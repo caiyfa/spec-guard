@@ -27,3 +27,15 @@ _proof_*.png
 .env.*
 !.env.example
 *.log
+
+# ── 工作区注册表与克隆（specstd，不入 git）──
+specstd/workspaces/registry.yaml
+specstd/workspaces/_clones/
+specstd/workspaces/_anchors/
+
+# ── Agent 会话文件（不入 git）──
+agent/sessions/*.jsonl
+
+# ── 反哺闭环持久化文件（不入 git）──
+feedback/ledger.json
+feedback/registry.json

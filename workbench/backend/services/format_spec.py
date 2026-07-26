@@ -92,7 +92,7 @@ _BODY = """## 一、场景测试 YAML（scenario yaml）
 ### 1.1 文件位置与命名
 
 ```
-tests/specguard/scenarios/{模块}/{功能}/{场景ID}.yaml
+scenarios/{模块}/{功能}/{场景ID}.yaml
 ```
 
 ### 1.2 必填字段
@@ -528,7 +528,7 @@ GET /api/reference/next-id?prefix=PP&type=RC
 | T7 | WARN | 依赖未声明版本期望（接受任意版本），建议补 version: ^X |
 
 **T6 补充**：version 已 bump 但契约未变化 → WARN（冗余 bump）；新场景未入基线 → INFO（需更新基线）。
-基线文件 `tests/specguard/contracts_baseline.json` 随 git 提交，由迁移脚本或发布检查流程更新。
+基线文件 `contracts_baseline.json` 随 git 提交，由迁移脚本或发布检查流程更新。
 
 ---
 

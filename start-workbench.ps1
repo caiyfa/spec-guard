@@ -3,8 +3,8 @@
     SpecGuard Workbench 一键启动（后端 FastAPI :9100 + 前端 Vite :5173）
 
 .DESCRIPTION
-    - 后端：tests/specguard/workbench/backend → uvicorn main:app :9100（API 文档 /docs）
-    - 前端：tests/specguard/workbench/frontend → npm run dev :5173（DAG 编排 /dag）
+    - 后端：workbench/backend → uvicorn main:app :9100（API 文档 /docs）
+    - 前端：workbench/frontend → npm run dev :5173（DAG 编排 /dag）
     - 幂等：端口已在监听则跳过对应服务；两个服务各起独立窗口便于看日志
     - 停止方式：直接关闭两个启动窗口（或 Stop-Process）
 
@@ -12,8 +12,8 @@
     启动完成后不自动打开浏览器
 
 .EXAMPLE
-    pwsh tests/specguard/start-workbench.ps1
-    pwsh tests/specguard/start-workbench.ps1 -NoBrowser
+    pwsh start-workbench.ps1
+    pwsh start-workbench.ps1 -NoBrowser
 #>
 param(
     [switch]$NoBrowser

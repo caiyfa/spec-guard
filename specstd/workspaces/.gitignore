@@ -1,0 +1,8 @@
+# 工作区注册表（含本地路径，不入 git）
+registry.yaml
+
+# git 型工作区克隆落点（不入 git）
+_clones/
+
+# 锚点清单快照
+_anchors/

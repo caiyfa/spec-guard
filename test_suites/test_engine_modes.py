@@ -1,7 +1,7 @@
 """引擎依赖模式离线自测：shared/exclusive 实例语义 + teardown + 命名空间绑定。
 
 不依赖 SIT 网络/DB/账号——用桩步骤驱动引擎，可在任何机器直接运行：
-    python -m pytest tests/specguard -k engine_modes -v
+    python -m pytest -k engine_modes -v
 """
 
 import os

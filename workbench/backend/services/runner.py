@@ -1,6 +1,6 @@
 """执行控制服务：subprocess 管理 + WebSocket 实时广播。
 
-包装 `python -m pytest tests/specguard` 命令，流式读取输出并广播给前端。
+包装 `python -m pytest` 命令，流式读取输出并广播给前端。
 不修改引擎代码。
 """
 
@@ -15,8 +15,7 @@ from typing import Optional
 
 from fastapi import WebSocket
 
-SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # tests/specguard/
-PROJECT_ROOT = SG_ROOT.parent.parent  # ifelc-ms-tdm-api 根目录
+SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # 仓库根
 
 
 class RunManager:
@@ -81,7 +80,7 @@ class RunManager:
             return {"ok": False, "error": "已有执行正在进行中"}
 
         # 构建 pytest 命令
-        cmd = [sys.executable, "-m", "pytest", "tests/specguard", "-v", "--tb=short"]
+        cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short"]
         if scope == "scenario" and target:
             cmd += ["-k", target]
         elif scope == "tag" and target:
@@ -114,7 +113,7 @@ class RunManager:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
-                cwd=str(PROJECT_ROOT),
+                cwd=str(SG_ROOT),
                 env={**os.environ, "SG_ENV": env},
             )
         except Exception as e:
@@ -155,7 +154,7 @@ class RunManager:
 
     def _parse_line(self, line: str) -> dict:
         """解析 pytest 输出行，提取场景 verdict"""
-        # 匹配: tests\specguard\test_suites\test_person_profile.py::test_scenario[PP-RC-001] PASSED
+        # 匹配: test_suites\test_person_profile.py::test_scenario[PP-RC-001] PASSED
         if " PASSED" in line or " FAILED" in line or " SKIPPED" in line or " ERROR" in line:
             for verdict in ("PASSED", "FAILED", "SKIPPED", "ERROR"):
                 if f" {verdict}" in line:
@@ -282,7 +281,7 @@ class RunManager:
                 "scenarios": batch,
             })
 
-            cmd = [sys.executable, "-m", "pytest", "tests/specguard", "-v", "--tb=short", "-k", target]
+            cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short", "-k", target]
             if getattr(self, "_strict_deps", False):
                 cmd += ["--strict-deps"]
             try:
@@ -290,7 +289,7 @@ class RunManager:
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
-                    cwd=str(PROJECT_ROOT),
+                    cwd=str(SG_ROOT),
                     env={**os.environ, "SG_ENV": env},
                 )
             except Exception as e:

@@ -27,10 +27,8 @@ class ValidateBody(BaseModel):
 
 @router.post("/validate")
 def api_validate_spec(body: ValidateBody):
-    """运行 spec 校验（verify_delta_merge.py）"""
+    """运行 spec 合规校验（specstd.conformance 原生实现）"""
     delta = body.delta or get_current_delta()
-    if not delta:
-        raise HTTPException(status_code=400, detail="未指定 delta 且 .current-delta 为空")
     return run_spec_validation(delta, body.mode)
 
 

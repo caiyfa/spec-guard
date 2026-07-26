@@ -6,6 +6,11 @@ import DagEditor from './pages/DagEditor';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import SpecValidation from './pages/SpecValidation';
+import AgentChat from './pages/AgentChat';
+import SpecCenter from './pages/SpecCenter';
+import Attribution from './pages/Attribution';
+import WorkspaceSettings from './pages/WorkspaceSettings';
+import Feedback from './pages/Feedback';
 
 const NAV = [
   { to: '/', label: '📊 总览', end: true },
@@ -14,6 +19,11 @@ const NAV = [
   { to: '/dag', label: '🔀 DAG 编排' },
   { to: '/run', label: '▶️ 测试执行' },
   { to: '/history', label: '📈 历史对比' },
+  { to: '/agent', label: '🤖 Agent 生成' },
+  { to: '/spec-center', label: '📄 Spec 文档' },
+  { to: '/attribution', label: '🔍 失败归因' },
+  { to: '/workspace', label: '🗂 工作区' },
+  { to: '/feedback', label: '🔄 反哺闭环' },
   { to: '/settings', label: '⚙️ 环境设置' },
 ];
 
@@ -59,6 +69,11 @@ export default function App() {
             <Route path="/run" element={<RunControl />} />
             <Route path="/dag" element={<DagEditor />} />
             <Route path="/history" element={<History />} />
+            <Route path="/agent" element={<AgentChat />} />
+            <Route path="/spec-center" element={<SpecCenter />} />
+            <Route path="/attribution" element={<Attribution />} />
+            <Route path="/workspace" element={<WorkspaceSettings />} />
+            <Route path="/feedback" element={<Feedback />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

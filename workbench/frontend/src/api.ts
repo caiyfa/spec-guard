@@ -223,3 +223,41 @@ export const referenceApi = {
     }),
   testDb: () => request<{ ok: boolean; message?: string; error?: string }>('/reference/test-db', { method: 'POST' }),
 };
+
+// ── 工作区管理 ──
+export interface WorkspaceInfo {
+  name: string;
+  system: string;
+  source: { type: string; path?: string; url?: string; branch?: string; local_path?: string };
+  last_commit: string;
+  pulled_at: string;
+}
+
+export const workspaceApi = {
+  list: () => request<{ workspaces: WorkspaceInfo[]; active: string }>('/workspace/list'),
+  getActive: () => request<{ active: WorkspaceInfo | null }>('/workspace/active'),
+  registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
+    request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),
+  registerGit: (body: { name: string; url: string; system: string; branch?: string }) =>
+    request<any>('/workspace/register-git', { method: 'POST', body: JSON.stringify(body) }),
+  activate: (name: string) =>
+    request<{ ok: boolean; active: string }>('/workspace/activate', { method: 'POST', body: JSON.stringify({ name }) }),
+  unregister: (name: string) =>
+    request<{ ok: boolean }>(`/workspace/${name}`, { method: 'DELETE' }),
+  conformance: (name?: string) =>
+    request<any>('/workspace/conformance', { method: 'POST', body: JSON.stringify({ name: name || '' }) }),
+  pull: (name: string) =>
+    request<any>('/workspace/pull', { method: 'POST', body: JSON.stringify({ name }) }),
+  specFiles: (subdir?: string) =>
+    request<{ files: any[]; workspace: string }>(`/workspace/spec-files${subdir ? `?subdir=${subdir}` : ''}`),
+  readFile: (path: string) =>
+    request<{ path: string; content: string }>(`/workspace/read-file?path=${encodeURIComponent(path)}`),
+};
+
+// ── Agent 对话 ──
+export const agentApi = {
+  listSessions: () => request<{ sessions: any[] }>('/agent/sessions'),
+  getSession: (id: string) => request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}`),
+  chat: (body: { message: string; session_id?: string; max_turns?: number }) =>
+    request<any>('/agent/chat', { method: 'POST', body: JSON.stringify(body) }),
+};

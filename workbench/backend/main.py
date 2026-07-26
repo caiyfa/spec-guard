@@ -1,11 +1,11 @@
 """SpecGuard Workbench — FastAPI 后端入口
 
 启动方式：
-    cd tests/specguard/workbench/backend
+    cd workbench/backend
     uvicorn main:app --reload --port 9100
 
-或从项目根目录：
-    python -m uvicorn tests.specguard.workbench.backend.main:app --reload --port 9100
+或从仓库根目录：
+    python -m uvicorn workbench.backend.main:app --reload --port 9100
 """
 
 import sys
@@ -19,7 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback
 
 app = FastAPI(
     title="SpecGuard Workbench API",
@@ -42,6 +42,9 @@ app.include_router(runs.router)
 app.include_router(reference.router)
 app.include_router(plans.router)
 app.include_router(spec_validation.router)
+app.include_router(agent.router)
+app.include_router(workspace.router)
+app.include_router(feedback.router)
 
 
 @app.get("/api/health")

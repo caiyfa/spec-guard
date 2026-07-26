@@ -1,9 +1,9 @@
 """全景档案测试套件入口：加载 scenarios/employee/person-profile/，按 DAG 序参数化执行。
 
 运行方式：
-    pytest tests/specguard                      # 全量（拓扑序）
-    pytest tests/specguard -k PP-RC-005         # 单场景（自动回溯上游准备环境）
-    pytest tests/specguard --prep-only          # 仅执行上游环境准备
+    python -m pytest -v                      # 全量（拓扑序）
+    python -m pytest -k PP-RC-005 -v         # 单场景（自动回溯上游准备环境）
+    python -m pytest --prep-only             # 仅执行上游环境准备
 """
 
 import os

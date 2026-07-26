@@ -7,6 +7,7 @@
 
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -14,8 +15,18 @@ from typing import Optional
 import yaml
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-PROJECT_ROOT = SG_ROOT.parent.parent
-SPEC_ROOT = PROJECT_ROOT / "raw" / "spec"
+if str(SG_ROOT) not in sys.path:
+    sys.path.insert(0, str(SG_ROOT))
+
+from specstd.workspace import get_active_workspace  # noqa: E402
+
+
+def _get_spec_root() -> Optional[Path]:
+    """获取当前激活工作区的根路径。"""
+    ws = get_active_workspace()
+    return ws.root if ws else None
+
+
 PLANS_ROOT = SG_ROOT / "plans"
 SCENARIOS_ROOT = SG_ROOT / "scenarios"
 REPORTS_ROOT = SG_ROOT / "reports"
@@ -171,7 +182,10 @@ def import_from_delta(delta_code: str) -> dict:
     3. 匹配已有场景（通过 covers 字段）
     4. 生成计划文件 plans/{delta_code}.yaml
     """
-    delta_dir = SPEC_ROOT / "changes" / delta_code
+    spec_root = _get_spec_root()
+    if not spec_root:
+        return {"ok": False, "error": "无激活的工作区"}
+    delta_dir = spec_root / "changes" / delta_code
     if not delta_dir.is_dir():
         return {"ok": False, "error": f"delta 目录不存在: {delta_dir}"}
 
@@ -261,7 +275,10 @@ def import_preview(delta_code: str) -> dict:
       frs: 全部 FR ID
       proposal: {name, description}
     """
-    delta_dir = SPEC_ROOT / "changes" / delta_code
+    spec_root = _get_spec_root()
+    if not spec_root:
+        return {"ok": False, "error": "无激活的工作区"}
+    delta_dir = spec_root / "changes" / delta_code
     if not delta_dir.is_dir():
         return {"ok": False, "error": f"delta 目录不存在: {delta_dir}"}
 
@@ -434,7 +451,10 @@ def import_confirm(delta_code: str, selected_files: list[str]) -> dict:
     工作副本存储在 plans/{delta_code}/scenarios/ 目录，
     每个副本文件头部标注源文件路径，编辑不影响源文件。
     """
-    delta_dir = SPEC_ROOT / "changes" / delta_code
+    spec_root = _get_spec_root()
+    if not spec_root:
+        return {"ok": False, "error": "无激活的工作区"}
+    delta_dir = spec_root / "changes" / delta_code
     if not delta_dir.is_dir():
         return {"ok": False, "error": f"delta 目录不存在"}
 

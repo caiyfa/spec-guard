@@ -309,7 +309,7 @@ def ref_yaml_format_spec():
     """导出 SpecGuard 对各类 YAML 文件的格式要求"""
     return {
         "scenario_yaml": {
-            "description": "场景测试 YAML 格式（tests/specguard/scenarios/**/*.yaml）",
+            "description": "场景测试 YAML 格式（scenarios/**/*.yaml）",
             "required_fields": {
                 "id": "场景唯一标识（如 PP-RC-001），全局唯一",
                 "title": "场景标题",
@@ -340,7 +340,7 @@ def ref_yaml_format_spec():
             "variable_syntax": "{{save名.字段}} 或 {{上游场景ID.save名.字段}}",
         },
         "plan_yaml": {
-            "description": "测试计划 YAML 格式（tests/specguard/plans/*.yaml）",
+            "description": "测试计划 YAML 格式（plans/*.yaml）",
             "required_fields": {
                 "id": "计划唯一标识",
                 "name": "计划名称",
