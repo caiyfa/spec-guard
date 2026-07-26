@@ -1,0 +1,29 @@
+# ── 行尾策略（跨平台统一规范）──
+# 默认：所有文本文件统一 LF（仓库内一律 LF，符合现代工程惯例）
+* text=auto eol=lf
+
+# Windows 批处理必须用 CRLF（cmd 解释器对 LF 兼容性差）
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+# PowerShell 对 LF 兼容良好，保持 LF
+*.ps1   text eol=lf
+
+# ── 二进制文件（禁止任何行尾/编码转换）──
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
+*.xlsx  binary
+*.xls   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary

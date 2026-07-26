@@ -1,0 +1,1080 @@
+"""场景执行器：步骤调度 + 断言执行 + 依赖闭包回溯 + ExecutionRecord 填充。
+
+变量插值规则：
+- 字符串完全匹配 {{expr}} → 返回解析值（保留原始类型，如 int/list/dict）
+- 字符串内嵌 {{expr}} → 字符串替换（str(value)）
+- expr 支持点号路径：{{emp.no}}（本场景变量）/ {{PP-PREP-001.activityId}}（上游场景命名空间）
+"""
+
+import os
+import random
+import string
+import time
+import uuid as _uuid
+
+from jsonpath_ng import parse as jsonpath_parse
+
+from engine.execution_record import (
+    AssertionTrace, ExecutionRecord, StepTrace,
+    VERDICT_PASS, VERDICT_SKIP, VERDICT_BLOCKED, VERDICT_DRIFT, VERDICT_ORPHANED,
+    CAT_ASSERT, CAT_ORACLE, CAT_ENV, CAT_UPSTREAM,
+    truncate,
+)
+from engine.http_client import HttpClient
+from engine.scenario_loader import MODE_SHARED, MODE_EXCLUSIVE
+
+
+class SkipScenario(Exception):
+    """场景前置条件不满足（工号池无候选/账号未配置等）→ verdict=SKIP
+
+    category: SKIP 归类（pool_empty/pool_leased_out/account_missing/db_unavailable/oracle_infra/uncategorized）
+    向后兼容：不带 category 的调用点一律归为 uncategorized，无需批量修改业务代码。
+    """
+    def __init__(self, message, category="uncategorized"):
+        super().__init__(message)
+        self.category = category
+
+
+# ══════════════════════════════════════════════════════════
+# 资源租约注册表（session 级，进程结束即消亡）
+# ══════════════════════════════════════════════════════════
+
+class LeaseRegistry:
+    """session 级资源租约注册表。任何步骤处理器/调度器都可接入。
+
+    resource_type: 资源类型标识（emp_no / session_id / account / config_key / ...）
+    key:           资源实例标识
+    holder:        持有者（场景 ID + 实例号），用于报告展示与冲突诊断
+    租约是 session 级，挂在 RunContext 上，进程结束即消亡。
+    """
+    def __init__(self):
+        self._leases = {}   # {resource_type: {key: holder}}
+
+    def acquire(self, resource_type, key, holder):
+        held = self._leases.setdefault(resource_type, {})
+        if key in held:
+            return False          # 已被租出，调用方决定换候选还是 SKIP
+        held[key] = holder
+        return True
+
+    def leased_keys(self, resource_type):
+        return set(self._leases.get(resource_type, {}))
+
+    def release(self, resource_type, key):        # teardown/实例清理时归还
+        self._leases.get(resource_type, {}).pop(key, None)
+
+    def release_all(self):                        # session 结束时整体释放
+        self._leases.clear()
+
+    def snapshot(self):                           # 报告落盘用：{type: {key: holder}}
+        return {t: dict(keys) for t, keys in self._leases.items()}
+
+
+# ══════════════════════════════════════════════════════════
+# 执行上下文（pytest session 级共享）
+# ══════════════════════════════════════════════════════════
+
+class RunContext:
+    def __init__(self, registry, env_config, token_provider, graph, run_dir,
+                 skip_upstream_verify=False, prep_only=False, db=None, strict_deps=False):
+        self.registry = registry
+        self.env = env_config
+        self.token_provider = token_provider
+        self.graph = graph
+        self.run_dir = run_dir
+        self.skip_upstream_verify = skip_upstream_verify
+        self.prep_only = prep_only
+        self.db = db                     # engine.db_oracle.ReadOnlyDb（可为 None）
+        self.strict_deps = strict_deps   # 严格依赖模式：DRIFT/ORPHANED 退化为 BLOCKED（发版门禁用）
+        self.leases = LeaseRegistry()    # session 级资源租约注册表（工号池/账号/配置层共用）
+        self.records = []              # list[ExecutionRecord] 本次运行全部记录
+        self.instances = {}            # scenario_id -> list[_Instance]（实例池：shared 复用 / exclusive 新建）
+        self.teardown_stack = []       # [(scenario, _Instance)] 已执行且声明 teardown 的实例，session 末 LIFO 清理
+        self.shared_ns = {}            # 跨场景变量命名空间 {scenario_id: saved_vars}（仅共享实例发布）
+        # env 命名空间：场景可用 {{env.resource_code}} / {{env.vars.*}} 引用环境级配置
+        self.shared_ns["env"] = {
+            "resource_code": env_config.get("default_resource_code", "TDM_SNAPSHOT_ARCHIVE"),
+            "vars": env_config.get("vars", {}),   # REQ-3：自定义变量段全量暴露
+        }
+        self._clients = {}             # account -> HttpClient
+
+    def http_client(self, account):
+        """按账号别名获取客户端（account=None 表示不带 token 的匿名调用）。
+
+        别名（default/restricted 等）必须在 env 配置 accounts 中映射为真实 AD 账号；
+        未配置时抛 SkipScenario（支持"受限账号后补，缺账号时 SKIP"的场景约定）。
+        """
+        key = account or "__anonymous__"
+        if key not in self._clients:
+            real_account = None
+            if account:
+                real_account = self.account_emp_no(account)
+                if not real_account:
+                    raise SkipScenario(
+                        f"账号别名 '{account}' 未在环境配置 accounts 中定义"
+                        f"（请在 systems/{{system}}/config/env.*.yaml 的 accounts 补充真实 AD 账号）")
+            self._clients[key] = HttpClient(
+                self.env["tdm_base"],
+                token_provider=self.token_provider if real_account else None,
+                account=real_account,
+                check_version=bool(self.env.get("check_version_header", False)),
+            )
+        return self._clients[key]
+
+    def account_info(self, account):
+        """账号配置：accounts 中 {别名: {ad, emp_no}}（兼容 {别名: ad} 简单形式）"""
+        cfg = (self.env.get("accounts") or {}).get(account)
+        if cfg is None:
+            return None
+        if isinstance(cfg, str):
+            return {"ad": cfg, "emp_no": None}
+        return cfg
+
+    def account_emp_no(self, account):
+        """账号别名 → 真实 AD 账号（token 换取用）"""
+        info = self.account_info(account)
+        return info.get("ad") if info else None
+
+
+# ══════════════════════════════════════════════════════════
+# 变量插值
+# ══════════════════════════════════════════════════════════
+
+# REQ-2：内置变量函数（运行时生成新值）
+_FNS = {
+    "fn.timestamp": lambda: str(int(time.time())),
+    "fn.date": lambda: time.strftime("%Y%m%d"),
+    "fn.uuid_short": lambda: _uuid.uuid4().hex[:8],
+}
+
+
+def _resolve(expr, ns):
+    """变量插值解析：支持点号路径 + 数组下标 + fn 函数。
+
+    解析顺序：
+    1. fn 函数（fn.timestamp 等）→ 直接调用
+    2. 点号路径（emp.no）→ 快速 dict 路径
+    3. 数组下标/复杂路径 → jsonpath 兜底
+    """
+    expr = expr.strip()
+
+    # REQ-2：fn 函数拦截
+    if expr in _FNS:
+        return _FNS[expr]()
+
+    # 快路径：点号 dict 路径
+    parts = expr.split(".")
+    try:
+        cur = ns
+        for p in parts:
+            if isinstance(cur, dict) and p in cur:
+                cur = cur[p]
+            elif isinstance(cur, list) and p.isdigit():
+                cur = cur[int(p)]
+            else:
+                raise KeyError(p)
+        return cur
+    except (KeyError, TypeError, IndexError):
+        pass
+
+    # REQ-1：jsonpath 兜底（数组下标 records[0].id、负索引 rows[-1]）
+    try:
+        matches = jsonpath_parse(f"$.{expr}").find(ns)
+        if matches:
+            return matches[0].value
+    except Exception:
+        pass
+
+    raise KeyError(f"变量未定义: {expr}（可用键: {list(ns) if isinstance(ns, dict) else type(ns)}）")
+
+
+def render(obj, ns):
+    """递归插值：dict/list/str 中的 {{expr}} 全部替换"""
+    import re
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {k: render(v, ns) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [render(v, ns) for v in obj]
+    if isinstance(obj, str):
+        m = re.fullmatch(r"\{\{\s*(.+?)\s*\}\}", obj)
+        if m:
+            return _resolve(m.group(1), ns)          # 完全匹配：保留类型
+        return re.sub(r"\{\{\s*(.+?)\s*\}\}",
+                      lambda mm: str(_resolve(mm.group(1), ns)), obj)
+    return obj
+
+
+# ══════════════════════════════════════════════════════════
+# 内置步骤处理器
+# ══════════════════════════════════════════════════════════
+
+def step_call(body, rctx, ns, record):
+    """HTTP 调用（Apifox 风格参数体系）。
+
+    as: 账号别名（default 等），none/anonymous 表示不带 token
+    headers/cookies: KV dict，支持 {{var}} 插值；headers 可显式覆盖 Authorization（负向测试）
+    body_type: json（默认）| form | urlencoded | raw | binary
+      - json:        {json: {...}}
+      - form:        {form: {k: v, file_field: "@path/to/file"}}（@前缀=文件字段，multipart）
+      - urlencoded:  {urlencoded: {k: v}}
+      - raw:         {raw: "文本", content_type: "text/plain"（默认）}
+      - binary:      {file: "path/to/file"}（文件字节流作为 body）
+    """
+    account = body.get("as", "default")
+    if account in ("none", "anonymous"):
+        account = None
+    client = rctx.http_client(account)
+    method = body.get("method", "GET").upper()
+    path = render(body["path"], ns)
+    params = render(body.get("params"), ns)
+    headers = render(body.get("headers"), ns)
+    cookies = render(body.get("cookies"), ns)
+    body_type = body.get("body_type") or ("json" if body.get("json") is not None else None)
+
+    json_body = None
+    data = None
+    files = None
+    if body_type == "json":
+        json_body = render(body.get("json"), ns)
+    elif body_type == "form":
+        form = render(body.get("form") or {}, ns) or {}
+        data, files = {}, {}
+        for k, v in form.items():
+            if isinstance(v, str) and v.startswith("@"):
+                fpath = v[1:]
+                if not os.path.isabs(fpath):
+                    fpath = os.path.join(os.getcwd(), fpath)
+                files[k] = (os.path.basename(fpath), open(fpath, "rb"))
+            else:
+                data[k] = v
+        files = files or None
+    elif body_type == "urlencoded":
+        data = render(body.get("urlencoded") or {}, ns)
+        if headers is None:
+            headers = {}
+        headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
+    elif body_type == "raw":
+        data = render(body.get("raw", ""), ns)
+        if headers is None:
+            headers = {}
+        headers.setdefault("Content-Type", body.get("content_type", "text/plain"))
+    elif body_type == "binary":
+        fpath = render(body.get("file", ""), ns)
+        if not os.path.isabs(fpath):
+            fpath = os.path.join(os.getcwd(), fpath)
+        data = open(fpath, "rb")
+        if headers is None:
+            headers = {}
+        headers.setdefault("Content-Type", "application/octet-stream")
+    elif body_type:
+        raise ValueError(f"body_type 非法: {body_type}（支持 json/form/urlencoded/raw/binary）")
+
+    started = time.time()
+    resp = client.request(method, path, params=params, json_body=json_body,
+                          data=data, files=files, headers=headers, cookies=cookies,
+                          raise_on_error=False, timeout=body.get("timeout", 30))
+    elapsed = int((time.time() - started) * 1000)
+    try:
+        resp_json = resp.json()
+    except Exception:
+        resp_json = None
+    record.steps.append(StepTrace(
+        type="call",
+        request={"as": account or "(匿名)", "method": method, "path": path,
+                 "params": params, **({"body_type": body_type} if body_type else {}),
+                 **({"headers": list(headers)} if headers else {})},
+        response_status=resp.status_code,
+        duration_ms=elapsed,
+        body_excerpt=truncate(resp_json),
+    ))
+    return {"status": resp.status_code, "json": resp_json,
+            "headers": {k: v for k, v in resp.headers.items()}}
+
+
+def step_set_var(body, rctx, ns, record):
+    """变量设置：{save: emp, vars: {no: '90024713', name: '张超'}}"""
+    values = {k: render(v, ns) for k, v in (body.get("vars") or {}).items()}
+    record.steps.append(StepTrace(type="set_var", note=f"设置变量: {values}"))
+    return values
+
+
+def step_db_query(body, rctx, ns, record):
+    """只读 SQL 查询：{sql: 'SELECT ...', save: rows}。sql 支持 {{var}} 插值。"""
+    if rctx.db is None:
+        raise SkipScenario("当前环境 DB 不可用，db_query 步骤无法执行")
+    sql = render(body["sql"], ns)
+    started = time.time()
+    rows = rctx.db.query(sql)
+    elapsed = int((time.time() - started) * 1000)
+    record.db_traces.append({"purpose": body.get("note", "db_query"),
+                             "sql": sql, "rows": len(rows),
+                             "excerpt": truncate(rows[:3])})
+    record.steps.append(StepTrace(type="db_query", duration_ms=elapsed,
+                                  note=f"{body.get('note', 'db_query')} → {len(rows)} 行"))
+    return rows
+
+
+def step_poll(body, rctx, ns, record):
+    """异步轮询：重复调用直至条件满足或超时。
+
+    用法：
+    - poll:
+        call: {method: GET, path: /api/task/result, params: {taskNo: "{{submit.json.data.taskNo}}"}}
+        until:
+          - json: {path: "$.data.status", eq: "DONE"}
+        interval_ms: 2000
+        timeout_ms: 60000
+        on_timeout: fail          # fail（默认）| skip
+        save: result
+    """
+    call_body = body.get("call", {})
+    until_conditions = body.get("until", [])
+    interval_ms = body.get("interval_ms", 2000)
+    timeout_ms = body.get("timeout_ms", 60000)
+    on_timeout = body.get("on_timeout", "fail")
+
+    if not call_body:
+        raise ValueError("poll 步骤缺少 call 配置")
+    if not until_conditions:
+        raise ValueError("poll 步骤缺少 until 条件")
+
+    account = call_body.get("as", "default")
+    if account in ("none", "anonymous"):
+        account = None
+    client = rctx.http_client(account)
+    method = call_body.get("method", "GET").upper()
+    path = render(call_body["path"], ns)
+    params = render(call_body.get("params"), ns)
+    json_body = render(call_body.get("json"), ns)
+
+    started_total = time.time()
+    attempt = 0
+    last_result = None
+
+    while True:
+        attempt += 1
+        elapsed_total = int((time.time() - started_total) * 1000)
+        if elapsed_total > timeout_ms:
+            msg = (f"poll 超时（{timeout_ms}ms，{attempt} 轮）："
+                   f"until 条件未满足，最后响应 status={last_result.get("status") if last_result else "无"}")
+            if on_timeout == "skip":
+                raise SkipScenario(msg, category="poll_timeout")
+            raise AssertionError(msg)
+
+        # 执行 HTTP 调用
+        started = time.time()
+        resp = client.request(method, path, params=params, json_body=json_body,
+                              raise_on_error=False, timeout=call_body.get("timeout", 30))
+        elapsed = int((time.time() - started) * 1000)
+        try:
+            resp_json = resp.json()
+        except Exception:
+            resp_json = None
+
+        last_result = {"status": resp.status_code, "json": resp_json,
+                       "headers": {k: v for k, v in resp.headers.items()}}
+
+        record.steps.append(StepTrace(
+            type=f"poll:{attempt}",
+            request={"as": account or "(匿名)", "method": method, "path": path, "params": params},
+            response_status=resp.status_code,
+            duration_ms=elapsed,
+            body_excerpt=truncate(resp_json),
+            note=f"轮询第 {attempt} 轮",
+        ))
+
+        # 评估 until 条件（复用 json 断言逻辑）
+        all_passed = True
+        for cond in until_conditions:
+            if "json" in cond:
+                jb = cond["json"]
+                try:
+                    payload = resp_json
+                    actual = _jsonpath_find(jb["path"], payload)
+                    if not _eval_json_condition(jb, actual):
+                        all_passed = False
+                        break
+                except (AssertionError, Exception):
+                    all_passed = False
+                    break
+            elif "status" in cond:
+                sb = cond["status"]
+                expected = render(sb.get("eq"), ns)
+                if resp.status_code != expected:
+                    all_passed = False
+                    break
+
+        if all_passed:
+            record.steps.append(StepTrace(
+                type="poll:done",
+                note=f"轮询完成：{attempt} 轮，总耗时 {int((time.time() - started_total) * 1000)}ms",
+            ))
+            return last_result
+
+        # 间隔后重试
+        time.sleep(interval_ms / 1000.0)
+
+
+def _eval_json_condition(body, actual):
+    """评估单条 json 条件是否满足（用于 poll until 判断，不产生 trace）"""
+    if "eq" in body:
+        return actual == body["eq"]
+    if "ne" in body:
+        return actual != body["ne"]
+    if body.get("not_null"):
+        return actual is not None
+    if "contains" in body:
+        return actual is not None and body["contains"] in actual
+    if "len_gt" in body:
+        return actual is not None and len(actual) > body["len_gt"]
+    if "len_eq" in body:
+        return actual is not None and len(actual) == body["len_eq"]
+    if body.get("absent"):
+        return False  # absent 在 jsonpath_find 中已处理（有匹配=不满足）
+    return actual is not None
+
+
+# ══════════════════════════════════════════════════════════
+# 随机文本池（HR 领域自然语言词库）
+# ══════════════════════════════════════════════════════════
+
+RANDOM_POOLS = {
+    "activity_name": [
+        "年度干部盘点", "半年度人才盘点", "季度绩效盘点", "专项能力盘点",
+        "中层干部盘点", "高潜人才盘点", "新员工盘点", "管理层盘点",
+        "技术人才盘点", "销售团队盘点",
+    ],
+    "department": [
+        "研发部", "产品部", "市场部", "人事部", "财务部",
+        "运营部", "技术部", "设计部", "客服部", "法务部",
+    ],
+    "person_name": [
+        "张超", "李明", "王芳", "赵强", "陈静",
+        "刘伟", "杨柳", "周涛", "吴雪", "郑浩",
+    ],
+    "eval_text": [
+        "表现优秀，能力突出", "工作认真负责，团队协作好", "技术能力强，学习速度快",
+        "沟通能力出色，执行力强", "具有创新思维，解决问题能力强",
+        "工作态度积极，责任心强", "业务理解深入，产出稳定",
+        "具有领导潜力，能独立负责项目",
+    ],
+    "session_desc": [
+        "常规盘点流程", "年度例行盘点", "重点关注高潜人员",
+        "全面能力评估", "绩效与潜力双维度盘点",
+    ],
+    "tag": [
+        "核心骨干", "高潜人才", "技术专家", "管理后备",
+        "业务标兵", "创新先锋", "团队标杆",
+    ],
+}
+
+
+def step_random(body, rctx, ns, record):
+    """随机数据生成：随机数 / 随机文本 / 随机池抓取 / UUID。
+
+    用法：
+    - random: {type: number, min: 1, max: 100, save: num}           # 随机整数
+    - random: {type: float, min: 0, max: 100, precision: 1, save: f} # 随机浮点数
+    - random: {type: text, pool: activity_name, save: name}          # 从词库随机选
+    - random: {type: text, pool: person_name, suffix: true, save: n} # 词库+随机后缀
+    - random: {type: text, length: 8, save: s}                       # 随机字符串
+    - random: {type: uuid, save: id}                                 # 短 UUID
+    """
+    rtype = body.get("type", "number")
+
+    if rtype == "number":
+        lo = int(render(str(body.get("min", 1)), ns) or 1)
+        hi = int(render(str(body.get("max", 100)), ns) or 100)
+        value = random.randint(lo, hi)
+
+    elif rtype == "float":
+        lo = float(render(str(body.get("min", 0)), ns) or 0)
+        hi = float(render(str(body.get("max", 100)), ns) or 100)
+        precision = int(body.get("precision", 1))
+        value = round(random.uniform(lo, hi), precision)
+
+    elif rtype == "text":
+        pool_name = body.get("pool", "")
+        if pool_name:
+            pool = RANDOM_POOLS.get(pool_name)
+            if not pool:
+                raise ValueError(f"随机文本池不存在: {pool_name}（可用: {sorted(RANDOM_POOLS)}）")
+            value = random.choice(pool)
+        else:
+            length = int(body.get("length", 8))
+            value = "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
+        # 可选随机数字后缀（保证唯一性）
+        if body.get("suffix"):
+            value = f"{value}-{random.randint(100, 999)}"
+
+    elif rtype == "uuid":
+        value = _uuid.uuid4().hex[:8]
+
+    elif rtype == "pick":
+        # 从自定义列表随机选
+        items = body.get("items", [])
+        if not items:
+            raise ValueError("random type=pick 需要 items 列表")
+        value = random.choice(items)
+
+    else:
+        raise ValueError(f"random.type 非法: {rtype}（支持 number/float/text/uuid/pick）")
+
+    record.steps.append(StepTrace(
+        type="random",
+        note=f"随机生成 {rtype} = {value!r}",
+    ))
+    return value
+
+
+def step_tool(body, rctx, ns, record):
+    """tool 信封分发器（格式 2.0）：{use, with, save} → 注册工具的 handler。
+
+    YAML 语法层冻结为 3 原语（call/db_query/poll）+ 本信封；领域能力全部以
+    tool 形式调用。with 段为工具参数，save 为产出变量名（注入命名空间）。
+    工具元数据见 engine.tool_registry.TOOLS（name 唯一关联 handler）。
+    """
+    from engine.tool_registry import TOOLS
+    use = body.get("use")
+    if not use:
+        raise ValueError("tool 步骤缺少 use 字段（工具名）")
+    if use not in TOOLS:
+        raise ValueError(f"未注册的 tool: {use}（可用: {sorted(TOOLS)}）")
+    handler = rctx.registry.get_step(use)
+    inner = dict(body.get("with") or {})
+    if body.get("save"):
+        inner["save"] = body["save"]
+    return handler(inner, rctx, ns, record)
+
+
+def _fn_namespace():
+    """fn 内置函数的命名空间视图（脚本内 fn.date() 点号调用）"""
+    from types import SimpleNamespace
+    return SimpleNamespace(**{k.split(".", 1)[1]: v for k, v in _FNS.items()})
+
+
+def step_python(body, rctx, ns, record):
+    """Python 脚本原语（格式 2.1）：在引擎上下文执行脚本，处理复杂逻辑。
+
+    用法：
+    - python:
+        script: |
+          rows = ns['rows']
+          output = [r for r in rows if r['total_score'] is None]
+          print(f'过滤出 {len(output)} 行')
+        save: null_rows          # 可选：取脚本中 output 变量注入 ns[save]
+    或：
+    - python: {file: "scripts/xxx.py", save: out}   # 相对 specguard 根目录
+
+    脚本可用上下文：
+    - ns            变量命名空间 dict（直接读写；ns['x']=1 对下游可见）
+    - save(k, v)    等价 ns[k] = v
+    - output        约定产出变量（step 声明 save 时被取走）
+    - rctx / record 运行上下文 / 执行记录
+    - http(account) 取 HTTP 客户端（含 token），db 只读 DB 连接（可为 None）
+    - fn            内置函数（fn.timestamp() 等）
+    - json / re / time / datetime / uuid 预导入模块；SkipScenario 主动跳过
+    """
+    script = body.get("script")
+    if not script and body.get("file"):
+        fpath = render(body["file"], ns)
+        if not os.path.isabs(fpath):
+            fpath = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), fpath)
+        with open(fpath, "r", encoding="utf-8") as f:
+            script = f.read()
+    if not script:
+        raise ValueError("python 步骤缺少 script（或 file）")
+
+    import io as _io
+    import json as _json
+    import re as _re
+    import datetime as _datetime
+    ctx = {
+        "ns": ns,
+        "save": lambda k, v: ns.__setitem__(k, v),
+        "rctx": rctx,
+        "record": record,
+        "http": lambda account="default": rctx.http_client(account),
+        "db": rctx.db,
+        "fn": _fn_namespace(),
+        "json": _json, "re": _re, "time": time, "datetime": _datetime, "uuid": _uuid,
+        "SkipScenario": SkipScenario,
+        "output": None,
+        "print": print,
+    }
+    buf = _io.StringIO()
+    started = time.time()
+    from contextlib import redirect_stdout
+    with redirect_stdout(buf):
+        exec(compile(script, "<python_step>", "exec"), ctx)
+    elapsed = int((time.time() - started) * 1000)
+
+    printed = buf.getvalue().strip()
+    record.steps.append(StepTrace(
+        type="python",
+        duration_ms=elapsed,
+        note=(printed[:200] if printed else "脚本执行完成"),
+    ))
+    return ctx.get("output")
+
+
+def register_builtin_steps(registry):
+    registry.step("call", step_call)
+    registry.step("set_var", step_set_var)
+    registry.step("db_query", step_db_query)
+    registry.step("poll", step_poll)
+    registry.step("random", step_random)
+    registry.step("tool", step_tool)
+    registry.step("python", step_python)
+
+
+# ══════════════════════════════════════════════════════════
+# 断言执行
+# ══════════════════════════════════════════════════════════
+
+def _jsonpath_find(path, data):
+    matches = jsonpath_parse(path).find(data)
+    if not matches:
+        raise AssertionError(f"jsonpath 无匹配: {path}")
+    return matches[0].value
+
+
+def _assert_json_ops(body, actual, ns, trace):
+    """json 断言的操作符判定，就地更新 trace"""
+    if "eq" in body:
+        expected = render(body["eq"], ns)
+        trace.expected, trace.actual = expected, actual
+        trace.passed = actual == expected
+        trace.expr += f" == {expected!r}"
+        if not trace.passed:
+            trace.message = f"实际值 {actual!r} ≠ 预期 {expected!r}"
+    elif "ne" in body:
+        expected = render(body["ne"], ns)
+        trace.expected, trace.actual = f"≠{expected!r}", actual
+        trace.passed = actual != expected
+        trace.expr += f" != {expected!r}"
+    elif body.get("not_null"):
+        trace.expected, trace.actual = "非 null", actual
+        trace.passed = actual is not None
+        trace.expr += " 非 null"
+    elif "contains" in body:
+        expected = render(body["contains"], ns)
+        trace.expected, trace.actual = f"包含 {expected!r}", actual
+        trace.passed = actual is not None and expected in actual
+        trace.expr += f" 包含 {expected!r}"
+    elif "len_gt" in body:
+        n = render(body["len_gt"], ns)
+        trace.expected, trace.actual = f"长度>{n}", (len(actual) if actual is not None else None)
+        trace.passed = actual is not None and len(actual) > n
+        trace.expr += f" 长度>{n}"
+    elif "len_eq" in body:
+        n = render(body["len_eq"], ns)
+        trace.expected, trace.actual = f"长度={n}", (len(actual) if actual is not None else None)
+        trace.passed = actual is not None and len(actual) == n
+        trace.expr += f" 长度={n}"
+    else:
+        trace.passed = actual is not None
+        trace.expr += " 存在"
+
+
+def _run_verifies(scenario, rctx, ns, record, last_call_ref):
+    first_fail_category = None
+    for v in scenario.verify:
+        if "status" in v:
+            body = v["status"]
+            target = ns[body.get("of", last_call_ref)]
+            expected = render(body["eq"], ns)
+            actual = target["status"]
+            trace = AssertionTrace(expr=f"{body.get('of', last_call_ref)}.status == {expected}",
+                                   actual=actual, expected=expected,
+                                   passed=actual == expected,
+                                   message="" if actual == expected else f"实际状态 {actual} ≠ 预期 {expected}")
+            record.assertions.append(trace)
+            if not trace.passed and not first_fail_category:
+                first_fail_category = CAT_ASSERT
+
+        elif "json" in v:
+            body = v["json"]
+            target = ns[body.get("of", last_call_ref)]
+            trace = AssertionTrace(expr=f"{body.get('of', last_call_ref)}{body['path']}")
+            try:
+                # U-1: call 产出取 ["json"]，db_query 裸数组直通（支持 DB 断言）
+                payload = target["json"] if isinstance(target, dict) and "json" in target else target
+                actual = _jsonpath_find(body["path"], payload)
+                if body.get("absent"):
+                    # absent 语义：路径有匹配 → 失败（不应存在）
+                    trace.passed = False
+                    trace.actual = actual
+                    trace.expected = "路径不应存在"
+                    trace.expr += " 不应存在"
+                    trace.message = f"路径应不存在但存在值: {actual!r}"
+                else:
+                    _assert_json_ops(body, actual, ns, trace)
+            except AssertionError as e:
+                if body.get("absent"):
+                    # absent 语义：路径无匹配 → 通过
+                    trace.passed = True
+                    trace.expected = "路径不存在"
+                    trace.expr += " 不存在"
+                else:
+                    trace.passed, trace.message = False, str(e)
+            record.assertions.append(trace)
+            if not trace.passed and not first_fail_category:
+                first_fail_category = CAT_ASSERT
+
+        elif "oracle" in v:
+            body = v["oracle"]
+            name, params = (body, {}) if isinstance(body, str) else (body["name"], body.get("params", {}))
+            fn = rctx.registry.get_oracle(name)
+            trace = AssertionTrace(expr=f"oracle: {name}")
+            try:
+                fn(params, rctx, ns, record)
+                trace.passed = True
+            except AssertionError as e:
+                trace.passed, trace.message = False, str(e)
+            record.assertions.append(trace)
+            if not trace.passed and not first_fail_category:
+                first_fail_category = CAT_ORACLE
+
+        elif "python" in v:
+            body = v["python"]
+            script = body if isinstance(body, str) else body.get("script", "")
+            trace = AssertionTrace(expr="python 断言脚本")
+            import io as _io
+            import json as _json
+            import re as _re
+            import datetime as _datetime
+            ctx = {
+                "ns": ns,
+                "save": lambda k, val: ns.__setitem__(k, val),
+                "rctx": rctx,
+                "record": record,
+                "http": lambda account="default": rctx.http_client(account),
+                "db": rctx.db,
+                "fn": _fn_namespace(),
+                "json": _json, "re": _re, "time": time, "datetime": _datetime, "uuid": _uuid,
+                "SkipScenario": SkipScenario,
+                "output": None,
+            }
+            buf = _io.StringIO()
+            try:
+                from contextlib import redirect_stdout
+                with redirect_stdout(buf):
+                    exec(compile(script, "<python_assert>", "exec"), ctx)
+                trace.passed = True
+                if buf.getvalue().strip():
+                    trace.message = buf.getvalue().strip()[:200]
+            except AssertionError as e:
+                trace.passed, trace.message = False, str(e)
+            record.assertions.append(trace)
+            if not trace.passed and not first_fail_category:
+                first_fail_category = CAT_ASSERT
+    return first_fail_category
+
+
+# ══════════════════════════════════════════════════════════
+# 场景执行
+# ══════════════════════════════════════════════════════════
+
+def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
+                 instance_no=1):
+    """执行单场景（flow + verify），返回 ExecutionRecord（含运行时 saved_vars）。
+
+    extra_ns: 依赖实例绑定的命名空间覆盖（{上游场景ID: 该实例的 saved_vars}），
+    优先于 shared_ns——独占实例的变量只对绑定的消费者可见。
+    """
+    record = ExecutionRecord(
+        scenario_id=scenario.id, title=scenario.title, covers=scenario.covers,
+        tags=scenario.tags, priority=scenario.priority, doc=scenario.doc,
+        upstream_of=upstream_of, instance_no=instance_no,
+    )
+    record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
+    if scenario.produces:
+        record.given["produces"] = scenario.produces
+    started = time.time()
+
+    ns = dict(rctx.shared_ns)          # 继承共享命名空间
+    if extra_ns:
+        ns.update(extra_ns)            # 实例绑定覆盖（exclusive 上游的变量在此注入）
+    saved = {}
+    last_call_ref = None
+    try:
+        for step in scenario.flow:
+            if not isinstance(step, dict) or len(step) != 1:
+                raise ValueError(f"步骤格式错误（应为单键 dict）: {step}")
+            step_type, body = next(iter(step.items()))
+            body = body or {}
+            handler = rctx.registry.get_step(step_type)
+            value = handler(body, rctx, ns, record)
+            save_name = body.get("save") if isinstance(body, dict) else None
+            if save_name:
+                saved[save_name] = value
+                ns[save_name] = value
+                if step_type == "call":
+                    last_call_ref = save_name
+
+        if run_verify and scenario.verify:
+            # 仅当断言依赖默认 of（无显式 of 字段）且无 call 步骤时才报错
+            needs_default_ref = any(
+                (("status" in v and "of" not in v.get("status", {})) or
+                 ("json" in v and "of" not in v.get("json", {})))
+                for v in scenario.verify
+            )
+            if last_call_ref is None and needs_default_ref:
+                raise ValueError("场景有 status/json 断言但 flow 中没有 save 的 call 步骤")
+            fail_cat = _run_verifies(scenario, rctx, ns, record, last_call_ref)
+            if fail_cat:
+                failed = [a for a in record.assertions if not a.passed]
+                record.fail(fail_cat, f"{len(failed)} 条断言失败",
+                            evidence=[{"expr": a.expr, "actual": a.actual,
+                                       "expected": a.expected, "message": a.message} for a in failed])
+            else:
+                record.verdict = VERDICT_PASS
+        else:
+            record.verdict = VERDICT_PASS
+
+    except SkipScenario as e:
+        record.verdict = VERDICT_SKIP
+        record.skip_reason = str(e)
+        record.skip_category = e.category
+    except AssertionError as e:
+        record.fail(CAT_ASSERT, str(e))
+    except Exception as e:
+        record.fail(CAT_ENV, f"{type(e).__name__}: {e}")
+
+    record.duration_ms = int((time.time() - started) * 1000)
+    record.saved_vars = saved          # 运行时属性（to_dict 时排除）
+    record.run_ns = ns                 # 运行时完整命名空间（供 teardown 插值，不落盘）
+    return record
+
+
+# ══════════════════════════════════════════════════════════
+# 实例池：shared 复用 / exclusive 新建（写型场景状态管理核心）
+# ════════════════════════════════════════════════════════
+
+class _Instance:
+    """上游场景的一次执行实例。
+
+    - mode=shared：session 内唯一，所有只读消费者共享
+    - mode=exclusive：为单个消费者新建，消费者可变更其状态而不影响其他人
+    export_ns：本实例及其依赖闭包的变量快照 {scenario_id: saved_vars}，
+    消费者合并后得到“与本实例一致的世界观”（传递引用绑定到同一套实例）。
+    """
+
+    def __init__(self, scenario, record, mode, no, export_ns):
+        self.scenario = scenario
+        self.record = record
+        self.mode = mode
+        self.no = no                   # 实例序号（1 起，报告区分多实例）
+        self.export_ns = export_ns     # {scenario_id: saved_vars}，含传递依赖
+        self.torn_down = False
+
+
+class _UpstreamFailed(Exception):
+    """上游实例未通过，携带 (scenario_id, verdict) 供消费者标记 BLOCKED"""
+
+    def __init__(self, sid, verdict):
+        self.sid, self.verdict = sid, verdict
+        super().__init__(f"{sid}: {verdict}")
+
+
+def _resolve_dep_ns(scenario, rctx, consumer_id):
+    """解析场景的直接依赖 → 合并后的实例绑定命名空间。上游未通过时抛 _UpstreamFailed。"""
+    dep_ns = {}
+    for dep in scenario.depends_on:
+        inst = _acquire_instance(dep["id"], rctx, consumer_id, dep["mode"])
+        if inst.record.verdict != VERDICT_PASS:
+            raise _UpstreamFailed(dep["id"], inst.record.verdict)
+        dep_ns.update(inst.export_ns)
+    return dep_ns
+
+
+def _acquire_instance(scenario_id, rctx, consumer_id, mode):
+    """获取上游场景的可用实例。
+
+    - shared：复用池内共享实例（无则创建）；共享实例永不被独占消费者触碰
+    - exclusive：总是新建全新实例（懒重跑），其依赖闭包递归按各自 mode 获取：
+      闭包内 shared 上游仍复用缓存，exclusive 上游同样新建（递归独占）
+    """
+    pool = rctx.instances.setdefault(scenario_id, [])
+    if mode == MODE_SHARED:
+        for inst in pool:
+            if inst.mode == MODE_SHARED:
+                return inst
+    scenario = rctx.graph.by_id[scenario_id]
+    dep_ns = _resolve_dep_ns(scenario, rctx, consumer_id)   # 先递归准备它自己的上游
+
+    no = len(pool) + 1
+    record = run_scenario(scenario, rctx, upstream_of=consumer_id,
+                          run_verify=not rctx.skip_upstream_verify,
+                          extra_ns=dep_ns, instance_no=no)
+    record.dep_mode = mode
+    rctx.records.append(record)
+
+    export_ns = dict(dep_ns)
+    export_ns[scenario_id] = record.saved_vars
+    inst = _Instance(scenario, record, mode, no, export_ns)
+    pool.append(inst)
+    if record.verdict == VERDICT_PASS and mode == MODE_SHARED:
+        rctx.shared_ns[scenario_id] = record.saved_vars   # 仅共享实例发布到全局
+    if scenario.teardown:
+        rctx.teardown_stack.append((scenario, inst))       # 失败实例也登记（尽力清理）
+    return inst
+
+
+def _blocked_record(scenario, sid, verdict):
+    record = ExecutionRecord(
+        scenario_id=scenario.id, title=scenario.title, covers=scenario.covers,
+        tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
+    record.verdict = VERDICT_BLOCKED
+    record.skip_reason = f"上游场景 {sid} 未通过（{verdict}），本场景未执行"
+    record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
+    return record
+
+
+def _verdict_record(scenario, verdict, reason):
+    record = ExecutionRecord(
+        scenario_id=scenario.id, title=scenario.title, covers=scenario.covers,
+        tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
+    record.verdict = verdict
+    record.skip_reason = reason
+    record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
+    return record
+
+
+def _check_dep_versions(scenario, rctx):
+    """版本仲裁（格式 2.0）：执行前评估依赖边的版本匹配状态。
+
+    返回 (verdict, reason)；全部满足返回 (None, "")。
+    - 上游缺失 + optional → SKIP（可选依赖豁免，两种模式一致）
+    - 上游缺失 → ORPHANED（strict_deps 下 BLOCKED）
+    - 契约版本 MAJOR 漂移 → DRIFT（strict_deps 下 BLOCKED）
+    - MINOR 漂移 → 放行（调用方记录提示）
+    """
+    from engine.dependency_graph import ORPHAN
+    from engine.versioning import MAJOR_DRIFT, MINOR_DRIFT
+    minor_notes = []
+    for st in rctx.graph.dep_status.get(scenario.id, []):
+        status = st["status"]
+        if status == ORPHAN:
+            if st["optional"]:
+                return VERDICT_SKIP, f"可选依赖 {st['id']} 不存在，场景跳过（optional）"
+            if rctx.strict_deps:
+                return VERDICT_BLOCKED, f"依赖场景 {st['id']} 不存在（strict_deps 严格模式）"
+            return VERDICT_ORPHANED, f"依赖场景 {st['id']} 不存在——上游已删除/改名，请修正 depends_on"
+        if status == MAJOR_DRIFT:
+            msg = (f"依赖 {st['id']} 契约版本漂移: 期望 {st['version'] or '(未声明)'} "
+                   f"实际 v{st['actual']}")
+            if rctx.strict_deps:
+                return VERDICT_BLOCKED, msg + "（strict_deps 严格模式）"
+            return VERDICT_DRIFT, msg + "——请核对上游契约后 bump 期望版本"
+        if status == MINOR_DRIFT:
+            minor_notes.append(f"{st['id']}(期望{st['version']}/实际v{st['actual']})")
+    if minor_notes:
+        scenario._minor_drift_note = "MINOR 漂移放行: " + ", ".join(minor_notes)
+    return None, ""
+
+
+def run_with_deps(scenario, rctx):
+    """按依赖闭包执行目标场景。
+
+    - shared 上游 session 内只执行一次，多消费者共享；exclusive 上游按消费者懒重跑新建实例
+    - 上游未通过 → 目标场景 BLOCKED（exclusive 实例失败只阻塞绑定它的消费者）
+    - prep_only 模式 → 目标场景 SKIP（仅完成环境准备）
+    - 目标场景若已作为共享上游完整执行过（含 verify）则复用其记录；
+      PASS 的目标场景登记为共享实例供后续场景复用
+      （skip_upstream_verify 模式下上游记录未跑 verify，不可作为目标结论复用）
+    """
+    # 版本仲裁：DRIFT / ORPHANED / 可选依赖缺失 → 不执行（默认不阻塞流水线）
+    verdict, reason = _check_dep_versions(scenario, rctx)
+    if verdict:
+        record = _verdict_record(scenario, verdict, reason)
+        rctx.records.append(record)
+        return record
+
+    try:
+        dep_ns = _resolve_dep_ns(scenario, rctx, scenario.id)
+    except _UpstreamFailed as e:
+        record = _blocked_record(scenario, e.sid, e.verdict)
+        rctx.records.append(record)
+        return record
+
+    if rctx.prep_only:
+        record = ExecutionRecord(
+            scenario_id=scenario.id, title=scenario.title, covers=scenario.covers,
+            tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
+        record.verdict = VERDICT_SKIP
+        record.skip_reason = "prep-only 模式：仅执行上游环境准备，目标场景未执行"
+        record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
+        rctx.records.append(record)
+        return record
+
+    # 目标场景若已作为共享上游完整执行过（含 verify），直接复用，避免 HTTP+DB 全量重放
+    if not rctx.skip_upstream_verify:
+        for inst in rctx.instances.get(scenario.id, []):
+            if inst.mode == MODE_SHARED:
+                return inst.record
+
+    record = run_scenario(scenario, rctx, extra_ns=dep_ns)
+    minor_note = getattr(scenario, "_minor_drift_note", None)
+    if minor_note:
+        record.given["dep_version_note"] = minor_note
+        scenario._minor_drift_note = None
+    rctx.records.append(record)
+    # PASS 的目标场景登记为共享实例：后续场景把它当 shared 上游时复用，不再重跑
+    if record.verdict == VERDICT_PASS and not rctx.skip_upstream_verify:
+        export_ns = dict(dep_ns)
+        export_ns[scenario.id] = record.saved_vars
+        inst = _Instance(scenario, record, MODE_SHARED, 1, export_ns)
+        rctx.instances.setdefault(scenario.id, []).append(inst)
+        rctx.shared_ns[scenario.id] = record.saved_vars
+        if scenario.teardown:
+            rctx.teardown_stack.append((scenario, inst))
+    return record
+
+
+# ════════════════════════════════════════════════════════
+# teardown：session 末 LIFO 执行清理步骤（写型场景现场恢复/脏数据治理）
+# ════════════════════════════════════════════════════════
+
+def run_teardowns(rctx):
+    """LIFO 执行全部已登记实例的 teardown 步骤。
+
+    - 步骤插值使用该实例运行时的完整命名空间（可引用 {{session.id}} 等 flow 产出）
+    - teardown 失败不改变场景 verdict，仅记录 trace（清理尽力而为，不阻塞报告）
+    - 必须在报告落盘之前调用，teardown 轨迹才能进入 case JSON
+    """
+    for scenario, inst in reversed(rctx.teardown_stack):
+        if inst.torn_down:
+            continue
+        inst.torn_down = True
+        ns = getattr(inst.record, "run_ns", None) or dict(rctx.shared_ns)
+        for step in scenario.teardown:
+            if not isinstance(step, dict) or len(step) != 1:
+                inst.record.steps.append(StepTrace(
+                    type="teardown_error", note=f"teardown 步骤格式错误: {step}"))
+                continue
+            step_type, body = next(iter(step.items()))
+            try:
+                handler = rctx.registry.get_step(step_type)
+                started = time.time()
+                before = len(inst.record.steps)
+                handler(body or {}, rctx, ns, inst.record)
+                elapsed = int((time.time() - started) * 1000)
+                if len(inst.record.steps) > before:
+                    # 处理器自己追加了 trace → 改名标记为 teardown 阶段
+                    for s in inst.record.steps[before:]:
+                        s.type = "teardown:" + s.type
+                        s.duration_ms = s.duration_ms or elapsed
+                else:
+                    # 处理器未追加 trace → 主动补一条，保证 teardown 可审计
+                    inst.record.steps.append(StepTrace(
+                        type=f"teardown:{step_type}", duration_ms=elapsed,
+                        note=f"清理步骤 {step_type} 执行完成"))
+            except Exception as e:
+                inst.record.steps.append(StepTrace(
+                    type="teardown_error",
+                    note=f"{step_type} 清理失败（不影响场景结论）: {type(e).__name__}: {e}"))
+    rctx.leases.release_all()   # session 结束整体释放全部租约

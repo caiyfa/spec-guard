@@ -1,0 +1,96 @@
+# ─────────── 人读层：doc ───────────
+id: GP-IMP-001
+title: 九宫格落位支持 0 与 "-"（0=没有分数入库；"-"视为没有分数，入库为 NULL）
+version: "0.1"
+test_type: scenario
+priority: P0
+tags: [import, grid, requirement-driven]
+doc:
+  given: 会话含人员 90024713/90027339/90027338；fixture 综合评价 Sheet 3 行：
+         落位分别为 "0"、"-"、"5"（对照组），其余必填字段齐备
+  when: oss_upload → submit → poll 校验完成 → confirm → poll 保存完成
+  then: |
+    ① 校验 failCount=0（"0" 与 "-" 均为合法落位值，不再被 1-9 旧校验拦截）；
+    ② DB 3 行全入库：90024713 落位="0"（没有分数）、90027339 落位=NULL（"-"视为没有分数）、
+    90027338 落位="5"（正常值不受影响）。
+  covers: []
+  requirement: 九宫格盘点数值校验增加0或者"-"；"-"视为没有分数，等价于 null（2026-07-23 与需求方确认）
+  known_gap: |
+    当前实现（Step4ImportTaskService L928-939）对 "-" 仍报「必须为0-9的数字」。
+    本场景按需求编写预期，若执行 FAIL 则暴露实现缺口（"-" 未支持），属产品缺陷而非用例问题。
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-002, mode: exclusive, version: ^0}
+flow:
+  - tool: {use: oss_upload, with: {file: "test-data/step4/grid-position-valid.xlsx"}, save: up}
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/submit
+      json:
+        bizType: "step4Import"
+        fileKey: "{{up.ossKey}}"
+        bizParam:
+          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+          resourceCode: "TDM_INV_OPERATION"
+      save: submit
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.finished", eq: true}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: check_result
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/confirm
+      params: {taskNo: "{{submit.json.data.taskNo}}"}
+      save: confirm
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.taskStatus", eq: "SAVE_SUCCESS"}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: save_result
+  - db_query:
+      sql: SELECT emp_no, leader_calibrated_placement
+           FROM tdm_result_person_eval
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND emp_no = '90024713'
+      save: row_zero
+      note: 落位 "0"（没有分数）
+  - db_query:
+      sql: SELECT emp_no, leader_calibrated_placement
+           FROM tdm_result_person_eval
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND emp_no = '90027339'
+      save: row_dash
+      note: 落位 "-"（应为 NULL）
+  - db_query:
+      sql: SELECT emp_no, leader_calibrated_placement
+           FROM tdm_result_person_eval
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND emp_no = '90027338'
+      save: row_normal
+      note: 落位 "5"（对照组）
+verify:
+  - json: {of: check_result, path: "$.data.taskStatus", eq: "CHECK_SUCCESS"}
+  - json: {of: check_result, path: "$.data.failCount", eq: 0}
+  # ① 落位 "0" 合法入库（没有分数）
+  - json: {of: row_zero, path: "$", len_eq: 1}
+  - json: {of: row_zero, path: "$[0].leader_calibrated_placement", eq: "0"}
+  # ② 落位 "-" 合法入库，按「没有分数」存 NULL
+  - json: {of: row_dash, path: "$", len_eq: 1}
+  - json: {of: row_dash, path: "$[0].leader_calibrated_placement", eq: null}
+  # ③ 对照组：正常落位不受影响
+  - json: {of: row_normal, path: "$", len_eq: 1}
+  - json: {of: row_normal, path: "$[0].leader_calibrated_placement", eq: "5"}

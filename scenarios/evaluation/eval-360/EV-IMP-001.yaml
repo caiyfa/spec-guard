@@ -1,0 +1,119 @@
+# ─────────── 人读层：doc ───────────
+id: EV-IMP-001
+title: 360分数"-"与空值可导入（不丢行、不丢其余字段，整Sheet不解析失败）
+version: "0.1"
+test_type: scenario
+priority: P0
+tags: [import, eval360, regression]
+doc:
+  given: 会话含人员 90024713/90027339/90027338；fixture 含 360评价总分/360维度得分/360价值观 三个 Sheet，
+         覆盖三种行：分数填"-"（r1）、分数留空（r2）、正常分数（r3 对照组）
+  when: oss_upload → submit → poll 校验完成 → confirm → poll 保存完成
+  then: |
+    ① 校验 CHECK_SUCCESS 且 failCount=0（"-"与空值不再被数值校验拦截）；
+    ② 总分表 3 行全入库：r1 分数为 NULL 但行保留（不删掉其余数据），r3 分数 88.50 正常（scale=2）；
+    ③ 维度表 3 行全入库（回归："-" 不再导致整个 Sheet 解析失败丢数据），"-"行得分 NULL、正常行 92.50/85.00 保留；
+    ④ 价值观 2 行入库（dim_category='VALUES'）。
+  covers: []
+  related_bug: ["52648d4 360评价导入Excel中-字符导致整个Sheet解析失败丢数据"]
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-002, mode: exclusive, version: ^0}
+flow:
+  - tool: {use: oss_upload, with: {file: "test-data/step4/eval360-empty-scores.xlsx"}, save: up}
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/submit
+      json:
+        bizType: "step4Import"
+        fileKey: "{{up.ossKey}}"
+        bizParam:
+          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+          resourceCode: "TDM_INV_OPERATION"
+      save: submit
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.finished", eq: true}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: check_result
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/confirm
+      params: {taskNo: "{{submit.json.data.taskNo}}"}
+      save: confirm
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.taskStatus", eq: "SAVE_SUCCESS"}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: save_result
+  - db_query:
+      sql: SELECT emp_no, paper_name, total_score, self_score, rank_overall
+           FROM tdm_eval_360
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+           ORDER BY emp_no, paper_name
+      save: total_rows
+      note: 360评价总分入库断言（工号升序：90024713 < 90027338 < 90027339）
+  - db_query:
+      sql: SELECT emp_no, dim_category, paper_name, total_score
+           FROM tdm_eval_360_dimension
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND dim_category = '决策能力' AND emp_no = '90024713'
+      save: dim_dash_row
+      note: 维度"-"行（得分应为 NULL 但行保留）
+  - db_query:
+      sql: SELECT emp_no, dim_category, total_score
+           FROM tdm_eval_360_dimension
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND dim_category != 'VALUES'
+      save: dim_rows
+      note: 维度得分行数（回归整Sheet不丢：3行）
+  - db_query:
+      sql: SELECT emp_no, total_score
+           FROM tdm_eval_360_dimension
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND emp_no = '90024713' AND dim_category = '沟通能力'
+      save: dim_valid_row
+      note: 维度正常行（92.50 保留）
+  - db_query:
+      sql: SELECT emp_no, total_score
+           FROM tdm_eval_360_dimension
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND dim_category = 'VALUES'
+           ORDER BY emp_no
+      save: value_rows
+      note: 价值观行（2行）
+verify:
+  - json: {of: submit, path: "$.data.taskNo", not_null: true}
+  - json: {of: check_result, path: "$.data.taskStatus", eq: "CHECK_SUCCESS"}
+  - json: {of: check_result, path: "$.data.failCount", eq: 0}
+  - json: {of: save_result, path: "$.data.taskStatus", eq: "SAVE_SUCCESS"}
+  # ① 总分表：3 行全入库（不丢行）
+  - json: {of: total_rows, path: "$", len_eq: 3}
+  # ② r1(90024713, 套卷A)：分数全 "-"/空 → NULL，但行保留
+  - json: {of: total_rows, path: "$[0].total_score", eq: null}
+  - json: {of: total_rows, path: "$[0].self_score", eq: null}
+  - json: {of: total_rows, path: "$[0].paper_name", eq: "SG-套卷A"}
+  # ③ r3(90027338, 套卷C)：正常分数不受影响，scale=2
+  - json: {of: total_rows, path: "$[1].total_score", eq: 88.5}
+  - json: {of: total_rows, path: "$[1].self_score", eq: 90}
+  # ④ r2(90027339, 套卷B)：空值可导入 → NULL
+  - json: {of: total_rows, path: "$[2].total_score", eq: null}
+  # ⑤ 维度表：整 Sheet 不丢（3 行），"-"行 NULL、正常行保留
+  - json: {of: dim_rows, path: "$", len_eq: 3}
+  - json: {of: dim_dash_row, path: "$[0].total_score", eq: null}
+  - json: {of: dim_valid_row, path: "$[0].total_score", eq: 92.5}
+  # ⑥ 价值观：2 行
+  - json: {of: value_rows, path: "$", len_eq: 2}

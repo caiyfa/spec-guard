@@ -1,0 +1,27 @@
+# ─────────── 人读层：doc ───────────
+id: PP-RC-007
+title: 历史活动列表（trend）按盘点日期降序返回
+version: "0.1"
+priority: P1
+tags: [resolver]
+doc:
+  given: 人员参与过多次盘点活动（有多个快照）
+  when: 调用 GET /api/employee/profile/trend?empNo=xxx
+  then: 返回 ActivityTrendItem 数组，全量不分页，按 inventoryDate 降序
+  covers: [FR-002]
+  related_ac: [AC-002]
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile/trend
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - json: {path: "$.data", not_null: true}
+  - oracle: trend_sorted_desc

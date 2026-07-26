@@ -1,0 +1,28 @@
+# ─────────── 人读层：doc ───────────
+id: PP-RC-006
+title: 指定无快照的活动时自动回退该人员最新快照
+version: "0.1"
+priority: P1
+tags: [resolver]
+doc:
+  given: 人员在活动A有快照；传入一个该人员无快照（或不存在）的 activityId
+  when: 调用 GET /api/employee/profile?empNo=xxx&activityId=INVALID
+  then: 自动回退返回该人员最新快照的 ProfileVO（页面正常展示数据而非报错）
+  covers: [FR-002]
+  related_ac: [AC-002, AC-003]
+  related_edge: "archive test-cases TC-008"
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", activityId: "999999999999999999", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  # 预期回退到最新快照正常返回；若实现返回错误，按实际响应校准后更新本场景
+  - status: {eq: 200}
+  - json: {path: "$.data.basicInfo.empNo", eq: "{{emp.no}}"}

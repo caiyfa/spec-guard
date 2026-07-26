@@ -1,0 +1,43 @@
+id: PP-PERM-002
+title: 跨平台人员 trend 列表的权限过滤
+version: "0.1"
+priority: P1
+tags:
+  - permission
+doc:
+  given: 人员快照跨 ≥2 平台；当前用户具备 TDM_SNAPSHOT_ARCHIVE 部分平台权限
+  when: 调用 GET /api/employee/profile/trend?empNo=xxx
+  then: 返回的活动列表按 inventoryDate 降序；活动所属平台在用户权限范围内可见
+  covers:
+    - FR-013
+    - FR-015
+  related_ac:
+    - AC-002
+depends_on:
+  - {id: PP-PERM-001, version: ^0}
+flow:
+  - tool:
+      use: select_emp
+      with:
+        role: cross_platform
+      save: emp
+  - tool:
+      use: fetch_permission
+      with:
+        account: default
+      save: scope
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile/trend
+      params:
+        empNo: '{{emp.no}}'
+        resourceCode: '{{env.resource_code}}'
+      save: resp
+verify:
+  - status:
+      eq: 200
+  - json:
+      path: $.data
+      not_null: true
+  - oracle: trend_sorted_desc

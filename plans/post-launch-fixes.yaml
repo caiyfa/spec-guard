@@ -1,0 +1,103 @@
+id: post-launch-fixes
+name: 上线后问题修复（第一批）
+description: '系统上线后，QA 在迭代版本「人才发展0717-历史盘点+ES加速」回归测试中发现多个模块存在待修复问题（详见《干部盘点迭代&回归问题汇总.xlsx》），涉及：
+
+
+  1. **平台业务单元查询底表错误**：`/api/system/platform-corps` 接口查询底表应为 `sap_corp`，当前误用 `sap_platform_corp`
+
+  2. **历史盘点切片数据时点过滤缺陷**（P0'
+env: sit
+tags:
+- imported
+- post-launch-fixes
+filter:
+  scenarios:
+  - PP-PERM-001
+  - PP-PERM-002
+  - PP-PERM-004
+  - PP-RC-001
+  - PP-RC-002
+  - PP-RC-003
+  - PP-RC-004
+  - PP-RC-005
+  - PP-RC-006
+  - PP-RC-007
+  - PP-SEC-002
+  - PP-SNAP-001
+source_delta: post-launch-fixes
+source_frs:
+- FR-001
+- FR-002
+- FR-012
+- FR-013
+- FR-014
+- FR-020
+- FR-021
+- FR-022
+- FR-023
+- FR-024
+- FR-025
+- FR-026
+- FR-027
+unmatched_frs:
+- FR-012
+- FR-020
+- FR-021
+- FR-022
+- FR-023
+- FR-024
+- FR-025
+- FR-026
+- FR-027
+imported_files:
+- path: modules\employee-person-profile\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: employee-person-profile
+  test_type: scenario
+  frs:
+  - FR-020
+  - FR-021
+  - FR-022
+  - FR-023
+  - FR-024
+  - FR-025
+  - FR-026
+  - FR-027
+- path: modules\inventory-history-import\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: inventory-history-import
+  test_type: unit
+  frs:
+  - FR-002
+- path: modules\inventory-person\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: inventory-person
+  test_type: scenario
+  frs:
+  - FR-014
+- path: modules\inventory-session\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: inventory-session
+  test_type: scenario
+  frs:
+  - FR-012
+- path: modules\inventory-step4-import\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: inventory-step4-import
+  test_type: scenario
+  frs:
+  - FR-013
+- path: modules\system-settings-inventory-activity\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: system-settings-inventory-activity
+  test_type: unit
+  frs:
+  - FR-001
+- path: modules\system-settings-platform-corp\delta-spec.md
+  copy: plans\post-launch-fixes\scenarios\delta-spec.md
+  module: system-settings-platform-corp
+  test_type: unit
+  frs:
+  - FR-001
+breakpoints: []
+updated_at: '2026-07-23T12:27:16'

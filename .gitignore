@@ -1,0 +1,29 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+
+# ── Node / 前端 ──
+node_modules/
+workbench/frontend/dist/
+
+# ── 运行产物（勿提交，AGENTS.md 约定）──
+reports/
+drafts/
+
+# ── 临时验证产物（本地保留，不入库）──
+_e2e_deps.py
+_proof_*.png
+
+# ── 编辑器 ──
+.idea/
+.vscode/
+*.iml
+
+# ── 环境与凭据 ──
+.env
+.env.*
+!.env.example
+*.log

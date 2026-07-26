@@ -1,0 +1,63 @@
+# TDM 工号池：角色化候选工号 + 执行前 DB 校验
+# 校验 SQL 返回数值，>= min 视为该候选满足角色条件
+# check 为 null 表示免校验（如 nonexistent 固定假工号）
+
+roles:
+  snapshot_rich:
+    description: 有快照记录的人员（切片模式/快照保真场景）
+    candidates: ["90024713", "90001063", "90024365", "90024006", "90023915"]
+    check:
+      sql: >-
+        SELECT COUNT(*) FROM tdm_snap_profile sp
+        JOIN tdm_emp_employee e ON sp.emp_id = e.id
+        WHERE e.emp_no = %s AND sp.deleted = 0
+      min: 1
+
+  cross_platform:
+    description: 快照跨 ≥2 平台的人员（corpCode 权限过滤场景）
+    candidates: ["90027339", "90027333", "90024713", "90024006", "90027234"]
+    check:
+      sql: >-
+        SELECT COUNT(DISTINCT sp.corp_code) FROM tdm_snap_profile sp
+        JOIN tdm_emp_employee e ON sp.emp_id = e.id
+        WHERE e.emp_no = %s AND sp.deleted = 0
+      min: 2
+
+  vertical_manager:
+    description: use_vertical_manager=Y 的人员（纵向负责人权限场景）
+    candidates: ["90001063", "90027329"]
+    check:
+      sql: >-
+        SELECT COUNT(*) FROM tdm_inv_person
+        WHERE emp_no = %s AND use_vertical_manager = 'Y' AND deleted = 0
+      min: 1
+
+  no_snapshot_tdm:
+    description: TDM 员工表有记录但从未生成快照（员工表兜底场景）
+    candidates: ["50000294", "50000769", "50001867", "90000002", "90000003"]
+    check:
+      sql: >-
+        SELECT
+          (SELECT COUNT(*) FROM tdm_emp_employee WHERE emp_no = %s AND deleted = 0)
+          -
+          (SELECT COUNT(*) FROM tdm_snap_profile sp
+           JOIN tdm_emp_employee e2 ON sp.emp_id = e2.id
+           WHERE e2.emp_no = %s AND sp.deleted = 0)
+      min: 1
+
+  dhr_only:
+    description: 仅 DHR 存在（TDM 员工表无记录，DHR 降级场景）
+    candidates: ["80005963", "80006032", "80006033"]
+    check:
+      sql: >-
+        SELECT
+          (SELECT COUNT(*) FROM dhr_employee
+           WHERE emp_no = %s AND dt_date = (SELECT MAX(dt_date) FROM dhr_employee))
+          -
+          (SELECT COUNT(*) FROM tdm_emp_employee WHERE emp_no = %s AND deleted = 0)
+      min: 1
+
+  nonexistent:
+    description: 不存在的工号（404 场景，固定假工号免校验）
+    candidates: ["NOTEXIST999"]
+    check: null

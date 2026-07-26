@@ -1,0 +1,22 @@
+id: pp-full-regression
+name: 全景档案全量回归
+description: person-profile 模块全部 15 个场景的完整回归测试
+env: sit
+tags: [regression]
+filter:
+  scenarios:
+    - PP-RC-001
+    - PP-RC-002
+    - PP-RC-003
+    - PP-RC-004
+    - PP-RC-005
+    - PP-RC-006
+    - PP-RC-007
+    - PP-SNAP-001
+    - PP-SNAP-002
+    - PP-PERM-001
+    - PP-PERM-002
+    - PP-PERM-003
+    - PP-PERM-004
+    - PP-SEC-001
+    - PP-SEC-002

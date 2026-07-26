@@ -1,0 +1,30 @@
+id: p0-import-and-revert
+name: P0 三项修复验证（360空值导入 / 落位0与"-" / 会话退回）
+description: |
+  针对 2026-07-22 三项 P0 修复的自动化验证：
+  1. 360 数值校验取消：分数 "-" / 空值可导入（入库 NULL），不丢行、不丢其余字段（回归 52648d4）
+  2. 九宫格落位校验：支持 "0" 与 "-"（"-" 视为没有分数，等价于 null）；越界值仍拦截
+  3. 已完成会话退回按钮：PUT /api/inventory/sessions/{id}/revert（仅活动 ACTIVE；FR-012）
+
+  执行前置（引擎第二批升级，见 docs/引擎升级建议-第二批-变量插值与资源命名.md）：
+  - REQ-1 变量插值数组下标（IS-PREP-003 锁定人员引用 records[0].id）
+  - REQ-2 fn.timestamp 唯一活动名（prep 场景每次运行新建活动，无历史包袱）
+  - REQ-4 写型账号权限预置（TDM_INV_ACTIVITY / TDM_INV_OPERATION）
+
+  已知产品缺口（按需求预期编写，FAIL 即暴露缺陷）：
+  - GP-IMP-001：当前实现对落位 "-" 仍报格式错误，需求要求视为没有分数（NULL）
+env: sit
+tags: [p0, import, revert, post-launch-fixes]
+filter:
+  scenarios:
+    - IS-PREP-002
+    - IS-PREP-003
+    - EV-IMP-001
+    - EV-IMP-002
+    - GP-IMP-001
+    - GP-IMP-002
+    - IS-RVT-001
+    - IS-RVT-002
+    - IS-RVT-003
+breakpoints: []
+source_delta: post-launch-fixes

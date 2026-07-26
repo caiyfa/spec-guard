@@ -1,0 +1,80 @@
+# ─────────── 人读层：doc ───────────
+id: GP-IMP-002
+title: 落位越界（10）行报错「必须为0-9的数字」，正常行行级隔离入库
+version: "0.1"
+test_type: scenario
+priority: P1
+tags: [import, grid, negative, row-isolation]
+doc:
+  given: 会话含人员 90024713/90027339；fixture 综合评价 Sheet 2 行：
+         r1 落位="10"（越界）、r2 落位="7"（正常）
+  when: oss_upload → submit → poll 校验完成 → confirm → poll 保存完成
+  then: |
+    ① 校验 failCount=1，错误消息含「必须为0-9的数字」（范围校验保留：仅 0-9 与 "-" 合法）；
+    ② 行级隔离：r2（落位 7）正常入库；r1（落位 10）未入库。
+  covers: []
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-002, mode: exclusive, version: ^0}
+flow:
+  - tool: {use: oss_upload, with: {file: "test-data/step4/grid-position-out-of-range.xlsx"}, save: up}
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/submit
+      json:
+        bizType: "step4Import"
+        fileKey: "{{up.ossKey}}"
+        bizParam:
+          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+          resourceCode: "TDM_INV_OPERATION"
+      save: submit
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.finished", eq: true}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: check_result
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/confirm
+      params: {taskNo: "{{submit.json.data.taskNo}}"}
+      save: confirm
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.finished", eq: true}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: save_result
+  - db_query:
+      sql: SELECT emp_no, leader_calibrated_placement
+           FROM tdm_result_person_eval
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND emp_no = '90027339'
+      save: valid_row
+      note: 正常行（落位 7）应入库
+  - db_query:
+      sql: SELECT emp_no
+           FROM tdm_result_person_eval
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND emp_no = '90024713'
+      save: bad_row
+      note: 越界行（落位 10）不应入库
+verify:
+  - json: {of: check_result, path: "$.data.failCount", eq: 1}
+  - json: {of: check_result, path: "$.data.recentFailInfos[0].errorMsg", contains: "必须为0-9的数字"}
+  # 行级隔离：正常行入库
+  - json: {of: valid_row, path: "$", len_eq: 1}
+  - json: {of: valid_row, path: "$[0].leader_calibrated_placement", eq: "7"}
+  # 越界行未入库
+  - json: {of: bad_row, path: "$", len_eq: 0}

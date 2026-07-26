@@ -1,0 +1,44 @@
+# ─────────── 人读层：doc ───────────
+id: IS-RVT-001
+title: 退回已完成会话至进行中（活动 ACTIVE）+ 退回后可再次完成
+version: "0.1"
+test_type: scenario
+priority: P0
+tags: [revert, session-lifecycle]
+doc:
+  given: 会话状态 COMPLETED，所属活动状态 ACTIVE（IS-PREP-003 独占实例）
+  when: PUT /api/inventory/sessions/{id}/revert → 再调 PUT /{id}/complete
+  then: |
+    ① 退回响应 200，sessionStatus=IN_PROGRESS，completedAt=null；
+    ② DB：session_status=IN_PROGRESS、completed_at IS NULL、reopen_flag 未设置（与 reopen 区分）；
+    ③ 生命周期连续：退回后可再次完成（COMPLETED）。
+  covers: [FR-012]
+  related_ac: [FR-012-验证1, FR-012-验证4]
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-003, mode: exclusive, version: ^0}
+flow:
+  - call:
+      method: PUT
+      path: "/api/inventory/sessions/{{IS-PREP-003.session.json.data.id}}/revert"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: resp
+  - db_query:
+      sql: SELECT session_status, completed_at, reopen_flag, current_step
+           FROM tdm_inv_session WHERE id = {{IS-PREP-003.session.json.data.id}}
+      save: sess_db
+      note: 退回后 DB 状态断言
+  - call:
+      method: PUT
+      path: "/api/inventory/sessions/{{IS-PREP-003.session.json.data.id}}/complete"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: recompleted
+verify:
+  - status: {eq: 200, of: resp}
+  - json: {of: resp, path: "$.data.sessionStatus", eq: "IN_PROGRESS"}
+  - json: {of: resp, path: "$.data.completedAt", eq: null}
+  - json: {of: sess_db, path: "$[0].session_status", eq: "IN_PROGRESS"}
+  - json: {of: sess_db, path: "$[0].completed_at", eq: null}
+  - json: {of: sess_db, path: "$[0].reopen_flag", eq: null}
+  - json: {of: recompleted, path: "$.data.sessionStatus", eq: "COMPLETED"}

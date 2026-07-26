@@ -1,0 +1,7 @@
+id: pp-security-check
+name: 安全与权限专项
+description: fail-secure + 权限过滤 + 跨平台隔离场景
+env: sit
+tags: [security, permission]
+filter:
+  tags: [security, permission]

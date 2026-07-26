@@ -1,0 +1,28 @@
+# ─────────── 人读层：doc ───────────
+id: PP-PERM-004
+title: 受限账号查跨平台人员：历史平台结果被过滤
+version: "0.1"
+priority: P1
+tags: [permission]
+doc:
+  given: 受限账号（仅单平台权限）；人员快照跨 ≥2 平台
+  when: 调用 GET /api/employee/profile?empNo=xxx
+  then: 仅返回权限内平台的盘点结果，其余平台记录被过滤（permission_filtered 预言校验）
+  covers: [FR-013, FR-015]
+  related_ac: [AC-001]
+  note: 依赖 env accounts.restricted 配置真实受限账号；未配置时场景 SKIP
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: cross_platform}, save: emp}
+  - tool: {use: fetch_permission, with: {account: restricted}, save: scope}
+  - call:
+      as: restricted
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - oracle: permission_filtered

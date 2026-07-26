@@ -1,0 +1,41 @@
+id: PP-PERM-001
+title: 跨平台人员档案的盘点结果 corpCode 过滤
+version: "0.1"
+priority: P0
+tags:
+  - permission
+doc:
+  given: 人员快照跨 ≥2 平台；当前用户具备 TDM_SNAPSHOT_ARCHIVE 部分平台权限
+  when: 调用 GET /api/employee/profile?empNo=xxx
+  then: 7 个盘点结果字段中每条记录的 corpCode 均在用户权限范围内（corpCode=null 的非盘点数据保留）；权限范围外平台的历史盘点记录被过滤
+  covers:
+    - FR-013
+    - FR-014
+    - FR-015
+  related_ac:
+    - AC-001
+depends_on:
+  - {id: PP-RC-003, version: ^0}
+flow:
+  - tool:
+      use: select_emp
+      with:
+        role: cross_platform
+      save: emp
+  - tool:
+      use: fetch_permission
+      with:
+        account: default
+      save: scope
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params:
+        empNo: '{{emp.no}}'
+        resourceCode: '{{env.resource_code}}'
+      save: resp
+verify:
+  - status:
+      eq: 200
+  - oracle: permission_filtered

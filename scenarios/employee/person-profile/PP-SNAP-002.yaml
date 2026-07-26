@@ -1,0 +1,26 @@
+# ─────────── 人读层：doc ───────────
+id: PP-SNAP-002
+title: 盘点结果类记录注入 inv* 活动上下文（annualPerf 不注入）
+version: "0.1"
+priority: P1
+tags: [snapshot]
+doc:
+  given: 人员快照中含盘点结果数据（capability/gridPlacement/personEval/eval360Primary/reserve 至少一项非空）
+  when: 切片模式调用 GET /api/employee/profile?empNo=xxx&activityId=yyy
+  then: 盘点结果类每条记录含 invActivityId/invActivityName/invCorpCode/invCorpName 上下文（FR-006）；annualPerf 记录不注入 inv*（跨活动时间序列数据与单一活动无关）；空模块跳过校验
+  covers: [FR-006]
+  related_ac: [AC-002]
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", activityId: "{{emp.activity_id}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - oracle: inv_context_injected

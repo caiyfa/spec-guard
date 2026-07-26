@@ -1,0 +1,83 @@
+# ─────────── 人读层：doc ───────────
+id: EV-IMP-002
+title: 360必填校验保留：类型为空行报错，正常行不受影响的行级隔离
+version: "0.1"
+test_type: scenario
+priority: P1
+tags: [import, eval360, negative, row-isolation]
+doc:
+  given: 会话含人员 90024713/90027339；fixture 360评价总分 Sheet 2 行：
+         r1 类型留空（应报必填错误）、r2 类型=总分且总分=80（正常行）
+  when: oss_upload → submit → poll 校验完成 → confirm → poll 保存完成
+  then: |
+    ① 校验阶段 failCount=1，错误消息含「必填」「类型」（必填校验未随数值校验一起取消）；
+    ② 行级隔离：r2 正常入库（tdm_eval_360 存在 SG-套卷E 记录，总分 80.00）；
+    ③ r1 未入库（SG-套卷D 无记录）。
+  covers: []
+  note: 数值校验取消≠全部校验取消；类型/套卷名称仍为必填
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-002, mode: exclusive, version: ^0}
+flow:
+  - tool: {use: oss_upload, with: {file: "test-data/step4/eval360-required-missing.xlsx"}, save: up}
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/submit
+      json:
+        bizType: "step4Import"
+        fileKey: "{{up.ossKey}}"
+        bizParam:
+          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+          resourceCode: "TDM_INV_OPERATION"
+      save: submit
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.finished", eq: true}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: check_result
+  - call:
+      method: POST
+      path: /api/data-io/import/excel/task/confirm
+      params: {taskNo: "{{submit.json.data.taskNo}}"}
+      save: confirm
+  - poll:
+      call:
+        method: GET
+        path: /api/data-io/import/task/result
+        params: {taskNo: "{{submit.json.data.taskNo}}"}
+      until:
+        - json: {path: "$.data.finished", eq: true}
+      interval_ms: 2000
+      timeout_ms: 120000
+      on_timeout: fail
+      save: save_result
+  - db_query:
+      sql: SELECT emp_no, paper_name, total_score
+           FROM tdm_eval_360
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND paper_name = 'SG-套卷E'
+      save: valid_row
+      note: 正常行应入库
+  - db_query:
+      sql: SELECT emp_no, paper_name
+           FROM tdm_eval_360
+           WHERE session_id = {{IS-PREP-002.session.json.data.id}} AND deleted = 0
+             AND paper_name = 'SG-套卷D'
+      save: bad_row
+      note: 必填错误行不应入库
+verify:
+  - json: {of: check_result, path: "$.data.failCount", eq: 1}
+  - json: {of: check_result, path: "$.data.recentFailInfos[0].errorMsg", contains: "必填"}
+  - json: {of: check_result, path: "$.data.recentFailInfos[0].errorMsg", contains: "类型"}
+  # 行级隔离：正常行入库
+  - json: {of: valid_row, path: "$", len_eq: 1}
+  - json: {of: valid_row, path: "$[0].total_score", eq: 80}
+  # 错误行未入库
+  - json: {of: bad_row, path: "$", len_eq: 0}

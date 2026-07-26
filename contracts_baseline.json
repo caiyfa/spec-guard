@@ -1,0 +1,98 @@
+{
+  "EV-IMP-001": {
+    "fingerprint": "59f2dec54919",
+    "version": "0.1"
+  },
+  "EV-IMP-002": {
+    "fingerprint": "abdd1c77cd11",
+    "version": "0.1"
+  },
+  "GP-IMP-001": {
+    "fingerprint": "e905efd14bd1",
+    "version": "0.1"
+  },
+  "GP-IMP-002": {
+    "fingerprint": "abdd1c77cd11",
+    "version": "0.1"
+  },
+  "IS-PREP-002": {
+    "fingerprint": "e3931cf7be41",
+    "version": "0.1"
+  },
+  "IS-PREP-003": {
+    "fingerprint": "9bb43413201c",
+    "version": "0.1"
+  },
+  "IS-RVT-001": {
+    "fingerprint": "bad209ad1d1d",
+    "version": "0.1"
+  },
+  "IS-RVT-002": {
+    "fingerprint": "ff998a828c1f",
+    "version": "0.1"
+  },
+  "IS-RVT-003": {
+    "fingerprint": "83366603f0a7",
+    "version": "0.1"
+  },
+  "PP-PERM-001": {
+    "fingerprint": "8818f30cb509",
+    "version": "0.1"
+  },
+  "PP-PERM-002": {
+    "fingerprint": "06549fadbffb",
+    "version": "0.1"
+  },
+  "PP-PERM-003": {
+    "fingerprint": "f4481f4e9404",
+    "version": "0.1"
+  },
+  "PP-PERM-004": {
+    "fingerprint": "06549fadbffb",
+    "version": "0.1"
+  },
+  "PP-RC-001": {
+    "fingerprint": "2471b369d56d",
+    "version": "0.1"
+  },
+  "PP-RC-002": {
+    "fingerprint": "ccdbf21063eb",
+    "version": "0.1"
+  },
+  "PP-RC-003": {
+    "fingerprint": "ccdbf21063eb",
+    "version": "0.1"
+  },
+  "PP-RC-004": {
+    "fingerprint": "ccdbf21063eb",
+    "version": "0.1"
+  },
+  "PP-RC-005": {
+    "fingerprint": "643f9d09ecba",
+    "version": "0.1"
+  },
+  "PP-RC-006": {
+    "fingerprint": "b13e5ecd7593",
+    "version": "0.1"
+  },
+  "PP-RC-007": {
+    "fingerprint": "b13e5ecd7593",
+    "version": "0.1"
+  },
+  "PP-SEC-001": {
+    "fingerprint": "350017b137d4",
+    "version": "0.1"
+  },
+  "PP-SEC-002": {
+    "fingerprint": "1d2b5c510e71",
+    "version": "0.1"
+  },
+  "PP-SNAP-001": {
+    "fingerprint": "643f9d09ecba",
+    "version": "0.1"
+  },
+  "PP-SNAP-002": {
+    "fingerprint": "3512305e6c4b",
+    "version": "0.1"
+  }
+}

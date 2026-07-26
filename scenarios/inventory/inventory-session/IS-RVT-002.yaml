@@ -1,0 +1,38 @@
+# ─────────── 人读层：doc ───────────
+id: IS-RVT-002
+title: 活动已关闭后退回已完成会话 → 400 拒绝（revert 比 reopen 严格）
+version: "0.1"
+test_type: scenario
+priority: P0
+tags: [revert, negative]
+doc:
+  given: 会话状态 COMPLETED，随后活动被关闭（ACTIVE → CLOSED）
+  when: PUT /api/inventory/sessions/{id}/revert
+  then: 400，错误消息含「仅已启动状态允许退回」；会话状态不被改变（DB 仍 COMPLETED）
+  covers: [FR-012]
+  related_ac: [FR-012-验证2, FR-012-边界:活动状态非ACTIVE]
+  note: revert 仅允许 ACTIVE（与 reopen 允许 ACTIVE/CLOSED 的差异点）
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-003, mode: exclusive, version: ^0}
+flow:
+  - call:
+      method: PUT
+      path: "/api/system/activities/{{IS-PREP-003.activity.json.data.id}}/close"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: closed
+  - call:
+      method: PUT
+      path: "/api/inventory/sessions/{{IS-PREP-003.session.json.data.id}}/revert"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: resp
+  - db_query:
+      sql: SELECT session_status FROM tdm_inv_session
+           WHERE id = {{IS-PREP-003.session.json.data.id}}
+      save: sess_db
+      note: 确认会话状态未被变更
+verify:
+  - status: {eq: 400, of: resp}
+  - json: {of: resp, path: "$.message", contains: "仅已启动状态允许退回"}
+  - json: {of: sess_db, path: "$[0].session_status", eq: "COMPLETED"}

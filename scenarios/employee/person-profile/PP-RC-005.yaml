@@ -1,0 +1,39 @@
+# ─────────── 人读层：doc ───────────
+id: PP-RC-005
+title: 切片模式查询历史盘点快照（快照冻结 + 结果时点过滤）
+version: "0.1"
+priority: P0
+tags: [resolver]
+doc:
+  given: 人员参与过盘点活动并生成 RESULT 快照（select_emp 附带最新 RESULT 快照的 activityId）
+  when: 调用 GET /api/employee/profile?empNo=xxx&activityId=yyy（另调一次不带 activityId 作全局对照）
+  then: |
+    ① 状态型字段（workExternal/education/attendance/otherInfo）与快照 JSON 全等（snapshot_frozen）；
+    ② 盘点结果字段来自全局采集 + inventory_date ≤ 当前活动过滤（result_time_filtered：
+    切片记录 ⊆ 全局模式响应，且所有记录活动盘点时间不晚于当前活动）。
+    已知行为：workInternal/annualPerf 被 DHR 实时覆盖；eval360Detail 已废弃不展示
+    （360 信息由 eval360Primary 承载，能力明细不展示）——正向断言为 null。
+  covers: [FR-002, FR-003]
+  related_ac: [AC-002, AC-004]
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp_global
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", activityId: "{{emp.activity_id}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - json: {path: "$.data.basicInfo.empNo", eq: "{{emp.no}}"}
+  - oracle: snapshot_frozen
+  - oracle: result_time_filtered

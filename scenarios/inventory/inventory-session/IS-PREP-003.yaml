@@ -1,0 +1,87 @@
+# ─────────── 人读层：doc ───────────
+id: IS-PREP-003
+title: 数据准备：活动+会话+人员+锁定1人+完成会话（会话 COMPLETED）
+version: "0.1"
+test_type: unit
+priority: P0
+tags: [prep, revert-base]
+produces:
+  - {resource: inv_activity, state: ACTIVE}
+  - {resource: inv_session, state: COMPLETED}
+doc:
+  given: 测试账号具备活动/会话管理权限（资源码 TDM_INV_ACTIVITY）
+  when: 创建活动→启动→会话（corp 1002）→添加3人→锁定第1人→完成会话
+  then: 会话状态 COMPLETED，completedAt 非空
+  engine_deps: ["REQ-1(records[0].id 数组下标)", "REQ-2(fn.timestamp)", "REQ-4(写权限)"]
+  note: 完成校验要求 ①今天≥盘点日期（2026-07-22）②至少1名已锁定人员
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool:
+      use: set_var
+      with:
+        vars:
+          activity_name: "SG退回校验-{{fn.timestamp}}"
+          corp_code: "1002"
+          corp_name: "远东租赁"
+          inv_date: "2026-07-22"
+  - call:
+      method: POST
+      path: /api/system/activities
+      json:
+        activityName: "{{activity_name}}"
+        activityType: "CURRENT"
+        inventoryDate: "{{inv_date}}"
+        resourceCode: "TDM_INV_ACTIVITY"
+        platformList:
+          - {corpCode: "{{corp_code}}", corpName: "{{corp_name}}"}
+      save: activity
+  - call:
+      method: PUT
+      path: "/api/system/activities/{{activity.json.data.id}}/start"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: act_start
+  - call:
+      method: POST
+      path: /api/inventory/sessions
+      json:
+        activityId: "{{activity.json.data.id}}"
+        corpCode: "{{corp_code}}"
+        corpName: "{{corp_name}}"
+        resourceCode: "TDM_INV_ACTIVITY"
+      save: session
+  - call:
+      method: POST
+      path: /api/inventory/persons
+      json:
+        sessionId: "{{session.json.data.id}}"
+        empNoList: ["90024713", "90027339", "90027338"]
+        resourceCode: "TDM_INV_ACTIVITY"
+      save: persons
+  - call:
+      method: POST
+      path: /api/inventory/persons/query
+      json: {sessionId: "{{session.json.data.id}}", page: 1, size: 10}
+      save: persons_q
+  - call:
+      method: PUT
+      path: "/api/inventory/persons/{{persons_q.json.data.records[0].id}}/lock"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: lock_resp
+  - call:
+      method: PUT
+      path: "/api/inventory/sessions/{{session.json.data.id}}/complete"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: completed
+verify:
+  - status: {of: activity, eq: 201}
+  - json: {of: persons, path: "$.data.inserted", eq: 3}
+  - json: {of: completed, path: "$.data.sessionStatus", eq: "COMPLETED"}
+  - json: {of: completed, path: "$.data.completedAt", not_null: true}
+teardown:
+  # 尽力而为：关闭活动（IS-RVT-002 已关闭时此步报错不影响 verdict）
+  - call:
+      method: PUT
+      path: "/api/system/activities/{{activity.json.data.id}}/close"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}

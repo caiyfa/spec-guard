@@ -1,0 +1,28 @@
+# ─────────── 人读层：doc ───────────
+id: PP-SEC-001
+title: 未登录（无 token）访问档案接口被拒绝
+version: "0.1"
+priority: P0
+tags: [security]
+doc:
+  given: 请求不携带 Authorization 头
+  when: 调用 GET /api/employee/profile?empNo=xxx
+  then: 返回未认证错误（统一包装协议：HTTP 200 + body.status=401）
+  covers: []
+  related_ac: [AC-001]
+  note: 未认证错误同样被 BusinessResult 统一包装，401 语义在 body.status
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: set_var, with: {vars: {"no": "90024713"}}, save: emp}
+  - call:
+      as: none
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - json: {path: "$.status", eq: "401"}
+  - json: {path: "$.message", contains: "authentication"}

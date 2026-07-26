@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecGuard 完全体 · 契约驱动的智能测试体系</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --blue: #58a6ff;
+    --purple: #a371f7;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.7;
+  }
+  .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── 导航 ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(13,17,23,.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .container { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  nav .logo { font-weight: 700; font-size: 17px; letter-spacing: .5px; }
+  nav .logo span { background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  nav a { color: var(--text-dim); text-decoration: none; font-size: 13.5px; margin-left: 22px; transition: color .2s; }
+  nav a:hover { color: var(--text); }
+
+  /* ── Hero ── */
+  .hero {
+    min-height: 92vh; display: flex; align-items: center; text-align: center;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% -5%, rgba(88,166,255,.18), transparent),
+      radial-gradient(ellipse 45% 40% at 85% 25%, rgba(163,113,247,.12), transparent),
+      var(--bg);
+    padding: 110px 0 60px;
+  }
+  .hero h1 { font-size: 52px; font-weight: 800; letter-spacing: 1px; }
+  .hero h1 .grad { background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .slogan { font-size: 21px; color: var(--text-dim); margin: 18px 0 8px; }
+  .hero .slogan strong { color: var(--text); }
+  .badges { display: flex; gap: 12px; justify-content: center; margin: 26px 0 34px; flex-wrap: wrap; }
+  .badge {
+    padding: 6px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--bg-soft);
+  }
+  .badge.done { color: var(--green); border-color: rgba(63,185,80,.4); }
+  .badge.plan { color: var(--amber); border-color: rgba(210,153,34,.4); }
+  .badge.info { color: var(--blue); border-color: rgba(88,166,255,.4); }
+  .cta-row { display: flex; gap: 16px; justify-content: center; }
+  .btn {
+    padding: 12px 30px; border-radius: 10px; font-size: 15px; font-weight: 600;
+    text-decoration: none; transition: transform .15s, box-shadow .15s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { background: linear-gradient(90deg, var(--blue), var(--purple)); color: #fff; box-shadow: 0 4px 24px rgba(88,166,255,.35); }
+  .btn-ghost { border: 1px solid var(--border); color: var(--text); background: var(--bg-soft); }
+
+  /* ── 通用区块 ── */
+  section { padding: 84px 0; }
+  .kicker { color: var(--blue); font-size: 13px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; text-align: center; }
+  h2.title { font-size: 34px; font-weight: 800; text-align: center; margin: 10px 0 14px; }
+  .subtitle { color: var(--text-dim); text-align: center; max-width: 720px; margin: 0 auto 48px; font-size: 15.5px; }
+  .alt { background: var(--bg-soft); }
+
+  /* ── 痛点 ── */
+  .pain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .pain-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 26px 22px; border-top: 3px solid var(--red);
+  }
+  .pain-card h3 { font-size: 16.5px; margin-bottom: 10px; }
+  .pain-card p { font-size: 13.5px; color: var(--text-dim); }
+  .pain-card .icon { font-size: 26px; margin-bottom: 12px; }
+
+  /* ── 数字带 ── */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .stat {
+    text-align: center; padding: 26px 10px; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: 14px;
+  }
+  .stat .num { font-size: 36px; font-weight: 800; background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat .label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  /* ── 三层架构 ── */
+  .layer { border-radius: 16px; padding: 26px 30px; margin-bottom: 18px; border: 1px solid var(--border); position: relative; overflow: hidden; }
+  .layer::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; }
+  .layer.l1 { background: linear-gradient(135deg, rgba(163,113,247,.10), var(--bg-card)); }
+  .layer.l1::before { background: var(--purple); }
+  .layer.l2 { background: linear-gradient(135deg, rgba(88,166,255,.10), var(--bg-card)); }
+  .layer.l2::before { background: var(--blue); }
+  .layer.l3 { background: linear-gradient(135deg, rgba(63,185,80,.10), var(--bg-card)); }
+  .layer.l3::before { background: var(--green); }
+  .layer-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .layer-head h3 { font-size: 20px; }
+  .layer-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .layer-item { background: rgba(13,17,23,.55); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; }
+  .layer-item strong { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .layer-item span { color: var(--text-dim); }
+
+  /* ── 能力卡片 ── */
+  .cap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .cap-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; transition: transform .18s, border-color .18s;
+  }
+  .cap-card:hover { transform: translateY(-4px); border-color: var(--blue); }
+  .cap-card h3 { font-size: 16.5px; margin: 12px 0 8px; }
+  .cap-card p { font-size: 13.5px; color: var(--text-dim); }
+  .cap-card .gain { margin-top: 12px; font-size: 12.5px; color: var(--green); font-weight: 600; }
+  .cap-card .role { margin-top: 12px; font-size: 12.5px; color: var(--purple); font-weight: 600; }
+  .cap-icon {
+    width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 800; color: #fff;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+  }
+  .cap-card.future .cap-icon { background: linear-gradient(135deg, var(--amber), var(--purple)); }
+
+  /* ── Mermaid ── */
+  .mermaid-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 30px; overflow-x: auto; }
+  .mermaid { display: flex; justify-content: center; }
+
+  /* ── verdict ── */
+  .verdict-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 34px; }
+  .verdict { border-radius: 12px; padding: 18px; text-align: center; border: 1px solid var(--border); background: var(--bg-card); }
+  .verdict .tag { display: inline-block; font-weight: 800; font-size: 14px; padding: 3px 14px; border-radius: 999px; margin-bottom: 10px; }
+  .verdict p { font-size: 12.5px; color: var(--text-dim); }
+  .v-pass .tag { background: rgba(63,185,80,.15); color: var(--green); }
+  .v-fail .tag { background: rgba(248,81,73,.15); color: var(--red); }
+  .v-skip .tag { background: rgba(210,153,34,.15); color: var(--amber); }
+  .v-blocked .tag { background: rgba(88,166,255,.15); color: var(--blue); }
+  .v-drift .tag { background: rgba(163,113,247,.15); color: var(--purple); }
+
+  /* ── 边界 ── */
+  .boundary { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .boundary-item { display: flex; gap: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .boundary-item .no { color: var(--red); font-size: 18px; font-weight: 800; flex-shrink: 0; }
+  .boundary-item h4 { font-size: 14.5px; margin-bottom: 4px; }
+  .boundary-item p { font-size: 12.5px; color: var(--text-dim); }
+
+  /* ── 分工表 ── */
+  table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: 14px; overflow: hidden; border: 1px solid var(--border); }
+  th, td { padding: 14px 18px; text-align: left; font-size: 13.5px; border-bottom: 1px solid var(--border); }
+  th { background: rgba(88,166,255,.08); font-size: 13px; letter-spacing: 1px; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+
+  /* ── 路线 ── */
+  .roadmap { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; counter-reset: step; }
+  .road-step { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px 20px; position: relative; }
+  .road-step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; top: -14px; left: 20px; width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), var(--purple)); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+  }
+  .road-step h4 { margin: 8px 0 6px; font-size: 15.5px; }
+  .road-step p { font-size: 12.5px; color: var(--text-dim); }
+
+  /* ── 结尾 CTA ── */
+  .final { text-align: center; padding: 100px 0; background: radial-gradient(ellipse 55% 60% at 50% 110%, rgba(163,113,247,.16), transparent), var(--bg-soft); }
+  .final h2 { font-size: 36px; font-weight: 800; margin-bottom: 14px; }
+  .final p { color: var(--text-dim); margin-bottom: 34px; }
+  footer { padding: 30px 0; text-align: center; color: var(--text-dim); font-size: 12.5px; border-top: 1px solid var(--border); }
+
+  /* ── 渐显 ── */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 36px; }
+    nav a { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="logo">Spec<span>Guard</span></div>
+    <div>
+      <a href="#pain">痛点</a>
+      <a href="#arch">架构</a>
+      <a href="#cap">能力</a>
+      <a href="#flow">流程</a>
+      <a href="#boundary">边界</a>
+      <a href="#roadmap">落地</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════ HERO ══════════ -->
+<header class="hero">
+  <div class="container">
+    <h1>Spec<span class="grad">Guard</span> 完全体</h1>
+    <p class="slogan">契约驱动的智能测试体系 —— 让测试人员<strong>从「写用例」升级为「做判断」</strong></p>
+    <div class="badges">
+      <span class="badge done">✔ 引擎层 · 已建成冻结</span>
+      <span class="badge done">✔ 工作台层 · 已建成可用</span>
+      <span class="badge plan">◐ 智能层 · PI Agent 设计中</span>
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#cap">查看核心能力</a>
+      <a class="btn btn-ghost" href="#flow">交互流程</a>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════ 痛点 ══════════ -->
+<section id="pain">
+  <div class="container">
+    <p class="kicker">Why SpecGuard</p>
+    <h2 class="title">后端测试的四个老难题</h2>
+    <p class="subtitle">不是测试人员不努力，而是工具链把人困在了低价值的重复劳动里。</p>
+    <div class="pain-grid reveal">
+      <div class="pain-card">
+        <div class="icon">✍️</div>
+        <h3>用例编写慢</h3>
+        <p>一个接口场景从读文档到落地用例以人天计，字段对齐、断言编写全靠手工。</p>
+      </div>
+      <div class="pain-card">
+        <div class="icon">🎯</div>
+        <h3>回归范围拍脑袋</h3>
+        <p>每次发版要么全量跑费时费力，要么凭经验圈范围，漏测风险无人兜底。</p>
+      </div>
+      <div class="pain-card">
+        <div class="icon">🔍</div>
+        <h3>失败排查翻日志</h3>
+        <p>一个 FAIL 要人工分辨：环境问题？数据缺失？场景写错？还是真缺陷？</p>
+      </div>
+      <div class="pain-card">
+        <div class="icon">🌫️</div>
+        <h3>报告噪音淹没问题</h3>
+        <p>环境抖动造成的假失败混在报告里，真正的缺陷信号被淹没。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 实测数据 ══════════ -->
+<section class="alt">
+  <div class="container">
+    <p class="kicker">Proven, Not Promised</p>
+    <h2 class="title">已建成部分的真实战绩</h2>
+    <p class="subtitle">以下全部来自 TDM 项目 SIT 环境实测，不是 PPT 数字。</p>
+    <div class="stats reveal">
+      <div class="stat"><div class="num">87</div><div class="label">引擎单元测试</div></div>
+      <div class="stat"><div class="num">51</div><div class="label">SIT 场景实测通过</div></div>
+      <div class="stat"><div class="num">24</div><div class="label">场景格式 2.0 无损迁移</div></div>
+      <div class="stat"><div class="num">9</div><div class="label">依赖管理 E2E 校验</div></div>
+      <div class="stat"><div class="num">8+</div><div class="label">DB 校对断言器</div></div>
+      <div class="stat"><div class="num">25s</div><div class="label">全量场景执行耗时</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 三层架构 ══════════ -->
+<section id="arch">
+  <div class="container">
+    <p class="kicker">Architecture</p>
+    <h2 class="title">三层架构：冻结的底座，生长的智能</h2>
+    <p class="subtitle">引擎层语法冻结保稳定，工作台层承载人机交互，智能层引入 PI Agent 设计思想逐步点亮。</p>
+    <div class="reveal">
+      <div class="layer l1">
+        <div class="layer-head"><h3>智能层</h3><span class="badge plan">◐ 规划中 · PI Agent 设计思想</span></div>
+        <div class="layer-items">
+          <div class="layer-item"><strong>场景智能生成</strong><span>读 Spec 与格式规范，自动生成合规 YAML</span></div>
+          <div class="layer-item"><strong>计划智能编排</strong><span>DAG + FR 覆盖矩阵，自动圈定回归范围</span></div>
+          <div class="layer-item"><strong>失败智能归因</strong><span>环境 / 数据 / 缺陷自动分类，场景自修复</span></div>
+          <div class="layer-item"><strong>自治回归</strong><span>代码 diff 驱动增量回归，报告主动推送</span></div>
+        </div>
+      </div>
+      <div class="layer l2">
+        <div class="layer-head"><h3>工作台层</h3><span class="badge done">✔ 已建成</span></div>
+        <div class="layer-items">
+          <div class="layer-item"><strong>RunControl</strong><span>执行控制、断点分段、实时输出流</span></div>
+          <div class="layer-item"><strong>DagEditor</strong><span>ELK 自动布局、连线建依赖、版本徽章</span></div>
+          <div class="layer-item"><strong>格式规范导出</strong><span>Agent 生成用例的唯一依据，引擎动态生成</span></div>
+          <div class="layer-item"><strong>报告看板</strong><span>report.md + run.json + 单场景证据链</span></div>
+        </div>
+      </div>
+      <div class="layer l3">
+        <div class="layer-head"><h3>引擎层</h3><span class="badge done">✔ 已建成 · 语法冻结</span></div>
+        <div class="layer-items">
+          <div class="layer-item"><strong>YAML DSL</strong><span>3 原语 call / db_query / poll + tool 信封</span></div>
+          <div class="layer-item"><strong>DAG 依赖调度</strong><span>拓扑排序、shared / exclusive 双模式</span></div>
+          <div class="layer-item"><strong>DB 与权限预言</strong><span>oracle 断言器注册表，SELECT-only 守卫</span></div>
+          <div class="layer-item"><strong>版本化契约</strong><span>契约指纹 + 发布门禁，变更可仲裁</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 已建成能力 ══════════ -->
+<section id="cap" class="alt">
+  <div class="container">
+    <p class="kicker">Capabilities · Now</p>
+    <h2 class="title">今天就能用的十项能力</h2>
+    <p class="subtitle">测试人员不写代码，只写 YAML；doc 层即测试文档，执行层即测试脚本。</p>
+    <div class="cap-grid reveal">
+      <div class="cap-card"><div class="cap-icon">01</div><h3>API 级 E2E 场景</h3><p>HTTP 调用 + JSON 路径断言 + 状态码校验 + DB 校对 + 权限预言，一条链路全覆盖。</p><div class="gain">→ 不写代码，只写 YAML</div></div>
+      <div class="cap-card"><div class="cap-icon">02</div><h3>双层 YAML 用例</h3><p>doc 层 given/when/then + FR 编号给人看，flow/verify 层给机器跑，评审零翻译成本。</p><div class="gain">→ 用例即文档</div></div>
+      <div class="cap-card"><div class="cap-icon">03</div><h3>依赖 DAG 调度</h3><p>depends_on 声明上下游，自动拓扑排序、跨模块引用；上游失败下游自动 BLOCKED。</p><div class="gain">→ 准备用例自动前置</div></div>
+      <div class="cap-card"><div class="cap-icon">04</div><h3>写型场景状态管理</h3><p>shared 只读复用 / exclusive 独占实例双模式，teardown LIFO 清理，写流程不污染环境。</p><div class="gain">→ 写测试也敢放心跑</div></div>
+      <div class="cap-card"><div class="cap-icon">05</div><h3>DB 校对断言器</h3><p>快照冻结比对、时点过滤、DHR 降级、三维权限过滤等 8+ 预置 oracle。</p><div class="gain">→ 接口与库一致性自动核对</div></div>
+      <div class="cap-card"><div class="cap-icon">06</div><h3>权限预言</h3><p>实时抓取权限中台数据，ALL / PART / 无权限 fail-secure 全链路自动验证。</p><div class="gain">→ 告别手工构造账号矩阵</div></div>
+      <div class="cap-card"><div class="cap-icon">07</div><h3>断点分段执行</h3><p>按断点切批次，批间暂停展示上下文，人工确认后再继续。</p><div class="gain">→ 长链路可中途介入</div></div>
+      <div class="cap-card"><div class="cap-icon">08</div><h3>计划驱动执行</h3><p>测试计划由迭代 delta 导入生成，报告按 plan_id 归档，历史完整可追溯。</p><div class="gain">→ 回归与需求一一对应</div></div>
+      <div class="cap-card"><div class="cap-icon">09</div><h3>诚实的结果语义</h3><p>数据缺失 → SKIP，上游失败 → BLOCKED，绝不把环境问题报成 FAIL。</p><div class="gain">→ FAIL 即可疑缺陷</div></div>
+      <div class="cap-card"><div class="cap-icon">10</div><h3>发布门禁</h3><p>契约指纹变更未 bump 版本即拦截，环检测、teardown 缺失告警自动守门。</p><div class="gain">→ 用例库质量自动保障</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 完全体智能 ══════════ -->
+<section>
+  <div class="container">
+    <p class="kicker">Capabilities · Future</p>
+    <h2 class="title">完全体：PI Agent 思想点亮智能层</h2>
+    <p class="subtitle">开源 PI Agent 已验证的设计哲学——极简工具原语 + 知识注入 + 上下文工程——与 SpecGuard 架构天然同构：tool 信封对应工具原语，格式规范对应 skill 文件，报告事件流对应三层事件系统。无需自研框架，只做思想移植。</p>
+    <div class="cap-grid reveal">
+      <div class="cap-card future"><div class="cap-icon">G</div><h3>场景智能生成</h3><p>Agent 读 spec.md + api.yaml + 格式规范，自动生成带 FR 覆盖标注的合规 YAML。</p><div class="role">→ 测试人员：从写用例变为审用例</div></div>
+      <div class="cap-card future"><div class="cap-icon">O</div><h3>计划智能编排</h3><p>基于 DAG 契约指纹与 FR 覆盖矩阵，自动编排计划并标出覆盖缺口。</p><div class="role">→ 测试人员：从排计划变为定策略</div></div>
+      <div class="cap-card future"><div class="cap-icon">D</div><h3>失败智能归因</h3><p>自动分类环境 / 数据 / 场景错误 / 疑似缺陷；场景错误自动修复，缺陷产出 BUG 单草稿。</p><div class="role">→ 测试人员：从翻日志变为做判断</div></div>
+      <div class="cap-card future"><div class="cap-icon">R</div><h3>变更驱动自治回归</h3><p>代码 diff → 自动圈定受影响场景 → 增量回归 → 报告推送。</p><div class="role">→ 每次提交都有精准质量守门</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 交互流程 ══════════ -->
+<section id="flow" class="alt">
+  <div class="container">
+    <p class="kicker">Workflow</p>
+    <h2 class="title">完全体交互流程：人从环中撤到环上</h2>
+    <p class="subtitle">Agent 跑在环里，人守在三个关键闸门：用例评审、缺陷定性、放行决策。</p>
+    <div class="mermaid-box reveal">
+<pre class="mermaid">
+graph TD
+    A[Spec需求变更] --> B[Agent生成或更新场景YAML]
+    B --> C[测试人员评审doc层<br/>given/when/then与FR覆盖]
+    C -->|评审不通过| B
+    C -->|评审通过| D[提交场景库<br/>格式校验+发布门禁]
+    D --> E[Agent编排测试计划<br/>标出FR覆盖缺口]
+    E --> F[测试人员确认回归范围]
+    F --> G[Workbench一键执行<br/>或断点分段执行]
+    G --> H{运行结果}
+    H -->|全PASS| I[报告归档<br/>report.md+run.json+cases]
+    H -->|有FAIL| J[Agent失败归因]
+    J --> K{归因类别}
+    K -->|环境或数据缺失| L[补数据或配账号后重跑]
+    K -->|场景本身错误| M[Agent修复场景<br/>测试人员确认]
+    K -->|疑似产品缺陷| N[测试人员定性定级<br/>确认后提BUG单]
+    L --> G
+    M --> G
+    N --> I
+</pre>
+    </div>
+    <div class="verdict-grid reveal">
+      <div class="verdict v-pass"><span class="tag">PASS</span><p>断言全过，无需动作</p></div>
+      <div class="verdict v-fail"><span class="tag">FAIL</span><p>断言未过，进入归因流程</p></div>
+      <div class="verdict v-skip"><span class="tag">SKIP</span><p>环境缺数据，非缺陷，补料重跑</p></div>
+      <div class="verdict v-blocked"><span class="tag">BLOCKED</span><p>上游未过，先看上游，勿查本场景</p></div>
+      <div class="verdict v-drift"><span class="tag">DRIFT</span><p>上游契约变更，按需 bump 版本</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 人机分工 ══════════ -->
+<section>
+  <div class="container">
+    <p class="kicker">Human × Agent × Engine</p>
+    <h2 class="title">人机分工：谁干什么，一目了然</h2>
+    <p class="subtitle">机器负责速度与一致性，人负责判断与责任。</p>
+    <div class="reveal">
+      <table>
+        <tr><th>环节</th><th>Agent</th><th>测试人员</th><th>引擎</th></tr>
+        <tr><td>场景编写</td><td>生成初稿</td><td>评审 doc 层、拍板入库</td><td>格式校验</td></tr>
+        <tr><td>计划编排</td><td>推荐范围、标缺口</td><td>确认回归策略</td><td>DAG 拓扑调度</td></tr>
+        <tr><td>执行</td><td>触发与监控</td><td>断点处介入判断</td><td>执行 + 证据落盘</td></tr>
+        <tr><td>失败处理</td><td>归因建议、修复草稿</td><td>缺陷定性、BUG 单确认</td><td>重跑与清理</td></tr>
+        <tr><td>质量守门</td><td>覆盖缺口提醒</td><td>最终放行决策</td><td>发布门禁拦截</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 能力边界 ══════════ -->
+<section id="boundary" class="alt">
+  <div class="container">
+    <p class="kicker">Honest Boundaries</p>
+    <h2 class="title">我们不做什么 —— 边界清晰才值得信任</h2>
+    <p class="subtitle">七条长期边界写进设计，防止能力误用，也让每一分投入都花在刀刃上。</p>
+    <div class="boundary reveal">
+      <div class="boundary-item"><div class="no">✕</div><div><h4>不做前端 UI 测试</h4><p>纯后端 API + DB 视角，UI 链路交给专门工具。</p></div></div>
+      <div class="boundary-item"><div class="no">✕</div><div><h4>不做性能压测</h4><p>引擎按依赖串行调度，压测走 JMeter 等专用平台。</p></div></div>
+      <div class="boundary-item"><div class="no">✕</div><div><h4>不替代探索性测试</h4><p>易用性与业务直觉判断永远属于人。</p></div></div>
+      <div class="boundary-item"><div class="no">✕</div><div><h4>不写生产数据库</h4><p>SELECT-only 硬守卫，写操作只走 API 且必须配 teardown。</p></div></div>
+      <div class="boundary-item"><div class="no">✕</div><div><h4>不造假数据凑通过</h4><p>SKIP 语义是底线：环境缺失绝不粉饰成 PASS。</p></div></div>
+      <div class="boundary-item"><div class="no">✕</div><div><h4>Agent 产物不直接执行</h4><p>人工评审 → 格式校验 → 发布门禁，三道闸缺一不可。</p></div></div>
+      <div class="boundary-item"><div class="no">✕</div><div><h4>不替代缺陷定性</h4><p>Agent 只给归因建议，定性与定级永远由测试人员拍板。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 落地节奏 ══════════ -->
+<section id="roadmap">
+  <div class="container">
+    <p class="kicker">Roadmap</p>
+    <h2 class="title">四阶段滚动交付，每步独立见效</h2>
+    <p class="subtitle">引擎冻结层不受影响，智能层纯增量叠加，随时可停、随时可用。</p>
+    <div class="roadmap reveal">
+      <div class="road-step"><h4>场景生成</h4><p>Agent 生成合规 YAML 场景，用例编写从人天级降至分钟级。</p></div>
+      <div class="road-step"><h4>智能编排</h4><p>FR 覆盖缺口自动识别，回归范围精准化，杜绝漏测与冗余。</p></div>
+      <div class="road-step"><h4>运行诊断</h4><p>失败自动归因、场景自修复、BUG 单草稿，分析从小时降至分钟。</p></div>
+      <div class="road-step"><h4>自治回归</h4><p>代码变更驱动增量回归，每次提交自动质量守门。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 结尾 ══════════ -->
+<section class="final">
+  <div class="container">
+    <h2>底座已冻结，智能正当时</h2>
+    <p>引擎与工作台已在 TDM 项目实战验证 · 智能层仅需开发 token 积分与专项人力即可启动</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#pain">重新回顾</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  SpecGuard · 契约驱动的智能测试体系 · TDM 项目孵化 · 2026-07
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    flowchart: { curve: 'basis', htmlLabels: true },
+    themeVariables: {
+      primaryColor: '#1c2330',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#58a6ff',
+      lineColor: '#8b949e',
+      secondaryColor: '#161b22',
+      tertiaryColor: '#0d1117'
+    }
+  });
+
+  // 滚动渐显
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

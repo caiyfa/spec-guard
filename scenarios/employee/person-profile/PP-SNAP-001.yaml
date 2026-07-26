@@ -1,0 +1,38 @@
+# ─────────── 人读层：doc ───────────
+id: PP-SNAP-001
+title: 切片数据保真：状态型字段与快照一致 + 结果字段时点过滤正确
+version: "0.1"
+priority: P0
+tags: [snapshot]
+doc:
+  given: 人员有含盘点结果数据的 RESULT 快照
+  when: 切片模式调用 GET /api/employee/profile?empNo=xxx&activityId=yyy（另调全局模式作对照）
+  then: |
+    ① 状态型字段（workExternal/education/attendance/otherInfo）与快照 JSON 严格全等（snapshot_frozen），
+    证明这些字段读取路径为快照而非 DHR 实时表；
+    ② 盘点结果字段与全局模式同源且满足 inventory_date 时点过滤（result_time_filtered）；
+    ③ eval360Detail 已废弃不展示（360 信息由 eval360Primary 承载）——正向断言为 null。
+    与 PP-RC-005 互补：本场景聚焦快照冻结字段的保真性，RC-005 聚焦职责链路由。
+  covers: [FR-002, FR-003]
+  related_ac: [AC-004]
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp_global
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", activityId: "{{emp.activity_id}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - oracle: snapshot_frozen
+  - oracle: result_time_filtered

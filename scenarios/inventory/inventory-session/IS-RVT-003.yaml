@@ -1,0 +1,32 @@
+# ─────────── 人读层：doc ───────────
+id: IS-RVT-003
+title: 进行中会话调用退回 → 400 拒绝（仅已完成会话可退回）
+version: "0.1"
+test_type: scenario
+priority: P1
+tags: [revert, negative]
+doc:
+  given: 会话状态 IN_PROGRESS（IS-PREP-002 独占实例）
+  when: PUT /api/inventory/sessions/{id}/revert
+  then: 400，错误消息含「仅已完成会话可退回」；会话状态保持 IN_PROGRESS
+  covers: [FR-012]
+  related_ac: [FR-012-边界:会话非COMPLETED]
+
+# ─────────── 机器读层 ───────────
+depends_on:
+  - {id: IS-PREP-002, mode: exclusive, version: ^0}
+flow:
+  - call:
+      method: PUT
+      path: "/api/inventory/sessions/{{IS-PREP-002.session.json.data.id}}/revert"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: resp
+  - db_query:
+      sql: SELECT session_status FROM tdm_inv_session
+           WHERE id = {{IS-PREP-002.session.json.data.id}}
+      save: sess_db
+      note: 确认会话状态未被变更
+verify:
+  - status: {eq: 400, of: resp}
+  - json: {of: resp, path: "$.message", contains: "仅已完成会话可退回"}
+  - json: {of: sess_db, path: "$[0].session_status", eq: "IN_PROGRESS"}

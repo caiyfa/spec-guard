@@ -1,0 +1,27 @@
+# ─────────── 人读层：doc ───────────
+id: PP-PERM-003
+title: 纵向负责人（verticalManager）维度权限过滤
+version: "0.1"
+priority: P0
+tags: [permission]
+doc:
+  given: 人员任一 tdm_inv_person 记录 use_vertical_manager=Y；当前用户 vm 权限不覆盖该人员的 vertical_manager 值
+  when: 调用 GET /api/employee/profile?empNo=xxx
+  then: 7 个盘点结果字段全部清空（fail-secure），basicInfo/教育/工作经历等非盘点数据保留；用户 vm 权限覆盖时结果正常返回
+  covers: [FR-016, FR-017]
+  related_ac: [AC-001]
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: vertical_manager}, save: emp}
+  - tool: {use: fetch_permission, with: {account: default}, save: scope}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - oracle: vm_filtered

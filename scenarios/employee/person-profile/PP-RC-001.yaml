@@ -1,0 +1,28 @@
+# ─────────── 人读层：doc（不参执行，进报告"原始内容"段，供 QA/产品评审）───────────
+id: PP-RC-001
+title: 有快照人员当前模式返回全模块档案
+version: "0.1"
+priority: P0
+tags: [resolver]
+doc:
+  given: 人员已被盘点锁定并生成快照；当前用户具备 TDM_SNAPSHOT_ARCHIVE 资源权限
+  when: 调用 GET /api/employee/profile?empNo=xxx（不传 activityId）
+  then: 返回 ProfileVO，basicInfo 及各业务模块完整；basicInfo 与员工表当前行一致
+  covers: [FR-001, FR-004]
+  related_ac: [AC-001]
+
+# ─────────── 机器读层：依赖 + 执行 + 验证 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - json: {path: "$.data.basicInfo.empNo", eq: "{{emp.no}}"}
+  - json: {path: "$.data.basicInfo.empName", not_null: true}
+  - oracle: profile_matches_db

@@ -1,0 +1,28 @@
+# ─────────── 人读层：doc ───────────
+id: PP-RC-004
+title: 人员在 TDM 和 DHR 均不存在返回 404
+version: "0.1"
+priority: P0
+tags: [resolver]
+doc:
+  given: empNo 在 TDM（tdm_emp_employee）和 DHR（dhr_employee）中均无记录
+  when: 调用 GET /api/employee/profile?empNo=NOTEXIST999
+  then: 4 级回退解析链全部无法处理，返回人员不存在错误
+  covers: [FR-001]
+  related_ac: [AC-003]
+  note: TDM 统一响应包装协议下错误语义为 HTTP 200 + body.status=500000 + message（非 HTTP 404）；与 api.yaml 声明的 404 存在表现形式差异，以 BusinessResult 实际协议为准
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: set_var, with: {vars: {"no": "NOTEXIST999"}}, save: emp}
+  - call:
+      as: default
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - json: {path: "$.status", eq: "500000"}
+  - json: {path: "$.message", contains: "不存在"}

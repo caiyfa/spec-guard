@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecGuard 完全体 · 交互原型（企业级多系统）</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-soft: #161b22; --bg-card: #1c2330; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e;
+    --blue: #58a6ff; --purple: #a371f7; --green: #3fb950; --amber: #d29922; --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: "Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; font-size: 14px; line-height: 1.6; overflow: hidden; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .app { display: flex; height: 100vh; }
+  .sidebar { width: 224px; flex-shrink: 0; background: var(--bg-soft); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .sidebar .brand { padding: 16px 18px; font-size: 16px; font-weight: 800; border-bottom: 1px solid var(--border); }
+  .sidebar .brand span { background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sidebar .proto-tag { font-size: 10px; color: var(--amber); font-weight: 600; display: block; margin-top: 2px; letter-spacing: 1px; }
+  .nav-sec { padding: 10px 18px 4px; font-size: 10.5px; color: var(--text-dim); letter-spacing: 2px; font-weight: 700; }
+  .nav-item { padding: 9px 18px; color: var(--text-dim); cursor: pointer; font-size: 13px; border-left: 3px solid transparent; display: flex; align-items: center; gap: 10px; transition: all .15s; user-select: none; }
+  .nav-item:hover { color: var(--text); background: rgba(88,166,255,.05); }
+  .nav-item.active { color: var(--text); background: rgba(88,166,255,.1); border-left-color: var(--blue); }
+  .nav-item .ico { width: 18px; text-align: center; font-weight: 700; }
+  .sidebar .foot { margin-top: auto; padding: 12px 18px; font-size: 10.5px; color: var(--text-dim); border-top: 1px solid var(--border); line-height: 1.7; }
+  .sidebar .foot b { color: var(--purple); }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--bg-soft); }
+  .sys-switch { display: flex; gap: 6px; }
+  .sys-opt { font-size: 12px; padding: 4px 13px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; user-select: none; transition: all .15s; }
+  .sys-opt:hover { color: var(--text); }
+  .sys-opt.active { color: var(--blue); border-color: rgba(88,166,255,.5); background: rgba(88,166,255,.1); font-weight: 600; }
+  .topbar .env { font-size: 12px; padding: 3px 12px; border-radius: 999px; border: 1px solid rgba(63,185,80,.4); color: var(--green); font-weight: 600; }
+  .topbar .agent-status { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+
+  .view { flex: 1; overflow-y: auto; padding: 22px; display: none; }
+  .view.active { display: block; }
+  .view h2 { font-size: 19px; margin-bottom: 4px; }
+  .view .v-sub { color: var(--text-dim); font-size: 12.5px; margin-bottom: 18px; }
+
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .btn { padding: 8px 16px; border-radius: 8px; font-size: 12.5px; font-weight: 600; border: none; cursor: pointer; transition: all .15s; font-family: inherit; }
+  .btn-p { background: linear-gradient(90deg, var(--blue), var(--purple)); color: #fff; }
+  .btn-p:hover { box-shadow: 0 2px 14px rgba(88,166,255,.4); }
+  .btn-g { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); }
+  .btn-g:hover { border-color: var(--blue); }
+  .btn-d { background: rgba(248,81,73,.12); color: var(--red); border: 1px solid rgba(248,81,73,.35); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+  .t-pass { background: rgba(63,185,80,.15); color: var(--green); }
+  .t-fail { background: rgba(248,81,73,.15); color: var(--red); }
+  .t-skip { background: rgba(210,153,34,.15); color: var(--amber); }
+  .t-blocked { background: rgba(88,166,255,.15); color: var(--blue); }
+  .t-drift { background: rgba(163,113,247,.15); color: var(--purple); }
+  .t-run { background: rgba(88,166,255,.15); color: var(--blue); }
+  .t-wait { background: var(--bg-soft); color: var(--text-dim); }
+  .mono { font-family: Consolas, "Courier New", monospace; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dim { color: var(--text-dim); font-size: 12px; }
+  .think-steps { font-size: 12px; color: var(--text-dim); }
+  .think-steps div { padding: 3px 0; opacity: 0; animation: fadein .4s forwards; }
+  .think-steps div::before { content: "✓ "; color: var(--green); font-weight: 700; }
+  @keyframes fadein { to { opacity: 1; } }
+  .run-row { display: flex; align-items: center; gap: 12px; padding: 9px 6px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .run-row:last-child { border-bottom: none; }
+  .run-row .rid { color: var(--text-dim); font-size: 11.5px; }
+  .run-row .rname { flex: 1; }
+  .codebox { background: #0a0e14; border-radius: 8px; padding: 14px; font-size: 12.5px; line-height: 1.75; white-space: pre-wrap; font-family: Consolas, monospace; }
+
+  /* ── 仪表盘 ── */
+  .sys-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+  .sys-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; cursor: pointer; transition: all .15s; }
+  .sys-card:hover { border-color: var(--blue); }
+  .sys-card.cur { border-color: rgba(88,166,255,.55); box-shadow: 0 0 0 1px rgba(88,166,255,.3); }
+  .sys-card h3 { font-size: 14.5px; margin-bottom: 2px; }
+  .sys-card .repo { font-size: 11px; color: var(--text-dim); }
+  .sys-card .nums { display: flex; gap: 18px; margin-top: 10px; }
+  .sys-card .nums b { font-size: 20px; color: var(--blue); }
+  .sys-card .nums span { font-size: 11px; color: var(--text-dim); display: block; }
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .stat-card .num { font-size: 28px; font-weight: 800; background: linear-gradient(90deg, var(--blue), var(--purple)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat-card .lb { font-size: 12px; color: var(--text-dim); }
+  .stat-card .delta { font-size: 11.5px; color: var(--green); margin-top: 3px; }
+  .vbar { display: flex; height: 24px; border-radius: 7px; overflow: hidden; margin: 10px 0 8px; }
+  .vbar div { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-dim); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+  .timeline-item { position: relative; padding: 7px 0 7px 24px; font-size: 12.5px; border-left: 2px solid var(--border); margin-left: 8px; }
+  .timeline-item::before { content: ""; position: absolute; left: -6px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--purple); }
+  .timeline-item .tt { color: var(--text-dim); font-size: 11px; }
+
+  /* ── Spec 文档中心 ── */
+  .spec-wrap { display: grid; grid-template-columns: 350px 1fr; gap: 14px; height: calc(100vh - 170px); }
+  .spec-tree { overflow-y: auto; }
+  .repo-head { padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .repo-head .rname { font-weight: 700; font-size: 13.5px; }
+  .repo-head .rmeta { font-size: 11px; color: var(--text-dim); margin: 4px 0 8px; }
+  .t-dir { font-size: 12.5px; color: var(--text); padding: 4px 0 2px; font-weight: 600; }
+  .t-dir .t-commit { font-size: 10.5px; color: var(--amber); font-weight: 400; }
+  .t-item { font-size: 12.5px; color: var(--text-dim); padding: 5px 8px 5px 22px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 7px; }
+  .t-item:hover { background: rgba(88,166,255,.07); color: var(--text); }
+  .t-item.active { background: rgba(88,166,255,.13); color: var(--blue); }
+  .t-item .t-note { margin-left: auto; font-size: 10px; color: var(--text-dim); background: var(--bg-soft); padding: 1px 7px; border-radius: 4px; }
+  .t-item .t-note.delta { color: var(--amber); }
+  .t-sub { margin-left: 14px; border-left: 1px solid var(--border); padding-left: 6px; }
+  .spec-preview { display: flex; flex-direction: column; min-width: 0; }
+  .pv-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 10px; flex-wrap: wrap; }
+  .pv-head .pname { font-weight: 700; font-size: 13px; }
+  .pv-body { flex: 1; overflow-y: auto; background: #0a0e14; border-radius: 8px; padding: 18px; font-size: 12.8px; line-height: 1.8; }
+  .pv-body h4 { color: var(--text); margin: 12px 0 4px; font-size: 13.5px; }
+  .pv-body h4:first-child { margin-top: 0; }
+  .pv-body .fr { padding: 5px 10px; border-radius: 6px; margin: 3px 0; color: var(--text-dim); }
+  .pv-body .fr b { color: var(--blue); font-family: Consolas, monospace; }
+  .pv-body .fr.hl { background: rgba(88,166,255,.12); border: 1px solid rgba(88,166,255,.4); color: var(--text); }
+  .pv-body .fr del { color: var(--red); }
+  .pv-body .yk { color: #7ee787; }
+  .pv-body .yc { color: #6e7681; }
+  .pv-body .ys { color: #a5d6ff; }
+  .pull-banner { display: none; margin-top: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(210,153,34,.45); background: rgba(210,153,34,.08); font-size: 12.5px; }
+  .pull-banner.show { display: block; animation: fadein .4s; }
+
+  /* ── Agent 生成 ── */
+  .gen-wrap { display: grid; grid-template-columns: 390px 1fr; gap: 14px; height: calc(100vh - 170px); }
+  .chat-panel { display: flex; flex-direction: column; }
+  .chat-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 11px; }
+  .msg { max-width: 94%; padding: 9px 13px; border-radius: 12px; font-size: 12.8px; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.3); }
+  .msg.agent { align-self: flex-start; background: var(--bg-soft); border: 1px solid var(--border); }
+  .msg.agent .who { font-size: 11px; color: var(--purple); font-weight: 700; display: block; margin-bottom: 4px; }
+  .msg .src { display: block; font-size: 11px; color: var(--blue); font-family: Consolas, monospace; padding: 1px 0; }
+  .quick-cmds { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px 0; }
+  .quick-cmds .btn { font-size: 12px; padding: 6px 12px; }
+  .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
+  .chat-input input { flex: 1; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 13px; outline: none; font-family: inherit; }
+  .chat-input input:focus { border-color: var(--blue); }
+  .yaml-panel { display: flex; flex-direction: column; min-width: 0; }
+  .yaml-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 10px; flex-wrap: wrap; }
+  .yaml-head .fname { font-size: 13px; font-weight: 700; }
+  .yaml-body { flex: 1; overflow-y: auto; background: #0a0e14; border-radius: 8px; padding: 16px; font-size: 12.5px; line-height: 1.75; white-space: pre; color: #a5d6ff; min-height: 180px; font-family: Consolas, monospace; }
+  .yaml-body .cmt { color: #6e7681; }
+  .yaml-body .key { color: #7ee787; }
+  .yaml-body .cov { background: rgba(163,113,247,.25); color: #d2a8ff; border-radius: 4px; padding: 0 4px; font-weight: 700; }
+  .yaml-body .cursor { display: inline-block; width: 7px; height: 14px; background: var(--blue); vertical-align: middle; animation: pulse .8s infinite; }
+  .link-confirm { display: none; margin-top: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(63,185,80,.4); background: rgba(63,185,80,.07); font-size: 12.5px; }
+  .link-confirm.show { display: block; animation: fadein .4s; }
+  .yaml-actions { display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 12px; align-items: center; flex-wrap: wrap; }
+  .check-line { font-size: 12.5px; color: var(--green); }
+  .check-line::before { content: "✓ "; font-weight: 800; }
+
+  /* ── 计划与 DAG ── */
+  .plan-wrap { display: grid; grid-template-columns: 400px 1fr; gap: 14px; }
+  .fr-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .fr-table th, .fr-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  .fr-table th { color: var(--text-dim); font-size: 11.5px; }
+  .fr-table tr.gap { animation: gapflash 1.6s infinite; }
+  @keyframes gapflash { 50% { background: rgba(248,81,73,.10); } }
+  .cover-check { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; display: none; }
+  .cover-check.show { display: block; }
+  .cc-row { display: flex; gap: 10px; align-items: center; font-size: 12.5px; padding: 5px 0; }
+  .cc-row .ok { color: var(--green); font-weight: 700; }
+  .cc-row .bad { color: var(--red); font-weight: 700; }
+  .cc-fix { margin-top: 10px; padding: 12px; border-radius: 10px; border: 1px solid rgba(248,81,73,.4); background: rgba(248,81,73,.06); font-size: 12.5px; display: none; }
+  .cc-fix.show { display: block; animation: fadein .4s; }
+  .dag-svg { width: 100%; height: auto; display: block; }
+  .dag-node rect { fill: var(--bg-soft); stroke: var(--border); rx: 8; }
+  .dag-node text { fill: var(--text); font-size: 11px; font-weight: 600; }
+  .dag-node .st { font-size: 9.5px; font-weight: 700; }
+  .dag-node.gap rect { stroke: var(--red); stroke-dasharray: 5 4; animation: dashmove 1s linear infinite; }
+  @keyframes dashmove { to { stroke-dashoffset: -9; } }
+
+  .loop-node { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+  .loop-node.warn { border-color: rgba(210,153,34,.5); color: var(--amber); }
+  .loop-node.bad { border-color: rgba(248,81,73,.5); color: var(--red); }
+  .loop-node.hl { border-color: rgba(88,166,255,.5); color: var(--blue); }
+  .loop-node.ok { border-color: rgba(63,185,80,.5); color: var(--green); }
+  .loop-arr { color: var(--text-dim); }
+  .loop-back { color: var(--purple); font-weight: 700; }
+
+  /* ── 飞书通知 ── */
+  #toast { position: fixed; top: 62px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast-item { background: var(--bg-card); border: 1px solid rgba(63,185,80,.5); border-left: 4px solid var(--green); border-radius: 10px; padding: 10px 16px; font-size: 12.5px; box-shadow: 0 6px 24px rgba(0,0,0,.45); animation: toastin .3s; max-width: 380px; }
+  .toast-item b { color: var(--green); }
+  @keyframes toastin { from { transform: translateX(30px); opacity: 0; } }
+  .fs-card { background: #fff; color: #1f2329; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.35); font-size: 12.5px; line-height: 1.55; }
+  .fs-card .fs-head { padding: 9px 14px; font-weight: 700; color: #fff; font-size: 13px; }
+  .fs-card .fs-title { padding: 10px 14px 2px; font-weight: 700; font-size: 13.5px; }
+  .fs-card .fs-body { padding: 6px 14px 12px; }
+  .fs-card .fs-row { display: flex; gap: 8px; padding: 2px 0; }
+  .fs-card .fs-row .k { color: #646a73; min-width: 78px; flex-shrink: 0; }
+  .fs-card .fs-at { color: #3370ff; }
+  .fs-card .fs-btns { border-top: 1px solid #e5e6eb; padding: 8px 14px; display: flex; gap: 18px; }
+  .fs-card .fs-btn { color: #3370ff; font-weight: 600; cursor: pointer; }
+
+  /* ── Agent 工具调用 ── */
+  .arch-badges { display: flex; gap: 8px; margin: -6px 0 14px; flex-wrap: wrap; }
+  .arch-badges span { font-size: 11px; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); background: var(--bg-soft); }
+  .arch-badges b { color: var(--blue); font-weight: 600; }
+  .tool-call { border: 1px solid var(--border); border-left: 3px solid var(--purple); border-radius: 8px; margin: 4px 0; background: rgba(163,113,247,.05); font-size: 12px; opacity: 0; animation: fadein .35s forwards; }
+  .tool-call .tc-head { padding: 4px 10px 1px; font-weight: 700; color: var(--purple); font-family: Consolas, monospace; font-size: 12px; }
+  .tool-call .tc-arg { padding: 0 10px; color: var(--text-dim); font-family: Consolas, monospace; font-size: 11px; }
+  .tool-call .tc-ret { padding: 1px 10px 6px; color: var(--green); font-size: 11.5px; }
+  .tool-call .tc-ret.err { color: var(--red); }
+
+  @media (max-width: 1200px) {
+    .gen-wrap, .plan-wrap, .grid-2, .spec-wrap { grid-template-columns: 1fr; height: auto; }
+    .stat-row, .sys-cards { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">Spec<span>Guard</span><span class="proto-tag">完全体 · 交互原型 · 模拟数据</span></div>
+    <div class="nav-sec">总览</div>
+    <div class="nav-item active" data-view="dash"><span class="ico">▦</span>多系统仪表盘</div>
+    <div class="nav-item" data-view="spec"><span class="ico">▤</span>Spec 文档中心</div>
+    <div class="nav-sec">测试生产</div>
+    <div class="nav-item" data-view="gen"><span class="ico">✦</span>Agent 场景生成</div>
+    <div class="nav-item" data-view="plan"><span class="ico">◎</span>编排与关联校验</div>
+    <div class="nav-item" data-view="run"><span class="ico">▶</span>运行中心</div>
+    <div class="nav-sec">质量闭环</div>
+    <div class="nav-item" data-view="diag"><span class="ico">⚕</span>失败归因</div>
+    <div class="nav-item" data-view="auto"><span class="ico">↻</span>自治回归</div>
+    <div class="nav-item" data-view="fb"><span class="ico">⇄</span>双循环反哺</div>
+    <div class="nav-sec">配置</div>
+    <div class="nav-item" data-view="notify"><span class="ico">✉</span>通知与反馈路径</div>
+    <div class="foot">Harness 五关注点闭环：<br>上下文→约束→<b>验证</b>→恢复→<b>反馈</b><br>SpecGuard 落地「验证 + 反馈」两环</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="sys-switch" id="sysSwitch">
+        <span class="sys-opt active" data-sys="tdm">TDM 干部盘点</span>
+        <span class="sys-opt" data-sys="hrcenter">HR-Center 权限中台</span>
+        <span class="sys-opt" data-sys="pbs">PBS 薪酬核算</span>
+      </div>
+      <span class="env">SIT</span>
+      <span class="agent-status"><span class="dot"></span>Agent 在线 · 已加载 <span class="mono" id="agentSpec">ifelc-spec-tdm@a3f8c21</span></span>
+    </div>
+
+    <!-- ═══ 视图1 多系统仪表盘 ═══ -->
+    <div class="view active" id="v-dash">
+      <h2>多系统质量仪表盘</h2>
+      <p class="v-sub">企业级定位：一套引擎，多系统接入——每个系统对接自己的 Spec 仓库（AGENTS.md 描述结构）</p>
+      <div class="sys-cards">
+        <div class="sys-card cur" data-sys="tdm">
+          <h3>TDM 干部盘点</h3><div class="repo mono">ifelc-spec-tdm @a3f8c21 · 今天 09:12 拉取</div>
+          <div class="nums"><div><b>128</b><span>场景</span></div><div><b>94%</b><span>FR 覆盖</span></div><div><b style="color:var(--green);">正常</b><span>Spec 同步</span></div></div>
+        </div>
+        <div class="sys-card" data-sys="hrcenter">
+          <h3>HR-Center 权限中台</h3><div class="repo mono">ifelc-spec-hr-center @e71b092 · 昨天拉取</div>
+          <div class="nums"><div><b>46</b><span>场景</span></div><div><b>88%</b><span>FR 覆盖</span></div><div><b style="color:var(--green);">正常</b><span>Spec 同步</span></div></div>
+        </div>
+        <div class="sys-card" data-sys="pbs">
+          <h3>PBS 薪酬核算</h3><div class="repo mono">ifelc-spec-pbs @c92d4aa · 2 天前拉取</div>
+          <div class="nums"><div><b>67</b><span>场景</span></div><div><b>76%</b><span>FR 覆盖</span></div><div><b style="color:var(--amber);">滞后</b><span>Spec 同步</span></div></div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-card"><div class="num">241</div><div class="lb">三系统场景总数</div><div class="delta">▲ 本周 Agent 新增 9</div></div>
+        <div class="stat-card"><div class="num">87%</div><div class="lb">加权 FR 覆盖率</div><div class="delta">▲ 缺口均已生成草稿</div></div>
+        <div class="stat-card"><div class="num">23</div><div class="lb">本周自治回归</div><div class="delta">▲ 拦截缺陷 2 个</div></div>
+        <div class="stat-card"><div class="num">14</div><div class="lb">Spec 反哺报告（累计）</div><div class="delta">▲ 11 已闭环</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:14px;">TDM 最近运行 verdict 分布 <span class="rid" style="color:var(--text-dim);font-size:11px;">2026-07-24_164814</span></h3>
+          <div class="vbar">
+            <div style="width:78%;background:var(--green);">PASS 100</div>
+            <div style="width:10%;background:var(--red);">FAIL 2</div>
+            <div style="width:6%;background:var(--amber);">&nbsp;</div>
+            <div style="width:4%;background:var(--blue);">&nbsp;</div>
+            <div style="width:2%;background:var(--purple);">&nbsp;</div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--green);"></i>PASS 100</span>
+            <span><i style="background:var(--red);"></i>FAIL 2</span>
+            <span><i style="background:var(--amber);"></i>SKIP 1</span>
+            <span><i style="background:var(--blue);"></i>BLOCKED 5</span>
+            <span><i style="background:var(--purple);"></i>DRIFT 2</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:8px;">Agent 动态</h3>
+          <div class="timeline-item"><div class="tt">10:24</div>为缺口 FR-009 生成场景草稿 <span class="mono">IS-GRID-007</span>，covers 标签已关联 spec.md §4</div>
+          <div class="timeline-item"><div class="tt">09:51</div>自治回归拦截：commit a3f8c21 致 PP-RC-005 FAIL，已归因（代码缺陷）· 研发修复中</div>
+          <div class="timeline-item"><div class="tt">09:12</div>拉取 ifelc-spec-tdm@a3f8c21：2 处 FR 变更，3 场景受影响已标记</div>
+          <div class="timeline-item"><div class="tt">昨天</div>PBS 系统接入：AGENTS.md 解析完成，首批 12 场景生成待评审</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图2 Spec 文档中心 ═══ -->
+    <div class="view" id="v-spec">
+      <h2>Spec 文档中心</h2>
+      <p class="v-sub">每个系统一个 Spec 仓库 · AGENTS.md 是结构导航入口（规则层） · spec.md / api.yaml 是内容层 · changes/ 下是 delta 模式（delta-spec.md / api-delta.yaml）</p>
+      <div class="spec-wrap">
+        <div class="card spec-tree">
+          <div class="repo-head">
+            <div class="rname mono" id="repoName">ifelc-spec-tdm</div>
+            <div class="rmeta">分支 main · 本地快照 <span class="mono" id="repoCommit">a3f8c21</span> · 拉取于 <span id="repoTime">2026-07-24 09:12</span></div>
+            <button class="btn btn-p" id="btnPull" onclick="pullSpec()">⇓ 从仓库拉取更新</button>
+          </div>
+          <div id="treeBody">
+            <div class="t-dir">ifelc-spec-tdm <span class="t-commit mono" id="treeCommit">@a3f8c21</span></div>
+            <div class="t-item" data-file="agents" onclick="showSpecFile(this)">📄 AGENTS.md <span class="t-note">结构导航</span></div>
+            <div class="t-item" data-file="ctx" onclick="showSpecFile(this)">📄 CONTEXT.md <span class="t-note">术语表</span></div>
+            <div class="t-dir">modules/</div>
+            <div class="t-sub">
+              <div class="t-dir">employee/person-profile/</div>
+              <div class="t-sub">
+                <div class="t-item active" data-file="spec-pp" onclick="showSpecFile(this)">spec.md <span class="t-note">v6.3 · FR-001~017</span></div>
+                <div class="t-item" data-file="api-pp" onclick="showSpecFile(this)">api.yaml</div>
+              </div>
+              <div class="t-dir">inventory/grid-placement/</div>
+              <div class="t-sub">
+                <div class="t-item" data-file="spec-gp" onclick="showSpecFile(this)">spec.md <span class="t-note">FR-001~011</span></div>
+                <div class="t-item" data-file="api-gp" onclick="showSpecFile(this)">api.yaml</div>
+              </div>
+            </div>
+            <div class="t-dir">changes/2026-07-inventory/ <span class="t-commit">delta 模式</span></div>
+            <div class="t-sub">
+              <div class="t-item" data-file="delta" onclick="showSpecFile(this)">delta-specs/inventory.md <span class="t-note delta">delta-spec</span></div>
+              <div class="t-item" data-file="delta-api" onclick="showSpecFile(this)">api-delta.yaml <span class="t-note delta">delta</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card spec-preview">
+          <div class="pv-head">
+            <span class="pname mono" id="pvName">modules/employee/person-profile/spec.md</span>
+            <span id="pvBadge"></span>
+            <span style="margin-left:auto;" class="dim" id="pvMeta">v6.3 · 唯一标签锚点：FR 编号</span>
+          </div>
+          <div class="pv-body" id="pvBody"></div>
+          <div class="pull-banner" id="pullBanner">
+            <b>拉取完成：</b><span class="mono">a3f8c21 → f42e8b7</span>。检测到 <b>2 处 FR 变更</b>（person-profile：FR-012 修订、FR-017 新增 AC）→ <b>3 个场景 covers 受影响</b>已标记 DRIFT。
+            <div style="margin-top:8px;"><button class="btn btn-g" onclick="switchView('plan')">前往编排校验 →</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图3 Agent 场景生成 ═══ -->
+    <div class="view" id="v-gen">
+      <h2>Agent 场景生成</h2>
+      <p class="v-sub">输入材料：AGENTS.md（导航）→ spec.md + api.yaml（delta 迭代则读 delta-spec.md / api-delta.yaml）→ 格式规范 v1.4.1 · 产物通过 covers 唯一标签绑定 Spec</p>
+      <div class="arch-badges">
+        <span>harness：<b>自建薄循环（Python ~300 行）</b></span>
+        <span>工具层：<b>MCP Server（5 工具）</b></span>
+        <span>skill：<b>format_spec 动态规范</b></span>
+        <span>正确性：<b>确定性校验器兜底（非 LLM 裁判）</b></span>
+        <span>模型：<b>企业大模型网关</b></span>
+      </div>
+      <div class="gen-wrap">
+        <div class="card chat-panel">
+          <div class="chat-log" id="chatLog">
+            <div class="msg agent"><span class="who">SpecGuard Agent</span>当前系统 <b>TDM</b>，Spec 快照 <span class="mono">ifelc-spec-tdm@a3f8c21</span>。我运行在 SpecGuard 薄 harness 上，通过 <b>5 个 MCP 工具</b>（read_spec / list_scenarios / query_registry / write_draft / validate）完成「读取→生成→校验→自修复」循环，工具调用过程全程可见。</div>
+          </div>
+          <div class="quick-cmds">
+            <button class="btn btn-g" onclick="startGen('gap')">📐 为缺口 FR-009 生成场景</button>
+            <button class="btn btn-g" onclick="startGen('delta')">🔄 从 delta-spec 增量生成</button>
+          </div>
+          <div class="chat-input">
+            <input id="chatIn" placeholder="例如：为九宫格落位接口生成权限过滤场景…" onkeydown="if(event.key==='Enter')startGen('input')">
+            <button class="btn btn-p" onclick="startGen('input')">发送</button>
+          </div>
+        </div>
+        <div class="card yaml-panel">
+          <div class="yaml-head">
+            <span class="fname mono" id="yamlName">（等待生成）</span>
+            <span id="yamlVerdict"></span>
+            <span style="margin-left:auto;" class="dim" id="yamlStat"></span>
+          </div>
+          <div class="yaml-body" id="yamlBody"><span style="color:#6e7681;"># Agent 生成的场景 YAML 将在此实时呈现…
+# 注意 covers 行：它是场景 ↔ Spec 的唯一标签关联</span></div>
+          <div class="link-confirm" id="linkConfirm">
+            <b>标签关联确认</b>（场景 ↔ Spec 双向锚定）：
+            <div style="margin-top:6px;" class="mono">
+              covers <span style="color:#d2a8ff;">FR-009</span> → 命中 spec.md §4「FR-009 九宫格多选批量对比」 ✓<br>
+              covers <span style="color:#d2a8ff;">AC-009-3</span> → 命中 api.yaml /grid/compare 响应 schema ✓
+            </div>
+          </div>
+          <div class="yaml-actions" id="yamlActions" style="visibility:hidden;">
+            <span class="check-line" id="chkFmt" style="display:none;">格式校验通过</span>
+            <span class="check-line" id="chkGate" style="display:none;">发布门禁通过</span>
+            <span class="check-line" id="chkLink" style="display:none;">covers 标签在 Spec 中存在</span>
+            <span style="flex:1;"></span>
+            <button class="btn btn-p" onclick="approve()">评审通过 · 入库</button>
+            <button class="btn btn-g" onclick="revise()">要求修改</button>
+            <button class="btn btn-d" onclick="discard()">丢弃</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图4 编排与关联校验 ═══ -->
+    <div class="view" id="v-plan">
+      <h2>编排与关联校验</h2>
+      <p class="v-sub">DAG 编排两道闸：① covers 标签关联校验 ② Spec 逻辑审查——发现 Spec 问题生成反馈报告（循环 A），研发优化 Spec 后才允许执行测试</p>
+      <div class="plan-wrap">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <h3 style="font-size:14px;">Spec 关联完整性校验</h3>
+            <button class="btn btn-p" id="btnCov" onclick="validateCovers()">▶ 编排前校验（129 场景）</button>
+          </div>
+          <table class="fr-table">
+            <tr><th>场景</th><th>covers 标签</th><th>Spec 关联</th></tr>
+            <tr><td class="mono">PP-RC-005</td><td class="mono">FR-003</td><td class="cc-cell"><span style="color:var(--green);">✓ 命中 spec.md §4</span></td></tr>
+            <tr><td class="mono">PP-PERM-001</td><td class="mono">FR-013/015</td><td><span style="color:var(--green);">✓ 命中 spec.md §4</span></td></tr>
+            <tr><td class="mono">IS-GRID-007</td><td class="mono">FR-009</td><td><span style="color:var(--green);">✓ 命中 spec.md §4</span></td></tr>
+            <tr id="badRow" style="display:none;"><td class="mono">EVAL-360-003</td><td class="mono">FR-022</td><td><span style="color:var(--red);">✗ 未命中</span></td></tr>
+            <tr id="badRow2" style="display:none;"><td class="mono">PP-RC-006</td><td class="mono">FR-012</td><td><span style="color:var(--amber);">⚠ FR 已修订</span></td></tr>
+          </table>
+          <div class="cover-check" id="coverCheck">
+            <div class="cc-row"><span class="ok">✓</span><span>扫描 129 场景 · covers 标签共 214 个</span></div>
+            <div class="cc-row"><span class="ok">✓</span><span>212 个命中 Spec 快照 <span class="mono">@f42e8b7</span> 的 FR/AC 清单</span></div>
+            <div class="cc-row"><span class="bad">✗</span><span class="mono">EVAL-360-003 → FR-022 不存在（需求变更已移除）</span></div>
+            <div class="cc-row"><span class="bad">⚠</span><span class="mono">PP-RC-006 → FR-012 本次拉取有修订，建议重新核对断言</span></div>
+            <div class="cc-row"><span class="bad">⚠</span><span>Spec 逻辑审查：spec.md §4 FR-003 与 §6 条文冲突（快照冻结范围口径不一）——非用例问题，阻塞执行</span></div>
+          </div>
+          <div class="cc-fix" id="specIssue" style="border-color:rgba(210,153,34,.45);background:rgba(210,153,34,.06);">
+            <b>循环 A · 编排期 Spec 反馈</b>：§4 要求「全字段冻结保真」，§6 却写「仅状态型字段比对」——断言口径取决于读哪条，测试失去判定基准。生成反馈报告，研发优化 Spec 后才允许执行测试。
+            <div style="margin-top:8px;"><button class="btn btn-p" onclick="gotoFeedback()">生成 Spec 反馈报告 →</button></div>
+          </div>
+          <div class="cc-fix" id="ccFix">
+            <b>修复建议（Agent）</b>：FR-022 在 <span class="mono">f42e8b7</span> 中被拆分为 FR-021a/FR-021b（查看 spec 变更记录）。
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-p" onclick="fixCovers(this)">重新生成该场景（对齐 FR-021a/b）</button>
+              <button class="btn btn-g" onclick="alert('原型演示：打开 spec.md 变更 diff（f42e8b7 vs a3f8c21）')">查看 spec 变更记录</button>
+            </div>
+          </div>
+          <div id="covDone" style="display:none;margin-top:12px;">
+            <span class="tag t-pass" style="font-size:12.5px;padding:5px 14px;">关联校验通过 · 允许编排</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:8px;">DAG 编排画布 <span style="font-size:11px;color:var(--text-dim);font-weight:400;">（节点携带 covers 标签 · 校验通过前禁止执行）</span></h3>
+          <svg class="dag-svg" viewBox="0 0 640 360">
+            <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b949e"/></marker></defs>
+            <path d="M170,60 C 240,60 240,50 300,50" stroke="#8b949e" fill="none" marker-end="url(#arr)"/>
+            <path d="M170,80 C 230,90 240,130 300,140" stroke="#d29922" fill="none" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+            <path d="M460,50 C 510,55 520,80 540,110" stroke="#8b949e" fill="none" marker-end="url(#arr)"/>
+            <path d="M460,160 C 500,170 510,180 530,200" stroke="#8b949e" fill="none" marker-end="url(#arr)"/>
+            <path d="M170,100 C 220,140 240,220 300,250" stroke="#8b949e" fill="none" marker-end="url(#arr)"/>
+            <g class="dag-node"><rect x="30" y="48" width="140" height="52" rx="8"/><text x="44" y="70">IS-PREP-001</text><text x="44" y="88" class="st" fill="#3fb950">v0.2 · covers FR-010</text></g>
+            <g class="dag-node"><rect x="300" y="24" width="160" height="52" rx="8"/><text x="314" y="46">PP-RC-005 切片快照</text><text x="314" y="64" class="st" fill="#3fb950">v0.3 · covers FR-003</text></g>
+            <g class="dag-node"><rect x="300" y="114" width="160" height="52" rx="8"/><text x="314" y="136">IS-GRID-007 批量对比</text><text x="314" y="154" class="st" fill="#d29922">v0.1 · exclusive</text></g>
+            <g class="dag-node"><rect x="516" y="96" width="112" height="52" rx="8"/><text x="528" y="118">FR-009</text><text x="528" y="136" class="st" fill="#3fb950">已覆盖</text></g>
+            <g class="dag-node"><rect x="300" y="224" width="160" height="52" rx="8"/><text x="314" y="246">PP-PERM-001 权限</text><text x="314" y="264" class="st" fill="#3fb950">v0.2 · covers FR-013</text></g>
+            <g class="dag-node gap"><rect x="516" y="224" width="112" height="52" rx="8"/><text x="528" y="246">EVAL-360-003</text><text x="528" y="264" class="st" fill="#f85149">FR-022 失效</text></g>
+            <g class="dag-node"><rect x="30" y="180" width="140" height="52" rx="8"/><text x="44" y="202">EVAL-360-001</text><text x="44" y="220" class="st" fill="#a371f7">v0.1 · DRIFT</text></g>
+          </svg>
+          <p class="dim" style="margin-top:6px;">实线=shared 复用 · 虚线=exclusive 独占 · 红闪=covers 标签失效 · 节点 covers 标签可点击跳转 spec.md 对应 FR</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图5 运行中心（体系化：系统→迭代→场景） ═══ -->
+    <div class="view" id="v-run">
+      <h2>运行中心</h2>
+      <p class="v-sub">体系化执行：先选系统 → 再选迭代 → 后选场景 · 点击场景可查看完整上下文（变量 / 操作轨迹 / 数据变化 / 输出）</p>
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
+          <div><div class="dim" style="margin-bottom:4px;">① 系统</div><div class="sys-switch"><span class="sys-opt active">TDM 干部盘点</span></div></div>
+          <div><div class="dim" style="margin-bottom:4px;">② 迭代（对应 Spec changes/ 或基线）</div>
+            <div class="sys-switch" id="iterSwitch">
+              <span class="sys-opt active" data-iter="d1">2026-07 盘点迭代 <span class="mono" style="font-size:10px;">delta</span></span>
+              <span class="sys-opt" data-iter="base">基线全量 v6.3</span>
+            </div>
+          </div>
+          <div style="margin-left:auto;align-self:flex-end;">
+            <button class="btn btn-p" id="btnRun" onclick="startRun()">▶ 执行选中场景</button>
+            <button class="btn btn-g" id="btnBp" onclick="toggleBp()">断点 <span id="bpState">关</span></button>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="dim" style="margin-bottom:6px;">③ 场景（按模块分组 · 已按拓扑序排列）</div>
+          <div id="scenePicker" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:8px;">执行队列 <span class="dim">（点击场景行展开上下文）</span></h3>
+          <div id="runList"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;">
+          <h3 style="font-size:14px;margin-bottom:8px;">实时输出流</h3>
+          <div class="yaml-body" id="runLog" style="flex:1;min-height:300px;max-height:50vh;"></div>
+          <div id="runDone" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <span class="tag t-fail">FAIL 1</span> <span class="tag t-pass">PASS 4</span> <span class="tag t-skip">SKIP 1</span>
+            <span class="dim" style="margin-left:10px;">报告已归档 reports/2026-07-24_170201/</span>
+            <button class="btn btn-p" style="margin-left:10px;" onclick="switchView('diag')">查看 Agent 归因 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图6 失败归因 ═══ -->
+    <div class="view" id="v-diag">
+      <h2>失败智能归因</h2>
+      <p class="v-sub">执行期循环 B 的入口：FAIL → 归因四类（环境/数据/场景/缺陷）→ 代码缺陷交研发优化；若研发反馈伴随 spec/api 变更 → 内容签名检测决定是否同步用例</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:10px;">待归因 FAIL（1）</h3>
+          <div class="run-row" style="cursor:pointer;border:1px solid rgba(248,81,73,.35);border-radius:10px;padding:12px;" onclick="analyzeFail()">
+            <span class="tag t-fail">FAIL</span>
+            <span class="rname"><strong class="mono">PP-RC-005</strong> 切片模式查询历史盘点快照</span>
+            <span class="rid">run 2026-07-24_170201</span>
+          </div>
+          <div class="run-row" style="padding:12px;opacity:.6;">
+            <span class="tag t-skip">SKIP</span>
+            <span class="rname"><strong class="mono">PP-PERM-004</strong> 受限账号跨平台过滤</span>
+            <span class="rid">账号未配置 · 无需归因</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:10px;">归因报告</h3>
+          <div id="diagIdle" class="dim">← 点击左侧 FAIL 场景，Agent 开始归因分析</div>
+          <div id="diagSteps" class="think-steps" style="display:none;"></div>
+          <div id="diagResult" style="display:none;">
+            <div style="display:flex;gap:10px;align-items:center;margin:12px 0;">
+              <span class="tag t-fail" style="font-size:13px;padding:5px 16px;">疑似产品缺陷（代码）</span>
+              <span class="dim">置信度 92%</span>
+            </div>
+            <div class="codebox">
+              <div style="color:#6e7681;"># 证据链</div>
+              <div>1. 断言失败：$.data.basicInfo.politicalStatusName</div>
+              <div>   期望="群众"(快照JSON) 实际=null</div>
+              <div>2. DB 校对：tdm_snap_profile 快照字段存在且非空</div>
+              <div>3. 环境探测：SIT 网关/DB/权限中台均正常</div>
+              <div>4. 关联变更：commit a3f8c21 修改 SnapshotService</div>
+              <div>   assembleCurrent() 漏回填 politicalStatusName</div>
+              <div>5. Spec 侧无矛盾（§4/§6 冲突已在循环 A 修复）</div>
+            </div>
+            <p class="dim" style="margin:10px 0;">结论：代码缺陷，研发优化代码。若研发反馈修复伴随 spec/api 变更，SpecGuard 将做内容签名检测，决定是否同步测试用例与 DAG。</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="btn btn-p" onclick="showBug()">生成 BUG 单草稿</button>
+              <button class="btn btn-g" onclick="gotoSigCheck()">研发反馈 spec/api 有变更 → 签名检测</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图7 自治回归 ═══ -->
+    <div class="view" id="v-auto">
+      <h2>变更驱动自治回归</h2>
+      <p class="v-sub">代码 diff → Agent 圈定受影响场景 → 增量回归 → 报告推送：从 128 全量到 7 个精准场景</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:10px;">代码变更输入</h3>
+          <div class="codebox">
+            <div><span style="color:#7ee787;">commit a3f8c21</span> <span style="color:#6e7681;">(feature/snapshot-fix)</span></div>
+            <div style="color:#6e7681;">Author: caiyunfei · 2026-07-24 16:32</div>
+            <div style="margin-top:6px;">修复: 快照组装补充政治面貌字段回填</div>
+            <div style="margin-top:8px;color:#6e7681;">变更文件 (2):</div>
+            <div>  core/service/SnapshotService.java <span style="color:#d29922;">+18 -3</span></div>
+            <div>  core/model/vo/ProfileVO.java <span style="color:#d29922;">+2 -0</span></div>
+          </div>
+          <button class="btn btn-p" style="margin-top:12px;" id="btnDiff" onclick="analyzeDiff()">✦ Agent 分析影响面</button>
+          <div id="diffSteps" class="think-steps" style="display:none;margin-top:10px;"></div>
+        </div>
+        <div class="card" id="impactCard" style="visibility:hidden;">
+          <h3 style="font-size:14px;margin-bottom:10px;">受影响场景圈定 <span style="font-size:11px;color:var(--green);">128 → 7（-94.5% 执行成本）</span></h3>
+          <div class="run-row"><span class="tag t-run">直接</span><span class="rname mono">PP-RC-001 / PP-RC-005 / PP-SNAP-001</span><span class="rid">covers SnapshotService</span></div>
+          <div class="run-row"><span class="tag t-run">直接</span><span class="rname mono">PP-SNAP-002 / PP-RC-004</span><span class="rid">契约指纹命中</span></div>
+          <div class="run-row"><span class="tag t-blocked">传递</span><span class="rname mono">PP-PERM-002 / PP-RC-007</span><span class="rid">下游依赖闭包</span></div>
+          <button class="btn btn-p" style="margin-top:14px;" id="btnAuto" onclick="startAuto()">▶ 执行增量回归（7 场景）</button>
+          <div id="autoResult" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(63,185,80,.4);border-radius:10px;background:rgba(63,185,80,.06);">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+              <span class="tag t-pass" style="font-size:13px;padding:4px 14px;">全量 PASS 7/7</span>
+              <span class="dim">耗时 11.2s</span>
+            </div>
+            <p class="dim">报告已归档并推送飞书群「TDM 质量守门」；commit a3f8c21 质量门禁：通过。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图8 Spec 质量反哺 ═══ -->
+    <div class="view" id="v-fb">
+      <h2>双反馈循环 · SpecGuard 核心价值</h2>
+      <p class="v-sub">SpecGuard 不是一次性测试工具，而是两个反馈循环的发动机：循环 A（编排期）提升 Spec 文档质量，循环 B（执行期）驱动代码修复并用内容签名检测保持用例同步——直至问题全部解决</p>
+      <div class="stat-row">
+        <div class="stat-card"><div class="num">14</div><div class="lb">累计反哺报告（循环 A）</div></div>
+        <div class="stat-card"><div class="num">11</div><div class="lb">已闭环</div></div>
+        <div class="stat-card"><div class="num">9</div><div class="lb">本月签名检测（循环 B）</div></div>
+        <div class="stat-card"><div class="num">100%</div><div class="lb">spec/api 变更的场景同步率</div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="font-size:14px;margin-bottom:12px;">两个反馈循环，直至问题全部解决</h3>
+        <div style="margin-bottom:14px;">
+          <div style="font-size:12px;color:var(--amber);font-weight:700;margin-bottom:6px;">循环 A · 编排期 —— 提升 Spec 文档质量</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;">
+            <span class="loop-node">编排 DAG</span><span class="loop-arr">→</span><span class="loop-node">关联校验 + 逻辑审查</span><span class="loop-arr">→</span><span class="loop-node warn">发现 Spec 问题</span><span class="loop-arr">→</span><span class="loop-node">反馈报告</span><span class="loop-arr">→</span><span class="loop-node">研发优化 Spec</span><span class="loop-arr">→</span><span class="loop-node">重新拉取</span><span class="loop-arr">→</span><span class="loop-back">↩ 回到编排</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--blue);font-weight:700;margin-bottom:6px;">循环 B · 执行期 —— 修复代码并保持用例同步</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;">
+            <span class="loop-node">执行测试</span><span class="loop-arr">→</span><span class="loop-node bad">FAIL 归因 = 代码缺陷</span><span class="loop-arr">→</span><span class="loop-node">研发优化代码</span><span class="loop-arr">→</span><span class="loop-node">spec/api 有变更？</span><span class="loop-arr">→</span><span class="loop-node hl">内容签名检测</span><span class="loop-arr">→</span><span class="loop-node">更新用例 + DAG</span><span class="loop-arr">→</span><span class="loop-back">↩ 重新执行，直至全绿</span>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card" id="loopACard">
+          <h3 style="font-size:14px;">循环 A 演示 · SPQ-2026-013 <span class="tag t-drift">研发修改中</span></h3>
+          <p class="dim" style="margin:6px 0 10px;">来源：编排期 Spec 逻辑审查（「编排与关联校验」自动生成，非执行期）</p>
+          <div class="codebox" style="margin-bottom:12px;">
+            <div><span style="color:#7ee787;">报告</span>: SPQ-2026-013 · 编排校验时 Agent 自动生成</div>
+            <div><span style="color:#7ee787;">冲突条文</span>: spec.md §4 FR-003（快照全字段冻结保真）</div>
+            <div>           vs §6 Edge Cases（仅状态型字段参与比对）</div>
+            <div><span style="color:#7ee787;">影响</span>: 3 场景断言口径不定（PP-RC-005 / SNAP-001 / SNAP-002）→ 阻塞执行</div>
+            <div><span style="color:#7ee787;">附带证据</span>: covers 关联图谱 + 条文原文摘录</div>
+          </div>
+          <div id="fbFlow">
+            <div class="cc-row"><span class="ok">✓</span><span>07-24 09:40 编排校验发现冲突，Agent 生成反馈报告，测试确认后推送研发</span></div>
+            <div class="cc-row"><span class="ok">✓</span><span>07-24 11:20 讨论结论：以 §4 为准——快照冻结为全字段保真，§6 条文修订</span></div>
+            <div class="cc-row"><span class="ok">✓</span><span>07-24 14:02 研发提交 spec 修订 commit <span class="mono">f42e8b7</span>（§6 修订 + Changelog）</span></div>
+            <div class="cc-row" id="fbPullRow"><span class="bad">④</span><span><b>待操作：重新拉取 Spec，让 SpecGuard 对齐最新语义后回到编排</b></span></div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn btn-p" id="btnFbPull" onclick="fbRepull()">⇓ 重新拉取 Spec（a3f8c21 → f42e8b7）</button>
+            <button class="btn btn-g" id="btnFbRegen" style="display:none;" onclick="switchView('plan')">回到编排重新校验 →</button>
+          </div>
+          <div class="link-confirm" id="fbDone">
+            <b>循环 A 收口</b>：Spec 快照已对齐 <span class="mono">f42e8b7</span>，§4/§6 口径统一；编排校验重跑通过，允许执行测试；SPQ-2026-013 → 已闭环。
+          </div>
+        </div>
+        <div class="card" id="loopBCard">
+          <h3 style="font-size:14px;">循环 B 演示 · 内容签名检测 <span class="tag t-run">待检测</span></h3>
+          <p class="dim" style="margin:6px 0 10px;">前置：PP-RC-005 已归因代码缺陷；研发提交修复 commit <span class="mono">b51d9e3</span>，并反馈「api.yaml /profile 出参有调整」</p>
+          <button class="btn btn-p" id="btnSig" onclick="sigCheck()">⚖ 启动内容签名检测</button>
+          <div id="sigSteps" class="think-steps" style="display:none;margin-top:10px;"></div>
+          <div id="sigResult" style="display:none;margin-top:12px;">
+            <table class="fr-table">
+              <tr><th>签名项</th><th>基线</th><th>当前</th><th>结论</th></tr>
+              <tr><td class="mono">spec.md 主体（剔除 Changelog）</td><td class="mono">9f2c…e1</td><td class="mono">9f2c…e1</td><td><span class="tag t-pass">未变化 · 语义未动</span></td></tr>
+              <tr><td class="mono">/profile 出参 schema</td><td class="mono">77ab…c4</td><td class="mono">3d1f…8a</td><td><span class="tag t-fail">已变化 · 需同步用例</span></td></tr>
+              <tr><td class="mono">/profile 入参</td><td class="mono">c501…b2</td><td class="mono">c501…b2</td><td><span class="tag t-pass">未变化</span></td></tr>
+            </table>
+            <p class="dim" style="margin:10px 0;">决策：出参签名变化命中 covers FR-003 → 受影响场景 PP-RC-005 / PP-SNAP-001（2 个）需更新；其余 127 场景签名零影响，直接回归。</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="btn btn-p" id="btnSigApply" onclick="sigApply(this)">优化 2 个受影响场景</button>
+              <button class="btn btn-g" id="btnSigRun" style="display:none;" onclick="sigRun(this)">更新 DAG 并重新执行 →</button>
+            </div>
+            <div class="link-confirm" id="sigDone">
+              <b>循环 B 收口</b>：用例已同步（v0.3→v0.4），DAG 已更新，增量回归 7 场景全 PASS——研发修复 + 用例同步双完成，问题清零；下一轮变更再来，循环再转。
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3 style="font-size:14px;margin-bottom:8px;">反哺报告台账</h3>
+        <div class="run-row"><span class="tag t-wait">待讨论</span><span class="rname"><strong class="mono">SPQ-2026-014</strong> FR-009 批量对比分页语义未定义 <span class="rid">循环A · 编排期生成场景时发现</span></span></div>
+        <div class="run-row"><span class="tag t-pass">已闭环</span><span class="rname"><strong class="mono">SPQ-2026-013</strong> 快照冻结规则 §4/§6 条文冲突 <span class="rid">循环A · 研发修订 f42e8b7 · 重校验通过</span></span></div>
+        <div class="run-row"><span class="tag t-pass">已闭环</span><span class="rname"><strong class="mono">SPQ-2026-011</strong> /profile 出参签名漂移 <span class="rid">循环B · 签名检测触发 2 场景同步 · 回归 PASS</span></span></div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3 style="font-size:14px;margin-bottom:8px;">SpecGuard 在 Harness 五关注点闭环中的位置</h3>
+        <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;">
+          <div style="flex:1;min-width:130px;padding:12px;border:1px solid var(--border);border-radius:10px;text-align:center;"><b>上下文</b><div class="dim">AGENTS.md +<br>spec.md/api.yaml</div></div>
+          <div style="align-self:center;color:var(--text-dim);">→</div>
+          <div style="flex:1;min-width:130px;padding:12px;border:1px solid var(--border);border-radius:10px;text-align:center;"><b>约束</b><div class="dim">格式规范 v1.4.1<br>发布门禁</div></div>
+          <div style="align-self:center;color:var(--text-dim);">→</div>
+          <div style="flex:1;min-width:130px;padding:12px;border:2px solid var(--blue);border-radius:10px;text-align:center;background:rgba(88,166,255,.08);"><b style="color:var(--blue);">验证 ★</b><div class="dim">场景执行 +<br>DB/权限预言</div></div>
+          <div style="align-self:center;color:var(--text-dim);">→</div>
+          <div style="flex:1;min-width:130px;padding:12px;border:1px solid var(--border);border-radius:10px;text-align:center;"><b>恢复</b><div class="dim">失败归因 +<br>场景自修复</div></div>
+          <div style="align-self:center;color:var(--text-dim);">→</div>
+          <div style="flex:1;min-width:130px;padding:12px;border:2px solid var(--purple);border-radius:10px;text-align:center;background:rgba(163,113,247,.08);"><b style="color:var(--purple);">反馈 ★</b><div class="dim">Spec 反哺 +<br>场景漂移治理</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 视图9 通知与反馈路径 ═══ -->
+    <div class="view" id="v-notify">
+      <h2>通知与反馈路径</h2>
+      <p class="v-sub">飞书群机器人 webhook 统一注册：按「系统 × 循环场景」配置消息去向——反馈报告、运行监控、缺陷通知自动送达对应群，告别手动拷贝报告</p>
+      <div class="grid-2" style="grid-template-columns:1.2fr 1fr;">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <h3 style="font-size:14px;">反馈路径注册表（多系统）</h3>
+            <button class="btn btn-g" onclick="alert('原型演示：注册新路径——选系统 → 选触发场景 → 粘贴飞书群机器人 webhook → 发送验证消息')">＋ 注册新路径</button>
+          </div>
+          <table class="fr-table">
+            <tr><th>系统</th><th>触发场景</th><th>目标飞书群</th><th>类型</th><th>状态</th><th></th></tr>
+            <tr><td>TDM</td><td>循环A · Spec 反馈报告</td><td>TDM-Spec 协作群</td><td>卡片</td><td><span class="tag t-pass">启用</span></td><td><button class="btn btn-g" style="padding:3px 10px;font-size:11px;" onclick="sendTestMsg(this,'m1','TDM-Spec 协作群')">测试</button></td></tr>
+            <tr><td>TDM</td><td>循环B · 运行监控（每次执行）</td><td>TDM 质量守门</td><td>卡片</td><td><span class="tag t-pass">启用</span></td><td><button class="btn btn-g" style="padding:3px 10px;font-size:11px;" onclick="sendTestMsg(this,'m2','TDM 质量守门')">测试</button></td></tr>
+            <tr><td>TDM</td><td>循环B · FAIL 归因 / BUG 单</td><td>TDM 后端研发群</td><td>卡片</td><td><span class="tag t-pass">启用</span></td><td><button class="btn btn-g" style="padding:3px 10px;font-size:11px;" onclick="sendTestMsg(this,'m3','TDM 后端研发群')">测试</button></td></tr>
+            <tr><td>TDM</td><td>自治回归 · 质量门禁</td><td>TDM 质量守门</td><td>文本</td><td><span class="tag t-pass">启用</span></td><td><button class="btn btn-g" style="padding:3px 10px;font-size:11px;" onclick="sendTestMsg(this,'m2','TDM 质量守门')">测试</button></td></tr>
+            <tr><td>HRC</td><td>循环A/B 全事件</td><td>HC 协作群</td><td>卡片</td><td><span class="tag t-pass">启用</span></td><td><button class="btn btn-g" style="padding:3px 10px;font-size:11px;" onclick="sendTestMsg(this,'m1','HC 协作群')">测试</button></td></tr>
+            <tr><td>PBS</td><td>循环A/B 全事件</td><td>PBS 质量群</td><td>卡片</td><td><span class="tag t-skip">webhook 过期</span></td><td><button class="btn btn-g" style="padding:3px 10px;font-size:11px;" onclick="alert('原型演示：重新粘贴 webhook 并发送验证消息')">更新</button></td></tr>
+          </table>
+          <p class="dim" style="margin-top:10px;">安全约束：webhook 掩码存储（a3f***）、仅出站调用；消息只含场景 ID / 结论 / 链接，证据明细需登录 SpecGuard 查看——不在群内落地敏感数据。</p>
+        </div>
+        <div class="card">
+          <h3 style="font-size:14px;margin-bottom:10px;">消息模板预览（飞书卡片）</h3>
+          <div class="sys-switch" style="margin-bottom:12px;" id="msgTabs">
+            <span class="sys-opt active" data-msg="m1" onclick="showMsg(this)">循环A · Spec 反馈</span>
+            <span class="sys-opt" data-msg="m2" onclick="showMsg(this)">循环B · 运行监控</span>
+            <span class="sys-opt" data-msg="m3" onclick="showMsg(this)">循环B · 缺陷通知</span>
+          </div>
+          <div id="msgPreview"></div>
+          <div class="link-confirm" id="msgSent" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ═══ BUG 单模态 ═══ -->
+<div id="bugModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;">
+  <div class="card" style="width:560px;max-height:80vh;overflow-y:auto;">
+    <h3 style="font-size:15px;margin-bottom:12px;">BUG 单草稿 <span style="font-size:11px;color:var(--amber);">（Agent 生成 · 人工确认后才提交禅道）</span></h3>
+    <table class="fr-table">
+      <tr><td style="width:90px;color:var(--text-dim);">标题</td><td>[快照] 当前模式档案政治面貌字段丢失（assembleCurrent 未回填）</td></tr>
+      <tr><td style="color:var(--text-dim);">严重度</td><td><span class="tag t-fail">2-严重</span></td></tr>
+      <tr><td style="color:var(--text-dim);">模块</td><td>人员管理 / 干部全景档案</td></tr>
+      <tr><td style="color:var(--text-dim);">重现场景</td><td class="mono">PP-RC-005（自动附 run_id + HTTP 轨迹 + DB 证据）</td></tr>
+      <tr><td style="color:var(--text-dim);">疑似引入</td><td class="mono">commit a3f8c21 · SnapshotService.assembleCurrent()</td></tr>
+    </table>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-p" onclick="closeBug('已提交禅道，研发接单优化代码')">确认提交</button>
+      <button class="btn btn-g" onclick="closeBug('')">返回修改</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══ 视图切换 ═══ */
+function switchView(v){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active', x.id==='v-'+v));
+}
+document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>switchView(n.dataset.view));
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ═══ 飞书通知 ═══ */
+function toast(msg){
+  const t=document.createElement('div'); t.className='toast-item';
+  t.innerHTML='✉ <b>飞书</b> · '+msg;
+  document.getElementById('toast').appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); },3400);
+}
+const MSG_TPL = {
+  m1: { head:'#3370ff', headText:'SpecGuard · Spec 质量反馈（循环A）', title:'SPQ-2026-014 · FR-009 批量对比分页语义未定义',
+    rows:[['系统','TDM 干部盘点'],['模块','inventory/grid-placement'],['来源','编排期逻辑审查'],['影响','2 场景阻塞执行'],['提及','<span class="fs-at">@后端owner @产品</span>']],
+    note:'请确认分页语义后修订 spec.md，SpecGuard 拉取新快照后自动重校验。', btns:['查看反馈报告','认领处理'] },
+  m2: { head:'#21a366', headText:'SpecGuard · 运行监控（循环B）', title:'run 2026-07-24_170201 执行完成',
+    rows:[['系统','TDM 干部盘点'],['迭代','2026-07 盘点迭代（delta）'],['结果','<b>PASS 5 · <span style="color:#d83931;">FAIL 1</span> · SKIP 1</b>'],['耗时','25.3s'],['FAIL 场景','PP-RC-005（Agent 归因就绪）']],
+    note:'完整证据（HTTP 轨迹 / DB 校对 / 上下文变量）请登录 SpecGuard 查看。', btns:['查看完整报告','一键归因'] },
+  m3: { head:'#d83931', headText:'SpecGuard · 缺陷待优化（循环B）', title:'PP-RC-005 切片模式查询历史快照 FAIL',
+    rows:[['归因','代码缺陷（置信度 92%）'],['疑似引入','commit a3f8c21 · SnapshotService'],['BUG 单','#5813 已创建'],['提及','<span class="fs-at">@后端owner</span>']],
+    note:'修复后若伴随 spec/api 变更，请回复本消息，SpecGuard 将自动触发签名检测。', btns:['查看 BUG 单','标记已修复'] },
+};
+function renderMsg(k){
+  const m = MSG_TPL[k];
+  document.getElementById('msgPreview').innerHTML =
+    `<div class="fs-card">
+      <div class="fs-head" style="background:${m.head};">${m.headText}</div>
+      <div class="fs-title">${m.title}</div>
+      <div class="fs-body">${m.rows.map(r=>`<div class="fs-row"><span class="k">${r[0]}</span><span>${r[1]}</span></div>`).join('')}<div style="margin-top:6px;color:#646a73;">${m.note}</div></div>
+      <div class="fs-btns">${m.btns.map(b=>`<span class="fs-btn">${b}</span>`).join('')}</div>
+    </div>`;
+  document.getElementById('msgSent').classList.remove('show');
+}
+function showMsg(el){
+  document.querySelectorAll('#msgTabs .sys-opt').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active'); renderMsg(el.dataset.msg);
+}
+async function sendTestMsg(btn,k,group){
+  btn.disabled=true; btn.textContent='发送中…';
+  showMsg(document.querySelector(`#msgTabs .sys-opt[data-msg="${k}"]`));
+  await sleep(900);
+  btn.disabled=false; btn.textContent='测试';
+  const s=document.getElementById('msgSent');
+  s.innerHTML=`<b>已送达</b>「${group}」 · 机器人 SpecGuard Bot · 延迟 0.4s`;
+  s.classList.add('show');
+  toast(`测试消息已送达「${group}」`);
+}
+renderMsg('m1');
+
+/* ═══ 系统切换 ═══ */
+const SYS_META = {
+  tdm:      { repo:'ifelc-spec-tdm',      commit:'a3f8c21', agent:'ifelc-spec-tdm@a3f8c21' },
+  hrcenter: { repo:'ifelc-spec-hr-center', commit:'e71b092', agent:'ifelc-spec-hr-center@e71b092' },
+  pbs:      { repo:'ifelc-spec-pbs',      commit:'c92d4aa', agent:'ifelc-spec-pbs@c92d4aa' },
+};
+document.querySelectorAll('#sysSwitch .sys-opt').forEach(o=>o.onclick=()=>{
+  document.querySelectorAll('#sysSwitch .sys-opt').forEach(x=>x.classList.remove('active'));
+  o.classList.add('active');
+  const m = SYS_META[o.dataset.sys];
+  document.getElementById('agentSpec').textContent = m.agent;
+  document.getElementById('repoName').textContent = m.repo;
+  document.getElementById('repoCommit').textContent = m.commit;
+  document.getElementById('treeCommit').textContent = '@'+m.commit;
+  document.querySelectorAll('.sys-card').forEach(c=>c.classList.toggle('cur', c.dataset.sys===o.dataset.sys));
+});
+document.querySelectorAll('.sys-card').forEach(c=>c.onclick=()=>{
+  document.querySelector(`#sysSwitch .sys-opt[data-sys="${c.dataset.sys}"]`).click();
+  switchView('spec');
+});
+
+/* ═══ Spec 文档中心：文件预览 ═══ */
+const SPEC_FILES = {
+  'agents': { name:'AGENTS.md', meta:'规则层 · 结构导航（被 28+ Agent 工具原生识别）', html:
+    `<h4># AGENTS.md — ifelc-spec-tdm</h4>
+    <div class="fr"><b>## Project Overview</b><br>TDM 干部人才盘点系统 Spec 仓库。结构：modules/{模块}/{功能}/ 下 spec.md + api.yaml 成对；增量迭代在 changes/{delta}/。</div>
+    <div class="fr"><b>## Reference Docs</b><br>- 领域术语 → CONTEXT.md<br>- 格式与目录规范 → 本文件 §4<br>- delta 流程 → changes/README.md</div>
+    <div class="fr"><b>## Always</b>：改代码前先读对应模块 spec.md §4 与 api.yaml；场景用例通过 covers 标签绑定 FR 编号</div>
+    <div class="fr"><b>## Never</b>：禁止直接修改 specs 基线目录（delta 先行）；禁止删除 archive/</div>` },
+  'ctx': { name:'CONTEXT.md', meta:'领域术语表', html:
+    `<h4># CONTEXT.md · 术语表</h4>
+    <div class="fr"><b>盘点会话</b>：一个平台一次盘点的工作流实例，五步法 Step1→5</div>
+    <div class="fr"><b>快照冻结</b>：以 inventory_date 为基准的人员数据切片，只读不可变</div>
+    <div class="fr"><b>covers</b>：场景与 Spec 的唯一标签关联机制，取值 FR/AC 编号</div>` },
+  'spec-pp': { name:'modules/employee/person-profile/spec.md', meta:'v6.3 · FR-001~017 · 快照 @a3f8c21', html:
+    `<h4>§4 Functional Requirements（节选）</h4>
+    <div class="fr"><b>FR-001</b> 档案查询按职责链路由：快照→员工表→DHR 降级</div>
+    <div class="fr hl"><b>FR-003</b> 切片模式下档案数据必须来自快照 JSON，<u>全字段冻结保真</u>（本迭代与 §6 条文冲突 → SPQ-2026-013）</div>
+    <div class="fr"><b>FR-006</b> inv* 盘点上下文注入，annualPerf 不注入</div>
+    <div class="fr"><b>FR-013/015</b> corpCode 三维权限过滤（业务单元/职层/纵向）</div>
+    <h4>§6 Edge Cases（节选）</h4>
+    <div class="fr"><del>仅状态型字段参与快照比对</del> ← f42e8b7 已修订为「全字段保真，见 FR-003」</div>` },
+  'api-pp': { name:'modules/employee/person-profile/api.yaml', meta:'OpenAPI 3.0', html:
+    `<div><span class="yk">/api/employee/profile</span>:</div>
+    <div>  <span class="yk">get</span>:</div>
+    <div>    <span class="yk">summary</span>: <span class="ys">干部全景档案查询（当前/切片双模式）</span></div>
+    <div>    <span class="yk">parameters</span>: [empNo, activityId?, resourceCode]</div>
+    <div>    <span class="yk">responses</span>:</div>
+    <div>      <span class="yk">200</span>: <span class="ys">ProfileVO（basicInfo/education/annualPerf/eval360Primary…）</span></div>
+    <div class="yc"># 场景断言锚点：$.data.basicInfo.* ↔ FR-003 快照保真</div>` },
+  'spec-gp': { name:'modules/inventory/grid-placement/spec.md', meta:'FR-001~011', html:
+    `<h4>§4 Functional Requirements（节选）</h4>
+    <div class="fr hl"><b>FR-009</b> 九宫格支持多选人员批量对比矩阵，3x3 分布与 DB 落位一致 <span style="color:var(--amber);">（分页语义未定义 → SPQ-2026-014）</span></div>
+    <div class="fr"><b>FR-011</b> 落位结果为 null 时前端渲染空态而非"null"</div>` },
+  'api-gp': { name:'modules/inventory/grid-placement/api.yaml', meta:'OpenAPI 3.0', html:
+    `<div><span class="yk">/api/inventory/grid/compare</span>:</div>
+    <div>  <span class="yk">get</span>:</div>
+    <div>    <span class="yk">summary</span>: <span class="ys">九宫格多选批量对比矩阵</span></div>
+    <div>    <span class="yk">parameters</span>: [sessionId, invPersonIdList]</div>
+    <div class="yc"># AC-009-3：响应 schema 含 matrix 3x3 + unplaced 名单</div>` },
+  'delta': { name:'changes/2026-07-inventory/delta-specs/inventory.md', meta:'delta 模式 · 未归档', html:
+    `<h4># Delta：2026-07-inventory</h4>
+    <div class="fr"><b>🔧 MODIFIED</b> FR-012 切片回退语义：无快照活动时回退最新快照（原为报错）</div>
+    <div class="fr"><b>✅ ADDED</b> FR-017 新增 AC：trend 接口空数组返回 200 而非 204</div>
+    <div class="yc"># 生成用例时：delta 文件优先于基线 spec.md（就近原则）</div>` },
+  'delta-api': { name:'changes/2026-07-inventory/api-delta.yaml', meta:'delta 模式', html:
+    `<div><span class="yk">/api/inventory/grid/compare</span>:</div>
+    <div>  <span class="yk">get</span>: <span class="ys">（新增）九宫格多选批量对比</span></div>
+    <div class="yc"># oasdiff 破坏性变更检测：无 breaking</div>` },
+};
+function showSpecFile(el){
+  document.querySelectorAll('.t-item').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const f = SPEC_FILES[el.dataset.file];
+  document.getElementById('pvName').textContent = f.name;
+  document.getElementById('pvMeta').textContent = f.meta;
+  document.getElementById('pvBody').innerHTML = f.html;
+}
+showSpecFile(document.querySelector('.t-item[data-file="spec-pp"]'));
+
+/* ═══ Spec 拉取 ═══ */
+async function pullSpec(){
+  const btn=document.getElementById('btnPull'); btn.disabled=true; btn.textContent='拉取中…（git fetch + merge）';
+  await sleep(1500);
+  ['repoCommit','treeCommit'].forEach(id=>document.getElementById(id).textContent = id==='treeCommit'?'@f42e8b7':'f42e8b7');
+  document.getElementById('repoTime').textContent='2026-07-24 14:35';
+  document.getElementById('agentSpec').textContent='ifelc-spec-tdm@f42e8b7';
+  document.getElementById('pullBanner').classList.add('show');
+  btn.disabled=false; btn.textContent='⇓ 从仓库拉取更新';
+}
+
+/* ═══ Agent 场景生成 ═══ */
+const YAML_TEXT =
+`<span class="cmt"># 人读层：doc（评审重点） · 生成依据：spec.md §4 FR-009 + api.yaml</span>
+<span class="key">id</span>: IS-GRID-007
+<span class="key">version</span>: 0.1
+<span class="key">title</span>: 九宫格多选批量对比矩阵（FR-009）
+<span class="key">priority</span>: P0
+<span class="key">depends_on</span>:
+  - {id: IS-PREP-001, mode: exclusive, version: ^0}
+<span class="key">doc</span>:
+  <span class="key">given</span>: 会话内已锁定 4 名盘点人员
+  <span class="key">when</span>: GET /api/inventory/grid/compare?invPersonIdList=...
+  <span class="key">then</span>: 返回 3x3 矩阵分布，落位与 DB 一致
+  <span class="key">covers</span>: [<span class="cov">FR-009</span>, <span class="cov">AC-009-3</span>]   <span class="cmt"># ← 唯一标签：场景↔Spec 双向锚定</span>
+<span class="key">flow</span>:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      method: GET
+      path: /api/inventory/grid/compare
+      params: {sessionId: "{{IS-PREP-001.session.id}}"}
+      save: resp
+<span class="key">verify</span>:
+  - status: {eq: 200}
+  - json: {path: "$.data.matrix", not_null: true}
+  - oracle: grid_placement_matches_db
+<span class="key">teardown</span>:
+  - call: {method: POST, path: /api/inventory/session/void,
+           json: {sessionId: "{{IS-PREP-001.session.id}}"}}`;
+
+let genBusy = false;
+async function startGen(kind){
+  if(genBusy) return; genBusy = true;
+  const log = document.getElementById('chatLog');
+  const input = document.getElementById('chatIn');
+  let text = '为缺口 FR-009 生成九宫格批量对比场景';
+  if(kind==='input' && input.value.trim()) text = input.value.trim();
+  if(kind==='delta') text = '对照 changes/2026-07-inventory delta 文件，增量生成缺失场景';
+  input.value = '';
+  log.insertAdjacentHTML('beforeend', `<div class="msg user"></div>`);
+  log.lastElementChild.textContent = text;
+  log.scrollTop = log.scrollHeight;
+
+  const agentMsg = document.createElement('div');
+  agentMsg.className = 'msg agent';
+  agentMsg.innerHTML = '<span class="who">SpecGuard Agent</span><div class="think-steps" id="think"></div>';
+  log.appendChild(agentMsg); log.scrollTop = log.scrollHeight;
+
+  const TOOL_FLOW = kind==='delta'
+    ? [
+      ['read_spec','{path:"AGENTS.md"}','→ 导航规则：changes/ delta 优先于基线'],
+      ['read_spec','{path:"changes/2026-07-inventory/delta-specs/inventory.md"}','→ FR-009（delta 新增）+ FR-012 修订'],
+      ['read_spec','{path:"changes/2026-07-inventory/api-delta.yaml"}','→ 新增 GET /grid/compare · oasdiff 无 breaking'],
+      ['list_scenarios','{module:"grid-placement"}','→ 基线+delta 合并视图：FR-009 无场景 · next_id=IS-GRID-007'],
+      ['query_registry','{kind:"oracle"}','→ 8 断言器 · grid_placement_matches_db ✓'],
+      ['write_draft','{path:"scenarios/inventory/grid-placement/IS-GRID-007.yaml"}','→ 37 行草稿写入（文本外科手术，未触碰现有文件）'],
+      ['validate','{draft:"IS-GRID-007.yaml"}','✗ ERROR: oracle "grid_matches_db" 未注册（幻觉拦截）','err'],
+      ['write_draft','{patch:"oracle → grid_placement_matches_db"}','→ 已按注册表修正'],
+      ['validate','{draft:"IS-GRID-007.yaml"}','✓ 格式校验 · 发布门禁 · covers 关联（delta FR-009）全通过'],
+    ]
+    : [
+      ['read_spec','{path:"AGENTS.md"}','→ 结构导航：modules/{模块}/{功能}/ 成对存放'],
+      ['read_spec','{path:"modules/inventory/grid-placement/spec.md"}','→ FR-009 命中 §4（唯一标签锚点）'],
+      ['read_spec','{path:"modules/inventory/grid-placement/api.yaml"}','→ GET /grid/compare + AC-009-3 schema'],
+      ['list_scenarios','{module:"grid-placement"}','→ 3 个相似场景 · 复用 exclusive 模式 · next_id=IS-GRID-007'],
+      ['query_registry','{kind:"oracle"}','→ 8 断言器 · grid_placement_matches_db ✓'],
+      ['write_draft','{path:"scenarios/inventory/grid-placement/IS-GRID-007.yaml"}','→ 37 行草稿写入（文本外科手术，未触碰现有文件）'],
+      ['validate','{draft:"IS-GRID-007.yaml"}','✗ ERROR: oracle "grid_matches_db" 未注册（幻觉拦截）','err'],
+      ['write_draft','{patch:"oracle → grid_placement_matches_db"}','→ 已按注册表修正'],
+      ['validate','{draft:"IS-GRID-007.yaml"}','✓ 格式校验 · 发布门禁 · covers 关联 全通过'],
+    ];
+  const think = document.getElementById('think');
+  for(const [tool,arg,ret,cls] of TOOL_FLOW){
+    const d=document.createElement('div');
+    d.className='tool-call';
+    d.innerHTML=`<div class="tc-head">🔧 ${tool}</div><div class="tc-arg">${arg}</div><div class="tc-ret ${cls||''}">${ret}</div>`;
+    think.appendChild(d); log.scrollTop=log.scrollHeight; await sleep(520);
+  }
+
+  document.getElementById('yamlName').textContent = 'scenarios/inventory/grid-placement/IS-GRID-007.yaml';
+  const body = document.getElementById('yamlBody');
+  body.innerHTML = '<span class="cursor"></span>';
+  const tmp = document.createElement('div'); tmp.innerHTML = YAML_TEXT;
+  const full = tmp.textContent;
+  let i = 0;
+  while(i < full.length){
+    i = Math.min(i + 14, full.length);
+    body.textContent = full.slice(0,i);
+    body.insertAdjacentHTML('beforeend','');
+    body.innerHTML = escapeHtml(full.slice(0,i)) + '<span class="cursor"></span>';
+    body.scrollTop = body.scrollHeight;
+    await sleep(16);
+  }
+  body.innerHTML = YAML_TEXT;
+  document.getElementById('yamlStat').textContent = '37 行 · 自校验完成';
+  document.getElementById('yamlActions').style.visibility = 'visible';
+  ['chkFmt','chkGate','chkLink'].forEach(id=>document.getElementById(id).style.display='none');
+  await sleep(450); document.getElementById('chkFmt').style.display = 'inline';
+  await sleep(550); document.getElementById('chkGate').style.display = 'inline';
+  await sleep(550); document.getElementById('chkLink').style.display = 'inline';
+  document.getElementById('linkConfirm').classList.add('show');
+  agentMsg.insertAdjacentHTML('beforeend','<div style="font-size:12.5px;margin-top:6px;">草稿已生成，covers 标签已锚定 Spec。请评审 doc 层 —— 入库决策权在你。</div>');
+  log.scrollTop = log.scrollHeight;
+  genBusy = false;
+}
+function escapeHtml(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function approve(){
+  const log=document.getElementById('chatLog');
+  log.insertAdjacentHTML('beforeend','<div class="msg agent"><span class="who">SpecGuard Agent</span>IS-GRID-007 已入库（v0.1）。FR-009 缺口关闭；DAG 画布与覆盖矩阵已同步。编排前请执行一次关联校验。</div>');
+  log.scrollTop=log.scrollHeight;
+  document.getElementById('yamlActions').style.visibility='hidden';
+  document.getElementById('yamlVerdict').innerHTML = '<span class="tag t-pass">已入库</span>';
+}
+function revise(){
+  const log=document.getElementById('chatLog');
+  log.insertAdjacentHTML('beforeend','<div class="msg user">补一个 invPersonIdList 为空的边界断言，covers 追加 AC-009-5</div>');
+  log.scrollTop=log.scrollHeight;
+  setTimeout(()=>{ log.insertAdjacentHTML('beforeend','<div class="msg agent"><span class="who">SpecGuard Agent</span>收到。已在 api.yaml 确认 AC-009-5 存在（空名单返回空矩阵），补充 len_eq: 0 断言并追加 covers，请重新评审。</div>'); log.scrollTop=log.scrollHeight; },800);
+}
+function discard(){
+  document.getElementById('yamlBody').innerHTML='<span style="color:#6e7681;"># 草稿已丢弃（未写入场景库，零副作用）</span>';
+  document.getElementById('yamlActions').style.visibility='hidden';
+  document.getElementById('linkConfirm').classList.remove('show');
+}
+
+/* ═══ 编排前关联校验 ═══ */
+async function validateCovers(){
+  const btn=document.getElementById('btnCov'); btn.disabled=true; btn.textContent='校验中…';
+  document.getElementById('coverCheck').classList.remove('show');
+  document.getElementById('ccFix').classList.remove('show');
+  document.getElementById('covDone').style.display='none';
+  await sleep(1000);
+  document.getElementById('badRow').style.display='table-row';
+  document.getElementById('badRow2').style.display='table-row';
+  document.getElementById('coverCheck').classList.add('show');
+  await sleep(600);
+  document.getElementById('ccFix').classList.add('show');
+  document.getElementById('specIssue').classList.add('show');
+  btn.disabled=false; btn.textContent='▶ 重新校验';
+}
+async function fixCovers(btn){
+  btn.disabled=true; btn.textContent='重新生成中…';
+  await sleep(1600);
+  btn.textContent='✓ 已重生成（covers → FR-021a/b）';
+  document.getElementById('badRow').querySelector('td:last-child').innerHTML='<span style="color:var(--green);">✓ FR-021a/b 命中</span>';
+  document.getElementById('badRow2').querySelector('td:last-child').innerHTML='<span style="color:var(--green);">✓ 已按修订核对</span>';
+  document.getElementById('covDone').style.display='block';
+}
+
+/* ═══ 运行中心 ═══ */
+const RUN_SCENARIOS=[
+  ['IS-PREP-001','创建盘点会话（prep）','pass'],
+  ['PP-RC-005','切片模式查询历史快照','fail'],
+  ['IS-GRID-007','九宫格批量对比（新入库）','pass'],
+  ['PP-PERM-001','跨平台 corpCode 过滤','pass'],
+  ['PP-PERM-004','受限账号跨平台过滤','skip'],
+  ['PP-SEC-001','匿名访问拒绝','pass'],
+];
+const CTX_DATA = {
+  'IS-PREP-001': { vars:[['emp.no','90024713','select_emp 产出（role=snapshot_rich）'],['env.resource_code','VIEW_TELENT_SEARCH','环境配置注入']],
+    ops:['select_emp → DB 校验工号池 ✓（附带 RESULT 快照上下文）','POST /api/inventory/session → 200 · 新增会话 8021（tdm_inv_session +1 行）','登记 teardown：session/void（LIFO）'],
+    out:'save: session = { id: 8021, sessionStatus: "IN_PROGRESS" } · 断言 3/3 ✓' },
+  'PP-RC-005': { vars:[['emp.no','90024713','本场景 select_emp 产出'],['session.id','8021','上游引用 {{IS-PREP-001.session.id}}（shared 复用）'],['scope.corp','ALL×3','fetch_permission 预言']],
+    ops:['fetch_permission → hr-center 三维 ALL','GET /api/employee/profile?activityId=1936 → 200 (412ms)','oracle snapshot_frozen → 逐字段比对快照 JSON'],
+    out:'断言 5/6 ✓ · ✗ $.data.basicInfo.politicalStatusName 期望"群众"实际 null' },
+  'IS-GRID-007': { vars:[['session.id','8027','上游引用 {{IS-PREP-001.session.id}}（exclusive 新实例）'],['emp.no','90024713','本场景产出']],
+    ops:['exclusive 模式：为本场景新建 IN_PROGRESS 会话 8027','GET /api/inventory/grid/compare → 200 (358ms)','oracle grid_placement_matches_db → tdm_result_grid 逐格比对 ✓'],
+    out:'断言 4/4 ✓ · matrix 3x3 返回 · teardown 已作废会话 8027' },
+};
+let running=false, bpOn=false;
+function renderPicker(){
+  const p=document.getElementById('scenePicker');
+  p.innerHTML = RUN_SCENARIOS.map(([id,name])=>`<span class="sys-opt active" data-sc="${id}" onclick="this.classList.toggle('active')">${id}</span>`).join('');
+}
+renderPicker();
+document.querySelectorAll('#iterSwitch .sys-opt').forEach(o=>o.onclick=()=>{
+  document.querySelectorAll('#iterSwitch .sys-opt').forEach(x=>x.classList.remove('active')); o.classList.add('active');
+});
+function toggleBp(){ bpOn=!bpOn; document.getElementById('bpState').textContent=bpOn?'开':'关'; }
+async function startRun(){
+  if(running) return; running=true;
+  document.getElementById('btnRun').disabled=true;
+  document.getElementById('runDone').style.display='none';
+  const list=document.getElementById('runList'), log=document.getElementById('runLog');
+  list.innerHTML=''; log.innerHTML='';
+  RUN_SCENARIOS.forEach(([id,name])=>{
+    list.insertAdjacentHTML('beforeend',`<div class="run-row" style="cursor:pointer;" onclick="toggleCtx('${id}')"><span class="tag t-wait" id="tg-${id}">等待</span><span class="rname"><strong class="mono">${id}</strong> ${name}</span><span class="rid" id="tm-${id}"></span></div><div id="ctx-${id}" style="display:none;padding:10px 14px;border:1px solid var(--border);border-radius:10px;margin:2px 0 8px;background:#0a0e14;"></div>`);
+  });
+  addLog(log,'# run 2026-07-24_170201 · 系统=TDM · 迭代=2026-07盘点迭代(delta) · env=sit','#6e7681');
+  addLog(log,'关联校验已通过（129 场景 covers 全命中）· 选中 6 场景 · 拓扑排序无环','#6e7681');
+  await sleep(600);
+  for(const [id,name,result] of RUN_SCENARIOS){
+    const tg=document.getElementById('tg-'+id);
+    tg.className='tag t-run'; tg.textContent='运行中';
+    addLog(log,`\n▶ ${id} ${name}`);
+    if(id==='PP-RC-005') addLog(log,'  依赖: IS-PREP-001 (shared, ^0) ✓ 实例复用','#6e7681');
+    if(id==='IS-GRID-007') addLog(log,'  依赖: IS-PREP-001 (exclusive) → 新实例 8027','#6e7681');
+    await sleep(650);
+    addLog(log,`  HTTP 调用完成 (≈400ms)`);
+    await sleep(550);
+    if(result==='pass'){ addLog(log,`  verify 全过 · oracle ✓`,'#3fb950'); tg.className='tag t-pass'; tg.textContent='PASS'; }
+    if(result==='fail'){ addLog(log,`  ✗ politicalStatusName 期望"群众"实际 null`,'#f85149'); addLog(log,`  oracle snapshot_frozen: 字段比对失败`,'#f85149'); tg.className='tag t-fail'; tg.textContent='FAIL'; }
+    if(result==='skip'){ addLog(log,`  SKIP: accounts.restricted 未配置（环境 ≠ 缺陷）`,'#d29922'); tg.className='tag t-skip'; tg.textContent='SKIP'; }
+    document.getElementById('tm-'+id).textContent=(Math.random()*1.4+0.4).toFixed(1)+'s';
+    fillCtx(id);
+    log.scrollTop=log.scrollHeight;
+  }
+  addLog(log,'\n══ 完成 · 报告归档 reports/2026-07-24_170201/ ══','#6e7681');
+  addLog(log,'监控卡片已推送飞书「TDM 质量守门」（PASS 5 / FAIL 1 / SKIP 1 · 附报告链接）','#6e7681');
+  addLog(log,'Agent 捕获 1 个 FAIL，归因就绪 →','#a371f7');
+  toast('运行监控卡片已推送「TDM 质量守门」');
+  document.getElementById('runDone').style.display='block';
+  document.getElementById('btnRun').disabled=false; running=false;
+}
+function addLog(el,t,c){ const d=document.createElement('div'); d.textContent=t; if(c)d.style.color=c; el.appendChild(d); el.scrollTop=el.scrollHeight; }
+function fillCtx(id){
+  const data = CTX_DATA[id]; if(!data) return;
+  const el = document.getElementById('ctx-'+id);
+  el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;">
+    <div><b style="color:var(--blue);">上下文变量（可引用值）</b><table class="fr-table" style="margin-top:6px;">${data.vars.map(v=>`<tr><td class="mono" style="color:#7ee787;">${v[0]}</td><td class="mono">${v[1]}</td><td style="color:var(--text-dim);font-size:11px;">${v[2]}</td></tr>`).join('')}</table></div>
+    <div><b style="color:var(--amber);">操作轨迹与数据变化</b><div style="margin-top:6px;">${data.ops.map(o=>`<div style="padding:2px 0;color:var(--text-dim);">· ${o}</div>`).join('')}</div></div>
+    <div style="grid-column:1/-1;"><b style="color:var(--purple);">输出与断言</b><div class="mono" style="margin-top:4px;color:#a5d6ff;">${data.out}</div></div>
+  </div>`;
+}
+function toggleCtx(id){
+  const el=document.getElementById('ctx-'+id);
+  if(el.innerHTML) el.style.display = el.style.display==='none'?'block':'none';
+}
+
+/* ═══ 失败归因 ═══ */
+let diagBusy=false;
+async function analyzeFail(){
+  if(diagBusy) return; diagBusy=true;
+  document.getElementById('diagIdle').style.display='none';
+  document.getElementById('diagResult').style.display='none';
+  const stepsEl=document.getElementById('diagSteps'); stepsEl.style.display='block'; stepsEl.innerHTML='';
+  const steps=['读取 cases/PP-RC-005.json：HTTP 轨迹 + db_traces + 上下文变量','快照 JSON 逐字段比对 → 仅 politicalStatusName 差异','环境探测：网关/DB/权限中台正常 → 排除环境类','检索近 24h commit：定位 a3f8c21 改动 assembleCurrent()','交叉验证：历史 run 该断言连续 PASS 41 次 → 判定新引入代码回归'];
+  for(const s of steps){ const d=document.createElement('div'); d.textContent=s; stepsEl.appendChild(d); await sleep(720); }
+  document.getElementById('diagResult').style.display='block';
+  diagBusy=false;
+}
+/* gotoFeedback / gotoSigCheck 统一定义见下方「双反馈循环」 */
+
+/* ═══ 自治回归 ═══ */
+let autoBusy=false;
+async function analyzeDiff(){
+  if(autoBusy) return; autoBusy=true;
+  document.getElementById('btnDiff').disabled=true;
+  const stepsEl=document.getElementById('diffSteps'); stepsEl.style.display='block'; stepsEl.innerHTML='';
+  const steps=['解析 diff：SnapshotService.assembleCurrent() + ProfileVO','符号反查：影响接口 /api/employee/profile 等 3 个','场景反查：covers/flow 命中 → 5 个直接场景','契约指纹比对：produces 变更 → 追加 2 个下游闭包场景','圈定完成：7 场景（原全量 128，降本 94.5%）'];
+  for(const s of steps){ const d=document.createElement('div'); d.textContent=s; stepsEl.appendChild(d); await sleep(750); }
+  document.getElementById('impactCard').style.visibility='visible';
+  autoBusy=false;
+}
+async function startAuto(){
+  const btn=document.getElementById('btnAuto'); btn.disabled=true; btn.textContent='回归执行中…';
+  await sleep(2200);
+  document.getElementById('autoResult').style.display='block';
+  toast('质量门禁结果已推送「TDM 质量守门」');
+  btn.textContent='▶ 再次执行'; btn.disabled=false;
+}
+
+/* ═══ 双反馈循环 ═══ */
+function gotoFeedback(){ toast('循环A 反馈报告已推送「TDM-Spec 协作群」 · @后端owner @产品'); switchView('fb'); setTimeout(()=>document.getElementById('loopACard').scrollIntoView({behavior:'smooth'}),120); }
+function gotoSigCheck(){ switchView('fb'); setTimeout(()=>document.getElementById('loopBCard').scrollIntoView({behavior:'smooth'}),120); }
+function showBug(){ document.getElementById('bugModal').style.display='flex'; }
+function closeBug(msg){ document.getElementById('bugModal').style.display='none'; if(msg) toast('BUG 单 #5813 已同步「TDM 后端研发群」 · @后端owner'); }
+async function sigCheck(){
+  const btn=document.getElementById('btnSig'); btn.disabled=true;
+  const st=document.getElementById('sigSteps'); st.style.display='block'; st.innerHTML='';
+  const steps=['读取研发修复反馈：commit b51d9e3 + api.yaml 调整说明','计算 spec.md 主体签名（剔除 Changelog/版本行）：9f2c…e1','对比基线签名：一致 → 需求语义未动，场景 doc 层无需改','计算 api.yaml 端点签名：/profile 出参 77ab…c4 → 3d1f…8a','签名 diff 定位：ProfileVO.basicInfo.politicalStatusName 约束补全','命中分析：covers FR-003 的 2 场景需同步，其余 127 场景零影响'];
+  for(const s of steps){ const d=document.createElement('div'); d.textContent=s; st.appendChild(d); await sleep(700); }
+  document.getElementById('sigResult').style.display='block';
+  btn.style.display='none';
+}
+async function sigApply(btn){ btn.disabled=true; btn.textContent='优化中…（断言口径同步签名）'; await sleep(1500); btn.textContent='✓ 已优化（v0.3→v0.4）'; document.getElementById('btnSigRun').style.display='inline-block'; }
+async function sigRun(btn){ btn.disabled=true; btn.textContent='DAG 更新 · 增量回归中…'; await sleep(2000); btn.style.display='none'; document.getElementById('sigDone').classList.add('show'); toast('回归全绿已推送「TDM 后端研发群」 · commit b51d9e3 可合并'); }
+async function fbRepull(){
+  const btn=document.getElementById('btnFbPull'); btn.disabled=true; btn.textContent='拉取中…';
+  await sleep(1400);
+  document.getElementById('repoCommit').textContent='f42e8b7';
+  document.getElementById('treeCommit').textContent='@f42e8b7';
+  document.getElementById('agentSpec').textContent='ifelc-spec-tdm@f42e8b7';
+  document.getElementById('fbPullRow').innerHTML='<span class="ok">✓</span><span>07-24 14:35 SpecGuard 重新拉取 Spec（f42e8b7），3 场景标记待重生成</span>';
+  btn.style.display='none';
+  document.getElementById('btnFbRegen').style.display='inline-block';
+  document.getElementById('fbDone').classList.add('show');
+  toast('Spec 更新通知已推送「TDM-Spec 协作群」 · 附重校验入口');
+}
+</script>
+</body>
+</html>

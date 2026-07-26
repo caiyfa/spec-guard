@@ -1,0 +1,73 @@
+# ─────────── 人读层：doc ───────────
+id: IS-PREP-002
+title: 数据准备：创建活动→启动→创建会话→添加3名人员（会话 IN_PROGRESS）
+version: "0.1"
+test_type: unit
+priority: P0
+tags: [prep, import-base]
+produces:
+  - {resource: inv_activity, state: ACTIVE}
+  - {resource: inv_session, state: IN_PROGRESS}
+  - {resource: inv_person, state: UNLOCKED}
+doc:
+  given: 测试账号具备活动/会话管理权限（资源码 TDM_INV_ACTIVITY，权限预置见引擎 REQ-4）
+  when: 创建活动（唯一名）→ 启动 → 创建会话（corp 1002 远东租赁）→ 添加人员 90024713/90027339/90027338
+  then: 活动 201 创建成功，会话状态 IN_PROGRESS，人员 inserted=3
+  engine_deps: ["REQ-2(fn.timestamp 唯一活动名)", "REQ-4(写权限)"]
+  note: 盘点日期 2026-07-22（≤今天，保证 complete 可用；人员 DHR 数据按该日期查询）
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool:
+      use: set_var
+      with:
+        vars:
+          activity_name: "SG导入校验-{{fn.timestamp}}"
+          corp_code: "1002"
+          corp_name: "远东租赁"
+          inv_date: "2026-07-22"
+  - call:
+      method: POST
+      path: /api/system/activities
+      json:
+        activityName: "{{activity_name}}"
+        activityType: "CURRENT"
+        inventoryDate: "{{inv_date}}"
+        resourceCode: "TDM_INV_ACTIVITY"
+        platformList:
+          - {corpCode: "{{corp_code}}", corpName: "{{corp_name}}"}
+      save: activity
+  - call:
+      method: PUT
+      path: "/api/system/activities/{{activity.json.data.id}}/start"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}
+      save: act_start
+  - call:
+      method: POST
+      path: /api/inventory/sessions
+      json:
+        activityId: "{{activity.json.data.id}}"
+        corpCode: "{{corp_code}}"
+        corpName: "{{corp_name}}"
+        resourceCode: "TDM_INV_ACTIVITY"
+      save: session
+  - call:
+      method: POST
+      path: /api/inventory/persons
+      json:
+        sessionId: "{{session.json.data.id}}"
+        empNoList: ["90024713", "90027339", "90027338"]
+        resourceCode: "TDM_INV_ACTIVITY"
+      save: persons
+verify:
+  - status: {of: activity, eq: 201}
+  - json: {of: session, path: "$.data.id", not_null: true}
+  - json: {of: session, path: "$.data.sessionStatus", eq: "IN_PROGRESS"}
+  - json: {of: persons, path: "$.data.inserted", eq: 3}
+teardown:
+  # 尽力而为：关闭活动（引擎 teardown 失败不改判 verdict）
+  - call:
+      method: PUT
+      path: "/api/system/activities/{{activity.json.data.id}}/close"
+      json: {resourceCode: "TDM_INV_ACTIVITY"}

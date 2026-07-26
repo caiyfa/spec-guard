@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecGuard 测试驾驶舱 — 可视化样板</title>
+<style>
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2330;--line:#2d3646;--txt:#e6edf3;--txt2:#8b98a9;
+  --pass:#3fb950;--fail:#f85149;--skip:#d29922;--blocked:#8957e5;--info:#58a6ff;
+  --pass-bg:rgba(63,185,80,.12);--fail-bg:rgba(248,81,73,.12);--skip-bg:rgba(210,153,34,.12);--blocked-bg:rgba(137,87,229,.12);
+  --mono:'Cascadia Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:0 20px 60px}
+/* ── 顶栏 ── */
+.topbar{display:flex;align-items:center;gap:16px;padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.logo{font-size:17px;font-weight:700}.logo em{color:var(--info);font-style:normal}
+.envtag{background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:2px 10px;font-size:12px;color:var(--txt2)}
+select{background:var(--bg3);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:13px;cursor:pointer}
+.livedot{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);margin-left:auto}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--pass);box-shadow:0 0 6px var(--pass)}
+.dot.running{background:var(--info);box-shadow:0 0 6px var(--info);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.passrate{font-size:13px}.passrate b{color:var(--pass);font-size:16px}
+/* ── 区块 ── */
+.section{margin-top:22px}
+.sec-title{font-size:15px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sec-title .hint{font-size:12px;color:var(--txt2);font-weight:400}
+/* ── 流水线全流程 ── */
+.pipeline{display:flex;gap:0;overflow-x:auto;padding:4px 0}
+.stage{flex:1;min-width:118px;position:relative;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:default;transition:.15s}
+.stage+.stage{margin-left:26px}
+.stage+.stage::before{content:'▶';position:absolute;left:-21px;top:50%;transform:translateY(-50%);color:var(--line);font-size:11px}
+.stage:hover{border-color:var(--info);background:var(--bg3)}
+.stage .st-name{font-size:13px;font-weight:600}
+.stage .st-sub{font-size:11px;color:var(--txt2);margin-top:2px;white-space:nowrap}
+.stage .st-metric{font-size:12px;margin-top:6px;font-family:var(--mono)}
+.stage.ok .st-metric{color:var(--pass)}.stage.warn .st-metric{color:var(--skip)}.stage.err .st-metric{color:var(--fail)}
+.stage .st-bar{height:3px;border-radius:2px;margin-top:8px;background:var(--line);overflow:hidden}
+.stage .st-bar i{display:block;height:100%;background:var(--pass)}
+.stage.warn .st-bar i{background:var(--skip)}.stage.err .st-bar i{background:var(--fail)}
+.stage .tip{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:20;background:#000c;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--txt);width:230px;backdrop-filter:blur(4px)}
+.stage:hover .tip{display:block}
+/* ── 统计卡 ── */
+.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;cursor:pointer;transition:.15s}
+.card:hover{border-color:var(--info)}
+.card.active{border-color:var(--info);background:var(--bg3)}
+.card .num{font-size:26px;font-weight:700;font-family:var(--mono)}
+.card .lbl{font-size:12px;color:var(--txt2);margin-top:2px}
+.card.c-pass .num{color:var(--pass)}.card.c-fail .num{color:var(--fail)}
+.card.c-skip .num{color:var(--skip)}.card.c-blocked .num{color:var(--blocked)}
+.diffline{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.badge{font-size:12px;padding:3px 12px;border-radius:12px;border:1px solid;cursor:default}
+.badge.newfail{color:var(--fail);border-color:var(--fail);background:var(--fail-bg)}
+.badge.fixed{color:var(--pass);border-color:var(--pass);background:var(--pass-bg)}
+.badge.stillfail{color:var(--skip);border-color:var(--skip);background:var(--skip-bg)}
+/* ── 主区域 ── */
+.main{display:grid;grid-template-columns:1fr;gap:16px}
+.panel{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+/* 筛选条 */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.fbtn{background:var(--bg3);border:1px solid var(--line);color:var(--txt2);border-radius:14px;padding:3px 12px;font-size:12px;cursor:pointer}
+.fbtn.on{color:var(--txt);border-color:var(--info);background:rgba(88,166,255,.12)}
+.search{background:var(--bg3);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:5px 10px;font-size:13px;width:210px}
+.search:focus{outline:none;border-color:var(--info)}
+/* 场景表 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--txt2);font-weight:500;font-size:12px;padding:6px 10px;border-bottom:1px solid var(--line)}
+td{padding:8px 10px;border-bottom:1px solid #212938}
+tbody tr{cursor:pointer;transition:.1s}
+tbody tr:hover{background:var(--bg3)}
+tbody tr.sel{background:rgba(88,166,255,.08);box-shadow:inset 3px 0 0 var(--info)}
+.vtag{display:inline-block;font-size:11px;font-weight:600;padding:1px 9px;border-radius:10px;font-family:var(--mono)}
+.v-PASS{color:var(--pass);background:var(--pass-bg)}.v-FAIL{color:var(--fail);background:var(--fail-bg)}
+.v-SKIP{color:var(--skip);background:var(--skip-bg)}.v-BLOCKED{color:var(--blocked);background:var(--blocked-bg)}
+.v-WARN{color:var(--skip);background:var(--skip-bg)}
+.tags .t{font-size:11px;color:var(--txt2);background:var(--bg3);border-radius:8px;padding:1px 7px;margin-right:4px}
+.mono{font-family:var(--mono);font-size:12px}
+.dep{color:var(--info);font-size:11px}
+.dep-excl{color:#f0883e;font-size:11px;cursor:help}
+.dep-shared{color:var(--txt2);font-size:11px;cursor:help}
+/* 租约甘特图 */
+.lease-gantt{margin-top:8px}
+.lg-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px}
+.lg-lbl{width:130px;font-family:var(--mono);color:var(--txt2);flex-shrink:0;font-size:11px}
+.lg-track{flex:1;height:22px;background:var(--bg3);border-radius:4px;position:relative;overflow:hidden}
+.lg-bar{position:absolute;top:2px;bottom:2px;border-radius:3px;display:flex;align-items:center;padding:0 7px;font-size:11px;color:#fff;white-space:nowrap;overflow:hidden}
+.tl-item.teardown-dot::before{border-color:var(--skip)}
+.durbar{display:inline-block;height:5px;border-radius:3px;background:var(--info);vertical-align:middle;margin-right:6px;opacity:.7}
+.copy{background:none;border:1px solid var(--line);color:var(--txt2);border-radius:5px;font-size:11px;padding:2px 8px;cursor:pointer}
+.copy:hover{color:var(--txt);border-color:var(--info)}
+/* ── 底部三列 ── */
+.bottom{display:grid;grid-template-columns:1.25fr 1fr 1.15fr;gap:16px;margin-top:22px}
+/* FR 矩阵 */
+.matrix{overflow-x:auto}
+.matrix table{font-size:11px}
+.matrix th,.matrix td{padding:3px 5px;text-align:center;border-bottom:none}
+.matrix th.fr{text-align:left;font-family:var(--mono);white-space:nowrap}
+.cell{width:17px;height:17px;border-radius:3px;display:inline-block;cursor:pointer}
+.cell.P{background:var(--pass)}.cell.F{background:var(--fail)}.cell.S{background:var(--skip)}.cell.B{background:var(--blocked)}.cell.N{background:var(--line)}
+/* 失败聚类 */
+.cluster .cl{margin-bottom:10px}
+.cluster .cl-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;cursor:pointer}
+.cluster .cl-head b{font-family:var(--mono);font-size:12px}
+.cluster .cl-bar{height:8px;border-radius:4px;background:var(--bg3);overflow:hidden}
+.cluster .cl-bar i{display:block;height:100%}
+.cluster .cl-items{font-size:12px;color:var(--txt2);margin-top:4px;padding-left:4px;display:none}
+.cluster .cl.open .cl-items{display:block}
+.cluster .cl-items span{color:var(--info);cursor:pointer;margin-right:8px}
+/* 趋势 */
+.trend svg{width:100%;height:130px}
+.heatmap{margin-top:10px;overflow-x:auto}
+.heatmap table{font-size:10px}
+.heatmap td,.heatmap th{padding:2px 3px;border:none;text-align:center}
+.heatmap th{font-family:var(--mono)}
+.hcell{width:15px;height:15px;border-radius:3px;display:inline-block}
+.legend{font-size:11px;color:var(--txt2);margin-top:8px;display:flex;gap:12px;flex-wrap:wrap}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
+/* ── 详情抽屉 ── */
+.drawer{position:fixed;top:0;right:-620px;width:600px;height:100vh;background:var(--bg2);border-left:1px solid var(--line);z-index:100;transition:right .25s;display:flex;flex-direction:column;box-shadow:-8px 0 30px #0008}
+.drawer.open{right:0}
+.d-head{padding:16px 20px;border-bottom:1px solid var(--line)}
+.d-head .d-id{font-family:var(--mono);color:var(--info);font-size:13px}
+.d-head h3{font-size:16px;margin:4px 0 8px}
+.d-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer}
+.d-close:hover{color:var(--txt)}
+.d-tabs{display:flex;border-bottom:1px solid var(--line);padding:0 12px}
+.d-tab{padding:9px 14px;font-size:13px;color:var(--txt2);cursor:pointer;border-bottom:2px solid transparent}
+.d-tab.on{color:var(--txt);border-bottom-color:var(--info)}
+.d-body{flex:1;overflow-y:auto;padding:16px 20px}
+.kv{margin-bottom:10px}.kv .k{font-size:12px;color:var(--txt2)}.kv .v{margin-top:2px}
+.gwt{border-left:3px solid var(--info);padding:8px 12px;background:var(--bg3);border-radius:0 6px 6px 0;margin-bottom:8px}
+.gwt b{color:var(--info);font-size:12px;font-family:var(--mono)}
+.depchain{font-family:var(--mono);font-size:12px;color:var(--txt2)}
+.depchain b{color:var(--info)}
+/* 时间线 */
+.tl{position:relative;padding-left:22px}
+.tl::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl-item{position:relative;margin-bottom:14px}
+.tl-item::before{content:'';position:absolute;left:-19px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--bg2);border:2px solid var(--info)}
+.tl-item.errdot::before{border-color:var(--fail)}
+.tl-item .tl-t{font-size:13px}.tl-item .tl-t b{font-family:var(--mono);color:var(--info)}
+.tl-item .tl-meta{font-size:11px;color:var(--txt2);font-family:var(--mono)}
+.tl-item pre{background:#0a0e14;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:11px;font-family:var(--mono);overflow-x:auto;margin-top:5px;max-height:150px;overflow-y:auto;color:#a5d6ff;white-space:pre-wrap;word-break:break-all}
+details summary{font-size:11px;color:var(--txt2);cursor:pointer;margin-top:4px}
+/* 断言表 */
+.assert-t td{font-size:12px;vertical-align:top}
+.assert-t .expr{font-family:var(--mono);font-size:11px}
+.assert-t tr.bad{background:var(--fail-bg)}
+.diffbox{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.diffbox .db{border-radius:6px;padding:8px 10px;font-size:11px;font-family:var(--mono);white-space:pre-wrap;word-break:break-all}
+.diffbox .actual{background:var(--fail-bg);border:1px solid #f8514933}
+.diffbox .expect{background:var(--pass-bg);border:1px solid #3fb95033}
+.diffbox .db .cap{font-size:10px;color:var(--txt2);margin-bottom:4px;font-family:"Segoe UI"}
+/* 历史 */
+.hist{display:flex;gap:6px;align-items:flex-end;margin:8px 0 12px}
+.hist .h{width:26px;text-align:center;font-size:10px;color:var(--txt2);cursor:default}
+.hist .h i{display:block;width:100%;height:22px;border-radius:4px;margin-bottom:3px}
+footer{margin-top:30px;color:var(--txt2);font-size:12px;text-align:center}
+.mask{position:fixed;inset:0;background:#0006;z-index:90;display:none}
+.mask.on{display:block}
+@media(max-width:1100px){.bottom{grid-template-columns:1fr}.cards{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">🛡 <em>SpecGuard</em> 测试驾驶舱 <span style="font-size:11px;color:var(--txt2)">可视化样板</span></div>
+  <span class="envtag" id="envTag">环境: SIT</span>
+  <select id="runSel" title="选择运行批次"></select>
+  <select id="diffSel" title="对比基线"></select>
+  <div class="livedot"><span class="dot" id="liveDot"></span><span id="liveTxt">空闲 — 最近运行已完成</span></div>
+  <div class="passrate">通过率 <b id="passRate">—</b></div>
+</div>
+
+<div class="wrap">
+
+  <!-- ① 自动化测试全流程 -->
+  <div class="section">
+    <div class="sec-title">① 自动化测试全流程 <span class="hint">引擎执行链路各阶段健康度（悬停看明细）</span></div>
+    <div class="pipeline" id="pipeline"></div>
+  </div>
+
+  <!-- ② Run 总览 -->
+  <div class="section">
+    <div class="sec-title">② 运行总览 <span class="hint" id="runMeta"></span></div>
+    <div class="cards" id="cards"></div>
+    <div class="diffline" id="diffline"></div>
+  </div>
+
+  <!-- ③ 场景列表 -->
+  <div class="section main">
+    <div class="panel">
+      <div class="sec-title">③ 场景执行结果 <span class="hint">点击行查看详情 · 支持筛选组合</span></div>
+      <div class="filters" id="filters">
+        <input class="search" id="kw" placeholder="🔍 搜索场景 ID / 标题 / FR…">
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:110px">场景</th><th>标题</th><th style="width:70px">结果</th>
+          <th style="width:120px">耗时</th><th style="width:110px">覆盖 FR</th>
+          <th style="width:150px">标签</th><th style="width:90px">操作</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ④ 三列分析 -->
+  <div class="bottom">
+    <div class="panel">
+      <div class="sec-title">④ FR 需求覆盖矩阵 <span class="hint">行=Spec 条款 列=场景</span></div>
+      <div class="matrix" id="matrix"></div>
+      <div class="legend"><span><i style="background:var(--pass)"></i>通过</span><span><i style="background:var(--fail)"></i>失败</span><span><i style="background:var(--skip)"></i>跳过</span><span><i style="background:var(--blocked)"></i>阻塞</span><span><i style="background:var(--line)"></i>未覆盖</span></div>
+    </div>
+    <div class="panel cluster">
+      <div class="sec-title">⑤ 失败 / 跳过聚类 <span class="hint">按归类分组 · 点击展开</span></div>
+      <div id="cluster"></div>
+    </div>
+    <div class="panel trend">
+      <div class="sec-title">⑥ 质量趋势 <span class="hint">通过率折线 + 场景热力图</span></div>
+      <div id="trendChart"></div>
+      <div class="heatmap" id="heatmap"></div>
+    </div>
+  </div>
+
+  <footer>SpecGuard Dashboard 样板 · 数据源 reports/{run_id}/run.json + cases/*.json · 样例数据内嵌，接入真实数据仅需替换 DATA 对象</footer>
+</div>
+
+<!-- 详情抽屉 -->
+<div class="mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="d-head">
+    <button class="d-close" onclick="closeDrawer()">✕</button>
+    <div class="d-id" id="dId"></div>
+    <h3 id="dTitle"></h3>
+    <span id="dVerdict"></span> <span class="mono" id="dDur" style="color:var(--txt2)"></span>
+  </div>
+  <div class="d-tabs" id="dTabs"></div>
+  <div class="d-body" id="dBody"></div>
+</div>
+
+<script>
+/* ═══════════════ 内嵌样例数据（结构与 run.json / cases/*.json 对齐） ═══════════════ */
+const SC_META = {
+ 'PP-RC-001':{t:'当前模式：职责链路由到全局聚合',tags:['resolver'],pr:'P0',fr:['FR-001','FR-004'],dep:[]},
+ 'PP-RC-002':{t:'员工表兜底（无快照有员工记录）',tags:['resolver'],pr:'P1',fr:['FR-001'],dep:[]},
+ 'PP-RC-003':{t:'DHR 降级（TDM 无、DHR 有）',tags:['resolver'],pr:'P1',fr:['FR-001'],dep:[]},
+ 'PP-RC-004':{t:'查询不存在人员返回业务错误',tags:['resolver'],pr:'P1',fr:['FR-001'],dep:[]},
+ 'PP-RC-005':{t:'切片模式：快照冻结 + 结果时点过滤',tags:['snapshot'],pr:'P0',fr:['FR-002','FR-003'],dep:['PP-RC-001']},
+ 'PP-RC-006':{t:'切片指定无快照活动 → 回退最新快照',tags:['snapshot'],pr:'P1',fr:['FR-002'],dep:[]},
+ 'PP-RC-007':{t:'trend 接口按盘点时间降序',tags:['resolver'],pr:'P1',fr:['FR-002'],dep:[]},
+ 'PP-SNAP-001':{t:'切片全字段保真（14 个 JSON 字段）',tags:['snapshot'],pr:'P0',fr:['FR-002','FR-003'],dep:['PP-RC-005'],exdep:['PP-RC-005']},
+ 'PP-SNAP-002':{t:'盘点结果注入 inv* 上下文',tags:['snapshot'],pr:'P1',fr:['FR-006'],dep:[]},
+ 'PP-PERM-001':{t:'跨平台人员 corpCode 权限过滤',tags:['permission'],pr:'P0',fr:['FR-013','FR-015'],dep:[]},
+ 'PP-PERM-002':{t:'trend 接口权限过滤',tags:['permission'],pr:'P1',fr:['FR-013'],dep:[]},
+ 'PP-PERM-003':{t:'verticalManager 维度过滤',tags:['permission'],pr:'P0',fr:['FR-016','FR-017'],dep:[]},
+ 'PP-PERM-004':{t:'受限账号跨平台过滤',tags:['permission'],pr:'P1',fr:['FR-014'],dep:[]},
+ 'PP-SEC-001':{t:'匿名访问被拒绝（fail-secure）',tags:['security'],pr:'P0',fr:['FR-013'],dep:[]},
+ 'PP-SEC-002':{t:'无资源权限访问被拒绝（假资源码）',tags:['security'],pr:'P0',fr:['FR-013'],dep:[]},
+};
+const ALL_FR=['FR-001','FR-002','FR-003','FR-004','FR-006','FR-009','FR-010','FR-013','FR-014','FR-015','FR-016','FR-017','FR-020','FR-021'];
+// 两个可对比 run + 历史趋势
+const DATA={
+ runs:{
+  '2026-07-22_143020':{env:'sit',started:'2026-07-22T14:30:20',finished:'2026-07-22T14:30:47',ver:'1.4.2-SNAPSHOT(a3f8e12)',
+   leases:{emp_no:{'90024713':'PP-RC-005#1','90024714':'PP-SNAP-001#1'}},
+   verdicts:{'PP-RC-001':'PASS','PP-RC-002':'PASS','PP-RC-003':'PASS','PP-RC-004':'PASS','PP-RC-005':'FAIL','PP-RC-006':'PASS','PP-RC-007':'FAIL','PP-SNAP-001':'FAIL','PP-SNAP-002':'PASS','PP-PERM-001':'PASS','PP-PERM-002':'PASS','PP-PERM-003':'PASS','PP-PERM-004':'SKIP','PP-SEC-001':'PASS','PP-SEC-002':'BLOCKED'},
+   dur:{'PP-RC-001':1633,'PP-RC-002':1336,'PP-RC-003':2361,'PP-RC-004':212,'PP-RC-005':1035,'PP-RC-006':796,'PP-RC-007':450,'PP-SNAP-001':888,'PP-SNAP-002':938,'PP-PERM-001':1740,'PP-PERM-002':1250,'PP-PERM-003':1430,'PP-PERM-004':6,'PP-SEC-001':320,'PP-SEC-002':8}},
+  '2026-07-22_132029':{env:'sit',started:'2026-07-22T13:20:29',finished:'2026-07-22T13:20:58',ver:'1.4.2-SNAPSHOT(9be01c7)',leases:{},
+   verdicts:{'PP-RC-001':'PASS','PP-RC-002':'PASS','PP-RC-003':'FAIL','PP-RC-004':'PASS','PP-RC-005':'FAIL','PP-RC-006':'PASS','PP-RC-007':'FAIL','PP-SNAP-001':'FAIL','PP-SNAP-002':'FAIL','PP-PERM-001':'PASS','PP-PERM-002':'PASS','PP-PERM-003':'PASS','PP-PERM-004':'SKIP','PP-SEC-001':'PASS','PP-SEC-002':'PASS'},
+   dur:{'PP-RC-001':2633,'PP-RC-002':1336,'PP-RC-003':3361,'PP-RC-004':212,'PP-RC-005':1035,'PP-RC-006':796,'PP-RC-007':450,'PP-SNAP-001':888,'PP-SNAP-002':938,'PP-PERM-001':1840,'PP-PERM-002':1350,'PP-PERM-003':1530,'PP-PERM-004':6,'PP-SEC-001':320,'PP-SEC-002':290}}
+ },
+ trend:[
+  {id:'07-18_09',rate:60},{id:'07-18_17',rate:66},{id:'07-19_10',rate:66},{id:'07-20_11',rate:73},
+  {id:'07-21_09',rate:80},{id:'07-21_16',rate:73},{id:'07-22_13',rate:66},{id:'07-22_14',rate:73}],
+ // 场景级历史（热力图 + 抽屉 Tab5，P=PASS F=FAIL S=SKIP B=BLOCKED）
+ history:{
+  'PP-RC-001':'PPPPPPPP','PP-RC-002':'PFPPPPPP','PP-RC-003':'PPPPPPFP','PP-RC-004':'PPPPPPPP',
+  'PP-RC-005':'FFPFPFFF','PP-RC-006':'PPPPPPPP','PP-RC-007':'PPPPFFFF','PP-SNAP-001':'FFFFFFFF',
+  'PP-SNAP-002':'PPPPPPFP','PP-PERM-001':'PPPPPPPP','PP-PERM-002':'PPPPPPPP','PP-PERM-003':'PPPFPPPP',
+  'PP-PERM-004':'SSSSSSSS','PP-SEC-001':'PPPPPPPP','PP-SEC-002':'PPPPPPPB'}
+};
+// 全流程阶段（基于引擎真实链路建模）
+const PIPE=[
+ {n:'场景加载',s:'scenarios/**/*.yaml',m:'15 场景 · 0 告警',cls:'ok',pct:100,tip:'scenario_loader 扫描场景库，双层 YAML（doc 人读层 + flow/verify 机器读层），校验 id 唯一性'},
+ {n:'DAG 依赖解析',s:'dependency_graph',m:'2 条依赖边 · 无环',cls:'ok',pct:100,tip:'三色 DFS 循环检测 + 拓扑排序；上游场景 session 内只执行一次，结果供下游引用'},
+ {n:'SSO Token',s:'token_provider',m:'2 账号 · 缓存命中 93%',cls:'ok',pct:93,tip:'账密换 access_token，按账号缓存，剩余有效期 <5min 自动刷新，401 失效重取'},
+ {n:'工号池选号',s:'select_emp (DB 校验)',m:'5 角色 · 1 角色无候选',cls:'warn',pct:80,tip:'角色化候选工号 + 执行前 DB 校验；候选全部不满足 → 场景 SKIP（数据缺失 ≠ 产品缺陷）'},
+ {n:'权限预言',s:'hr-center data-info',m:'4 次抓取 · 0 异常',cls:'ok',pct:100,tip:'实时推导账号三维权限范围（corp/groupLevel/vm），作为权限断言的预期真相源；预言机异常 → 场景 SKIP'},
+ {n:'HTTP 调用',s:'sit-ha 网关',m:'21 次 · P95 1.8s',cls:'ok',pct:100,tip:'Bearer 认证 + 401 自动重取重试；匿名调用（as: none）用于 fail-secure 场景'},
+ {n:'断言执行',s:'status / json / oracle',m:'87 条 · 9 条失败',cls:'err',pct:90,tip:'HTTP 状态码 + JSONPath 断言 + 8 个 DB 校对断言器（快照冻结/时点过滤/权限过滤…）'},
+ {n:'DB 预言校对',s:'只读 SELECT 守卫',m:'34 次查询 · 3 处不一致',cls:'warn',pct:91,tip:'响应 vs tdm_snap_profile / tdm_emp_employee / dhr_employee 真值比对，雪花 ID 归一化'},
+ {n:'报告落盘',s:'run.json + cases/ + md',m:'16 文件 · 增量写入',cls:'ok',pct:100,tip:'JSON 先行（可视化数据源），MD 四段式渲染（原始内容/执行过程/结果/情况分析）'}];
+// 单场景详情样例（结构对齐 cases/{id}.json）
+const CASE_DETAIL={
+ 'PP-RC-005':{
+  doc:{given:'人员 90024713 存在 RESULT 快照（活动 1936）',when:'GET /api/employee/profile?empNo=90024713&activityId=1936',then:'档案数据来自 tdm_snap_profile 快照 JSON（冻结），盘点结果按 inventory_date 时点过滤'},
+  emp_pool:'角色 snapshot_rich → 选中 90024713（校验值 4），快照活动 1936（RESULT）',account:'default（AD: caiyunfei，工号: 90024713）',
+  steps:[
+   {type:'select_emp',note:'工号池角色 snapshot_rich → 90024713',dur:184},
+   {type:'call',req:'[default] GET /api/employee/profile',params:'{empNo:"90024713", resourceCode:"VIEW_TELENT_SEARCH"}',status:200,dur:642,body:'{"status":"200","data":{"basicInfo":{"empNo":"90024713","empName":"张**","corpCode":"C012"},"dataSource":"SNAPSHOT","capability":[…],"gridPlacement":[…]}}'},
+   {type:'call',req:'[default] GET /api/employee/profile (切片)',params:'{empNo:"90024713", activityId:1936}',status:200,dur:518,body:'{"status":"200","data":{"basicInfo":{…},"dataSource":"SNAPSHOT","snapshotType":"RESULT","gridPlacement":[{"activityId":2011,…}]}}'},
+   {type:'teardown:call',note:'清理切片测试临时数据（独占租约归还）',dur:45},
+  ],
+  asserts:[
+   {expr:'resp.status == 200',actual:'200',expected:'200',ok:true},
+   {expr:'resp$.data.basicInfo.empNo == "90024713"',actual:'"90024713"',expected:'"90024713"',ok:true},
+   {expr:'oracle: snapshot_frozen',actual:'切片响应与快照 JSON 一致',expected:'—',ok:true},
+   {expr:'oracle: result_time_filtered',actual:'gridPlacement: 1 条切片记录不在全局结果中',expected:'切片结果 ⊆ 全局 + inventory_date ≤ 当前活动',ok:false,
+    msg:'时点过滤失效：活动 2011 inventory_date=2026-06-30 > 当前活动 1936 的 2026-03-31',
+    diff:{actual:'gridPlacement[0]\n activityId: 2011\n inventoryDate: "2026-06-30"  ← 晚于切片时点',expected:'仅返回 inventory_date ≤ 2026-03-31 的活动\n（当前活动 1936 的盘点时点）'}},
+  ],
+  db:[
+   {purpose:'snapshot_frozen: 状态型字段 ↔ tdm_snap_profile JSON',sql:"SELECT sp.* FROM tdm_snap_profile sp JOIN tdm_emp_employee e ON sp.emp_id=e.id WHERE e.emp_no='90024713' AND sp.activity_id=1936 AND sp.deleted=0",rows:1,note:'strict_mismatches: 0 · basic_loose_diffs: 2（DHR 覆盖，预期内）'},
+   {purpose:'result_time_filtered: 活动时点批量查询',sql:'SELECT id, inventory_date FROM tdm_inv_activity WHERE id IN (1936, 2011)',rows:2,note:'date_violations: 1（活动 2011）'},
+  ],
+  failure:{cat:'oracle_mismatch',msg:'1 条断言失败：切片结果字段时点/同源校验失败'}},
+ 'PP-SEC-002':{
+  doc:{given:'账号使用假资源码 SG_NONEXIST_RESOURCE 模拟无权限',when:'GET /api/employee/profile?resourceCode=SG_NONEXIST_RESOURCE',then:'fail-secure：拒绝访问或返回空数据'},
+  emp_pool:'角色 snapshot_rich → 选中 90024713（校验值 4）',account:'no_access（AD: caiyunfei，配合假资源码）',
+  steps:[
+   {type:'select_emp',note:'工号池角色 snapshot_rich → 90024713',dur:12},
+   {type:'fetch_permission',note:'权限预言 no_access@SG_NONEXIST_RESOURCE → corpCode=∅, groupLevel=∅, verticalManager=∅',dur:230},
+  ],
+  asserts:[],db:[],
+  blocked:'上游场景 PP-RC-001 未通过（FAIL），本场景未执行'},
+ '_default_pass':{
+  doc:{given:'（样例）工号池选出满足角色条件的人员',when:'（样例）调用被测接口',then:'（样例）响应与 DB 真值一致'},
+  emp_pool:'角色 snapshot_rich → 选中 90024713（校验值 4）',account:'default（AD: caiyunfei）',
+  steps:[
+   {type:'select_emp',note:'工号池角色校验通过',dur:95},
+   {type:'call',req:'[default] GET /api/employee/profile',params:'{empNo:"90024713"}',status:200,dur:820,body:'{"status":"200","data":{…}}'}],
+  asserts:[
+   {expr:'resp.status == 200',actual:'200',expected:'200',ok:true},
+   {expr:'resp$.data.basicInfo.empNo 非 null',actual:'"90024713"',expected:'非 null',ok:true},
+   {expr:'oracle: profile_matches_db',actual:'4 字段全部一致',expected:'—',ok:true}],
+  db:[{purpose:'profile_matches_db: basicInfo ↔ tdm_emp_employee',sql:"SELECT * FROM tdm_emp_employee WHERE emp_no='90024713' AND deleted=0",rows:1,note:'mismatches: 0'}]},
+ '_default_skip':{
+  doc:{given:'受限账号（单平台权限）尚未配置',when:'—',then:'—'},steps:[],asserts:[],db:[],
+  skip:'账号别名 restricted 未在环境配置 accounts 中定义（请在 env.sit.yaml 的 accounts 补充真实 AD 账号）'}
+};
+const FAIL_DETAIL={
+ 'oracle_mismatch（DB 校对不一致）':{color:'var(--fail)',items:['PP-RC-005','PP-SNAP-001'],hint:'时点过滤失效 + 快照字段不一致 —— 疑似同一根因（Collector 时点条件）'},
+ 'assert_failed（HTTP/JSON 断言失败）':{color:'var(--fail)',items:['PP-RC-007'],hint:'trend 未按 inventoryDate 降序'},
+ 'upstream_blocked（上游阻塞）':{color:'var(--blocked)',items:['PP-SEC-002'],hint:'上游 PP-RC-001 未通过传播'},
+ 'account_missing（账号未配置 · SKIP）':{color:'var(--skip)',items:['PP-PERM-004'],hint:'补 env.sit.yaml accounts.restricted 即激活'}};
+/* ═══ 状态 ═══ */
+let curRun=Object.keys(DATA.runs)[0], baseRun=Object.keys(DATA.runs)[1];
+let fVerdict=null, fTags=new Set(), fKw='', selId=null;
+const V_ORDER={FAIL:0,BLOCKED:1,SKIP:2,PASS:3};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function scenList(){
+  const run=DATA.runs[curRun];
+  return Object.keys(SC_META).map(id=>({id,...SC_META[id],v:run.verdicts[id],dur:run.dur[id]}));
+}
+/* ── ① 流水线 ── */
+function renderPipeline(){
+  $('pipeline').innerHTML=PIPE.map(p=>`
+   <div class="stage ${p.cls}">
+     <div class="st-name">${p.n}</div><div class="st-sub">${p.s}</div>
+     <div class="st-metric">${p.m}</div>
+     <div class="st-bar"><i style="width:${p.pct}%"></i></div>
+     <div class="tip">${p.tip}</div>
+   </div>`).join('');
+}
+/* ── ② 总览卡片 + Diff ── */
+function renderCards(){
+  const run=DATA.runs[curRun],vs=Object.values(run.verdicts);
+  const n=t=>vs.filter(v=>v===t).length;
+  const total=vs.length,pass=n('PASS');
+  const dur=((new Date(run.finished)-new Date(run.started))/1000).toFixed(0);
+  $('passRate').textContent=Math.round(pass/total*100)+'%';
+  $('runMeta').textContent=`run_id: ${curRun} · 服务版本 ${run.ver} · ${run.started.replace('T',' ')} 起 · 总耗时 ${dur}s`;
+  const defs=[['total','场景总数',total,''],['PASS','通过',n('PASS'),'c-pass'],['FAIL','失败',n('FAIL'),'c-fail'],
+    ['SKIP','跳过',n('SKIP'),'c-skip'],['BLOCKED','阻塞',n('BLOCKED'),'c-blocked'],['dur','总耗时',dur+'s','']];
+  $('cards').innerHTML=defs.map(([k,l,v,c])=>
+   `<div class="card ${c} ${fVerdict===k?'active':''}" onclick="clickCard('${k}')"><div class="num">${v}</div><div class="lbl">${l}${['PASS','FAIL','SKIP','BLOCKED'].includes(k)?' · 点击过滤':''}</div></div>`).join('');
+  const base=DATA.runs[baseRun];
+  if(!base||baseRun===curRun){$('diffline').innerHTML='<span style="font-size:12px;color:var(--txt2)">选择不同基线以查看回归对比</span>';return}
+  const nf=[],fx=[],sf=[];
+  Object.keys(SC_META).forEach(id=>{
+    const a=base.verdicts[id],b=run.verdicts[id];
+    if(b==='FAIL'&&a!=='FAIL')nf.push(id);
+    if(a==='FAIL'&&b==='PASS')fx.push(id);
+    if(a==='FAIL'&&b==='FAIL')sf.push(id);
+  });
+  $('diffline').innerHTML=
+   `<span class="badge newfail">🆕 新增失败 ${nf.length}${nf.length?'：'+nf.join(' '):''}</span>`+
+   `<span class="badge fixed">✅ 已修复 ${fx.length}${fx.length?'：'+fx.join(' '):''}</span>`+
+   `<span class="badge stillfail">⚠️ 持续失败 ${sf.length}${sf.length?'：'+sf.join(' '):''}</span>`+
+   `<span style="font-size:12px;color:var(--txt2);align-self:center">（基线: ${baseRun}）</span>`;
+}
+function clickCard(k){
+  if(['PASS','FAIL','SKIP','BLOCKED'].includes(k)){fVerdict=fVerdict===k?null:k;renderAll()}
+}
+/* ── ③ 场景表 ── */
+function renderFilters(){
+  const tags=['P0','resolver','snapshot','permission','security'];
+  [...$('filters').querySelectorAll('.fbtn')].forEach(b=>b.remove());
+  tags.forEach(t=>{
+    const b=document.createElement('button');b.className='fbtn'+(fTags.has(t)?' on':'');b.textContent=t;
+    b.onclick=()=>{fTags.has(t)?fTags.delete(t):fTags.add(t);renderAll()};
+    $('filters').appendChild(b);
+  });
+}
+function renderTable(){
+  const maxDur=Math.max(...Object.values(DATA.runs[curRun].dur));
+  let list=scenList().filter(s=>{
+    if(fVerdict&&s.v!==fVerdict)return false;
+    for(const t of fTags){if(t==='P0'){if(s.pr!=='P0')return false}else if(!s.tags.includes(t))return false}
+    if(fKw){const k=fKw.toLowerCase();if(!(s.id.toLowerCase().includes(k)||s.t.includes(fKw)||s.fr.join(',').toLowerCase().includes(k)))return false}
+    return true;
+  }).sort((a,b)=>V_ORDER[a.v]-V_ORDER[b.v]||a.id.localeCompare(b.id));
+  $('tbody').innerHTML=list.map(s=>`
+   <tr class="${selId===s.id?'sel':''}" onclick="openDrawer('${s.id}')">
+    <td class="mono">${s.id}${s.dep.length?` <span class="${s.exdep&&s.exdep.length?'dep-excl':'dep-shared'}" title="依赖: ${s.dep.join(' → ')}${s.exdep&&s.exdep.length?'（含独占依赖 🔒）':''}">⛓${s.dep.length}${s.exdep&&s.exdep.length?'🔒':''}</span>`:''}</td>
+    <td>${esc(s.t)}</td>
+    <td><span class="vtag v-${s.v}">${s.v}</span></td>
+    <td class="mono"><span class="durbar" style="width:${Math.max(4,s.dur/maxDur*60)}px"></span>${s.dur}ms</td>
+    <td class="mono" style="font-size:11px">${s.fr.join(', ')}</td>
+    <td class="tags"><span class="t">${s.pr}</span>${s.tags.map(t=>`<span class="t">${t}</span>`).join('')}</td>
+    <td><button class="copy" onclick="event.stopPropagation();copyCmd('${s.id}',this)">📋 重跑</button></td>
+   </tr>`).join('')||'<tr><td colspan="7" style="color:var(--txt2);text-align:center;padding:20px">无匹配场景</td></tr>';
+}
+function copyCmd(id,btn){
+  navigator.clipboard.writeText(`python -m pytest tests/specguard -k "${id}" -v`).then(()=>{
+    btn.textContent='✓ 已复制';setTimeout(()=>btn.textContent='📋 重跑',1500)});
+}
+/* ── ④ FR 矩阵 ── */
+function renderMatrix(){
+  const run=DATA.runs[curRun],ids=Object.keys(SC_META);
+  const V2C={PASS:'P',FAIL:'F',SKIP:'S',BLOCKED:'B'};
+  let h='<table><tr><th class="fr"></th>'+ids.map(id=>`<th title="${id}">${id.replace('PP-','')}</th>`).join('')+'</tr>';
+  ALL_FR.forEach(fr=>{
+    h+=`<tr><th class="fr">${fr}</th>`+ids.map(id=>{
+      const covers=SC_META[id].fr.includes(fr);
+      const c=covers?V2C[run.verdicts[id]]:'N';
+      return `<td><span class="cell ${c}" title="${fr} × ${id}${covers?' → '+run.verdicts[id]:'（未覆盖）'}" ${covers?`onclick="openDrawer('${id}')"`:''}></span></td>`;
+    }).join('')+'</tr>';
+  });
+  $('matrix').innerHTML=h+'</table>';
+}
+/* ── ⑤ 失败聚类 ── */
+function renderCluster(){
+  const total=Object.values(FAIL_DETAIL).reduce((a,c)=>a+c.items.length,0);
+  $('cluster').innerHTML=Object.entries(FAIL_DETAIL).map(([cat,c],i)=>`
+   <div class="cl" id="cl${i}">
+     <div class="cl-head" onclick="this.parentNode.classList.toggle('open')"><b>${cat}</b><span>${c.items.length} 个场景 ▾</span></div>
+     <div class="cl-bar"><i style="width:${c.items.length/total*100}%;background:${c.color}"></i></div>
+     <div class="cl-items">${c.items.map(id=>`<span onclick="openDrawer('${id}')">${id}</span>`).join('')}<br>💡 ${c.hint}</div>
+   </div>`).join('');
+}
+/* ── ⑥ 趋势 ── */
+function renderTrend(){
+  const d=DATA.trend,W=440,H=110,P=26;
+  const x=i=>P+i*(W-P*2)/(d.length-1), y=r=>H-14-(r/100)*(H-34);
+  const pts=d.map((t,i)=>`${x(i)},${y(t.rate)}`).join(' ');
+  $('trendChart').innerHTML=`<svg viewBox="0 0 ${W} ${H}">
+   ${[100,80,60,40].map(g=>`<line x1="${P}" x2="${W-P}" y1="${y(g)}" y2="${y(g)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="2" y="${y(g)+3}" font-size="8" fill="var(--txt2)">${g}%</text>`).join('')}
+   <polyline points="${pts}" fill="none" stroke="var(--info)" stroke-width="2"/>
+   ${d.map((t,i)=>`<circle cx="${x(i)}" cy="${y(t.rate)}" r="3.5" fill="${t.rate>=80?'var(--pass)':t.rate>=60?'var(--skip)':'var(--fail)'}"><title>${t.id} 通过率 ${t.rate}%</title></circle>
+     <text x="${x(i)}" y="${H-2}" font-size="7.5" fill="var(--txt2)" text-anchor="middle">${t.id}</text>`).join('')}
+  </svg>`;
+  const C={P:'var(--pass)',F:'var(--fail)',S:'var(--skip)',B:'var(--blocked)'};
+  let h='<table><tr><th style="text-align:left">场景 × 近 8 次</th>'+d.map(t=>`<th>${t.id.slice(-5)}</th>`).join('')+'<th>flaky</th></tr>';
+  Object.entries(DATA.history).forEach(([id,seq])=>{
+    const flaky=/PF|FP/.test(seq);
+    h+=`<tr><th class="fr" style="text-align:left;font-family:var(--mono);cursor:pointer" onclick="openDrawer('${id}')">${id}</th>`+
+      [...seq].map((c,i)=>`<td><span class="hcell" style="background:${C[c]}" title="${id} @ ${d[i].id}: ${c==='P'?'PASS':c==='F'?'FAIL':c==='S'?'SKIP':'BLOCKED'}"></span></td>`).join('')+
+      `<td>${flaky?'⚡':''}</td></tr>`;
+  });
+  $('heatmap').innerHTML=h+'</table>';
+}
+/* ── 详情抽屉 ── */
+let dTab=0;
+function openDrawer(id){
+  selId=id;dTab=0;
+  const run=DATA.runs[curRun],meta=SC_META[id],v=run.verdicts[id];
+  $('dId').textContent=id+' · '+meta.pr+' · '+meta.tags.join(' / ');
+  $('dTitle').textContent=meta.t;
+  $('dVerdict').innerHTML=`<span class="vtag v-${v}">${v}</span>`;
+  $('dDur').textContent=run.dur[id]+'ms';
+  renderDrawerTabs();renderDrawerBody(id);
+  $('drawer').classList.add('open');$('mask').classList.add('on');
+  renderTable();
+}
+function closeDrawer(){selId=null;$('drawer').classList.remove('open');$('mask').classList.remove('on');renderTable()}
+function renderDrawerTabs(){
+  const names=['📋 需求','🔀 执行轨迹','✅ 断言','🔎 证据','📈 历史','🔗 租约'];
+  $('dTabs').innerHTML=names.map((n,i)=>`<div class="d-tab ${i===dTab?'on':''}" onclick="dTab=${i};renderDrawerTabs();renderDrawerBody(selId)">${n}</div>`).join('');
+}
+function detail(id){
+  const v=DATA.runs[curRun].verdicts[id];
+  if(CASE_DETAIL[id])return CASE_DETAIL[id];
+  return v==='SKIP'?CASE_DETAIL['_default_skip']:CASE_DETAIL['_default_pass'];
+}
+function renderDrawerBody(id){
+  const d=detail(id),meta=SC_META[id];let h='';
+  if(dTab===0){
+    h+=`<div class="gwt"><b>GIVEN</b><div>${esc(d.doc.given)}</div></div>
+        <div class="gwt"><b>WHEN</b><div>${esc(d.doc.when)}</div></div>
+        <div class="gwt"><b>THEN</b><div>${esc(d.doc.then)}</div></div>
+        <div class="kv"><div class="k">覆盖 Spec 条款</div><div class="v mono">${meta.fr.join('、')}</div></div>`;
+    if(meta.dep.length)h+=`<div class="kv"><div class="k">依赖链（自动拓扑排序，上游 PASS 后其 save 变量可引用）</div><div class="v depchain">${meta.dep.map(x=>`<b>${x}</b>`).join(' → ')} → 本场景</div></div>`;
+    if(d.emp_pool)h+=`<div class="kv"><div class="k">工号池</div><div class="v" style="font-size:13px">${esc(d.emp_pool)}</div></div>`;
+    if(d.account)h+=`<div class="kv"><div class="k">使用账号</div><div class="v" style="font-size:13px">${esc(d.account)}</div></div>`;
+  }
+  if(dTab===1){
+    if(d.blocked)h+=`<div class="gwt" style="border-color:var(--blocked)"><b style="color:var(--blocked)">BLOCKED</b><div>${esc(d.blocked)}</div></div>`;
+    if(d.skip)h+=`<div class="gwt" style="border-color:var(--skip)"><b style="color:var(--skip)">SKIP</b><div>${esc(d.skip)}</div></div>`;
+    h+=d.steps.length?`<div class="tl">${d.steps.map(s=>{
+      const isTd=s.type.startsWith('teardown:');
+      return `
+      <div class="tl-item ${s.status>=400?'errdot':isTd?'teardown-dot':''}">
+        <div class="tl-t"><b>${s.type}</b> ${esc(s.req||s.note||'')}</div>
+        <div class="tl-meta">${isTd?'🧹 清理阶段 · ':''}${s.params?esc(s.params)+' · ':''}${s.status?'HTTP '+s.status+' · ':''}${s.dur}ms</div>
+        ${s.body?`<details><summary>响应摘录</summary><pre>${esc(s.body)}</pre></details>`:''}
+      </div>`}).join('')}</div>`:(d.blocked||d.skip?'':'<div style="color:var(--txt2)">（未执行）</div>');
+  }
+  if(dTab===2){
+    if(!d.asserts.length){h+='<div style="color:var(--txt2)">（无断言记录）</div>'}
+    else{
+      h+='<table class="assert-t"><tr><th>#</th><th>断言</th><th>实际</th><th>预期</th><th></th></tr>'+
+        d.asserts.map((a,i)=>`<tr class="${a.ok?'':'bad'}"><td>${i+1}</td><td class="expr">${esc(a.expr)}</td><td class="mono">${esc(a.actual)}</td><td class="mono">${esc(a.expected)}</td><td>${a.ok?'✓':'✗'}</td></tr>`).join('')+'</table>';
+      d.asserts.filter(a=>!a.ok).forEach(a=>{
+        h+=`<div class="kv" style="margin-top:14px"><div class="k">失败详情</div><div class="v" style="font-size:13px;color:var(--fail)">${esc(a.msg||'')}</div></div>`;
+        if(a.diff)h+=`<div class="diffbox"><div class="db actual"><div class="cap">实际（响应）</div>${esc(a.diff.actual)}</div><div class="db expect"><div class="cap">预期（DB 真值）</div>${esc(a.diff.expected)}</div></div>`;
+      });
+      if(d.failure)h+=`<div class="kv" style="margin-top:14px"><div class="k">失败归类</div><div class="v"><span class="vtag v-FAIL">${d.failure.cat}</span> <span style="font-size:13px">${esc(d.failure.msg)}</span></div></div>`;
+    }
+    h+=`<div style="margin-top:16px"><button class="copy" onclick="copyCmd('${id}',this)">📋 复制本地复跑命令</button> <span class="mono" style="font-size:11px;color:var(--txt2)">python -m pytest tests/specguard -k "${id}" -v</span></div>`;
+  }
+  if(dTab===3){
+    h+=d.db.length?d.db.map(t=>`
+      <div class="kv"><div class="k">🗄 ${esc(t.purpose)}</div>
+      <pre>${esc(t.sql)}</pre>
+      <div style="font-size:12px;color:var(--txt2);margin-top:3px">→ ${t.rows} 行 · ${esc(t.note)}</div></div>`).join('')
+      :'<div style="color:var(--txt2)">（无 DB 校对记录）</div>';
+  }
+  if(dTab===4){
+    const seq=DATA.history[id]||'',C={P:'var(--pass)',F:'var(--fail)',S:'var(--skip)',B:'var(--blocked)'};
+    const flaky=/PF|FP/.test(seq);
+    h+=`<div class="kv"><div class="k">近 ${seq.length} 次运行 verdict 序列${flaky?' · <span style="color:var(--skip)">⚡ 检测到 flaky（PASS/FAIL 交替）</span>':''}</div></div>
+      <div class="hist">${[...seq].map((c,i)=>`<div class="h"><i style="background:${C[c]}"></i>${DATA.trend[i].id.slice(-5)}</div>`).join('')}</div>
+      <div style="font-size:12px;color:var(--txt2)">连续 FAIL 属稳定回归应优先修复；PASS/FAIL 交替（flaky）多为环境/数据抖动，建议检查工号池候选与网关稳定性。</div>`;
+  }
+  if(dTab===5){
+    const run=DATA.runs[curRun],leases=run.leases||{};
+    const types=Object.keys(leases);
+    if(!types.length){h+='<div style="color:var(--txt2)">（本次运行无资源租约记录——全部为只读场景或尚未接入写型场景）</div>'}
+    else{
+      h+='<div class="kv"><div class="k">资源租约快照（session 级，进程结束即消亡）</div></div><div class="lease-gantt">';
+      const colors=['var(--info)','#f0883e','var(--pass)','var(--blocked)'];
+      let ci=0;
+      types.forEach(type=>{Object.entries(leases[type]).forEach(([key,holder])=>{
+        h+=`<div class="lg-row"><div class="lg-lbl">${type}: ${key}</div><div class="lg-track"><div class="lg-bar" style="left:4%;width:62%;background:${colors[ci++%colors.length]}">${holder}</div></div></div>`;
+      })});
+      h+='</div><div style="font-size:12px;color:var(--txt2);margin-top:10px">💡 独占租约防止多个写型场景操作同一数据互相踩踏；teardown 成功后即时归还，session 结束整体释放。</div>';
+    }
+  }
+  $('dBody').innerHTML=h;
+}
+/* ── 装配 ── */
+function renderAll(){renderCards();renderFilters();renderTable();renderMatrix();renderCluster();renderTrend()}
+(function init(){
+  const runs=Object.keys(DATA.runs);
+  $('runSel').innerHTML=runs.map(r=>`<option value="${r}">当前: ${r}</option>`).join('');
+  $('diffSel').innerHTML=runs.map(r=>`<option value="${r}" ${r===baseRun?'selected':''}>基线: ${r}</option>`).join('');
+  $('runSel').onchange=e=>{curRun=e.target.value;renderAll()};
+  $('diffSel').onchange=e=>{baseRun=e.target.value;renderAll()};
+  $('kw').oninput=e=>{fKw=e.target.value.trim();renderTable()};
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
+  renderPipeline();renderAll();
+  // 模拟“实时模式”演示：8 秒后展示运行中状态（真实实现走 SSE + fs.watch reports/）
+  setTimeout(()=>{ $('liveDot').classList.add('running');$('liveTxt').textContent='运行中 — 已完成 9/15 场景（SSE 实时推送演示）';
+    setTimeout(()=>{$('liveDot').classList.remove('running');$('liveTxt').textContent='空闲 — 最近运行已完成'},5000)},8000);
+})();
+</script>
+</body>
+</html>

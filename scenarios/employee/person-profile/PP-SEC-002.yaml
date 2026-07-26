@@ -1,0 +1,30 @@
+# ─────────── 人读层：doc ───────────
+id: PP-SEC-002
+title: 无权限账号访问档案被拒绝（fail-secure，不泄露数据）
+version: "0.1"
+priority: P0
+tags: [security]
+doc:
+  given: 登录账号使用一个在权限中台不存在的资源码（任何账号对其都无权限）
+  when: 调用 GET /api/employee/profile?empNo=xxx&resourceCode=SG_NONEXIST_RESOURCE
+  then: 返回权限拒绝（统一包装协议：HTTP 200 + status=500000 + message 含"无数据权限"）；不返回任何人员数据（fail-secure）
+  covers: [FR-013, FR-015]
+  related_ac: [AC-001]
+  note: 用不存在的假资源码模拟无权限，场景对任何测试账号都成立，不依赖账号的真实权限配置；TDM 错误语义在 body.status/message
+
+# ─────────── 机器读层 ───────────
+depends_on: []
+flow:
+  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+  - call:
+      as: no_access
+      method: GET
+      path: /api/employee/profile
+      params: {empNo: "{{emp.no}}", resourceCode: "SG_NONEXIST_RESOURCE"}
+      save: resp
+verify:
+  - status: {eq: 200}
+  - json: {path: "$.status", eq: "500000"}
+  - json: {path: "$.message", contains: "无数据权限"}
+  # fail-secure：data 不得携带任何人员档案数据
+  - json: {path: "$.data.basicInfo", absent: true}
