@@ -2,6 +2,6 @@
 # 本文件不作为场景执行，仅承载套件级元数据（scenario_loader 读取后注入各场景）
 feature: 干部全景档案
 module: employee/person-profile
-spec_ref: raw/spec/specs/employee/person-profile/spec.md
+spec_ref: specs/employee/person-profile/spec.md
 spec_version: V1.28
-api_ref: raw/spec/specs/employee/person-profile/api.yaml
+api_ref: specs/employee/person-profile/api.yaml

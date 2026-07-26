@@ -10,6 +10,7 @@ from services.plan_store import (
     get_plan_working_copy, save_plan_working_copy, list_plan_working_copies,
 )
 from services.runner import run_manager
+from services.covers_gate import check_covers_gate
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
 
@@ -53,10 +54,20 @@ def api_delete_plan(plan_id: str):
 
 @router.post("/{plan_id}/run")
 async def api_run_plan(plan_id: str):
-    """按计划执行（支持断点）"""
+    """按计划执行（支持断点）
+
+    与 runs/trigger 同一 covers 前置闸（计划驱动是主执行路径，不能成为闸口漏洞）。
+    """
     plan = get_plan(plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail=f"计划 {plan_id} 不存在")
+
+    covers_errors = check_covers_gate()
+    if covers_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "covers 校验未通过，禁止触发执行", "errors": covers_errors},
+        )
 
     scenario_ids = resolve_scenarios(plan)
     if not scenario_ids:

@@ -19,7 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts
 
 app = FastAPI(
     title="SpecGuard Workbench API",
@@ -45,6 +45,7 @@ app.include_router(spec_validation.router)
 app.include_router(agent.router)
 app.include_router(workspace.router)
 app.include_router(feedback.router)
+app.include_router(drafts.router)
 
 
 @app.get("/api/health")

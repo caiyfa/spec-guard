@@ -41,7 +41,7 @@ class RegisterLocalBody(BaseModel):
     path: str
     system: str = "tdm"
     activate: bool = True
-    run_conformance: bool = True
+    # 注意：不接受 run_conformance 客户端参数——接入即门禁，合规校验由服务端强制执行（V2 修复）
 
 
 class RegisterGitBody(BaseModel):
@@ -50,7 +50,7 @@ class RegisterGitBody(BaseModel):
     system: str = "tdm"
     branch: str = "main"
     activate: bool = True
-    run_conformance: bool = True
+    # 同上：合规校验不可被客户端跳过（V2 修复）
 
 
 class ActivateBody(BaseModel):
@@ -90,17 +90,17 @@ def api_get_active():
 
 @router.post("/register-local")
 def api_register_local(body: RegisterLocalBody):
-    """注册本地文件夹工作区。"""
+    """注册本地文件夹工作区（合规校验强制执行，任一 ERROR 拒绝接入）。"""
     result = register_local(body.name, body.path, body.system,
-                            activate=body.activate, run_conformance=body.run_conformance)
+                            activate=body.activate, run_conformance=True)
     return result
 
 
 @router.post("/register-git")
 def api_register_git(body: RegisterGitBody):
-    """注册 git 工作区（克隆仓库）。"""
+    """注册 git 工作区（克隆仓库，合规校验强制执行）。"""
     result = register_git(body.name, body.url, body.system, body.branch,
-                          activate=body.activate, run_conformance=body.run_conformance)
+                          activate=body.activate, run_conformance=True)
     return result
 
 
@@ -145,7 +145,13 @@ def api_spec_files(subdir: str = ""):
     if not ws:
         raise HTTPException(status_code=400, detail="无激活的工作区")
 
-    root = ws.root / subdir if subdir else ws.root
+    # V3 修复：subdir 必须解析在工作区根之内（防路径穿越枚举任意目录）
+    if subdir:
+        root = safe_resolve(subdir)
+        if root is None:
+            raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界: {subdir}")
+    else:
+        root = ws.root
     if not root.is_dir():
         raise HTTPException(status_code=404, detail=f"目录不存在: {subdir}")
 

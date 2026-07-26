@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from services.runner import run_manager
 from services.scenario_store import list_reports, get_report, get_case
+from services.covers_gate import check_covers_gate as _check_covers
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -24,17 +25,18 @@ class TriggerBody(BaseModel):
     env: str = "sit"         # 目标环境
     breakpoints: list[str] = []   # 断点场景 ID 列表
     strict_deps: bool = False     # 严格依赖模式（DRIFT/ORPHANED → BLOCKED）
-    skip_covers_check: bool = False  # 跳过 covers 校验（engine_modes 用）
+    # 注意：covers 校验不可由客户端跳过（V10 修复）——engine_modes 由服务端按 scope 判定豁免
 
 
 @router.post("/trigger")
 async def api_trigger(body: TriggerBody):
     """触发执行（支持断点）
 
-    covers 校验前置闸：未通过禁止触发（skip_covers_check=True 可跳过）。
+    covers 校验前置闸：未通过禁止触发（仅 engine_modes 豁免，由服务端判定）。
     """
-    # covers 校验前置闸
-    if not body.skip_covers_check and body.scope != "engine_modes":
+    # covers 校验前置闸（V10 修复：仅 engine_modes 由服务端豁免，客户端无法绕过；
+    # 与 plans 执行入口共用 services.covers_gate）
+    if body.scope != "engine_modes":
         covers_errors = _check_covers()
         if covers_errors:
             raise HTTPException(
@@ -119,27 +121,4 @@ async def ws_stream(ws: WebSocket):
         run_manager.unsubscribe(ws)
 
 
-def _check_covers() -> list[dict]:
-    """检查全部场景的 covers 是否可解析为有效 FR ID。
-
-    返回 covers 错误列表（空列表表示全部通过）。
-    """
-    try:
-        from specstd.workspace import get_active_workspace
-        from specstd.anchors import scan_anchors, resolve_covers
-        from specstd.conformance import check_covers
-
-        ws = get_active_workspace()
-        if not ws:
-            return []  # 无激活工作区时不阻止执行
-
-        anchors = scan_anchors(ws.root)
-        if not anchors:
-            return []  # 无锚点时不阻止（可能是新工作区未导入 spec）
-
-        scenarios_root = SG_ROOT / "scenarios"
-        findings = check_covers(anchors, scenarios_root)
-        errors = [f.to_dict() for f in findings if f.level == "ERROR"]
-        return errors
-    except Exception:
-        return []  # 校验异常时不阻止执行（容错）
+# covers 闸实现已抽取至 services/covers_gate.py（runs 与 plans 共用）

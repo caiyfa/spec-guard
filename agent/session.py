@@ -4,10 +4,20 @@ kill 后重跑可从 JSONL 续会话：每条消息一行 JSON，append-only。
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+# V11 修复：session_id 白名单（时间戳_uuidhex 格式），防路径穿越写
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+
+
+def _validate_session_id(session_id: str):
+    """session_id 非法时抛 ValueError（防拼路径穿越）。"""
+    if not session_id or not SESSION_ID_RE.match(session_id):
+        raise ValueError(f"非法 session_id: {session_id!r}")
 
 
 class SessionManager:
@@ -23,6 +33,7 @@ class SessionManager:
 
     def save(self, session_id: str, messages: list[dict], metrics: dict = None):
         """保存会话到 JSONL（覆盖写，每次全量保存）。"""
+        _validate_session_id(session_id)
         path = self.sessions_dir / f"{session_id}.jsonl"
         with open(path, "w", encoding="utf-8") as f:
             for msg in messages:
@@ -32,12 +43,14 @@ class SessionManager:
 
     def append(self, session_id: str, message: dict):
         """追加单条消息到 JSONL。"""
+        _validate_session_id(session_id)
         path = self.sessions_dir / f"{session_id}.jsonl"
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(message, ensure_ascii=False) + "\n")
 
     def load(self, session_id: str) -> Optional[list[dict]]:
         """从 JSONL 加载会话消息列表。"""
+        _validate_session_id(session_id)
         path = self.sessions_dir / f"{session_id}.jsonl"
         if not path.is_file():
             return None

@@ -81,31 +81,10 @@ def scan_anchors(workspace_root: Path) -> dict[str, AnchorInfo]:
     anchors: dict[str, AnchorInfo] = {}
     for spec_md in sorted(specs_dir.rglob(FILE_SPEC_MD)):
         for info in parse_spec_md(spec_md):
-            if info.fr_id in anchors:
-                # 重复 FR ID：保留第一个，但记录冲突
-                existing = anchors[info.fr_id]
-                existing.covers_set  # noqa: 触发 dataclass 初始化
-                # 在 check_anchor_uniqueness 中检测
+            # 重复 FR ID 被后者覆盖；唯一性冲突由 conformance.py 的 ANCHOR 规则检测
             anchors[info.fr_id] = info
 
     return anchors
-
-
-def check_anchor_uniqueness(anchors: dict[str, AnchorInfo]) -> list[Finding]:
-    """检查 FR 锚点全局唯一性。
-
-    扫描时重复 FR ID 会被覆盖，此函数重新扫描以检测冲突。
-    返回的 findings 级别为 ERROR。
-    """
-    findings: list[Finding] = []
-    # 收集每个 FR ID 出现的文件列表
-    # 由于 scan_anchors 已去重，这里需要重新扫描原始文件
-    # 但 anchors 中已有 file_path，可以通过检查是否有多个不同 file 指向同一 fr_id
-    # 实际上 scan_anchors 直接覆盖了，所以这里改用另一种方式：
-    # 遍历 anchors，检查是否有 fr_id 相同但 file_path 不同的情况
-    # 由于 dict 已去重，我们需要在 scan_anchors 中传入原始列表
-    # 这里改为空实现——实际唯一性检查在 conformance.py 的 ANCHOR 规则中完成
-    return findings
 
 
 # ══════════════════════════════════════════════════════════

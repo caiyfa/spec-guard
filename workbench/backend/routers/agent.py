@@ -18,7 +18,7 @@ if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
 from agent.llm_client import LLMClient
-from agent.session import SessionManager
+from agent.session import SessionManager, _validate_session_id
 from agent.runtime import AgentRuntime, build_system_prompt
 
 SESSIONS_DIR = SG_ROOT / "agent" / "sessions"
@@ -38,10 +38,14 @@ def list_sessions():
 @router.get("/sessions/{session_id}")
 def get_session(session_id: str):
     """获取会话详情。"""
+    from fastapi import HTTPException
+    try:
+        _validate_session_id(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法 session_id")
     sm = SessionManager(SESSIONS_DIR)
     messages = sm.load(session_id)
     if messages is None:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="会话不存在")
     return {"session_id": session_id, "messages": messages}
 
@@ -55,6 +59,12 @@ class ChatBody(BaseModel):
 @router.post("/chat")
 async def chat(body: ChatBody):
     """同步对话（非 WebSocket，适合短交互）。"""
+    from fastapi import HTTPException
+    if body.session_id:
+        try:
+            _validate_session_id(body.session_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法 session_id")
     llm = LLMClient()
     sm = SessionManager(SESSIONS_DIR)
     sid = body.session_id or sm.create()
@@ -101,6 +111,12 @@ async def agent_ws(websocket: WebSocket):
             if not message:
                 await websocket.send_json({"type": "error", "message": "缺少 message 参数"})
                 continue
+            if session_id:
+                try:
+                    _validate_session_id(session_id)
+                except ValueError:
+                    await websocket.send_json({"type": "error", "message": "非法 session_id"})
+                    continue
 
             # 初始化
             llm = LLMClient()
@@ -114,17 +130,25 @@ async def agent_ws(websocket: WebSocket):
             system_prompt = build_system_prompt()
             runtime = AgentRuntime(llm, max_turns=max_turns)
 
-            # 在线程中运行 agent，收集事件后推送
-            events = []
-            runtime.events.subscribe(lambda e: events.append(e))
-
-            messages = await asyncio.to_thread(
-                runtime.run, system_prompt, message, sm, sid
+            # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）
+            loop = asyncio.get_running_loop()
+            queue: asyncio.Queue = asyncio.Queue()
+            runtime.events.subscribe(
+                lambda e: loop.call_soon_threadsafe(queue.put_nowait, e)
             )
 
-            # 推送所有事件
-            for event in events:
-                await websocket.send_json(event)
+            run_task = asyncio.create_task(
+                asyncio.to_thread(runtime.run, system_prompt, message, sm, sid)
+            )
+            while True:
+                if run_task.done() and queue.empty():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.2)
+                    await websocket.send_json(event)
+                except asyncio.TimeoutError:
+                    continue
+            messages = await run_task  # 运行异常在此抛出，进外层 except
 
             # 推送完成
             await websocket.send_json({

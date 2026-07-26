@@ -98,6 +98,7 @@ class RunManager:
         self.started_at = datetime.now().isoformat(timespec="seconds")
         self.status = "running"
         self._output_lines = []
+        self._scope = scope  # D2：通知推送豁免 engine_modes 用
 
         await self.broadcast({
             "type": "started",
@@ -151,6 +152,8 @@ class RunManager:
             "finished_at": datetime.now().isoformat(timespec="seconds"),
         })
         self.process = None
+        # D2 修复：执行完成后按注册表自动推送飞书通知（fail/drift/skip 事件）
+        await self._push_run_notifications()
 
     def _parse_line(self, line: str) -> dict:
         """解析 pytest 输出行，提取场景 verdict"""
@@ -325,6 +328,8 @@ class RunManager:
             "finished_at": datetime.now().isoformat(timespec="seconds"),
         })
         self.process = None
+        # D2 修复：断点分段执行完成后同样自动推送通知
+        await self._push_run_notifications()
 
     def _build_breakpoint_context(self) -> dict:
         """构建断点处的上下文信息（供前端展示数据状态）"""
@@ -343,6 +348,49 @@ class RunManager:
             "recent_verdicts": recent_verdicts[-10:],
             "output_tail": self._output_lines[-20:],
         }
+
+    async def _push_run_notifications(self):
+        """D2：运行结束后读取 case verdicts，按反馈路径注册表自动推送通知。
+
+        事件映射：FAIL→fail，DRIFT/ORPHANED→drift，SKIP/BLOCKED→skip；
+        engine_modes 自测不推送；任何异常只记 WARN，不影响执行收尾。
+        """
+        try:
+            if getattr(self, "_scope", "") == "engine_modes" or not self.run_id:
+                return
+            import json as _json
+
+            cases_dir = SG_ROOT / "reports" / self.run_id / "cases"
+            if not cases_dir.is_dir():
+                return
+
+            from feedback.notify import NotifyRegistry
+            registry = NotifyRegistry(SG_ROOT / "feedback" / "registry.json")
+            if not registry.list():  # 未注册 webhook 时零成本退出
+                return
+
+            system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+            event_map = {"FAIL": "fail", "DRIFT": "drift", "ORPHANED": "drift",
+                         "SKIP": "skip", "BLOCKED": "skip"}
+            for case_file in sorted(cases_dir.glob("*.json")):
+                try:
+                    case = _json.loads(case_file.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                verdict = case.get("verdict", "")
+                event = event_map.get(verdict)
+                if not event:
+                    continue
+                scenario_id = case.get("scenario_id", case_file.stem)
+                failure = case.get("failure") or {}
+                conclusion = failure.get("category") or case.get("skip_reason") or f"判定 {verdict}"
+                await asyncio.to_thread(
+                    registry.send_notification,
+                    system, scenario_id, event, verdict,
+                    str(conclusion)[:200], f"reports/{self.run_id}/report.md",
+                )
+        except Exception as e:
+            print(f"[SpecGuard WARN] 通知自动推送失败（不影响执行结果）: {type(e).__name__}: {e}")
 
     async def resume(self) -> dict:
         """断点放行：继续执行下一批场景"""

@@ -29,8 +29,58 @@ def sign_spec_body(text: str) -> str:
     return hashlib.sha256(body.strip().encode('utf-8')).hexdigest()[:12]
 
 
-def sign_api_path(path: str, method: str, spec: dict) -> str:
-    """对 api.yaml 中单个 path+method 的入参/出参签名。"""
+def _norm_schema(schema) -> object:
+    """规范化提取 schema 结构（V4 修复：字段级变更可检测）。
+
+    递归提取字段名 / 类型 / 必填 / 枚举 / 数组项结构，忽略描述性文本。
+    $ref 保留引用名（引用目标变化会在定义处被独立签名）。
+    """
+    if not isinstance(schema, dict):
+        return None
+    if '$ref' in schema:
+        return {'$ref': str(schema['$ref']).split('/')[-1]}
+    node = {}
+    if schema.get('type'):
+        node['t'] = schema['type']
+    if schema.get('required'):
+        node['req'] = sorted(str(r) for r in schema['required'])
+    if schema.get('enum'):
+        node['enum'] = sorted(str(e) for e in schema['enum'])
+    props = schema.get('properties')
+    if isinstance(props, dict):
+        node['props'] = {k: _norm_schema(v) for k, v in sorted(props.items())}
+    items = schema.get('items')
+    if isinstance(items, dict):
+        node['items'] = _norm_schema(items)
+    # allOf/anyOf/oneOf 组合结构
+    for comb in ('allOf', 'anyOf', 'oneOf'):
+        subs = schema.get(comb)
+        if isinstance(subs, list):
+            node[comb] = [_norm_schema(s) for s in subs]
+    return node or None
+
+
+def _norm_content(content: dict) -> object:
+    """规范化 requestBody/responses 的 content（取 application/json 优先的 schema）。"""
+    if not isinstance(content, dict):
+        return None
+    for mt in ('application/json', 'application/*+json', '*/*'):
+        media = content.get(mt)
+        if isinstance(media, dict) and 'schema' in media:
+            return _norm_schema(media['schema'])
+    # 无 json 媒体类型时取第一个带 schema 的
+    for media in content.values():
+        if isinstance(media, dict) and 'schema' in media:
+            return _norm_schema(media['schema'])
+    return None
+
+
+def sign_api_path(path: str, method: str, spec: dict, components: dict | None = None) -> str:
+    """对 api.yaml 中单个 path+method 的入参/出参 schema 签名（V4 修复）。
+
+    签名材料：参数（名+位置+必填+schema 结构）、requestBody schema 结构、
+    每个响应码的 schema 结构——出参字段级增删改均会导致签名变化。
+    """
     params = spec.get('parameters', [])
     request_body = spec.get('requestBody', {})
     responses = spec.get('responses', {})
@@ -38,9 +88,24 @@ def sign_api_path(path: str, method: str, spec: dict) -> str:
     contract = {
         'path': path,
         'method': method.upper(),
-        'parameters': sorted(str(p.get('name', '')) for p in params),
-        'request_body': bool(request_body),
-        'response_codes': sorted(str(k) for k in responses.keys()),
+        'parameters': sorted(
+            (
+                {
+                    'name': str(p.get('name', '')),
+                    'in': str(p.get('in', '')),
+                    'required': bool(p.get('required')),
+                    'schema': _norm_schema(p.get('schema') or {}),
+                }
+                for p in params if isinstance(p, dict)
+            ),
+            key=lambda d: (d['name'], d['in']),
+        ),
+        'request_body': _norm_content(request_body.get('content', {}))
+        if isinstance(request_body, dict) else None,
+        'responses': {
+            str(code): _norm_content((resp or {}).get('content', {}))
+            for code, resp in sorted(responses.items()) if isinstance(resp, dict)
+        },
     }
     raw = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:12]
@@ -48,12 +113,15 @@ def sign_api_path(path: str, method: str, spec: dict) -> str:
 
 def sign_api_yaml(api_spec: dict) -> dict:
     """对 api.yaml 全量签名，返回 {path: {method: signature}}。"""
+    components = api_spec.get('components') or {}
     signatures = {}
     for path, methods in (api_spec.get('paths') or {}).items():
+        if not isinstance(methods, dict):
+            continue
         signatures[path] = {}
         for method, spec in methods.items():
-            if method.upper() in ('GET', 'POST', 'PUT', 'DELETE', 'PATCH'):
-                signatures[path][method] = sign_api_path(path, method, spec)
+            if method.upper() in ('GET', 'POST', 'PUT', 'DELETE', 'PATCH') and isinstance(spec, dict):
+                signatures[path][method] = sign_api_path(path, method, spec, components)
     return signatures
 
 

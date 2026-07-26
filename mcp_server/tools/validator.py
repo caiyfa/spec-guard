@@ -19,6 +19,14 @@ if str(BACKEND_DIR) not in sys.path:
 
 from specstd.anchors import resolve_covers, scan_anchors  # noqa: E402
 from specstd.workspace import get_active_workspace  # noqa: E402
+from mcp_server.tools.live_registry import oracle_names  # noqa: E402
+
+
+def _hint(name: str, candidates) -> str:
+    """为未注册名称生成相近候选 hint（幻觉自修复的依据）。"""
+    import difflib
+    matches = difflib.get_close_matches(name, list(candidates), n=3, cutoff=0.5)
+    return f"相近候选: {', '.join(matches)}" if matches else ""
 
 TOOLS = [
     Tool(
@@ -43,20 +51,25 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
 
 
 def _handle_validate(arguments: dict) -> list[TextContent]:
-    import yaml
-
     content = arguments.get("content", "")
     if not content:
         return [TextContent(type="text", text="错误：缺少 content 参数")]
+    report = validate_scenario_content(content)
+    return [TextContent(type="text", text=json.dumps(report, ensure_ascii=False, indent=2))]
+
+
+def validate_scenario_content(content: str) -> dict:
+    """校验场景 YAML 内容，返回结构化报告 dict（供 MCP 工具与 drafts 路由复用）。"""
+    import yaml
 
     # 解析 YAML
     try:
         raw = yaml.safe_load(content) or {}
     except yaml.YAMLError as e:
-        return [TextContent(type="text", text=json.dumps({
+        return {
             "verdict": "ERROR",
             "findings": [{"level": "ERROR", "rule": "T1", "message": f"YAML 解析失败: {e}"}],
-        }, ensure_ascii=False, indent=2))]
+        }
 
     findings = []
     sid = raw.get("id", "(unknown)")
@@ -116,16 +129,37 @@ def _handle_validate(arguments: dict) -> list[TextContent]:
             if isinstance(tool_body, dict):
                 tool_name = tool_body.get("use", "")
                 if tool_name and valid_tools and tool_name not in valid_tools:
+                    hint = _hint(tool_name, valid_tools)
                     findings.append({"level": "ERROR", "rule": "REGISTRY", "scenario": sid,
-                                     "message": f"未注册的 tool: {tool_name}"})
+                                     "message": f"未注册的 tool: {tool_name}",
+                                     **({"hint": hint} if hint else {})})
+
+    # V9 修复：verify 段 oracle 引用校验（幻觉拦截——编造 oracle 必报 ERROR + hint）
+    valid_oracles = oracle_names()
+    for item in verify:
+        if not isinstance(item, dict) or "oracle" not in item:
+            continue
+        oracle_ref = item["oracle"]
+        # 两种形态：- oracle: name（字符串）/ - oracle: {name: xxx, params: {...}}（参数化）
+        if isinstance(oracle_ref, str):
+            oracle_name = oracle_ref
+        elif isinstance(oracle_ref, dict):
+            oracle_name = str(oracle_ref.get("name", ""))
+        else:
+            continue
+        if oracle_name and valid_oracles and oracle_name not in valid_oracles:
+            hint = _hint(oracle_name, valid_oracles)
+            findings.append({"level": "ERROR", "rule": "REGISTRY", "scenario": sid,
+                             "message": f"未注册的 oracle: {oracle_name}",
+                             **({"hint": hint} if hint else {})})
 
     n_err = sum(1 for f in findings if f["level"] == "ERROR")
     n_warn = sum(1 for f in findings if f["level"] == "WARN")
     verdict = "PASS" if n_err == 0 else "REJECT"
 
-    return [TextContent(type="text", text=json.dumps({
+    return {
         "verdict": verdict,
         "scenario": sid,
         "findings": findings,
         "summary": {"error": n_err, "warn": n_warn},
-    }, ensure_ascii=False, indent=2))]
+    }

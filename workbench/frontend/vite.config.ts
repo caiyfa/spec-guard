@@ -15,6 +15,10 @@ export default defineConfig({
         target: 'ws://localhost:9100',
         ws: true,
       },
+      '/api/agent/ws': {
+        target: 'ws://localhost:9100',
+        ws: true,
+      },
     },
   },
 })

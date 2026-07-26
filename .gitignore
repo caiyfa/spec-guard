@@ -39,3 +39,4 @@ agent/sessions/*.jsonl
 # ── 反哺闭环持久化文件（不入 git）──
 feedback/ledger.json
 feedback/registry.json
+feedback/receipts.jsonl

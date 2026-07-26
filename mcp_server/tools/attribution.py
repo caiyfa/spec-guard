@@ -6,6 +6,7 @@
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,16 @@ if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
 REPORTS_ROOT = SG_ROOT / "reports"
+
+# V13 修复：run_id 白名单（时间戳目录名或普通标识符，禁路径分隔符）
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+# V12 修复：只读 SQL 的逃逸关键词黑名单（startswith(SELECT) 可被这些绕过）
+SQL_DENY_RE = re.compile(
+    r"\b(FOR\s+UPDATE|LOCK\s+IN\s+SHARE\s+MODE|INTO\s+(OUT|DUMP)FILE|LOCK\s+TABLES|"
+    r"HANDLER|LOAD\s+DATA|LOAD\s+XML|DO\s+SLEEP)\b",
+    re.IGNORECASE,
+)
 
 TOOLS = [
     Tool(
@@ -59,7 +70,14 @@ def _handle_read_report(arguments: dict) -> list[TextContent]:
     if not run_id:
         return [TextContent(type="text", text="错误：缺少 run_id 参数")]
 
-    run_dir = REPORTS_ROOT / run_id
+    # V13 修复：run_id 白名单校验 + 解析结果必须落在 reports/ 之内
+    if not RUN_ID_RE.match(run_id):
+        return [TextContent(type="text", text=f"OUT_OF_SCOPE: 非法 run_id: {run_id}")]
+    run_dir = (REPORTS_ROOT / run_id).resolve()
+    try:
+        run_dir.relative_to(REPORTS_ROOT.resolve())
+    except ValueError:
+        return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界: {run_id}")]
     if not run_dir.is_dir():
         return [TextContent(type="text", text=f"错误：运行报告不存在: {run_id}")]
 
@@ -119,10 +137,13 @@ def _handle_db_evidence(arguments: dict) -> list[TextContent]:
     if not sql:
         return [TextContent(type="text", text="错误：缺少 sql 参数")]
 
-    # 只读守卫
+    # 只读守卫（V12 修复：补充逃逸关键词黑名单——FOR UPDATE 加锁 / INTO OUTFILE 写文件等）
     sql_upper = sql.upper().strip()
     if not sql_upper.startswith(("SELECT", "SHOW", "DESCRIBE", "EXPLAIN")):
         return [TextContent(type="text", text="错误：仅允许 SELECT/SHOW/DESCRIBE/EXPLAIN")]
+    m = SQL_DENY_RE.search(sql)
+    if m:
+        return [TextContent(type="text", text=f"错误：只读守卫拒绝危险子句: {m.group(1)}")]
 
     # 尝试使用引擎的 DB 客户端
     try:

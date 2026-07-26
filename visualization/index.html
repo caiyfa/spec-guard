@@ -428,7 +428,7 @@ function renderTable(){
    </tr>`).join('')||'<tr><td colspan="7" style="color:var(--txt2);text-align:center;padding:20px">无匹配场景</td></tr>';
 }
 function copyCmd(id,btn){
-  navigator.clipboard.writeText(`python -m pytest tests/specguard -k "${id}" -v`).then(()=>{
+  navigator.clipboard.writeText(`python -m pytest -k "${id}" -v`).then(()=>{
     btn.textContent='✓ 已复制';setTimeout(()=>btn.textContent='📋 重跑',1500)});
 }
 /* ── ④ FR 矩阵 ── */
@@ -533,7 +533,7 @@ function renderDrawerBody(id){
       });
       if(d.failure)h+=`<div class="kv" style="margin-top:14px"><div class="k">失败归类</div><div class="v"><span class="vtag v-FAIL">${d.failure.cat}</span> <span style="font-size:13px">${esc(d.failure.msg)}</span></div></div>`;
     }
-    h+=`<div style="margin-top:16px"><button class="copy" onclick="copyCmd('${id}',this)">📋 复制本地复跑命令</button> <span class="mono" style="font-size:11px;color:var(--txt2)">python -m pytest tests/specguard -k "${id}" -v</span></div>`;
+    h+=`<div style="margin-top:16px"><button class="copy" onclick="copyCmd('${id}',this)">📋 复制本地复跑命令</button> <span class="mono" style="font-size:11px;color:var(--txt2)">python -m pytest -k "${id}" -v</span></div>`;
   }
   if(dTab===3){
     h+=d.db.length?d.db.map(t=>`

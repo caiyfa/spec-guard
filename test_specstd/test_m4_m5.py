@@ -149,25 +149,25 @@ class TestNotifyRegistry:
 
     def test_list_masks_url(self, tmp_path):
         reg = NotifyRegistry(tmp_path / "registry.json")
-        reg.register("tdm", "PP-*", "https://example.com/hook/secret")
+        reg.register("tdm", "PP-*", "https://open.feishu.cn/hook/secret")
         items = reg.list()
         assert "url" not in items[0]
         assert "masked_url" in items[0]
 
     def test_find_matches(self, tmp_path):
         reg = NotifyRegistry(tmp_path / "registry.json")
-        reg.register("tdm", "PP-RC-*", "https://ex.com/h1", ["fail"])
-        reg.register("tdm", "EV-*", "https://ex.com/h2", ["fail"])
+        reg.register("tdm", "PP-RC-*", "https://open.feishu.cn/h1", ["fail"])
+        reg.register("tdm", "EV-*", "https://open.feishu.cn/h2", ["fail"])
         matches = reg.find_matches("tdm", "PP-RC-001", "fail")
         assert len(matches) == 1
 
     def test_no_match_wrong_system(self, tmp_path):
         reg = NotifyRegistry(tmp_path / "registry.json")
-        reg.register("tdm", "PP-*", "https://ex.com/hook")
+        reg.register("tdm", "PP-*", "https://open.feishu.cn/hook")
         assert len(reg.find_matches("pbs", "PP-RC-001", "fail")) == 0
 
     def test_unregister(self, tmp_path):
         reg = NotifyRegistry(tmp_path / "registry.json")
-        entry = reg.register("tdm", "PP-*", "https://ex.com/hook")
+        entry = reg.register("tdm", "PP-*", "https://open.feishu.cn/hook")
         assert reg.unregister(entry["id"]) is True
         assert len(reg.list()) == 0

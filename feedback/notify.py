@@ -5,11 +5,47 @@ webhook URL 掩码存储（如 a3f***）。
 """
 
 import fnmatch
+import ipaddress
 import json
+import os
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
+
+
+def validate_webhook_url(url: str) -> str | None:
+    """校验 webhook URL（V14 修复：SSRF 限制）。
+
+    - 仅允许 https 协议（飞书 webhook 为 https）
+    - 禁止 IP 字面量与 localhost
+    - 主机名须命中白名单（环境变量 SG_NOTIFY_ALLOWED_HOSTS，逗号分隔，
+      默认 open.feishu.cn,*.feishu.cn）
+    返回错误消息；合法时返回 None。
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "URL 解析失败"
+    if parsed.scheme != "https":
+        return f"仅允许 https 协议: {parsed.scheme or '(无协议)' }"
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return "缺少主机名"
+    if host in ("localhost",) or host.endswith(".local"):
+        return f"禁止本机地址: {host}"
+    try:
+        ipaddress.ip_address(host)
+        return f"禁止 IP 字面量地址: {host}"
+    except ValueError:
+        pass  # 非 IP，为主机名，继续白名单校验
+    allowed = os.environ.get(
+        "SG_NOTIFY_ALLOWED_HOSTS", "open.feishu.cn,*.feishu.cn"
+    ).split(",")
+    if not any(fnmatch.fnmatch(host, pat.strip().lower()) for pat in allowed if pat.strip()):
+        return f"主机名不在白名单（SG_NOTIFY_ALLOWED_HOSTS）: {host}"
+    return None
 
 
 def mask_url(url: str) -> str:
@@ -27,10 +63,18 @@ def mask_url(url: str) -> str:
 class NotifyRegistry:
     """飞书 webhook 注册表。"""
 
-    def __init__(self, registry_path: Path):
+    def __init__(self, registry_path: Path, receipts_path: Path | None = None):
         self.path = registry_path
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # 回执记录文件（D2 修复：各触发点消息送达回执落盘）
+        self.receipts_path = receipts_path or (self.path.parent / "receipts.jsonl")
         self._webhooks = self._load()
+
+    def _append_receipt(self, record: dict):
+        """追加一条送达回执到 receipts.jsonl。"""
+        record = {"timestamp": datetime.now().isoformat(timespec="seconds"), **record}
+        with open(self.receipts_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def _load(self) -> list[dict]:
         if not self.path.is_file():
@@ -45,7 +89,10 @@ class NotifyRegistry:
 
     def register(self, system: str, scenario_pattern: str, url: str,
                  events: list[str] = None) -> dict:
-        """注册 webhook。"""
+        """注册 webhook。URL 须通过 SSRF 校验（V14），非法时抛 ValueError。"""
+        url_err = validate_webhook_url(url)
+        if url_err:
+            raise ValueError(f"webhook URL 非法: {url_err}")
         entry = {
             "id": f"wh-{len(self._webhooks) + 1:03d}",
             "system": system,
@@ -121,4 +168,10 @@ class NotifyRegistry:
                     "ok": False,
                 })
 
+        # D2 修复：送达回执落盘（含未匹配到 webhook 的情况，便于审计触发点行为）
+        self._append_receipt({
+            "system": system, "scenario_id": scenario_id, "event": event,
+            "verdict": verdict, "matched": len(matches),
+            "results": [{"webhook_id": r["webhook_id"], "ok": r["ok"]} for r in results],
+        })
         return results

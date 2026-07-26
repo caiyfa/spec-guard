@@ -36,7 +36,10 @@ for mod in TOOL_MODULES:
 # System Prompt 构建
 # ══════════════════════════════════════════════════════════
 
-_SYSTEM_PROMPT_TEMPLATE = """你是 SpecGuard 场景生成助手。你的任务是根据用户需求，使用提供的工具生成合规的测试场景 YAML。
+# D8 修复：模板唯一事实源为 prompts/system.md.j2（原为内联副本，j2 文件成死文件）
+_PROMPT_TEMPLATE_PATH = Path(__file__).resolve().parent / "prompts" / "system.md.j2"
+
+_FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 场景生成助手。你的任务是根据用户需求，使用提供的工具生成合规的测试场景 YAML。
 
 ## 硬约束
 
@@ -68,6 +71,16 @@ _SYSTEM_PROMPT_TEMPLATE = """你是 SpecGuard 场景生成助手。你的任务�
 """
 
 
+def _load_prompt_template() -> str:
+    """加载 system prompt 模板（prompts/system.md.j2 优先，缺失时回退内联兜底）。"""
+    try:
+        if _PROMPT_TEMPLATE_PATH.is_file():
+            return _PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    return _FALLBACK_PROMPT_TEMPLATE
+
+
 def build_system_prompt(format_spec_text: str = "", agents_md: str = "") -> str:
     """构建 system prompt：format_spec + 工作区 AGENTS.md 全量注入。"""
     if not format_spec_text:
@@ -87,7 +100,7 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "") -> str:
         except Exception:
             agents_md = "（工作区未激活）"
 
-    return (_SYSTEM_PROMPT_TEMPLATE
+    return (_load_prompt_template()
             .replace("{{ format_spec }}", format_spec_text)
             .replace("{{ agents_md }}", agents_md))
 

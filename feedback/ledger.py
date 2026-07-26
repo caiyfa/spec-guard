@@ -15,6 +15,12 @@ class FeedbackLedger:
 
     VALID_STATUSES = ["pending", "in_progress", "closed"]
     VALID_SOURCES = ["loop_a", "loop_b"]
+    # V15 修复：合法状态流转（closed 为终态，不可重开）
+    ALLOWED_TRANSITIONS = {
+        "pending": {"in_progress", "closed"},
+        "in_progress": {"pending", "closed"},
+        "closed": set(),
+    }
 
     def __init__(self, ledger_path: Path):
         self.path = ledger_path
@@ -66,12 +72,18 @@ class FeedbackLedger:
         return entry
 
     def transition(self, spq_id: str, new_status: str) -> dict:
-        """状态流转。"""
+        """状态流转（仅允许合法迁移，closed 为终态）。"""
         if new_status not in self.VALID_STATUSES:
             raise ValueError(f"status 必须为 {self.VALID_STATUSES}")
         for entry in self._entries:
             if entry["spq_id"] == spq_id:
                 old = entry["status"]
+                if new_status == old:
+                    return entry
+                if new_status not in self.ALLOWED_TRANSITIONS.get(old, set()):
+                    raise ValueError(
+                        f"非法状态流转: {old} → {new_status}"
+                        f"（允许: {sorted(self.ALLOWED_TRANSITIONS.get(old, set())) or '无（终态）'}）")
                 entry["status"] = new_status
                 entry["updated_at"] = datetime.now().isoformat(timespec="seconds")
                 entry["events"].append({

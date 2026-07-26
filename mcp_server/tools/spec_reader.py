@@ -75,7 +75,13 @@ def _handle_list_spec_files(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="错误：无激活的工作区")]
 
     subdir = arguments.get("subdir", "")
-    root = ws.root / subdir if subdir else ws.root
+    # V3 修复：subdir 必须解析在工作区根之内（与 read_spec 同一守卫，防路径穿越）
+    if subdir:
+        root = safe_resolve(subdir)
+        if root is None:
+            return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界: {subdir}")]
+    else:
+        root = ws.root
 
     if not root.is_dir():
         return [TextContent(type="text", text=f"错误：目录不存在: {subdir}")]

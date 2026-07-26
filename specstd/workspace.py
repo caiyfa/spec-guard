@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +34,31 @@ SG_ROOT = SPECSTD_DIR.parent                            # 仓库根
 WORKSPACES_DIR = SPECSTD_DIR / "workspaces"             # specstd/workspaces/
 REGISTRY_PATH = WORKSPACES_DIR / "registry.yaml"        # 注册表
 CLONES_DIR = WORKSPACES_DIR / "_clones"                # git 型克隆落点
+
+# 工作区名称白名单：字母开头，仅字母/数字/下划线/连字符（防路径穿越，V1 修复）
+WORKSPACE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+
+# 注册表读写锁（V17 修复：并发请求防写坏）
+_REGISTRY_LOCK = threading.RLock()
+
+
+def _validate_name(name: str) -> Optional[str]:
+    """校验工作区名称合法性。返回错误消息，合法时返回 None。"""
+    if not name or not WORKSPACE_NAME_RE.match(name):
+        return (f"工作区名称非法: {name!r}（须字母开头，仅含字母/数字/下划线/连字符，"
+                f"长度 1-64）")
+    return None
+
+
+def _clone_path_for(name: str) -> Path:
+    """计算 git 工作区克隆落点，并断言解析结果在 _clones/ 之内（V1 修复）。"""
+    base = CLONES_DIR.resolve()
+    target = (base / name).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        raise ValueError(f"克隆路径越界（工作区名称非法）: {name!r}")
+    return target
 
 
 # ══════════════════════════════════════════════════════════
@@ -100,19 +127,23 @@ def _ensure_dirs():
 
 def _load_registry() -> dict:
     """加载注册表。不存在时返回空结构。"""
-    _ensure_dirs()
-    if not REGISTRY_PATH.is_file():
-        return {"active": "", "workspaces": {}}
-    with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {"active": "", "workspaces": {}}
+    with _REGISTRY_LOCK:
+        _ensure_dirs()
+        if not REGISTRY_PATH.is_file():
+            return {"active": "", "workspaces": {}}
+        with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {"active": "", "workspaces": {}}
 
 
 def _save_registry(registry: dict):
-    """保存注册表。"""
-    _ensure_dirs()
-    with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
-        yaml.dump(registry, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-        f.write("\n")
+    """保存注册表（写临时文件后原子替换，防并发写坏）。"""
+    with _REGISTRY_LOCK:
+        _ensure_dirs()
+        tmp_path = REGISTRY_PATH.with_suffix(".yaml.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            yaml.dump(registry, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            f.write("\n")
+        os.replace(tmp_path, REGISTRY_PATH)
 
 
 # ══════════════════════════════════════════════════════════
@@ -160,16 +191,22 @@ def unregister(name: str) -> bool:
     git 型工作区会同时删除克隆目录。
     如果是当前激活的工作区，清除激活状态。
     """
+    # V1 修复：名称非法直接拒绝（防注册表被篡改后路径穿越删除）
+    if _validate_name(name):
+        return False
     registry = _load_registry()
     ws_dict = registry.get("workspaces") or {}
     if name not in ws_dict:
         return False
 
     info = WorkspaceInfo.from_dict(name, ws_dict[name])
-    # git 型：删除克隆目录
+    # git 型：删除克隆目录（删除前断言目标在 _clones/ 之内）
     if info.source_type == "git" and info.local_path:
-        clone_path = SG_ROOT / info.local_path
-        if clone_path.exists():
+        try:
+            clone_path = _clone_path_for(name)
+        except ValueError:
+            clone_path = None
+        if clone_path and clone_path.exists():
             import shutil
             shutil.rmtree(clone_path, ignore_errors=True)
 
@@ -199,6 +236,9 @@ def register_local(name: str, path: str, system: str,
     返回：
         {ok, workspace?, report?, error?}
     """
+    name_err = _validate_name(name)
+    if name_err:
+        return {"ok": False, "error": name_err}
     ws_path = Path(path).resolve()
     if not ws_path.is_dir():
         return {"ok": False, "error": f"路径不存在或不是目录: {path}"}
@@ -239,17 +279,23 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
 
     git 认证走系统 git 凭据管理器，SpecGuard 不存储任何凭据。
     """
-    clone_path = CLONES_DIR / name
+    name_err = _validate_name(name)
+    if name_err:
+        return {"ok": False, "error": name_err}
+    try:
+        clone_path = _clone_path_for(name)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
 
     # 如果克隆目录已存在，先清理
     if clone_path.exists():
         import shutil
         shutil.rmtree(clone_path, ignore_errors=True)
 
-    # 执行 git clone
+    # 执行 git clone（`--` 终止选项解析，防 url 以 `-` 开头造成选项注入）
     try:
         result = subprocess.run(
-            ["git", "clone", "--branch", branch, url, str(clone_path)],
+            ["git", "clone", "--branch", branch, "--", url, str(clone_path)],
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode != 0:
@@ -311,6 +357,9 @@ def pull(name: str) -> dict:
 
     记录 commit 变化 → 触发 FR 变更检测。
     """
+    name_err = _validate_name(name)
+    if name_err:
+        return {"ok": False, "error": name_err}
     info = get_workspace(name)
     if not info:
         return {"ok": False, "error": f"工作区 '{name}' 不存在"}

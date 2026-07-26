@@ -109,9 +109,9 @@ SpecGuard 智能层是契约驱动测试引擎 SpecGuard 的上层能力扩展�
 | attribution | read_run_report / db_evidence | 运行报告读取 / DB 证据收集（循环 B） |
 
 **安全约束**：
-- `write_draft` 强制路径前缀 `drafts/`，禁止覆盖已有文件（除非 `overwrite=True`）
-- `validate` 检查 covers 引用的 FR ID 是否在当前工作区 spec.md 中存在
-- `read_spec` / `read_file` 通过 `safe_resolve()` 防止路径越界
+- `write_draft` 强制路径前缀 `drafts/`；`mode=create` 禁止覆盖（返回 `OVERWRITE_DENIED`），修改仅能 `mode=patch` 追加
+- `validate` 检查 covers 引用的 FR ID 是否在当前工作区 spec.md 中存在；tool/oracle 引用均对活注册表校验（幻觉拦截 + hint）
+- `read_spec` / `read_file` / `list_spec_files` 统一通过 `safe_resolve()` 防止路径越界
 
 ### M2：薄 Harness + CLI（agent/）
 
@@ -119,12 +119,12 @@ SpecGuard 智能层是契约驱动测试引擎 SpecGuard 的上层能力扩展�
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| llm_client | [agent/llm_client.py](file:///d:/work/tdm-code/specguard/agent/llm_client.py) | LLM 网关调用 / 计量统计 / 响应缓存 / 退避重试 |
+| llm_client | [agent/llm_client.py](file:///d:/work/tdm-code/specguard/agent/llm_client.py) | LLM 网关调用 / 计量统计 / system prompt 缓存命中观测 / 退避重试 |
 | runtime | [agent/runtime.py](file:///d:/work/tdm-code/specguard/agent/runtime.py) | 核心循环：LLM → tool_calls → 执行 → 结果回填 → stop 判定 |
 | session | [agent/session.py](file:///d:/work/tdm-code/specguard/agent/session.py) | JSONL 会话持久化（append-only，支持历史回放） |
 | events | [agent/events.py](file:///d:/work/tdm-code/specguard/agent/events.py) | 事件总线（tool_call / tool_result / llm_response / session_end） |
 | cli | [agent/cli.py](file:///d:/work/tdm-code/specguard/agent/cli.py) | 命令行入口（`python -m agent.cli "生成场景 PP-RC-008"`） |
-| prompts | [agent/prompts/system.md.j2](file:///d:/work/tdm-code/specguard/agent/prompts/system.md.j2) | 系统提示模板（Jinja2，注入工具清单 + 格式规范摘要） |
+| prompts | [agent/prompts/system.md.j2](file:///d:/work/tdm-code/specguard/agent/prompts/system.md.j2) | 系统提示模板（唯一事实源，全量注入 format_spec + 工作区 AGENTS.md） |
 
 **核心循环伪代码**：
 ```
@@ -146,7 +146,8 @@ while not should_stop:
 
 | 路由 | 文件 | 端点 |
 |------|------|------|
-| Agent | [routers/agent.py](file:///d:/work/tdm-code/specguard/workbench/backend/routers/agent.py) | `POST /api/agent/chat`（同步）/ `GET /api/agent/sessions` / `GET /api/agent/sessions/{id}` |
+| Agent | [routers/agent.py](file:///d:/work/tdm-code/specguard/workbench/backend/routers/agent.py) | `WS /api/agent/ws`（实时事件流）/ `POST /api/agent/chat`（同步）/ 会话查询×2 |
+| Drafts | [routers/drafts.py](file:///d:/work/tdm-code/specguard/workbench/backend/routers/drafts.py) | 三道闸入库：列表/读取/格式校验/promote（门禁失败自动回滚）/废弃 |
 | Workspace | [routers/workspace.py](file:///d:/work/tdm-code/specguard/workbench/backend/routers/workspace.py) | 工作区 CRUD + 合规校验 + Spec 文件树 + 文件读取 |
 | Feedback | [routers/feedback.py](file:///d:/work/tdm-code/specguard/workbench/backend/routers/feedback.py) | 台账 CRUD + 状态流转 + webhook 注册/注销/发送 |
 
@@ -171,7 +172,7 @@ while not should_stop:
 
 | 模块 | 文件 | 功能 |
 |------|------|------|
-| signature | [specstd/signature.py](file:///d:/work/tdm-code/specguard/specstd/signature.py) | FR 级内容签名（sha256-12），跨版本 diff 检测变更 |
+| signature | [specstd/signature.py](file:///d:/work/tdm-code/specguard/specstd/signature.py) | spec 主体（剔除 Changelog）+ api 每 path 入参/出参 schema 结构签名（sha256-12），字段级变更可检测 |
 | attribution | [mcp_server/tools/attribution.py](file:///d:/work/tdm-code/specguard/mcp_server/tools/attribution.py) | 读取运行报告 JSON / 提取失败场景 / 收集 DB 证据 |
 
 ### M5：反哺闭环 + 飞书通知（feedback/）
@@ -181,7 +182,7 @@ while not should_stop:
 | 模块 | 文件 | 功能 |
 |------|------|------|
 | ledger | [feedback/ledger.py](file:///d:/work/tdm-code/specguard/feedback/ledger.py) | SPQ 台账（SPQ-001~），状态机 pending → in_progress → closed |
-| notify | [feedback/notify.py](file:///d:/work/tdm-code/specguard/feedback/notify.py) | webhook 注册表 / URL 掩码存储 / fnmatch 场景匹配 / 仅出站通知 |
+| notify | [feedback/notify.py](file:///d:/work/tdm-code/specguard/feedback/notify.py) | webhook 注册表 / URL 掩码存储 / SSRF 白名单校验 / fnmatch 场景匹配 / 仅出站通知 / 送达回执落盘 |
 
 **安全约束**：
 - webhook URL 掩码存储（如 `https://open.feishu.cn/a3f***`）
@@ -220,7 +221,7 @@ tsc -b && vite build
 ### 浏览器验证
 
 通过 browser-use 工具验证：
-- Dashboard 主页面加载正常，侧边栏 12 项导航全部可见
+- Dashboard 主页面加载正常，侧边栏导航全部可见
 - 工作区管理页：注册表单渲染正常（local/git 切换）
 - 反哺闭环页：台账 Tab + 通知配置 Tab 正常切换
 - 失败归因页：运行历史加载 + 报告分析正常（15 场景，0 失败）
@@ -386,12 +387,36 @@ python release_check.py
 
 | 方向 | 说明 |
 |------|------|
-| Agent 流式对话 | WebSocket 实时推送 tool_calls 过程（当前为同步） |
 | 多系统接入 | 按 `systems/{system}/` 契约接入更多被测系统 |
 | 归因自动化 | 从执行报告自动生成 SPQ 台账条目（当前需手动创建） |
-| Spec 变更检测 | signature 跨版本 diff 自动触发影响面分析 |
+| Spec 变更检测 | signature 跨版本 diff 自动触发影响面分析与用例同步建议 |
 | 工作区 git push | Agent 修复 Spec 后自动提交 PR（当前仅本地草稿） |
+| 反哺台账自动生成 | 循环 A/B 事件自动建 SPQ 条目（当前通知已自动，台账手动） |
 
 ---
 
-> **文档版本**：1.0 | **维护者**：SpecGuard Team | **关联文档**：[SpecGuard-Agent架构设计-MCP工具层与薄Harness.md](file:///d:/work/tdm-code/specguard/docs/SpecGuard-Agent架构设计-MCP工具层与薄Harness.md)
+## 十、验收修复记录（2026-07-26 验收后修复）
+
+验收发现 2 个严重安全漏洞、3 项设计验收未达成、若干中低危项，已全部修复：
+
+| 类别 | 修复项 | 方案 |
+|------|--------|------|
+| 🔴 严重 | 工作区 name 路径穿越（任意目录删除/覆写） | name 白名单正则 + `_clone_path_for` 解析断言 + unregister 同样守卫 |
+| 🔴 严重 | 合规门禁可被 `run_conformance=false` 跳过 | 客户端参数移除，服务端强制执行（接入即门禁 P2 落实） |
+| 🟠 高 | `subdir` 路径穿越（spec-files / list_spec_files） | 统一 `safe_resolve` 守卫，越界返回 403/OUT_OF_SCOPE |
+| 🟠 高 | api 签名不含 schema 结构（字段级变更失明） | 签名材料改为入参/出参 schema 规范化结构（递归字段+类型+必填+枚举） |
+| 🟠 高 | M5 通知仅手动发送 | runner 执行完成自动按注册表推送（FAIL/DRIFT/SKIP 事件），回执落 `receipts.jsonl`，新增 `GET /api/feedback/receipts` |
+| 🟡 中 | 三道闸 UI 缺失 | 新增 drafts 路由 + 「📝 草稿评审」页：列表/评审/校验/入库（门禁失败自动回滚）/废弃 |
+| 🟡 中 | WebSocket 伪流式 | asyncio 队列桥接实时推送；AgentChat 全面切换 WS，工具调用卡片逐条呈现 |
+| 🟡 中 | `query_registry(oracle)` 硬编码 | 新增 `live_registry.py` 离线构建活注册表（db=None），oracle/step 清单动态读取 |
+| 🟡 中 | validator 不校验 oracle 引用 | verify 段 oracle（字符串/参数化两形态）对活注册表校验，编造即 ERROR + difflib hint |
+| 🟡 中 | covers 闸客户端可跳过 + plans 路径绕过 | 客户端 skip 参数移除；闸抽取 `services/covers_gate.py`，runs 与 plans 双入口共用 |
+| 🟡 中 | session_id / run_id 路径穿越 | 白名单正则 + 解析断言 |
+| 🟡 中 | SQL 守卫逃逸（FOR UPDATE / INTO OUTFILE） | 危险子句关键词黑名单（含 LOCK IN SHARE MODE / LOAD DATA 等） |
+| ⚪ 低 | webhook SSRF / ledger 状态机 / 注册表锁 / 死代码 / j2 死文件 / 残留旧引用 | https+主机白名单；closed 终态流转校验；原子写+RLock；anchors 死代码清除；runtime 改读 system.md.j2；_suite.yaml 与 visualization 旧路径清理 |
+
+**复跑验证**：test_specstd 117 全绿（新增 37 项修复测试）/ engine_modes 39 / test_engine 62 / release_check PASS / 前端 tsc+vite 构建通过。
+
+---
+
+> **文档版本**：1.1 | **维护者**：SpecGuard Team | **关联文档**：[SpecGuard-Agent架构设计-MCP工具层与薄Harness.md](file:///d:/work/tdm-code/specguard/docs/SpecGuard-Agent架构设计-MCP工具层与薄Harness.md)

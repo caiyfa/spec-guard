@@ -9,7 +9,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    const d: unknown = err.detail;
+    // detail 可能是字符串或结构化对象（如 422 的 {message, findings}）
+    const msg = typeof d === 'string' ? d
+      : (d && typeof d === 'object' && 'message' in d ? String((d as any).message) : JSON.stringify(d));
+    throw new Error(msg || `HTTP ${res.status}`);
   }
   return res.json();
 }
@@ -260,4 +264,44 @@ export const agentApi = {
   getSession: (id: string) => request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}`),
   chat: (body: { message: string; session_id?: string; max_turns?: number }) =>
     request<any>('/agent/chat', { method: 'POST', body: JSON.stringify(body) }),
+};
+
+// ── 草稿区三道闸（D1）──
+export interface DraftItem {
+  filename: string;
+  scenario_id: string;
+  title: string;
+  size: number;
+  modified: string;
+}
+
+export interface ValidateFinding {
+  level: string;
+  rule: string;
+  message: string;
+  scenario?: string;
+  hint?: string;
+}
+
+export interface ValidateReport {
+  verdict: string;
+  scenario?: string;
+  findings: ValidateFinding[];
+  summary?: { error: number; warn: number };
+}
+
+export const draftsApi = {
+  list: () => request<{ drafts: DraftItem[] }>('/drafts'),
+  modules: () => request<{ modules: string[] }>('/drafts/modules'),
+  read: (filename: string) =>
+    request<{ filename: string; content: string }>(`/drafts/${encodeURIComponent(filename)}`),
+  validate: (filename: string) =>
+    request<ValidateReport>(`/drafts/${encodeURIComponent(filename)}/validate`, { method: 'POST' }),
+  promote: (filename: string, module: string) =>
+    request<any>(`/drafts/${encodeURIComponent(filename)}/promote`, {
+      method: 'POST',
+      body: JSON.stringify({ module }),
+    }),
+  discard: (filename: string) =>
+    request<{ ok: boolean; trashed_to: string }>(`/drafts/${encodeURIComponent(filename)}/discard`, { method: 'POST' }),
 };

@@ -112,9 +112,12 @@ def list_webhooks():
 
 @router.post("/notify")
 def register_webhook(body: RegisterWebhookBody):
-    """注册 webhook。"""
+    """注册 webhook（URL 须过 SSRF 校验）。"""
     reg = _get_registry()
-    entry = reg.register(body.system, body.scenario_pattern, body.url, body.events)
+    try:
+        entry = reg.register(body.system, body.scenario_pattern, body.url, body.events)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     # 返回时掩码 URL
     entry.pop("url", None)
     return entry
@@ -138,3 +141,22 @@ def send_notification(body: SendNotifyBody):
         body.verdict, body.conclusion, body.report_link,
     )
     return {"results": results, "sent": len(results)}
+
+
+@router.get("/receipts")
+def list_receipts(limit: int = 50):
+    """送达回执记录（receipts.jsonl 尾部，最新的在前）。"""
+    receipts_path = FEEDBACK_DIR / "receipts.jsonl"
+    if not receipts_path.is_file():
+        return {"receipts": []}
+    import json
+    lines = receipts_path.read_text(encoding="utf-8").splitlines()
+    receipts = []
+    for line in reversed(lines[-limit:]):
+        line = line.strip()
+        if line:
+            try:
+                receipts.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return {"receipts": receipts}
