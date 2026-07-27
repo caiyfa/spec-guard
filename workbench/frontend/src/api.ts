@@ -22,6 +22,12 @@ function handleUnauthorized() {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = session.getToken();
   const ws = session.getWorkspace();
+  // 坏 token 预检：HTTP header 仅支持 ASCII，非 ASCII token（如中文工号签发的 mock-token）
+  // 会让 fetch 直接抛 TypeError。此处等同 401 处理：清 token 跳登录页，用户可自助恢复。
+  if (token && !/^[\x20-\x7E]+$/.test(token)) {
+    handleUnauthorized();
+    throw new Error('会话 token 非法，请重新登录');
+  }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (ws) headers['X-SG-Workspace'] = ws;

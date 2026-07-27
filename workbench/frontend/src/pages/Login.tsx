@@ -43,12 +43,20 @@ export default function Login() {
     window.location.href = `${uacBase}/api/authing/login?redirectURL=${redirect}`;
   };
 
+  const EMP_NO_RE = /^[A-Za-z0-9_-]+$/;
+
   const mockLogin = async () => {
-    if (!empNo.trim() || busy) return;
+    const emp = empNo.trim();
+    if (!emp || busy) return;
+    // 工号将编进 token 并放入 HTTP header（仅支持 ASCII），中文/特殊字符必须前端拦截
+    if (!EMP_NO_RE.test(emp)) {
+      setError('工号仅支持字母、数字、下划线、连字符（不能含中文或空格）');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      const r = await authApi.mockLogin(empNo.trim(), name.trim());
+      const r = await authApi.mockLogin(emp, name.trim());
       if (r.ok && r.token) {
         session.setToken(r.token);
         // 整页重载进入主页（避免 SPA 切换白屏风险）

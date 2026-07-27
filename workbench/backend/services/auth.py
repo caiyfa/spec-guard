@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextvars
 import os
+import re
 import time
 from dataclasses import dataclass
 
@@ -162,6 +163,11 @@ def issue_mock_token(emp_no: str, name: str = "") -> str:
     """mock 模式登录签发 token（仅 SG_AUTH_MODE=mock 可用）。"""
     if SG_AUTH_MODE != "mock":
         raise HTTPException(status_code=403, detail="非 mock 模式，请走 UAC 登录")
+    # 工号将编进 token 放入 HTTP Authorization header（仅支持 ASCII），
+    # 中文/空格/特殊字符必须在此拦截——否则签发成功但后续请求必然构造失败
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", emp_no or ""):
+        raise HTTPException(status_code=400,
+                            detail="工号仅支持字母、数字、下划线、连字符（1-64 位）")
     user_store.upsert_user(emp_no, name or emp_no)
     return f"mock-{emp_no}"
 

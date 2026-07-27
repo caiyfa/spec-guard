@@ -62,7 +62,14 @@ export default function App() {
     }
     authApi.me()
       .then(setUser)
-      .catch(() => { /* 401 由 api.ts 统一处理 */ })
+      .catch(() => {
+        // 401 由 api.ts 统一处理（已跳 /login）；
+        // 其他失败（网络异常/坏 token 抛错）也必须跳登录页，否则永远卡在"加载用户信息…"
+        if (!window.location.pathname.startsWith('/login')) {
+          session.clearToken();
+          window.location.href = '/login';
+        }
+      })
       .finally(() => setLoading(false));
   }, [isLoginPage]);
 
