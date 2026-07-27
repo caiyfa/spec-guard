@@ -296,9 +296,11 @@ pwsh start-workbench.ps1
 ### 生产模式（服务器部署）
 
 ```powershell
-pwsh start-workbench.ps1 -Prod
-# ① 前端构建（npm run build → dist/）
+pwsh serve-prod.ps1                                            # SIT 联调
+pwsh serve-prod.ps1 -UacBase 'http://ha.fehorizon.com/femsp/uac'  # 生产环境
+# ① 依赖自检 + 前端构建（dist 过期自动重建）
 # ② 单端口 :9100 托管 API + 前端（SG_AUTH_MODE=uac，集团 Authing SSO 登录）
+# ③ 健康等待 + 部署检查清单输出
 ```
 
 生产部署关键配置（环境变量）：

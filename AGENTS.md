@@ -99,8 +99,8 @@ python -m pytest test_engine -v           # 组件单测（call/python/deps_edit
 python release_check.py                   # 格式/环/契约指纹校验，全 PASS 才允许入库
 
 # ── 工作台 ──
-pwsh start-workbench.ps1                  # 开发模式（后端 :9100 mock 登录 + 前端 :5173 热更新，幂等）
-pwsh start-workbench.ps1 -Prod            # 生产模式（前端构建 + 单端口 :9100 UAC SSO，workers=1 不可改）
+pwsh start-workbench.ps1                  # 本地开发（后端 :9100 --reload 热重载 + 前端 :5173，依赖自检，幂等）
+pwsh serve-prod.ps1                       # 生产部署（前端构建 + 单端口 :9100 UAC SSO，workers=1 不可改）
 cd workbench/backend && uvicorn main:app --reload --port 9100   # 后端单独
 cd workbench/frontend && npm install && npm run dev             # 前端单独（:5173）
 cd workbench/frontend && npm run build                          # 前端构建（tsc + vite）
