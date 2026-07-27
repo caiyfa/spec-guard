@@ -1,6 +1,7 @@
 // Agent 对话面板（V7 修复：WebSocket 实时流——工具调用卡片随循环逐条呈现）
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { session } from '../api';
 
 interface ChatMessage {
   role: string;
@@ -35,7 +36,9 @@ export default function AgentChat() {
   // 建立 WebSocket（页面生命周期内复用）
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/agent/ws`);
+    const ws = new WebSocket(
+      `${protocol}//${window.location.host}/api/agent/ws?token=${encodeURIComponent(session.getToken())}`
+    );
     wsRef.current = ws;
     ws.onopen = () => setWsState('open');
     ws.onclose = () => setWsState('closed');

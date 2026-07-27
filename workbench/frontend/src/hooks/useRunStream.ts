@@ -1,5 +1,6 @@
-/** WebSocket 实时执行流 Hook */
+/** WebSocket 实时执行流 Hook（多用户：token 经 query 参数认证） */
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { session } from '../api';
 
 export interface StreamEvent {
   type: 'status' | 'output' | 'started' | 'finished' | 'aborted';
@@ -22,7 +23,9 @@ export function useRunStream() {
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/runs/stream`);
+    const ws = new WebSocket(
+      `${protocol}//${window.location.host}/api/runs/stream?token=${encodeURIComponent(session.getToken())}`
+    );
     wsRef.current = ws;
 
     ws.onopen = () => setConnected(true);

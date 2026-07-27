@@ -13,10 +13,16 @@
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+from services.auth import require_role
+
+# 反哺闭环整体对 tester+ 开放（viewer 无此菜单，后端同样拦截）
+router = APIRouter(
+    prefix="/api/feedback", tags=["feedback"],
+    dependencies=[Depends(require_role("admin", "tester"))],
+)
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(SG_ROOT) not in sys.path:

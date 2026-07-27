@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import os
 import re
 import subprocess
@@ -40,6 +41,27 @@ WORKSPACE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
 # 注册表读写锁（V17 修复：并发请求防写坏）
 _REGISTRY_LOCK = threading.RLock()
+
+# ── 请求级工作区上下文（多用户改造，M7）──
+# 服务端：X-SG-Workspace header 经中间件注入；asyncio.to_thread / threadpool 均复制 context，
+# 因此 agent runtime、MCP 工具、covers 闸在任何下游线程都能读到请求工作区。
+_CTX_WORKSPACE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "sg_workspace_name", default=None)
+
+
+def set_context_workspace(name: Optional[str]):
+    """设置请求级工作区名（中间件/依赖注入调用）。返回 reset token。"""
+    return _CTX_WORKSPACE.set(name or None)
+
+
+def reset_context_workspace(token):
+    """恢复上一上下文（中间件收尾调用）。"""
+    _CTX_WORKSPACE.reset(token)
+
+
+def get_context_workspace() -> Optional[str]:
+    """当前请求上下文中的工作区名（未设置返回 None）。"""
+    return _CTX_WORKSPACE.get()
 
 
 def _validate_name(name: str) -> Optional[str]:
@@ -167,7 +189,18 @@ def get_workspace(name: str) -> Optional[WorkspaceInfo]:
 
 
 def get_active_workspace() -> Optional[WorkspaceInfo]:
-    """获取当前激活的工作区。"""
+    """解析当前有效工作区（多用户改造，M7）。
+
+    解析顺序：
+    ① 请求上下文（X-SG-Workspace header 经中间件注入，多用户 Web 模式）
+    ② SG_WORKSPACE 环境变量（MCP stdio POC 模式，Qoder 挂载无用户概念）
+    ③ 注册表全局 active（遗留单机模式，仅 admin 可设）
+    """
+    name = _CTX_WORKSPACE.get() or os.environ.get("SG_WORKSPACE", "").strip()
+    if name:
+        info = get_workspace(name)
+        if info:
+            return info
     registry = _load_registry()
     active = registry.get("active", "")
     if not active:

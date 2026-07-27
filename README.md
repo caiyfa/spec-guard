@@ -281,7 +281,44 @@ specguard/
 
 ---
 
-## 九、待补项
+## 九、Workbench 多用户部署（M6-M8）
+
+工作台支持多用户 + RBAC（admin/tester/viewer 三角色），可部署到服务器为团队提供服务。
+
+### 开发模式（本地热更新）
+
+```powershell
+pwsh start-workbench.ps1
+# 后端 :9100（SG_AUTH_MODE=mock）+ 前端 :5173（热更新）
+# 浏览器打开 http://localhost:5173 → mock 登录页输工号直接登录
+```
+
+### 生产模式（服务器部署）
+
+```powershell
+pwsh start-workbench.ps1 -Prod
+# ① 前端构建（npm run build → dist/）
+# ② 单端口 :9100 托管 API + 前端（SG_AUTH_MODE=uac，集团 Authing SSO 登录）
+```
+
+生产部署关键配置（环境变量）：
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `SG_AUTH_MODE` | `uac` | `uac`（集团 SSO）/ `mock`（本地开发降级） |
+| `SG_UAC_BASE` | `http://sit-ha.fehorizon.com/femsp/uac` | UAC 地址（SIT 内网）；生产切换 `http://ha.fehorizon.com/femsp/uac` |
+| `SG_ADMIN_ACCOUNTS` | 空 | 预置管理员（逗号分隔 AD 账号）；未设置时**首个登录用户自动成为 admin** |
+
+硬约束：
+
+- **uvicorn 必须 workers=1**：RunManager 全局单例 + SQLite，多 worker 会破坏执行队列与共享状态
+- 执行并发模型为**全局 FIFO 队列**（running 时触发自动排队，完成后自动消费）
+- 数据文件 `workbench/backend/data/workbench.db`（用户/授权/审计/队列，勿提交）
+- 工作区治理：admin 注册 → 授权开通给用户 → 用户在顶栏选择器预选（可设个人默认）
+
+---
+
+## 十、待补项
 
 1. **PP-PERM-004 SKIP**：在 `env.sit.yaml` 的 `accounts.restricted` 配置真实受限账号（单平台权限）即激活
 2. **UAT 环境**：复制 `env.sit.yaml` → `env.uat.yaml`，修改 `tdm_base` / `default_resource_code` / SSO 域名 / DB 凭据（回退读 `DB_PASSWORD_UAT`）

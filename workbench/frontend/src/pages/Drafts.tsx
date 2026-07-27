@@ -120,7 +120,9 @@ export default function Drafts() {
             >
               <div className="text-sm text-gray-200 font-mono">{d.scenario_id || d.filename}</div>
               <div className="text-xs text-gray-500 truncate">{d.title || d.filename}</div>
-              <div className="text-[10px] text-gray-600 mt-0.5">{d.modified}</div>
+              <div className="text-[10px] text-gray-600 mt-0.5">
+                {d.modified}{d.author ? ` · ${d.author}` : ''}
+              </div>
             </button>
           ))}
         </div>

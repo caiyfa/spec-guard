@@ -29,6 +29,11 @@ class RunManager:
         self.started_at: Optional[str] = None
         self.subscribers: list[WebSocket] = []
         self._output_lines: list[str] = []
+        # 多用户队列（M8）：当前执行的归属与持久化队列项
+        self.current_emp_no: str = ""
+        self.current_workspace: str = ""
+        self._queue_id: Optional[int] = None
+        self._scope: str = ""
         # 断点状态
         self.breakpoints: list[str] = []          # 断点场景 ID 列表
         self.pending_scenarios: list[str] = []    # 待执行场景（断点分段用）
@@ -68,16 +73,43 @@ class RunManager:
             self.subscribers.remove(ws)
 
     async def trigger(self, scope: str = "all", target: str = "", env: str = "sit",
-                      plan_id: str = "", strict_deps: bool = False) -> dict:
+                      plan_id: str = "", strict_deps: bool = False,
+                      emp_no: str = "", workspace: str = "",
+                      queue_id: Optional[int] = None) -> dict:
         """触发执行
 
         scope: all / module / scenario / tag / engine_modes
         target: 场景ID / 模块路径 / 标签名（scope != all 时有效）
         plan_id: 测试计划 ID（非空时报告归档到 reports/{plan_id}/）
         strict_deps: 严格依赖模式（SG_STRICT_DEPS=1 注入子进程，DRIFT/ORPHANED → BLOCKED）
+        emp_no/workspace: 触发人与工作区（多用户归属，M8）
+        queue_id: 来自队列的消费（内部用；为 None 时新建队表记录）
+
+        已有执行时进入 FIFO 队列（run_queue 表持久化），返回 queued + position。
         """
         if self.is_running:
-            return {"ok": False, "error": "已有执行正在进行中"}
+            from services import user_store
+            qid = user_store.enqueue_run(
+                emp_no=emp_no, scope=scope, target=target, env=env, plan_id=plan_id,
+                breakpoints=[], strict_deps=strict_deps, workspace=workspace)
+            user_store.audit(emp_no, "enqueue_run", scope, f"queue_id={qid}")
+            queued = [r for r in user_store.list_run_queue() if r["status"] == "queued"]
+            position = next((i + 1 for i, r in enumerate(queued) if r["id"] == qid), len(queued))
+            await self.broadcast({"type": "queued", "queue_id": qid, "position": position,
+                                  "emp_no": emp_no, "scope": scope})
+            return {"ok": True, "queued": True, "queue_id": qid, "position": position}
+
+        # 启动执行：登记队表（running）
+        from services import user_store
+        if queue_id:
+            user_store.update_run_queue(queue_id, "running", started=True)
+            self._queue_id = queue_id
+        else:
+            self._queue_id = user_store.enqueue_run(
+                emp_no=emp_no, scope=scope, target=target, env=env, plan_id=plan_id,
+                breakpoints=[], strict_deps=strict_deps, workspace=workspace, status="running")
+        self.current_emp_no = emp_no
+        self.current_workspace = workspace
 
         # 构建 pytest 命令
         cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short"]
@@ -99,6 +131,8 @@ class RunManager:
         self.status = "running"
         self._output_lines = []
         self._scope = scope  # D2：通知推送豁免 engine_modes 用
+        if queue_id is None:
+            user_store.audit(emp_no, "trigger_run", scope, f"queue_id={self._queue_id}")
 
         await self.broadcast({
             "type": "started",
@@ -154,6 +188,8 @@ class RunManager:
         self.process = None
         # D2 修复：执行完成后按注册表自动推送飞书通知（fail/drift/skip 事件）
         await self._push_run_notifications()
+        # M8：收尾并消费队列下一个
+        await self._finish_current_run()
 
     def _parse_line(self, line: str) -> dict:
         """解析 pytest 输出行，提取场景 verdict"""
@@ -185,15 +221,40 @@ class RunManager:
 
     async def trigger_with_breakpoints(self, scenario_ids: list[str], breakpoints: list[str],
                                        env: str = "sit", plan_id: str = "",
-                                       strict_deps: bool = False) -> dict:
+                                       strict_deps: bool = False,
+                                       emp_no: str = "", workspace: str = "",
+                                       queue_id: Optional[int] = None) -> dict:
         """带断点的分段执行
 
         将场景列表按断点切分为多个批次，逐批执行：
         - 批次间遇到断点场景时暂停，广播上下文，等待 resume 信号
         - 无断点时退化为一次性全量执行
+        - 已有执行时进入 FIFO 队列（M8）
         """
         if self.is_running:
-            return {"ok": False, "error": "已有执行正在进行中"}
+            from services import user_store
+            target = " or ".join(scenario_ids)
+            qid = user_store.enqueue_run(
+                emp_no=emp_no, scope="breakpoint", target=target, env=env, plan_id=plan_id,
+                breakpoints=breakpoints, strict_deps=strict_deps, workspace=workspace)
+            user_store.audit(emp_no, "enqueue_run", "breakpoint", f"queue_id={qid}")
+            queued = [r for r in user_store.list_run_queue() if r["status"] == "queued"]
+            position = next((i + 1 for i, r in enumerate(queued) if r["id"] == qid), len(queued))
+            await self.broadcast({"type": "queued", "queue_id": qid, "position": position,
+                                  "emp_no": emp_no, "scope": "breakpoint"})
+            return {"ok": True, "queued": True, "queue_id": qid, "position": position}
+
+        from services import user_store
+        if queue_id:
+            user_store.update_run_queue(queue_id, "running", started=True)
+            self._queue_id = queue_id
+        else:
+            self._queue_id = user_store.enqueue_run(
+                emp_no=emp_no, scope="breakpoint", target=" or ".join(scenario_ids), env=env,
+                plan_id=plan_id, breakpoints=breakpoints, strict_deps=strict_deps,
+                workspace=workspace, status="running")
+        self.current_emp_no = emp_no
+        self.current_workspace = workspace
 
         self.run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         self.plan_id = plan_id
@@ -207,7 +268,8 @@ class RunManager:
         if not breakpoints:
             target = " or ".join(scenario_ids)
             return await self.trigger(scope="scenario", target=target, env=env, plan_id=plan_id,
-                                      strict_deps=strict_deps)
+                                      strict_deps=strict_deps, emp_no=emp_no, workspace=workspace,
+                                      queue_id=queue_id)
 
         self._strict_deps = strict_deps
 
@@ -330,6 +392,8 @@ class RunManager:
         self.process = None
         # D2 修复：断点分段执行完成后同样自动推送通知
         await self._push_run_notifications()
+        # M8：收尾并消费队列下一个
+        await self._finish_current_run()
 
     def _build_breakpoint_context(self) -> dict:
         """构建断点处的上下文信息（供前端展示数据状态）"""
@@ -348,6 +412,46 @@ class RunManager:
             "recent_verdicts": recent_verdicts[-10:],
             "output_tail": self._output_lines[-20:],
         }
+
+    async def _finish_current_run(self):
+        """M8：当前执行收尾（队表标记完成）并自动启动队列下一个。"""
+        from services import user_store
+        if self._queue_id:
+            user_store.update_run_queue(self._queue_id, "done", finished=True)
+        self._queue_id = None
+        self.current_emp_no = ""
+        self.current_workspace = ""
+        await self._start_next_from_queue()
+
+    async def _start_next_from_queue(self):
+        """M8：取队列最老 queued 项启动（FIFO）。"""
+        from services import user_store
+        queued = [r for r in user_store.list_run_queue() if r["status"] == "queued"]
+        if not queued:
+            return
+        row = queued[0]
+        import json as _json
+        try:
+            breakpoints = _json.loads(row.get("breakpoints") or "[]")
+        except Exception:
+            breakpoints = []
+        # 队列执行的上下文（原请求上下文已结束，用存储的工作区重建）
+        from specstd.workspace import set_context_workspace
+        set_context_workspace(row.get("workspace") or None)
+        await self.broadcast({"type": "queue_dequeued", "queue_id": row["id"],
+                              "emp_no": row["emp_no"], "scope": row["scope"]})
+        if breakpoints:
+            scenario_ids = row["target"].split(" or ") if row["target"] else []
+            await self.trigger_with_breakpoints(
+                scenario_ids=scenario_ids, breakpoints=breakpoints,
+                env=row["env"], plan_id=row["plan_id"],
+                strict_deps=bool(row["strict_deps"]), emp_no=row["emp_no"],
+                workspace=row.get("workspace", ""), queue_id=row["id"])
+        else:
+            await self.trigger(scope=row["scope"], target=row["target"], env=row["env"],
+                               plan_id=row["plan_id"], strict_deps=bool(row["strict_deps"]),
+                               emp_no=row["emp_no"], workspace=row.get("workspace", ""),
+                               queue_id=row["id"])
 
     async def _push_run_notifications(self):
         """D2：运行结束后读取 case verdicts，按反馈路径注册表自动推送通知。
@@ -400,6 +504,12 @@ class RunManager:
         return {"ok": True}
 
     def get_status(self) -> dict:
+        queue = []
+        try:
+            from services import user_store
+            queue = user_store.list_run_queue()
+        except Exception:
+            pass
         return {
             "status": self.status,
             "run_id": self.run_id,
@@ -412,6 +522,9 @@ class RunManager:
             "completed_scenarios": self.completed_scenarios,
             "pending_scenarios": self.pending_scenarios,
             "subscriber_count": len(self.subscribers),
+            "current_emp_no": self.current_emp_no,
+            "current_workspace": self.current_workspace,
+            "queue": queue,
         }
 
 

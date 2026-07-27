@@ -1,12 +1,35 @@
-/** SpecGuard Workbench API 客户端 */
+/** SpecGuard Workbench API 客户端（多用户：token + 工作区注入） */
 
 const BASE = '/api';
 
+// ── 会话状态（token 存 sessionStorage，工作区选择存 localStorage）──
+export const session = {
+  getToken: () => sessionStorage.getItem('sg_token') || '',
+  setToken: (t: string) => sessionStorage.setItem('sg_token', t),
+  clearToken: () => sessionStorage.removeItem('sg_token'),
+  getWorkspace: () => localStorage.getItem('sg_workspace') || '',
+  setWorkspace: (w: string) => localStorage.setItem('sg_workspace', w),
+};
+
+/** 401 统一处理：清 token 并强制回登录页 */
+function handleUnauthorized() {
+  session.clearToken();
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const token = session.getToken();
+  const ws = session.getWorkspace();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (ws) headers['X-SG-Workspace'] = ws;
+  const res = await fetch(`${BASE}${path}`, { headers, ...options });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('未登录或登录已过期');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const d: unknown = err.detail;
@@ -17,6 +40,69 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   return res.json();
 }
+
+// ── 认证 ──
+export interface CurrentUser {
+  emp_no: string;
+  name: string;
+  role: 'admin' | 'tester' | 'viewer';
+  default_workspace: string;
+  auth_mode: 'uac' | 'mock';
+}
+
+export const authApi = {
+  config: () => request<{ auth_mode: string; uac_base: string; uac_logout_url: string }>('/auth/config'),
+  me: () => request<CurrentUser>('/auth/me'),
+  mockLogin: (emp_no: string, name = '') =>
+    request<{ ok: boolean; token: string; user: any }>('/auth/mock-login', {
+      method: 'POST',
+      body: JSON.stringify({ emp_no, name }),
+    }),
+  logout: () => request<{ ok: boolean; uac_logout_url: string }>('/auth/logout', { method: 'POST' }),
+};
+
+// ── 用户与授权管理（admin）──
+export interface UserItem {
+  emp_no: string;
+  name: string;
+  role: string;
+  default_workspace: string;
+  created_at: string;
+  last_login_at: string;
+}
+
+export interface GrantItem {
+  id: number;
+  workspace_name: string;
+  emp_no: string;
+  granted_by: string;
+  created_at: string;
+}
+
+export const usersApi = {
+  list: () => request<{ users: UserItem[] }>('/users'),
+  setRole: (emp_no: string, role: string) =>
+    request<{ ok: boolean }>(`/users/${encodeURIComponent(emp_no)}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+  grants: () => request<{ grants: GrantItem[] }>('/users/grants'),
+  grant: (emp_no: string, workspace_name: string) =>
+    request<{ ok: boolean }>(`/users/${encodeURIComponent(emp_no)}/grants`, {
+      method: 'POST',
+      body: JSON.stringify({ workspace_name }),
+    }),
+  revoke: (emp_no: string, workspace_name: string) =>
+    request<{ ok: boolean }>(`/users/${encodeURIComponent(emp_no)}/grants/${encodeURIComponent(workspace_name)}`, {
+      method: 'DELETE',
+    }),
+  setDefaultWorkspace: (workspace_name: string) =>
+    request<{ ok: boolean; default_workspace: string }>('/users/me/default-workspace', {
+      method: 'PUT',
+      body: JSON.stringify({ workspace_name }),
+    }),
+  auditLog: (limit = 100) => request<{ entries: any[] }>(`/users/audit-log?limit=${limit}`),
+};
 
 // ── 场景管理 ──
 export interface Scenario {
@@ -91,13 +177,15 @@ export interface RunSummary {
 
 export const runsApi = {
   trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = []) =>
-    request<{ ok: boolean; run_id: string }>('/runs/trigger', {
+    request<{ ok: boolean; run_id?: string; queued?: boolean; queue_id?: number; position?: number }>('/runs/trigger', {
       method: 'POST',
       body: JSON.stringify({ scope, target, env, breakpoints }),
     }),
   abort: () => request<{ ok: boolean }>('/runs/abort', { method: 'POST' }),
   resume: () => request<{ ok: boolean }>('/runs/resume', { method: 'POST' }),
   status: () => request<RunStatus>('/runs/status'),
+  cancelQueued: (itemId: number) =>
+    request<{ ok: boolean }>(`/runs/queue/${itemId}`, { method: 'DELETE' }),
   history: (limit = 20) => request<RunSummary[]>(`/runs/history?limit=${limit}`),
   get: (runId: string) => request<Record<string, unknown>>(`/runs/${runId}`),
 };
@@ -120,11 +208,20 @@ export interface ImportPreview {
     total_frs: number; matched_scenarios: number;
   };
 }
+export interface RunQueueItem {
+  id: number; emp_no: string; scope: string; target: string;
+  env: string; plan_id: string; workspace: string;
+  status: 'queued' | 'running';
+  created_at: string; started_at: string;
+}
+
 export interface RunStatus {
   status: string; run_id: string; plan_id: string;
   is_running: boolean; is_paused: boolean;
   paused_at: string; breakpoints: string[];
   completed_scenarios: string[]; pending_scenarios: string[];
+  current_emp_no?: string; current_workspace?: string;
+  queue?: RunQueueItem[];
 }
 
 export interface TestPlan {
@@ -238,7 +335,7 @@ export interface WorkspaceInfo {
 }
 
 export const workspaceApi = {
-  list: () => request<{ workspaces: WorkspaceInfo[]; active: string }>('/workspace/list'),
+  list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
   getActive: () => request<{ active: WorkspaceInfo | null }>('/workspace/active'),
   registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
     request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),
@@ -273,6 +370,7 @@ export interface DraftItem {
   title: string;
   size: number;
   modified: string;
+  author?: string;
 }
 
 export interface ValidateFinding {

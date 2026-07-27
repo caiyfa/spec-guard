@@ -1,6 +1,6 @@
-/** RunControl — 执行控制：触发 / 结构化进度 / 实时日志流 / 终止 */
+/** RunControl — 执行控制：触发 / 结构化进度 / 实时日志流 / 终止 / 多用户队列 */
 import { useRef, useEffect, useState, useMemo } from 'react';
-import { runsApi, scenariosApi, plansApi, type Scenario, type TestPlan } from '../api';
+import { runsApi, scenariosApi, plansApi, authApi, type Scenario, type TestPlan, type RunStatus } from '../api';
 import { useRunStream } from '../hooks/useRunStream';
 
 const SCOPES = [
@@ -40,7 +40,35 @@ export default function RunControl() {
   const [selectedPlan, setSelectedPlan] = useState('');
   const [showLog, setShowLog] = useState(true);
   const [breakpoints] = useState<Set<string>>(new Set());
+  const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
+  const [myEmpNo, setMyEmpNo] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
+
+  // 队列状态轮询（M8：当前执行归属 + 排队列表）
+  useEffect(() => {
+    authApi.me().then(u => setMyEmpNo(u.emp_no)).catch(() => {});
+    let alive = true;
+    const poll = async () => {
+      try {
+        const s = await runsApi.status();
+        if (alive) setRunStatus(s);
+      } catch { /* 忽略轮询错误 */ }
+    };
+    poll();
+    const timer = setInterval(poll, 3000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+
+  const queue = useMemo(() => (runStatus?.queue || []).filter(q => q.status === 'queued'), [runStatus]);
+  const currentOwner = runStatus?.current_emp_no || '';
+
+  const cancelQueued = async (id: number) => {
+    try {
+      await runsApi.cancelQueued(id);
+      const s = await runsApi.status();
+      setRunStatus(s);
+    } catch { /* 权限错误等静默 */ }
+  };
 
   // 从事件中提取断点命中信息
   const breakpointHit = useMemo(() => {
@@ -97,14 +125,20 @@ export default function RunControl() {
     setError('');
     clear();
     try {
+      let result: { ok: boolean; queued?: boolean; position?: number } | undefined;
       if (selectedPlan && scope === 'all') {
-        await plansApi.run(selectedPlan);
+        result = await plansApi.run(selectedPlan);
       } else if (breakpoints.size > 0) {
         // 有断点 → 用 trigger API 带断点
         const bpList = [...breakpoints];
-        await runsApi.trigger(scope, target, 'sit', bpList);
+        result = await runsApi.trigger(scope, target, 'sit', bpList);
       } else {
-        await runsApi.trigger(scope, target);
+        result = await runsApi.trigger(scope, target);
+      }
+      if (result?.queued) {
+        setError(`已有执行进行中，已加入队列（第 ${result.position} 位）`);
+        const s = await runsApi.status();
+        setRunStatus(s);
       }
     } catch (e: unknown) { setError(e instanceof Error ? e.message : '触发失败'); }
   };
@@ -184,6 +218,38 @@ export default function RunControl() {
       </div>
 
       {error && <p className="text-sm text-fail">{error}</p>}
+
+      {/* 多用户执行归属与队列（M8） */}
+      {(currentOwner || queue.length > 0) && (
+        <div className="border border-border rounded-lg px-3 py-2 bg-surface-2 space-y-1.5">
+          {currentOwner && (
+            <div className="text-xs text-gray-400">
+              当前执行：<span className="text-info font-medium">{currentOwner}</span>
+              {currentOwner === myEmpNo && <span className="text-gray-600">（我）</span>}
+              {runStatus?.current_workspace && <span className="text-gray-600"> · 工作区 {runStatus.current_workspace}</span>}
+            </div>
+          )}
+          {queue.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[11px] text-gray-500">排队中（{queue.length}）：</div>
+              {queue.map((q, i) => (
+                <div key={q.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-600 font-mono">#{i + 1}</span>
+                  <span className={q.emp_no === myEmpNo ? 'text-info' : 'text-gray-400'}>
+                    {q.emp_no}{q.emp_no === myEmpNo && '（我）'}
+                  </span>
+                  <span className="text-gray-600">{q.scope}{q.target ? ` · ${q.target.slice(0, 40)}` : ''}</span>
+                  <span className="text-gray-700 font-mono text-[10px]">{q.created_at}</span>
+                  {(q.emp_no === myEmpNo || runStatus?.current_emp_no === myEmpNo) && (
+                    <button onClick={() => cancelQueued(q.id)}
+                      className="text-fail/80 hover:text-fail text-[10px]">取消</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 断点命中面板 */}
       {isPaused && breakpointHit && (

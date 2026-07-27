@@ -4,9 +4,10 @@ import os
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from services.auth import require_role
 from services.format_spec import generate_format_spec_md, get_next_scenario_id, validate_scenario_id
 
 router = APIRouter(prefix="/api/reference", tags=["reference"])
@@ -222,7 +223,7 @@ class EnvConfigBody(BaseModel):
     raw: str
 
 
-@router.put("/env-config")
+@router.put("/env-config", dependencies=[Depends(require_role("admin"))])
 def save_env_config(body: EnvConfigBody):
     """保存环境配置（校验 YAML 语法后写入）"""
     try:
@@ -236,7 +237,7 @@ def save_env_config(body: EnvConfigBody):
     return {"ok": True}
 
 
-@router.post("/test-db")
+@router.post("/test-db", dependencies=[Depends(require_role("admin"))])
 def test_db_connection():
     """测试数据库连接（读取 env.sit.yaml + devops 凭据回退）"""
     if not _ENV_FILE.is_file():

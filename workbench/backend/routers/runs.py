@@ -5,9 +5,13 @@
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from services.auth import (
+    CurrentUser, get_current_user, get_current_user_ws, optional_workspace, require_role,
+)
+from services import user_store
 from services.runner import run_manager
 from services.scenario_store import list_reports, get_report, get_case
 from services.covers_gate import check_covers_gate as _check_covers
@@ -29,8 +33,10 @@ class TriggerBody(BaseModel):
 
 
 @router.post("/trigger")
-async def api_trigger(body: TriggerBody):
-    """触发执行（支持断点）
+async def api_trigger(body: TriggerBody,
+                      user: CurrentUser = Depends(require_role("admin", "tester")),
+                      workspace: str = Depends(optional_workspace)):
+    """触发执行（支持断点 + 多用户 FIFO 队列）
 
     covers 校验前置闸：未通过禁止触发（仅 engine_modes 豁免，由服务端判定）。
     """
@@ -52,18 +58,31 @@ async def api_trigger(body: TriggerBody):
             breakpoints=body.breakpoints,
             env=body.env,
             strict_deps=body.strict_deps,
+            emp_no=user.emp_no,
+            workspace=workspace,
         )
     else:
         result = await run_manager.trigger(scope=body.scope, target=body.target, env=body.env,
-                                           strict_deps=body.strict_deps)
+                                           strict_deps=body.strict_deps,
+                                           emp_no=user.emp_no, workspace=workspace)
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
     return result
 
 
+def _check_run_owner(user: CurrentUser):
+    """M8：resume/abort 仅触发人本人或 admin 可操作。"""
+    owner = run_manager.current_emp_no
+    if owner and owner != user.emp_no and not user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail=f"当前执行由 {owner} 触发，仅本人或管理员可操作")
+
+
 @router.post("/resume")
-async def api_resume():
-    """断点放行"""
+async def api_resume(user: CurrentUser = Depends(require_role("admin", "tester"))):
+    """断点放行（仅触发人本人或 admin）"""
+    _check_run_owner(user)
     result = await run_manager.resume()
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
@@ -71,27 +90,41 @@ async def api_resume():
 
 
 @router.post("/abort")
-async def api_abort():
-    """终止当前执行"""
+async def api_abort(user: CurrentUser = Depends(require_role("admin", "tester"))):
+    """终止当前执行（仅触发人本人或 admin）"""
+    _check_run_owner(user)
     result = await run_manager.abort()
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
     return result
 
 
-@router.get("/status")
+@router.delete("/queue/{item_id}")
+def api_cancel_queued(item_id: int, user: CurrentUser = Depends(get_current_user)):
+    """取消排队项（本人或 admin；M8）。"""
+    row = user_store.get_run_queue_item(item_id)
+    if not row or row["status"] != "queued":
+        raise HTTPException(status_code=404, detail="排队项不存在或已开始执行")
+    if row["emp_no"] != user.emp_no and not user.is_admin:
+        raise HTTPException(status_code=403, detail="仅本人或管理员可取消排队")
+    user_store.update_run_queue(item_id, "cancelled", finished=True)
+    user_store.audit(user.emp_no, "cancel_queued", str(item_id))
+    return {"ok": True}
+
+
+@router.get("/status", dependencies=[Depends(get_current_user)])
 def api_status():
     """当前执行状态"""
     return run_manager.get_status()
 
 
-@router.get("/history")
+@router.get("/history", dependencies=[Depends(get_current_user)])
 def api_history(limit: int = 20):
     """历史运行列表"""
     return list_reports(limit=limit)
 
 
-@router.get("/{run_id}")
+@router.get("/{run_id}", dependencies=[Depends(get_current_user)])
 def api_get_run(run_id: str):
     """单次运行详情（run.json）"""
     data = get_report(run_id)
@@ -100,7 +133,7 @@ def api_get_run(run_id: str):
     return data
 
 
-@router.get("/{run_id}/cases/{case_file:path}")
+@router.get("/{run_id}/cases/{case_file:path}", dependencies=[Depends(get_current_user)])
 def api_get_case(run_id: str, case_file: str):
     """单场景详情 JSON"""
     data = get_case(run_id, case_file)
@@ -110,8 +143,8 @@ def api_get_case(run_id: str, case_file: str):
 
 
 @router.websocket("/stream")
-async def ws_stream(ws: WebSocket):
-    """WebSocket 实时执行流"""
+async def ws_stream(ws: WebSocket, _user: CurrentUser = Depends(get_current_user_ws)):
+    """WebSocket 实时执行流（WS 专用认证依赖；token 经 query 参数传入）"""
     await run_manager.subscribe(ws)
     try:
         while True:

@@ -5,12 +5,35 @@
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 DRAFTS_ROOT = SG_ROOT / "drafts"
+META_PATH = DRAFTS_ROOT / "_meta.json"
+
+
+def _record_author(filename: str):
+    """记录草稿作者到 drafts/_meta.json（M7 多用户归属；无用户上下文时跳过）。"""
+    try:
+        from services.auth import current_emp_no  # 延迟导入（MCP stdio 无此上下文）
+        emp_no = current_emp_no()
+    except Exception:
+        emp_no = ""
+    if not emp_no:
+        return
+    meta = {}
+    if META_PATH.is_file():
+        try:
+            meta = json.loads(META_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+    meta[filename] = {"author": emp_no,
+                      "updated_at": datetime.now().isoformat(timespec="seconds")}
+    META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
+                         encoding="utf-8")
 
 TOOLS = [
     Tool(
@@ -57,6 +80,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         if draft_path.exists():
             return [TextContent(type="text", text=f"OVERWRITE_DENIED: 文件已存在: {filename}（使用 mode=patch 追加）")]
         draft_path.write_text(content, encoding="utf-8")
+        _record_author(filename)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
             "path": str(draft_path.relative_to(SG_ROOT)), "size": len(content),
@@ -68,6 +92,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
             existing = draft_path.read_text(encoding="utf-8")
         merged = existing + "\n" + content if existing else content
         draft_path.write_text(merged, encoding="utf-8")
+        _record_author(filename)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
             "path": str(draft_path.relative_to(SG_ROOT)), "size": len(merged),

@@ -21,8 +21,10 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from services.auth import require_role
 
 router = APIRouter(prefix="/api/drafts", tags=["drafts"])
 
@@ -68,7 +70,16 @@ def _guard_module(module: str) -> Path:
 
 @router.get("")
 def list_drafts():
-    """列出草稿区全部 YAML 草稿（按修改时间倒序）。"""
+    """列出草稿区全部 YAML 草稿（按修改时间倒序，含作者归属）。"""
+    # 作者元数据（draft_writer 写入）
+    meta_path = DRAFTS_ROOT / "_meta.json"
+    meta = {}
+    if meta_path.is_file():
+        try:
+            import json as _json
+            meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
     drafts = []
     if DRAFTS_ROOT.is_dir():
         for f in sorted(DRAFTS_ROOT.glob("*.yaml"), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -85,6 +96,7 @@ def list_drafts():
                 "title": title,
                 "size": f.stat().st_size,
                 "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds"),
+                "author": (meta.get(f.name) or {}).get("author", ""),
             })
     return {"drafts": drafts}
 
@@ -113,7 +125,7 @@ def read_draft(filename: str):
 # 三道闸：① 格式校验 ② 发布门禁 ③ 入库
 # ══════════════════════════════════════════════════════════
 
-@router.post("/{filename}/validate")
+@router.post("/{filename}/validate", dependencies=[Depends(require_role("admin", "tester"))])
 def validate_draft(filename: str):
     """格式校验（format + covers + 注册表引用，与 MCP validate 同一实现）。"""
     from mcp_server.tools.validator import validate_scenario_content
@@ -129,7 +141,7 @@ class PromoteBody(BaseModel):
     skip_gate: bool = False  # 仅调试用途跳过发布门禁（默认 False，正常入库必须过门禁）
 
 
-@router.post("/{filename}/promote")
+@router.post("/{filename}/promote", dependencies=[Depends(require_role("admin", "tester"))])
 def promote_draft(filename: str, body: PromoteBody):
     """入库：格式校验 PASS → 移入 scenarios/{module}/ → 更新契约基线 → 发布门禁。
 
@@ -177,6 +189,14 @@ def promote_draft(filename: str, body: PromoteBody):
                 "gate_output": gate.get("output", ""),
             })
 
+    # 审计：草稿入库留痕（M6 审计要求）
+    try:
+        from services.auth import current_emp_no
+        from services import user_store
+        user_store.audit(current_emp_no(), "promote_draft", filename, body.module)
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "scenario_id": report.get("scenario", ""),
@@ -186,7 +206,7 @@ def promote_draft(filename: str, body: PromoteBody):
     }
 
 
-@router.post("/{filename}/discard")
+@router.post("/{filename}/discard", dependencies=[Depends(require_role("admin", "tester"))])
 def discard_draft(filename: str):
     """废弃草稿（移入 drafts/_trash/，可人工恢复）。"""
     path = _guard_filename(filename)

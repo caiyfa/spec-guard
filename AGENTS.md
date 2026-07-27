@@ -99,10 +99,16 @@ python -m pytest test_engine -v           # 组件单测（call/python/deps_edit
 python release_check.py                   # 格式/环/契约指纹校验，全 PASS 才允许入库
 
 # ── 工作台 ──
-pwsh start-workbench.ps1                  # 一键启动（后端 :9100 + 前端 :5173，幂等）
+pwsh start-workbench.ps1                  # 开发模式（后端 :9100 mock 登录 + 前端 :5173 热更新，幂等）
+pwsh start-workbench.ps1 -Prod            # 生产模式（前端构建 + 单端口 :9100 UAC SSO，workers=1 不可改）
 cd workbench/backend && uvicorn main:app --reload --port 9100   # 后端单独
 cd workbench/frontend && npm install && npm run dev             # 前端单独（:5173）
 cd workbench/frontend && npm run build                          # 前端构建（tsc + vite）
+
+# ── 多用户部署要点（M6-M8）──
+# 认证: SG_AUTH_MODE=uac|mock（生产 uac / 开发 mock）；SG_UAC_BASE 默认 sit 内网地址
+# 预置管理员: SG_ADMIN_ACCOUNTS=ad1,ad2（未设置时首个登录用户自动成为 admin）
+# 数据: workbench/backend/data/workbench.db（SQLite，勿提交）；MCP stdio POC 用 SG_WORKSPACE 指定工作区
 ```
 
 **环境依赖**：

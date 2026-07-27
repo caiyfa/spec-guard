@@ -33,8 +33,11 @@ specstd/workspaces/registry.yaml
 specstd/workspaces/_clones/
 specstd/workspaces/_anchors/
 
-# ── Agent 会话文件（不入 git）──
-agent/sessions/*.jsonl
+# ── Agent 会话文件（不入 git，多用户按工号分目录）──
+agent/sessions/
+
+# ── Workbench 多用户数据（SQLite，不入 git）──
+workbench/backend/data/
 
 # ── 反哺闭环持久化文件（不入 git）──
 feedback/ledger.json

@@ -16,7 +16,7 @@
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
@@ -30,6 +30,10 @@ from specstd.workspace import (
     register_local, register_git, set_active, unregister,
     pull, run_conformance, safe_resolve,
 )
+from services.auth import (  # noqa: E402
+    CurrentUser, get_current_user, require_role, resolve_workspace,
+)
+from services import user_store  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════
@@ -70,12 +74,17 @@ class PullBody(BaseModel):
 # ══════════════════════════════════════════════════════════
 
 @router.get("/list")
-def api_list_workspaces():
-    """列出全部已注册工作区。"""
+def api_list_workspaces(user: CurrentUser = Depends(get_current_user)):
+    """列出工作区：admin 见全部；其他角色仅见已授权的。"""
     workspaces = list_workspaces()
+    if not user.is_admin:
+        granted = {g["workspace_name"] for g in user_store.list_grants(emp_no=user.emp_no)}
+        workspaces = [w for w in workspaces if w.name in granted]
+    db_user = user_store.get_user(user.emp_no) or {}
     return {
         "workspaces": [w.to_dict() for w in workspaces],
         "active": get_active_workspace().name if get_active_workspace() else "",
+        "my_default": db_user.get("default_workspace", ""),
     }
 
 
@@ -89,45 +98,53 @@ def api_get_active():
 
 
 @router.post("/register-local")
-def api_register_local(body: RegisterLocalBody):
+def api_register_local(body: RegisterLocalBody,
+                       admin: CurrentUser = Depends(require_role("admin"))):
     """注册本地文件夹工作区（合规校验强制执行，任一 ERROR 拒绝接入）。"""
     result = register_local(body.name, body.path, body.system,
                             activate=body.activate, run_conformance=True)
+    if result.get("ok"):
+        user_store.audit(admin.emp_no, "register_workspace", body.name, "local")
     return result
 
 
 @router.post("/register-git")
-def api_register_git(body: RegisterGitBody):
+def api_register_git(body: RegisterGitBody,
+                     admin: CurrentUser = Depends(require_role("admin"))):
     """注册 git 工作区（克隆仓库，合规校验强制执行）。"""
     result = register_git(body.name, body.url, body.system, body.branch,
                           activate=body.activate, run_conformance=True)
+    if result.get("ok"):
+        user_store.audit(admin.emp_no, "register_workspace", body.name, "git")
     return result
 
 
-@router.post("/activate")
+@router.post("/activate", dependencies=[Depends(require_role("admin"))])
 def api_activate(body: ActivateBody):
-    """激活工作区。"""
+    """【遗留·仅 admin】设置全局激活工作区（MCP stdio POC 模式用；
+    多用户 Web 模式用个人默认工作区 + X-SG-Workspace header，不走此接口）。"""
     if not set_active(body.name):
         raise HTTPException(status_code=404, detail=f"工作区不存在: {body.name}")
     return {"ok": True, "active": body.name}
 
 
 @router.delete("/{name}")
-def api_unregister(name: str):
+def api_unregister(name: str, admin: CurrentUser = Depends(require_role("admin"))):
     """注销工作区。"""
     if not unregister(name):
         raise HTTPException(status_code=404, detail=f"工作区不存在: {name}")
+    user_store.audit(admin.emp_no, "unregister_workspace", name)
     return {"ok": True}
 
 
-@router.post("/conformance")
+@router.post("/conformance", dependencies=[Depends(require_role("admin"))])
 def api_conformance(body: ConformanceBody):
     """执行合规校验。"""
     report = run_conformance(body.name or None)
     return report.to_dict()
 
 
-@router.post("/pull")
+@router.post("/pull", dependencies=[Depends(require_role("admin"))])
 def api_pull(body: PullBody):
     """拉取 git 工作区更新。"""
     result = pull(body.name)
@@ -139,15 +156,15 @@ def api_pull(body: PullBody):
 # ══════════════════════════════════════════════════════════
 
 @router.get("/spec-files")
-def api_spec_files(subdir: str = ""):
-    """列出当前激活工作区的 spec 文件树（含 delta 标记）。"""
-    ws = get_active_workspace()
+def api_spec_files(subdir: str = "", ws_name: str = Depends(resolve_workspace)):
+    """列出请求工作区的 spec 文件树（含 delta 标记；授权校验由 resolve_workspace 完成）。"""
+    ws = get_workspace(ws_name)
     if not ws:
-        raise HTTPException(status_code=400, detail="无激活的工作区")
+        raise HTTPException(status_code=404, detail=f"工作区未注册: {ws_name}")
 
     # V3 修复：subdir 必须解析在工作区根之内（防路径穿越枚举任意目录）
     if subdir:
-        root = safe_resolve(subdir)
+        root = safe_resolve(subdir, ws_name)
         if root is None:
             raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界: {subdir}")
     else:
@@ -155,7 +172,6 @@ def api_spec_files(subdir: str = ""):
     if not root.is_dir():
         raise HTTPException(status_code=404, detail=f"目录不存在: {subdir}")
 
-    import json
     files = []
     for f in sorted(root.rglob("*")):
         if f.is_file():
@@ -167,11 +183,11 @@ def api_spec_files(subdir: str = ""):
 
 
 @router.get("/read-file")
-def api_read_file(path: str):
-    """读取当前激活工作区的文件。"""
-    resolved = safe_resolve(path)
+def api_read_file(path: str, ws_name: str = Depends(resolve_workspace)):
+    """读取请求工作区的文件（授权校验由 resolve_workspace 完成）。"""
+    resolved = safe_resolve(path, ws_name)
     if resolved is None:
-        raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界或工作区未激活: {path}")
+        raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界或工作区不存在: {path}")
     if not resolved.is_file():
         raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
 

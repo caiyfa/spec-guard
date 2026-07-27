@@ -1,8 +1,9 @@
 """测试计划 API：CRUD + 按计划执行 + 计划历史"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from services.auth import CurrentUser, optional_workspace, require_role
 from services.plan_store import (
     list_plans, get_plan, save_plan, delete_plan,
     resolve_scenarios, list_plan_history, import_from_delta,
@@ -38,13 +39,13 @@ class PlanBody(BaseModel):
     tags: list = []
 
 
-@router.put("/{plan_id}")
+@router.put("/{plan_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_save_plan(plan_id: str, body: PlanBody):
     """创建/更新计划"""
     return save_plan(plan_id, body.model_dump())
 
 
-@router.delete("/{plan_id}")
+@router.delete("/{plan_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_delete_plan(plan_id: str):
     """删除计划"""
     if not delete_plan(plan_id):
@@ -53,8 +54,10 @@ def api_delete_plan(plan_id: str):
 
 
 @router.post("/{plan_id}/run")
-async def api_run_plan(plan_id: str):
-    """按计划执行（支持断点）
+async def api_run_plan(plan_id: str,
+                       user: CurrentUser = Depends(require_role("admin", "tester")),
+                       workspace: str = Depends(optional_workspace)):
+    """按计划执行（支持断点 + 多用户 FIFO 队列）
 
     与 runs/trigger 同一 covers 前置闸（计划驱动是主执行路径，不能成为闸口漏洞）。
     """
@@ -82,12 +85,15 @@ async def api_run_plan(plan_id: str):
             env=plan.get("env", "sit"),
             plan_id=plan_id,
             strict_deps=strict_deps,
+            emp_no=user.emp_no,
+            workspace=workspace,
         )
     else:
         target = " or ".join(scenario_ids)
         result = await run_manager.trigger(
             scope="scenario", target=target, env=plan.get("env", "sit"),
             plan_id=plan_id, strict_deps=strict_deps,
+            emp_no=user.emp_no, workspace=workspace,
         )
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
@@ -107,7 +113,7 @@ def api_import_preview(delta_code: str):
     return result
 
 
-@router.post("/import-confirm/{delta_code}")
+@router.post("/import-confirm/{delta_code}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_import_confirm(delta_code: str, body: ImportConfirmBody):
     """确认导入：创建工作副本 + 生成计划"""
     result = import_confirm(delta_code, body.selected_files)
@@ -116,7 +122,7 @@ def api_import_confirm(delta_code: str, body: ImportConfirmBody):
     return result
 
 
-@router.post("/import/{delta_code}")
+@router.post("/import/{delta_code}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_import_plan(delta_code: str):
     """从 spec delta 导入生成测试计划"""
     result = import_from_delta(delta_code)
@@ -144,7 +150,7 @@ class WorkingCopyBody(BaseModel):
     content: str
 
 
-@router.put("/{plan_id}/working-copies/{filename}")
+@router.put("/{plan_id}/working-copies/{filename}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_save_working_copy(plan_id: str, filename: str, body: WorkingCopyBody):
     """保存工作副本（不影响源文件）"""
     if not save_plan_working_copy(plan_id, filename, body.content):

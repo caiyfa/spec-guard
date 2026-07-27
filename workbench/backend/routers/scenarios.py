@@ -1,8 +1,9 @@
 """场景管理 API：列表 / DAG / YAML 读写 / 校验 / 依赖编辑 / 漂移报告"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from services.auth import require_role
 from services.scenario_store import (
     list_scenarios, get_dag, get_scenario_yaml,
     save_scenario_yaml, validate_dag, get_drift_report,
@@ -51,7 +52,7 @@ class SaveScenarioBody(BaseModel):
     content: str
 
 
-@router.put("/{scenario_id}")
+@router.put("/{scenario_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_save_scenario(scenario_id: str, body: SaveScenarioBody):
     """保存场景 YAML（校验后写入）"""
     result = save_scenario_yaml(scenario_id, body.content)
@@ -70,7 +71,7 @@ class DepEditBody(BaseModel):
     mode: str = "shared"  # shared | exclusive（add 时生效）
 
 
-@router.post("/{scenario_id}/deps")
+@router.post("/{scenario_id}/deps", dependencies=[Depends(require_role("admin", "tester"))])
 def api_edit_dep(scenario_id: str, body: DepEditBody):
     """增删场景依赖（行级外科手术，保注释；add 前服务端环校验）"""
     if body.action not in ("add", "remove"):
