@@ -45,14 +45,14 @@ def workspace(tmp_path):
 # ══════════════════════════════════════════════════════════
 
 class TestToolRegistration:
-    def test_10_tools_registered(self):
-        assert len(ALL_TOOLS) == 10
+    def test_11_tools_registered(self):
+        assert len(ALL_TOOLS) == 11
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
         expected = {"read_spec", "list_spec_files", "list_scenarios",
                      "read_scenario", "next_scenario_id",
-                     "query_registry", "write_draft", "validate",
+                     "query_registry", "write_draft", "undo_draft", "validate",
                      "read_run_report", "db_evidence"}
         assert names == expected
 

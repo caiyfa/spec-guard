@@ -1,9 +1,11 @@
-/** Plans — 测试计划管理：Delta 导入（预览→选择→确认）+ 执行 + 历史 */
+/** Plans — 场景管理（测试计划 + 新建场景 两个 Tab） */
 import { useEffect, useState } from 'react';
 import { plansApi, scenariosApi, specApi } from '../api';
 import type { TestPlan, Scenario, RunSummary, DeltaInfo, ImportPreview } from '../api';
+import ScenarioCreateTab from '../components/ScenarioCreateTab';
 
 export default function Plans() {
+  const [activeTab, setActiveTab] = useState<'plans' | 'create'>('plans');
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [deltas, setDeltas] = useState<DeltaInfo[]>([]);
@@ -105,7 +107,35 @@ export default function Plans() {
   };
 
   return (
-    <div className="h-full flex gap-3">
+    <div className="h-full flex flex-col">
+      {/* Tab 导航 */}
+      <div className="flex items-center gap-1 mb-3 border-b border-border">
+        <button
+          onClick={() => setActiveTab('plans')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === 'plans'
+              ? 'text-info border-info'
+              : 'text-gray-500 border-transparent hover:text-gray-300'
+          }`}
+        >
+          测试计划
+        </button>
+        <button
+          onClick={() => setActiveTab('create')}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === 'create'
+              ? 'text-info border-info'
+              : 'text-gray-500 border-transparent hover:text-gray-300'
+          }`}
+        >
+          ✨ 新建场景
+        </button>
+      </div>
+
+      {activeTab === 'create' ? (
+        <ScenarioCreateTab />
+      ) : (
+      <div className="h-full flex gap-3">
       {/* 计划列表 */}
       <div className="w-[320px] flex-shrink-0 flex flex-col border border-border rounded-lg overflow-hidden">
         <div className="px-3 py-2 border-b border-border flex items-center justify-between bg-surface-2">
@@ -357,6 +387,8 @@ export default function Plans() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }

@@ -39,7 +39,8 @@ TOOLS = [
     Tool(
         name="write_draft",
         description="写入草稿到 drafts/ 目录。路径限定（仅 drafts/ 可写），禁止覆盖已有文件"
-                    "（mode=create 时已存在返回 OVERWRITE_DENIED），支持 patch 模式（追加到已有文件）。",
+                    "（mode=create 时已存在返回 OVERWRITE_DENIED），支持 patch 模式（追加到已有文件）。"
+                    "写入前自动备份到 .bak 文件（支持 undo_draft 回滚）。",
         inputSchema={
             "type": "object",
             "properties": {
@@ -52,13 +53,35 @@ TOOLS = [
             "required": ["filename", "content"]
         }
     ),
+    Tool(
+        name="undo_draft",
+        description="撤销最后一次 write_draft 操作：从 .bak 备份恢复文件内容。"
+                    "如果没有 .bak 文件则返回错误。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "要撤销的草稿文件名"}
+            },
+            "required": ["filename"]
+        }
+    ),
 ]
 
 
 async def handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "write_draft":
         return _handle_write_draft(arguments)
+    elif name == "undo_draft":
+        return _handle_undo_draft(arguments)
     return []
+
+
+def _backup_draft(filename: str):
+    """写入前备份已有文件到 .bak（G4-A 操作撤销）。"""
+    draft_path = DRAFTS_ROOT / filename
+    bak_path = DRAFTS_ROOT / f"{filename}.bak"
+    if draft_path.exists():
+        bak_path.write_text(draft_path.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def _handle_write_draft(arguments: dict) -> list[TextContent]:
@@ -87,6 +110,8 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         }, ensure_ascii=False, indent=2))]
 
     elif mode == "patch":
+        # G4-A: patch 前备份
+        _backup_draft(filename)
         existing = ""
         if draft_path.exists():
             existing = draft_path.read_text(encoding="utf-8")
@@ -96,6 +121,30 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
             "path": str(draft_path.relative_to(SG_ROOT)), "size": len(merged),
+            "backup": f"{filename}.bak",
         }, ensure_ascii=False, indent=2))]
 
     return [TextContent(type="text", text=f"错误：未知模式: {mode}")]
+
+
+def _handle_undo_draft(arguments: dict) -> list[TextContent]:
+    """G4-A: 从 .bak 备份恢复草稿文件。"""
+    filename = arguments.get("filename", "")
+    if not filename:
+        return [TextContent(type="text", text="错误：缺少 filename 参数")]
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return [TextContent(type="text", text="OUT_OF_SCOPE: filename 不允许包含路径分隔符或 ..")]
+
+    bak_path = DRAFTS_ROOT / f"{filename}.bak"
+    draft_path = DRAFTS_ROOT / filename
+
+    if not bak_path.exists():
+        return [TextContent(type="text", text=f"错误：无 .bak 备份文件: {filename}.bak")]
+
+    # 恢复
+    draft_path.write_text(bak_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return [TextContent(type="text", text=json.dumps({
+        "ok": True, "action": "undo",
+        "path": str(draft_path.relative_to(SG_ROOT)),
+        "restored_from": f"{filename}.bak",
+    }, ensure_ascii=False, indent=2))]

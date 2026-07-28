@@ -3,12 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from services.auth import require_role
+from services.auth import require_role, resolve_workspace
 from services.scenario_store import (
     list_scenarios, get_dag, get_scenario_yaml,
     save_scenario_yaml, validate_dag, get_drift_report,
 )
-from services import deps_editor
+from services import deps_editor, scenario_meta
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
 
@@ -38,6 +38,57 @@ def api_drift_report():
     """版本漂移/缺失报告（DRIFT/ORPHANED 清单）"""
     return get_drift_report()
 
+
+# ══════════════════════════════════════════════════════════
+# 场景创建向导（G2-1）
+# ══════════════════════════════════════════════════════════
+
+class CreateScenarioBody(BaseModel):
+    name: str
+    module: str = ""
+
+
+@router.post("/create", dependencies=[Depends(require_role("admin", "tester"))])
+def api_create_scenario(body: CreateScenarioBody, ws_name: str = Depends(resolve_workspace)):
+    """创建场景元数据（向导 Step 1）。"""
+    meta = scenario_meta.create_meta(
+        name=body.name, module=body.module or "", workspace=ws_name or "",
+    )
+    return meta
+
+
+@router.get("/meta-list", dependencies=[Depends(require_role("admin", "tester"))])
+def api_list_scenario_meta(ws_name: str = Depends(resolve_workspace)):
+    """列出场景元数据（按工作区筛选）。"""
+    metas = scenario_meta.list_meta(workspace=ws_name or "")
+    return {"metas": metas}
+
+
+class UpdateInfoPackBody(BaseModel):
+    files: list[str]
+
+
+@router.put("/{scenario_id}/info-pack", dependencies=[Depends(require_role("admin", "tester"))])
+def api_update_info_pack(scenario_id: str, body: UpdateInfoPackBody):
+    """更新基础信息包文件列表（向导 Step 2）。"""
+    result = scenario_meta.update_info_pack(scenario_id, body.files)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"场景元数据不存在: {scenario_id}")
+    return result
+
+
+@router.get("/{scenario_id}/meta", dependencies=[Depends(require_role("admin", "tester"))])
+def api_get_scenario_meta(scenario_id: str):
+    """获取场景元数据 + 基础信息包。"""
+    meta = scenario_meta.get_meta(scenario_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail=f"场景元数据不存在: {scenario_id}")
+    return meta
+
+
+# ══════════════════════════════════════════════════════════
+# 场景 YAML 读写
+# ══════════════════════════════════════════════════════════
 
 @router.get("/{scenario_id}")
 def api_get_scenario(scenario_id: str):

@@ -193,3 +193,57 @@ def api_read_file(path: str, ws_name: str = Depends(resolve_workspace)):
 
     content = resolved.read_text(encoding="utf-8")
     return {"path": path, "content": content}
+
+
+@router.get("/search")
+def api_search_files(q: str = "", ws_name: str = Depends(resolve_workspace)):
+    """在工作区文件中搜索内容（返回匹配文件路径 + 上下文片段）。
+
+    限制：只搜索文本文件（md/yaml/yml/json/txt/html/csv），单文件上限 512KB。
+    """
+    if not q or len(q) < 2:
+        return {"results": [], "query": q}
+    ws = get_workspace(ws_name)
+    if not ws:
+        raise HTTPException(status_code=404, detail=f"工作区未注册: {ws_name}")
+
+    TEXT_EXTS = {".md", ".markdown", ".yaml", ".yml", ".json", ".txt", ".html", ".htm", ".csv"}
+    MAX_FILE_SIZE = 512 * 1024  # 512KB
+    results = []
+    q_lower = q.lower()
+
+    for f in sorted(ws.root.rglob("*")):
+        if not f.is_file():
+            continue
+        ext = f.suffix.lower()
+        if ext not in TEXT_EXTS:
+            continue
+        if f.stat().st_size > MAX_FILE_SIZE:
+            continue
+        rel = str(f.relative_to(ws.root)).replace("\\", "/")
+        # 文件名匹配也算结果
+        name_match = q_lower in rel.lower()
+        try:
+            content = f.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if name_match:
+            # 文件名匹配，取前 200 字符作为预览
+            preview = content[:200].replace("\n", " ")
+            results.append({"path": rel, "match_type": "filename", "preview": preview, "size": f.stat().st_size})
+            continue
+        # 内容搜索：找第一个匹配行的上下文
+        for i, line in enumerate(content.splitlines()):
+            if q_lower in line.lower():
+                start = max(0, i - 1)
+                end = min(len(content.splitlines()), i + 2)
+                context = "\n".join(content.splitlines()[start:end])
+                results.append({
+                    "path": rel, "match_type": "content", "line": i + 1,
+                    "preview": context[:300], "size": f.stat().st_size,
+                })
+                break  # 每个文件只取第一个匹配
+        if len(results) >= 50:
+            break  # 限制结果数量
+
+    return {"results": results, "query": q}

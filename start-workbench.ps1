@@ -7,8 +7,8 @@
     - 依赖自检：Python 关键模块缺失自动 pip install；package.json 比 node_modules 新时自动 npm install
     - 后端：workbench/backend → uvicorn --reload :9100（SG_AUTH_MODE=mock，改代码自动重载）
     - 前端：workbench/frontend → npm run dev :5173（热更新）
-    - 端口归属校验：9100/5173 被非 SpecGuard 进程占用时报错退出（不误判"已在运行"）
-    - 幂等：SpecGuard 服务已在运行则跳过
+    - 端口归属校验：9100/5173 被非 SpecGuard 进程占用时报错退出
+    - 幂等重启：SpecGuard 服务已在运行则先终止再重启（确保运行最新代码）
     生产部署请使用 serve-prod.ps1（单端口 9100，UAC SSO）。
 
 .PARAMETER NoBrowser
@@ -45,6 +45,26 @@ function Test-OurFrontend {
     } catch { return $false }
 }
 
+function Stop-PortProcess([int]$Port) {
+    <# 终止占用指定端口的监听进程（递归杀子进程） #>
+    $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+    foreach ($conn in $conns) {
+        $procId = $conn.OwningProcess
+        if (-not $procId) { continue }
+        try {
+            $proc = Get-Process -Id $procId -ErrorAction Stop
+            # 递归终止子进程
+            function Kill-Tree([int]$Id) {
+                $children = Get-CimInstance Win32_Process -Filter "ParentProcessId=$Id" -ErrorAction SilentlyContinue
+                foreach ($child in $children) { Kill-Tree $child.ProcessId }
+                Stop-Process -Id $Id -Force -ErrorAction SilentlyContinue
+            }
+            Kill-Tree $procId
+            Write-Host "  已终止进程 $procId ($($proc.ProcessName))" -ForegroundColor DarkGray
+        } catch {}
+    }
+}
+
 Write-Host "=== SpecGuard Workbench 开发模式启动 ===" -ForegroundColor Cyan
 
 # ── 依赖自检：Python ──
@@ -77,35 +97,39 @@ if ($needNpm) {
 # ── 后端（FastAPI :9100，--reload 热重载 + mock 认证）──
 if (Test-Port 9100) {
     if (Test-OurBackend) {
-        Write-Host "[跳过] 后端已在运行  http://127.0.0.1:9100" -ForegroundColor Yellow
+        Write-Host "[重启] 后端已在运行，先终止旧进程..." -ForegroundColor Yellow
+        Stop-PortProcess 9100
+        Start-Sleep -Seconds 1
     } else {
         Write-Host "[错误] 端口 9100 被其他进程占用（非 SpecGuard），请先释放该端口" -ForegroundColor Red
         exit 1
     }
-} else {
-    $authMode = if ($env:SG_AUTH_MODE) { $env:SG_AUTH_MODE } else { 'mock' }
-    Write-Host "[启动] 后端 FastAPI  http://127.0.0.1:9100  (SG_AUTH_MODE=$authMode, --reload)" -ForegroundColor Green
-    Start-Process pwsh -ArgumentList @(
-        '-NoExit', '-Command',
-        "Set-Location '$BackendDir'; if (-not `$env:SG_AUTH_MODE) { `$env:SG_AUTH_MODE = '$authMode' }; python -m uvicorn main:app --reload --host 127.0.0.1 --port 9100"
-    ) -WindowStyle Normal
 }
+
+$authMode = if ($env:SG_AUTH_MODE) { $env:SG_AUTH_MODE } else { 'mock' }
+Write-Host "[启动] 后端 FastAPI  http://127.0.0.1:9100  (SG_AUTH_MODE=$authMode, --reload)" -ForegroundColor Green
+Start-Process pwsh -ArgumentList @(
+    '-NoExit', '-Command',
+    "Set-Location '$BackendDir'; if (-not `$env:SG_AUTH_MODE) { `$env:SG_AUTH_MODE = '$authMode' }; python -m uvicorn main:app --reload --reload-dir '$BackendDir' --reload-dir '$SgRoot\agent' --reload-dir '$SgRoot\mcp_server' --reload-dir '$SgRoot\engine' --reload-dir '$SgRoot\specstd' --reload-dir '$SgRoot\systems' --host 127.0.0.1 --port 9100"
+) -WindowStyle Normal
 
 # ── 前端（Vite :5173）──
 if (Test-Port 5173) {
     if (Test-OurFrontend) {
-        Write-Host "[跳过] 前端已在运行  http://localhost:5173" -ForegroundColor Yellow
+        Write-Host "[重启] 前端已在运行，先终止旧进程..." -ForegroundColor Yellow
+        Stop-PortProcess 5173
+        Start-Sleep -Seconds 1
     } else {
         Write-Host "[错误] 端口 5173 被其他进程占用（非 SpecGuard 前端），请先释放该端口" -ForegroundColor Red
         exit 1
     }
-} else {
-    Write-Host "[启动] 前端 Vite     http://localhost:5173" -ForegroundColor Green
-    Start-Process pwsh -ArgumentList @(
-        '-NoExit', '-Command',
-        "Set-Location '$FrontendDir'; npm run dev -- --port 5173 --strictPort"
-    ) -WindowStyle Normal
 }
+
+Write-Host "[启动] 前端 Vite     http://localhost:5173" -ForegroundColor Green
+Start-Process pwsh -ArgumentList @(
+    '-NoExit', '-Command',
+    "Set-Location '$FrontendDir'; npm run dev -- --port 5173 --strictPort"
+) -WindowStyle Normal
 
 # ── 健康等待（最长 60s）──
 Write-Host "等待服务就绪" -NoNewline

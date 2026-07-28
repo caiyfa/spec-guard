@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
 import RunControl from './pages/RunControl';
@@ -23,21 +23,73 @@ const ALL = ['admin', 'tester', 'viewer'];
 const TESTER_UP = ['admin', 'tester'];
 const ADMIN_ONLY = ['admin'];
 
-const NAV = [
-  { to: '/', label: '📊 总览', end: true, roles: ALL },
-  { to: '/spec', label: '🛡 Spec 校验', roles: ALL },
-  { to: '/plans', label: '📋 测试场景管理', roles: TESTER_UP },
-  { to: '/dag', label: '🔀 DAG 编排', roles: ALL },
-  { to: '/run', label: '▶️ 测试执行', roles: TESTER_UP },
-  { to: '/history', label: '📈 历史对比', roles: ALL },
-  { to: '/agent', label: '🤖 Agent 生成', roles: TESTER_UP },
-  { to: '/drafts', label: '📝 草稿评审', roles: TESTER_UP },
-  { to: '/spec-center', label: '📄 Spec 文档', roles: ALL },
-  { to: '/attribution', label: '🔍 失败归因', roles: ALL },
-  { to: '/workspace', label: '🗂 工作区', roles: ADMIN_ONLY },
-  { to: '/feedback', label: '🔄 反哺闭环', roles: TESTER_UP },
-  { to: '/admin-users', label: '👥 用户', roles: ADMIN_ONLY },
-  { to: '/settings', label: '⚙️ 环境设置', roles: ADMIN_ONLY },
+// ── 菜单结构：一级分组 > 二级菜单项，按工作流排序 ──
+interface NavItem {
+  to: string;
+  label: string;
+  end?: boolean;
+  roles: string[];
+}
+
+interface NavGroup {
+  label: string;
+  icon: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: '总览',
+    icon: '📊',
+    items: [{ to: '/', label: '仪表盘', end: true, roles: ALL }],
+  },
+  {
+    label: '工作区',
+    icon: '🗂',
+    items: [
+      { to: '/workspace', label: '工作区管理', roles: ADMIN_ONLY },
+      { to: '/settings', label: '系统设置', roles: ADMIN_ONLY },
+      { to: '/admin-users', label: '用户管理', roles: ADMIN_ONLY },
+    ],
+  },
+  {
+    label: '需求',
+    icon: '📋',
+    items: [
+      { to: '/spec-center', label: '文档中心', roles: ALL },
+      { to: '/spec', label: '合规校验', roles: ALL },
+    ],
+  },
+  {
+    label: '场景',
+    icon: '🧩',
+    items: [
+      { to: '/plans', label: '场景管理', roles: TESTER_UP },
+      { to: '/dag', label: 'DAG 编排', roles: ALL },
+    ],
+  },
+  {
+    label: 'Agent',
+    icon: '🤖',
+    items: [
+      { to: '/agent', label: '对话', roles: TESTER_UP },
+      { to: '/drafts', label: '草稿评审', roles: TESTER_UP },
+    ],
+  },
+  {
+    label: '执行',
+    icon: '▶️',
+    items: [
+      { to: '/run', label: '测试执行', roles: TESTER_UP },
+      { to: '/history', label: '历史对比', roles: ALL },
+      { to: '/attribution', label: '失败归因', roles: ALL },
+    ],
+  },
+  {
+    label: '反哺',
+    icon: '🔄',
+    items: [{ to: '/feedback', label: '反哺闭环', roles: TESTER_UP }],
+  },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -45,6 +97,14 @@ const ROLE_LABEL: Record<string, string> = {
   tester: '测试',
   viewer: '只读',
 };
+
+// 过滤掉当前角色无权限的分组/菜单项
+function filterNavGroups(role: string): NavGroup[] {
+  return NAV_GROUPS.map(g => ({
+    ...g,
+    items: g.items.filter(i => i.roles.includes(role)),
+  })).filter(g => g.items.length > 0);
+}
 
 export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -63,8 +123,6 @@ export default function App() {
     authApi.me()
       .then(setUser)
       .catch(() => {
-        // 401 由 api.ts 统一处理（已跳 /login）；
-        // 其他失败（网络异常/坏 token 抛错）也必须跳登录页，否则永远卡在"加载用户信息…"
         if (!window.location.pathname.startsWith('/login')) {
           session.clearToken();
           window.location.href = '/login';
@@ -105,82 +163,205 @@ export default function App() {
     );
   }
 
-  const visibleNav = NAV.filter(n => n.roles.includes(user.role));
-
   return (
     <BrowserRouter>
-      <div className="flex h-screen overflow-hidden">
-        {/* 侧边栏 */}
-        <aside className="w-52 flex-shrink-0 bg-surface-2 border-r border-border flex flex-col">
-          <div className="p-4 border-b border-border">
-            <h1 className="text-sm font-bold text-info">🛡 SpecGuard</h1>
-            <p className="text-[11px] text-gray-500 mt-0.5">测试流水线工作台</p>
-          </div>
-          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-            {visibleNav.map((n) => (
-              <NavLink
-                key={n.to}
-                to={n.to}
-                end={n.end}
-                className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive
-                      ? 'bg-info/10 text-info font-medium'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-surface-3'
-                  }`
-                }
-              >
-                {n.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="p-3 border-t border-border text-[10px] text-gray-600">
-            engine 不可变 · 仅读写 YAML + reports
-          </div>
-        </aside>
-
-        {/* 主区：顶栏 + 内容 */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* 顶栏：工作区选择器 + 用户区 */}
-          <header className="flex-shrink-0 h-12 bg-surface-2 border-b border-border flex items-center justify-between px-4">
-            <WorkspaceSelector user={user} />
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-gray-300">{user.name}</span>
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                user.role === 'admin' ? 'bg-purple-900/50 text-purple-300'
-                : user.role === 'tester' ? 'bg-info/15 text-info'
-                : 'bg-gray-700 text-gray-400'
-              }`}>{ROLE_LABEL[user.role] || user.role}</span>
-              <button
-                onClick={handleLogout}
-                className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                登出
-              </button>
-            </div>
-          </header>
-
-          {/* 主内容区 */}
-          <main className="flex-1 overflow-y-auto p-6">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/spec" element={<SpecValidation />} />
-              <Route path="/plans" element={<Plans />} />
-              <Route path="/run" element={<RunControl />} />
-              <Route path="/dag" element={<DagEditor />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/agent" element={<AgentChat />} />
-              <Route path="/drafts" element={<Drafts />} />
-              <Route path="/spec-center" element={<SpecCenter />} />
-              <Route path="/attribution" element={<Attribution />} />
-              <Route path="/workspace" element={<WorkspaceSettings />} />
-              <Route path="/feedback" element={<Feedback />} />
-              <Route path="/admin-users" element={<AdminUsers />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
+      <AppContent user={user} onLogout={handleLogout} />
     </BrowserRouter>
   );
+}
+
+function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [drawerOpen, setDrawerOpen] = useState(() => {
+    return localStorage.getItem('sg_drawer_open') !== 'false';
+  });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    // 默认展开当前路由所在分组
+    const groups = filterNavGroups(user.role);
+    const current = groups.find(g =>
+      g.items.some(i => i.to === location.pathname || (i.to !== '/' && location.pathname.startsWith(i.to)))
+    );
+    return new Set(current ? [current.label] : []);
+  });
+
+  const noPadding = location.pathname === '/agent';
+  const visibleGroups = filterNavGroups(user.role);
+
+  const toggleDrawer = () => {
+    const next = !drawerOpen;
+    setDrawerOpen(next);
+    localStorage.setItem('sg_drawer_open', String(next));
+  };
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  // 判断分组是否应该高亮（包含当前路由）
+  const isGroupActive = (group: NavGroup) =>
+    group.items.some(i =>
+      i.to === location.pathname ||
+      (i.to !== '/' && location.pathname.startsWith(i.to))
+    );
+
+  return (
+    <div className="flex h-screen overflow-hidden">
+      {/* 抽屉式侧边栏 */}
+      <aside
+        style={{ width: drawerOpen ? '208px' : '0px', minWidth: 0 }}
+        className="flex-shrink-0 bg-surface-2 border-r border-border flex flex-col overflow-hidden"
+      >
+        {/* Logo 区 */}
+        <div className="p-4 border-b border-border flex-shrink-0">
+          <h1 className="text-sm font-bold text-info whitespace-nowrap">🛡 SpecGuard</h1>
+          <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">测试流水线工作台</p>
+        </div>
+
+        {/* 菜单区 */}
+        <nav className="flex-1 p-1.5 overflow-y-auto">
+          {visibleGroups.map(group => {
+            const isExpanded = expandedGroups.has(group.label);
+            const isActive = isGroupActive(group);
+            const isSingle = group.items.length === 1;
+            const item = group.items[0];
+
+            // 单项分组：直接渲染为链接
+            if (isSingle) {
+              return (
+                <NavLink
+                  key={group.label}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive: a }) =>
+                    `flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors whitespace-nowrap ${
+                      a
+                        ? 'bg-info/10 text-info font-medium'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-surface-3'
+                    }`
+                  }
+                >
+                  <span className="text-xs">{group.icon}</span>
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            }
+
+            // 多项分组：可折叠
+            return (
+              <div key={group.label} className="mb-0.5">
+                <button
+                  onClick={() => toggleGroup(group.label)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'text-gray-200 font-medium'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
+                  }`}
+                >
+                  <span className="text-xs">{group.icon}</span>
+                  <span className="flex-1 text-left">{group.label}</span>
+                  <span className="text-[10px] text-gray-600">{isExpanded ? '▼' : '▶'}</span>
+                </button>
+                {isExpanded && (
+                  <div className="ml-3 border-l border-border/50 pl-1 mt-0.5 space-y-0.5">
+                    {group.items.map(item => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.end}
+                        className={({ isActive: a }) =>
+                          `block px-2.5 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
+                            a
+                              ? 'bg-info/10 text-info font-medium'
+                              : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
+                          }`
+                        }
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="p-3 border-t border-border text-[10px] text-gray-600 flex-shrink-0 whitespace-nowrap">
+          engine 不可变 · 仅读写 YAML + reports
+        </div>
+      </aside>
+
+      {/* 主区：顶栏 + 内容 */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* 顶栏：抽屉开关 + 工作区选择器 + 用户区 */}
+        <header className="flex-shrink-0 h-12 bg-surface-2 border-b border-border flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            {/* 抽屉开关 */}
+            <button
+              onClick={toggleDrawer}
+              className="text-gray-400 hover:text-gray-200 transition-colors p-1 rounded hover:bg-surface-3"
+              title={drawerOpen ? '收起菜单' : '展开菜单'}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2">
+                {drawerOpen ? (
+                  <path d="M3 3 L15 3 M3 9 L15 9 M3 15 L15 15" />
+                ) : (
+                  <path d="M3 3 L15 3 M3 9 L15 9 M3 15 L15 15" />
+                )}
+              </svg>
+            </button>
+            <WorkspaceSelector user={user} />
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-gray-300">{user.name}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${
+              user.role === 'admin' ? 'bg-purple-900/50 text-purple-300'
+              : user.role === 'tester' ? 'bg-info/15 text-info'
+              : 'bg-gray-700 text-gray-400'
+            }`}>{ROLE_LABEL[user.role] || user.role}</span>
+            <button
+              onClick={onLogout}
+              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              登出
+            </button>
+          </div>
+        </header>
+
+        {/* 主内容区 */}
+        <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/spec" element={<SpecValidation />} />
+            <Route path="/plans" element={<Plans />} />
+            <Route path="/run" element={<RunControl />} />
+            <Route path="/dag" element={<DagEditor />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/agent" element={<AgentChat />} />
+            <Route path="/drafts" element={<Drafts />} />
+            {/* /scenario-create 已合并到 /plans */}
+            <Route path="/scenario-create" element={<RedirectToPlans />} />
+            <Route path="/spec-center" element={<SpecCenter />} />
+            <Route path="/attribution" element={<Attribution />} />
+            <Route path="/workspace" element={<WorkspaceSettings />} />
+            <Route path="/feedback" element={<Feedback />} />
+            <Route path="/admin-users" element={<AdminUsers />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function RedirectToPlans() {
+  const navigate = useNavigate();
+  useEffect(() => { navigate('/plans'); }, [navigate]);
+  return null;
 }

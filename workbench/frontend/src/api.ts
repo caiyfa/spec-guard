@@ -359,14 +359,99 @@ export const workspaceApi = {
     request<{ files: any[]; workspace: string }>(`/workspace/spec-files${subdir ? `?subdir=${subdir}` : ''}`),
   readFile: (path: string) =>
     request<{ path: string; content: string }>(`/workspace/read-file?path=${encodeURIComponent(path)}`),
+  search: (q: string) =>
+    request<{ results: { path: string; match_type: string; line?: number; preview: string; size: number }[]; query: string }>(`/workspace/search?q=${encodeURIComponent(q)}`),
 };
 
 // ── Agent 对话 ──
+export interface AgentMode {
+  name: string;
+  temperature: number;
+  tools: string[];
+  description: string;
+  prompt_fragment: string;
+}
+
+export interface AgentSkill {
+  name: string;
+  description: string;
+  trigger: string;
+  content: string;
+}
+
 export const agentApi = {
-  listSessions: () => request<{ sessions: any[] }>('/agent/sessions'),
-  getSession: (id: string) => request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}`),
-  chat: (body: { message: string; session_id?: string; max_turns?: number }) =>
+  listSessions: (workspace = '') =>
+    request<{ sessions: any[] }>(`/agent/sessions${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+  getSession: (id: string, workspace = '') =>
+    request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+  exportSession: (id: string, workspace = '') =>
+    request<any>(`/agent/sessions/${id}/export${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+  chat: (body: { message: string; session_id?: string; max_turns?: number; workspace?: string; mode?: string; scenario_id?: string }) =>
     request<any>('/agent/chat', { method: 'POST', body: JSON.stringify(body) }),
+  getModes: () =>
+    request<{ modes: AgentMode[] }>('/agent/modes'),
+  getSkills: () =>
+    request<{ skills: AgentSkill[] }>('/agent/skills'),
+};
+
+// ── LLM 配置（G1-1）──
+export interface LLMConfig {
+  base_url: string;
+  api_key: string;
+  model: string;
+  timeout: string;
+  temperature: string;
+  // 模型能力限制
+  max_context_tokens: string;
+  max_output_tokens: string;
+  // 思考/推理选项
+  thinking_enabled: string;
+  reasoning_effort: string;
+}
+
+export const settingsApi = {
+  getLLMConfig: () =>
+    request<{ config: LLMConfig; db_config: Record<string, string>; env_controlled: Record<string, boolean> }>('/settings/llm-config'),
+  saveLLMConfig: (config: LLMConfig) =>
+    request<{ ok: boolean; config: LLMConfig; db_config: Record<string, string>; probe: { ok: boolean; message: string } | null }>('/settings/llm-config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
+  probeLLM: (body: { base_url: string; api_key: string; model: string; timeout?: number }) =>
+    request<{ ok: boolean; message: string }>('/settings/llm-config/probe', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+};
+
+// ── 多模型配置 ──
+export interface ModelConfig {
+  id: string;
+  name: string;
+  base_url: string;
+  api_key: string;
+  model: string;
+  timeout: string;
+  temperature: string;
+  max_context_tokens: string;
+  max_output_tokens: string;
+  thinking_enabled: string;
+  reasoning_effort: string;
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const modelApi = {
+  list: () => request<{ models: ModelConfig[] }>('/settings/models'),
+  create: (data: Omit<ModelConfig, 'id' | 'is_default' | 'created_at' | 'updated_at'>) =>
+    request<ModelConfig>('/settings/models', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Omit<ModelConfig, 'id' | 'is_default' | 'created_at' | 'updated_at'>) =>
+    request<ModelConfig>(`/settings/models/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => request<{ ok: boolean }>(`/settings/models/${id}`, { method: 'DELETE' }),
+  setDefault: (id: string) => request<ModelConfig>(`/settings/models/${id}/default`, { method: 'POST' }),
+  probe: (id: string, data?: { base_url?: string; api_key?: string; model?: string }) =>
+    request<{ ok: boolean; message: string }>(`/settings/models/${id}/probe`, { method: 'POST', body: JSON.stringify(data || {}) }),
 };
 
 // ── 草稿区三道闸（D1）──
@@ -408,4 +493,30 @@ export const draftsApi = {
     }),
   discard: (filename: string) =>
     request<{ ok: boolean; trashed_to: string }>(`/drafts/${encodeURIComponent(filename)}/discard`, { method: 'POST' }),
+};
+
+// ── 场景创建向导（G2-1）──
+export interface ScenarioMeta {
+  id: string;
+  name: string;
+  module: string;
+  workspace: string;
+  info_pack: string[];
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const scenarioApi = {
+  create: (body: { name: string; module?: string }) =>
+    request<ScenarioMeta>('/scenarios/create', { method: 'POST', body: JSON.stringify(body) }),
+  getMeta: (id: string) =>
+    request<ScenarioMeta>(`/scenarios/${encodeURIComponent(id)}/meta`),
+  updateInfoPack: (id: string, files: string[]) =>
+    request<ScenarioMeta>(`/scenarios/${encodeURIComponent(id)}/info-pack`, {
+      method: 'PUT',
+      body: JSON.stringify({ files }),
+    }),
+  listMeta: () =>
+    request<{ metas: ScenarioMeta[] }>('/scenarios/meta-list'),
 };

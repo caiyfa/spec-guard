@@ -16,6 +16,9 @@ if str(SG_ROOT) not in sys.path:
 from agent.llm_client import LLMClient
 from agent.session import SessionManager
 from agent.events import EventBus
+from agent.mode_loader import load_mode, ModeDef
+from agent.compactor import should_compact, compact
+from agent.skill_loader import build_skills_xml
 
 # 默认使用 MCP server 的全部工具
 from mcp_server.tools import (
@@ -23,6 +26,13 @@ from mcp_server.tools import (
 )
 
 TOOL_MODULES = [spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution]
+
+# info_pack 工具（G2-1）：延迟导入，避免循环依赖
+try:
+    from mcp_server.tools import info_pack as _info_pack_mod
+    TOOL_MODULES.append(_info_pack_mod)
+except ImportError:
+    pass
 ALL_TOOLS = []
 for mod in TOOL_MODULES:
     ALL_TOOLS.extend(mod.TOOLS)
@@ -81,8 +91,9 @@ def _load_prompt_template() -> str:
     return _FALLBACK_PROMPT_TEMPLATE
 
 
-def build_system_prompt(format_spec_text: str = "", agents_md: str = "") -> str:
-    """构建 system prompt：format_spec + 工作区 AGENTS.md 全量注入。"""
+def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
+                         mode: str = "", scenario_context: str = "") -> str:
+    """构建 system prompt：format_spec + 工作区 AGENTS.md + 模式片段 + 场景上下文。"""
     if not format_spec_text:
         try:
             BACKEND_DIR = SG_ROOT / "workbench" / "backend"
@@ -100,9 +111,26 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "") -> str:
         except Exception:
             agents_md = "（工作区未激活）"
 
-    return (_load_prompt_template()
-            .replace("{{ format_spec }}", format_spec_text)
-            .replace("{{ agents_md }}", agents_md))
+    prompt = (_load_prompt_template()
+              .replace("{{ format_spec }}", format_spec_text)
+              .replace("{{ agents_md }}", agents_md))
+
+    # 追加模式 prompt 片段
+    if mode:
+        mode_def = load_mode(mode)
+        if mode_def and mode_def.prompt_fragment:
+            prompt += f"\n\n## 当前模式：{mode}\n\n{mode_def.prompt_fragment}"
+
+    # 追加场景上下文（基础信息包）
+    if scenario_context:
+        prompt += f"\n\n## 基础信息包\n\n{scenario_context}"
+
+    # G3-2: 注入技能 XML 块
+    skills_xml = build_skills_xml()
+    if skills_xml:
+        prompt += f"\n\n## 可用技能\n\n{skills_xml}"
+
+    return prompt
 
 
 # ══════════════════════════════════════════════════════════
@@ -112,12 +140,37 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "") -> str:
 class AgentRuntime:
     """核心循环：LLM → tools → LLM → ... → stop。"""
 
-    def __init__(self, llm: LLMClient, tools: list = None, max_turns: int = 12):
+    def __init__(self, llm: LLMClient, tools: list = None, max_turns: int = 12,
+                 mode_name: str = ""):
         self.llm = llm
         self.max_turns = max_turns
         self.events = EventBus()
-        self.tools = tools if tools is not None else ALL_TOOLS
-        self._tool_map = dict(TOOL_NAME_TO_MODULE)
+        self.mode_name = mode_name
+
+        # 按模式过滤工具
+        if tools is not None:
+            # 显式传入优先
+            self.tools = tools
+        elif mode_name:
+            mode_def = load_mode(mode_name)
+            if mode_def and mode_def.tools:
+                # 按白名单过滤
+                self.tools = [t for t in ALL_TOOLS if t.name in mode_def.tools]
+            elif mode_def and mode_def.tools == []:
+                # 空列表 = 无工具（纯对话）
+                self.tools = []
+            else:
+                self.tools = ALL_TOOLS
+        else:
+            self.tools = ALL_TOOLS
+
+        # 重建 tool_map（只包含过滤后的工具）
+        self._tool_map = {}
+        for tool in self.tools:
+            for mod in TOOL_MODULES:
+                if tool in mod.TOOLS:
+                    self._tool_map[tool.name] = mod
+                    break
 
     def run(self, system_prompt: str, user_message: str,
             session: Optional[SessionManager] = None,
@@ -138,15 +191,36 @@ class AgentRuntime:
         openai_tools = self._to_openai_tools()
 
         for turn in range(self.max_turns):
+            # G3-1: 超阈值时触发压缩
+            if should_compact(messages):
+                messages = compact(messages, self.llm)
+                self.events.emit("compaction", message_count=len(messages))
             self.events.emit("state", turn=turn, max_turns=self.max_turns)
 
             message, usage = self.llm.chat(messages, openai_tools)
-            messages.append(message)
 
+            # 发射事件（保留 reasoning_content 供前端显示）
             self.events.emit("assistant", message=message, turn=turn, usage=usage)
 
+            # 清理消息格式后再追加到 messages（避免回传时 API 400）
+            clean_message = {k: v for k, v in message.items() if k != "reasoning_content"}
+            # 确保 content 是字符串（某些 API 返回 null）
+            if clean_message.get("content") is None:
+                clean_message["content"] = ""
+            # 清理 tool_calls 格式（移除 index 等非标准字段）
+            if clean_message.get("tool_calls"):
+                cleaned_tc = []
+                for tc in clean_message["tool_calls"]:
+                    cleaned_tc.append({
+                        "id": tc.get("id", ""),
+                        "type": tc.get("type", "function"),
+                        "function": tc.get("function", {}),
+                    })
+                clean_message["tool_calls"] = cleaned_tc
+            messages.append(clean_message)
+
             # 检查是否有 tool_calls
-            tool_calls = message.get("tool_calls")
+            tool_calls = clean_message.get("tool_calls")
             if not tool_calls:
                 break  # LLM 返回最终回复，停止
 
@@ -165,6 +239,10 @@ class AgentRuntime:
             if session and session_id:
                 session.save(session_id, messages)
         else:
+            # G3-1: 熔断前也尝试压缩
+            if should_compact(messages):
+                messages = compact(messages, self.llm)
+                self.events.emit("compaction", message_count=len(messages))
             messages.append({"role": "system", "content": f"[FUSE] 已达到 max_turns={self.max_turns}，自动停止。"})
             self.events.emit("state", fused=True, max_turns=self.max_turns)
 
