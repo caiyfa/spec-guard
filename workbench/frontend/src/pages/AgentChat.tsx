@@ -85,9 +85,119 @@ interface ToolItem {
   assistantText?: string;
 }
 interface GroupedItem {
-  type: 'user' | 'assistant-text' | 'tool-group';
+  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete';
   content?: string;
   tools?: ToolItem[];
+  stepLabel?: string;   // 关联的待办步骤名称
+  stepIdx?: number;    // 步骤索引
+}
+
+// ── 简易 Markdown 渲染 ──
+function MarkdownText({ content }: { content: string }) {
+  // 分割代码块
+  const parts = content.split(/(```[\s\S]*?```)/g);
+  return (
+    <div className="text-sm text-gray-200">
+      {parts.map((part, i) => {
+        if (part.startsWith('```')) {
+          const lines = part.replace(/^```\w*\n?/, '').replace(/```$/, '').split('\n');
+          return <pre key={i} className="text-[11px] bg-black/30 rounded p-2 overflow-x-auto max-h-80 my-1 text-gray-400">{lines.join('\n')}</pre>;
+        }
+        // 渲染行级 markdown
+        const lines = part.split('\n');
+        const elements: JSX.Element[] = [];
+          let inTable = false;
+          let tableRows: string[][] = [];
+          let listItems: string[] = [];
+
+          const flushTable = () => {
+            if (tableRows.length > 0) {
+              elements.push(
+                <table key={`t${elements.length}`} className="w-full text-[11px] my-1 border-collapse">
+                  <thead>
+                    <tr>{tableRows[0].map((h, hi) => <th key={hi} className="border border-border px-1.5 py-0.5 text-left text-gray-300">{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.slice(2).map((row, ri) => (
+                      <tr key={ri}>{row.map((c, ci) => <td key={ci} className="border border-border px-1.5 py-0.5 text-gray-400">{c}</td>)} </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+              tableRows = [];
+            }
+          };
+          const flushList = () => {
+            if (listItems.length > 0) {
+              elements.push(
+                <ul key={`l${elements.length}`} className="list-disc pl-4 my-0.5">
+                  {listItems.map((li, li2) => <li key={li2} className="text-gray-300">{renderInlineMd(li)}</li>)}
+                </ul>
+              );
+              listItems = [];
+            }
+          };
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            // 表格行
+            if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+              flushList();
+              inTable = true;
+              tableRows.push(trimmed.split('|').slice(1, -1).map(c => c.trim()));
+              continue;
+            } else if (inTable) {
+              flushTable();
+              inTable = false;
+            }
+            // 分隔线
+            if (/^---+$/.test(trimmed)) { flushList(); elements.push(<hr key={`h${elements.length}`} className="border-border my-1" />); continue; }
+            // 标题
+            const h2 = trimmed.match(/^##\s+(.*)/); if (h2) { flushList(); elements.push(<h3 key={`h${elements.length}`} className="text-sm font-semibold text-gray-200 mt-1.5 mb-0.5">{renderInlineMd(h2[1])}</h3>); continue; }
+            const h3 = trimmed.match(/^###\s+(.*)/); if (h3) { flushList(); elements.push(<h4 key={`h${elements.length}`} className="text-xs font-semibold text-gray-300 mt-1 mb-0.5">{renderInlineMd(h3[1])}</h4>); continue; }
+            // 列表项
+            const li = trimmed.match(/^[-*]\s+(.*)/); if (li) { listItems.push(li[1]); continue; }
+            const ol = trimmed.match(/^\d+\.\s+(.*)/); if (ol) { listItems.push(ol[1]); continue; }
+            // 空行
+            if (!trimmed) { flushList(); continue; }
+            // 普通段落
+            flushList();
+            elements.push(<p key={`p${elements.length}`} className="text-gray-200 leading-relaxed">{renderInlineMd(trimmed)}</p>);
+          }
+          flushTable();
+          flushList();
+        return <div key={i}>{elements}</div>;
+      })}
+    </div>
+  );
+}
+
+// 渲染行内 Markdown（粗体、代码、链接）
+function renderInlineMd(text: string): JSX.Element {
+  const parts: JSX.Element[] = [];
+  let remaining = text;
+  let key = 0;
+  while (remaining) {
+    // 粗体 **text**
+    const bold = remaining.match(/^(.*?)\*\*(.+?)\*\*/s);
+    if (bold) {
+      if (bold[1]) parts.push(<span key={key++}>{bold[1]}</span>);
+      parts.push(<strong key={key++} className="font-semibold text-gray-100">{bold[2]}</strong>);
+      remaining = remaining.slice(bold[0].length);
+      continue;
+    }
+    // 行内代码 `code`
+    const code = remaining.match(/^(.*?)`(.+?)`/s);
+    if (code) {
+      if (code[1]) parts.push(<span key={key++}>{code[1]}</span>);
+      parts.push(<code key={key++} className="text-[11px] text-yellow-400/80 bg-black/30 rounded px-0.5">{code[2]}</code>);
+      remaining = remaining.slice(code[0].length);
+      continue;
+    }
+    parts.push(<span key={key++}>{remaining}</span>);
+    break;
+  }
+  return <>{parts}</>;
 }
 
 // ── 提取 <plan> 标签 ──
@@ -153,20 +263,49 @@ function inferPlanProgress(plan: string[], tools: ToolItem[]): number {
   return maxStep;
 }
 
-// ── 将扁平消息列表分组 ──
+// ── 将扁平消息列表分组（按待办步骤关联 + 完成提示） ──
 function groupMessages(messages: ChatMessage[]): GroupedItem[] {
   const groups: GroupedItem[] = [];
   let currentToolGroup: GroupedItem | null = null;
+  let lastStepIdx = -1;  // 上一个工具组对应的步骤索引
+
+  const flushToolGroup = () => {
+    if (currentToolGroup) {
+      groups.push(currentToolGroup);
+      // 如果该步骤所有工具都已完成，插入步骤完成提示
+      if (currentToolGroup.stepIdx !== undefined && currentToolGroup.stepIdx > lastStepIdx) {
+        const allDone = (currentToolGroup.tools || []).every(t => t.result !== undefined);
+        if (allDone && currentToolGroup.stepLabel) {
+          groups.push({ type: 'step-complete', content: currentToolGroup.stepLabel, stepIdx: currentToolGroup.stepIdx });
+          lastStepIdx = currentToolGroup.stepIdx;
+        }
+      }
+      currentToolGroup = null;
+    }
+  };
 
   for (const msg of messages) {
     if (msg.role === 'system') continue;
 
     if (msg.role === 'user') {
-      if (currentToolGroup) { groups.push(currentToolGroup); currentToolGroup = null; }
+      flushToolGroup();
       groups.push({ type: 'user', content: msg.content });
     } else if (msg.role === 'assistant') {
       if (msg.tool_calls && msg.tool_calls.length > 0) {
-        if (!currentToolGroup) currentToolGroup = { type: 'tool-group', tools: [] };
+        // 根据第一个工具名推断步骤
+        const firstName = msg.tool_calls[0].function.name;
+        const stepIdx = TOOL_TO_STEP[firstName];
+        const stepLabel = stepIdx !== undefined ? DEFAULT_PLANS.generate?.[stepIdx] : undefined;
+        // 如果步骤变化了，先 flush 上一组
+        if (currentToolGroup && stepIdx !== undefined && currentToolGroup.stepIdx !== undefined && stepIdx !== currentToolGroup.stepIdx) {
+          flushToolGroup();
+        }
+        if (!currentToolGroup) currentToolGroup = { type: 'tool-group', tools: [], stepIdx, stepLabel };
+        // 如果新组的 stepIdx 更高，更新（可能同一步骤多次调用）
+        if (stepIdx !== undefined && (currentToolGroup.stepIdx === undefined || stepIdx > currentToolGroup.stepIdx)) {
+          currentToolGroup.stepIdx = stepIdx;
+          currentToolGroup.stepLabel = DEFAULT_PLANS.generate?.[stepIdx];
+        }
         const cleanContent = msg.content ? stripPlan(msg.content) : '';
         for (let i = 0; i < msg.tool_calls.length; i++) {
           currentToolGroup.tools!.push({
@@ -176,7 +315,7 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
           });
         }
       } else {
-        if (currentToolGroup) { groups.push(currentToolGroup); currentToolGroup = null; }
+        flushToolGroup();
         const cleanContent = msg.content ? stripPlan(msg.content) : '';
         if (cleanContent) {
           groups.push({ type: 'assistant-text', content: cleanContent });
@@ -193,7 +332,7 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
       }
     }
   }
-  if (currentToolGroup) groups.push(currentToolGroup);
+  flushToolGroup();
   return groups;
 }
 
@@ -242,6 +381,47 @@ function ToolCallBlock({ tool, idx }: { tool: ToolItem; idx: number }) {
       {/* 折叠时的简要结果预览 */}
       {!expanded && hasResult && resultPreview && (
         <div className="px-2 pb-1 text-gray-600 text-[10px] truncate">{resultPreview}</div>
+      )}
+    </div>
+  );
+}
+
+// ── 工具组块（按待办步骤分组，整体可折叠） ──
+function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLabel?: string }) {
+  const [groupExpanded, setGroupExpanded] = useState(false);
+  const allDone = tools.every(t => t.result !== undefined);
+  const hasError = tools.some(t => t.result && (t.result.includes('"error"') || t.result.includes('ERROR') || t.result.includes('❌')));
+  const successCount = tools.filter(t => t.result && !(t.result.includes('"error"') || t.result.includes('ERROR') || t.result.includes('❌'))).length;
+
+  return (
+    <div className="mb-2">
+      {/* 步骤标题栏（可折叠整个组） */}
+      <button
+        onClick={() => setGroupExpanded(!groupExpanded)}
+        className="w-full flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
+      >
+        <span className="text-[10px]">{groupExpanded ? '▼' : '▶'}</span>
+        {stepLabel && <span className="text-gray-400">{stepLabel}</span>}
+        <span className="text-[10px] text-gray-600">
+          {allDone ? `${successCount}/${tools.length} 工具` : `${tools.length} 工具 执行中…`}
+        </span>
+        {allDone && (
+          <span className={hasError ? 'text-red-400 text-[10px]' : 'text-green-500/70 text-[10px]'}>
+            {hasError ? '⚠️' : '✅'}
+          </span>
+        )}
+        {!allDone && <span className="text-yellow-500/50 text-[10px] animate-pulse">⏳</span>}
+      </button>
+      {/* 展开时显示各工具调用 */}
+      {groupExpanded && (
+        <div className="space-y-1 ml-2">
+          {tools[0]?.assistantText && (
+            <div className="text-xs text-gray-400 px-1 py-0.5">{tools[0].assistantText}</div>
+          )}
+          {tools.map((tool, ti) => (
+            <ToolCallBlock key={ti} tool={tool} idx={ti} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -497,6 +677,9 @@ export default function AgentChat() {
         setTurnInfo('');
         setLoading(false);
         setSessionsVersion(v => v + 1);
+        // 待办完成状态依赖 inferPlanProgress 从工具调用推断：
+        // write_draft (step 6) 被调用且有结果 → 所有步骤自动 ✅
+        // LLM 暂停等待用户输入时不会误标完成
         break;
       case 'error':
         setError(event.message || 'Agent 异常');
@@ -696,33 +879,25 @@ export default function AgentChat() {
     }
     if (item.type === 'assistant-text') {
       return (
-        <div key={idx} className="mb-2">
-          <div className="text-sm text-gray-200 px-1 py-1 whitespace-pre-wrap">{item.content}</div>
+        <div key={idx} className="mb-2 px-1 py-1">
+          <MarkdownText content={item.content || ''} />
         </div>
       );
     }
-    // tool-group
-    if (item.type === 'tool-group' && item.tools) {
-      const allDone = item.tools.every(t => t.result !== undefined);
-      const hasError = item.tools.some(t => t.result && (t.result.includes('"error"') || t.result.includes('ERROR')));
+    // step-complete: 步骤完成提示
+    if (item.type === 'step-complete') {
       return (
-        <div key={idx} className="mb-2 space-y-1">
-          {/* 助手文字（如果有且不在工具内） */}
-          {item.tools[0]?.assistantText && (
-            <div className="text-sm text-gray-300 px-1 py-0.5">{item.tools[0].assistantText}</div>
-          )}
-          {/* 工具列表 */}
-          <div className="space-y-1">
-            {item.tools.map((tool, ti) => (
-              <ToolCallBlock key={ti} tool={tool} idx={ti} />
-            ))}
-          </div>
-          {/* 状态指示 */}
-          {!allDone && (
-            <div className="text-[10px] text-yellow-500/50 px-1">执行中…</div>
-          )}
+        <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
+          <span className="text-green-500">✅</span>
+          <span className="text-green-400/80">完成：{item.content}</span>
         </div>
       );
+    }
+    // tool-group: 按步骤分组的工具调用
+    if (item.type === 'tool-group' && item.tools) {
+      return (
+        <ToolGroupBlock key={idx} tools={item.tools} stepLabel={item.stepLabel} />
+    );
     }
     return null;
   };
