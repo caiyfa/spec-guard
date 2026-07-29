@@ -7,7 +7,7 @@ import type { AgentMode, AgentSkill, ScenarioMeta, ModelConfig } from '../api';
 import SessionTree from '../components/SessionTree';
 
 const MODE_LABELS: Record<string, string> = {
-  generate: '✨生成', debug: '🐛调试', analyze: '🔍分析', chat: '💬对话',
+  generate: '✨生成', debug: '🐛调试', analyze: '🔍分析', chat: '💬对话', audit: '🔎审计',
 };
 
 interface ChatMessage {
@@ -71,6 +71,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: '/mode:debug', label: '切换到调试模式', desc: '场景调试模式（8 工具）', type: 'mode' },
   { cmd: '/mode:analyze', label: '切换到分析模式', desc: '只读分析模式（6 工具）', type: 'mode' },
   { cmd: '/mode:chat', label: '切换到对话模式', desc: '自由对话模式（0 工具）', type: 'mode' },
+  { cmd: '/mode:audit', label: '切换到审计模式', desc: 'Spec 审计模式（7 工具）', type: 'mode' },
   { cmd: '/new', label: '新会话', desc: '开始新的对话会话', type: 'action' },
   { cmd: '/clear', label: '清空对话', desc: '清空当前消息列表', type: 'action' },
   { cmd: '/undo', label: '撤销写入', desc: '撤销最后一次草稿写入（从 .bak 恢复）', type: 'action' },
@@ -84,12 +85,23 @@ interface ToolItem {
   result?: string;
   assistantText?: string;
 }
+interface ModeSwitchEvent {
+  id: number;
+  from: string;
+  to: string;
+  reason: string;
+  source: string;
+  auto: boolean;
+  msgIndex: number;  // messages.length at the time of switch
+}
+
 interface GroupedItem {
-  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete';
+  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete' | 'mode-switch';
   content?: string;
   tools?: ToolItem[];
   stepLabel?: string;   // 关联的待办步骤名称
   stepIdx?: number;    // 步骤索引
+  modeSwitch?: ModeSwitchEvent;  // 模式切换事件
 }
 
 // ── 简易 Markdown 渲染 ──
@@ -585,12 +597,27 @@ export default function AgentChat() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashQuery, setSlashQuery] = useState('');
   const [wsReconnect, setWsReconnect] = useState(0);
+  // H-2: 模式锁定与切换事件
+  const [lockedMode, setLockedMode] = useState('');  // 非空 = 锁定的模式名
+  const [modeSwitches, setModeSwitches] = useState<ModeSwitchEvent[]>([]);
+  const modeSwitchIdRef = useRef(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const autoSentRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const currentWorkspace = session.getWorkspace();
+
+  // H-2: 推导当前页面（从 URL path 提取，供路由上下文使用）
+  const currentPage = useMemo(() => {
+    const path = window.location.pathname;
+    if (path.includes('/execution')) return 'execution';
+    if (path.includes('/editor')) return 'editor';
+    if (path.includes('/dag')) return 'dag';
+    if (path.includes('/feedback')) return 'feedback';
+    if (path.includes('/agent')) return 'chat';
+    return '';
+  }, []);
 
   const filteredCommands = useMemo(() => {
     if (!slashQuery) return SLASH_COMMANDS;
@@ -681,6 +708,30 @@ export default function AgentChat() {
         // write_draft (step 6) 被调用且有结果 → 所有步骤自动 ✅
         // LLM 暂停等待用户输入时不会误标完成
         break;
+      case 'mode_switch':
+        // H-2: 处理模式自动切换事件
+        if (!lockedMode) {
+          setCurrentMode(event.to || 'chat');
+        }
+        setModeSwitches(prev => [...prev, {
+          id: ++modeSwitchIdRef.current,
+          from: event.from || '',
+          to: event.to || '',
+          reason: event.reason || '',
+          source: event.source || '',
+          auto: event.auto !== false,
+          msgIndex: messages.length,
+        }]);
+        break;
+      case 'todo_update':
+        // H-4/F-FE: 待办更新（H-2 仅存储，H-FE 接续渲染）
+        if (event.todos) {
+          setPlanItems(event.todos.map((t: any) => {
+            const icon = t.status === 'done' ? '✅' : t.status === 'in_progress' ? '🔄' : t.status === 'blocked' ? '⛔' : '○';
+            return `${icon} ${t.title}`;
+          }));
+        }
+        break;
       case 'error':
         setError(event.message || 'Agent 异常');
         setLoading(false);
@@ -742,10 +793,11 @@ export default function AgentChat() {
           message: msg, session_id: '', max_turns: 50,
           workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
           model_id: currentModelId,
+          context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
         }));
       }
     }
-  }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentMode, currentModelId]);
+  }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentMode, currentModelId, currentPage, lockedMode]);
 
   // 发送消息
   const handleSend = useCallback(() => {
@@ -759,8 +811,9 @@ export default function AgentChat() {
       message: userMsg, session_id: sessionId, max_turns: 50,
       workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
       model_id: currentModelId,
+      context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
     }));
-  }, [input, loading, sessionId, currentWorkspace, currentMode, scenarioId, currentModelId]);
+  }, [input, loading, sessionId, currentWorkspace, currentMode, scenarioId, currentModelId, currentPage, lockedMode]);
 
   // 打断会话
   const handleStop = useCallback(() => {
@@ -777,7 +830,9 @@ export default function AgentChat() {
   const handleSlashSelect = (cmd: SlashCommand) => {
     setSlashOpen(false); setInput('');
     if (cmd.type === 'mode') {
-      setCurrentMode(cmd.cmd.replace('/mode:', ''));
+      const newMode = cmd.cmd.replace('/mode:', '');
+      setCurrentMode(newMode);
+      setLockedMode(newMode);  // 斜杠命令切换也锁定
     } else if (cmd.type === 'action') {
       if (cmd.cmd === '/new') {
         setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setPlanItems([]);
@@ -793,6 +848,7 @@ export default function AgentChat() {
             message: msg, session_id: sessionId, max_turns: 3,
             workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
             model_id: currentModelId,
+            context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
           }));
         }
       } else if (cmd.cmd === '/export') {
@@ -830,6 +886,7 @@ export default function AgentChat() {
       setMessages(r.messages || []);
       setSessionId(id);
       setPlanItems([]);
+      setModeSwitches([]);  // H-2: 清空模式切换记录
       // 从历史消息中提取 plan
       for (const m of (r.messages || [])) {
         if (m.role === 'assistant' && m.content) {
@@ -842,6 +899,7 @@ export default function AgentChat() {
 
   const handleNewSession = () => {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
+    setModeSwitches([]);  // H-2: 清空模式切换记录
   };
 
   const handleExportSession = async () => {
@@ -856,8 +914,34 @@ export default function AgentChat() {
     } catch { setError('导出失败'); }
   };
 
-  // 分组消息
-  const grouped = useMemo(() => groupMessages(messages), [messages]);
+  // 分组消息（H-2: 插入模式切换卡片）
+  const grouped = useMemo(() => {
+    const groups = groupMessages(messages);
+    if (modeSwitches.length === 0) return groups;
+    // 在适当位置插入模式切换卡片
+    // 简化策略：按 msgIndex 找到对应分组位置插入
+    const result: GroupedItem[] = [];
+    let msgIdx = 0;
+    let switchIdx = 0;
+    for (const g of groups) {
+      // 计算当前组对应的 message 索引增量
+      if (g.type === 'user') msgIdx++;
+      else if (g.type === 'assistant-text') msgIdx++;
+      else if (g.type === 'tool-group') msgIdx += (g.tools?.length || 0) + 1;  // assistant + tool results
+      // 检查是否有切换事件应在此处插入
+      while (switchIdx < modeSwitches.length && modeSwitches[switchIdx].msgIndex <= msgIdx) {
+        result.push({ type: 'mode-switch', modeSwitch: modeSwitches[switchIdx] });
+        switchIdx++;
+      }
+      result.push(g);
+    }
+    // 剩余的切换事件追加到末尾
+    while (switchIdx < modeSwitches.length) {
+      result.push({ type: 'mode-switch', modeSwitch: modeSwitches[switchIdx] });
+      switchIdx++;
+    }
+    return result;
+  }, [messages, modeSwitches]);
 
   // 上下文大小 + 模型上下文窗口限制
   const estimatedTokens = messages.reduce((sum, m) => sum + Math.ceil((m.content?.length || 0) / 4), 0);
@@ -890,6 +974,22 @@ export default function AgentChat() {
         <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
           <span className="text-green-500">✅</span>
           <span className="text-green-400/80">完成：{item.content}</span>
+        </div>
+      );
+    }
+    // mode-switch: 模式切换卡片（H-2）
+    if (item.type === 'mode-switch' && item.modeSwitch) {
+      const ms = item.modeSwitch;
+      const fromLabel = MODE_LABELS[ms.from] || ms.from;
+      const toLabel = MODE_LABELS[ms.to] || ms.to;
+      return (
+        <div key={idx} className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-info/5 border border-info/20 rounded text-xs">
+          <span className="text-info/60">🔄</span>
+          <span className="text-gray-400">{fromLabel}</span>
+          <span className="text-gray-600">→</span>
+          <span className="text-info font-medium">{toLabel}</span>
+          {ms.auto && <span className="text-[10px] text-gray-600 ml-1">（自动）</span>}
+          <span className="text-[10px] text-gray-500 ml-auto">{ms.reason}</span>
         </div>
       );
     }
@@ -1035,16 +1135,35 @@ export default function AgentChat() {
             {/* 底部选择器栏 */}
             <div className="flex items-center gap-1 mt-2 flex-wrap">
               {modes.map(m => (
-                <button key={m.name} onClick={() => setCurrentMode(m.name)}
-                  title={`${m.tools.length} 工具`}
+                <button key={m.name}
+                  onClick={() => {
+                    setCurrentMode(m.name);
+                    // 点击模式 = 手动切换，自动锁定该模式
+                    setLockedMode(m.name);
+                  }}
+                  onDoubleClick={() => {
+                    // 双击 = 解锁（允许自动路由）
+                    setLockedMode('');
+                  }}
+                  title={`${m.tools.length} 工具${lockedMode === m.name ? '（锁定，双击解锁）' : lockedMode ? '（当前锁定: ' + MODE_LABELS[lockedMode] + '）' : '（点击切换并锁定，双击解锁）'}`}
                   className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                     currentMode === m.name
                       ? 'bg-info/15 text-info border border-info/30'
                       : 'bg-surface-2 text-gray-500 border border-border hover:text-gray-300'
-                  }`}>
+                  }${lockedMode === m.name ? ' ring-1 ring-info/40' : ''}`}>
                   {MODE_LABELS[m.name] || m.name}
+                  {lockedMode === m.name && <span className="ml-0.5">🔒</span>}
                 </button>
               ))}
+              {lockedMode && (
+                <button
+                  onClick={() => setLockedMode('')}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-gray-500 hover:text-gray-300 border border-border"
+                  title="解锁模式，允许自动路由"
+                >
+                  🔓 解锁
+                </button>
+              )}
               <span className="text-gray-700">|</span>
               {models.length > 0 && (
                 <select

@@ -28,8 +28,65 @@ from agent.session import SessionManager, _validate_session_id
 from agent.runtime import AgentRuntime, build_system_prompt
 from agent.mode_loader import list_modes
 from agent.skill_loader import list_skills
+from agent.mode_router import RouteContext, RouteResult, route_mode
 
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
+
+# H-2: 模式路由辅助函数
+_PULL_RECENT_MINUTES = 5  # 拉取后 5 分钟内视为 "just pulled"
+
+
+def _check_recent_pull(workspace: str) -> bool:
+    """检查工作区是否在最近几分钟内执行过 git pull（路由信号）。
+
+    读取注册表中的 pulled_at 字段，与当前时间比较。
+    """
+    if not workspace:
+        return False
+    try:
+        from specstd.workspace import get_workspace
+        from datetime import datetime, timedelta
+        info = get_workspace(workspace)
+        if not info or not info.pulled_at:
+            return False
+        pulled = datetime.fromisoformat(info.pulled_at)
+        return datetime.now() - pulled < timedelta(minutes=_PULL_RECENT_MINUTES)
+    except Exception:
+        return False
+
+
+def _count_pending_vulns() -> int:
+    """统计台账中 pending 状态的漏洞数量（路由信号）。"""
+    try:
+        from feedback.ledger import FeedbackLedger
+        ledger_path = SG_ROOT / "feedback" / "ledger.json"
+        if not ledger_path.is_file():
+            return 0
+        ledger = FeedbackLedger(ledger_path)
+        return ledger.count_vulnerabilities(status="pending")
+    except Exception:
+        return 0
+
+
+def _build_route_context(data: dict, message: str) -> RouteContext:
+    """从前端 WS/REST 数据组装路由上下文。
+
+    前端提供：message / locked_mode / current_page / last_run_failed /
+              editing_scenario_id / scenario_never_run
+    后端补充：workspace_just_pulled / pending_vulnerabilities
+    """
+    ctx_data = data.get("context") or {}
+    workspace = data.get("workspace", "")
+    return RouteContext(
+        message=message,
+        locked_mode=ctx_data.get("locked_mode", "") or data.get("locked_mode", ""),
+        current_page=ctx_data.get("current_page", ""),
+        last_run_failed=ctx_data.get("last_run_failed", False),
+        editing_scenario_id=ctx_data.get("editing_scenario_id", "") or data.get("scenario_id", ""),
+        scenario_never_run=ctx_data.get("scenario_never_run", False),
+        workspace_just_pulled=_check_recent_pull(workspace),
+        pending_vulnerabilities=_count_pending_vulns(),
+    )
 
 
 def _build_scenario_context(scenario_id: str) -> str:
@@ -189,6 +246,7 @@ class ChatBody(BaseModel):
     mode: str = "generate"
     scenario_id: str = ""
     model_id: str = ""
+    context: dict = {}  # H-2: 路由上下文（current_page / last_run_failed / locked_mode 等）
 
 
 @router.get("/modes")
@@ -240,12 +298,26 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
     from specstd.workspace import set_context_workspace, reset_context_workspace
     _ctx_token = set_context_workspace(workspace or None)
 
+    # H-2: 模式自动路由
+    events = []
+    route_ctx = _build_route_context(body.model_dump(), body.message)
+    route_result = route_mode(route_ctx)
+    mode_name = route_result.mode
+    if mode_name != body.mode:
+        events.append({
+            "type": "mode_switch",
+            "from": body.mode,
+            "to": mode_name,
+            "source": route_result.source,
+            "reason": route_result.reason,
+            "auto": True,
+        })
+
     # 构建场景上下文（基础信息包）
     scenario_context = _build_scenario_context(body.scenario_id)
-    system_prompt = build_system_prompt(mode=body.mode, scenario_context=scenario_context)
-    runtime = AgentRuntime(llm, max_turns=body.max_turns, mode_name=body.mode)
+    system_prompt = build_system_prompt(mode=mode_name, scenario_context=scenario_context)
+    runtime = AgentRuntime(llm, max_turns=body.max_turns, mode_name=mode_name)
 
-    events = []
     runtime.events.subscribe(lambda e: events.append(e))
 
     messages = await asyncio.to_thread(
@@ -260,6 +332,9 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
         "messages": messages,
         "events": events,
         "stats": llm.get_stats(),
+        "mode": mode_name,
+        "mode_source": route_result.source,
+        "mode_reason": route_result.reason,
     }
 
 
@@ -285,6 +360,9 @@ async def agent_ws(websocket: WebSocket,
     _ws_query_workspace = websocket.query_params.get("workspace", "")
     _ws_ctx_token = set_context_workspace(_ws_query_workspace or None)
 
+    # H-2: 连接级模式跟踪（跨消息保持，用于检测模式切换）
+    _ws_current_mode = ""
+
     try:
         while True:
             data = await websocket.receive_json()
@@ -305,6 +383,28 @@ async def agent_ws(websocket: WebSocket,
                 except ValueError:
                     await websocket.send_json({"type": "error", "message": "非法 session_id"})
                     continue
+
+            # H-2: 模式自动路由
+            route_ctx = _build_route_context(data, message)
+            route_result = route_mode(route_ctx)
+            routed_mode = route_result.mode
+
+            # 首次消息：直接初始化为路由结果，不发切换事件（无"上一模式"）
+            # 后续消息：检测模式变化，发 mode_switch 事件
+            if not _ws_current_mode:
+                _ws_current_mode = routed_mode
+            elif routed_mode != _ws_current_mode:
+                await websocket.send_json({
+                    "type": "mode_switch",
+                    "from": _ws_current_mode,
+                    "to": routed_mode,
+                    "source": route_result.source,
+                    "reason": route_result.reason,
+                    "auto": True,
+                })
+                _ws_current_mode = routed_mode
+
+            mode_name = routed_mode
 
             # 初始化（会话按用户隔离 + 工作区）
             emp_no = _ws_emp_no or "_anonymous"
