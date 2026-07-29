@@ -122,7 +122,7 @@ def mask(key: str) -> str
 | H-3 | switch_mode 自主切换 | H | P0 | ✅ | ⛔ H-4（共享 meta.py/runtime.py） | S10 | 2 天（实际 0.2 天） |
 | H-2 | 模式自动路由 | H | P0 | ✅ | 无（独立文件） | S11 | 2 天（实际 0.3 天） |
 | H-5 | 闭环衔接（拉取信号 + 通知链接） | H | P0 | ✅ | ⛔ H-1 + ⛔ J-2 | S10 | 1.5 天（实际 0.2 天） |
-| H-FE | 前端：待办面板 + 模式徽章 + 切换卡片 | H | P0 | ⬜ | 🟡 接口 4（降级：mock 事件） | — | 3 天 |
+| H-FE | 前端：待办面板 + 模式徽章 + 切换卡片 | H | P0 | ✅ | 🟡 接口 4（降级：mock 事件） | S11 | 3 天（实际 0.2 天） |
 | T-1 | 切换：J-1 接入真实 crypto | 切换 | P0 | ✅ | ⛔ A-3 + ⛔ J-1 | S4 | 0.5 天（实际 0 天） |
 | T-2 | 切换：H-1/I-1 接入真实落盘路径 | 切换 | P0 | ✅ | ⛔ F-1-1 + ⛔ H-1/I-1 | S8 | 0.5 天（实际 0 天） |
 | T-3 | 切换：H-1/I-1 接通真实通知 | 切换 | P0 | ✅ | ⛔ J-2 + ⛔ H-1/I-1 | S8 | 0.5 天（实际 0 天） |
@@ -250,11 +250,11 @@ def mask(key: str) -> str
 - **开工门禁**：⛔ H-1 = ✅ + ⛔ J-2 = ✅
 - **涉及文件**：`routers/workspace.py`、`feedback/ledger.py`、前端通知链接处理
 
-#### H-FE 前端模式体验 ⬜
+#### H-FE 前端模式体验 ✅（S11，2026-07-29 完成）
 - **目标**：待办面板（TodoPanel）+ 模式徽章（ModeBadge 含锁定）+ 消息流切换卡片
-- **开工门禁**：🟡 接口 4 已冻结（降级：mock 事件流开发）
+- **开工门禁**：🟡 接口 4 已冻结（H-2/H-3/H-4 均已 ✅，真实事件流已就绪，无需 mock）
 - **涉及文件**：`components/TodoPanel.tsx`(新)、`components/ModeBadge.tsx`(新)、`pages/AgentChat.tsx`
-- **验收**：三处体现正常；锁定可操作；与后端联调通过
+- **验收**：三处体现正常；锁定可操作；与后端联调通过 — **全过**
 
 ### 切换任务（T 系列）
 
@@ -339,6 +339,7 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
+| 2026-07-29 | H-FE 前端模式体验 | S11 | ✅ 完成。①components/ModeBadge.tsx 新建模式徽章组件：当前模式图标+标签+锁定/自动标识；模式选择器（点击切换+锁定🔒，双击解锁）；解锁按钮；5 种模式图标映射。②components/TodoPanel.tsx 新建待办面板组件：双数据源（结构化待办 todo_update 事件优先，遗留计划项 <plan> 标签回退）；4 种状态图标（✅/🔄/⛔/○）+ 颜色；模式标签显示；当前模式 in_progress 项高亮；空状态提示。③AgentChat.tsx 集成：导入 ModeBadge + TodoPanel 组件（替除内联实现）；structuredTodos 状态存储结构化待办（todo_update 事件不再转字符串）；SidePanel 传递 structuredTodos/currentMode 给 TodoPanel；底部选择器栏用 ModeBadge 替换内联模式按钮；会话切换/新建时清理 structuredTodos。H-2/H-3/H-4 均已 ✅，真实事件流已就绪无需 mock。tsc 编译无错误；test_engine 62+test_specstd 389=451 全绿；release_check PASS。链 H 全部完成 |
 | 2026-07-29 | I-3 前端 Schedules 页 | S11 | ✅ 完成。①api.ts 新增 schedulesApi（7 个方法：list/create/get/update/delete/run/listPlans）+ ScheduledJob 接口（12 字段）。②pages/Schedules.tsx 新建定时任务页面：任务列表表格（名称/计划/cron/状态/上次运行/操作）；新建/编辑表单（任务名称 + 计划下拉 + cron 预设 6 种 + 自定义 cron + 通知配置 ID + 启用开关）；操作按钮（立即运行▶️ / 启停⏸️ / 编辑✏️ / 删除🗑️）；模态对话框表单；状态标签（成功/失败/部分成功/错误）。③App.tsx 添加 Schedules import + 路由 /schedules + 菜单入口（执行组下「定时任务」tester+）。I-2 已 ✅ 无需降级。tsc 编译无错误；test_engine 62+test_specstd 389=451 全绿；release_check PASS。链 I 全部完成 |
 | 2026-07-29 | I-2 scheduler 调度器 | S11 | ✅ 完成。①services/scheduler.py 新建 APScheduler 调度器：AsyncIOScheduler + SQLAlchemyJobStore（SQLite 持久化，重启不丢）；scheduled_jobs 表（12 字段：id/name/plan_id/workspace/cron/notify_config_id/enabled/created_by/created_at/last_run_at/last_run_status/last_run_id）；_execute_job 异步执行入口调 plan_executor.execute_plan（引擎直跑，复用 I-1）；start_scheduler/shutdown_scheduler 生命周期 + _restore_jobs 启动时恢复 enabled job；CRUD：create_job（验证 cron + 注册调度器）/ update_job（增量更新 + 同步调度器）/ delete_job（DB+调度器双删）/ trigger_job_now（手动触发一次）；工作区隔离（list_jobs 按 workspace 过滤）。②routers/schedules.py 新建 7 个端点：GET/POST/PUT/DELETE CRUD + POST /{id}/run 手动触发 + GET /plans/list 计划下拉；admin 门禁（创建/更新/删除），tester+ 门禁（触发）；resolve_workspace 工作区隔离。③main.py 注册路由 + startup 启动调度器 + shutdown 停止。④requirements.txt +apscheduler>=3.10 +sqlalchemy>=2.0（SQLAlchemyJobStore 依赖）。⑤test_scheduler.py 20 测试（建表幂等/CRUD 7 项/更新 6 项/cron 验证/工作区隔离/调度器生命周期/手动触发不存在 job）。test_engine 62+test_specstd 389=451 全绿；release_check PASS。I-3 可开工 |
 | 2026-07-29 | J-3 前端通知配置页 | S10 | ✅ 完成。①api.ts 新增 NotifyConfig 接口（8 字段）+ notifyApi（5 方法：list/create/update/delete/test），对接 J-1/J-2 后端 /api/notify/configs CRUD + /test 测试发送。②pages/NotifyConfigs.tsx 新建通知配置页面：配置列表（名称/渠道标签/订阅事件/启用状态/@手机号）；新建/编辑模态表单（配置名称 + 渠道切换钉钉/飞书 + webhook URL + 加签密钥钉钉可选飞书禁用 + @手机号 + 订阅事件多选 3 种 + 启用开关）；操作按钮（测试发送 / 编辑 / 删除）；测试发送结果反馈（成功/失败消息）；编辑时 webhook_url/secret 留空不修改提示。③App.tsx 添加 NotifyConfigs import + 路由 /notify + 菜单入口（反哺分组下「通知配置」tester+）。J-2 已 ✅ 无需降级。tsc --noEmit 编译无错误；test_engine 62+test_specstd 389=451 全绿；release_check PASS。链 J 全部完成 |

@@ -5,6 +5,9 @@ import { useSearchParams } from 'react-router-dom';
 import { session, agentApi, scenarioApi, modelApi } from '../api';
 import type { AgentMode, AgentSkill, ScenarioMeta, ModelConfig } from '../api';
 import SessionTree from '../components/SessionTree';
+import ModeBadge from '../components/ModeBadge';
+import TodoPanel from '../components/TodoPanel';
+import type { StructuredTodo } from '../components/TodoPanel';
 
 const MODE_LABELS: Record<string, string> = {
   generate: '✨生成', debug: '🐛调试', analyze: '🔍分析', chat: '💬对话', audit: '🔎审计',
@@ -497,52 +500,23 @@ function ContextPanel({ ctxUsage, messages, ctxLimit }: { ctxUsage: CtxUsage; me
   );
 }
 
-// ── 待办面板组件 ──
-function TodoPanel({ planItems, loading, grouped }: { planItems: string[]; loading: boolean; grouped: GroupedItem[] }) {
-  const allTools = grouped.filter(g => g.type === 'tool-group').flatMap(g => g.tools || []);
-  const completedStep = inferPlanProgress(planItems, allTools);
-  return (
-    <>
-      <div className="px-3 py-2 border-b border-border">
-        <span className="text-xs font-medium text-gray-300">📋 待办</span>
-        {!loading && <span className="text-[10px] text-gray-600 ml-2">已完成</span>}
-      </div>
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-        {planItems.map((item, i) => {
-          const isLLMDone = item.includes('✅');
-          const isInferredDone = i <= completedStep;
-          const isDone = isLLMDone || isInferredDone;
-          const isCurrent = !isDone && i === completedStep + 1 && loading;
-          return (
-            <div key={i} className={`text-xs flex items-start gap-1.5 ${
-              isDone ? 'text-gray-600 line-through' : isCurrent ? 'text-yellow-400' : 'text-gray-400'
-            }`}>
-              <span className="flex-shrink-0 mt-0.5">
-                {isDone ? '✅' : isCurrent ? '🔵' : '○'}
-              </span>
-              <span>{item.replace(/^✅\s*/, '').replace(/^\d+\.\s*/, '')}</span>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
 // ── 右侧面板组件（上下文 + 待办） ──
-function SidePanel({ ctxUsage, planItems, loading, grouped, messages, ctxLimit }: {
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, currentMode, messages, ctxLimit }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
+  structuredTodos: StructuredTodo[];
   loading: boolean;
-  grouped: GroupedItem[];
+  currentMode: string;
   messages: ChatMessage[];
   ctxLimit: number;
 }) {
-  if (!ctxUsage && planItems.length === 0) return null;
+  if (!ctxUsage && planItems.length === 0 && structuredTodos.length === 0) return null;
   return (
     <div className="w-56 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col">
       {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} />}
-      {planItems.length > 0 && <TodoPanel planItems={planItems} loading={loading} grouped={grouped} />}
+      {(planItems.length > 0 || structuredTodos.length > 0) && (
+        <TodoPanel todos={structuredTodos} planItems={planItems} loading={loading} currentMode={currentMode} />
+      )}
     </div>
   );
 }
@@ -601,6 +575,8 @@ export default function AgentChat() {
   const [lockedMode, setLockedMode] = useState('');  // 非空 = 锁定的模式名
   const [modeSwitches, setModeSwitches] = useState<ModeSwitchEvent[]>([]);
   const modeSwitchIdRef = useRef(0);
+  // H-FE: 结构化待办（来自 todo_update 事件）
+  const [structuredTodos, setStructuredTodos] = useState<StructuredTodo[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -724,12 +700,14 @@ export default function AgentChat() {
         }]);
         break;
       case 'todo_update':
-        // H-4/F-FE: 待办更新（H-2 仅存储，H-FE 接续渲染）
+        // H-FE: 结构化待办更新（todo_update 事件）
         if (event.todos) {
-          setPlanItems(event.todos.map((t: any) => {
-            const icon = t.status === 'done' ? '✅' : t.status === 'in_progress' ? '🔄' : t.status === 'blocked' ? '⛔' : '○';
-            return `${icon} ${t.title}`;
-          }));
+          setStructuredTodos(event.todos.map((t: any) => ({
+            id: t.id || '',
+            title: t.title || '',
+            status: t.status || 'pending',
+            mode: t.mode || '',
+          })));
         }
         break;
       case 'error':
@@ -887,6 +865,7 @@ export default function AgentChat() {
       setSessionId(id);
       setPlanItems([]);
       setModeSwitches([]);  // H-2: 清空模式切换记录
+      setStructuredTodos([]);  // H-FE: 清空结构化待办
       // 从历史消息中提取 plan
       for (const m of (r.messages || [])) {
         if (m.role === 'assistant' && m.content) {
@@ -900,6 +879,7 @@ export default function AgentChat() {
   const handleNewSession = () => {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
     setModeSwitches([]);  // H-2: 清空模式切换记录
+    setStructuredTodos([]);  // H-FE: 清空结构化待办
   };
 
   const handleExportSession = async () => {
@@ -1134,36 +1114,16 @@ export default function AgentChat() {
 
             {/* 底部选择器栏 */}
             <div className="flex items-center gap-1 mt-2 flex-wrap">
-              {modes.map(m => (
-                <button key={m.name}
-                  onClick={() => {
-                    setCurrentMode(m.name);
-                    // 点击模式 = 手动切换，自动锁定该模式
-                    setLockedMode(m.name);
-                  }}
-                  onDoubleClick={() => {
-                    // 双击 = 解锁（允许自动路由）
-                    setLockedMode('');
-                  }}
-                  title={`${m.tools.length} 工具${lockedMode === m.name ? '（锁定，双击解锁）' : lockedMode ? '（当前锁定: ' + MODE_LABELS[lockedMode] + '）' : '（点击切换并锁定，双击解锁）'}`}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                    currentMode === m.name
-                      ? 'bg-info/15 text-info border border-info/30'
-                      : 'bg-surface-2 text-gray-500 border border-border hover:text-gray-300'
-                  }${lockedMode === m.name ? ' ring-1 ring-info/40' : ''}`}>
-                  {MODE_LABELS[m.name] || m.name}
-                  {lockedMode === m.name && <span className="ml-0.5">🔒</span>}
-                </button>
-              ))}
-              {lockedMode && (
-                <button
-                  onClick={() => setLockedMode('')}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-gray-500 hover:text-gray-300 border border-border"
-                  title="解锁模式，允许自动路由"
-                >
-                  🔓 解锁
-                </button>
-              )}
+              <ModeBadge
+                currentMode={currentMode}
+                lockedMode={lockedMode}
+                modes={modes}
+                onSelectMode={(mode) => {
+                  setCurrentMode(mode);
+                  setLockedMode(mode);
+                }}
+                onUnlock={() => setLockedMode('')}
+              />
               <span className="text-gray-700">|</span>
               {models.length > 0 && (
                 <select
@@ -1207,7 +1167,7 @@ export default function AgentChat() {
         </div>
 
         {/* 右侧：上下文用量 + 待办面板 */}
-        <SidePanel ctxUsage={ctxUsage} planItems={planItems} loading={loading} grouped={grouped} messages={messages} ctxLimit={ctxLimit} />
+        <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} currentMode={currentMode} messages={messages} ctxLimit={ctxLimit} />
       </div>
     </div>
   );
