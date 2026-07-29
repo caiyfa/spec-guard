@@ -22,10 +22,10 @@ from agent.skill_loader import build_skills_xml
 
 # 默认使用 MCP server 的全部工具
 from mcp_server.tools import (
-    spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution,
+    spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit,
 )
 
-TOOL_MODULES = [spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution]
+TOOL_MODULES = [spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit]
 
 # info_pack 工具（G2-1）：延迟导入，避免循环依赖
 try:

@@ -15,6 +15,9 @@ class FeedbackLedger:
 
     VALID_STATUSES = ["pending", "in_progress", "closed"]
     VALID_SOURCES = ["loop_a", "loop_b"]
+    # H-1: 漏洞条目扩展
+    VALID_VTYPES = ["logic_defect", "spec_impl_mismatch", "missing_info", "behavior_deviation"]
+    VALID_SEVERITIES = ["blocker", "major", "minor"]
     # V15 修复：合法状态流转（closed 为终态，不可重开）
     ALLOWED_TRANSITIONS = {
         "pending": {"in_progress", "closed"},
@@ -106,3 +109,80 @@ class FeedbackLedger:
             if entry["spq_id"] == spq_id:
                 return entry
         return None
+
+    # ══════════════════════════════════════════════════════════
+    # H-1: 漏洞条目扩展
+    # ══════════════════════════════════════════════════════════
+
+    def create_vulnerability(
+        self,
+        vtype: str,
+        severity: str,
+        location: str,
+        summary: str,
+        evidence: str = "",
+        suggestion: str = "",
+        scenario_id: str = "",
+    ) -> dict:
+        """创建漏洞台账条目（H-1 扩展）。
+
+        漏洞条目在普通条目基础上增加 vtype / severity / location /
+        evidence / suggestion 字段，source 固定为 loop_b（审计发现）。
+
+        Args:
+            vtype: 漏洞类型（logic_defect / spec_impl_mismatch /
+                   missing_info / behavior_deviation）
+            severity: 严重度（blocker / major / minor）
+            location: FR ID 或文件路径
+            summary: 一句话描述
+            evidence: 证据（spec 原文 / 接口返回）
+            suggestion: 建议修正
+            scenario_id: 关联场景 ID（可选）
+
+        Returns:
+            创建的台账条目
+        """
+        if vtype not in self.VALID_VTYPES:
+            raise ValueError(f"vtype 必须为 {self.VALID_VTYPES}")
+        if severity not in self.VALID_SEVERITIES:
+            raise ValueError(f"severity 必须为 {self.VALID_SEVERITIES}")
+        now = datetime.now().isoformat(timespec="seconds")
+        entry = {
+            "spq_id": self._next_id(),
+            "title": summary,
+            "source": "loop_b",
+            "status": "pending",
+            "scenario_id": scenario_id,
+            "detail": "",
+            # 漏洞专属字段
+            "vtype": vtype,
+            "severity": severity,
+            "location": location,
+            "summary": summary,
+            "evidence": evidence,
+            "suggestion": suggestion,
+            "created_at": now,
+            "updated_at": now,
+            "events": [{"type": "created", "timestamp": now}],
+        }
+        self._entries.append(entry)
+        self._save()
+        return entry
+
+    def list_vulnerabilities(self, status: str = None) -> list[dict]:
+        """列出漏洞条目（含 vtype 字段的条目）。
+
+        Args:
+            status: 按状态过滤（可选）
+        """
+        result = [e for e in self._entries if "vtype" in e]
+        if status:
+            result = [e for e in result if e["status"] == status]
+        return result
+
+    def count_vulnerabilities(self, status: str = "pending") -> int:
+        """统计漏洞条目数量（按状态）。
+
+        供 H-2 路由器查询 pending 漏洞数。
+        """
+        return sum(1 for e in self._entries if "vtype" in e and e["status"] == status)

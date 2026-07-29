@@ -28,6 +28,7 @@ from mcp_server.tools import (  # noqa: E402
     draft_writer,
     validator,
     attribution,
+    audit,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -41,6 +42,7 @@ TOOL_MODULES = [
     draft_writer,
     validator,
     attribution,
+    audit,
 ]
 
 ALL_TOOLS: list[Tool] = []
