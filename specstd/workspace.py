@@ -525,3 +525,108 @@ def run_conformance(name: Optional[str] = None) -> ConformanceReport:
         return report
 
     return check_conformance(info.root, info.name)
+
+
+# ══════════════════════════════════════════════════════════
+# .specguard/ 路径解析（F-1-1）
+# ══════════════════════════════════════════════════════════
+
+def _is_safe_custom_path(custom_path: str) -> bool:
+    """检查自定义路径安全性（防路径穿越）。
+
+    安全规则：
+    - 非空
+    - 路径组件中不含 .. （防止 ../ 路径穿越）
+    - resolve 后为绝对路径
+    - 不等于文件系统根目录
+    """
+    if not custom_path or not custom_path.strip():
+        return False
+    p = Path(custom_path)
+    if ".." in p.parts:
+        return False
+    resolved = p.resolve()
+    if not resolved.is_absolute():
+        return False
+    if resolved == resolved.parent:  # 文件系统根目录
+        return False
+    return True
+
+
+def _ensure_specguard_meta(sg_dir: Path):
+    """首次创建时生成 README + .gitignore（幂等）。"""
+    gitignore = sg_dir / ".gitignore"
+    if not gitignore.is_file():
+        gitignore.write_text(
+            "# SpecGuard 运行产物（不提交）\n"
+            "reports/\n"
+            "drafts/\n\n"
+            "# 以下为版本化资产（提交）\n"
+            "# plans/\n"
+            "# info_packs/\n",
+            encoding="utf-8",
+        )
+    readme = sg_dir / "README.md"
+    if not readme.is_file():
+        readme.write_text(
+            "# .specguard/\n\n"
+            "本目录由 SpecGuard 自动管理。\n\n"
+            "- `drafts/`：Agent 生成的场景草稿（评审后移入 `../scenarios/`，未评审不入 git）\n"
+            "- `plans/`：delta 导入生成的测试计划（版本化）\n"
+            "- `reports/`：运行报告（运行产物，不入 git）\n"
+            "- `info_packs/`：场景的基础信息包关联（版本化）\n",
+            encoding="utf-8",
+        )
+
+
+def specguard_dir(workspace_root: Path = None, custom_path: str = "") -> Path:
+    """获取工作区的 .specguard 目录（可配置位置）。
+
+    custom_path 非空时用自定义位置，否则默认 {workspace}/.specguard/。
+    首次创建时自动生成 README + .gitignore。
+
+    Args:
+        workspace_root: 工作区根路径（None 时使用当前激活工作区）
+        custom_path: 自定义 .specguard 目录位置（空字符串用默认）
+
+    Returns:
+        .specguard 目录路径
+
+    Raises:
+        RuntimeError: 无激活工作区
+        ValueError: 非法自定义路径
+    """
+    ws = workspace_root or get_workspace_root()
+    if not ws:
+        raise RuntimeError("无激活工作区")
+
+    if custom_path:
+        if not _is_safe_custom_path(custom_path):
+            raise ValueError(f"非法自定义路径: {custom_path}")
+        sg_dir = Path(custom_path).resolve()
+    else:
+        sg_dir = ws / ".specguard"
+
+    sg_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_specguard_meta(sg_dir)
+    return sg_dir
+
+
+def drafts_dir() -> Path:
+    """Agent 草稿目录：{.specguard}/drafts/。"""
+    return specguard_dir() / "drafts"
+
+
+def plans_dir() -> Path:
+    """测试计划目录：{.specguard}/plans/。"""
+    return specguard_dir() / "plans"
+
+
+def reports_dir() -> Path:
+    """运行报告目录：{.specguard}/reports/。"""
+    return specguard_dir() / "reports"
+
+
+def info_packs_dir() -> Path:
+    """基础信息包目录：{.specguard}/info_packs/。"""
+    return specguard_dir() / "info_packs"

@@ -108,7 +108,7 @@ def mask(key: str) -> str
 | A-3 | API Key 加密存储 | A | P0 | ✅ | 无 | S1 | 2 天（实际 0.5 天） |
 | A-2 | Token 级 compaction（含中文估算） | A | P0 | ✅ | ⛔ 文件：runtime.py 须先合入 | S2 | 1.5 天（实际 0.5 天） |
 | A-1 | Mode temperature 字段清理 | A | P0 | 🔄 | 无 | S3 | 0.5 天 |
-| F-1-1 | `.specguard/` 路径函数 + 目录约定 | F-1 | P0 | 🔄 | 无 | S6 | 1.5 天 |
+| F-1-1 | `.specguard/` 路径函数 + 目录约定 | F-1 | P0 | ✅ | 无 | S6 | 1.5 天（实际 0.3 天） |
 | F-1-2 | 工具层路径迁移 | F-1 | P0 | ⬜ | ⛔ F-1-1 | — | 1.5 天 |
 | F-1-3 | 文档同步 + 前端配置字段 | F-1 | P0 | ⬜ | ⛔ F-1-2 | — | 1 天 |
 | J-1 | 通知配置 CRUD（含加密存储） | J | P0 | ✅ | 🟡 A-3（降级：透传 crypto） | S4 | 1.5 天（实际 0.5 天） |
@@ -158,7 +158,7 @@ def mask(key: str) -> str
 
 ### 链 F-1：文档归属（详细：[06a-任务链F1](./06a-任务链F1-文档归属架构.md)）
 
-#### F-1-1 `.specguard/` 路径函数 🔄（S6，2026-07-29 开始）
+#### F-1-1 `.specguard/` 路径函数 ✅（S6，2026-07-29 完成）
 - **目标**：`specguard_dir()` 等 5 个路径函数（含 custom_path + 路径穿越防护）+ 首次创建生成 README/.gitignore
 - **开工门禁**：无
 - **涉及文件**：`specstd/workspace.py`
@@ -287,7 +287,7 @@ def mask(key: str) -> str
 | `feedback/ledger.py` | — | 空闲 |
 | `workbench/backend/routers/agent.py` | — | 空闲 |
 | `workbench/frontend/src/pages/AgentChat.tsx` | — | 空闲 |
-| `specstd/workspace.py` | F-1-1 | 🔄 占用中 |
+| `specstd/workspace.py` | — | 空闲（F-1-1 已完成，可归 F-1-2） |
 
 > 规则：占用归属按**任务 ID** 判定（跨会话唯一），具体哪个会话在做看 §3 执行者列。
 > 占用中的文件，其他任务不得改。`runtime.py` 特别规则：**A-2 必须先合入，之后归 H-4/H-3 独占**。
@@ -299,7 +299,7 @@ def mask(key: str) -> str
 | 切换点 | 前置方 | 消费方 | 前置状态 | 切换任务 |
 |--------|--------|--------|---------|---------|
 | crypto 透传 → 真实加密 | A-3 | J-1 | ✅ 已切换（T-1 完成） | T-1 ✅ |
-| 旧路径 → .specguard/ | F-1-1 | H-1 / I-1 | ⬜ 未完成 | T-2 |
+| 旧路径 → .specguard/ | F-1-1 | H-1 / I-1 | ✅ 可切换 | T-2 |
 | notify_log → 真实通知 | J-2 | H-1 / I-1 | ✅ 可切换 | T-3 |
 
 > 前置方完工时把「前置状态」改为 ✅ 可切换；切换任务领走后改对应 T 状态。
@@ -322,6 +322,7 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
+| 2026-07-29 | F-1-1 `.specguard/` 路径函数 | S6 | ✅ 完成。specstd/workspace.py 新增 specguard_dir（可配置位置 + 路径穿越防护）+ drafts_dir/plans_dir/reports_dir/info_packs_dir 5 个冻结接口函数 + _ensure_specguard_meta（幂等生成 README/.gitignore）+ _is_safe_custom_path（拒 ../.. 路径穿越）。test_specguard_dir.py 18 测试全过（默认路径创建/README+gitignore 生成/幂等/显式 workspace_root/无工作区 raise/自定义路径/路径穿越拒绝/子目录/多工作区隔离/context var 隔离）。test_engine 62+test_specstd 264=326 全绿；release_check PASS。§6 旧路径→.specguard/ 切换点标记可切换，F-1-2 可开工 |
 | 2026-07-29 | J-2 钉钉/飞书 webhook | S5 | ✅ 完成。feedback/notify.py 新增 send_notification（async，钉钉 markdown+加签/飞书卡片）+ _render_markdown/_render_feishu_card（3 类事件渲染）+ send_batch_notifications（>3 漏洞合并）+ validate_webhook_url 扩展钉钉域名；routers/notify.py test_send 接入真实 send_notification。test_notify_webhook.py 22 测试全过（渲染/失败静默/加签/批量合并/SSRF）。test_engine 62+test_specstd 246=308 全绿；release_check PASS。§6 notify_log 切换点标记可切换 |
 | 2026-07-29 | T-1 J-1 接入真实 crypto | S4 | ✅ 完成（no-op）。J-1 实施时 A-3 已 ✅，直接使用真实 crypto，未用降级透传。无存量明文 webhook 需迁移。§6 crypto 切换点标记已切换 |
 | 2026-07-29 | J-1 通知配置 CRUD | S4 | ✅ 完成。notify_config.py（CRUD + crypto 加密 webhook_url/secret + get_configs_by_event 事件过滤）；notify.py（5 个 API 端点：list/create/update/delete/test_send，test_send 为 J-2 预留 stub）；main.py 注册路由。test_notify_config.py 18 测试全过（CRUD/事件订阅/加密存储/校验）。test_engine 62+test_specstd 224=286 全绿；release_check PASS。J-1 直接使用真实 crypto（A-3 已 ✅），T-1 实质完成 |
