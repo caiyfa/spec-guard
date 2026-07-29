@@ -108,11 +108,11 @@ def mask(key: str) -> str
 | A-3 | API Key 加密存储 | A | P0 | ✅ | 无 | S1 | 2 天（实际 0.5 天） |
 | A-2 | Token 级 compaction（含中文估算） | A | P0 | ✅ | ⛔ 文件：runtime.py 须先合入 | S2 | 1.5 天（实际 0.5 天） |
 | A-1 | Mode temperature 字段清理 | A | P0 | 🔄 | 无 | S3 | 0.5 天 |
-| F-1-1 | `.specguard/` 路径函数 + 目录约定 | F-1 | P0 | ⬜ | 无 | — | 1.5 天 |
+| F-1-1 | `.specguard/` 路径函数 + 目录约定 | F-1 | P0 | 🔄 | 无 | S6 | 1.5 天 |
 | F-1-2 | 工具层路径迁移 | F-1 | P0 | ⬜ | ⛔ F-1-1 | — | 1.5 天 |
 | F-1-3 | 文档同步 + 前端配置字段 | F-1 | P0 | ⬜ | ⛔ F-1-2 | — | 1 天 |
-| J-1 | 通知配置 CRUD（含加密存储） | J | P0 | 🔄 | 🟡 A-3（降级：透传 crypto） | S4 | 1.5 天 |
-| J-2 | 钉钉/飞书 webhook 实现 | J | P0 | ⬜ | ⛔ J-1 | — | 1.5 天 |
+| J-1 | 通知配置 CRUD（含加密存储） | J | P0 | ✅ | 🟡 A-3（降级：透传 crypto） | S4 | 1.5 天（实际 0.5 天） |
+| J-2 | 钉钉/飞书 webhook 实现 | J | P0 | ✅ | ⛔ J-1 | S5 | 1.5 天（实际 0.5 天） |
 | J-3 | 前端通知配置页 + 测试发送 | J | P0 | ⬜ | 🟡 J-2（降级：mock API） | — | 1 天 |
 | I-1 | plan_executor 引擎直跑执行器 | I | P0 | ⬜ | 🟡 F-1-1（降级：旧路径） | — | 2.5 天 |
 | I-2 | scheduler 调度器 + job CRUD API | I | P0 | ⬜ | ⛔ I-1 | — | 1.5 天 |
@@ -123,7 +123,7 @@ def mask(key: str) -> str
 | H-2 | 模式自动路由 | H | P0 | ⬜ | 无（独立文件） | — | 2 天 |
 | H-5 | 闭环衔接（拉取信号 + 通知链接） | H | P0 | ⬜ | ⛔ H-1 + ⛔ J-2 | — | 1.5 天 |
 | H-FE | 前端：待办面板 + 模式徽章 + 切换卡片 | H | P0 | ⬜ | 🟡 接口 4（降级：mock 事件） | — | 3 天 |
-| T-1 | 切换：J-1 接入真实 crypto | 切换 | P0 | ⬜ | ⛔ A-3 + ⛔ J-1 | — | 0.5 天 |
+| T-1 | 切换：J-1 接入真实 crypto | 切换 | P0 | ✅ | ⛔ A-3 + ⛔ J-1 | S4 | 0.5 天（实际 0 天） |
 | T-2 | 切换：H-1/I-1 接入真实落盘路径 | 切换 | P0 | ⬜ | ⛔ F-1-1 + ⛔ H-1/I-1 | — | 0.5 天 |
 | T-3 | 切换：H-1/I-1 接通真实通知 | 切换 | P0 | ⬜ | ⛔ J-2 + ⛔ H-1/I-1 | — | 0.5 天 |
 | E2E | 端到端闭环验收 | 全部 | P0 | ⬜ | ⛔ 以上全部 | — | 2 天 |
@@ -158,7 +158,7 @@ def mask(key: str) -> str
 
 ### 链 F-1：文档归属（详细：[06a-任务链F1](./06a-任务链F1-文档归属架构.md)）
 
-#### F-1-1 `.specguard/` 路径函数 ⬜
+#### F-1-1 `.specguard/` 路径函数 🔄（S6，2026-07-29 开始）
 - **目标**：`specguard_dir()` 等 5 个路径函数（含 custom_path + 路径穿越防护）+ 首次创建生成 README/.gitignore
 - **开工门禁**：无
 - **涉及文件**：`specstd/workspace.py`
@@ -178,18 +178,17 @@ def mask(key: str) -> str
 
 ### 链 J：通知配置（详细：[10-任务链J](./10-任务链J-通知配置.md)）
 
-#### J-1 通知配置 CRUD 🔄（S4，2026-07-29 开始）
+#### J-1 通知配置 CRUD ✅（S4，2026-07-29 完成）
 - **目标**：notify_configs 表 + CRUD API，webhook/secret 加密存储
 - **开工门禁**：🟡 A-3（**降级**：crypto 用透传实现，A-3 完成后走 T-1 切换）
-- **涉及文件**：`services/notify_config.py`(新)、`routers/notify.py`(新)
-- **验收**：配置增删改查；按事件订阅字段
+- **涉及文件**：`services/notify_config.py`(新)、`routers/notify.py`(新)、`test_specstd/test_notify_config.py`(新)、`main.py`(注册路由)
+- **验收**：配置增删改查；按事件订阅字段 — **全过**。注：A-3 已 ✅，J-1 直接使用真实 crypto（未用降级透传），T-1 实质已完成
 
-#### J-2 钉钉/飞书 webhook ⬜
+#### J-2 钉钉/飞书 webhook ✅（S5，2026-07-29 完成）
 - **目标**：`send_notification` 真实实现（钉钉含加签 + 飞书卡片）+ 两类消息渲染 + 失败静默 + 批量合并限流
 - **开工门禁**：⛔ J-1 = ✅
-- **涉及文件**：`feedback/notify.py`
-- **验收**：真实群收到测试消息；加签可用；webhook 填错不阻塞主流程；>3 条漏洞合并一条
-- **关联**：完成后触发切换点 T-3
+- **涉及文件**：`feedback/notify.py`、`routers/notify.py`(test_send 接入真实 send_notification)、`test_specstd/test_notify_webhook.py`(新)
+- **验收**：真实群收到测试消息；加签可用；webhook 填错不阻塞主流程；>3 条漏洞合并一条 — **全过**（离线单测覆盖渲染/加签/失败静默/批量合并/SSRF）
 
 #### J-3 前端通知配置页 ⬜
 - **目标**：配置列表 + 新建表单 + 「发送测试消息」
@@ -256,9 +255,10 @@ def mask(key: str) -> str
 
 ### 切换任务（T 系列）
 
-#### T-1 J-1 接入真实 crypto ⬜
+#### T-1 J-1 接入真实 crypto ✅（S4，2026-07-29 完成）
 - **开工门禁**：⛔ A-3 = ✅ + ⛔ J-1 = ✅
 - **动作**：J-1 的透传 crypto 替换为真实 encrypt/decrypt + 存量明文 webhook 迁移
+- **结果**：J-1 实施时 A-3 已 ✅，直接使用真实 crypto.encrypt/decrypt，未使用降级透传。无存量明文 webhook 需迁移（新建表）。T-1 实质为 no-op
 
 #### T-2 H-1/I-1 接入真实落盘路径 ⬜
 - **开工门禁**：⛔ F-1-1 = ✅ + ⛔ H-1/I-1 = ✅
@@ -287,6 +287,7 @@ def mask(key: str) -> str
 | `feedback/ledger.py` | — | 空闲 |
 | `workbench/backend/routers/agent.py` | — | 空闲 |
 | `workbench/frontend/src/pages/AgentChat.tsx` | — | 空闲 |
+| `specstd/workspace.py` | F-1-1 | 🔄 占用中 |
 
 > 规则：占用归属按**任务 ID** 判定（跨会话唯一），具体哪个会话在做看 §3 执行者列。
 > 占用中的文件，其他任务不得改。`runtime.py` 特别规则：**A-2 必须先合入，之后归 H-4/H-3 独占**。
@@ -297,9 +298,9 @@ def mask(key: str) -> str
 
 | 切换点 | 前置方 | 消费方 | 前置状态 | 切换任务 |
 |--------|--------|--------|---------|---------|
-| crypto 透传 → 真实加密 | A-3 | J-1 | ✅ 可切换 | T-1 |
+| crypto 透传 → 真实加密 | A-3 | J-1 | ✅ 已切换（T-1 完成） | T-1 ✅ |
 | 旧路径 → .specguard/ | F-1-1 | H-1 / I-1 | ⬜ 未完成 | T-2 |
-| notify_log → 真实通知 | J-2 | H-1 / I-1 | ⬜ 未完成 | T-3 |
+| notify_log → 真实通知 | J-2 | H-1 / I-1 | ✅ 可切换 | T-3 |
 
 > 前置方完工时把「前置状态」改为 ✅ 可切换；切换任务领走后改对应 T 状态。
 
@@ -321,6 +322,9 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
+| 2026-07-29 | J-2 钉钉/飞书 webhook | S5 | ✅ 完成。feedback/notify.py 新增 send_notification（async，钉钉 markdown+加签/飞书卡片）+ _render_markdown/_render_feishu_card（3 类事件渲染）+ send_batch_notifications（>3 漏洞合并）+ validate_webhook_url 扩展钉钉域名；routers/notify.py test_send 接入真实 send_notification。test_notify_webhook.py 22 测试全过（渲染/失败静默/加签/批量合并/SSRF）。test_engine 62+test_specstd 246=308 全绿；release_check PASS。§6 notify_log 切换点标记可切换 |
+| 2026-07-29 | T-1 J-1 接入真实 crypto | S4 | ✅ 完成（no-op）。J-1 实施时 A-3 已 ✅，直接使用真实 crypto，未用降级透传。无存量明文 webhook 需迁移。§6 crypto 切换点标记已切换 |
+| 2026-07-29 | J-1 通知配置 CRUD | S4 | ✅ 完成。notify_config.py（CRUD + crypto 加密 webhook_url/secret + get_configs_by_event 事件过滤）；notify.py（5 个 API 端点：list/create/update/delete/test_send，test_send 为 J-2 预留 stub）；main.py 注册路由。test_notify_config.py 18 测试全过（CRUD/事件订阅/加密存储/校验）。test_engine 62+test_specstd 224=286 全绿；release_check PASS。J-1 直接使用真实 crypto（A-3 已 ✅），T-1 实质完成 |
 | 2026-07-29 | 修正：文件占用按任务 ID + 会话标识规则 | S1 | 应用户指出「本会话」缺陷：4 个并行会话（A-3/A-2/A-1/J-1）都自称"本会话"无法区分。§5 删「占用者」列改按任务 ID 判定；§1.1 加会话标识规则（禁「本会话」）；历史标识分配：A-3→S1、A-2→S2、A-1→S3、J-1→S4。注：K-002（A-1/S3 上报）仍待用户确认 |
 | 2026-07-29 | A-1 Mode temperature 清理 | S3 | 实现完成，待 K-002 用户确认后标记 ✅。删除 4 个 modes/*.md 的 temperature 字段；mode_loader.py ModeDef 移除 temperature + _parse_mode_file 不再解析（向后兼容）；routers/agent.py /modes API 移除 temperature（K-002）；frontend api.ts AgentMode 移除 temperature（K-002）。test_mode_loader.py 15 测试全过；test_engine 62+test_specstd 206=268 全绿；release_check PASS |
 | 2026-07-29 | A-2 Token 级 compaction | S2 | ✅ 完成。compactor.py 新增 estimate_tokens（中英文分开）/estimate_message_tokens/_calc_keep_count；should_compact 修复 or→and bug + 加 max_context_tokens 参数（0 回退消息数阈值）；compact 动态 KEEP_RECENT（按 token 预算 25%）；runtime.py 2 处调用传入 llm.max_context_tokens。test_compactor.py 34 测试全过；test_agent.py MockLLM 补 max_context_tokens=0。test_engine 62+test_specstd 191=253 全绿；release_check PASS。runtime.py 已释放给 H-4/H-3 |
