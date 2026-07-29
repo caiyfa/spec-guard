@@ -332,7 +332,7 @@ async def _notify_failure(plan_id: str, plan_name: str, scenario_id: str,
             "scenario_id": scenario_id,
             "error": str(error_msg)[:300],
             "run_at": datetime.now().isoformat(timespec="seconds"),
-            "debug_url": f"/runs/{run_id}",
+            "debug_url": f"/agent?debug_run_id={run_id}",
         }
 
         for config in configs:

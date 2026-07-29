@@ -543,6 +543,8 @@ export default function AgentChat() {
   const [searchParams] = useSearchParams();
   const scenarioId = searchParams.get('scenario_id') || '';
   const initialMode = searchParams.get('mode') || 'generate';
+  // H-5#3: 通知链接带 context 打开（debug_run_id 触发 debug 路由）
+  const debugRunId = searchParams.get('debug_run_id') || '';
 
   // 从模块存储恢复状态（跨导航保持会话）
   const [messages, setMessages] = useState<ChatMessage[]>(_store.messages);
@@ -581,6 +583,7 @@ export default function AgentChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const autoSentRef = useRef(false);
+  const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const currentWorkspace = session.getWorkspace();
 
@@ -776,6 +779,33 @@ export default function AgentChat() {
       }
     }
   }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentMode, currentModelId, currentPage, lockedMode]);
+
+  // H-5#3: 通知链接自动打开调试（debug_run_id 触发）
+  useEffect(() => {
+    if (debugRunId && wsState === 'open' && !debugSentRef.current) {
+      debugSentRef.current = true;
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // 设置 debug 模式 + 路由上下文（last_run_failed=true 触发 H-2 路由器自动 debug）
+        setCurrentMode('debug');
+        setLockedMode('');  // 不锁定，允许路由器自动路由
+        const msg = `定时任务运行失败，请分析运行 ${debugRunId} 的失败原因。使用 read_run_report 工具读取运行报告，定位失败场景和错误根因，给出修复建议。`;
+        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS['debug'] || []); setCtxUsage(null);
+        setMessages(prev => [...prev, { role: 'user', content: msg }]);
+        ws.send(JSON.stringify({
+          message: msg, session_id: '', max_turns: 50,
+          workspace: currentWorkspace, mode: 'debug', scenario_id: '',
+          model_id: currentModelId,
+          context: {
+            current_page: 'execution',
+            last_run_failed: true,
+            editing_scenario_id: '',
+            locked_mode: '',
+          },
+        }));
+      }
+    }
+  }, [debugRunId, wsState, currentWorkspace, currentModelId]);
 
   // 发送消息
   const handleSend = useCallback(() => {

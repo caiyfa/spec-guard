@@ -203,7 +203,7 @@ async def _handle_report_vulnerability(arguments: dict) -> list[TextContent]:
                 "summary": summary,
                 "evidence": evidence[:200] if evidence else "",
                 "suggestion": suggestion[:200] if suggestion else "",
-                "detail_url": "",
+                "detail_url": f"/feedback?highlight={spq_id}",
             }
             results = await send_batch_notifications(configs, "vulnerability", [payload])
             if all(results):
