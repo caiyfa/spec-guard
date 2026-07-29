@@ -186,3 +186,61 @@ class FeedbackLedger:
         供 H-2 路由器查询 pending 漏洞数。
         """
         return sum(1 for e in self._entries if "vtype" in e and e["status"] == status)
+
+    # ══════════════════════════════════════════════════════════
+    # H-5: 闭环衔接便捷方法
+    # ══════════════════════════════════════════════════════════
+
+    def close_vulnerability(self, spq_id: str, note: str = "") -> dict:
+        """便捷方法：关闭漏洞（pending/in_progress → closed）。
+
+        Agent 重新审计后发现漏洞已修正时调用。
+
+        Args:
+            spq_id: 漏洞条目 ID
+            note: 关闭备注（可选，如「重新审计确认已修正」）
+        """
+        entry = self.transition(spq_id, "closed")
+        if note:
+            entry.setdefault("events", []).append({
+                "type": "closed",
+                "note": note,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+            })
+            self._save()
+        return entry
+
+    def close_vulnerabilities_by_location(self, location: str) -> list[dict]:
+        """按位置批量关闭漏洞。
+
+        Agent 重新审计后某 FR/文件路径的漏洞已全部修正时调用。
+        只关闭非 closed 状态的漏洞。
+
+        Args:
+            location: FR ID 或文件路径
+
+        Returns:
+            被关闭的漏洞列表
+        """
+        closed = []
+        for entry in self._entries:
+            if ("vtype" in entry
+                    and entry.get("location") == location
+                    and entry["status"] != "closed"):
+                self.transition(entry["spq_id"], "closed")
+                closed.append(entry)
+        return closed
+
+    def get_vulnerability_summary(self) -> dict:
+        """漏洞统计摘要（供前端展示和路由信号）。
+
+        Returns:
+            {total, pending, in_progress, closed}
+        """
+        vulns = [e for e in self._entries if "vtype" in e]
+        return {
+            "total": len(vulns),
+            "pending": sum(1 for v in vulns if v["status"] == "pending"),
+            "in_progress": sum(1 for v in vulns if v["status"] == "in_progress"),
+            "closed": sum(1 for v in vulns if v["status"] == "closed"),
+        }

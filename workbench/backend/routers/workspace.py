@@ -146,9 +146,61 @@ def api_conformance(body: ConformanceBody):
 
 @router.post("/pull", dependencies=[Depends(require_role("admin"))])
 def api_pull(body: PullBody):
-    """拉取 git 工作区更新。"""
+    """拉取 git 工作区更新，记录 pulled_at 时间戳（供 H-2 路由信号）。"""
     result = pull(body.name)
+    # H-5: 返回 pulled_at（供前端展示和路由信号确认）
+    if result.get("ok"):
+        info = get_workspace(body.name)
+        if info:
+            result["pulled_at"] = info.pulled_at
     return result
+
+
+# ══════════════════════════════════════════════════════════
+# H-5: 漏洞管理（闭环衔接）
+# ══════════════════════════════════════════════════════════
+
+@router.get("/vulnerabilities")
+def api_list_vulnerabilities(status: str = "",
+                             user: CurrentUser = Depends(require_role("admin", "tester"))):
+    """列出漏洞台账条目（可按状态过滤）+ 统计摘要。"""
+    from feedback.ledger import FeedbackLedger
+    ledger = FeedbackLedger(SG_ROOT / "feedback" / "ledger.json")
+    vulns = ledger.list_vulnerabilities(status or None)
+    summary = ledger.get_vulnerability_summary()
+    return {"vulnerabilities": vulns, "summary": summary}
+
+
+class CloseVulnerabilityBody(BaseModel):
+    note: str = ""
+
+
+@router.post("/vulnerabilities/{spq_id}/close")
+def api_close_vulnerability(spq_id: str, body: CloseVulnerabilityBody,
+                            user: CurrentUser = Depends(require_role("admin", "tester"))):
+    """关闭漏洞（Agent 重新审计后已修正的漏洞）。"""
+    from feedback.ledger import FeedbackLedger
+    ledger = FeedbackLedger(SG_ROOT / "feedback" / "ledger.json")
+    try:
+        return ledger.close_vulnerability(spq_id, body.note)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"漏洞不存在: {spq_id}")
+
+
+class CloseByLocationBody(BaseModel):
+    location: str
+
+
+@router.post("/vulnerabilities/close-by-location")
+def api_close_by_location(body: CloseByLocationBody,
+                          user: CurrentUser = Depends(require_role("admin", "tester"))):
+    """按位置批量关闭漏洞（Agent 重新审计后某 FR 的漏洞已全部修正）。"""
+    from feedback.ledger import FeedbackLedger
+    ledger = FeedbackLedger(SG_ROOT / "feedback" / "ledger.json")
+    closed = ledger.close_vulnerabilities_by_location(body.location)
+    return {"closed_count": len(closed), "closed": closed}
 
 
 # ══════════════════════════════════════════════════════════
