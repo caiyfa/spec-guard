@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 
 from services.user_store import _connect, _LOCK, init_db
+from services import crypto
 
 # 模型配置字段
 MODEL_FIELDS = (
@@ -63,40 +64,51 @@ def _next_id() -> str:
 
 
 def list_models() -> list[dict]:
-    """列出全部模型配置。"""
+    """列出全部模型配置（api_key 脱敏返回，前端列表用）。"""
     _ensure_table()
     with _LOCK, _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM model_configs ORDER BY is_default DESC, updated_at DESC"
         ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+    result = []
+    for r in rows:
+        m = _row_to_dict(r)
+        # 列表默认脱敏：先解密再 mask，兼容明文与密文
+        m["api_key"] = crypto.mask(crypto.decrypt(m.get("api_key", "")))
+        result.append(m)
+    return result
 
 
 def get_model(mid: str) -> dict | None:
-    """获取单个模型配置。"""
+    """获取单个模型配置（api_key 解密返回完整值，LLMClient 用）。"""
     _ensure_table()
     with _LOCK, _connect() as conn:
         row = conn.execute(
             "SELECT * FROM model_configs WHERE id = ?", (mid,)
         ).fetchone()
-    return _row_to_dict(row) if row else None
+    if not row:
+        return None
+    m = _row_to_dict(row)
+    m["api_key"] = crypto.decrypt(m.get("api_key", ""))
+    return m
 
 
 def get_default_model() -> dict | None:
-    """获取默认模型配置。"""
+    """获取默认模型配置（api_key 解密返回完整值）。"""
     _ensure_table()
     with _LOCK, _connect() as conn:
         row = conn.execute(
             "SELECT * FROM model_configs WHERE is_default = 1 LIMIT 1"
         ).fetchone()
-    if row:
-        return _row_to_dict(row)
-    # 无默认模型时返回第一个
-    with _LOCK, _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM model_configs ORDER BY created_at ASC LIMIT 1"
-        ).fetchone()
-    return _row_to_dict(row) if row else None
+        if not row:
+            row = conn.execute(
+                "SELECT * FROM model_configs ORDER BY created_at ASC LIMIT 1"
+            ).fetchone()
+    if not row:
+        return None
+    m = _row_to_dict(row)
+    m["api_key"] = crypto.decrypt(m.get("api_key", ""))
+    return m
 
 
 def create_model(data: dict) -> dict:
@@ -108,7 +120,7 @@ def create_model(data: dict) -> dict:
         "id": mid,
         "name": data.get("name", ""),
         "base_url": data.get("base_url", ""),
-        "api_key": data.get("api_key", ""),
+        "api_key": crypto.encrypt(data.get("api_key", "")),  # 加密存储
         "model": data.get("model", ""),
         "timeout": data.get("timeout", "120"),
         "temperature": data.get("temperature", "0.7"),
@@ -144,8 +156,11 @@ def update_model(mid: str, data: dict) -> dict | None:
     values = []
     for field in MODEL_FIELDS:
         if field in data:
+            value = data[field]
+            if field == "api_key":
+                value = crypto.encrypt(str(value))  # 加密存储
             sets.append(f"{field} = ?")
-            values.append(str(data[field]))
+            values.append(str(value))
     if not sets:
         return get_model(mid)
     sets.append("updated_at = ?")
