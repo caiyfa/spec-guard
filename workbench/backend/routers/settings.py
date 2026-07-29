@@ -193,3 +193,26 @@ def probe_model(mid: str, body: ModelProbeBody = None, user=Depends(require_role
         model=model_name,
         timeout=timeout,
     )
+
+
+class AuditBaselineBody(BaseModel):
+    auto_update: bool
+
+
+@router.get("/audit-baseline")
+def get_audit_baseline(user=Depends(require_role("admin", "tester"))):
+    """获取「审计完成自动更新 spec 签名基线」开关状态（K-007，默认手动）。"""
+    from services import settings_store
+    return {"auto_update": settings_store.audit_auto_update_baseline()}
+
+
+@router.post("/audit-baseline")
+def set_audit_baseline(body: AuditBaselineBody, user=Depends(require_role("admin"))):
+    """设置「审计完成自动更新 spec 签名基线」开关（K-007，默认手动）。
+
+    开启后，Agent 写审计报告成功时自动更新基线；关闭（默认）需手动调
+    POST /api/workspace/mark-audited 更新基线。
+    """
+    from services import settings_store
+    settings_store.set_bool(settings_store.KEY_AUDIT_AUTO_UPDATE_BASELINE, body.auto_update)
+    return {"ok": True, "auto_update": body.auto_update}

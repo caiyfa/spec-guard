@@ -107,6 +107,12 @@ def api_register_local(body: RegisterLocalBody,
                             activate=body.activate, run_conformance=True)
     if result.get("ok"):
         user_store.audit(admin.emp_no, "register_workspace", body.name, "local")
+        # K-007: 建立初始 spec 签名基线（此后 spec 变更才可被检测，避免新注册误路由 audit）
+        try:
+            from services import spec_baseline
+            spec_baseline.init_baseline()
+        except Exception:
+            pass  # 基线建立失败不阻塞注册
         # F-1-3: 初始化 .specguard 目录（如果指定了自定义位置）
         if body.specguard_path:
             try:
@@ -125,6 +131,12 @@ def api_register_git(body: RegisterGitBody,
                           activate=body.activate, run_conformance=True)
     if result.get("ok"):
         user_store.audit(admin.emp_no, "register_workspace", body.name, "git")
+        # K-007: 建立初始 spec 签名基线（此后 spec 变更才可被检测，避免新注册误路由 audit）
+        try:
+            from services import spec_baseline
+            spec_baseline.init_baseline()
+        except Exception:
+            pass  # 基线建立失败不阻塞注册
         # F-1-3: 初始化 .specguard 目录（如果指定了自定义位置）
         if body.specguard_path:
             try:
@@ -142,6 +154,22 @@ def api_activate(body: ActivateBody):
     if not set_active(body.name):
         raise HTTPException(status_code=404, detail=f"工作区不存在: {body.name}")
     return {"ok": True, "active": body.name}
+
+
+@router.post("/mark-audited", dependencies=[Depends(require_role("admin", "tester"))])
+def api_mark_audited(body: ActivateBody):
+    """手动标记已审计（K-007 默认基线更新方式）：把 spec 签名基线更新为当前状态。
+
+    标记后，此前的 spec 变更不再触发 audit 路由，直到场景包文件再次被修改。
+    （若开启「审计完成自动更新基线」设置，则无需手动调用。）
+    """
+    from services import spec_baseline
+    from specstd.workspace import get_workspace_root
+    root = get_workspace_root(body.name or None)
+    if not root:
+        raise HTTPException(status_code=400, detail="无激活工作区或工作区不存在")
+    ok = spec_baseline.update_baseline(root)
+    return {"ok": ok, "workspace": body.name, "baseline_updated": ok}
 
 
 @router.delete("/{name}")

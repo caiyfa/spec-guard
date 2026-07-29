@@ -26,7 +26,7 @@ class RouteContext:
     locked_mode: str = ""                     # 用户手动锁定的模式（非空则不自动路由）
     current_page: str = ""                    # 工作台当前页面（execution / editor / dag / chat / feedback）
     last_run_failed: bool = False             # 最近一次运行是否失败
-    workspace_just_pulled: bool = False       # 刚执行"重新拉取文档"
+    workspace_just_pulled: bool = False       # spec 文件相对签名基线有变更（K-007：研发修正场景包文件）
     editing_scenario_id: str = ""             # 正在编辑的场景 ID
     scenario_never_run: bool = False           # 该场景从未运行过
     pending_vulnerabilities: int = 0           # 台账中 pending 漏洞数
@@ -68,7 +68,8 @@ def route_mode(ctx: RouteContext) -> RouteResult:
 
     # ── 层 1：工作台上下文信号（确定性最强）──
     if ctx.workspace_just_pulled:
-        return RouteResult("audit", "context", "文档已重新拉取，自动审计变更")
+        # K-007：信号源为 spec 签名变更（场景包文件真被修改），非单纯 pull 时间
+        return RouteResult("audit", "context", "检测到 spec 文档变更（研发已修正），自动审计")
     if ctx.current_page == "execution" and ctx.last_run_failed:
         return RouteResult("debug", "context", "检测到失败运行，自动进入调试")
     if ctx.editing_scenario_id and ctx.scenario_never_run:

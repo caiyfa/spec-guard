@@ -135,11 +135,21 @@ def _handle_write_audit_report(arguments: dict) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=f"错误：写入报告失败: {e}")]
 
+    # K-007: 若开启「审计完成自动更新基线」，审计报告成功后更新 spec 签名基线
+    baseline_updated = False
+    try:
+        from services import settings_store, spec_baseline
+        if settings_store.audit_auto_update_baseline():
+            baseline_updated = spec_baseline.update_baseline()
+    except Exception:
+        pass  # 基线更新失败不阻塞审计报告
+
     return [TextContent(type="text", text=json.dumps({
         "ok": True,
         "path": str(report_path),
         "filename": filename,
         "vulnerability_count": vuln_count,
+        "baseline_updated": baseline_updated,
     }, ensure_ascii=False, indent=2))]
 
 

@@ -1,16 +1,17 @@
 /** Settings — 环境配置统一设置页面（Tab 布局：数据库 / 模型配置 / YAML / SSO） */
 import React, { useEffect, useState, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
-import { referenceApi, modelApi } from '../api';
+import { referenceApi, modelApi, settingsApi } from '../api';
 import type { ModelConfig } from '../api';
 
-type Tab = 'db' | 'models' | 'yaml' | 'sso';
+type Tab = 'db' | 'models' | 'yaml' | 'sso' | 'audit';
 
 const TAB_LABELS: Record<Tab, string> = {
   db: '🗄 数据库',
   models: '🧠 模型配置',
   yaml: '📄 YAML',
   sso: '🔑 SSO/网关',
+  audit: '🔍 审计',
 };
 
 export default function Settings() {
@@ -69,6 +70,7 @@ export default function Settings() {
         {tab === 'models' && <ModelsTab />}
         {tab === 'yaml' && <YamlTab raw={raw} setRaw={setRaw} loading={loading} />}
         {tab === 'sso' && <SsoTab raw={raw} setRaw={setRaw} />}
+        {tab === 'audit' && <AuditTab />}
       </div>
     </div>
   );
@@ -435,6 +437,60 @@ function SsoTab({ raw, setRaw }: { raw: string; setRaw: (v: string) => void }) {
         </div>
       </div>
       <p className="text-[10px] text-gray-600">SSO 和网关配置通过 YAML Tab 编辑保存。此处为只读预览。</p>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// Tab 5: 审计（K-007 spec 签名基线更新方式）
+// ══════════════════════════════════════════════════════════
+
+function AuditTab() {
+  const [autoUpdate, setAutoUpdate] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    settingsApi.getAuditBaseline()
+      .then((r) => setAutoUpdate(r.auto_update))
+      .catch(() => setMsg('✗ 加载失败'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async (val: boolean) => {
+    setAutoUpdate(val);
+    setMsg('');
+    try {
+      await settingsApi.setAuditBaseline(val);
+      setMsg('✓ 已保存');
+    } catch (e: unknown) {
+      setAutoUpdate(!val); // 失败回滚
+      setMsg(`✗ ${e instanceof Error ? e.message : '保存失败'}`);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl p-1">
+      <div className="rounded-md border border-border bg-surface-3 p-4">
+        <h3 className="text-sm font-medium text-gray-200 mb-1">Spec 签名基线更新方式</h3>
+        <p className="text-[11px] text-gray-500 mb-3">
+          路由通过对比 spec 文件签名与基线检测变更，决定「研发修正场景包文件后是否自动进入审计模式」（K-007）。
+        </p>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoUpdate}
+            disabled={loading}
+            onChange={(e) => save(e.target.checked)}
+          />
+          <span className="text-sm text-gray-200">审计完成后自动更新基线</span>
+        </label>
+        <div className="text-[10px] text-gray-500 mt-2 space-y-1">
+          <p>· 关闭（默认手动）：研发修正 spec 后需在 Agent 会话中或调用 POST /api/workspace/mark-audited 手动标记已审计，基线才复位。</p>
+          <p>· 开启：Agent 写审计报告成功后自动更新基线，无需手动标记。</p>
+        </div>
+        {msg && <p className={`text-[11px] mt-2 ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</p>}
+      </div>
     </div>
   );
 }

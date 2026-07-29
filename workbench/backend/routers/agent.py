@@ -33,24 +33,22 @@ from agent.mode_router import RouteContext, RouteResult, route_mode
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 
 # H-2: 模式路由辅助函数
-_PULL_RECENT_MINUTES = 5  # 拉取后 5 分钟内视为 "just pulled"
+def _check_spec_changed(workspace: str) -> bool:
+    """检查工作区 spec 文件相对签名基线是否有变更（K-007 路由主信号）。
 
-
-def _check_recent_pull(workspace: str) -> bool:
-    """检查工作区是否在最近几分钟内执行过 git pull（路由信号）。
-
-    读取注册表中的 pulled_at 字段，与当前时间比较。
+    替代原 _check_recent_pull（pulled_at 时间信号）：pull 仅作触发，
+    真正判定"研发修正后重新拉取"的依据是场景包文件（spec.md/api.yaml）
+    签名相对基线是否有变更（specstd.signature 字段级检测，git/local 通用）。
     """
     if not workspace:
         return False
     try:
-        from specstd.workspace import get_workspace
-        from datetime import datetime, timedelta
-        info = get_workspace(workspace)
-        if not info or not info.pulled_at:
+        from services import spec_baseline
+        from specstd.workspace import get_workspace_root
+        root = get_workspace_root(workspace)
+        if not root:
             return False
-        pulled = datetime.fromisoformat(info.pulled_at)
-        return datetime.now() - pulled < timedelta(minutes=_PULL_RECENT_MINUTES)
+        return spec_baseline.has_spec_changes(root)
     except Exception:
         return False
 
@@ -84,7 +82,7 @@ def _build_route_context(data: dict, message: str) -> RouteContext:
         last_run_failed=ctx_data.get("last_run_failed", False),
         editing_scenario_id=ctx_data.get("editing_scenario_id", "") or data.get("scenario_id", ""),
         scenario_never_run=ctx_data.get("scenario_never_run", False),
-        workspace_just_pulled=_check_recent_pull(workspace),
+        workspace_just_pulled=_check_spec_changed(workspace),
         pending_vulnerabilities=_count_pending_vulns(),
     )
 

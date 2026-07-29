@@ -421,6 +421,14 @@ export const settingsApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  // K-007: spec 签名基线自动更新开关
+  getAuditBaseline: () =>
+    request<{ auto_update: boolean }>('/settings/audit-baseline'),
+  setAuditBaseline: (autoUpdate: boolean) =>
+    request<{ ok: boolean; auto_update: boolean }>('/settings/audit-baseline', {
+      method: 'POST',
+      body: JSON.stringify({ auto_update: autoUpdate }),
+    }),
 };
 
 // ── 多模型配置 ──
