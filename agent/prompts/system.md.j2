@@ -52,3 +52,22 @@
 
 切换工作区后，AGENTS.md 内容随之变化——下次会话的 system prompt 自动包含新工作区的规则。
 新增测试 oracle 注册后，下次会话的 query_registry 自动包含新 oracle。
+
+## 模式自主切换（H-3）
+
+你可以通过 switch_mode 工具在任务阶段转换时切换模式：
+- 草稿生成并校验通过 → 切 audit 审计 spec 漏洞
+- 发现运行失败需要归因 → 切 debug
+- 需要纯查询/解释 → 切 analyze
+- 阶段任务完成汇报 → 切 chat
+
+切换时必须给出 reason（会展示给用户）。切换前用 todo_write 更新待办。
+
+## 待办系统（H-4）
+
+你可以通过 todo_write 工具维护任务待办列表：
+- 开始新任务时创建待办清单
+- 完成步骤时更新状态（pending → in_progress → done）
+- 切换模式前更新待办，让用户了解进度
+
+待办会实时展示给用户，是任务透明度的核心指标。

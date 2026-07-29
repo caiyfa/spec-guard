@@ -78,8 +78,12 @@ class SessionManager:
             pass
 
     def save(self, session_id: str, messages: list[dict], metrics: dict = None,
-             emp_no: str = "", workspace: str = ""):
-        """保存会话到 JSONL（覆盖写，每次全量保存）。"""
+             todos: list[dict] = None, emp_no: str = "", workspace: str = ""):
+        """保存会话到 JSONL（覆盖写，每次全量保存）。
+
+        Args:
+            todos: H-4 待办列表，非 None 时写入 todo_list 行
+        """
         _validate_session_id(session_id)
         path = self.sessions_dir / f"{session_id}.jsonl"
         with open(path, "w", encoding="utf-8") as f:
@@ -93,11 +97,18 @@ class SessionManager:
             }
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
             for msg in messages:
-                if msg.get("_type") == "session_meta":
-                    continue  # 跳过旧元数据，用新的替换
+                if msg.get("_type") in ("session_meta", "todo_list"):
+                    continue  # 跳过旧元数据和旧 todo_list，用新的替换
                 f.write(json.dumps(msg, ensure_ascii=False) + "\n")
             if metrics:
                 f.write(json.dumps({"_type": "metrics", **metrics}, ensure_ascii=False) + "\n")
+            # H-4: 写入待办列表
+            if todos is not None:
+                f.write(json.dumps({
+                    "_type": "todo_list",
+                    "todos": todos,
+                    "updated_at": datetime.now().isoformat(timespec="seconds"),
+                }, ensure_ascii=False) + "\n")
 
     def append(self, session_id: str, message: dict):
         """追加单条消息到 JSONL。"""
@@ -105,6 +116,37 @@ class SessionManager:
         path = self.sessions_dir / f"{session_id}.jsonl"
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(message, ensure_ascii=False) + "\n")
+
+    def save_todos(self, session_id: str, todos: list[dict]):
+        """H-4: 追加待办列表到 JSONL（即时持久化，save 会覆盖但也会重写）。"""
+        _validate_session_id(session_id)
+        path = self.sessions_dir / f"{session_id}.jsonl"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "_type": "todo_list",
+                "todos": todos,
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+            }, ensure_ascii=False) + "\n")
+
+    def load_todos(self, session_id: str) -> Optional[list[dict]]:
+        """H-4: 加载最新一份待办（取最后一行 todo_list）。"""
+        _validate_session_id(session_id)
+        path = self.sessions_dir / f"{session_id}.jsonl"
+        if not path.is_file():
+            return None
+        last_todos = None
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                    if msg.get("_type") == "todo_list":
+                        last_todos = msg.get("todos", [])
+                except json.JSONDecodeError:
+                    continue
+        return last_todos
 
     def load(self, session_id: str) -> Optional[list[dict]]:
         """从 JSONL 加载会话消息列表。
@@ -124,8 +166,8 @@ class SessionManager:
                     continue
                 msg = json.loads(line)
                 msg_type = msg.get("_type")
-                if msg_type in ("metrics", "session_meta"):
-                    continue  # 跳过纯元数据行
+                if msg_type in ("metrics", "session_meta", "todo_list"):
+                    continue  # 跳过纯元数据行和待办行
                 if msg_type == "compaction_summary":
                     # G3-1: 保留压缩摘要为 system 消息，去掉 _type 字段
                     msg = {k: v for k, v in msg.items() if k != "_type"}
@@ -193,6 +235,7 @@ class SessionManager:
         messages = []
         metrics = None
         errors = []
+        todos_data = None
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -206,6 +249,8 @@ class SessionManager:
                     metrics = msg
                 elif msg_type == "error":
                     errors.append({k: v for k, v in msg.items() if k != "_type"})
+                elif msg_type == "todo_list":
+                    todos_data = msg.get("todos", [])
                 elif msg_type == "compaction_summary":
                     msg = {k: v for k, v in msg.items() if k != "_type"}
                     msg["role"] = "system"
@@ -237,6 +282,7 @@ class SessionManager:
             "metrics": metrics,
             "metrics_history": metrics_history,  # 逐轮计量数据
             "errors": errors,  # 错误记录
+            "todos": todos_data,  # H-4: 待办列表
             "summary": {
                 "total_messages": len(messages),
                 "assistant_messages": assistant_msgs,
@@ -244,6 +290,7 @@ class SessionManager:
                 "error_count": len(errors),
                 "has_metrics": metrics is not None,
                 "metrics_turns": len(metrics_history),
+                "has_todos": todos_data is not None,
             },
             "exported_at": datetime.now().isoformat(timespec="seconds"),
         }

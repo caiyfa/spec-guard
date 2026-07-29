@@ -118,8 +118,8 @@ def mask(key: str) -> str
 | I-2 | scheduler 调度器 + job CRUD API | I | P0 | ⬜ | ⛔ I-1 | — | 1.5 天 |
 | I-3 | 前端 Schedules 页 | I | P0 | ⬜ | 🟡 I-2（降级：mock API） | — | 1 天 |
 | H-1 | audit 模式 + 审计工具 + ledger 扩展 | H | P0 | ✅ | 🟡 F-1-1 + 🟡 J-2 | S9 | 3 天（实际 0.3 天） |
-| H-4 | 待办系统（todo_write + 持久化） | H | P0 | 🔄 | ⛔ 文件：runtime.py（A-2 后） | S10 | 2 天 |
-| H-3 | switch_mode 自主切换 | H | P0 | ⬜ | ⛔ H-4（共享 meta.py/runtime.py） | — | 2 天 |
+| H-4 | 待办系统（todo_write + 持久化） | H | P0 | ✅ | ⛔ 文件：runtime.py（A-2 后） | S10 | 2 天（实际 0.3 天） |
+| H-3 | switch_mode 自主切换 | H | P0 | ✅ | ⛔ H-4（共享 meta.py/runtime.py） | S10 | 2 天（实际 0.2 天） |
 | H-2 | 模式自动路由 | H | P0 | ✅ | 无（独立文件） | S11 | 2 天（实际 0.3 天） |
 | H-5 | 闭环衔接（拉取信号 + 通知链接） | H | P0 | ⬜ | ⛔ H-1 + ⛔ J-2 | — | 1.5 天 |
 | H-FE | 前端：待办面板 + 模式徽章 + 切换卡片 | H | P0 | ⬜ | 🟡 接口 4（降级：mock 事件） | — | 3 天 |
@@ -283,9 +283,9 @@ def mask(key: str) -> str
 
 | 文件 | 占用任务 | 状态 |
 |------|---------|------|
-| `agent/runtime.py` | H-4 | 🔄 S10 |
+| `agent/runtime.py` | — | 空闲（H-4/H-3 已完成） |
 | `agent/compactor.py` | — | 空闲 |
-| `mcp_server/tools/meta.py` | H-4 | 🔄 S10 |
+| `mcp_server/tools/meta.py` | — | 空闲（H-4/H-3 已完成） |
 | `feedback/ledger.py` | — | 空闲（H-1 已完成） |
 | `workbench/backend/routers/agent.py` | — | 空闲（H-2 已完成） |
 | `workbench/frontend/src/pages/AgentChat.tsx` | — | 空闲（H-2 已完成，H-FE 可接续） |
@@ -335,6 +335,7 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
+| 2026-07-29 | H-4 待办系统 + H-3 switch_mode 自主切换 | S10 | ✅ 完成。①mcp_server/tools/meta.py（新建）：todo_write + switch_mode 两个 meta 工具定义 + META_TOOL_NAMES 常量 + handle（MCP 独立模式返回提示）。②agent/runtime.py：导入 meta 模块 + META_TOOLS 常量；__init__ 添加 _todos/_pending_mode_notice/_tools_dirty/_session/_session_id 属性；工具过滤逻辑统一（set(mode_def.tools) | META_TOOLS，chat 模式 tools=[] 也有 meta 工具）；_rebuild_tool_map 排除 meta 工具；_execute_tool 拦截 todo_write/switch_mode；_handle_todo_write（校验+更新+emit+持久化）；_handle_switch_mode（校验+调用_switch_mode）；_switch_mode（重建工具集+_tools_dirty+注入通知+待办流转+emit mode_switch+emit todo_update）；run() 恢复待办+循环内检查 _tools_dirty/_pending_mode_notice+save 传 todos。③agent/session.py：save 添加 todos 参数（写入 todo_list 行，跳过旧 todo_list）；save_todos（追加即时持久化）；load_todos（取最后一行 todo_list）；load 跳过 todo_list 行；export_session 解析 todo_list。④agent/prompts/system.md.j2：追加模式自主切换+待办系统引导。⑤mcp_server/server.py：注册 meta 模块。⑥test_mcp_server.py：工具数 13→15+名称集合。⑦test_meta_tools.py（新建 37 测试）：TestTodoWrite(6)+TestTodoPersistence(7)+TestSwitchMode(9)+TestMetaToolsAllModes(7)+TestTodoAutoTransition(3)+TestIntegration(1)+TestMetaModule(4)。test_engine 62+test_specstd 356=418 全绿；release_check PASS。runtime.py/meta.py 已释放 |
 | 2026-07-29 | H-2 模式自动路由 | S11 | ✅ 完成。①agent/mode_router.py 新建三层信号路由器：层 0 手动锁定（locked_mode 非空则不路由）> 层 1 工作台上下文（workspace_just_pulled→audit / execution+last_run_failed→debug / editing+never_run→generate / feedback+pending_vulns→audit）> 层 2 消息意图（4 组关键词零 LLM 调用：generate/debug/audit/analyze）> 层 3 默认 chat。RouteContext（8 字段）+ RouteResult（mode/source/reason）。②routers/agent.py 集成路由器：WS 端点连接级 _ws_current_mode 跟踪，首条消息初始化不发切换事件，后续消息模式变化时 emit mode_switch 事件（from/to/source/reason/auto）；REST /chat 端点同步集成，返回 mode/mode_source/mode_reason。辅助函数 _check_recent_pull（查 workspace pulled_at 5 分钟内）+ _count_pending_vulns（查 ledger pending 漏洞数）+ _build_route_context（组装前端+后端信号）。③AgentChat.tsx 前端集成：WS 消息携带 context 字段（current_page/editing_scenario_id/locked_mode）；mode_switch 事件处理（更新 currentMode + 模式切换卡片插入消息流）；todo_update 事件处理（H-FE 接续）；模式锁定（点击模式自动锁定🔒，双击或🔓解锁，斜杠命令也锁定）；audit 模式标签 + /mode:audit 命令。④test_mode_router.py 30 测试（4 类×多场景：手动锁定优先级/上下文信号 8 种/意图关键词 4 模式/默认兑底/层间优先级/RouteResult 结构/RouteContext 默认值/INTENT_KEYWORDS 完整性）。test_engine 62+test_specstd 356=418 全绿；release_check PASS。H-FE 可接续 AgentChat.tsx |
 | 2026-07-29 | I-1 plan_executor 引擎直跑 + T-2/T-3 切换 | S8 | ✅ 完成。①engine/scenario_runner.py 新增 run_single（薄封装 run_with_deps，不改调度语义：shared 上游复用 / exclusive 懒重跑 / 上游失败→BLOCKED / 版本仲裁 DRIFT/ORPHANED/SKIP）。②workbench/backend/services/plan_executor.py 新建引擎直跑执行器：_setup_runtime 复刻 conftest.py 装配（env_config/DB/Registry/TokenProvider/DependencyGraph）；execute_plan 异步入口：加载 plan→拓扑排序→逐场景 asyncio.to_thread(run_single)→失败立即 _notify_failure（复用 J-2 send_notification + J-1 get_configs_by_event，仅 import+call 不修改 feedback/notify.py）→teardown LIFO→report_writer.dump_json+render_md 落盘 {workspace}/.specguard/reports/{timestamp}/；_notify_success 全绿时通知。F-1-1/J-2 均已 ✅ 直接使用真实路径函数+真实通知，T-2/T-3 对 I-1 为 no-op。验收：失败场景下游 BLOCKED（run_with_deps 内部处理）；报告复用 report_writer（JSON+MD 格式对齐）。test_engine 62+test_specstd 289=351 全绿；release_check PASS。I-2 可开工 |
 | 2026-07-29 | H-1 audit 模式 + 审计工具 | S9 | ✅ 完成。①agent/modes/audit.md（第 5 模式，7 个工具白名单：read_spec/list_spec_files/query_registry/read_scenario/read_run_report/write_audit_report/report_vulnerability，4 类漏洞 V1-V4 对应 vtype 枚举，3 级严重度 blocker/major/minor）②mcp_server/tools/audit.py（write_audit_report：报告落 .specguard/audit/{timestamp}_{title}.md，依赖 F-1-1 specguard_dir()；report_vulnerability：写 feedback/ledger.py 台账 pending + 调 J-2 send_batch_notifications 通知，best-effort 失败不阻塞）③feedback/ledger.py 扩展 create_vulnerability（vtype/severity/location/evidence/suggestion/summary 6 字段）+ list_vulnerabilities + count_vulnerabilities（供 H-2 路由器查 pending 漏洞数）④mcp_server/server.py + agent/runtime.py TOOL_MODULES 注册 audit。F-1-1/J-2 均已 ✅，直接使用真实路径函数+真实通知，T-2/T-3 对 H-1 部分实质为 no-op。K-005（test_mcp_server.py 断言 11→13）由 F-1-2/S7 顺手修复。test_audit.py 25 测试全过（模式加载/工具白名单/ledger CRUD/漏洞字段完整性/状态机/write_audit_report 落盘/report_vulnerability 台账写入+通知不阻塞）。test_engine 62+test_specstd 289=351 全绿；release_check PASS。runtime.py 已释放给 H-4/H-3，H-5 前置 H-1 已满足 |

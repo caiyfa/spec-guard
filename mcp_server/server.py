@@ -29,6 +29,7 @@ from mcp_server.tools import (  # noqa: E402
     validator,
     attribution,
     audit,
+    meta,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -43,6 +44,7 @@ TOOL_MODULES = [
     validator,
     attribution,
     audit,
+    meta,
 ]
 
 ALL_TOOLS: list[Tool] = []

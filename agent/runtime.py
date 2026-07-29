@@ -22,10 +22,13 @@ from agent.skill_loader import build_skills_xml
 
 # 默认使用 MCP server 的全部工具
 from mcp_server.tools import (
-    spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit,
+    spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit, meta,
 )
 
-TOOL_MODULES = [spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit]
+TOOL_MODULES = [spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit, meta]
+
+# Meta 工具常驻所有模式（H-3/H-4）
+META_TOOLS = meta.META_TOOL_NAMES
 
 # info_pack 工具（G2-1）：延迟导入，避免循环依赖
 try:
@@ -147,30 +150,33 @@ class AgentRuntime:
         self.events = EventBus()
         self.mode_name = mode_name
 
-        # 按模式过滤工具
+        # H-4: 待办状态
+        self._todos: list[dict] = []
+        # H-3: 模式切换注入 + 工具集重建标记
+        self._pending_mode_notice: str = ""
+        self._tools_dirty: bool = False
+        # 会话引用（供 meta 工具持久化用）
+        self._session: Optional[SessionManager] = None
+        self._session_id: Optional[str] = None
+
+        # 按模式过滤工具（meta 工具常驻所有模式）
         if tools is not None:
             # 显式传入优先
             self.tools = tools
         elif mode_name:
             mode_def = load_mode(mode_name)
-            if mode_def and mode_def.tools:
-                # 按白名单过滤
-                self.tools = [t for t in ALL_TOOLS if t.name in mode_def.tools]
-            elif mode_def and mode_def.tools == []:
-                # 空列表 = 无工具（纯对话）
-                self.tools = []
+            if mode_def:
+                # meta 工具常驻所有模式（含 tools=[] 的 chat 模式）
+                allowed = set(mode_def.tools) | META_TOOLS
+                self.tools = [t for t in ALL_TOOLS if t.name in allowed]
             else:
                 self.tools = ALL_TOOLS
         else:
             self.tools = ALL_TOOLS
 
-        # 重建 tool_map（只包含过滤后的工具）
+        # 重建 tool_map（meta 工具在 _execute_tool 中拦截，不映射到模块）
         self._tool_map = {}
-        for tool in self.tools:
-            for mod in TOOL_MODULES:
-                if tool in mod.TOOLS:
-                    self._tool_map[tool.name] = mod
-                    break
+        self._rebuild_tool_map()
 
     def run(self, system_prompt: str, user_message: str,
             session: Optional[SessionManager] = None,
@@ -181,16 +187,33 @@ class AgentRuntime:
             {"role": "user", "content": user_message},
         ]
 
+        self._session = session
+        self._session_id = session_id
+
         # 恢复历史会话
         if session and session_id:
             history = session.load(session_id)
             if history:
                 messages = history
+                # H-4: 恢复待办状态
+                todos = session.load_todos(session_id)
+                if todos is not None:
+                    self._todos = todos
                 self.events.emit("state", resumed=True, session_id=session_id)
 
         openai_tools = self._to_openai_tools()
 
         for turn in range(self.max_turns):
+            # H-3: 模式切换后重建工具集
+            if self._tools_dirty:
+                openai_tools = self._to_openai_tools()
+                self._tools_dirty = False
+
+            # H-3: 注入模式切换通知（不动首条 system prompt）
+            if self._pending_mode_notice:
+                messages.append({"role": "system", "content": self._pending_mode_notice})
+                self._pending_mode_notice = None
+
             # G3-1: 超阈值时触发压缩
             if should_compact(messages, self.llm.max_context_tokens):
                 messages = compact(messages, self.llm, self.llm.max_context_tokens)
@@ -237,7 +260,7 @@ class AgentRuntime:
 
             # 增量保存会话
             if session and session_id:
-                session.save(session_id, messages)
+                session.save(session_id, messages, todos=self._todos)
         else:
             # G3-1: 熔断前也尝试压缩
             if should_compact(messages, self.llm.max_context_tokens):
@@ -248,7 +271,7 @@ class AgentRuntime:
 
         # 最终保存
         if session and session_id:
-            session.save(session_id, messages, metrics=self.llm.get_stats())
+            session.save(session_id, messages, metrics=self.llm.get_stats(), todos=self._todos)
 
         return messages
 
@@ -276,6 +299,13 @@ class AgentRuntime:
         except json.JSONDecodeError:
             return f"错误：参数 JSON 解析失败: {raw_args}"
 
+        # ── Meta 工具特殊处理（不通过 mod.handle）──
+        if name == "todo_write":
+            return self._handle_todo_write(arguments)
+        if name == "switch_mode":
+            return self._handle_switch_mode(arguments)
+
+        # ── 常规工具 ──
         mod = self._tool_map.get(name)
         if not mod:
             return f"未知工具: {name}"
@@ -285,3 +315,120 @@ class AgentRuntime:
             return result[0].text if result else "（无输出）"
         except Exception as e:
             return f"工具执行异常: {e}"
+
+    # ══════════════════════════════════════════════════════════
+    # H-3/H-4: Meta 工具处理 + 模式切换
+    # ══════════════════════════════════════════════════════════
+
+    def _rebuild_tool_map(self):
+        """重建 tool_map（meta 工具在 _execute_tool 中拦截，不映射到模块）。"""
+        self._tool_map = {}
+        for tool in self.tools:
+            if tool.name in META_TOOLS:
+                continue  # meta 工具在 _execute_tool 中拦截
+            for mod in TOOL_MODULES:
+                if tool in mod.TOOLS:
+                    self._tool_map[tool.name] = mod
+                    break
+
+    def _handle_todo_write(self, arguments: dict) -> str:
+        """H-4: 处理 todo_write — 更新待办 + emit 事件 + 持久化。"""
+        todos = arguments.get("todos", [])
+        if not isinstance(todos, list):
+            return "错误：todos 必须是数组"
+
+        # 校验每条待办
+        for todo in todos:
+            if not isinstance(todo, dict):
+                return "错误：每条待办必须是对象"
+            if not todo.get("id") or not todo.get("title"):
+                return "错误：每条待办必须包含 id 和 title"
+            status = todo.get("status", "pending")
+            if status not in ("pending", "in_progress", "done", "blocked"):
+                return f"错误：无效的 status: {status}"
+
+        self._todos = todos
+        self.events.emit("todo_update", todos=self._todos)
+
+        # 持久化到会话 JSONL
+        if self._session and self._session_id:
+            try:
+                self._session.save_todos(self._session_id, self._todos)
+            except Exception:
+                pass  # 持久化失败不影响运行时
+
+        return f"待办已更新（{len(self._todos)} 项）"
+
+    def _handle_switch_mode(self, arguments: dict) -> str:
+        """H-3: 处理 switch_mode — mid-run 模式切换。"""
+        new_mode = arguments.get("mode", "")
+        reason = arguments.get("reason", "")
+
+        if not new_mode:
+            return "错误：缺少 mode 参数"
+        if not reason:
+            return "错误：缺少 reason 参数"
+
+        # 验证模式存在
+        mode_def = load_mode(new_mode)
+        if not mode_def:
+            return f"错误：未知模式: {new_mode}"
+
+        if new_mode == self.mode_name:
+            return f"已在 {new_mode} 模式，无需切换"
+
+        old_mode = self.mode_name
+        self._switch_mode(new_mode, reason, mode_def)
+
+        return f"已切换到 {new_mode} 模式。{reason}"
+
+    def _switch_mode(self, new_mode: str, reason: str, mode_def=None):
+        """mid-run 模式切换：注入新 system 消息 + 重建工具白名单 + 待办流转。
+
+        关键设计：不改首条 system prompt（保护 prompt cache），而是注入新 system 消息。
+        """
+        if mode_def is None:
+            mode_def = load_mode(new_mode)
+        if not mode_def:
+            return
+
+        old_mode = self.mode_name
+
+        # 1. 重建工具集（新白名单 + meta 工具常驻）
+        allowed = set(mode_def.tools) | META_TOOLS
+        self.tools = [t for t in ALL_TOOLS if t.name in allowed]
+        self._rebuild_tool_map()
+        self._tools_dirty = True  # 下一轮 LLM 调用前重建 openai_tools
+
+        # 2. 注入新模式约束（作为新 system 消息，不动首条）
+        switch_notice = (
+            f"【模式切换】{old_mode} → {new_mode}\n"
+            f"原因：{reason}\n\n"
+            f"新模式行为约束：\n{mode_def.prompt_fragment}"
+        )
+        self._pending_mode_notice = switch_notice
+
+        # 3. 自动更新待办：当前模式的 in_progress 项 → done，
+        #    新模式的第一个 pending 项 → in_progress
+        for todo in self._todos:
+            if todo.get("mode") == old_mode and todo.get("status") == "in_progress":
+                todo["status"] = "done"
+        for todo in self._todos:
+            if todo.get("mode") == new_mode and todo.get("status") == "pending":
+                todo["status"] = "in_progress"
+                break
+
+        # 4. 事件 + 状态
+        self.mode_name = new_mode
+        self.events.emit("mode_switch",
+                         from_mode=old_mode, to_mode=new_mode,
+                         source="agent", reason=reason, auto=True)
+
+        # 待办变更也 emit + 持久化
+        if self._todos:
+            self.events.emit("todo_update", todos=self._todos)
+            if self._session and self._session_id:
+                try:
+                    self._session.save_todos(self._session_id, self._todos)
+                except Exception:
+                    pass

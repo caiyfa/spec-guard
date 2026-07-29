@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 13  # F-1-2/K-005: H-1 新增 audit 工具后 11→13
+        assert len(ALL_TOOLS) == 15  # H-3/H-4: 新增 meta 工具后 13→15
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -54,7 +54,8 @@ class TestToolRegistration:
                      "read_scenario", "next_scenario_id",
                      "query_registry", "write_draft", "undo_draft", "validate",
                      "read_run_report", "db_evidence",
-                     "write_audit_report", "report_vulnerability"}  # K-005: H-1 audit 工具
+                     "write_audit_report", "report_vulnerability",
+                     "todo_write", "switch_mode"}  # H-3/H-4: meta 工具
         assert names == expected
 
 
