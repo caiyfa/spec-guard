@@ -552,3 +552,30 @@ export const schedulesApi = {
   listPlans: () =>
     request<{ plans: { id: string; name: string; scenario_count: number }[] }>('/schedules/plans/list'),
 };
+
+// ── 通知配置（J-3）──
+export interface NotifyConfig {
+  id: string;
+  name: string;
+  channel: string;  // dingtalk / feishu
+  webhook_url: string;  // 脱敏
+  secret: string;  // 脱敏
+  mention_mobiles: string;
+  events: string[];
+  enabled: boolean;
+  created_by: string;
+  created_at: string;
+}
+
+export const notifyApi = {
+  list: () =>
+    request<{ configs: NotifyConfig[] }>('/notify/configs'),
+  create: (body: { name: string; channel: string; webhook_url: string; secret?: string; mention_mobiles?: string; events?: string[]; enabled?: boolean }) =>
+    request<NotifyConfig>('/notify/configs', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: { name: string; channel: string; webhook_url: string; secret?: string; mention_mobiles?: string; events?: string[]; enabled?: boolean }) =>
+    request<NotifyConfig>(`/notify/configs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (id: string) =>
+    request<{ ok: boolean }>(`/notify/configs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  test: (id: string, event?: string) =>
+    request<{ ok: boolean; message: string }>(`/notify/configs/${encodeURIComponent(id)}/test`, { method: 'POST', body: JSON.stringify({ event: event || 'plan_failure' }) }),
+};

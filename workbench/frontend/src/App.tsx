@@ -12,6 +12,7 @@ import SpecCenter from './pages/SpecCenter';
 import Attribution from './pages/Attribution';
 import WorkspaceSettings from './pages/WorkspaceSettings';
 import Feedback from './pages/Feedback';
+import NotifyConfigs from './pages/NotifyConfigs';
 import Schedules from './pages/Schedules';
 import Drafts from './pages/Drafts';
 import Login from './pages/Login';
@@ -90,7 +91,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: '反哺',
     icon: '🔄',
-    items: [{ to: '/feedback', label: '反哺闭环', roles: TESTER_UP }],
+    items: [
+      { to: '/feedback', label: '反哺闭环', roles: TESTER_UP },
+      { to: '/notify', label: '通知配置', roles: TESTER_UP },
+    ],
   },
 ];
 
@@ -353,6 +357,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/attribution" element={<Attribution />} />
             <Route path="/workspace" element={<WorkspaceSettings />} />
             <Route path="/feedback" element={<Feedback />} />
+            <Route path="/notify" element={<NotifyConfigs />} />
                         <Route path="/schedules" element={<Schedules />} />
             <Route path="/admin-users" element={<AdminUsers />} />
             <Route path="/settings" element={<Settings />} />
