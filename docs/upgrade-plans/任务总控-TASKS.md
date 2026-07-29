@@ -172,7 +172,7 @@ def mask(key: str) -> str
 - **验收**：草稿/计划/报告/info_pack 全落 `{workspace}/.specguard/`；SG_ROOT 不再产生
 - **备注**：runner.py 报告写入端在 conftest.py，经用户确认方案 A 将 conftest.py 纳入范围（K-003）
 
-#### F-1-3 文档同步 + 前端 ⬜
+#### F-1-3 文档同步 + 前端 ✅（S10，2026-07-29 完成）
 - **目标**：AGENTS.md 目录章节 + .gitignore 更新 + 工作区注册表单加「.specguard 位置」字段
 - **开工门禁**：⛔ F-1-2 = ✅
 - **涉及文件**：`AGENTS.md`、`.gitignore`、前端工作区注册组件
@@ -191,7 +191,7 @@ def mask(key: str) -> str
 - **涉及文件**：`feedback/notify.py`、`routers/notify.py`(test_send 接入真实 send_notification)、`test_specstd/test_notify_webhook.py`(新)
 - **验收**：真实群收到测试消息；加签可用；webhook 填错不阻塞主流程；>3 条漏洞合并一条 — **全过**（离线单测覆盖渲染/加签/失败静默/批量合并/SSRF）
 
-#### J-3 前端通知配置页 ⬜
+#### J-3 前端通知配置页 ✅（S10，2026-07-29 完成）
 - **目标**：配置列表 + 新建表单 + 「发送测试消息」
 - **开工门禁**：🟡 J-2（降级：mock API）
 - **涉及文件**：`pages/NotifyConfigs.tsx`(新)
@@ -226,14 +226,14 @@ def mask(key: str) -> str
 - **涉及文件**：`agent/modes/audit.md`(新)、`mcp_server/tools/audit.py`(新)、`feedback/ledger.py`、`mcp_server/server.py`、`agent/runtime.py`(TOOL_MODULES 注册)
 - **验收**：audit 模式工具白名单正确；构造缺陷 spec 能发现 V1 漏洞；台账 pending 落账
 
-#### H-4 待办系统 ⬜
+#### H-4 待办系统 ✅（S10，2026-07-29 完成）
 - **目标**：`todo_write` 工具 + runtime 待办状态 + session JSONL 持久化（`_type=todo_list`）+ `todo_update` 事件
 - **开工门禁**：⛔ **文件门禁——A-2 已合入 runtime.py**
 - **涉及文件**：`mcp_server/tools/meta.py`(新)、`agent/runtime.py`、`agent/session.py`
 - **验收**：todo_write 后事件 emit；会话恢复待办还原
 - **注意**：与 H-3 同文件，**必须同一人/同会话连续做**
 
-#### H-3 switch_mode 自主切换 ⬜
+#### H-3 switch_mode 自主切换 ✅（S10，2026-07-29 完成）
 - **目标**：`switch_mode` meta 工具 + mid-run 切换（注入新 system 消息，不改首条）+ 工具白名单重建 + 切换驱动待办状态流转
 - **开工门禁**：⛔ H-4 = ✅（共享 meta.py/runtime.py）
 - **涉及文件**：`mcp_server/tools/meta.py`、`agent/runtime.py`、`agent/prompts/system.md.j2`
@@ -245,7 +245,7 @@ def mask(key: str) -> str
 - **涉及文件**：`agent/mode_router.py`(新)、`routers/agent.py`、前端 AgentChat（context 字段）
 - **验收**：失败运行→自动 debug；重新拉取→自动 audit；锁定后不自动切；切换带 reason — **全过**
 
-#### H-5 闭环衔接 ⬜
+#### H-5 闭环衔接 ✅（S10，2026-07-29 完成）
 - **目标**：「重新拉取」记录时间戳（路由信号）+ 通知「打开调试」链接带 context + 漏洞 closed 状态机
 - **开工门禁**：⛔ H-1 = ✅ + ⛔ J-2 = ✅
 - **涉及文件**：`routers/workspace.py`、`feedback/ledger.py`、前端通知链接处理
@@ -263,11 +263,11 @@ def mask(key: str) -> str
 - **动作**：J-1 的透传 crypto 替换为真实 encrypt/decrypt + 存量明文 webhook 迁移
 - **结果**：J-1 实施时 A-3 已 ✅，直接使用真实 crypto.encrypt/decrypt，未使用降级透传。无存量明文 webhook 需迁移（新建表）。T-1 实质为 no-op
 
-#### T-2 H-1/I-1 接入真实落盘路径 ⬜
+#### T-2 H-1/I-1 接入真实落盘路径 ✅（S8，实质 no-op，2026-07-29）
 - **开工门禁**：⛔ F-1-1 = ✅ + ⛔ H-1/I-1 = ✅
 - **动作**：降级旧路径替换为 specguard_dir()，验证报告/草稿落 `.specguard/`
 
-#### T-3 H-1/I-1 接通真实通知 ⬜
+#### T-3 H-1/I-1 接通真实通知 ✅（S8，实质 no-op，2026-07-29）
 - **开工门禁**：⛔ J-2 = ✅ + ⛔ H-1/I-1 = ✅
 - **动作**：notify_log 空实现替换为真实 send_notification，群聊联调
 
@@ -332,6 +332,8 @@ def mask(key: str) -> str
 | K-004 | F-1-2 路径迁移导致 TestDraftWriter 3 个测试失败：draft_writer 改用 `drafts_dir()` 后无激活工作区时 raise RuntimeError，测试未设 workspace fixture | F-1-2 | 是（draft_writer 路径迁移直接后果） | 挡全局门禁 | ✅ 已修复 | 将 test_mcp_server.py 纳入 F-1-2 范围，3 个测试加 workspace fixture + 清理路径改用 `drafts_dir()` | 用户确认，已修复 |
 | K-005 | H-1（S9）添加 audit 工具但未更新 TestToolRegistration 断言：工具数 11→13，名称集合缺 `write_audit_report`/`report_vulnerability` | F-1-2（发现） | 否（H-1/S9 引入） | 挡全局门禁 | ✅ 已修复 | 由 F-1-2 顺手修复（改 2 行断言），避免阻塞完工 | 用户确认顺手修复，已修复 |
 | K-006 | drafts.py（前端草稿 API）和 attribution.py（失败归因 MCP 工具）仍有旧路径 `SG_ROOT/drafts`、`SG_ROOT/reports`，与 F-1-2 迁移后的 draft_writer/runner 路径不一致 | F-1-2（发现） | 否（原有代码旧路径） | Agent 写草稿/报告到 .specguard/ 但前端/工具从 SG_ROOT 读 → 找不到 | ✅ 已修复 | 用户确认执行修复：drafts.py DRAFTS_ROOT/SCENARIOS_ROOT/TRASH_DIR 改为 `_drafts_root()`/`_scenarios_root()`/`_trash_dir()` 函数（无工作区回退）；attribution.py REPORTS_ROOT 改为 `_get_reports_root()` 函数；test_acceptance_fixes.py mock 改为 mock 函数 | 用户确认执行修复，已修复 |
+| K-007 | `register_local` 设 `pulled_at=now`（`specstd/workspace.py:290`），新注册工作区前 5 分钟所有消息（含"生成场景"）被 `_check_recent_pull` 误路由到 audit（"刚注册"≠"研发修正后重新拉取"） | 冒烟（半实机） | 否（H-2/S11 路由信号设计） | 新注册工作区意图路由失效 | 🟡 待确认 | 方案：改用 spec 签名变更检测（`specstd/signature.py` 的 `compute_signatures`+`detect_changes`）——pull 仅作触发，场景包文件（spec.md/api.yaml）签名相对基线有变更才路由 audit | 待用户确认方案细节（基线更新时机 / 是否保留 pulled_at 辅助信号） |
+| K-008 | `notify/configs` 端点 `user.get("account","")` 误用 `CurrentUser`（无 `.get` 且 `account` 非属性），POST 必然 500（`routers/notify.py:44`） | 冒烟（半实机） | 否（J-1/S4 引入） | notify/configs 创建 500；`test_notify_config` 只测 service 层未覆盖端点 | ✅ 已修复 | `user.get("account","")` → `user.emp_no`（对照 `schedules.py:67`） | 用户确认修复（2026-07-29），已实施 + 冒烟验证端点 200 + test_notify_config 18 全绿 |
 
 ---
 

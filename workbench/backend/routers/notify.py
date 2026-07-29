@@ -41,7 +41,7 @@ def list_configs(user=Depends(require_role("admin", "tester"))):
 def create_config(body: NotifyConfigBody, user=Depends(require_role("admin"))):
     """创建通知配置。webhook_url/secret 加密存储。"""
     try:
-        return notify_config.create_config(body.model_dump(), created_by=user.get("account", ""))
+        return notify_config.create_config(body.model_dump(), created_by=user.emp_no)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
