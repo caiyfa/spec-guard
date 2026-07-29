@@ -198,7 +198,6 @@ def get_modes(user: CurrentUser = Depends(require_role("admin", "tester"))):
     return {"modes": [
         {
             "name": m.name,
-            "temperature": m.temperature,
             "tools": m.tools,
             "description": m.description,
             "prompt_fragment": m.prompt_fragment[:200] + "..." if len(m.prompt_fragment) > 200 else m.prompt_fragment,

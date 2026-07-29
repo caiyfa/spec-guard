@@ -24,7 +24,6 @@ _CACHE_TTL: float = 30  # 30 秒
 class ModeDef:
     """模式定义。"""
     name: str                         # 模式名称（文件名去掉 .md）
-    temperature: float = 0.7          # 温度
     tools: list[str] = field(default_factory=list)  # 工具白名单（空列表 = 无工具）
     prompt_fragment: str = ""         # Markdown 正文（system prompt 片段）
     description: str = ""             # 模式简述（frontmatter 可选）
@@ -83,12 +82,13 @@ def _parse_mode_file(name: str, text: str) -> ModeDef:
 
     格式：
         ---
-        temperature: 0.3
         tools:
           - read_spec
           - validate
         ---
         Markdown 正文（system prompt 片段）
+
+    向后兼容：旧文件的 temperature 字段会被安全忽略（不报错）。
     """
     frontmatter = {}
     body = text
@@ -105,7 +105,6 @@ def _parse_mode_file(name: str, text: str) -> ModeDef:
 
     return ModeDef(
         name=name,
-        temperature=float(frontmatter.get("temperature", 0.7)),
         tools=list(frontmatter.get("tools", [])),
         prompt_fragment=body,
         description=str(frontmatter.get("description", "")),

@@ -1,5 +1,4 @@
 ---
-temperature: 0.2
 tools:
   - read_spec
   - list_spec_files

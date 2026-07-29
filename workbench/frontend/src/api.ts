@@ -366,7 +366,6 @@ export const workspaceApi = {
 // ── Agent 对话 ──
 export interface AgentMode {
   name: string;
-  temperature: number;
   tools: string[];
   description: string;
   prompt_fragment: string;
