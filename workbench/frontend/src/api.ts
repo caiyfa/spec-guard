@@ -519,3 +519,36 @@ export const scenarioApi = {
   listMeta: () =>
     request<{ metas: ScenarioMeta[] }>('/scenarios/meta-list'),
 };
+
+// ── 定时任务调度（I-2/I-3）──
+export interface ScheduledJob {
+  id: string;
+  name: string;
+  plan_id: string;
+  workspace: string;
+  cron: string;
+  notify_config_id: string;
+  enabled: boolean;
+  created_by: string;
+  created_at: string;
+  last_run_at: string;
+  last_run_status: string;
+  last_run_id: string;
+}
+
+export const schedulesApi = {
+  list: () =>
+    request<{ jobs: ScheduledJob[] }>('/schedules'),
+  create: (body: { name: string; plan_id: string; cron: string; notify_config_id?: string; enabled?: boolean }) =>
+    request<ScheduledJob>('/schedules', { method: 'POST', body: JSON.stringify(body) }),
+  get: (id: string) =>
+    request<ScheduledJob>(`/schedules/${encodeURIComponent(id)}`),
+  update: (id: string, body: { name?: string; plan_id?: string; cron?: string; notify_config_id?: string; enabled?: boolean }) =>
+    request<ScheduledJob>(`/schedules/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (id: string) =>
+    request<{ ok: boolean }>(`/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  run: (id: string) =>
+    request<{ run_id: string; status: string; results: any[] }>(`/schedules/${encodeURIComponent(id)}/run`, { method: 'POST' }),
+  listPlans: () =>
+    request<{ plans: { id: string; name: string; scenario_count: number }[] }>('/schedules/plans/list'),
+};
