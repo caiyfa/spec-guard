@@ -18,6 +18,7 @@ export default function WorkspaceSettings() {
   const [regUrl, setRegUrl] = useState('');
   const [regSystem, setRegSystem] = useState('tdm');
   const [regBranch, setRegBranch] = useState('main');
+  const [regSpecguardPath, setRegSpecguardPath] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const load = async () => {
@@ -40,24 +41,24 @@ export default function WorkspaceSettings() {
     try {
       if (regType === 'local') {
         if (!regPath) { setError('请输入本地路径'); return; }
-        const result = await workspaceApi.registerLocal({ name: regName, path: regPath, system: regSystem });
+        const result = await workspaceApi.registerLocal({ name: regName, path: regPath, system: regSystem, specguard_path: regSpecguardPath || undefined } as any);
         if (!result.ok) {
           setError(result.error || '注册失败');
           if (result.report) setConformance(result.report);
         } else {
           setSuccess(`工作区 ${regName} 注册成功`);
-          setRegName(''); setRegPath('');
+          setRegName(''); setRegPath(''); setRegSpecguardPath('');
           load();
         }
       } else {
         if (!regUrl) { setError('请输入 git URL'); return; }
-        const result = await workspaceApi.registerGit({ name: regName, url: regUrl, system: regSystem, branch: regBranch });
+        const result = await workspaceApi.registerGit({ name: regName, url: regUrl, system: regSystem, branch: regBranch, specguard_path: regSpecguardPath || undefined } as any);
         if (!result.ok) {
           setError(result.error || '注册失败');
           if (result.report) setConformance(result.report);
         } else {
           setSuccess(`工作区 ${regName} 克隆成功`);
-          setRegName(''); setRegUrl('');
+          setRegName(''); setRegUrl(''); setRegSpecguardPath('');
           load();
         }
       }
@@ -141,6 +142,7 @@ export default function WorkspaceSettings() {
               <input value={regBranch} onChange={e => setRegBranch(e.target.value)} placeholder="分支 (main)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
             </>
           )}
+          <input value={regSpecguardPath} onChange={e => setRegSpecguardPath(e.target.value)} placeholder=".specguard 目录位置（可选，默认 {工作区}/.specguard/）" className="col-span-2 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
         </div>
         <button onClick={handleRegister} disabled={submitting} className="mt-2 px-4 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40">
           {submitting ? '处理中...' : regType === 'local' ? '注册' : '克隆并注册'}

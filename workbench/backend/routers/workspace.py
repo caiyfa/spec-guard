@@ -45,6 +45,7 @@ class RegisterLocalBody(BaseModel):
     path: str
     system: str = "tdm"
     activate: bool = True
+    specguard_path: str = ""  # F-1-3: .specguard 目录自定义位置（可选，默认 {workspace}/.specguard/）
     # 注意：不接受 run_conformance 客户端参数——接入即门禁，合规校验由服务端强制执行（V2 修复）
 
 
@@ -54,6 +55,7 @@ class RegisterGitBody(BaseModel):
     system: str = "tdm"
     branch: str = "main"
     activate: bool = True
+    specguard_path: str = ""  # F-1-3: .specguard 目录自定义位置
     # 同上：合规校验不可被客户端跳过（V2 修复）
 
 
@@ -105,6 +107,13 @@ def api_register_local(body: RegisterLocalBody,
                             activate=body.activate, run_conformance=True)
     if result.get("ok"):
         user_store.audit(admin.emp_no, "register_workspace", body.name, "local")
+        # F-1-3: 初始化 .specguard 目录（如果指定了自定义位置）
+        if body.specguard_path:
+            try:
+                from specstd.workspace import specguard_dir
+                specguard_dir(custom_path=body.specguard_path)
+            except Exception:
+                pass  # 自定义路径初始化失败不阻塞注册
     return result
 
 
@@ -116,6 +125,13 @@ def api_register_git(body: RegisterGitBody,
                           activate=body.activate, run_conformance=True)
     if result.get("ok"):
         user_store.audit(admin.emp_no, "register_workspace", body.name, "git")
+        # F-1-3: 初始化 .specguard 目录（如果指定了自定义位置）
+        if body.specguard_path:
+            try:
+                from specstd.workspace import specguard_dir
+                specguard_dir(custom_path=body.specguard_path)
+            except Exception:
+                pass  # 自定义路径初始化失败不阻塞注册
     return result
 
 

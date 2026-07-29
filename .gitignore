@@ -9,9 +9,9 @@ venv/
 node_modules/
 workbench/frontend/dist/
 
-# ── 运行产物（勿提交，AGENTS.md 约定）──
-reports/
-drafts/
+# ── 运行产物（勿提交，各工作区 .specguard/ 有独立 .gitignore）──
+# drafts/ 和 reports/ 已迁移至各工作区 .specguard/ 目录
+# 顶层不再产生这些目录，保留空注释供参考
 
 # ── 临时验证产物（本地保留，不入库）──
 _e2e_deps.py

@@ -104,9 +104,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 ├── test_engine/                  # 引擎组件单测（call/python/deps_editor/versioning；需显式指定路径）
 ├── test_specstd/                 # specstd 包单测（conformance/anchors/signature/workspace/agent/mcp/multiuser）
 │
-├── plans/                        # 测试计划 YAML（delta 导入生成，禁止手动新建）
-├── reports/                      # 运行产物（时间戳目录，.gitignore，勿提交）
-├── drafts/                       # Agent 草稿区（评审通过才移入 scenarios/）
+├── (drafts/plans/reports 已迁移至各工作区的 .specguard/ 目录，见 specstd/workspace.py)
 └── workbench/                    # 可视化工作台
     ├── backend/                  #   FastAPI（main.py + routers/×12 + services/×12，含 RBAC + 工作区中间件）
     │   ├── routers/              #   auth/users/scenarios/runs/reference/plans/spec_validation/
@@ -184,7 +182,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - **TDD**：改引擎先写失败测试（`test_engine/` 或 `test_suites/test_engine_modes.py`），离线可跑者优先；改 specstd 先写 `test_specstd/`。
 - **引擎能力变更三同步**（强制）：新增步骤类型/断言器/语法时，必须 ① 更新 `format_spec.py` 规范文档 ② 递增其版本号 ③ 更新 `contracts_baseline.json`——格式规范是 Agent 生成用例的唯一依据，文档滞后 = 能力不可用。
 - 引擎改动后必跑离线自测（`engine_modes` + `test_engine`），全绿再跑联网场景。
-- 测试计划（`plans/`）只能由 delta 导入生成，禁止手动新建。
+- 测试计划只能由 delta 导入生成，禁止手动新建（落盘在各工作区的 `.specguard/plans/`）。
 
 ---
 
@@ -203,7 +201,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 
 ## Git Workflow
 
-- **独立仓库**：已初始化并关联远端（`origin` → gitee `spec-guard`）。`.gitignore` 已覆盖 `__pycache__/` `.pytest_cache/` `node_modules/` `reports/` `drafts/` `*.pyc` `workbench/backend/data/` `agent/sessions/` `feedback/*.json` `specstd/workspaces/*` 等；新增运行产物/凭据类文件前先确认是否需补 `.gitignore`。
+- **独立仓库**：已初始化并关联远端（`origin` → gitee `spec-guard`）。`.gitignore` 已覆盖 `__pycache__/` `.pytest_cache/` `node_modules/` `*.pyc` `workbench/backend/data/` `agent/sessions/` `feedback/*.json` `specstd/workspaces/*` 等；各工作区的 `.specguard/` 目录有自己的 `.gitignore`（忽略 reports/drafts，保留 plans/info_packs）；新增运行产物/凭据类文件前先确认是否需补 `.gitignore`。
 - **commit 规范**：中文，格式 `{类型}: {中文简述}`（类型：feat/fix/docs/refactor/test/chore）。
 - 迁移自 TDM 后端项目的历史路径引用（`tests/specguard/`）已在命令侧清理完毕，README 与本文件命令路径一致。
 
@@ -226,7 +224,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 
 - 不让 Agent 产物绕过三道闸（人工评审 → 格式校验 → 发布门禁）直接入 `scenarios/`。
 - 不在校验器/只读工具里写任何副作用（validate 必须纯读）。
-- 不把 `reports/` 运行产物、`node_modules/`、`__pycache__/`、`workbench/backend/data/`、`agent/sessions/` 提交进仓库。
+- 不把运行产物（各工作区 `.specguard/reports/`）、`node_modules/`、`__pycache__/`、`workbench/backend/data/`、`agent/sessions/` 提交进仓库。
 - 不在代码里硬编码环境凭据（一律走 env 配置 + devops 凭据回退）。
 - 不用 js-yaml / round-trip 方式写 YAML（丢失中文注释）。
 
