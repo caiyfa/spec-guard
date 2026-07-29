@@ -1036,6 +1036,28 @@ def run_with_deps(scenario, rctx):
 
 
 # ════════════════════════════════════════════════════════
+# run_single：plan_executor 引擎直跑入口（薄封装，不改调度语义）
+# ════════════════════════════════════════════════════════
+
+def run_single(scenario, rctx):
+    """执行单个场景（含依赖闭包），返回 ExecutionRecord。
+
+    plan_executor 引擎直跑的入口，复用 run_with_deps 的依赖解析与实例管理：
+    - shared 上游 session 内复用；exclusive 上游按消费者懒重跑
+    - 上游未通过 → 本场景 BLOCKED（下游自动跳过）
+    - 版本仲裁：DRIFT/ORPHANED/SKIP 按既有语义处理
+
+    Args:
+        scenario: Scenario 对象（须在 rctx.graph.by_id 中）
+        rctx: RunContext（由调用方装配，含 registry/env/token_provider/graph/db）
+
+    Returns:
+        ExecutionRecord（含 verdict / failure / skip_reason / saved_vars 等）
+    """
+    return run_with_deps(scenario, rctx)
+
+
+# ════════════════════════════════════════════════════════
 # teardown：session 末 LIFO 执行清理步骤（写型场景现场恢复/脏数据治理）
 # ════════════════════════════════════════════════════════
 

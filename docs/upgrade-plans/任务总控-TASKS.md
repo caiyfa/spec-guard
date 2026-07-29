@@ -114,7 +114,7 @@ def mask(key: str) -> str
 | J-1 | 通知配置 CRUD（含加密存储） | J | P0 | ✅ | 🟡 A-3（降级：透传 crypto） | S4 | 1.5 天（实际 0.5 天） |
 | J-2 | 钉钉/飞书 webhook 实现 | J | P0 | ✅ | ⛔ J-1 | S5 | 1.5 天（实际 0.5 天） |
 | J-3 | 前端通知配置页 + 测试发送 | J | P0 | ⬜ | 🟡 J-2（降级：mock API） | — | 1 天 |
-| I-1 | plan_executor 引擎直跑执行器 | I | P0 | 🔄 | 🟡 F-1-1（降级：旧路径） | S8 | 2.5 天 |
+| I-1 | plan_executor 引擎直跑执行器 | I | P0 | ✅ | 🟡 F-1-1（降级：旧路径） | S8 | 2.5 天（实际 0.3 天） |
 | I-2 | scheduler 调度器 + job CRUD API | I | P0 | ⬜ | ⛔ I-1 | — | 1.5 天 |
 | I-3 | 前端 Schedules 页 | I | P0 | ⬜ | 🟡 I-2（降级：mock API） | — | 1 天 |
 | H-1 | audit 模式 + 审计工具 + ledger 扩展 | H | P0 | ✅ | 🟡 F-1-1 + 🟡 J-2 | S9 | 3 天（实际 0.3 天） |
@@ -124,8 +124,8 @@ def mask(key: str) -> str
 | H-5 | 闭环衔接（拉取信号 + 通知链接） | H | P0 | ⬜ | ⛔ H-1 + ⛔ J-2 | — | 1.5 天 |
 | H-FE | 前端：待办面板 + 模式徽章 + 切换卡片 | H | P0 | ⬜ | 🟡 接口 4（降级：mock 事件） | — | 3 天 |
 | T-1 | 切换：J-1 接入真实 crypto | 切换 | P0 | ✅ | ⛔ A-3 + ⛔ J-1 | S4 | 0.5 天（实际 0 天） |
-| T-2 | 切换：H-1/I-1 接入真实落盘路径 | 切换 | P0 | ⬜ | ⛔ F-1-1 + ⛔ H-1/I-1 | — | 0.5 天 |
-| T-3 | 切换：H-1/I-1 接通真实通知 | 切换 | P0 | ⬜ | ⛔ J-2 + ⛔ H-1/I-1 | — | 0.5 天 |
+| T-2 | 切换：H-1/I-1 接入真实落盘路径 | 切换 | P0 | ✅ | ⛔ F-1-1 + ⛔ H-1/I-1 | S8 | 0.5 天（实际 0 天） |
+| T-3 | 切换：H-1/I-1 接通真实通知 | 切换 | P0 | ✅ | ⛔ J-2 + ⛔ H-1/I-1 | S8 | 0.5 天（实际 0 天） |
 | E2E | 端到端闭环验收 | 全部 | P0 | ⬜ | ⛔ 以上全部 | — | 2 天 |
 
 ---
@@ -198,12 +198,13 @@ def mask(key: str) -> str
 
 ### 链 I：定时任务调度（详细：[09-任务链I](./09-任务链I-定时任务调度.md)）
 
-#### I-1 plan_executor 引擎直跑 ⬜
+#### I-1 plan_executor 引擎直跑 ✅（S8，2026-07-29 完成）
 - **目标**：加载 plan → DAG 拓扑 → 逐场景执行 → 失败标记下游 skipped + 立即通知 + 报告落盘
 - **开工门禁**：🟡 F-1-1（降级：报告先落 SG_ROOT/reports）+ 🟡 J-2（降级：通知走 T-3 前记 notify_log）
 - **涉及文件**：`services/plan_executor.py`(新)、`engine/scenario_runner.py`(暴露 run_single)
 - **验收**：失败场景下游 skipped；报告格式复用 report_writer
 - **注意**：执行走**引擎直跑**（用户已确认），不经 pytest
+- **备注**：F-1-1/J-2 均已 ✅，直接使用真实 specguard_dir()/reports_dir() + send_notification()，T-2/T-3 对 I-1 部分实质为 no-op
 
 #### I-2 scheduler 调度器 ⬜
 - **目标**：APScheduler（SQLite jobstore）+ scheduled_jobs 表 + CRUD API + 手动触发 + 启停钩子
@@ -294,8 +295,8 @@ def mask(key: str) -> str
 | `workbench/backend/services/runner.py` | — | 空闲（F-1-2 已完成） |
 | `workbench/backend/services/scenario_meta.py` | — | 空闲（F-1-2 已完成） |
 | `conftest.py` | — | 空闲（F-1-2 已完成） |
-| `workbench/backend/services/plan_executor.py` | I-1 | 🔄 占用中 |
-| `engine/scenario_runner.py` | I-1 | 🔄 占用中 |
+| `workbench/backend/services/plan_executor.py` | — | 空闲（I-1 已完成） |
+| `engine/scenario_runner.py` | — | 空闲（I-1 已完成） |
 
 > 规则：占用归属按**任务 ID** 判定（跨会话唯一），具体哪个会话在做看 §3 执行者列。
 > 占用中的文件，其他任务不得改。`runtime.py` 特别规则：**A-2 必须先合入，之后归 H-4/H-3 独占**。
@@ -307,8 +308,8 @@ def mask(key: str) -> str
 | 切换点 | 前置方 | 消费方 | 前置状态 | 切换任务 |
 |--------|--------|--------|---------|---------|
 | crypto 透传 → 真实加密 | A-3 | J-1 | ✅ 已切换（T-1 完成） | T-1 ✅ |
-| 旧路径 → .specguard/ | F-1-1 | H-1 / I-1 | ✅ 可切换 | T-2 |
-| notify_log → 真实通知 | J-2 | H-1 / I-1 | ✅ 可切换 | T-3 |
+| 旧路径 → .specguard/ | F-1-1 | H-1 / I-1 | ✅ 已切换（T-2 完成，H-1/I-1 均直接使用真实路径） | T-2 ✅ |
+| notify_log → 真实通知 | J-2 | H-1 / I-1 | ✅ 已切换（T-3 完成，H-1/I-1 均直接使用真实通知） | T-3 ✅ |
 
 > 前置方完工时把「前置状态」改为 ✅ 可切换；切换任务领走后改对应 T 状态。
 
@@ -334,6 +335,7 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
+| 2026-07-29 | I-1 plan_executor 引擎直跑 + T-2/T-3 切换 | S8 | ✅ 完成。①engine/scenario_runner.py 新增 run_single（薄封装 run_with_deps，不改调度语义：shared 上游复用 / exclusive 懒重跑 / 上游失败→BLOCKED / 版本仲裁 DRIFT/ORPHANED/SKIP）。②workbench/backend/services/plan_executor.py 新建引擎直跑执行器：_setup_runtime 复刻 conftest.py 装配（env_config/DB/Registry/TokenProvider/DependencyGraph）；execute_plan 异步入口：加载 plan→拓扑排序→逐场景 asyncio.to_thread(run_single)→失败立即 _notify_failure（复用 J-2 send_notification + J-1 get_configs_by_event，仅 import+call 不修改 feedback/notify.py）→teardown LIFO→report_writer.dump_json+render_md 落盘 {workspace}/.specguard/reports/{timestamp}/；_notify_success 全绿时通知。F-1-1/J-2 均已 ✅ 直接使用真实路径函数+真实通知，T-2/T-3 对 I-1 为 no-op。验收：失败场景下游 BLOCKED（run_with_deps 内部处理）；报告复用 report_writer（JSON+MD 格式对齐）。test_engine 62+test_specstd 289=351 全绿；release_check PASS。I-2 可开工 |
 | 2026-07-29 | H-1 audit 模式 + 审计工具 | S9 | ✅ 完成。①agent/modes/audit.md（第 5 模式，7 个工具白名单：read_spec/list_spec_files/query_registry/read_scenario/read_run_report/write_audit_report/report_vulnerability，4 类漏洞 V1-V4 对应 vtype 枚举，3 级严重度 blocker/major/minor）②mcp_server/tools/audit.py（write_audit_report：报告落 .specguard/audit/{timestamp}_{title}.md，依赖 F-1-1 specguard_dir()；report_vulnerability：写 feedback/ledger.py 台账 pending + 调 J-2 send_batch_notifications 通知，best-effort 失败不阻塞）③feedback/ledger.py 扩展 create_vulnerability（vtype/severity/location/evidence/suggestion/summary 6 字段）+ list_vulnerabilities + count_vulnerabilities（供 H-2 路由器查 pending 漏洞数）④mcp_server/server.py + agent/runtime.py TOOL_MODULES 注册 audit。F-1-1/J-2 均已 ✅，直接使用真实路径函数+真实通知，T-2/T-3 对 H-1 部分实质为 no-op。K-005（test_mcp_server.py 断言 11→13）由 F-1-2/S7 顺手修复。test_audit.py 25 测试全过（模式加载/工具白名单/ledger CRUD/漏洞字段完整性/状态机/write_audit_report 落盘/report_vulnerability 台账写入+通知不阻塞）。test_engine 62+test_specstd 289=351 全绿；release_check PASS。runtime.py 已释放给 H-4/H-3，H-5 前置 H-1 已满足 |
 | 2026-07-29 | F-1-2 补充修复：drafts.py + attribution.py 路径迁移（K-006） | S7 | ✅ 完成。drafts.py DRAFTS_ROOT/SCENARIOS_ROOT/TRASH_DIR 三个模块级常量改为 `_drafts_root()`/`_scenarios_root()`/`_trash_dir()` 函数（无工作区回退旧路径）；`relative_to(SG_ROOT)` 改用 `get_workspace_root() or SG_ROOT`。attribution.py REPORTS_ROOT 改为 `_get_reports_root()` 函数。test_acceptance_fixes.py 2 处 mock 从 `monkeypatch.setattr(dr, "DRAFTS_ROOT", ...)` 改为 `monkeypatch.setattr(dr, "_drafts_root", lambda: ...)`。test_engine 62+test_specstd 351=413 全绿；release_check PASS |
 | 2026-07-29 | F-1-2 工具层路径迁移 | S7 | ✅ 完成。5 文件路径迁移：①conftest.py REPORTS_ROOT 支持 `SG_REPORTS_ROOT` 环境变量覆盖（K-003 方案A，用户确认将 conftest.py 纳入范围）②draft_writer.py 草稿路径改用 `drafts_dir()`（模块级常量→动态函数 `_drafts_root()`，无工作区时 RuntimeError 友好返回；`_rel_path()` 辅助相对工作区根展示路径）③plan_store.py 计划/报告路径改用 `_plans_root()`/`_reports_root()`（删 PLANS_ROOT/SCENARIOS_ROOT/REPORTS_ROOT 常量，`relative_to(SG_ROOT)` 改用 `get_workspace_root()`）④runner.py 报告路径改用 `_get_reports_root()`（无工作区回退旧路径）+ 传 `SG_REPORTS_ROOT` 环境变量给 pytest 子进程（trigger + _run_batches 两处）⑤scenario_meta.py info_pack 改用文件存储 `info_packs_dir()/{sid}.yaml`（`get_meta` 优先文件回退 DB，`update_info_pack` 双写 DB+文件）。test_mcp_server.py 修复 5 测试（K-004 TestDraftWriter 3 个加 workspace fixture + 清理路径改 `drafts_dir()`；K-005 TestToolRegistration 2 个断言 11→13 + 名称集合加 audit 工具，H-1/S9 引入顺手修）。test_engine 62+test_specstd 326=388 全绿；release_check PASS。F-1-3 可开工 |
