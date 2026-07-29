@@ -337,7 +337,6 @@ export interface WorkspaceInfo {
   system: string;
   source: { type: string; path?: string; url?: string; branch?: string; local_path?: string };
   last_commit: string;
-  pulled_at: string;
 }
 
 export const workspaceApi = {

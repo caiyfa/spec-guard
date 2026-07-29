@@ -75,7 +75,7 @@ def main():
 
             # ═══ 闭环 1：意图路由 + 台账 ═══
             print("\n=== 闭环 1：意图路由 + 漏洞台账 ===")
-            # K-007 验证：register 后 pulled_at=now 但无 spec 变更，不应误触发 audit
+            # K-007 验证：register 后无 spec 变更，不应误触发 audit（pulled_at 已清理）
             r = client.post("/api/agent/chat",
                             json={"message": "帮我生成一个测试场景", "workspace": "smoke"}, headers=H)
             d = r.json()

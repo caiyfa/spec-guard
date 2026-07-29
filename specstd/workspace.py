@@ -16,7 +16,6 @@ import re
 import subprocess
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -98,7 +97,6 @@ class WorkspaceInfo:
     branch: str = "main"               # git 型：分支
     local_path: str = ""               # git 型：克隆落点（相对仓库根）
     last_commit: str = ""              # 最近一次 commit SHA
-    pulled_at: str = ""                # 最近一次拉取时间
 
     @property
     def root(self) -> Path:
@@ -118,7 +116,6 @@ class WorkspaceInfo:
                     "local_path": self.local_path} if self.source_type == "git" else {}),
             },
             "last_commit": self.last_commit,
-            "pulled_at": self.pulled_at,
         }
 
     @classmethod
@@ -133,7 +130,6 @@ class WorkspaceInfo:
             branch=source.get("branch", "main"),
             local_path=source.get("local_path", ""),
             last_commit=d.get("last_commit", ""),
-            pulled_at=d.get("pulled_at", ""),
         )
 
 
@@ -287,7 +283,6 @@ def register_local(name: str, path: str, system: str,
     info = WorkspaceInfo(
         name=name, system=system, source_type="local",
         source_path=str(ws_path),
-        pulled_at=datetime.now().isoformat(timespec="minutes"),
     )
     registry = _load_registry()
     ws_dict = registry.setdefault("workspaces", {})
@@ -354,7 +349,6 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
                 source_url=url, branch=branch,
                 local_path=str(clone_path.relative_to(SG_ROOT)),
                 last_commit=last_commit,
-                pulled_at=datetime.now().isoformat(timespec="minutes"),
             )
             registry = _load_registry()
             ws_dict = registry.setdefault("workspaces", {})
@@ -370,7 +364,6 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
         source_url=url, branch=branch,
         local_path=local_rel,
         last_commit=last_commit,
-        pulled_at=datetime.now().isoformat(timespec="minutes"),
     )
     registry = _load_registry()
     ws_dict = registry.setdefault("workspaces", {})
@@ -423,7 +416,6 @@ def pull(name: str) -> dict:
     ws_dict = registry.get("workspaces") or {}
     if name in ws_dict:
         ws_dict[name]["last_commit"] = new_commit
-        ws_dict[name]["pulled_at"] = datetime.now().isoformat(timespec="minutes")
         _save_registry(registry)
 
     # 执行合规校验

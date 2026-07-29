@@ -190,14 +190,8 @@ def api_conformance(body: ConformanceBody):
 
 @router.post("/pull", dependencies=[Depends(require_role("admin"))])
 def api_pull(body: PullBody):
-    """拉取 git 工作区更新，记录 pulled_at 时间戳（供 H-2 路由信号）。"""
-    result = pull(body.name)
-    # H-5: 返回 pulled_at（供前端展示和路由信号确认）
-    if result.get("ok"):
-        info = get_workspace(body.name)
-        if info:
-            result["pulled_at"] = info.pulled_at
-    return result
+    """拉取 git 工作区更新（K-007：spec 变更由签名基线检测，不再用 pulled_at 时间信号）。"""
+    return pull(body.name)
 
 
 # ══════════════════════════════════════════════════════════
