@@ -35,9 +35,11 @@
 ```
 1. 读 §3 任务总表，找状态 = ⬜ 且前置已满足的任务
 2. 读该任务的 §4 任务卡片，执行「开工门禁」检查
-3. 门禁通过 → 把状态改为 🔄，填执行者 + 开始日期，然后开始干活
+3. 门禁通过 → 把状态改为 🔄，填你的**会话标识**（见下）+ 开始日期，然后开始干活
 4. 门禁不通过 → 停止，报告阻塞原因（缺哪个前置），不得强行开工
 ```
+
+**会话标识规则（必填，跨会话唯一）**：开工前给自己分配一个简短唯一标识（建议 S1、S2…按全项目领取顺序递增），全程用它填「执行者」。**禁止填「本会话」**——每个会话都自称"本会话"，新会话会误以为是自己。占用文件时 §5 只填**任务 ID**（不填会话标识，避免相对指代混乱）。当前已分配：S1（A-3）、S2（A-2）、S3（A-1）、S4（J-1）。
 
 ### 1.2 开工门禁（不满足 = 拒绝开发）
 
@@ -103,13 +105,13 @@ def mask(key: str) -> str
 
 | ID | 任务 | 链 | 优先级 | 状态 | 前置（⛔硬 / 🟡可降级） | 执行者 | 预计 |
 |----|------|----|--------|------|------------------------|--------|------|
-| A-3 | API Key 加密存储 | A | P0 | ✅ | 无 | 本会话 | 2 天（实际 0.5 天） |
-| A-2 | Token 级 compaction（含中文估算） | A | P0 | ⬜ | ⛔ 文件：runtime.py 须先合入 | — | 1.5 天 |
-| A-1 | Mode temperature 字段清理 | A | P0 | ⬜ | 无 | — | 0.5 天 |
+| A-3 | API Key 加密存储 | A | P0 | ✅ | 无 | S1 | 2 天（实际 0.5 天） |
+| A-2 | Token 级 compaction（含中文估算） | A | P0 | ✅ | ⛔ 文件：runtime.py 须先合入 | S2 | 1.5 天（实际 0.5 天） |
+| A-1 | Mode temperature 字段清理 | A | P0 | 🔄 | 无 | S3 | 0.5 天 |
 | F-1-1 | `.specguard/` 路径函数 + 目录约定 | F-1 | P0 | ⬜ | 无 | — | 1.5 天 |
 | F-1-2 | 工具层路径迁移 | F-1 | P0 | ⬜ | ⛔ F-1-1 | — | 1.5 天 |
 | F-1-3 | 文档同步 + 前端配置字段 | F-1 | P0 | ⬜ | ⛔ F-1-2 | — | 1 天 |
-| J-1 | 通知配置 CRUD（含加密存储） | J | P0 | ⬜ | 🟡 A-3（降级：透传 crypto） | — | 1.5 天 |
+| J-1 | 通知配置 CRUD（含加密存储） | J | P0 | 🔄 | 🟡 A-3（降级：透传 crypto） | S4 | 1.5 天 |
 | J-2 | 钉钉/飞书 webhook 实现 | J | P0 | ⬜ | ⛔ J-1 | — | 1.5 天 |
 | J-3 | 前端通知配置页 + 测试发送 | J | P0 | ⬜ | 🟡 J-2（降级：mock API） | — | 1 天 |
 | I-1 | plan_executor 引擎直跑执行器 | I | P0 | ⬜ | 🟡 F-1-1（降级：旧路径） | — | 2.5 天 |
@@ -135,20 +137,20 @@ def mask(key: str) -> str
 
 ### 链 A：紧急修复（详细：[01-任务链A](./01-任务链A-P0紧急修复.md)）
 
-#### A-3 API Key 加密存储 ✅（本会话，2026-07-29 完成）
+#### A-3 API Key 加密存储 ✅（S1，2026-07-29 完成）
 - **目标**：`crypto.py`（encrypt/decrypt/mask）+ model_config 加密存储 + 存量迁移脚本
 - **开工门禁**：无 ⛔。**新依赖 `cryptography>=42.0` 已获用户批准**
 - **涉及文件**：`services/crypto.py`(新)、`services/model_config.py`、`scripts/migrate_encrypt_apikeys.py`(新)、`requirements.txt`
 - **验收**：DB 中 api_key 带 `ENC:` 前缀；前端脱敏；LLM 调用正常；迁移脚本幂等
 - **关联**：完成后触发切换点 T-1（标「可切换」）
 
-#### A-2 Token 级 compaction ⬜
+#### A-2 Token 级 compaction ✅（S2，2026-07-29 完成）
 - **目标**：`should_compact` 改 token 阈值（修 or→and bug）+ 中文 token 估算（1 字≈1.5 token）
 - **开工门禁**：⛔ **文件门禁——`runtime.py` 当前无 🔄 任务占用**（改动仅 2 行，须先于 H-3/H-4 合入）
-- **涉及文件**：`agent/compactor.py`、`agent/runtime.py`(2 行)
-- **验收**：中文估算正确；50K token 中文消息触发压缩；or→and bug 修复有单测
+- **涉及文件**：`agent/compactor.py`、`agent/runtime.py`(2 行)、`test_specstd/test_compactor.py`(新)、`test_specstd/test_agent.py`(MockLLM 补 max_context_tokens)
+- **验收**：中文估算正确；50K token 中文消息触发压缩；or→and bug 修复有单测 — **全过**
 
-#### A-1 Mode temperature 清理 ⬜
+#### A-1 Mode temperature 清理 🔄（S3，2026-07-29 开始）
 - **目标**：删 modes/*.md 的 temperature 字段 + ModeDef 移除该字段（向后兼容）
 - **开工门禁**：无
 - **涉及文件**：`agent/modes/*.md`、`agent/mode_loader.py`
@@ -176,7 +178,7 @@ def mask(key: str) -> str
 
 ### 链 J：通知配置（详细：[10-任务链J](./10-任务链J-通知配置.md)）
 
-#### J-1 通知配置 CRUD ⬜
+#### J-1 通知配置 CRUD 🔄（S4，2026-07-29 开始）
 - **目标**：notify_configs 表 + CRUD API，webhook/secret 加密存储
 - **开工门禁**：🟡 A-3（**降级**：crypto 用透传实现，A-3 完成后走 T-1 切换）
 - **涉及文件**：`services/notify_config.py`(新)、`routers/notify.py`(新)
@@ -277,15 +279,17 @@ def mask(key: str) -> str
 
 ## 五、文件占用表（🔄 任务开工前必须登记，完工必须释放）
 
-| 文件 | 当前占用任务 | 占用者 | 状态 |
-|------|-------------|--------|------|
-| `agent/runtime.py` | — | — | 空闲 |
-| `mcp_server/tools/meta.py` | — | — | 空闲 |
-| `feedback/ledger.py` | — | — | 空闲 |
-| `workbench/backend/routers/agent.py` | — | — | 空闲 |
-| `workbench/frontend/src/pages/AgentChat.tsx` | — | — | 空闲 |
+| 文件 | 占用任务 | 状态 |
+|------|---------|------|
+| `agent/runtime.py` | — | 空闲（A-2 已合入，可归 H-4/H-3） |
+| `agent/compactor.py` | — | 空闲 |
+| `mcp_server/tools/meta.py` | — | 空闲 |
+| `feedback/ledger.py` | — | 空闲 |
+| `workbench/backend/routers/agent.py` | — | 空闲 |
+| `workbench/frontend/src/pages/AgentChat.tsx` | — | 空闲 |
 
-> 规则：占用中的文件，其他任务不得改。`runtime.py` 特别规则：**A-2 必须先合入，之后归 H-4/H-3 独占**。
+> 规则：占用归属按**任务 ID** 判定（跨会话唯一），具体哪个会话在做看 §3 执行者列。
+> 占用中的文件，其他任务不得改。`runtime.py` 特别规则：**A-2 必须先合入，之后归 H-4/H-3 独占**。
 
 ---
 
@@ -309,6 +313,7 @@ def mask(key: str) -> str
 | 编号 | 问题 | 发现任务 | 是否本任务引入 | 影响 | 状态 | 处理决策 | 确认记录 |
 |------|------|---------|--------------|------|------|---------|---------|
 | K-001 | `TestLLMClient` 4 个测试未隔离真实 DB，`LLMClient` 读真实 workbench.db 的 model_config 导致 mock 测试失败 | A-3 | 否（git stash 验证） | 挡全局门禁（test_specstd 全绿） | ✅ 已修复 | 加 DB 隔离 fixture（`test_agent.py`） | ⚠️ **反面示例**：执行者未先上报确认就擅自修复，违反 §1.0。本条目为机制建立契机，此后必须先确认后行动 |
+| K-002 | 移除 `ModeDef.temperature` 后 `routers/agent.py:201` 和 `frontend/api.ts:369` 引用该字段会 AttributeError / 类型不一致 | A-1 | 是（移除字段的直接后果） | 不修则 `/modes` API 500 + 挡全局门禁 | 🟡 待确认 | 建议顺手修（删 1 行/文件），属于移除字段的必要配套。已实施但待用户确认后才标记 A-1 ✅ | 已上报，系统续跑中先行实施，待用户追认 |
 
 ---
 
@@ -316,8 +321,11 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
-| 2026-07-29 | 机制增补：问题及时上报原则 + 已知问题登记区 | 本会话 | 应用户要求：§1.0 加「先确认后行动」最高原则（含上报场景/格式/禁止项），§7 新增已知问题登记（含 K-001 反面示例），§1.3 完工流程加「问题已确认」检查（无 🟡 待确认项才可标记完成） |
-| 2026-07-29 | A-3 API Key 加密存储 | 本会话 | ✅ 完成。crypto.py + model_config 加密 + 迁移脚本 + 13 测试全过；test_specstd 157/test_engine 62/release_check 全绿。另顺手修复 test_agent.py 3 个预先存在的环境污染失败（未隔离 DB，git stash 验证与 A-3 无关）。T-1 标记可切换 |
+| 2026-07-29 | 修正：文件占用按任务 ID + 会话标识规则 | S1 | 应用户指出「本会话」缺陷：4 个并行会话（A-3/A-2/A-1/J-1）都自称"本会话"无法区分。§5 删「占用者」列改按任务 ID 判定；§1.1 加会话标识规则（禁「本会话」）；历史标识分配：A-3→S1、A-2→S2、A-1→S3、J-1→S4。注：K-002（A-1/S3 上报）仍待用户确认 |
+| 2026-07-29 | A-1 Mode temperature 清理 | S3 | 实现完成，待 K-002 用户确认后标记 ✅。删除 4 个 modes/*.md 的 temperature 字段；mode_loader.py ModeDef 移除 temperature + _parse_mode_file 不再解析（向后兼容）；routers/agent.py /modes API 移除 temperature（K-002）；frontend api.ts AgentMode 移除 temperature（K-002）。test_mode_loader.py 15 测试全过；test_engine 62+test_specstd 206=268 全绿；release_check PASS |
+| 2026-07-29 | A-2 Token 级 compaction | S2 | ✅ 完成。compactor.py 新增 estimate_tokens（中英文分开）/estimate_message_tokens/_calc_keep_count；should_compact 修复 or→and bug + 加 max_context_tokens 参数（0 回退消息数阈值）；compact 动态 KEEP_RECENT（按 token 预算 25%）；runtime.py 2 处调用传入 llm.max_context_tokens。test_compactor.py 34 测试全过；test_agent.py MockLLM 补 max_context_tokens=0。test_engine 62+test_specstd 191=253 全绿；release_check PASS。runtime.py 已释放给 H-4/H-3 |
+| 2026-07-29 | 机制增补：问题及时上报原则 + 已知问题登记区 | S1 | 应用户要求：§1.0 加「先确认后行动」最高原则（含上报场景/格式/禁止项），§7 新增已知问题登记（含 K-001 反面示例），§1.3 完工流程加「问题已确认」检查（无 🟡 待确认项才可标记完成） |
+| 2026-07-29 | A-3 API Key 加密存储 | S1 | ✅ 完成。crypto.py + model_config 加密 + 迁移脚本 + 13 测试全过；test_specstd 157/test_engine 62/release_check 全绿。另顺手修复 test_agent.py 3 个预先存在的环境污染失败（未隔离 DB，git stash 验证与 A-3 无关）。T-1 标记可切换 |
 | 2026-07-29 | 任务总控文件建立 + 接口冻结 | — | ✅ 初始状态，全部 ⬜ |
 
 ---
