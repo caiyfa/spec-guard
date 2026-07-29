@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules
 from services.auth import get_current_user
 from services import user_store
 
@@ -63,12 +63,22 @@ class WorkspaceContextMiddleware:
 
 app.add_middleware(WorkspaceContextMiddleware)
 
-# 启动初始化：建表 + 清理上一生命周期遗留的 running 队列项 + 旧会话迁移
+# 启动初始化：建表 + 清理上一生命周期遗留的 running 队列项 + 旧会话迁移 + 启动调度器
 @app.on_event("startup")
 def _startup():
     user_store.init_db()
     user_store.fail_stale_running()
     _migrate_legacy_sessions()
+    # I-2: 启动定时任务调度器
+    from services.scheduler import start_scheduler
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+def _shutdown():
+    # I-2: 停止定时任务调度器
+    from services.scheduler import shutdown_scheduler
+    shutdown_scheduler()
 
 
 def _migrate_legacy_sessions():
@@ -102,6 +112,7 @@ app.include_router(feedback.router, dependencies=[Depends(get_current_user)])
 app.include_router(drafts.router, dependencies=[Depends(get_current_user)])
 app.include_router(settings.router, dependencies=[Depends(get_current_user)])
 app.include_router(notify.router, dependencies=[Depends(get_current_user)])
+app.include_router(schedules.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/api/health")

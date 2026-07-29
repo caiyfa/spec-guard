@@ -6,3 +6,5 @@ jsonpath-ng>=1.6
 httpx>=0.27
 mcp>=1.0
 cryptography>=42.0
+apscheduler>=3.10
+sqlalchemy>=2.0
