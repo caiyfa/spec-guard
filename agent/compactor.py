@@ -1,7 +1,7 @@
 """agent.compactor — 会话上下文压缩器（G3-1）。
 
-当对话超过阈值（默认 8 轮 = 16 条消息）时，自动压缩旧消息为摘要。
-保留最近 3-5 轮原始消息，确保对话连续性。
+当对话超过 token 阈值（占 max_context_tokens 的 70%）时，自动压缩旧消息为摘要。
+保留最近消息（按 token 预算动态计算），确保对话连续性。
 摘要包含文件操作记录（读了哪些 spec、写了哪些 draft）。
 
 压缩后的摘要消息标记为 _type: "compaction_summary"，存入 JSONL。
@@ -12,44 +12,105 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-# 压缩阈值：超过此消息数时触发压缩（1 轮 = assistant + tool_result ≈ 2-3 条消息）
+# 压缩阈值：超过此消息数时触发压缩（向后兼容：max_context_tokens=0 时回退到此阈值）
 COMPACTION_THRESHOLD = 16  # 约 8 轮
-# 保留最近 N 条原始消息（约 3-5 轮）
+# 保留最近 N 条原始消息（约 3-5 轮；向后兼容：无 max_context_tokens 时的默认值）
 KEEP_RECENT = 10
+# token 级阈值占比（占 max_context_tokens 的 70%）
+COMPACTION_RATIO = 0.7
+# 触发压缩的最低消息数（保底，防止消息太少时误触发）
+MIN_MESSAGES_BEFORE_COMPACT = 8
 # 文件操作记录中的关键工具
 FILE_READ_TOOLS = {"read_spec", "read_info_pack", "list_spec_files", "read_scenario"}
 FILE_WRITE_TOOLS = {"write_draft", "add_to_info_pack"}
 VALIDATE_TOOLS = {"validate"}
 
 
-def should_compact(messages: list[dict]) -> bool:
-    """判断是否需要压缩（消息数超过阈值且非首次压缩）。"""
-    # 只统计实际对话消息（排除 system 首条和 compaction_summary）
+def estimate_tokens(text: str) -> int:
+    """估算文本 token 数（区分中英文）。
+
+    中文 1 字 ≈ 1.5 token（GPT 系列保守估计）
+    英文/数字 4 字符 ≈ 1 token
+    """
+    if not text:
+        return 0
+    chinese_chars = sum(
+        1 for c in text
+        if '\u4e00' <= c <= '\u9fff' or '\u3000' <= c <= '\u303f' or '\uff00' <= c <= '\uffef'
+    )
+    non_chinese = len(text) - chinese_chars
+    estimated = int(chinese_chars * 1.5 + non_chinese / 4)
+    return max(1, estimated)
+
+
+def estimate_message_tokens(message: dict) -> int:
+    """估算单条消息的 token 数（含 content + tool_calls）。"""
+    total = 4  # 每条消息的元数据开销
+    content = message.get("content")
+    if isinstance(content, str):
+        total += estimate_tokens(content)
+    elif isinstance(content, list):
+        for part in content:
+            total += estimate_tokens(str(part))
+    for tc in message.get("tool_calls", []) or []:
+        args = tc.get("function", {}).get("arguments", "")
+        total += estimate_tokens(args) if isinstance(args, str) else estimate_tokens(str(args))
+    return total
+
+
+def _calc_keep_count(conversation: list[dict], reserve_tokens: int) -> int:
+    """从尾部累计，保留不超过 reserve_tokens 的消息数。"""
+    acc = 0
+    count = 0
+    for m in reversed(conversation):
+        t = estimate_message_tokens(m)
+        if acc + t > reserve_tokens:
+            break
+        acc += t
+        count += 1
+    return max(count, 4)  # 至少保留 4 条（2 轮）
+
+
+def should_compact(messages: list[dict], max_context_tokens: int = 0) -> bool:
+    """判断是否需要压缩（token 级阈值 + 消息数保底）。
+
+    Args:
+        messages: 完整消息列表
+        max_context_tokens: 模型上下文窗口大小（0 时回退消息数阈值）
+    """
+    # 【修复 bug】正确排除 system 首条与 compaction_summary（or → and）
     conversation_msgs = [
         m for m in messages
-        if m.get("role") != "system" or m.get("_type") != "compaction_summary"
+        if not (m.get("role") == "system" and m.get("_type") in (None, "compaction_summary"))
     ]
-    # 已经有 compaction_summary 且消息数仍超阈值 → 可再次压缩
-    # 但至少要有足够的消息才值得压缩
-    return len(conversation_msgs) > COMPACTION_THRESHOLD
+    if len(conversation_msgs) < MIN_MESSAGES_BEFORE_COMPACT:
+        return False
+
+    if max_context_tokens <= 0:
+        # 回退：消息数阈值（向后兼容）
+        return len(conversation_msgs) > COMPACTION_THRESHOLD
+
+    estimated = sum(estimate_message_tokens(m) for m in messages)
+    return estimated >= int(max_context_tokens * COMPACTION_RATIO)
 
 
-def compact(messages: list[dict], llm=None) -> list[dict]:
+def compact(messages: list[dict], llm=None, max_context_tokens: int = 0) -> list[dict]:
     """压缩会话消息列表。
 
     1. 保留 system 首条（原始 system prompt）
     2. 保留已有的 compaction_summary（如有）
     3. 生成新的 compaction_summary（汇总被压缩的消息）
-    4. 保留最近 KEEP_RECENT 条原始消息
+    4. 保留最近消息（按 token 预算动态计算，回退 KEEP_RECENT）
 
     Args:
         messages: 完整消息列表
         llm: 可选的 LLMClient（用于生成摘要；None 时用启发式摘要）
+        max_context_tokens: 模型上下文窗口大小（0 时回退固定 KEEP_RECENT）
 
     Returns:
         压缩后的消息列表
     """
-    if not should_compact(messages):
+    if not should_compact(messages, max_context_tokens):
         return messages
 
     # 分离 system 首条
@@ -72,12 +133,19 @@ def compact(messages: list[dict], llm=None) -> list[dict]:
             conversation.append(m)
 
     # 分割：旧消息（待压缩）+ 最近消息（保留）
-    if len(conversation) <= KEEP_RECENT:
+    # 按 token 预算动态计算保留条数（无 max_context_tokens 时回退固定值）
+    if max_context_tokens > 0:
+        reserve_tokens = int(max_context_tokens * 0.25)
+        keep_count = _calc_keep_count(conversation, reserve_tokens)
+    else:
+        keep_count = KEEP_RECENT
+
+    if len(conversation) <= keep_count:
         return messages  # 不需要压缩
 
     # 调整分割点到安全边界：确保不在 assistant→tool 配对中间断开
     # 安全边界 = 前一条不是带 tool_calls 的 assistant，且当前位置不是 tool 消息
-    split_idx = len(conversation) - KEEP_RECENT
+    split_idx = len(conversation) - keep_count
     while split_idx > 0:
         curr = conversation[split_idx]
         prev = conversation[split_idx - 1] if split_idx > 0 else None

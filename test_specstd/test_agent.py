@@ -35,6 +35,7 @@ class MockLLM:
         self.responses = responses or []
         self._call_count = 0
         self._total_tokens = 0
+        self.max_context_tokens = 0  # 回退消息数阈值（与 LLMClient 接口对齐）
 
     @property
     def is_mock(self):

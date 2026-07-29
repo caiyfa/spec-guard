@@ -192,8 +192,8 @@ class AgentRuntime:
 
         for turn in range(self.max_turns):
             # G3-1: 超阈值时触发压缩
-            if should_compact(messages):
-                messages = compact(messages, self.llm)
+            if should_compact(messages, self.llm.max_context_tokens):
+                messages = compact(messages, self.llm, self.llm.max_context_tokens)
                 self.events.emit("compaction", message_count=len(messages))
             self.events.emit("state", turn=turn, max_turns=self.max_turns)
 
@@ -240,8 +240,8 @@ class AgentRuntime:
                 session.save(session_id, messages)
         else:
             # G3-1: 熔断前也尝试压缩
-            if should_compact(messages):
-                messages = compact(messages, self.llm)
+            if should_compact(messages, self.llm.max_context_tokens):
+                messages = compact(messages, self.llm, self.llm.max_context_tokens)
                 self.events.emit("compaction", message_count=len(messages))
             messages.append({"role": "system", "content": f"[FUSE] 已达到 max_turns={self.max_turns}，自动停止。"})
             self.events.emit("state", fused=True, max_turns=self.max_turns)
