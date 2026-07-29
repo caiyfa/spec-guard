@@ -409,8 +409,8 @@ class TestD1DraftsGate:
         scenarios_dir.mkdir(parents=True)
         (tmp_path / "scenarios" / "mod" / "a" / ".gitkeep").write_text("")
 
-        monkeypatch.setattr(dr, "DRAFTS_ROOT", drafts_dir)
-        monkeypatch.setattr(dr, "SCENARIOS_ROOT", tmp_path / "scenarios")
+        monkeypatch.setattr(dr, "_drafts_root", lambda: drafts_dir)
+        monkeypatch.setattr(dr, "_scenarios_root", lambda: tmp_path / "scenarios")
         monkeypatch.setattr(dr, "SG_ROOT", tmp_path)
 
         draft = drafts_dir / "XX-TEST-100.yaml"
@@ -440,8 +440,8 @@ verify:
         dr = self._import_drafts_router()
         drafts_dir = tmp_path / "drafts"
         drafts_dir.mkdir(parents=True)
-        monkeypatch.setattr(dr, "DRAFTS_ROOT", drafts_dir)
-        monkeypatch.setattr(dr, "TRASH_DIR", drafts_dir / "_trash")
+        monkeypatch.setattr(dr, "_drafts_root", lambda: drafts_dir)
+        monkeypatch.setattr(dr, "_trash_dir", lambda: drafts_dir / "_trash")
         monkeypatch.setattr(dr, "SG_ROOT", tmp_path)
 
         draft = drafts_dir / "XX-TEST-101.yaml"

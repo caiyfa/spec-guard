@@ -32,9 +32,30 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-DRAFTS_ROOT = SG_ROOT / "drafts"
-SCENARIOS_ROOT = SG_ROOT / "scenarios"
-TRASH_DIR = DRAFTS_ROOT / "_trash"
+from specstd.workspace import drafts_dir, get_workspace_root  # noqa: E402
+
+
+def _drafts_root() -> Path:
+    """获取草稿目录（动态解析当前工作区 .specguard/drafts/，无工作区回退 SG_ROOT/drafts/）。"""
+    try:
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    except Exception:
+        d = SG_ROOT / "drafts"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+
+def _scenarios_root() -> Path:
+    """获取场景库目录（工作区 scenarios/，无工作区回退 SG_ROOT/scenarios/）。"""
+    ws = get_workspace_root()
+    return (ws / "scenarios") if ws else (SG_ROOT / "scenarios")
+
+
+def _trash_dir() -> Path:
+    """获取草稿回收站目录。"""
+    return _drafts_root() / "_trash"
 
 
 # ══════════════════════════════════════════════════════════
@@ -47,16 +68,17 @@ def _guard_filename(filename: str) -> Path:
         raise HTTPException(status_code=400, detail=f"非法文件名: {filename}")
     if not filename.endswith((".yaml", ".yml")):
         raise HTTPException(status_code=400, detail=f"仅支持 YAML 草稿: {filename}")
-    return DRAFTS_ROOT / filename
+    return _drafts_root() / filename
 
 
 def _guard_module(module: str) -> Path:
     """校验入库模块目录（必须为 scenarios/ 下已存在的目录）。"""
     if not module or ".." in module or module.startswith(("/", "\\")):
         raise HTTPException(status_code=400, detail=f"非法模块路径: {module}")
-    target = (SCENARIOS_ROOT / module).resolve()
+    scenarios_root = _scenarios_root()
+    target = (scenarios_root / module).resolve()
     try:
-        target.relative_to(SCENARIOS_ROOT.resolve())
+        target.relative_to(scenarios_root.resolve())
     except ValueError:
         raise HTTPException(status_code=400, detail=f"模块路径越界: {module}")
     if not target.is_dir():
@@ -72,7 +94,8 @@ def _guard_module(module: str) -> Path:
 def list_drafts():
     """列出草稿区全部 YAML 草稿（按修改时间倒序，含作者归属）。"""
     # 作者元数据（draft_writer 写入）
-    meta_path = DRAFTS_ROOT / "_meta.json"
+    drafts_root = _drafts_root()
+    meta_path = drafts_root / "_meta.json"
     meta = {}
     if meta_path.is_file():
         try:
@@ -81,8 +104,8 @@ def list_drafts():
         except Exception:
             meta = {}
     drafts = []
-    if DRAFTS_ROOT.is_dir():
-        for f in sorted(DRAFTS_ROOT.glob("*.yaml"), key=lambda p: p.stat().st_mtime, reverse=True):
+    if drafts_root.is_dir():
+        for f in sorted(drafts_root.glob("*.yaml"), key=lambda p: p.stat().st_mtime, reverse=True):
             sid, title = "", ""
             try:
                 raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
@@ -104,11 +127,12 @@ def list_drafts():
 @router.get("/modules")
 def list_modules():
     """列出 scenarios/ 下的模块目录（promote 目标选择）。"""
+    scenarios_root = _scenarios_root()
     modules = []
-    if SCENARIOS_ROOT.is_dir():
-        for d in sorted(SCENARIOS_ROOT.rglob("*")):
+    if scenarios_root.is_dir():
+        for d in sorted(scenarios_root.rglob("*")):
             if d.is_dir() and any(c.suffix == ".yaml" for c in d.iterdir() if c.is_file()):
-                modules.append(str(d.relative_to(SCENARIOS_ROOT)).replace("\\", "/"))
+                modules.append(str(d.relative_to(scenarios_root)).replace("\\", "/"))
     return {"modules": modules}
 
 
@@ -200,7 +224,7 @@ def promote_draft(filename: str, body: PromoteBody):
     return {
         "ok": True,
         "scenario_id": report.get("scenario", ""),
-        "target": str(target.relative_to(SG_ROOT)).replace("\\", "/"),
+        "target": str(target.relative_to(get_workspace_root() or SG_ROOT)).replace("\\", "/"),
         "validate": report,
         "gate": gate,
     }
@@ -212,10 +236,11 @@ def discard_draft(filename: str):
     path = _guard_filename(filename)
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
-    TRASH_DIR.mkdir(parents=True, exist_ok=True)
-    target = TRASH_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
+    trash = _trash_dir()
+    trash.mkdir(parents=True, exist_ok=True)
+    target = trash / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
     shutil.move(str(path), str(target))
-    return {"ok": True, "trashed_to": str(target.relative_to(SG_ROOT)).replace("\\", "/")}
+    return {"ok": True, "trashed_to": str(target.relative_to(get_workspace_root() or SG_ROOT)).replace("\\", "/")}
 
 
 # ══════════════════════════════════════════════════════════
@@ -227,7 +252,7 @@ def _rebuild_baseline():
     from engine.scenario_loader import load_scenarios
     from engine.versioning import build_baseline, save_baseline
 
-    scenarios = load_scenarios(str(SCENARIOS_ROOT))
+    scenarios = load_scenarios(str(_scenarios_root()))
     baseline = build_baseline(scenarios)
     save_baseline(str(SG_ROOT), baseline)
 

@@ -18,6 +18,15 @@ from fastapi import WebSocket
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # 仓库根
 
 
+def _get_reports_root() -> Path:
+    """获取报告目录（优先工作区 .specguard/reports/，无工作区回退 SG_ROOT/reports/）。"""
+    try:
+        from specstd.workspace import reports_dir
+        return reports_dir()
+    except Exception:
+        return SG_ROOT / "reports"
+
+
 class RunManager:
     """管理单次 pytest 执行的生命周期 + WebSocket 广播 + 断点暂停/恢复"""
 
@@ -149,7 +158,7 @@ class RunManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(SG_ROOT),
-                env={**os.environ, "SG_ENV": env},
+                env={**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())},
             )
         except Exception as e:
             self.status = "idle"
@@ -355,7 +364,7 @@ class RunManager:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                     cwd=str(SG_ROOT),
-                    env={**os.environ, "SG_ENV": env},
+                    env={**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())},
                 )
             except Exception as e:
                 await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {e}"})
@@ -464,7 +473,7 @@ class RunManager:
                 return
             import json as _json
 
-            cases_dir = SG_ROOT / "reports" / self.run_id / "cases"
+            cases_dir = _get_reports_root() / self.run_id / "cases"
             if not cases_dir.is_dir():
                 return
 

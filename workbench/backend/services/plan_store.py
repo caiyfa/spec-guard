@@ -18,7 +18,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-from specstd.workspace import get_active_workspace  # noqa: E402
+from specstd.workspace import get_active_workspace, plans_dir, reports_dir, get_workspace_root  # noqa: E402
 
 
 def _get_spec_root() -> Optional[Path]:
@@ -27,13 +27,20 @@ def _get_spec_root() -> Optional[Path]:
     return ws.root if ws else None
 
 
-PLANS_ROOT = SG_ROOT / "plans"
-SCENARIOS_ROOT = SG_ROOT / "scenarios"
-REPORTS_ROOT = SG_ROOT / "reports"
+def _plans_root() -> Path:
+    """获取计划目录（动态解析当前工作区 .specguard/plans/）。"""
+    d = plans_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _reports_root() -> Path:
+    """获取报告目录（动态解析当前工作区 .specguard/reports/）。"""
+    return reports_dir()
 
 
 def _ensure_plans_dir():
-    PLANS_ROOT.mkdir(parents=True, exist_ok=True)
+    _plans_root()
 
 
 def _load_all_scenarios() -> list[dict]:
@@ -44,9 +51,8 @@ def _load_all_scenarios() -> list[dict]:
 
 def list_plans() -> list[dict]:
     """列出全部测试计划"""
-    _ensure_plans_dir()
     plans = []
-    for f in sorted(PLANS_ROOT.iterdir()):
+    for f in sorted(_plans_root().iterdir()):
         if not f.suffix in (".yaml", ".yml"):
             continue
         with open(f, "r", encoding="utf-8") as fh:
@@ -59,9 +65,8 @@ def list_plans() -> list[dict]:
 
 def get_plan(plan_id: str) -> Optional[dict]:
     """读取单个计划"""
-    _ensure_plans_dir()
     for ext in (".yaml", ".yml"):
-        path = PLANS_ROOT / f"{plan_id}{ext}"
+        path = _plans_root() / f"{plan_id}{ext}"
         if path.is_file():
             with open(path, "r", encoding="utf-8") as fh:
                 raw = yaml.safe_load(fh) or {}
@@ -74,10 +79,9 @@ def get_plan(plan_id: str) -> Optional[dict]:
 
 def save_plan(plan_id: str, data: dict) -> dict:
     """创建/更新计划"""
-    _ensure_plans_dir()
     data["id"] = plan_id
     data["updated_at"] = datetime.now().isoformat(timespec="seconds")
-    path = PLANS_ROOT / f"{plan_id}.yaml"
+    path = _plans_root() / f"{plan_id}.yaml"
     with open(path, "w", encoding="utf-8") as fh:
         yaml.dump(data, fh, allow_unicode=True, default_flow_style=False, sort_keys=False)
     return get_plan(plan_id) or data
@@ -86,7 +90,7 @@ def save_plan(plan_id: str, data: dict) -> dict:
 def delete_plan(plan_id: str) -> bool:
     """删除计划"""
     for ext in (".yaml", ".yml"):
-        path = PLANS_ROOT / f"{plan_id}{ext}"
+        path = _plans_root() / f"{plan_id}{ext}"
         if path.is_file():
             path.unlink()
             return True
@@ -123,7 +127,7 @@ def resolve_scenarios(plan: dict) -> list[str]:
 
 def list_plan_history(plan_id: str, limit: int = 20) -> list[dict]:
     """计划的历史执行记录（读 reports/{plan_id}/ 目录）"""
-    plan_reports = REPORTS_ROOT / plan_id
+    plan_reports = _reports_root() / plan_id
     if not plan_reports.is_dir():
         return []
     import json
@@ -146,8 +150,8 @@ def list_plan_history(plan_id: str, limit: int = 20) -> list[dict]:
 
 
 def get_plan_report_dir(plan_id: str, run_id: str) -> Path:
-    """计划报告目录：reports/{plan_id}/{run_id}/"""
-    return REPORTS_ROOT / plan_id / run_id
+    """计划报告目录：.specguard/reports/{plan_id}/{run_id}/"""
+    return _reports_root() / plan_id / run_id
 
 
 def _normalize(raw: dict, fallback_id: str) -> dict:
@@ -467,7 +471,7 @@ def import_confirm(delta_code: str, selected_files: list[str]) -> dict:
     files_to_import = [f for f in preview["files"] if f["path"] in selected_files] if selected_files else preview["files"]
 
     # 创建工作副本目录
-    plan_dir = PLANS_ROOT / delta_code
+    plan_dir = _plans_root() / delta_code
     scenarios_dir = plan_dir / "scenarios"
     scenarios_dir.mkdir(parents=True, exist_ok=True)
 
@@ -485,7 +489,7 @@ def import_confirm(delta_code: str, selected_files: list[str]) -> dict:
         dst.write_text(header + content, encoding="utf-8")
         imported.append({
             "path": f["path"],
-            "copy": str(dst.relative_to(SG_ROOT)),
+            "copy": str(dst.relative_to(get_workspace_root())),
             "module": f.get("module", ""),
             "test_type": f.get("test_type", "scenario"),
             "frs": f.get("frs", []),
@@ -522,7 +526,7 @@ def import_confirm(delta_code: str, selected_files: list[str]) -> dict:
 
 def get_plan_working_copy(plan_id: str, filename: str) -> Optional[str]:
     """读取计划的工作副本内容"""
-    copy_path = PLANS_ROOT / plan_id / "scenarios" / filename
+    copy_path = _plans_root() / plan_id / "scenarios" / filename
     if not copy_path.is_file():
         return None
     return copy_path.read_text(encoding="utf-8")
@@ -530,7 +534,7 @@ def get_plan_working_copy(plan_id: str, filename: str) -> Optional[str]:
 
 def save_plan_working_copy(plan_id: str, filename: str, content: str) -> bool:
     """保存工作副本（不影响源文件）"""
-    copy_path = PLANS_ROOT / plan_id / "scenarios" / filename
+    copy_path = _plans_root() / plan_id / "scenarios" / filename
     if not copy_path.parent.is_dir():
         return False
     copy_path.write_text(content, encoding="utf-8")
@@ -539,7 +543,7 @@ def save_plan_working_copy(plan_id: str, filename: str, content: str) -> bool:
 
 def list_plan_working_copies(plan_id: str) -> list[dict]:
     """列出计划的全部工作副本"""
-    scenarios_dir = PLANS_ROOT / plan_id / "scenarios"
+    scenarios_dir = _plans_root() / plan_id / "scenarios"
     if not scenarios_dir.is_dir():
         return []
     copies = []

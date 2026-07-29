@@ -109,15 +109,15 @@ def mask(key: str) -> str
 | A-2 | Token 级 compaction（含中文估算） | A | P0 | ✅ | ⛔ 文件：runtime.py 须先合入 | S2 | 1.5 天（实际 0.5 天） |
 | A-1 | Mode temperature 字段清理 | A | P0 | ✅ | 无 | S3 | 0.5 天（实际 0.3 天） |
 | F-1-1 | `.specguard/` 路径函数 + 目录约定 | F-1 | P0 | ✅ | 无 | S6 | 1.5 天（实际 0.3 天） |
-| F-1-2 | 工具层路径迁移 | F-1 | P0 | ⬜ | ⛔ F-1-1 | — | 1.5 天 |
+| F-1-2 | 工具层路径迁移 | F-1 | P0 | ✅ | ⛔ F-1-1 | S7 | 1.5 天（实际 0.3 天） |
 | F-1-3 | 文档同步 + 前端配置字段 | F-1 | P0 | ⬜ | ⛔ F-1-2 | — | 1 天 |
 | J-1 | 通知配置 CRUD（含加密存储） | J | P0 | ✅ | 🟡 A-3（降级：透传 crypto） | S4 | 1.5 天（实际 0.5 天） |
 | J-2 | 钉钉/飞书 webhook 实现 | J | P0 | ✅ | ⛔ J-1 | S5 | 1.5 天（实际 0.5 天） |
 | J-3 | 前端通知配置页 + 测试发送 | J | P0 | ⬜ | 🟡 J-2（降级：mock API） | — | 1 天 |
-| I-1 | plan_executor 引擎直跑执行器 | I | P0 | ⬜ | 🟡 F-1-1（降级：旧路径） | — | 2.5 天 |
+| I-1 | plan_executor 引擎直跑执行器 | I | P0 | 🔄 | 🟡 F-1-1（降级：旧路径） | S8 | 2.5 天 |
 | I-2 | scheduler 调度器 + job CRUD API | I | P0 | ⬜ | ⛔ I-1 | — | 1.5 天 |
 | I-3 | 前端 Schedules 页 | I | P0 | ⬜ | 🟡 I-2（降级：mock API） | — | 1 天 |
-| H-1 | audit 模式 + 审计工具 + ledger 扩展 | H | P0 | ⬜ | 🟡 F-1-1 + 🟡 J-2 | — | 3 天 |
+| H-1 | audit 模式 + 审计工具 + ledger 扩展 | H | P0 | ✅ | 🟡 F-1-1 + 🟡 J-2 | S9 | 3 天（实际 0.3 天） |
 | H-4 | 待办系统（todo_write + 持久化） | H | P0 | ⬜ | ⛔ 文件：runtime.py（A-2 后） | — | 2 天 |
 | H-3 | switch_mode 自主切换 | H | P0 | ⬜ | ⛔ H-4（共享 meta.py/runtime.py） | — | 2 天 |
 | H-2 | 模式自动路由 | H | P0 | ⬜ | 无（独立文件） | — | 2 天 |
@@ -165,11 +165,12 @@ def mask(key: str) -> str
 - **验收**：激活工作区自动建 `.specguard/`；自定义路径生效；`../..` 被拒
 - **关联**：完成后触发切换点 T-2
 
-#### F-1-2 工具层路径迁移 ⬜
+#### F-1-2 工具层路径迁移 ✅（S7，2026-07-29 完成）
 - **目标**：draft_writer/plan_store/runner/scenario_meta 改用新路径函数
 - **开工门禁**：⛔ F-1-1 = ✅
-- **涉及文件**：`mcp_server/tools/draft_writer.py`、`services/plan_store.py`、`services/runner.py`、`services/scenario_meta.py`
+- **涉及文件**：`mcp_server/tools/draft_writer.py`、`services/plan_store.py`、`services/runner.py`、`services/scenario_meta.py`、`conftest.py`（方案 A 纳入，REPORTS_ROOT 支持环境变量覆盖）
 - **验收**：草稿/计划/报告/info_pack 全落 `{workspace}/.specguard/`；SG_ROOT 不再产生
+- **备注**：runner.py 报告写入端在 conftest.py，经用户确认方案 A 将 conftest.py 纳入范围（K-003）
 
 #### F-1-3 文档同步 + 前端 ⬜
 - **目标**：AGENTS.md 目录章节 + .gitignore 更新 + 工作区注册表单加「.specguard 位置」字段
@@ -217,7 +218,7 @@ def mask(key: str) -> str
 
 ### 链 H：闭环编排（详细：[08-任务链H](./08-任务链H-闭环编排与模式自动路由.md)）
 
-#### H-1 audit 模式 + 审计工具 ⬜
+#### H-1 audit 模式 + 审计工具 ✅（S9，2026-07-29 完成）
 - **目标**：`modes/audit.md`（第 5 模式，4 类漏洞）+ `tools/audit.py`（write_audit_report + report_vulnerability）+ ledger 漏洞条目结构
 - **开工门禁**：🟡 F-1-1（降级：报告落旧路径）+ 🟡 J-2（降级：漏洞只落台账不通知）
 - **涉及文件**：`agent/modes/audit.md`(新)、`mcp_server/tools/audit.py`(新)、`feedback/ledger.py`、`mcp_server/server.py`、`agent/runtime.py`(TOOL_MODULES 注册)
@@ -281,13 +282,20 @@ def mask(key: str) -> str
 
 | 文件 | 占用任务 | 状态 |
 |------|---------|------|
-| `agent/runtime.py` | — | 空闲（A-2 已合入，可归 H-4/H-3） |
+| `agent/runtime.py` | — | 空闲（H-1 已完成，可归 H-4/H-3） |
 | `agent/compactor.py` | — | 空闲 |
 | `mcp_server/tools/meta.py` | — | 空闲 |
-| `feedback/ledger.py` | — | 空闲 |
+| `feedback/ledger.py` | — | 空闲（H-1 已完成） |
 | `workbench/backend/routers/agent.py` | — | 空闲 |
 | `workbench/frontend/src/pages/AgentChat.tsx` | — | 空闲 |
 | `specstd/workspace.py` | — | 空闲（F-1-1 已完成，可归 F-1-2） |
+| `mcp_server/tools/draft_writer.py` | — | 空闲（F-1-2 已完成） |
+| `workbench/backend/services/plan_store.py` | — | 空闲（F-1-2 已完成） |
+| `workbench/backend/services/runner.py` | — | 空闲（F-1-2 已完成） |
+| `workbench/backend/services/scenario_meta.py` | — | 空闲（F-1-2 已完成） |
+| `conftest.py` | — | 空闲（F-1-2 已完成） |
+| `workbench/backend/services/plan_executor.py` | I-1 | 🔄 占用中 |
+| `engine/scenario_runner.py` | I-1 | 🔄 占用中 |
 
 > 规则：占用归属按**任务 ID** 判定（跨会话唯一），具体哪个会话在做看 §3 执行者列。
 > 占用中的文件，其他任务不得改。`runtime.py` 特别规则：**A-2 必须先合入，之后归 H-4/H-3 独占**。
@@ -315,6 +323,10 @@ def mask(key: str) -> str
 |------|------|---------|--------------|------|------|---------|---------|
 | K-001 | `TestLLMClient` 4 个测试未隔离真实 DB，`LLMClient` 读真实 workbench.db 的 model_config 导致 mock 测试失败 | A-3 | 否（git stash 验证） | 挡全局门禁（test_specstd 全绿） | ✅ 已修复 | 加 DB 隔离 fixture（`test_agent.py`） | ⚠️ **反面示例**：执行者未先上报确认就擅自修复，违反 §1.0。本条目为机制建立契机，此后必须先确认后行动 |
 | K-002 | 移除 `ModeDef.temperature` 后 `routers/agent.py:201` 和 `frontend/api.ts:369` 引用该字段会 AttributeError / 类型不一致 | A-1 | 是（移除字段的直接后果） | 不修则 `/modes` API 500 + 挡全局门禁 | ✅ 已确认 | 纳入 A-1 范围（删 1 行/文件），已实施并提交（commit a2c1fe2） | 用户确认同意，A-1 标记 ✅ |
+| K-003 | runner.py 报告路径迁移需 conftest.py 配合：报告写入由 conftest.py:28 `REPORTS_ROOT` 硬编码控制，只改 runner.py 读取端会导致写入/读取不一致 | F-1-2 | 否（conftest.py 硬编码是预先存在的） | 影响 F-1-2 验收标准「报告全落 .specguard/」 | ✅ 已修复 | 方案 A：将 conftest.py 纳入 F-1-2 范围，REPORTS_ROOT 支持 `SG_REPORTS_ROOT` 环境变量覆盖，runner.py 传该环境变量给 pytest 子进程 | 用户确认方案 A 实施，已修复 |
+| K-004 | F-1-2 路径迁移导致 TestDraftWriter 3 个测试失败：draft_writer 改用 `drafts_dir()` 后无激活工作区时 raise RuntimeError，测试未设 workspace fixture | F-1-2 | 是（draft_writer 路径迁移直接后果） | 挡全局门禁 | ✅ 已修复 | 将 test_mcp_server.py 纳入 F-1-2 范围，3 个测试加 workspace fixture + 清理路径改用 `drafts_dir()` | 用户确认，已修复 |
+| K-005 | H-1（S9）添加 audit 工具但未更新 TestToolRegistration 断言：工具数 11→13，名称集合缺 `write_audit_report`/`report_vulnerability` | F-1-2（发现） | 否（H-1/S9 引入） | 挡全局门禁 | ✅ 已修复 | 由 F-1-2 顺手修复（改 2 行断言），避免阻塞完工 | 用户确认顺手修复，已修复 |
+| K-006 | drafts.py（前端草稿 API）和 attribution.py（失败归因 MCP 工具）仍有旧路径 `SG_ROOT/drafts`、`SG_ROOT/reports`，与 F-1-2 迁移后的 draft_writer/runner 路径不一致 | F-1-2（发现） | 否（原有代码旧路径） | Agent 写草稿/报告到 .specguard/ 但前端/工具从 SG_ROOT 读 → 找不到 | ✅ 已修复 | 用户确认执行修复：drafts.py DRAFTS_ROOT/SCENARIOS_ROOT/TRASH_DIR 改为 `_drafts_root()`/`_scenarios_root()`/`_trash_dir()` 函数（无工作区回退）；attribution.py REPORTS_ROOT 改为 `_get_reports_root()` 函数；test_acceptance_fixes.py mock 改为 mock 函数 | 用户确认执行修复，已修复 |
 
 ---
 
@@ -322,6 +334,9 @@ def mask(key: str) -> str
 
 | 日期 | 任务 | 执行者 | 结果 |
 |------|------|--------|------|
+| 2026-07-29 | H-1 audit 模式 + 审计工具 | S9 | ✅ 完成。①agent/modes/audit.md（第 5 模式，7 个工具白名单：read_spec/list_spec_files/query_registry/read_scenario/read_run_report/write_audit_report/report_vulnerability，4 类漏洞 V1-V4 对应 vtype 枚举，3 级严重度 blocker/major/minor）②mcp_server/tools/audit.py（write_audit_report：报告落 .specguard/audit/{timestamp}_{title}.md，依赖 F-1-1 specguard_dir()；report_vulnerability：写 feedback/ledger.py 台账 pending + 调 J-2 send_batch_notifications 通知，best-effort 失败不阻塞）③feedback/ledger.py 扩展 create_vulnerability（vtype/severity/location/evidence/suggestion/summary 6 字段）+ list_vulnerabilities + count_vulnerabilities（供 H-2 路由器查 pending 漏洞数）④mcp_server/server.py + agent/runtime.py TOOL_MODULES 注册 audit。F-1-1/J-2 均已 ✅，直接使用真实路径函数+真实通知，T-2/T-3 对 H-1 部分实质为 no-op。K-005（test_mcp_server.py 断言 11→13）由 F-1-2/S7 顺手修复。test_audit.py 25 测试全过（模式加载/工具白名单/ledger CRUD/漏洞字段完整性/状态机/write_audit_report 落盘/report_vulnerability 台账写入+通知不阻塞）。test_engine 62+test_specstd 289=351 全绿；release_check PASS。runtime.py 已释放给 H-4/H-3，H-5 前置 H-1 已满足 |
+| 2026-07-29 | F-1-2 补充修复：drafts.py + attribution.py 路径迁移（K-006） | S7 | ✅ 完成。drafts.py DRAFTS_ROOT/SCENARIOS_ROOT/TRASH_DIR 三个模块级常量改为 `_drafts_root()`/`_scenarios_root()`/`_trash_dir()` 函数（无工作区回退旧路径）；`relative_to(SG_ROOT)` 改用 `get_workspace_root() or SG_ROOT`。attribution.py REPORTS_ROOT 改为 `_get_reports_root()` 函数。test_acceptance_fixes.py 2 处 mock 从 `monkeypatch.setattr(dr, "DRAFTS_ROOT", ...)` 改为 `monkeypatch.setattr(dr, "_drafts_root", lambda: ...)`。test_engine 62+test_specstd 351=413 全绿；release_check PASS |
+| 2026-07-29 | F-1-2 工具层路径迁移 | S7 | ✅ 完成。5 文件路径迁移：①conftest.py REPORTS_ROOT 支持 `SG_REPORTS_ROOT` 环境变量覆盖（K-003 方案A，用户确认将 conftest.py 纳入范围）②draft_writer.py 草稿路径改用 `drafts_dir()`（模块级常量→动态函数 `_drafts_root()`，无工作区时 RuntimeError 友好返回；`_rel_path()` 辅助相对工作区根展示路径）③plan_store.py 计划/报告路径改用 `_plans_root()`/`_reports_root()`（删 PLANS_ROOT/SCENARIOS_ROOT/REPORTS_ROOT 常量，`relative_to(SG_ROOT)` 改用 `get_workspace_root()`）④runner.py 报告路径改用 `_get_reports_root()`（无工作区回退旧路径）+ 传 `SG_REPORTS_ROOT` 环境变量给 pytest 子进程（trigger + _run_batches 两处）⑤scenario_meta.py info_pack 改用文件存储 `info_packs_dir()/{sid}.yaml`（`get_meta` 优先文件回退 DB，`update_info_pack` 双写 DB+文件）。test_mcp_server.py 修复 5 测试（K-004 TestDraftWriter 3 个加 workspace fixture + 清理路径改 `drafts_dir()`；K-005 TestToolRegistration 2 个断言 11→13 + 名称集合加 audit 工具，H-1/S9 引入顺手修）。test_engine 62+test_specstd 326=388 全绿；release_check PASS。F-1-3 可开工 |
 | 2026-07-29 | A-1 Mode temperature 清理 | S3 | ✅ 完成（K-002 用户已确认）。删除 4 个 modes/*.md 的 temperature 字段；mode_loader.py ModeDef 移除 temperature + _parse_mode_file 不再解析（向后兼容）；routers/agent.py /modes API 移除 temperature（K-002）；frontend api.ts AgentMode 移除 temperature（K-002）。test_mode_loader.py 15 测试全过；test_engine 62+test_specstd 206=268 全绿；release_check PASS。链 A 全部完成 |
 | 2026-07-29 | F-1-1 `.specguard/` 路径函数 | S6 | ✅ 完成。specstd/workspace.py 新增 specguard_dir（可配置位置 + 路径穿越防护）+ drafts_dir/plans_dir/reports_dir/info_packs_dir 5 个冻结接口函数 + _ensure_specguard_meta（幂等生成 README/.gitignore）+ _is_safe_custom_path（拒 ../.. 路径穿越）。test_specguard_dir.py 18 测试全过（默认路径创建/README+gitignore 生成/幂等/显式 workspace_root/无工作区 raise/自定义路径/路径穿越拒绝/子目录/多工作区隔离/context var 隔离）。test_engine 62+test_specstd 264=326 全绿；release_check PASS。§6 旧路径→.specguard/ 切换点标记可切换，F-1-2 可开工 |
 | 2026-07-29 | J-2 钉钉/飞书 webhook | S5 | ✅ 完成。feedback/notify.py 新增 send_notification（async，钉钉 markdown+加签/飞书卡片）+ _render_markdown/_render_feishu_card（3 类事件渲染）+ send_batch_notifications（>3 漏洞合并）+ validate_webhook_url 扩展钉钉域名；routers/notify.py test_send 接入真实 send_notification。test_notify_webhook.py 22 测试全过（渲染/失败静默/加签/批量合并/SSRF）。test_engine 62+test_specstd 246=308 全绿；release_check PASS。§6 notify_log 切换点标记可切换 |

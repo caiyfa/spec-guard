@@ -21,7 +21,7 @@ if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
 from test_specstd.helpers import create_valid_workspace
-from specstd.workspace import register_local, unregister
+from specstd.workspace import register_local, unregister, drafts_dir
 from mcp_server.tools import spec_reader, scenario_tools, registry_query, draft_writer, validator
 from mcp_server.server import ALL_TOOLS
 
@@ -46,14 +46,15 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 11
+        assert len(ALL_TOOLS) == 13  # F-1-2/K-005: H-1 新增 audit 工具后 11→13
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
         expected = {"read_spec", "list_spec_files", "list_scenarios",
                      "read_scenario", "next_scenario_id",
                      "query_registry", "write_draft", "undo_draft", "validate",
-                     "read_run_report", "db_evidence"}
+                     "read_run_report", "db_evidence",
+                     "write_audit_report", "report_vulnerability"}  # K-005: H-1 audit 工具
         assert names == expected
 
 
@@ -149,7 +150,7 @@ class TestRegistryQuery:
 # ══════════════════════════════════════════════════════════
 
 class TestDraftWriter:
-    def test_write_draft_create(self, tmp_path):
+    def test_write_draft_create(self, tmp_path, workspace):
         result = _call(draft_writer, "write_draft", {
             "filename": "test-draft-create.yaml",
             "content": "id: TEST-DRAFT\ntitle: 测试\nflow: []\nverify: []\n",
@@ -157,10 +158,10 @@ class TestDraftWriter:
         data = json.loads(result[0].text)
         assert data["ok"] is True
         assert data["action"] == "create"
-        # 清理
-        (SG_ROOT / "drafts" / "test-draft-create.yaml").unlink(missing_ok=True)
+        # 清理（F-1-2: 路径在工作区 .specguard/drafts/ 下）
+        (drafts_dir() / "test-draft-create.yaml").unlink(missing_ok=True)
 
-    def test_write_draft_overwrite_denied(self, tmp_path):
+    def test_write_draft_overwrite_denied(self, tmp_path, workspace):
         # 先创建文件
         _call(draft_writer, "write_draft", {
             "filename": "test-overwrite.yaml",
@@ -173,7 +174,7 @@ class TestDraftWriter:
         })
         assert "OVERWRITE_DENIED" in result[0].text
         # 清理
-        (SG_ROOT / "drafts" / "test-overwrite.yaml").unlink(missing_ok=True)
+        (drafts_dir() / "test-overwrite.yaml").unlink(missing_ok=True)
 
     def test_write_draft_out_of_scope(self):
         result = _call(draft_writer, "write_draft", {
@@ -182,7 +183,7 @@ class TestDraftWriter:
         })
         assert "OUT_OF_SCOPE" in result[0].text
 
-    def test_write_draft_patch(self, tmp_path):
+    def test_write_draft_patch(self, tmp_path, workspace):
         # 先创建
         _call(draft_writer, "write_draft", {
             "filename": "test-patch.yaml",
@@ -198,7 +199,7 @@ class TestDraftWriter:
         assert data["ok"] is True
         assert data["action"] == "patch"
         # 清理
-        (SG_ROOT / "drafts" / "test-patch.yaml").unlink(missing_ok=True)
+        (drafts_dir() / "test-patch.yaml").unlink(missing_ok=True)
 
 
 # ══════════════════════════════════════════════════════════

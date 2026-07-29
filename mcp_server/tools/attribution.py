@@ -16,7 +16,13 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-REPORTS_ROOT = SG_ROOT / "reports"
+def _get_reports_root() -> Path:
+    """获取报告目录（优先工作区 .specguard/reports/，无工作区回退 SG_ROOT/reports/）。"""
+    try:
+        from specstd.workspace import reports_dir
+        return reports_dir()
+    except Exception:
+        return SG_ROOT / "reports"
 
 # V13 修复：run_id 白名单（时间戳目录名或普通标识符，禁路径分隔符）
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
@@ -73,9 +79,10 @@ def _handle_read_report(arguments: dict) -> list[TextContent]:
     # V13 修复：run_id 白名单校验 + 解析结果必须落在 reports/ 之内
     if not RUN_ID_RE.match(run_id):
         return [TextContent(type="text", text=f"OUT_OF_SCOPE: 非法 run_id: {run_id}")]
-    run_dir = (REPORTS_ROOT / run_id).resolve()
+    reports_root = _get_reports_root()
+    run_dir = (reports_root / run_id).resolve()
     try:
-        run_dir.relative_to(REPORTS_ROOT.resolve())
+        run_dir.relative_to(reports_root.resolve())
     except ValueError:
         return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界: {run_id}")]
     if not run_dir.is_dir():

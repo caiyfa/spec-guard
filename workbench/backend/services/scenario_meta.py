@@ -7,9 +7,19 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
+from pathlib import Path
+
+import yaml
 
 from services.user_store import _connect, _LOCK, init_db
+
+SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(SG_ROOT) not in sys.path:
+    sys.path.insert(0, str(SG_ROOT))
+
+from specstd.workspace import info_packs_dir  # noqa: E402
 
 
 def _ensure_table():
@@ -28,6 +38,33 @@ def _ensure_table():
                 updated_at TEXT NOT NULL DEFAULT ''
             )
         """)
+
+
+def _info_pack_path(sid: str) -> Path:
+    """获取场景 info_pack 文件路径：.specguard/info_packs/{sid}.yaml。"""
+    return info_packs_dir() / f"{sid}.yaml"
+
+
+def _read_info_pack(sid: str) -> list[str]:
+    """从文件读取 info_pack 文件列表。"""
+    path = _info_pack_path(sid)
+    if not path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return data.get("files", [])
+    except Exception:
+        return []
+
+
+def _write_info_pack(sid: str, files: list[str]):
+    """写入 info_pack 文件列表到 .specguard/info_packs/{sid}.yaml。"""
+    path = _info_pack_path(sid)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.dump({"files": files}, allow_unicode=True, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
 
 
 def _next_id() -> str:
@@ -80,7 +117,15 @@ def get_meta(sid: str) -> dict | None:
         ).fetchone()
     if not row:
         return None
-    return _row_to_dict(row)
+    d = _row_to_dict(row)
+    # F-1-2: info_pack 优先从文件读（.specguard/info_packs/），无工作区或文件不存在时回退 DB
+    try:
+        file_files = _read_info_pack(sid)
+        if file_files:
+            d["info_pack"] = file_files
+    except Exception:
+        pass  # 无激活工作区，用 DB 数据
+    return d
 
 
 def update_info_pack(sid: str, files: list[str]) -> dict | None:
@@ -95,6 +140,11 @@ def update_info_pack(sid: str, files: list[str]) -> dict | None:
         )
         if result.rowcount == 0:
             return None
+    # F-1-2: 同步写入文件（.specguard/info_packs/），无工作区时仅写 DB
+    try:
+        _write_info_pack(sid, files)
+    except Exception:
+        pass
     return get_meta(sid)
 
 

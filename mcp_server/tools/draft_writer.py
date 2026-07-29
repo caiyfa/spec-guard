@@ -1,18 +1,39 @@
-"""draft_writer — 写入草稿到 drafts/ 目录。
+"""draft_writer — 写入草稿到 .specguard/drafts/ 目录。
 
 工具：
   write_draft: 写入草稿（drafts/ 限定 + 禁覆盖 + patch 模式）
 """
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-DRAFTS_ROOT = SG_ROOT / "drafts"
-META_PATH = DRAFTS_ROOT / "_meta.json"
+if str(SG_ROOT) not in sys.path:
+    sys.path.insert(0, str(SG_ROOT))
+
+from specstd.workspace import drafts_dir, get_workspace_root  # noqa: E402
+
+
+def _drafts_root() -> Path:
+    """获取草稿目录（动态解析当前工作区 .specguard/drafts/）。"""
+    d = drafts_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _rel_path(path: Path) -> str:
+    """返回相对工作区根的路径（用于展示）。"""
+    ws = get_workspace_root()
+    if ws:
+        try:
+            return str(path.relative_to(ws))
+        except ValueError:
+            pass
+    return str(path)
 
 
 def _record_author(filename: str):
@@ -24,15 +45,16 @@ def _record_author(filename: str):
         emp_no = ""
     if not emp_no:
         return
+    meta_path = _drafts_root() / "_meta.json"
     meta = {}
-    if META_PATH.is_file():
+    if meta_path.is_file():
         try:
-            meta = json.loads(META_PATH.read_text(encoding="utf-8"))
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception:
             meta = {}
     meta[filename] = {"author": emp_no,
                       "updated_at": datetime.now().isoformat(timespec="seconds")}
-    META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
                          encoding="utf-8")
 
 TOOLS = [
@@ -78,8 +100,9 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
 
 def _backup_draft(filename: str):
     """写入前备份已有文件到 .bak（G4-A 操作撤销）。"""
-    draft_path = DRAFTS_ROOT / filename
-    bak_path = DRAFTS_ROOT / f"{filename}.bak"
+    drafts_root = _drafts_root()
+    draft_path = drafts_root / filename
+    bak_path = drafts_root / f"{filename}.bak"
     if draft_path.exists():
         bak_path.write_text(draft_path.read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -96,8 +119,11 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
     if "/" in filename or "\\" in filename or ".." in filename:
         return [TextContent(type="text", text="OUT_OF_SCOPE: filename 不允许包含路径分隔符或 ..")]
 
-    DRAFTS_ROOT.mkdir(parents=True, exist_ok=True)
-    draft_path = DRAFTS_ROOT / filename
+    try:
+        drafts_root = _drafts_root()
+    except RuntimeError as e:
+        return [TextContent(type="text", text=f"错误：{e}")]
+    draft_path = drafts_root / filename
 
     if mode == "create":
         if draft_path.exists():
@@ -106,7 +132,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         _record_author(filename)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
-            "path": str(draft_path.relative_to(SG_ROOT)), "size": len(content),
+            "path": _rel_path(draft_path), "size": len(content),
         }, ensure_ascii=False, indent=2))]
 
     elif mode == "patch":
@@ -120,7 +146,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         _record_author(filename)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
-            "path": str(draft_path.relative_to(SG_ROOT)), "size": len(merged),
+            "path": _rel_path(draft_path), "size": len(merged),
             "backup": f"{filename}.bak",
         }, ensure_ascii=False, indent=2))]
 
@@ -135,8 +161,12 @@ def _handle_undo_draft(arguments: dict) -> list[TextContent]:
     if "/" in filename or "\\" in filename or ".." in filename:
         return [TextContent(type="text", text="OUT_OF_SCOPE: filename 不允许包含路径分隔符或 ..")]
 
-    bak_path = DRAFTS_ROOT / f"{filename}.bak"
-    draft_path = DRAFTS_ROOT / filename
+    try:
+        drafts_root = _drafts_root()
+    except RuntimeError as e:
+        return [TextContent(type="text", text=f"错误：{e}")]
+    bak_path = drafts_root / f"{filename}.bak"
+    draft_path = drafts_root / filename
 
     if not bak_path.exists():
         return [TextContent(type="text", text=f"错误：无 .bak 备份文件: {filename}.bak")]
@@ -145,6 +175,6 @@ def _handle_undo_draft(arguments: dict) -> list[TextContent]:
     draft_path.write_text(bak_path.read_text(encoding="utf-8"), encoding="utf-8")
     return [TextContent(type="text", text=json.dumps({
         "ok": True, "action": "undo",
-        "path": str(draft_path.relative_to(SG_ROOT)),
+        "path": _rel_path(draft_path),
         "restored_from": f"{filename}.bak",
     }, ensure_ascii=False, indent=2))]

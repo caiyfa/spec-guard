@@ -25,7 +25,8 @@ from engine.scenario_runner import RunContext, register_builtin_steps, run_teard
 from engine import report_writer                              # noqa: E402
 
 SCENARIOS_ROOT = os.path.join(SG_ROOT, "scenarios")
-REPORTS_ROOT = os.path.join(SG_ROOT, "reports")
+# F-1-2: 支持 runner.py 通过环境变量指定报告目录（落 .specguard/reports/）
+REPORTS_ROOT = os.environ.get("SG_REPORTS_ROOT") or os.path.join(SG_ROOT, "reports")
 
 
 def pytest_addoption(parser):
