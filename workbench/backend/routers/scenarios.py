@@ -77,6 +77,18 @@ def api_update_info_pack(scenario_id: str, body: UpdateInfoPackBody):
     return result
 
 
+@router.get("/{scenario_id}/info-pack/freshness", dependencies=[Depends(require_role("admin", "tester"))])
+def api_info_pack_freshness(scenario_id: str):
+    """K-013：信息包新鲜度（逐文件 hash 比对）+ git 变更发现（信息包外相关新文件）。"""
+    from services import info_pack_freshness
+    if scenario_meta.get_meta(scenario_id) is None:
+        raise HTTPException(status_code=404, detail=f"场景元数据不存在: {scenario_id}")
+    freshness = info_pack_freshness.check_freshness(scenario_id)
+    discovery = info_pack_freshness.discover_related_changes(scenario_id)
+    return {**freshness, "inside_stale": discovery.get("inside_stale", []),
+            "outside_changes": discovery.get("outside_changes", [])}
+
+
 @router.get("/{scenario_id}/meta", dependencies=[Depends(require_role("admin", "tester"))])
 def api_get_scenario_meta(scenario_id: str):
     """获取场景元数据 + 基础信息包。"""

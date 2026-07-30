@@ -36,14 +36,14 @@ def _rel_path(path: Path) -> str:
     return str(path)
 
 
-def _record_author(filename: str):
-    """记录草稿作者到 drafts/_meta.json（M7 多用户归属；无用户上下文时跳过）。"""
+def _record_meta(filename: str, scenario_id: str = ""):
+    """记录草稿元数据到 drafts/_meta.json（M7 作者归属 + K-013 场景关联/信息包基准 commit）。"""
     try:
         from services.auth import current_emp_no  # 延迟导入（MCP stdio 无此上下文）
         emp_no = current_emp_no()
     except Exception:
         emp_no = ""
-    if not emp_no:
+    if not emp_no and not scenario_id:
         return
     meta_path = _drafts_root() / "_meta.json"
     meta = {}
@@ -52,10 +52,30 @@ def _record_author(filename: str):
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception:
             meta = {}
-    meta[filename] = {"author": emp_no,
-                      "updated_at": datetime.now().isoformat(timespec="seconds")}
+    entry = meta.get(filename, {})
+    if emp_no:
+        entry["author"] = emp_no
+    entry["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    if scenario_id:
+        entry["scenario_id"] = scenario_id
+        # K-013：记录信息包基准 commit（git 型），供后续核对信息包是否已演进
+        try:
+            from services import scenario_meta as sm
+            m = sm.get_meta(scenario_id)
+            if m:
+                commits = [e.get("commit") for e in (m.get("info_pack") or []) if e.get("commit")]
+                if commits:
+                    entry["pack_commit"] = commits[0]
+        except Exception:
+            pass
+    meta[filename] = entry
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
                          encoding="utf-8")
+
+
+def _record_author(filename: str):
+    """记录草稿作者到 drafts/_meta.json（M7 多用户归属；无用户上下文时跳过）。"""
+    _record_meta(filename)
 
 TOOLS = [
     Tool(
@@ -70,7 +90,10 @@ TOOLS = [
                 "content": {"type": "string", "description": "草稿内容（YAML 文本）"},
                 "mode": {"type": "string", "enum": ["create", "patch"],
                           "description": "模式：create（新建，禁止覆盖）/ patch（追加到已有文件）",
-                          "default": "create"}
+                          "default": "create"},
+                "scenario_id": {"type": "string",
+                                 "description": "可选：来源场景元数据 ID（如 SG-META-0001）。"
+                                 "记录后草稿与其信息包关联，信息包内容变更时可被核对标记"}
             },
             "required": ["filename", "content"]
         }
@@ -87,6 +110,22 @@ TOOLS = [
             "required": ["filename"]
         }
     ),
+    Tool(
+        name="promote_draft",
+        description="草稿入库：格式校验 PASS → 移入 scenarios/{module}/ → 契约基线更新 → 发布门禁"
+                    "（失败自动回滚，不产生半截入库）。仅在用户明确确认入库后调用。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "草稿文件名（如 PP-RC-008.yaml）"},
+                "module": {"type": "string",
+                            "description": "目标模块目录（相对 scenarios/，如 employee/person-profile）"},
+                "skip_gate": {"type": "boolean",
+                               "description": "跳过发布门禁（仅调试用途，默认 false）", "default": False}
+            },
+            "required": ["filename", "module"]
+        }
+    ),
 ]
 
 
@@ -95,7 +134,34 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_write_draft(arguments)
     elif name == "undo_draft":
         return _handle_undo_draft(arguments)
+    elif name == "promote_draft":
+        return _handle_promote_draft(arguments)
     return []
+
+
+def _handle_promote_draft(arguments: dict) -> list[TextContent]:
+    """K-015：草稿入库（与 API /drafts/{filename}/promote 同一实现）。"""
+    filename = arguments.get("filename", "")
+    module = arguments.get("module", "")
+    skip_gate = bool(arguments.get("skip_gate", False))
+    if not filename or not module:
+        return [TextContent(type="text", text="错误：缺少 filename 或 module 参数")]
+
+    try:
+        from services import draft_promote
+        try:
+            from services.auth import current_emp_no
+            emp_no = current_emp_no()
+        except Exception:
+            emp_no = ""
+        result = draft_promote.promote(filename, module, skip_gate=skip_gate, emp_no=emp_no)
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+    except Exception as e:
+        code = getattr(e, "code", "error")
+        detail = getattr(e, "detail", None)
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error_code": code, "error": str(e), **(detail or {}),
+        }, ensure_ascii=False, indent=2))]
 
 
 def _backup_draft(filename: str):
@@ -111,6 +177,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
     filename = arguments.get("filename", "")
     content = arguments.get("content", "")
     mode = arguments.get("mode", "create")
+    scenario_id = arguments.get("scenario_id", "")  # K-013: 来源场景关联
 
     if not filename or not content:
         return [TextContent(type="text", text="错误：缺少 filename 或 content 参数")]
@@ -129,7 +196,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         if draft_path.exists():
             return [TextContent(type="text", text=f"OVERWRITE_DENIED: 文件已存在: {filename}（使用 mode=patch 追加）")]
         draft_path.write_text(content, encoding="utf-8")
-        _record_author(filename)
+        _record_meta(filename, scenario_id)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
             "path": _rel_path(draft_path), "size": len(content),
@@ -143,7 +210,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
             existing = draft_path.read_text(encoding="utf-8")
         merged = existing + "\n" + content if existing else content
         draft_path.write_text(merged, encoding="utf-8")
-        _record_author(filename)
+        _record_meta(filename, scenario_id)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
             "path": _rel_path(draft_path), "size": len(merged),

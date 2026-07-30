@@ -14,9 +14,17 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import httpx
+
+
+class _StreamUnavailable(Exception):
+    """流式请求在建连/状态码阶段失败（未产出任何 delta）——安全回退非流式。"""
+
+
+class _StreamFailedMidway(Exception):
+    """流式已产出部分 delta 后中断——回退非流式拿完整结果（前端以最终消息为准）。"""
 
 
 class LLMClient:
@@ -124,11 +132,14 @@ class LLMClient:
         return not self.base_url
 
     def chat(self, messages: list[dict], tools: list[dict] = None,
-             temperature: float = 0.7) -> tuple[dict, dict]:
+             temperature: float = 0.7,
+             on_delta: Optional[Callable[[str], None]] = None) -> tuple[dict, dict]:
         """调用 LLM，返回 (message, usage)。
 
         message: {"role": "assistant", "content": "...", "tool_calls": [...]}
         usage: {"prompt_tokens": N, "completion_tokens": N, "total_tokens": N}
+        on_delta: 提供时启用 SSE 流式（K-012），每个 content 增量回调一次；
+                  流式失败自动回退非流式（结果以最终 message 为准）。
         """
         # system prompt 缓存检测（无论是否 mock）
         self._check_cache(messages)
@@ -145,7 +156,14 @@ class LLMClient:
         last_err = None
         for attempt in range(4):
             try:
-                data = self._call_api(messages, tools, temperature)
+                if on_delta is not None:
+                    try:
+                        data = self._call_api_stream(messages, tools, temperature, on_delta)
+                    except (_StreamUnavailable, _StreamFailedMidway):
+                        # 流式不可用/中断 → 同次尝试内回退非流式（不消耗重试次数）
+                        data = self._call_api(messages, tools, temperature)
+                else:
+                    data = self._call_api(messages, tools, temperature)
                 usage = data.get("usage", {})
                 self._record_metrics(usage)
                 self._elapsed_time += time.time() - t0
@@ -166,12 +184,13 @@ class LLMClient:
 
         raise RuntimeError(f"LLM 调用失败（已重试 3 次）: {last_err}")
 
-    def _call_api(self, messages: list[dict], tools: list[dict], temperature: float) -> dict:
-        """调用 OpenAI 兼容 API（支持 thinking/reasoning 高级选项）。"""
+    def _build_body(self, messages: list[dict], tools: list[dict], temperature: float) -> dict:
+        """构造请求体（流式/非流式共用）。"""
         # 关键修复：strip reasoning_content（DeepSeek 返回但不接受回传，导致 400）
+        # K-013：strip references（@引用结构化清单，持久化用但不属于 OpenAI 消息格式）
         clean_messages = []
         for m in messages:
-            clean_m = {k: v for k, v in m.items() if k != "reasoning_content"}
+            clean_m = {k: v for k, v in m.items() if k not in ("reasoning_content", "references")}
             clean_messages.append(clean_m)
 
         body = {
@@ -194,14 +213,19 @@ class LLMClient:
             # OpenAI 风格：reasoning_effort（如果有值）
             if self.reasoning_effort:
                 body["reasoning_effort"] = self.reasoning_effort
+        return body
 
-        headers = {
+    def _headers(self) -> dict:
+        return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
 
+    def _call_api(self, messages: list[dict], tools: list[dict], temperature: float) -> dict:
+        """调用 OpenAI 兼容 API（支持 thinking/reasoning 高级选项）。"""
+        body = self._build_body(messages, tools, temperature)
         url = f"{self.base_url.rstrip('/')}/v1/chat/completions"
-        resp = self._client.post(url, json=body, headers=headers)
+        resp = self._client.post(url, json=body, headers=self._headers())
         if resp.status_code != 200:
             # 捕获错误响应体，用于调试
             error_detail = resp.text[:500] if resp.text else ""
@@ -211,6 +235,75 @@ class LLMClient:
                 response=resp,
             )
         return resp.json()
+
+    def _call_api_stream(self, messages: list[dict], tools: list[dict],
+                         temperature: float,
+                         on_delta: Callable[[str], None]) -> dict:
+        """SSE 流式调用（K-012）：逐 delta 回调 content，tool_calls 按 index 增量累积。
+
+        返回结构与非流式 _call_api 同构：{"choices": [{"message": ...}], "usage": {...}}。
+        失败语义：未产出 delta 前失败 → _StreamUnavailable（可回退）；
+                  已产出 delta 后中断 → _StreamFailedMidway（回退非流式取完整结果）。
+        """
+        body = self._build_body(messages, tools, temperature)
+        body["stream"] = True
+        body["stream_options"] = {"include_usage": True}
+        url = f"{self.base_url.rstrip('/')}/v1/chat/completions"
+
+        content_parts: list[str] = []
+        tool_calls_acc: dict[int, dict] = {}
+        usage: dict = {}
+        produced = False
+
+        try:
+            with self._client.stream("POST", url, json=body, headers=self._headers()) as resp:
+                if resp.status_code != 200:
+                    raise _StreamUnavailable(f"HTTP {resp.status_code}")
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    if chunk.get("usage"):
+                        usage = chunk["usage"]
+                    for choice in chunk.get("choices") or []:
+                        delta = choice.get("delta") or {}
+                        piece = delta.get("content")
+                        if piece:
+                            produced = True
+                            content_parts.append(piece)
+                            on_delta(piece)
+                        # reasoning_content（DeepSeek 思考流）不转发，保持与原有行为一致
+                        for tc in delta.get("tool_calls") or []:
+                            idx = tc.get("index", 0)
+                            acc = tool_calls_acc.setdefault(idx, {
+                                "id": "", "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            })
+                            if tc.get("id"):
+                                acc["id"] = tc["id"]
+                            fn = tc.get("function") or {}
+                            if fn.get("name"):
+                                acc["function"]["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                acc["function"]["arguments"] += fn["arguments"]
+        except _StreamUnavailable:
+            raise
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.ReadError,
+                httpx.RemoteProtocolError, httpx.ConnectTimeout) as e:
+            if produced:
+                raise _StreamFailedMidway(str(e))
+            raise _StreamUnavailable(str(e))
+
+        message: dict = {"role": "assistant", "content": "".join(content_parts)}
+        if tool_calls_acc:
+            message["tool_calls"] = [tool_calls_acc[i] for i in sorted(tool_calls_acc)]
+        return {"choices": [{"message": message}], "usage": usage}
 
     def _check_cache(self, messages: list[dict]):
         """检测 system prompt 是否变化（缓存命中/未命中）。"""

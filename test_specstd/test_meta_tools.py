@@ -50,7 +50,7 @@ class MockLLM:
     def is_mock(self):
         return True
 
-    def chat(self, messages, tools=None, temperature=0.7):
+    def chat(self, messages, tools=None, temperature=0.7, on_delta=None):
         if self._call_count < len(self.responses):
             resp = self.responses[self._call_count]
         else:
@@ -363,12 +363,11 @@ class TestMetaToolsAllModes:
         assert "todo_write" in tool_names
 
     def test_chat_mode_has_only_meta_tools(self):
-        """chat 模式 tools=[] 但仍有 meta 工具。"""
+        """chat 模式仅有 meta 工具 + 产物查询工具（K-015 加入 list_info_pack_artifacts）。"""
         clear_cache()
         runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="chat")
         tool_names = {t.name for t in runtime.tools}
-        # chat 模式只有 meta 工具
-        assert tool_names == META_TOOLS
+        assert tool_names == META_TOOLS | {"list_info_pack_artifacts"}
 
     def test_meta_tools_in_openai_format(self):
         """meta 工具出现在 OpenAI function calling 格式中。"""

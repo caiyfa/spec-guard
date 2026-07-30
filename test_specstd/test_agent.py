@@ -41,7 +41,7 @@ class MockLLM:
     def is_mock(self):
         return True
 
-    def chat(self, messages, tools=None, temperature=0.7):
+    def chat(self, messages, tools=None, temperature=0.7, on_delta=None):
         if self._call_count < len(self.responses):
             resp = self.responses[self._call_count]
         else:
@@ -272,6 +272,27 @@ class TestRuntime:
         # 应恢复历史消息
         assert any(m.get("content") == "prev reply" for m in messages)
 
+    def test_session_resume_appends_new_user_message(self, tmp_path):
+        """K-013 修复：续会话时本轮 user 消息必须追加（此前被 history 整体替换丢弃）。
+
+        生产佐证：真实会话导出文件中 assistant 在「自问自答」——LLM 看不到用户新消息。
+        """
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "previous"},
+            {"role": "assistant", "content": "prev reply"},
+        ])
+        llm = LLMClient(base_url="")
+        runtime = AgentRuntime(llm, max_turns=3)
+        messages = runtime.run("sys", "本轮新消息", session=sm, session_id=sid)
+        user_contents = [m.get("content") for m in messages if m.get("role") == "user"]
+        assert user_contents[-1] == "本轮新消息"
+        # 持久化后也应在（save 全量写）
+        loaded = sm.load(sid)
+        assert any(m.get("role") == "user" and m.get("content") == "本轮新消息" for m in loaded)
+
     def test_event_emission(self):
         """事件发射：assistant 和 state 事件。"""
         events = []
@@ -303,5 +324,63 @@ class TestSystemPrompt:
         """自动加载 format_spec 和 AGENTS.md。"""
         prompt = build_system_prompt()
         # 应包含 format_spec 内容（或回退消息）和工作区规则（或回退消息）
-        assert "硬约束" in prompt
-        assert "工作流程" in prompt
+        assert "通用硬约束" in prompt
+        assert "格式规范" in prompt
+
+
+class TestPromptOptimization:
+    """K-014：提示词深度优化（去 generate 化 / 按模式裁剪 / references 语义）。"""
+
+    def test_template_has_no_generate_conflict(self):
+        """P0 修复：通用模板不含 generate 专属段（消除与模式片段的指令冲突）。"""
+        prompt = build_system_prompt(mode="audit")
+        # generate 专属的交互/流程段不应出现在通用模板（只在 generate.md 模式片段）
+        assert "用户交互" not in prompt
+        assert "<plan>" not in prompt
+        # audit 模式片段应在（职责来自模式而非模板）
+        assert "当前模式：audit" in prompt
+
+    def test_format_spec_full_only_for_yaml_modes(self):
+        """format_spec 全量仅 generate/debug；其余模式一行指引。"""
+        p_gen = build_system_prompt(mode="generate")
+        p_chat = build_system_prompt(mode="chat")
+        assert "未注入全量格式规范" not in p_gen  # generate 拿全量
+        assert "未注入全量格式规范" in p_chat
+        # chat 模式显著更短
+        assert len(p_chat) < len(p_gen) * 0.6
+
+    def test_format_spec_pointer_for_audit(self):
+        """audit 模式给指引而非全量。"""
+        p = build_system_prompt(mode="audit")
+        assert "未注入全量格式规范" in p
+        assert "switch_mode" in p  # 指引包含切换路径
+
+    def test_no_mode_keeps_full_spec(self):
+        """mode 为空（未知）时保持全量注入（向后兼容）。"""
+        p = build_system_prompt()
+        assert "未注入全量格式规范" not in p
+
+    def test_skills_filtered_by_mode(self):
+        """skills 按模式过滤：generate 不含 debug-failure；空模式返回全部。"""
+        from agent.skill_loader import build_skills_xml
+        gen = build_skills_xml("generate")
+        assert "generate-scenario" in gen
+        assert "debug-failure" not in gen
+        dbg = build_skills_xml("debug")
+        assert "debug-failure" in dbg
+        assert "generate-scenario" not in dbg
+        all_xml = build_skills_xml("")
+        assert "generate-scenario" in all_xml and "debug-failure" in all_xml
+        # audit/chat 无技能
+        assert build_skills_xml("audit") == ""
+
+    def test_references_section_present(self):
+        """P2：@引用语义说明注入（LLM 不再靠猜 <references> 块）。"""
+        prompt = build_system_prompt(mode="chat")
+        assert "用户引用" in prompt
+        assert "<references>" in prompt
+
+    def test_unknown_tool_recovery_hint_in_template(self):
+        """K-012/K-014 衔接：模板含未知工具自我纠正指引。"""
+        prompt = build_system_prompt(mode="chat")
+        assert "可用工具清单" in prompt

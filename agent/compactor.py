@@ -25,6 +25,23 @@ FILE_READ_TOOLS = {"read_spec", "read_info_pack", "list_spec_files", "read_scena
 FILE_WRITE_TOOLS = {"write_draft", "add_to_info_pack"}
 VALIDATE_TOOLS = {"validate"}
 
+# 摘要尾部标记（识别 resume 形态的摘要：session.load 会剥离 _type，只能靠内容标记）
+SUMMARY_END_MARKER = "--- 以上为压缩摘要，以下是最近对话 ---"
+# K-015: 历史段软上限（字符），防多次压缩嵌套膨胀
+_HISTORY_CAP = 2000
+
+
+def _is_summary_msg(m: dict) -> bool:
+    """识别压缩摘要消息（兼容 resume 后 _type 被 session.load 剥离的形态）。
+
+    K-015 修复：resume 后旧摘要无 _type，若只靠 _type 识别会被当普通内容——
+    既丢失保留路径、又在后续压缩中被重复嵌套（生产会话 7 个空「历史摘要」头佐证）。
+    """
+    if m.get("_type") == "compaction_summary":
+        return True
+    return (m.get("role") == "system"
+            and SUMMARY_END_MARKER in str(m.get("content", "")))
+
 
 def estimate_tokens(text: str) -> int:
     """估算文本 token 数（区分中英文）。
@@ -123,11 +140,11 @@ def compact(messages: list[dict], llm=None, max_context_tokens: int = 0) -> list
                 continue
         rest.append(m)
 
-    # 找到已有的 compaction_summary
+    # 找到已有的 compaction_summary（K-015：兼容 resume 形态）
     existing_summary = None
     conversation = []
     for m in rest:
-        if m.get("_type") == "compaction_summary":
+        if _is_summary_msg(m):
             existing_summary = m
         else:
             conversation.append(m)
@@ -237,11 +254,19 @@ def _generate_summary(to_compress: list[dict],
     """
     parts = []
 
-    # 保留已有摘要
+    # 保留已有摘要（K-015：合并为单一历史段——剥离历轮叠加的标题行与尾部标记，
+    # 软上限防嵌套膨胀；修复前每轮压缩多叠一个「## 历史摘要」空头）
     if existing_summary and existing_summary.get("content"):
-        parts.append("## 历史摘要\n")
-        parts.append(existing_summary["content"])
-        parts.append("")
+        prev = str(existing_summary["content"]).replace(SUMMARY_END_MARKER, "")
+        prev_lines = [ln for ln in prev.splitlines()
+                      if ln.strip() not in ("## 历史摘要", "## 压缩摘要")]
+        prev = "\n".join(prev_lines).strip()
+        if prev:
+            if len(prev) > _HISTORY_CAP:
+                prev = "……（更早历史已截断）\n" + prev[-_HISTORY_CAP:]
+            parts.append("## 历史摘要\n")
+            parts.append(prev)
+            parts.append("")
 
     # 提取文件操作
     files_read = []
@@ -331,6 +356,6 @@ def _generate_summary(to_compress: list[dict],
             parts.append(f"{i}. {content}")
         parts.append("")
 
-    parts.append("--- 以上为压缩摘要，以下是最近对话 ---")
+    parts.append(SUMMARY_END_MARKER)
 
     return "\n".join(parts)

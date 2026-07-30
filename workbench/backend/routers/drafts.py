@@ -15,7 +15,6 @@
 """
 
 import shutil
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -104,6 +103,22 @@ def list_drafts():
         except Exception:
             meta = {}
     drafts = []
+    # K-013：场景关联的新鲜度缓存（同一 source_meta 只查一次）
+    _freshness_cache: dict = {}
+
+    def _stale_of(source_meta_id: str) -> bool:
+        if not source_meta_id:
+            return False
+        if source_meta_id not in _freshness_cache:
+            try:
+                from services import info_pack_freshness
+                _freshness_cache[source_meta_id] = (
+                    info_pack_freshness.check_freshness(source_meta_id).get("stale_count", 0) > 0
+                )
+            except Exception:
+                _freshness_cache[source_meta_id] = False
+        return _freshness_cache[source_meta_id]
+
     if drafts_root.is_dir():
         for f in sorted(drafts_root.glob("*.yaml"), key=lambda p: p.stat().st_mtime, reverse=True):
             sid, title = "", ""
@@ -113,13 +128,17 @@ def list_drafts():
                 title = str(raw.get("title", ""))
             except Exception:
                 pass
+            meta_entry = meta.get(f.name) or {}
+            source_meta = meta_entry.get("scenario_id", "")  # K-013: SG-META 关联（注意与 YAML 的 id 字段区分）
             drafts.append({
                 "filename": f.name,
                 "scenario_id": sid,
                 "title": title,
                 "size": f.stat().st_size,
                 "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds"),
-                "author": (meta.get(f.name) or {}).get("author", ""),
+                "author": meta_entry.get("author", ""),
+                "source_meta": source_meta,
+                "stale": _stale_of(source_meta),
             })
     return {"drafts": drafts}
 
@@ -170,64 +189,17 @@ def promote_draft(filename: str, body: PromoteBody):
     """入库：格式校验 PASS → 移入 scenarios/{module}/ → 更新契约基线 → 发布门禁。
 
     发布门禁失败自动回滚（文件移回 drafts/，基线还原）。
+    K-015：核心逻辑抽取至 services.draft_promote（MCP promote_draft 工具复用同一实现）。
     """
-    from mcp_server.tools.validator import validate_scenario_content
-
-    path = _guard_filename(filename)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
-    module_dir = _guard_module(body.module)
-    target = module_dir / filename
-    if target.exists():
-        raise HTTPException(status_code=409, detail=f"目标已存在同名场景: {body.module}/{filename}")
-
-    # 闸 1：格式校验
-    report = validate_scenario_content(path.read_text(encoding="utf-8"))
-    if report["verdict"] != "PASS":
-        raise HTTPException(status_code=422, detail={
-            "message": "格式校验未通过，禁止入库",
-            "findings": report["findings"],
-        })
-
-    # 入库：移动文件 + 更新契约基线
-    shutil.move(str(path), str(target))
+    from services import draft_promote
+    from services.auth import current_emp_no
     try:
-        _rebuild_baseline()
-    except Exception as e:
-        shutil.move(str(target), str(path))  # 回滚
-        raise HTTPException(status_code=500, detail=f"契约基线更新失败，已回滚: {e}")
-
-    # 闸 2：发布门禁（release_check.py）
-    gate = {"skipped": True}
-    if not body.skip_gate:
-        gate = _run_release_gate()
-        if not gate["ok"]:
-            # 回滚：文件移回 + 基线还原
-            shutil.move(str(target), str(path))
-            try:
-                _rebuild_baseline()
-            except Exception:
-                pass
-            raise HTTPException(status_code=502, detail={
-                "message": "发布门禁未通过，已回滚",
-                "gate_output": gate.get("output", ""),
-            })
-
-    # 审计：草稿入库留痕（M6 审计要求）
-    try:
-        from services.auth import current_emp_no
-        from services import user_store
-        user_store.audit(current_emp_no(), "promote_draft", filename, body.module)
-    except Exception:
-        pass
-
-    return {
-        "ok": True,
-        "scenario_id": report.get("scenario", ""),
-        "target": str(target.relative_to(get_workspace_root() or SG_ROOT)).replace("\\", "/"),
-        "validate": report,
-        "gate": gate,
-    }
+        return draft_promote.promote(filename, body.module, skip_gate=body.skip_gate,
+                                     emp_no=current_emp_no())
+    except draft_promote.PromoteError as e:
+        status = draft_promote.HTTP_STATUS.get(e.code, 500)
+        raise HTTPException(status_code=status,
+                            detail={"message": str(e), **(e.detail or {})} if e.detail else str(e))
 
 
 @router.post("/{filename}/discard", dependencies=[Depends(require_role("admin", "tester"))])
@@ -241,32 +213,3 @@ def discard_draft(filename: str):
     target = trash / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
     shutil.move(str(path), str(target))
     return {"ok": True, "trashed_to": str(target.relative_to(get_workspace_root() or SG_ROOT)).replace("\\", "/")}
-
-
-# ══════════════════════════════════════════════════════════
-# 内部工具
-# ══════════════════════════════════════════════════════════
-
-def _rebuild_baseline():
-    """重建契约基线（新场景入库后 T6 基线同步）。"""
-    from engine.scenario_loader import load_scenarios
-    from engine.versioning import build_baseline, save_baseline
-
-    scenarios = load_scenarios(str(_scenarios_root()))
-    baseline = build_baseline(scenarios)
-    save_baseline(str(SG_ROOT), baseline)
-
-
-def _run_release_gate() -> dict:
-    """运行发布门禁 release_check.py，返回 {ok, output}。"""
-    try:
-        result = subprocess.run(
-            [sys.executable, "release_check.py"],
-            cwd=str(SG_ROOT), capture_output=True, text=True, timeout=180,
-        )
-        output = (result.stdout + result.stderr)[-3000:]
-        return {"ok": result.returncode == 0, "output": output, "skipped": False}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "output": "release_check 超时（180s）", "skipped": False}
-    except Exception as e:
-        return {"ok": False, "output": f"release_check 执行异常: {e}", "skipped": False}

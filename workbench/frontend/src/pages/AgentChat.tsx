@@ -1,23 +1,38 @@
-/** AgentChat — 左侧会话树 + 中间对话区 + 右侧待办面板 + 底部选择器 */
+/** AgentChat — 左侧会话树 + 中间对话区 + 右侧面板（K-012 简洁化：底部仅模式/模型下拉 + 输入框） */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { session, agentApi, scenarioApi, modelApi } from '../api';
-import type { AgentMode, AgentSkill, ScenarioMeta, ModelConfig } from '../api';
+import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi } from '../api';
+import type { AgentMode, ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness } from '../api';
 import SessionTree from '../components/SessionTree';
-import ModeBadge from '../components/ModeBadge';
+import ModeDropdown from '../components/ModeDropdown';
 import TodoPanel from '../components/TodoPanel';
 import type { StructuredTodo } from '../components/TodoPanel';
+import FileViewer from '../components/FileViewer';
 
 const MODE_LABELS: Record<string, string> = {
   generate: '✨生成', debug: '🐛调试', analyze: '🔍分析', chat: '💬对话', audit: '🔎审计',
 };
+
+interface ChatReference {
+  type: 'info_pack' | 'file' | 'draft';
+  path: string;          // file=相对路径 / draft=文件名 / info_pack=SG-META-xxxx
+  sha: string;           // 引用时的内容指纹（info_pack 为 ""）
+  label?: string;        // K-015: 展示名（信息包为场景名，持久化 refs 无此字段时回退 path）
+  missing?: boolean;
+}
 
 interface ChatMessage {
   role: string;
   content: string;
   tool_calls?: { id: string; function: { name: string; arguments: string } }[];
   reasoning_content?: string;
+  references?: ChatReference[];  // K-013: @引用（持久化在 user 消息上）
+}
+
+/** K-013：消息展示时剥离 <references> 注入块（内容已在引用面板呈现） */
+function stripRefBlock(content: string): string {
+  return content.replace(/^<references>[\s\S]*?<\/references>\s*/, '');
 }
 
 interface AgentStats {
@@ -105,6 +120,7 @@ interface GroupedItem {
   stepLabel?: string;   // 关联的待办步骤名称
   stepIdx?: number;    // 步骤索引
   modeSwitch?: ModeSwitchEvent;  // 模式切换事件
+  references?: ChatReference[];  // K-013: user 消息携带的 @引用
 }
 
 // ── 简易 Markdown 渲染 ──
@@ -293,7 +309,7 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
 
     if (msg.role === 'user') {
       flushToolGroup();
-      groups.push({ type: 'user', content: msg.content });
+      groups.push({ type: 'user', content: msg.content, references: msg.references });
     } else if (msg.role === 'assistant') {
       if (msg.tool_calls && msg.tool_calls.length > 0) {
         // 根据第一个工具名推断步骤
@@ -432,7 +448,7 @@ function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLabel?: s
 }
 
 // ── 上下文用量面板组件 ──
-function ContextPanel({ ctxUsage, messages, ctxLimit }: { ctxUsage: CtxUsage; messages: ChatMessage[]; ctxLimit: number }) {
+function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage: CtxUsage; messages: ChatMessage[]; ctxLimit: number; stats: AgentStats | null }) {
   const breakdown = calcCtxBreakdown(messages, ctxUsage.prompt_tokens);
   const total = ctxUsage.prompt_tokens + ctxUsage.completion_tokens;
   const pct = Math.round((total / ctxLimit) * 100);
@@ -452,6 +468,14 @@ function ContextPanel({ ctxUsage, messages, ctxLimit }: { ctxUsage: CtxUsage; me
           {pct}%
         </span>
       </div>
+      {/* K-012: 会话统计（原底部栏指标迁入） */}
+      {stats && (
+        <div className="text-[10px] text-gray-600 font-mono mb-1">
+          {stats.tps !== undefined && <span title="tokens/sec">⚡{stats.tps}/s </span>}
+          {stats.elapsed_time !== undefined && <span title="elapsed time">⏱{stats.elapsed_time}s </span>}
+          {(stats.cache_hits !== undefined) && <span title="prompt cache 命中/未命中">cache {stats.cache_hits}/{stats.cache_misses}</span>}
+        </div>
+      )}
       {/* 堆叠条形图 */}
       <div className="h-2 w-full rounded-full bg-black/40 overflow-hidden flex">
         {roles.map(r => {
@@ -489,8 +513,154 @@ function ContextPanel({ ctxUsage, messages, ctxLimit }: { ctxUsage: CtxUsage; me
   );
 }
 
-// ── 右侧面板组件（上下文 + 待办） ──
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, currentMode, messages, ctxLimit }: {
+// ── 新鲜度徽标 ──
+function FreshBadge({ status }: { status: string }) {
+  if (status === 'fresh') return <span className="text-pass text-[9px]" title="与引用时一致">✓</span>;
+  if (status === 'stale') return <span className="text-yellow-400 text-[9px]" title="内容已变更">⚠️</span>;
+  if (status === 'missing') return <span className="text-fail text-[9px]" title="文件已删除">✗</span>;
+  return null;
+}
+
+// ── 引用面板（K-013：会话中 @引用的内容 + 新鲜度） ──
+function RefPanel({ refs, onView }: {
+  refs: ChatReference[];
+  onView: (path: string, kind: 'file' | 'draft') => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [status, setStatus] = useState<Record<string, string>>({});
+  const refsKey = refs.map(r => `${r.type}:${r.path}:${r.sha}`).join('|');
+
+  // 逐条比对新鲜度（file 走 file-hash 端点；draft 走 .specguard/drafts 路径哈希，失败置 unknown）
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const next: Record<string, string> = {};
+      for (const r of refs) {
+        const k = `${r.type}:${r.path}`;
+        if (r.type === 'info_pack' || !r.sha) { next[k] = ''; continue; }
+        try {
+          const hashPath = r.type === 'draft' ? `.specguard/drafts/${r.path}` : r.path;
+          const h = await workspaceApi.fileHash(hashPath);
+          next[k] = h.sha === r.sha ? 'fresh' : 'stale';
+        } catch { next[k] = 'missing'; }
+      }
+      if (alive) setStatus(next);
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refsKey]);
+
+  if (refs.length === 0) return null;
+  return (
+    <div className="px-3 py-2 border-b border-border">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
+        <span>🔗 引用（{refs.length}）</span>
+        <span className="text-[9px] text-gray-600">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 max-h-40 overflow-y-auto space-y-0.5">
+          {refs.map((r, i) => (
+            <div key={i}
+              onClick={() => r.type !== 'info_pack' && onView(r.path, r.type === 'draft' ? 'draft' : 'file')}
+              className={`flex items-center gap-1.5 px-1 py-0.5 rounded text-[10px] ${r.type !== 'info_pack' ? 'cursor-pointer hover:bg-surface-3' : ''}`}>
+              <span>{r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'}</span>
+              <span className="font-mono text-gray-400 truncate flex-1" title={r.path}>{r.label || r.path}</span>
+              <FreshBadge status={status[`${r.type}:${r.path}`] || ''} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 基础信息包面板（K-013：条目化 + 新鲜度徽标 + 变更发现补入） ──
+function InfoPackPanel({ meta, onUpdate, onError, onViewFile }: {
+  meta: ScenarioMeta;
+  onUpdate: (m: ScenarioMeta) => void;
+  onError: (msg: string) => void;
+  onViewFile: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [freshness, setFreshness] = useState<InfoPackFreshness | null>(null);
+
+  const loadFreshness = useCallback(() => {
+    scenarioApi.infoPackFreshness(meta.id).then(setFreshness).catch(() => setFreshness(null));
+  }, [meta.id]);
+  useEffect(() => { loadFreshness(); }, [loadFreshness, meta.updated_at]);
+
+  const statusOf = (p: string) => freshness?.files.find(f => f.path === p)?.status || '';
+  const outside = freshness?.outside_changes || [];
+
+  const handleAddOutside = async (path: string) => {
+    try {
+      const updated = await scenarioApi.updateInfoPack(
+        meta.id, [...meta.info_pack.map(e => e.path), path]);
+      onUpdate(updated);
+    } catch { onError('补入文件失败'); }
+  };
+
+  return (
+    <div className="px-3 py-2 border-b border-border">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
+        <span>
+          📦 基础信息包（{meta.info_pack.length}）
+          {freshness && freshness.stale_count > 0 && (
+            <span className="text-yellow-400 text-[9px] ml-1">⚠️ {freshness.stale_count} 项已变更</span>
+          )}
+        </span>
+        <span className="text-[9px] text-gray-600">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5">
+          <div className="max-h-40 overflow-y-auto">
+            {meta.info_pack.map(entry => (
+              <div key={entry.path} className="flex items-center gap-1 group">
+                <FreshBadge status={statusOf(entry.path)} />
+                <span className="text-[10px]">📄</span>
+                <span onClick={() => onViewFile(entry.path)}
+                  className="text-[10px] font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info"
+                  title={`${entry.path}\nsha: ${entry.sha || '-'}\n添加: ${entry.added_at || '-'}`}>
+                  {entry.path}
+                </span>
+                <button onClick={async () => {
+                  const newFiles = meta.info_pack.map(e => e.path).filter(f => f !== entry.path);
+                  try {
+                    const updated = await scenarioApi.updateInfoPack(meta.id, newFiles);
+                    onUpdate(updated);
+                  } catch { onError('移除文件失败'); }
+                }} className="text-red-500 text-[10px] opacity-0 group-hover:opacity-100">✕</button>
+              </div>
+            ))}
+          </div>
+          {/* K-013: git 变更发现——信息包外的相关变更/新增文件，一键补入 */}
+          {outside.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-border/50">
+              <div className="text-[9px] text-yellow-400/80 mb-1">
+                ⚠️ {outside.length} 个相关文件已变更/新增（{freshness?.base_commit}→{freshness?.head_commit}），未在信息包中：
+              </div>
+              <div className="max-h-24 overflow-y-auto space-y-0.5">
+                {outside.map(p => (
+                  <div key={p} className="flex items-center gap-1">
+                    <span onClick={() => onViewFile(p)}
+                      className="text-[10px] font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info">{p}</span>
+                    <button onClick={() => handleAddOutside(p)}
+                      className="text-[9px] text-info hover:underline flex-shrink-0">+ 补入</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 右侧面板组件（引用 + 信息包 + 上下文 + 待办） ──
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, currentMode, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -498,11 +668,19 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, currentMode,
   currentMode: string;
   messages: ChatMessage[];
   ctxLimit: number;
+  stats: AgentStats | null;
+  scenarioMeta: ScenarioMeta | null;
+  onUpdateMeta: (m: ScenarioMeta) => void;
+  onError: (msg: string) => void;
+  references: ChatReference[];
+  onViewFile: (path: string, kind?: 'file' | 'draft') => void;
 }) {
-  if (!ctxUsage && planItems.length === 0 && structuredTodos.length === 0) return null;
+  if (!ctxUsage && planItems.length === 0 && structuredTodos.length === 0 && !scenarioMeta && references.length === 0) return null;
   return (
-    <div className="w-56 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col">
-      {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} />}
+    <div className="w-56 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col overflow-y-auto">
+      {references.length > 0 && <RefPanel refs={references} onView={onViewFile} />}
+      {scenarioMeta && <InfoPackPanel meta={scenarioMeta} onUpdate={onUpdateMeta} onError={onError} onViewFile={(p) => onViewFile(p)} />}
+      {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} stats={stats} />}
       {(planItems.length > 0 || structuredTodos.length > 0) && (
         <TodoPanel todos={structuredTodos} planItems={planItems} loading={loading} currentMode={currentMode} />
       )}
@@ -530,7 +708,8 @@ const _store = {
 
 export default function AgentChat() {
   const [searchParams] = useSearchParams();
-  const scenarioId = searchParams.get('scenario_id') || '';
+  // K-013：scenarioId 状态化——@信息包 引用可在对话中关联场景（不再只能从场景管理页进入）
+  const [scenarioId, setScenarioId] = useState(searchParams.get('scenario_id') || '');
   const initialMode = searchParams.get('mode') || 'generate';
   // H-5#3: 通知链接带 context 打开（debug_run_id 触发 debug 路由）
   const debugRunId = searchParams.get('debug_run_id') || '';
@@ -552,13 +731,20 @@ export default function AgentChat() {
   const [sessionsVersion, setSessionsVersion] = useState(0);
   const [modes, setModes] = useState<AgentMode[]>([]);
   const [currentMode, setCurrentMode] = useState(initialMode);
-  const [skills, setSkills] = useState<AgentSkill[]>([]);
-  const [showSkills, setShowSkills] = useState(false);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [currentModelId, setCurrentModelId] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<ScenarioMeta | null>(null);
-  const [showInfoPack, setShowInfoPack] = useState(false);
+  const [streamingText, setStreamingText] = useState('');  // K-012: 流式生成中的文本
   const [slashOpen, setSlashOpen] = useState(false);
+  // K-013: @引用（chips + 弹出层候选）
+  const [references, setReferences] = useState<ChatReference[]>([]);
+  const [atOpen, setAtOpen] = useState(false);
+  const [atQuery, setAtQuery] = useState('');
+  const [atIndex, setAtIndex] = useState(0);
+  const [atMetas, setAtMetas] = useState<ScenarioMeta[]>([]);
+  const [atDrafts, setAtDrafts] = useState<DraftItem[]>([]);
+  const [atFileResults, setAtFileResults] = useState<{ path: string; preview: string }[]>([]);
+  const [viewFile, setViewFile] = useState<{ path: string; content: string; loading: boolean } | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashQuery, setSlashQuery] = useState('');
   const [wsReconnect, setWsReconnect] = useState(0);
@@ -601,7 +787,6 @@ export default function AgentChat() {
 
   useEffect(() => {
     agentApi.getModes().then(r => setModes(r.modes || [])).catch(() => {});
-    agentApi.getSkills().then(r => setSkills(r.skills || [])).catch(() => {});
     modelApi.list().then(r => {
       setModels(r.models || []);
       const def = r.models?.find(m => m.is_default);
@@ -618,7 +803,7 @@ export default function AgentChat() {
   useEffect(() => { loadSessions(); }, [loadSessions, sessionsVersion]);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, turnInfo]);
+  }, [messages, turnInfo, streamingText]);
 
   // 同步状态到模块存储（跨导航保持）
   useEffect(() => { _store.messages = messages; }, [messages]);
@@ -640,6 +825,7 @@ export default function AgentChat() {
       case 'state':
         if (event.status === 'started' && event.session_id) {
           setSessionId(event.session_id);
+          localStorage.setItem('sg_agent_session', event.session_id);  // K-012: 持久化供刷新/重启恢复
           setSessionsVersion(v => v + 1);
         } else if (event.fused) {
           setTurnInfo(`⚠️ 熔断 ${event.max_turns}`);
@@ -647,7 +833,12 @@ export default function AgentChat() {
           setTurnInfo(`${event.turn + 1}/${event.max_turns}`);
         }
         break;
+      case 'assistant_delta':
+        // K-012: 流式增量文本（整块 assistant 到达时替换）
+        setStreamingText(prev => prev + (event.delta || ''));
+        break;
       case 'assistant':
+        setStreamingText('');  // 整块消息到达，流式气泡被正式消息替换
         if (event.message) {
           const content = event.message.content || '';
           const plan = extractPlan(content);
@@ -667,9 +858,13 @@ export default function AgentChat() {
         break;
       case 'done':
         setStats(event.stats || null);
-        if (event.session_id) setSessionId(event.session_id);
+        if (event.session_id) {
+          setSessionId(event.session_id);
+          localStorage.setItem('sg_agent_session', event.session_id);
+        }
         if (event.title) setSessionTitle(event.title);
         setTurnInfo('');
+        setStreamingText('');
         setLoading(false);
         setSessionsVersion(v => v + 1);
         break;
@@ -701,6 +896,7 @@ export default function AgentChat() {
         break;
       case 'error':
         setError(event.message || 'Agent 异常');
+        setStreamingText('');
         setLoading(false);
         break;
     }
@@ -798,16 +994,26 @@ export default function AgentChat() {
     const userMsg = input.trim();
     const ws = wsRef.current;
     if (!userMsg || loading || !ws || ws.readyState !== WebSocket.OPEN) return;
-    setInput(''); setSlashOpen(false);
+    setInput(''); setSlashOpen(false); setAtOpen(false);
     setLoading(true); setError(''); setTurnInfo(''); setPlanItems(DEFAULT_PLANS[currentMode] || []); setCtxUsage(null);
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    const msgRefs = references.length ? [...references] : undefined;
+    setReferences([]);
+    // K-015：发送时才落实 info_pack 关联（右侧信息包面板随发送出现）
+    const packRef = msgRefs?.find(r => r.type === 'info_pack');
+    if (packRef && packRef.path !== scenarioId) {
+      autoSentRef.current = true;  // 不触发向导自动发送
+      setScenarioId(packRef.path);
+      scenarioApi.getMeta(packRef.path).then(setScenarioMeta).catch(() => {});
+    }
+    setMessages(prev => [...prev, { role: 'user', content: userMsg, references: msgRefs }]);
     ws.send(JSON.stringify({
       message: userMsg, session_id: sessionId, max_turns: 50,
       workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
       model_id: currentModelId,
+      references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
       context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
     }));
-  }, [input, loading, sessionId, currentWorkspace, currentMode, scenarioId, currentModelId, currentPage, lockedMode]);
+  }, [input, loading, sessionId, currentWorkspace, currentMode, scenarioId, currentModelId, currentPage, lockedMode, references]);
 
   // 打断会话
   const handleStop = useCallback(() => {
@@ -817,6 +1023,7 @@ export default function AgentChat() {
     setLoading(false);
     setTurnInfo('');
     setError('');
+    setStreamingText('');
     setWsReconnect(v => v + 1);
   }, []);
 
@@ -830,6 +1037,7 @@ export default function AgentChat() {
     } else if (cmd.type === 'action') {
       if (cmd.cmd === '/new') {
         setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setPlanItems([]);
+        localStorage.removeItem('sg_agent_session');
       } else if (cmd.cmd === '/clear') {
         setMessages([]); setStats(null); setPlanItems([]);
       } else if (cmd.cmd === '/undo') {
@@ -862,9 +1070,92 @@ export default function AgentChat() {
     } else {
       setSlashOpen(false);
     }
+    // K-013: @引用（行尾 @ 开头的 token 触发候选层）
+    const atMatch = value.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setAtOpen(true); setAtQuery(atMatch[1]); setAtIndex(0);
+    } else {
+      setAtOpen(false);
+    }
   };
 
+  // K-013: @候选（信息包 / 草稿 / 文件搜索）
+  interface AtCandidate { type: 'info_pack' | 'file' | 'draft'; id: string; label: string; hint: string }
+  const atCandidates = useMemo<AtCandidate[]>(() => {
+    const q = atQuery.toLowerCase();
+    const list: AtCandidate[] = [];
+    for (const m of atMetas) {
+      if (!q || m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)) {
+        list.push({ type: 'info_pack', id: m.id, label: `📦 ${m.name || m.id}`, hint: `信息包 · ${m.info_pack?.length || 0} 文件` });
+      }
+    }
+    for (const d of atDrafts) {
+      if (!q || d.filename.toLowerCase().includes(q) || (d.title || '').toLowerCase().includes(q)) {
+        list.push({ type: 'draft', id: d.filename, label: `📝 ${d.title || d.filename}`, hint: `草稿 · ${d.filename}` });
+      }
+    }
+    for (const f of atFileResults) {
+      list.push({ type: 'file', id: f.path, label: `📄 ${f.path}`, hint: '工作区文件' });
+    }
+    return list.slice(0, 20);
+  }, [atMetas, atDrafts, atFileResults, atQuery]);
+
+  // @候选懒加载（首次打开时拉信息包与草稿清单）
+  const atLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!atOpen || atLoadedRef.current) return;
+    atLoadedRef.current = true;
+    scenarioApi.listMeta().then(r => setAtMetas(r.metas || [])).catch(() => {});
+    draftsApi.list().then(r => setAtDrafts(r.drafts || [])).catch(() => {});
+  }, [atOpen]);
+
+  // @文件搜索（防抖，≥2 字符）
+  useEffect(() => {
+    if (!atOpen || atQuery.length < 2) { setAtFileResults([]); return; }
+    const timer = setTimeout(() => {
+      workspaceApi.search(atQuery)
+        .then(r => setAtFileResults((r.results || []).map(x => ({ path: x.path, preview: x.preview }))))
+        .catch(() => setAtFileResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [atOpen, atQuery]);
+
+  const handleAtSelect = (c: { type: 'info_pack' | 'file' | 'draft'; id: string }) => {
+    setInput(prev => prev.replace(/@[^\s@]*$/, ''));
+    setAtOpen(false);
+    if (c.type === 'info_pack') {
+      // K-015 chip 化：选中仅加 chip（不立即关联），发送时才关联场景并在右侧展示
+      const m = atMetas.find(x => x.id === c.id);
+      setReferences(prev => [
+        ...prev.filter(r => r.type !== 'info_pack'),  // info_pack chip 唯一，重复选择替换
+        { type: 'info_pack', path: c.id, sha: '', label: m?.name || c.id },
+      ]);
+    } else {
+      setReferences(prev => prev.some(r => r.type === c.type && r.path === c.id)
+        ? prev : [...prev, { type: c.type, path: c.id, sha: '' }]);
+    }
+    inputRef.current?.focus();
+  };
+
+  // K-013: 打开引用文件查看器（FileViewer 弹窗）
+  const openFileViewer = useCallback(async (path: string, kind: 'file' | 'draft' = 'file') => {
+    setViewFile({ path, content: '', loading: true });
+    try {
+      const r = kind === 'draft' ? await draftsApi.read(path) : await workspaceApi.readFile(path);
+      setViewFile({ path, content: r.content, loading: false });
+    } catch {
+      setViewFile(null);
+      setError(`读取文件失败: ${path}`);
+    }
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (atOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setAtIndex(i => Math.min(i + 1, atCandidates.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setAtIndex(i => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (atCandidates[atIndex]) handleAtSelect(atCandidates[atIndex]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setAtOpen(false); return; }
+    }
     if (slashOpen) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex(i => Math.min(i + 1, filteredCommands.length - 1)); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex(i => Math.max(i - 1, 0)); return; }
@@ -874,28 +1165,47 @@ export default function AgentChat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  // K-012: 恢复会话（会话项点击 / 页面刷新自动恢复共用）
+  const restoreSession = useCallback(async (id: string, ws: string) => {
+    const r = await agentApi.getSession(id, ws);
+    setMessages(r.messages || []);
+    setSessionId(id);
+    setPlanItems([]);
+    setModeSwitches([]);  // H-2: 清空模式切换记录
+    setStructuredTodos([]);  // H-FE: 清空结构化待办
+    setStreamingText('');
+    // 从历史消息中提取 plan
+    for (const m of (r.messages || [])) {
+      if (m.role === 'assistant' && m.content) {
+        const plan = extractPlan(m.content);
+        if (plan) setPlanItems(plan);
+      }
+    }
+  }, []);
+
   const handleSelectSession = async (id: string, ws: string) => {
     try {
-      const r = await agentApi.getSession(id, ws);
-      setMessages(r.messages || []);
-      setSessionId(id);
-      setPlanItems([]);
-      setModeSwitches([]);  // H-2: 清空模式切换记录
-      setStructuredTodos([]);  // H-FE: 清空结构化待办
-      // 从历史消息中提取 plan
-      for (const m of (r.messages || [])) {
-        if (m.role === 'assistant' && m.content) {
-          const plan = extractPlan(m.content);
-          if (plan) setPlanItems(plan);
-        }
-      }
+      await restoreSession(id, ws);
+      localStorage.setItem('sg_agent_session', id);
     } catch { setError('加载会话失败'); }
   };
+
+  // K-012: 页面刷新/服务重启后自动恢复上次会话（_store 为空时才补拉，SPA 内导航不触发）
+  useEffect(() => {
+    if (messages.length > 0 || scenarioId || debugRunId) return;
+    const savedId = localStorage.getItem('sg_agent_session');
+    if (!savedId) return;
+    restoreSession(savedId, currentWorkspace)
+      .catch(() => localStorage.removeItem('sg_agent_session'));  // 会话已不存在则清键静默降级
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNewSession = () => {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
     setModeSwitches([]);  // H-2: 清空模式切换记录
     setStructuredTodos([]);  // H-FE: 清空结构化待办
+    setStreamingText('');
+    localStorage.removeItem('sg_agent_session');
   };
 
   const handleExportSession = async () => {
@@ -939,10 +1249,20 @@ export default function AgentChat() {
     return result;
   }, [messages, modeSwitches]);
 
-  // 上下文大小 + 模型上下文窗口限制
-  const estimatedTokens = messages.reduce((sum, m) => sum + Math.ceil((m.content?.length || 0) / 4), 0);
-  const ctxTokens = stats?.total_tokens || estimatedTokens;
-  const ctxSize = `${ctxTokens >= 1000 ? (ctxTokens / 1000).toFixed(1) + 'K' : ctxTokens} ctx`;
+  // K-013: 聚合会话中全部 @引用（右侧引用面板，按 type+path 去重）
+  const allRefs = useMemo(() => {
+    const seen = new Set<string>();
+    const out: ChatReference[] = [];
+    for (const m of messages) {
+      for (const r of (m.references || [])) {
+        const k = `${r.type}:${r.path}`;
+        if (!seen.has(k)) { seen.add(k); out.push(r); }
+      }
+    }
+    return out;
+  }, [messages]);
+
+  // 模型上下文窗口限制（ctx 用量展示在右侧 ContextPanel，K-012 底部栏不再重复）
   const currentModel = models.find(m => m.id === currentModelId);
   const ctxLimit = parseInt(currentModel?.max_context_tokens || '') || DEFAULT_CTX_LIMIT;
 
@@ -952,7 +1272,16 @@ export default function AgentChat() {
       return (
         <div key={idx} className="mb-2 flex justify-end">
           <div className="max-w-[80%] rounded-lg rounded-br-sm px-3 py-1.5 text-sm bg-info/10 text-info/90 border border-info/20">
-            {item.content}
+            {item.references && item.references.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-1">
+                {item.references.map((r, i) => (
+                  <span key={i} className="text-[9px] px-1 py-0.5 rounded bg-info/15 border border-info/30 font-mono text-info/80">
+                    {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'} {r.label || r.path}
+                  </span>
+                ))}
+              </div>
+            )}
+            {stripRefBlock(item.content || '')}
           </div>
         </div>
       );
@@ -1033,35 +1362,8 @@ export default function AgentChat() {
                 </span>
               </>
             )}
-            {scenarioMeta && (
-              <>
-                <span>·</span>
-                <button onClick={() => setShowInfoPack(!showInfoPack)} className="text-gray-400 hover:text-gray-200">
-                  📦 基础信息包({scenarioMeta.info_pack.length}) {showInfoPack ? '▲' : '▼'}
-                </button>
-              </>
-            )}
             <div className="ml-auto">{turnInfo}</div>
           </div>
-
-          {/* 基础信息包展开 */}
-          {showInfoPack && scenarioMeta && (
-            <div className="flex-shrink-0 px-4 py-2 bg-surface-2 border-b border-border max-h-32 overflow-y-auto">
-              {scenarioMeta.info_pack.map(path => (
-                <div key={path} className="flex items-center gap-1 group">
-                  <span className="text-[10px]">📄</span>
-                  <span className="text-[10px] font-mono text-gray-500 flex-1 truncate">{path}</span>
-                  <button onClick={async () => {
-                    const newFiles = scenarioMeta.info_pack.filter(f => f !== path);
-                    try {
-                      const updated = await scenarioApi.updateInfoPack(scenarioMeta.id, newFiles);
-                      setScenarioMeta(updated);
-                    } catch { setError('移除文件失败'); }
-                  }} className="text-red-500 text-[10px] opacity-0 group-hover:opacity-100">✕</button>
-                </div>
-              ))}
-            </div>
-          )}
 
           {/* 消息列表 — 统一背景 */}
           <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -1071,6 +1373,13 @@ export default function AgentChat() {
               </div>
             )}
             {grouped.map(renderGrouped)}
+            {/* K-012: 流式生成中气泡（整块 assistant 到达时被正式消息替换） */}
+            {streamingText && (
+              <div className="mb-2 px-1 py-1">
+                <MarkdownText content={streamingText} />
+                <span className="inline-block w-2 h-3.5 bg-info/70 animate-pulse rounded-sm" />
+              </div>
+            )}
             {error && (
               <div className="bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
                 <span className="text-red-400 text-sm">❌ {error}</span>
@@ -1096,6 +1405,35 @@ export default function AgentChat() {
               </div>
             )}
 
+            {/* K-013: @引用候选层 */}
+            {atOpen && atCandidates.length > 0 && (
+              <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface-2 border border-border rounded-lg shadow-xl max-h-60 overflow-y-auto z-10">
+                {atCandidates.map((c, i) => (
+                  <button key={`${c.type}:${c.id}`} onClick={() => handleAtSelect(c)}
+                    className={`w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors ${
+                      i === atIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
+                    }`}>
+                    <span className="text-xs truncate">{c.label}</span>
+                    <span className="text-[10px] text-gray-600 ml-auto flex-shrink-0">{c.hint}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* K-013: 已选引用 chips */}
+            {references.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {references.map((r, i) => (
+                  <span key={`${r.type}:${r.path}`}
+                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/30 font-mono">
+                    {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'} {r.label || r.path}
+                    <button onClick={() => setReferences(prev => prev.filter((_, j) => j !== i))}
+                      className="text-info/60 hover:text-fail">✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* 输入框 + 发送/停止按钮 */}
             <div className="flex gap-2 items-end">
               <textarea
@@ -1103,7 +1441,7 @@ export default function AgentChat() {
                 value={input}
                 onChange={e => handleInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={wsState === 'open' ? '输入消息... (Enter 发送, / 查看命令)' : 'WebSocket 未连接'}
+                placeholder={wsState === 'open' ? '输入消息... (Enter 发送, / 命令, @ 引用)' : 'WebSocket 未连接'}
                 rows={1}
                 className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none resize-none max-h-32"
                 disabled={loading || wsState !== 'open'}
@@ -1128,9 +1466,9 @@ export default function AgentChat() {
               )}
             </div>
 
-            {/* 底部选择器栏 */}
-            <div className="flex items-center gap-1 mt-2 flex-wrap">
-              <ModeBadge
+            {/* 底部选择器栏（K-012 收敛：仅模式下拉 + 模型下拉） */}
+            <div className="flex items-center gap-2 mt-2">
+              <ModeDropdown
                 currentMode={currentMode}
                 lockedMode={lockedMode}
                 modes={modes}
@@ -1140,7 +1478,6 @@ export default function AgentChat() {
                 }}
                 onUnlock={() => setLockedMode('')}
               />
-              <span className="text-gray-700">|</span>
               {models.length > 0 && (
                 <select
                   value={currentModelId}
@@ -1154,37 +1491,29 @@ export default function AgentChat() {
                   ))}
                 </select>
               )}
-              <span className="text-gray-700">|</span>
-              {skills.length > 0 && (
-                <button onClick={() => setShowSkills(!showSkills)}
-                  className="text-[10px] px-2 py-0.5 rounded bg-surface-2 text-gray-500 hover:text-gray-300 border border-border">
-                  📋 技能({skills.length}) {showSkills ? '▲' : '▼'}
-                </button>
-              )}
-              <div className="ml-auto flex items-center gap-2 text-[10px] text-gray-600 font-mono">
-                {stats && stats.tps !== undefined && <span title="tokens/sec">⚡ {stats.tps}/s</span>}
-                {stats && stats.prompt_tokens !== undefined && <span title="prompt/completion tokens">↑{stats.prompt_tokens} ↓{stats.completion_tokens}</span>}
-                {stats && stats.elapsed_time !== undefined && <span title="elapsed time">⏱ {stats.elapsed_time}s</span>}
-                <span>{ctxSize}</span>
-              </div>
             </div>
-
-            {showSkills && skills.length > 0 && (
-              <div className="mt-1 bg-surface-2 border border-border rounded-lg p-2 max-h-32 overflow-y-auto">
-                {skills.map(s => (
-                  <div key={s.name} className="px-2 py-0.5">
-                    <span className="text-[10px] text-info font-mono">{s.name}</span>
-                    <span className="text-[10px] text-gray-500 ml-2">{s.description}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* 右侧：上下文用量 + 待办面板 */}
-        <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} currentMode={currentMode} messages={messages} ctxLimit={ctxLimit} />
+        {/* 右侧：引用 + 信息包 + 上下文用量 + 待办面板 */}
+        <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} currentMode={currentMode} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} />
       </div>
+
+      {/* K-013: 引用文件查看器（FileViewer 弹窗） */}
+      {viewFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setViewFile(null)}>
+          <div className="w-[760px] max-w-[90vw] h-[80vh] bg-surface border border-border rounded-xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-2.5 border-b border-border flex items-center justify-between bg-surface-2 flex-shrink-0">
+              <span className="text-xs font-mono text-gray-300 truncate">{viewFile.path}</span>
+              <button onClick={() => setViewFile(null)} className="text-gray-500 hover:text-gray-300">✕</button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <FileViewer path={viewFile.path} content={viewFile.content} loading={viewFile.loading} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

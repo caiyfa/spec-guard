@@ -135,7 +135,7 @@ export default function Scenarios() {
   const handleLoadMeta = (m: ScenarioMeta) => {
     setMeta(m);
     setName(m.name);
-    setSelectedFiles(new Set(m.info_pack || []));
+    setSelectedFiles(new Set((m.info_pack || []).map(e => e.path)));
   };
 
   return (

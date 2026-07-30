@@ -32,6 +32,16 @@ from agent.mode_router import RouteContext, RouteResult, route_mode
 
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 
+# K-015: 会话级互斥——同一 session_id 只允许一个活跃 run
+# （session.save 是全量覆盖写，两个并发 run 会互相冲掉对方内容，last-writer-wins；
+#  用户真实会话导出文件取证：同 sid 的标签生成与草稿问答两段对话互相覆盖）
+_ACTIVE_RUNS: dict[str, "asyncio.Task"] = {}
+
+
+def _run_in_progress(session_id: str) -> bool:
+    task = _ACTIVE_RUNS.get(session_id)
+    return task is not None and not task.done()
+
 # H-2: 模式路由辅助函数
 def _check_spec_changed(workspace: str) -> bool:
     """检查工作区 spec 文件相对签名基线是否有变更（K-007 路由主信号）。
@@ -104,12 +114,30 @@ def _build_scenario_context(scenario_id: str) -> str:
     files = meta.get("info_pack", [])
     if not files:
         return f"当前场景：{scenario_id}（{meta.get('name', '')}）。基础信息包为空，请用 read_spec 工具读取工作区文件。"
-    file_list = "\n".join(f"  - {f}" for f in files)
+    # K-013：信息包清单附新鲜度标记（每条消息重建 context，天然实时感知变更）
+    from specstd.workspace import safe_resolve
+    lines = []
+    for e in files:
+        path = e.get("path", "") if isinstance(e, dict) else str(e)
+        stored = e.get("sha", "") if isinstance(e, dict) else ""
+        mark = ""
+        try:
+            resolved = safe_resolve(path)
+            if not resolved or not resolved.is_file():
+                mark = "（已删除）"
+            elif stored and scenario_meta.file_sha(resolved) != stored:
+                mark = "（已变更）"
+        except Exception:
+            pass
+        lines.append(f"  - {path}{mark}")
+    file_list = "\n".join(lines)
+    stale_hint = ("\n注意：标记（已变更）/（已删除）的文件与信息包记录时不一致，"
+                  "请以当前内容为准，并提醒用户信息包需要更新。") if any("（" in ln for ln in lines) else ""
     return (
         f"当前场景：{scenario_id}（{meta.get('name', '')}）\n"
         f"模块：{meta.get('module', '')}\n"
         f"基础信息包文件：\n{file_list}\n"
-        f"请用 read_info_pack 工具读取上述文件内容。"
+        f"请用 read_info_pack 工具读取上述文件内容。{stale_hint}"
     )
 
 
@@ -117,6 +145,89 @@ def _sessions_dir(emp_no: str) -> Path:
     """按用户隔离的会话目录（M7）：agent/sessions/{emp_no}/。"""
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", emp_no or "_anonymous")
     return SESSIONS_ROOT / safe
+
+
+# ══════════════════════════════════════════════════════════
+# K-013: @引用处理（信息包关联 / 文件与草稿内容注入）
+# ══════════════════════════════════════════════════════════
+
+_REF_MAX_FILE = 20 * 1024    # 单文件注入上限 20KB
+_REF_MAX_TOTAL = 60 * 1024   # 全部引用注入上限 60KB
+_REF_MAX_COUNT = 10          # 单条消息最多引用数
+
+
+def _process_references(references: list, scenario_id: str) -> tuple[str, str, list]:
+    """处理 @引用，返回 (scenario_id, 引用内容块, 结构化引用清单)。
+
+    - info_pack：关联为当前场景（不注入内容，走 _build_scenario_context 标准流程）
+    - file / draft：读取内容（截断保护）拼 <references> 块前缀到 user message，
+      同时返回含引用时 sha 的结构化清单（挂 user 消息持久化，供右侧引用面板比对新鲜度）
+    """
+    import hashlib
+    if not references:
+        return scenario_id, "", []
+
+    from specstd.workspace import safe_resolve
+
+    structured: list[dict] = []
+    blocks: list[str] = []
+    total = 0
+
+    for ref in references[:_REF_MAX_COUNT]:
+        if not isinstance(ref, dict):
+            continue
+        rtype = ref.get("type", "")
+        rid = str(ref.get("id") or ref.get("path") or "")
+        if not rid:
+            continue
+
+        if rtype == "info_pack":
+            # 关联语义：当前对话未关联场景时接管 scenario_id
+            if not scenario_id:
+                scenario_id = rid
+            structured.append({"type": "info_pack", "path": rid, "sha": ""})
+            continue
+
+        content, sha = "", ""
+        try:
+            if rtype == "file":
+                resolved = safe_resolve(rid)
+                if resolved and resolved.is_file():
+                    raw = resolved.read_bytes()
+                    sha = hashlib.sha256(raw).hexdigest()[:12]
+                    content = raw.decode("utf-8", errors="replace")
+            elif rtype == "draft":
+                # 草稿文件名守卫（与 draft_writer 一致：禁路径分隔符和 ..）
+                name = rid.replace("/", "").replace("\\", "").replace("..", "")
+                from specstd.workspace import drafts_dir
+                p = drafts_dir() / name
+                if p.is_file():
+                    raw = p.read_bytes()
+                    sha = hashlib.sha256(raw).hexdigest()[:12]
+                    content = raw.decode("utf-8", errors="replace")
+        except Exception:
+            continue
+
+        if not content:
+            blocks.append(f"--- {rid} ---\n[文件不存在或不可读]")
+            structured.append({"type": rtype, "path": rid, "sha": "", "missing": True})
+            continue
+
+        truncated = False
+        if len(content) > _REF_MAX_FILE:
+            content = content[:_REF_MAX_FILE]
+            truncated = True
+        if total + len(content) > _REF_MAX_TOTAL:
+            content = content[:max(0, _REF_MAX_TOTAL - total)]
+            truncated = True
+        total += len(content)
+        blocks.append(f"--- {rid} (sha:{sha}) ---\n{content}" + ("\n[截断]" if truncated else ""))
+        structured.append({"type": rtype, "path": rid, "sha": sha})
+
+    block_text = ""
+    if blocks:
+        block_text = "<references>\n" + "\n\n".join(blocks) + "\n</references>\n\n"
+    return scenario_id, block_text, structured
 
 
 def _iter_all_session_dirs() -> list[Path]:
@@ -244,6 +355,7 @@ class ChatBody(BaseModel):
     mode: str = "generate"
     scenario_id: str = ""
     model_id: str = ""
+    references: list = []  # K-013: @引用（info_pack/file/draft）
     context: dict = {}  # H-2: 路由上下文（current_page / last_run_failed / locked_mode 等）
 
 
@@ -292,6 +404,10 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
     sid = body.session_id or sm.create(emp_no=user.emp_no, workspace=workspace)
     llm.set_metrics_file(sessions_dir / (f"{workspace}/" if workspace else "") / f"{sid}_metrics.jsonl")
 
+    # K-015: 同会话并发写防护
+    if _run_in_progress(sid):
+        raise HTTPException(status_code=409, detail="该会话正在执行中，请稍后重试")
+
     # 设置工作区上下文（HTTP 请求可能由中间件设置，但 body.workspace 是显式传入的更可靠）
     from specstd.workspace import set_context_workspace, reset_context_workspace
     _ctx_token = set_context_workspace(workspace or None)
@@ -316,11 +432,27 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
     system_prompt = build_system_prompt(mode=mode_name, scenario_context=scenario_context)
     runtime = AgentRuntime(llm, max_turns=body.max_turns, mode_name=mode_name)
 
-    runtime.events.subscribe(lambda e: events.append(e))
+    # K-013: @引用处理（info_pack 关联场景 / file+draft 内容注入）
+    scenario_id, ref_block, structured_refs = _process_references(body.references, body.scenario_id)
+    if scenario_id != body.scenario_id:
+        scenario_context = _build_scenario_context(scenario_id)
+        system_prompt = build_system_prompt(mode=mode_name, scenario_context=scenario_context)
+    chat_message = f"{ref_block}{body.message}" if ref_block else body.message
 
-    messages = await asyncio.to_thread(
-        runtime.run, system_prompt, body.message, sm, sid
+    # K-012：assistant_delta 流式增量事件对 HTTP 同步调用无意义，不收集（避免响应体膨胀）
+    runtime.events.subscribe(
+        lambda e: None if e.get("type") == "assistant_delta" else events.append(e)
     )
+
+    run_task = asyncio.create_task(
+        asyncio.to_thread(runtime.run, system_prompt, chat_message, sm, sid,
+                          structured_refs or None)
+    )
+    _ACTIVE_RUNS[sid] = run_task  # K-015: 登记活跃 run（并发防护）
+    try:
+        messages = await run_task
+    finally:
+        _ACTIVE_RUNS.pop(sid, None)
 
     # 恢复上下文
     reset_context_workspace(_ctx_token)
@@ -371,6 +503,7 @@ async def agent_ws(websocket: WebSocket,
             mode_name = data.get("mode", "generate")
             scenario_id = data.get("scenario_id", "")
             model_id = data.get("model_id", "")
+            references = data.get("references", [])  # K-013: @引用
 
             if not message:
                 await websocket.send_json({"type": "error", "message": "缺少 message 参数"})
@@ -413,12 +546,29 @@ async def agent_ws(websocket: WebSocket,
             sid = session_id or sm.create(emp_no=emp_no, workspace=workspace)
             llm.set_metrics_file(sessions_dir / (f"{workspace}/" if workspace else "") / f"{sid}_metrics.jsonl")
 
+            # K-015: 同会话并发写防护（另一连接/标签页正在执行同一会话时拒绝）
+            if _run_in_progress(sid):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "该会话正在执行中，请等待当前执行完成（或点击停止后再发送）",
+                })
+                continue
+
             await websocket.send_json({"type": "state", "status": "started", "session_id": sid, "mode": mode_name})
 
             # 构建 system prompt（含模式 + 场景上下文）
             scenario_context = _build_scenario_context(scenario_id)
             system_prompt = build_system_prompt(mode=mode_name, scenario_context=scenario_context)
             runtime = AgentRuntime(llm, max_turns=max_turns, mode_name=mode_name)
+
+            # K-013: @引用处理（info_pack 关联场景 / file+draft 内容注入 user message）
+            scenario_id, ref_block, structured_refs = _process_references(references, scenario_id)
+            if ref_block or structured_refs:
+                # info_pack 关联可能改变了 scenario_id → 重建场景上下文与 system prompt
+                if scenario_id != data.get("scenario_id", ""):
+                    scenario_context = _build_scenario_context(scenario_id)
+                    system_prompt = build_system_prompt(mode=mode_name, scenario_context=scenario_context)
+            ws_message = f"{ref_block}{message}" if ref_block else message
 
             # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）
             loop = asyncio.get_running_loop()
@@ -428,17 +578,22 @@ async def agent_ws(websocket: WebSocket,
             )
 
             run_task = asyncio.create_task(
-                asyncio.to_thread(runtime.run, system_prompt, message, sm, sid)
+                asyncio.to_thread(runtime.run, system_prompt, ws_message, sm, sid,
+                                  structured_refs or None)
             )
-            while True:
-                if run_task.done() and queue.empty():
-                    break
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=0.2)
-                    await websocket.send_json(event)
-                except asyncio.TimeoutError:
-                    continue
-            messages = await run_task  # 运行异常在此抛出，进外层 except
+            _ACTIVE_RUNS[sid] = run_task  # K-015: 登记活跃 run（并发防护）
+            try:
+                while True:
+                    if run_task.done() and queue.empty():
+                        break
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=0.2)
+                        await websocket.send_json(event)
+                    except asyncio.TimeoutError:
+                        continue
+                messages = await run_task  # 运行异常在此抛出，进外层 except
+            finally:
+                _ACTIVE_RUNS.pop(sid, None)
 
             # G4: 新会话首条回复后用 LLM 生成标题
             session_title = ""

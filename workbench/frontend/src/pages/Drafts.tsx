@@ -118,7 +118,15 @@ export default function Drafts() {
                   : 'border-border bg-surface-2 hover:bg-surface-3'
               }`}
             >
-              <div className="text-sm text-gray-200 font-mono">{d.scenario_id || d.filename}</div>
+              <div className="text-sm text-gray-200 font-mono">
+                {d.scenario_id || d.filename}
+                {d.stale && (
+                  <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-normal"
+                    title={`来源信息包（${d.source_meta}）存在已变更/已删除文件，草稿内容可能过时`}>
+                    ⚠️ 信息包已变更
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-gray-500 truncate">{d.title || d.filename}</div>
               <div className="text-[10px] text-gray-600 mt-0.5">
                 {d.modified}{d.author ? ` · ${d.author}` : ''}

@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 15  # H-3/H-4: 新增 meta 工具后 13→15
+        assert len(ALL_TOOLS) == 16  # K-015: 新增 promote_draft 后 15→16
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -55,7 +55,8 @@ class TestToolRegistration:
                      "query_registry", "write_draft", "undo_draft", "validate",
                      "read_run_report", "db_evidence",
                      "write_audit_report", "report_vulnerability",
-                     "todo_write", "switch_mode"}  # H-3/H-4: meta 工具
+                     "todo_write", "switch_mode",
+                     "promote_draft"}  # H-3/H-4: meta 工具；K-015: promote_draft
         assert names == expected
 
 

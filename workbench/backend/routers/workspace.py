@@ -288,6 +288,18 @@ def api_read_file(path: str, ws_name: str = Depends(resolve_workspace)):
     return {"path": path, "content": content}
 
 
+@router.get("/file-hash")
+def api_file_hash(path: str, ws_name: str = Depends(resolve_workspace)):
+    """K-013：文件内容指纹（sha256[:12]），供前端比对 @引用/信息包条目的新鲜度。"""
+    import hashlib
+    resolved = safe_resolve(path, ws_name)
+    if resolved is None:
+        raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界或工作区不存在: {path}")
+    if not resolved.is_file():
+        raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
+    return {"path": path, "sha": hashlib.sha256(resolved.read_bytes()).hexdigest()[:12]}
+
+
 @router.get("/search")
 def api_search_files(q: str = "", ws_name: str = Depends(resolve_workspace)):
     """在工作区文件中搜索内容（返回匹配文件路径 + 上下文片段）。

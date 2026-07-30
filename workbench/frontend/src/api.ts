@@ -365,6 +365,8 @@ export const workspaceApi = {
     request<{ files: any[]; workspace: string }>(`/workspace/spec-files${subdir ? `?subdir=${subdir}` : ''}`),
   readFile: (path: string) =>
     request<{ path: string; content: string }>(`/workspace/read-file?path=${encodeURIComponent(path)}`),
+  fileHash: (path: string) =>
+    request<{ path: string; sha: string }>(`/workspace/file-hash?path=${encodeURIComponent(path)}`),
   search: (q: string) =>
     request<{ results: { path: string; match_type: string; line?: number; preview: string; size: number }[]; query: string }>(`/workspace/search?q=${encodeURIComponent(q)}`),
 };
@@ -475,6 +477,8 @@ export interface DraftItem {
   size: number;
   modified: string;
   author?: string;
+  source_meta?: string;  // K-013: 来源场景元数据 ID（SG-META-xxxx）
+  stale?: boolean;       // K-013: 其信息包存在已变更/已删除文件
 }
 
 export interface ValidateFinding {
@@ -509,12 +513,38 @@ export const draftsApi = {
 };
 
 // ── 场景创建向导（G2-1）──
+// K-013：info_pack 条目化（sha=内容指纹，commit=git 工作区 HEAD，added_at=添加时间）
+export interface InfoPackEntry {
+  path: string;
+  sha: string;
+  commit: string;
+  added_at: string;
+}
+
+export interface PackFreshnessFile {
+  path: string;
+  status: 'fresh' | 'stale' | 'missing';
+  stored_sha: string;
+  current_sha: string;
+}
+
+export interface InfoPackFreshness {
+  files: PackFreshnessFile[];
+  base_commit: string;
+  head_commit: string;
+  stale_count: number;
+  has_commit?: boolean;
+  inside_stale: string[];      // git diff：信息包内已变更
+  outside_changes: string[];   // git diff：信息包外相关变更/新增
+  error?: string;
+}
+
 export interface ScenarioMeta {
   id: string;
   name: string;
   module: string;
   workspace: string;
-  info_pack: string[];
+  info_pack: InfoPackEntry[];
   status: string;
   created_at: string;
   updated_at: string;
@@ -532,6 +562,8 @@ export const scenarioApi = {
     }),
   listMeta: () =>
     request<{ metas: ScenarioMeta[] }>('/scenarios/meta-list'),
+  infoPackFreshness: (id: string) =>
+    request<InfoPackFreshness>(`/scenarios/${encodeURIComponent(id)}/info-pack/freshness`),
 };
 
 // ── 定时任务调度（I-2/I-3）──

@@ -96,10 +96,11 @@ class TestModeFunctionality:
         assert "场景生成" in mode.prompt_fragment
 
     def test_chat_empty_tools(self):
+        """chat 模式工具白名单（K-015：加入产物查询工具，原为空）。"""
         clear_cache()
         mode = load_mode("chat")
         assert mode is not None
-        assert mode.tools == []
+        assert mode.tools == ["list_info_pack_artifacts"]
 
     def test_debug_tools(self):
         clear_cache()

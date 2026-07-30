@@ -412,6 +412,11 @@ class TestD1DraftsGate:
         monkeypatch.setattr(dr, "_drafts_root", lambda: drafts_dir)
         monkeypatch.setattr(dr, "_scenarios_root", lambda: tmp_path / "scenarios")
         monkeypatch.setattr(dr, "SG_ROOT", tmp_path)
+        # K-015：promote 逻辑已抽取到 services.draft_promote（自带路径解析），同步隔离
+        from services import draft_promote
+        monkeypatch.setattr(draft_promote, "_drafts_root", lambda: drafts_dir)
+        monkeypatch.setattr(draft_promote, "_scenarios_root", lambda: tmp_path / "scenarios")
+        monkeypatch.setattr(draft_promote, "SG_ROOT", tmp_path)
 
         draft = drafts_dir / "XX-TEST-100.yaml"
         draft.write_text("""

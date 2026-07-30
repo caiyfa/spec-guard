@@ -139,6 +139,57 @@ class TestRBACMatrix:
         assert r.status_code == 200
         assert r.json()["auth_mode"] == "mock"
 
+
+class TestSessionConcurrencyGuard:
+    """K-015：同会话并发写防护（_ACTIVE_RUNS 互斥）。
+
+    生产佐证：同 session_id 两个并发 run 的 save 全量覆盖写互相冲掉内容。
+    """
+
+    def test_chat_409_when_session_active(self, client):
+        import asyncio
+        from routers.agent import _ACTIVE_RUNS, _run_in_progress
+        h = _login(client, "90000001", "并发测试")
+        sid = "testsession001"
+        # 预置一个未完成的活跃 run（dummy task，.done() 为 False）
+        loop = asyncio.new_event_loop()
+
+        async def _dummy():
+            await asyncio.sleep(60)
+
+        task = loop.create_task(_dummy())
+        _ACTIVE_RUNS[sid] = task
+        try:
+            assert _run_in_progress(sid) is True
+            assert _run_in_progress("other-sid") is False
+            r = client.post("/api/agent/chat",
+                            json={"message": "hi", "session_id": sid},
+                            headers=h)
+            assert r.status_code == 409
+            assert "执行中" in r.json()["detail"]
+        finally:
+            task.cancel()
+            _ACTIVE_RUNS.clear()
+            loop.close()
+
+    def test_chat_no_conflict_when_done(self, client):
+        import asyncio
+        from routers.agent import _ACTIVE_RUNS, _run_in_progress
+        sid = "testsession002"
+        loop = asyncio.new_event_loop()
+
+        async def _done():
+            return 1
+
+        task = loop.create_task(_done())
+        loop.run_until_complete(asyncio.sleep(0))  # 让 task 完成
+        _ACTIVE_RUNS[sid] = task
+        try:
+            assert _run_in_progress(sid) is False  # 已完成 → 不拦截
+        finally:
+            _ACTIVE_RUNS.clear()
+            loop.close()
+
     def test_unauthenticated_401(self, client):
         assert client.get("/api/scenarios").status_code == 401
         assert client.get("/api/runs/status").status_code == 401

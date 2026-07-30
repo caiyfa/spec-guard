@@ -339,6 +339,55 @@ class TestCompactKeepBudget:
 
 
 # ══════════════════════════════════════════════════════════
+# K-015：压缩摘要嵌套修复（生产佐证：7 个空「历史摘要」头 + 16 个嵌套「压缩摘要」）
+# ══════════════════════════════════════════════════════════
+
+class TestSummaryNesting:
+    def _big_msgs(self, n=20):
+        msgs = [{"role": "system", "content": "system"}]
+        for i in range(n):
+            msgs.append({"role": "user", "content": "中" * 10})  # ~19 tokens each
+        return msgs
+
+    def test_repeated_compaction_single_history_header(self):
+        """连续两次压缩：只保留一个「## 历史摘要」头、一个「## 压缩摘要」段。"""
+        r1 = compact(self._big_msgs(), llm=None, max_context_tokens=100)
+        msgs = r1 + [{"role": "user", "content": "中" * 10} for _ in range(15)]
+        r2 = compact(msgs, llm=None, max_context_tokens=100)
+        summaries = [m for m in r2 if m.get("_type") == "compaction_summary"]
+        assert len(summaries) == 1
+        content = summaries[0]["content"]
+        assert content.count("## 历史摘要") == 1
+        assert content.count("## 压缩摘要") == 1
+
+    def test_resumed_summary_detected_without_type(self):
+        """resume 形态（_type 被 session.load 剥离）的摘要仍被识别保留，不当普通内容丢弃。"""
+        r1 = compact(self._big_msgs(), llm=None, max_context_tokens=100)
+        # 模拟 session.load：剥离 _type，compaction_summary 角色改 system
+        loaded = []
+        for m in r1:
+            m = dict(m)
+            if m.pop("_type", None) == "compaction_summary":
+                m["role"] = "system"
+            loaded.append(m)
+        msgs = loaded + [{"role": "user", "content": "中" * 10} for _ in range(15)]
+        r2 = compact(msgs, llm=None, max_context_tokens=100)
+        summaries = [m for m in r2 if m.get("_type") == "compaction_summary"]
+        assert len(summaries) == 1
+        # 旧摘要经历史段保留（而非被静默丢弃或重复嵌套）
+        assert summaries[0]["content"].count("## 历史摘要") == 1
+
+    def test_history_cap(self):
+        """历史段超过软上限时截断（防嵌套膨胀）。"""
+        from agent.compactor import _generate_summary, _HISTORY_CAP
+        existing = {"role": "system", "_type": "compaction_summary",
+                    "content": "## 历史摘要\n\n## 压缩摘要\n" + "长" * 5000}
+        text = _generate_summary([], existing, None)
+        assert text.count("## 历史摘要") == 1
+        assert len(text) < _HISTORY_CAP + 500
+
+
+# ══════════════════════════════════════════════════════════
 # _calc_keep_count
 # ══════════════════════════════════════════════════════════
 

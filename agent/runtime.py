@@ -52,17 +52,15 @@ for mod in TOOL_MODULES:
 # D8 修复：模板唯一事实源为 prompts/system.md.j2（原为内联副本，j2 文件成死文件）
 _PROMPT_TEMPLATE_PATH = Path(__file__).resolve().parent / "prompts" / "system.md.j2"
 
-_FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 场景生成助手。你的任务是根据用户需求，使用提供的工具生成合规的测试场景 YAML。
+_FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 智能测试助手——契约驱动场景测试引擎的内置 Agent。
 
-## 硬约束
+## 通用硬约束
 
-1. 场景 YAML 必须符合格式规范（见下方）
-2. doc.covers 中的 FR ID 必须在当前工作区的 spec.md 中存在（用 read_spec 验证）
-3. flow 中的 tool 名称必须已注册（用 query_registry 查询）
-4. verify 中的 oracle 名称必须已注册
-5. 生成后必须调用 validate 工具校验
-6. 校验通过后用 write_draft 写入 drafts/ 目录
-7. 禁止编造不存在的 FR ID、tool 名称或 oracle 名称
+1. 禁止编造不存在的 FR ID、tool 名称、oracle 名称或文件内容
+2. doc.covers 中的 FR ID 必须在当前工作区的 spec 中存在（用 read_spec 验证）
+3. flow 中的 tool / verify 中的 oracle 必须已注册（用 query_registry 查询）
+4. 生成或修改场景 YAML 后必须调用 validate 工具校验
+5. 校验逻辑一律走确定性工具（validate / query_registry / read_spec），不凭推测断言
 
 ## 格式规范
 
@@ -72,16 +70,34 @@ _FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 场景生成助手。你的任�
 
 {{ agents_md }}
 
-## 工作流程
+## 可用技能
 
-1. 用 next_scenario_id 获取可用 ID
-2. 用 read_spec / list_spec_files 了解需求对应的 FR
-3. 用 query_registry 查询可用的 tool / oracle
-4. 用 list_scenarios / read_scenario 参考已有场景
-5. 生成场景 YAML
-6. 用 validate 校验
-7. 校验通过后用 write_draft 写入草稿
+{{ skills_xml }}
+
+## 用户引用（@）
+
+用户可在消息中用 @ 引用信息包 / 工作区文件 / 草稿。文件与草稿引用的内容会以
+<references> 块注入该条消息（标头含路径与内容指纹 sha）：
+- 这是用户显式提供的上下文，优先采信，无需重复读取同一文件
+- @信息包 会把当前对话关联到对应场景，其文件清单见「基础信息包」段（如有）
+
+## 模式自主切换（H-3）
+
+你可以通过 switch_mode 工具在任务阶段转换时切换模式。
+切换时必须给出 reason（会展示给用户）。切换前用 todo_write 更新待办。
+若调用的工具在当前模式不可用，结果会返回当前可用工具清单——按需 switch_mode 后继续。
+
+## 待办系统（H-4）
+
+你可以通过 todo_write 工具维护任务待办列表，待办会实时展示给用户。
 """
+
+
+# K-014：只有生成/调试 YAML 的模式才注入全量格式规范（其余模式给一行指引，省 ~16k 字符/轮）
+_FORMAT_SPEC_MODES = {"generate", "debug"}
+_FORMAT_SPEC_POINTER = ("（本模式未注入全量格式规范。需要生成/修改场景 YAML 时："
+                        "用 query_registry 查 tool/oracle 目录，用 list_scenarios/read_scenario "
+                        "参考已有场景，或用 switch_mode 切到 generate 模式获取完整规范。）")
 
 
 def _load_prompt_template() -> str:
@@ -96,16 +112,26 @@ def _load_prompt_template() -> str:
 
 def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
                          mode: str = "", scenario_context: str = "") -> str:
-    """构建 system prompt：format_spec + 工作区 AGENTS.md + 模式片段 + 场景上下文。"""
+    """构建 system prompt：format_spec + 工作区 AGENTS.md + 技能 + 模式片段 + 场景上下文。
+
+    K-014 深度优化：
+    - format_spec 仅 generate/debug 模式注入全量（其余模式一行指引，省 ~16k 字符/轮）
+    - skills 按模式过滤（build_skills_xml(mode)）
+    - 模板已去 generate 化（P0 指令冲突修复：generate 流程只在 generate.md 模式片段中）
+    - 静态大块在前、动态内容（模式/场景上下文）在最后，保 prompt cache 前缀命中
+    """
     if not format_spec_text:
-        try:
-            BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-            if str(BACKEND_DIR) not in sys.path:
-                sys.path.insert(0, str(BACKEND_DIR))
-            from services.format_spec import generate_format_spec_md
-            format_spec_text = generate_format_spec_md()
-        except Exception:
-            format_spec_text = "（format_spec 加载失败，请用 query_registry 查询可用工具）"
+        if mode and mode not in _FORMAT_SPEC_MODES:
+            format_spec_text = _FORMAT_SPEC_POINTER
+        else:
+            try:
+                BACKEND_DIR = SG_ROOT / "workbench" / "backend"
+                if str(BACKEND_DIR) not in sys.path:
+                    sys.path.insert(0, str(BACKEND_DIR))
+                from services.format_spec import generate_format_spec_md
+                format_spec_text = generate_format_spec_md()
+            except Exception:
+                format_spec_text = "（format_spec 加载失败，请用 query_registry 查询可用工具）"
 
     if not agents_md:
         try:
@@ -114,24 +140,23 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
         except Exception:
             agents_md = "（工作区未激活）"
 
+    # G3-2 + K-014: 技能按模式过滤注入（静态区，位于动态片段之前）
+    skills_xml = build_skills_xml(mode) or "（无）"
+
     prompt = (_load_prompt_template()
               .replace("{{ format_spec }}", format_spec_text)
-              .replace("{{ agents_md }}", agents_md))
+              .replace("{{ agents_md }}", agents_md)
+              .replace("{{ skills_xml }}", skills_xml))
 
-    # 追加模式 prompt 片段
+    # 追加模式 prompt 片段（动态区）
     if mode:
         mode_def = load_mode(mode)
         if mode_def and mode_def.prompt_fragment:
             prompt += f"\n\n## 当前模式：{mode}\n\n{mode_def.prompt_fragment}"
 
-    # 追加场景上下文（基础信息包）
+    # 追加场景上下文（基础信息包）（最易变，放最后保前缀缓存）
     if scenario_context:
         prompt += f"\n\n## 基础信息包\n\n{scenario_context}"
-
-    # G3-2: 注入技能 XML 块
-    skills_xml = build_skills_xml()
-    if skills_xml:
-        prompt += f"\n\n## 可用技能\n\n{skills_xml}"
 
     return prompt
 
@@ -180,11 +205,18 @@ class AgentRuntime:
 
     def run(self, system_prompt: str, user_message: str,
             session: Optional[SessionManager] = None,
-            session_id: Optional[str] = None) -> list[dict]:
-        """执行核心循环，返回完整 messages 列表。"""
+            session_id: Optional[str] = None,
+            user_refs: Optional[list] = None) -> list[dict]:
+        """执行核心循环，返回完整 messages 列表。
+
+        user_refs: K-013 @引用的结构化清单，挂在 user 消息上持久化（右侧引用面板用）。
+        """
+        user_msg: dict = {"role": "user", "content": user_message}
+        if user_refs:
+            user_msg["references"] = user_refs
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
+            user_msg,
         ]
 
         self._session = session
@@ -195,6 +227,9 @@ class AgentRuntime:
             history = session.load(session_id)
             if history:
                 messages = history
+                # 关键修复（K-013）：恢复历史后必须追加本轮 user 消息——
+                # 此前直接丢弃，导致续会话时 LLM 看不到用户新消息（生产会话导出文件佐证）
+                messages.append(user_msg)
                 # H-4: 恢复待办状态
                 todos = session.load_todos(session_id)
                 if todos is not None:
@@ -220,7 +255,13 @@ class AgentRuntime:
                 self.events.emit("compaction", message_count=len(messages))
             self.events.emit("state", turn=turn, max_turns=self.max_turns)
 
-            message, usage = self.llm.chat(messages, openai_tools)
+            # K-012：非 mock 时启用 SSE 流式，逐 delta 转发前端（失败自动回退非流式）
+            on_delta = None
+            if not self.llm.is_mock:
+                def on_delta(text, _turn=turn):
+                    self.events.emit("assistant_delta", delta=text, turn=_turn)
+
+            message, usage = self.llm.chat(messages, openai_tools, on_delta=on_delta)
 
             # 发射事件（保留 reasoning_content 供前端显示）
             self.events.emit("assistant", message=message, turn=turn, usage=usage)
@@ -308,7 +349,14 @@ class AgentRuntime:
         # ── 常规工具 ──
         mod = self._tool_map.get(name)
         if not mod:
-            return f"未知工具: {name}"
+            # K-012：区分「全局存在但当前模式未挂载」（如模式自动切换后 LLM 仍调旧模式工具）
+            # vs「真未知」——附可用工具清单 + switch_mode 提示，让 LLM 自我纠正而非流程断裂
+            available = "、".join(sorted(set(self._tool_map) | set(META_TOOLS)))
+            if name in TOOL_NAME_TO_MODULE:
+                return (f"工具 '{name}' 在当前模式（{self.mode_name or '默认'}）不可用。"
+                        f"当前可用工具: {available}。"
+                        f"如需使用该工具，请调用 switch_mode 切到包含它的模式后继续。")
+            return f"未知工具: {name}。当前可用工具: {available}"
 
         try:
             result = asyncio.run(mod.handle(name, arguments))
