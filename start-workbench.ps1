@@ -7,8 +7,9 @@
     - 依赖自检：Python 关键模块缺失自动 pip install；package.json 比 node_modules 新时自动 npm install
     - 后端：workbench/backend → uvicorn --reload :9100（SG_AUTH_MODE=mock，改代码自动重载）
     - 前端：workbench/frontend → npm run dev :5173（热更新）
+    - 后台隐藏进程运行（不开新窗口），日志在 workbench/backend/data/logs/，PID 记录于 dev-pids.json
     - 端口归属校验：9100/5173 被非 SpecGuard 进程占用时报错退出
-    - 幂等重启：自动关闭上一轮 SpecGuard 启动窗口（SpecGuard* 标题）并终止残留进程（确保运行最新代码）
+    - 幂等重启：自动终止上一轮后台进程（PID 文件 + 旧版标题窗口 + 端口兜底），确保运行最新代码
     生产部署请使用 serve-prod.ps1（单端口 9100，UAC SSO）。
 
 .PARAMETER NoBrowser
@@ -26,6 +27,9 @@ $ErrorActionPreference = 'Stop'
 $SgRoot      = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendDir  = Join-Path $SgRoot 'workbench\backend'
 $FrontendDir = Join-Path $SgRoot 'workbench\frontend'
+$LogDir      = Join-Path $SgRoot 'workbench\backend\data\logs'   # data/ 已 gitignore
+$PidFile     = Join-Path $LogDir 'dev-pids.json'
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Test-Port([int]$Port) {
     return [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
@@ -45,13 +49,35 @@ function Test-OurFrontend {
     } catch { return $false }
 }
 
+function Kill-Tree([int]$Id) {
+    <# 递归终止进程及其全部子进程 #>
+    $children = Get-CimInstance Win32_Process -Filter "ParentProcessId=$Id" -ErrorAction SilentlyContinue
+    foreach ($child in $children) { Kill-Tree $child.ProcessId }
+    Stop-Process -Id $Id -Force -ErrorAction SilentlyContinue
+}
+
 function Stop-SgWindows {
-    <# 按窗口标题关闭上一轮启动的 SpecGuard 前后端窗口（连带终止其进程树） #>
+    <# 按窗口标题关闭历史版本启动的 SpecGuard 前后端窗口（兼容旧版，连带终止其进程树） #>
     $wins = Get-Process pwsh -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'SpecGuard*' }
     foreach ($w in $wins) {
         Write-Host "  已关闭旧窗口: $($w.MainWindowTitle) (PID $($w.Id))" -ForegroundColor DarkGray
-        Stop-Process -Id $w.Id -Force -ErrorAction SilentlyContinue
+        Kill-Tree $w.Id
     }
+}
+
+function Stop-PreviousRun {
+    <# 按 PID 文件终止上一轮隐藏后台进程（pwsh 宿主 + python/node 子进程树） #>
+    if (-not (Test-Path $PidFile)) { return }
+    try {
+        $pids = Get-Content $PidFile -Raw | ConvertFrom-Json
+        foreach ($p in @($pids)) {
+            if (Get-Process -Id $p -ErrorAction SilentlyContinue) {
+                Write-Host "  已终止上一轮进程树 (PID $p)" -ForegroundColor DarkGray
+                Kill-Tree $p
+            }
+        }
+    } catch {}
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
 }
 
 function Stop-PortProcess([int]$Port) {
@@ -62,12 +88,6 @@ function Stop-PortProcess([int]$Port) {
         if (-not $procId) { continue }
         try {
             $proc = Get-Process -Id $procId -ErrorAction Stop
-            # 递归终止子进程
-            function Kill-Tree([int]$Id) {
-                $children = Get-CimInstance Win32_Process -Filter "ParentProcessId=$Id" -ErrorAction SilentlyContinue
-                foreach ($child in $children) { Kill-Tree $child.ProcessId }
-                Stop-Process -Id $Id -Force -ErrorAction SilentlyContinue
-            }
             Kill-Tree $procId
             Write-Host "  已终止进程 $procId ($($proc.ProcessName))" -ForegroundColor DarkGray
         } catch {}
@@ -103,7 +123,8 @@ if ($needNpm) {
     finally { Pop-Location }
 }
 
-# ── 关闭上一轮启动的旧窗口（SpecGuard* 标题，连带杀进程树；端口兜底仍在下方）──
+# ── 清理上一轮进程（隐藏后台 PID 文件 + 旧版标题窗口；端口兜底仍在下方）──
+Stop-PreviousRun
 Stop-SgWindows
 
 # ── 后端（FastAPI :9100，--reload 热重载 + mock 认证）──
@@ -119,11 +140,13 @@ if (Test-Port 9100) {
 }
 
 $authMode = if ($env:SG_AUTH_MODE) { $env:SG_AUTH_MODE } else { 'mock' }
-Write-Host "[启动] 后端 FastAPI  http://127.0.0.1:9100  (SG_AUTH_MODE=$authMode, --reload)" -ForegroundColor Green
-Start-Process pwsh -ArgumentList @(
-    '-NoExit', '-Command',
-    "Set-Location '$BackendDir'; `$host.UI.RawUI.WindowTitle = 'SpecGuard 后端 :9100'; if (-not `$env:SG_AUTH_MODE) { `$env:SG_AUTH_MODE = '$authMode' }; python -m uvicorn main:app --reload --reload-dir '$BackendDir' --reload-dir '$SgRoot\agent' --reload-dir '$SgRoot\mcp_server' --reload-dir '$SgRoot\engine' --reload-dir '$SgRoot\specstd' --reload-dir '$SgRoot\systems' --host 127.0.0.1 --port 9100"
-) -WindowStyle Normal
+$backendOut = Join-Path $LogDir 'backend.log'
+$backendErr = Join-Path $LogDir 'backend.err.log'
+Write-Host "[启动] 后端 FastAPI  http://127.0.0.1:9100  (SG_AUTH_MODE=$authMode, --reload, 后台隐藏进程)" -ForegroundColor Green
+$backendProc = Start-Process pwsh -ArgumentList @(
+    '-NoProfile', '-Command',
+    "Set-Location '$BackendDir'; if (-not `$env:SG_AUTH_MODE) { `$env:SG_AUTH_MODE = '$authMode' }; python -m uvicorn main:app --reload --reload-dir '$BackendDir' --reload-dir '$SgRoot\agent' --reload-dir '$SgRoot\mcp_server' --reload-dir '$SgRoot\engine' --reload-dir '$SgRoot\specstd' --reload-dir '$SgRoot\systems' --host 127.0.0.1 --port 9100"
+) -WindowStyle Hidden -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru
 
 # ── 前端（Vite :5173）──
 if (Test-Port 5173) {
@@ -137,11 +160,16 @@ if (Test-Port 5173) {
     }
 }
 
-Write-Host "[启动] 前端 Vite     http://localhost:5173" -ForegroundColor Green
-Start-Process pwsh -ArgumentList @(
-    '-NoExit', '-Command',
-    "Set-Location '$FrontendDir'; `$host.UI.RawUI.WindowTitle = 'SpecGuard 前端 :5173'; npm run dev -- --port 5173 --strictPort"
-) -WindowStyle Normal
+$frontendOut = Join-Path $LogDir 'frontend.log'
+$frontendErr = Join-Path $LogDir 'frontend.err.log'
+Write-Host "[启动] 前端 Vite     http://localhost:5173  (后台隐藏进程)" -ForegroundColor Green
+$frontendProc = Start-Process pwsh -ArgumentList @(
+    '-NoProfile', '-Command',
+    "Set-Location '$FrontendDir'; npm run dev"
+) -WindowStyle Hidden -RedirectStandardOutput $frontendOut -RedirectStandardError $frontendErr -PassThru
+
+# ── 记录 PID（下次运行先按此精确清理）──
+@($backendProc.Id, $frontendProc.Id) | ConvertTo-Json | Set-Content $PidFile -Encoding utf8
 
 # ── 健康等待（最长 60s）──
 Write-Host "等待服务就绪" -NoNewline
@@ -157,9 +185,11 @@ if ($ready) {
     Write-Host "启动完成 ✅" -ForegroundColor Green
     Write-Host "  前端工作台:  http://localhost:5173  （mock 登录页：输工号直接登录）"
     Write-Host "  后端 API:    http://127.0.0.1:9100/docs  （--reload：改后端代码自动重载）"
+    Write-Host "  后端日志:    $backendOut"
+    Write-Host "  前端日志:    $frontendOut"
     Write-Host "  生产部署:    pwsh serve-prod.ps1"
     if (-not $NoBrowser) { Start-Process "http://localhost:5173" }
 } else {
-    Write-Host "⚠️ 服务未在 60s 内就绪，请检查两个启动窗口的日志输出" -ForegroundColor Red
+    Write-Host "⚠️ 服务未在 60s 内就绪，请检查日志: $LogDir" -ForegroundColor Red
     exit 1
 }
