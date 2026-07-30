@@ -23,6 +23,7 @@ _proof_*.png
 .idea/
 .vscode/
 *.iml
+.zcode/
 
 # ── 环境与凭据 ──
 .env
