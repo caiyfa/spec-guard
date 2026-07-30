@@ -3,12 +3,18 @@
 const BASE = '/api';
 
 // ── 会话状态（token 存 sessionStorage，工作区选择存 localStorage）──
+export const WORKSPACE_CHANGED_EVENT = 'sg-workspace-changed';
+
 export const session = {
   getToken: () => sessionStorage.getItem('sg_token') || '',
   setToken: (t: string) => sessionStorage.setItem('sg_token', t),
   clearToken: () => sessionStorage.removeItem('sg_token'),
   getWorkspace: () => localStorage.getItem('sg_workspace') || '',
-  setWorkspace: (w: string) => localStorage.setItem('sg_workspace', w),
+  setWorkspace: (w: string) => {
+    localStorage.setItem('sg_workspace', w);
+    // K-009：广播切换事件，已挂载页面（如工作区中心）可监听并自动重载
+    window.dispatchEvent(new CustomEvent(WORKSPACE_CHANGED_EVENT, { detail: w }));
+  },
 };
 
 /** 401 统一处理：清 token 并强制回登录页 */
@@ -353,7 +359,8 @@ export const workspaceApi = {
   conformance: (name?: string) =>
     request<any>('/workspace/conformance', { method: 'POST', body: JSON.stringify({ name: name || '' }) }),
   pull: (name: string) =>
-    request<any>('/workspace/pull', { method: 'POST', body: JSON.stringify({ name }) }),
+    request<{ ok: boolean; old_commit?: string; new_commit?: string; changed?: boolean; report?: any; error?: string }>(
+      '/workspace/pull', { method: 'POST', body: JSON.stringify({ name }) }),
   specFiles: (subdir?: string) =>
     request<{ files: any[]; workspace: string }>(`/workspace/spec-files${subdir ? `?subdir=${subdir}` : ''}`),
   readFile: (path: string) =>

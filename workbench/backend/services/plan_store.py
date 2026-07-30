@@ -166,6 +166,13 @@ def _normalize(raw: dict, fallback_id: str) -> dict:
         "tags": raw.get("tags", []) or [],
         "created_at": raw.get("created_at", ""),
         "updated_at": raw.get("updated_at", ""),
+        # K-011：断点 + delta 溯源字段（此前不在白名单——save/get 往返即丢失，
+        # 导致 run 端点 plan.get("breakpoints") 永远拿到空列表，断点功能实际失效）
+        "breakpoints": raw.get("breakpoints", []) or [],
+        "source_delta": raw.get("source_delta", ""),
+        "source_frs": raw.get("source_frs", []) or [],
+        "unmatched_frs": raw.get("unmatched_frs", []) or [],
+        "imported_files": raw.get("imported_files", []) or [],
     }
 
 

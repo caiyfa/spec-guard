@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import Plans from './pages/Plans';
+import Scenarios from './pages/Scenarios';
 import RunControl from './pages/RunControl';
 import DagEditor from './pages/DagEditor';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import SpecValidation from './pages/SpecValidation';
 import AgentChat from './pages/AgentChat';
-import SpecCenter from './pages/SpecCenter';
 import Attribution from './pages/Attribution';
-import WorkspaceSettings from './pages/WorkspaceSettings';
+import WorkspaceCenter from './pages/WorkspaceCenter';
 import Feedback from './pages/Feedback';
 import NotifyConfigs from './pages/NotifyConfigs';
 import Schedules from './pages/Schedules';
@@ -49,7 +48,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: '工作区',
     icon: '🗂',
     items: [
-      { to: '/workspace', label: '工作区管理', roles: ADMIN_ONLY },
+      // K-009：原「工作区管理」+「文档中心」合并为工作区中心，全角色可见（页内按角色显隐操作）
+      { to: '/workspace', label: '工作区中心', roles: ALL },
       { to: '/settings', label: '系统设置', roles: ADMIN_ONLY },
       { to: '/admin-users', label: '用户管理', roles: ADMIN_ONLY },
     ],
@@ -58,7 +58,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: '需求',
     icon: '📋',
     items: [
-      { to: '/spec-center', label: '文档中心', roles: ALL },
       { to: '/spec', label: '合规校验', roles: ALL },
     ],
   },
@@ -178,7 +177,6 @@ export default function App() {
 
 function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(() => {
     return localStorage.getItem('sg_drawer_open') !== 'false';
   });
@@ -345,7 +343,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/spec" element={<SpecValidation />} />
-            <Route path="/plans" element={<Plans />} />
+            <Route path="/plans" element={<Scenarios />} />
             <Route path="/run" element={<RunControl />} />
             <Route path="/dag" element={<DagEditor />} />
             <Route path="/history" element={<History />} />
@@ -353,9 +351,10 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/drafts" element={<Drafts />} />
             {/* /scenario-create 已合并到 /plans */}
             <Route path="/scenario-create" element={<RedirectToPlans />} />
-            <Route path="/spec-center" element={<SpecCenter />} />
+            {/* K-009：/spec-center 已合并到 /workspace（工作区中心） */}
+            <Route path="/spec-center" element={<RedirectToWorkspace />} />
             <Route path="/attribution" element={<Attribution />} />
-            <Route path="/workspace" element={<WorkspaceSettings />} />
+            <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/notify" element={<NotifyConfigs />} />
                         <Route path="/schedules" element={<Schedules />} />
@@ -371,5 +370,11 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
 function RedirectToPlans() {
   const navigate = useNavigate();
   useEffect(() => { navigate('/plans'); }, [navigate]);
+  return null;
+}
+
+function RedirectToWorkspace() {
+  const navigate = useNavigate();
+  useEffect(() => { navigate('/workspace'); }, [navigate]);
   return null;
 }

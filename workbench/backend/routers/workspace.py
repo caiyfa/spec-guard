@@ -188,9 +188,12 @@ def api_conformance(body: ConformanceBody):
     return report.to_dict()
 
 
-@router.post("/pull", dependencies=[Depends(require_role("admin"))])
+@router.post("/pull", dependencies=[Depends(require_role("admin", "tester"))])
 def api_pull(body: PullBody):
-    """拉取 git 工作区更新（K-007：spec 变更由签名基线检测，不再用 pulled_at 时间信号）。"""
+    """拉取 git 工作区更新（K-007：spec 变更由签名基线检测，不再用 pulled_at 时间信号）。
+
+    K-009：权限放宽至 tester——文档中心使用者需要自助同步最新 Spec（pull 为只读性质操作）。
+    """
     return pull(body.name)
 
 

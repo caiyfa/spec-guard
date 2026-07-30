@@ -1,7 +1,7 @@
 // 顶栏工作区选择器：全页生效（localStorage + X-SG-Workspace header），可设为个人默认
 
 import { useEffect, useState } from 'react';
-import { session, usersApi, workspaceApi } from '../api';
+import { session, usersApi, workspaceApi, WORKSPACE_CHANGED_EVENT } from '../api';
 import type { CurrentUser, WorkspaceInfo } from '../api';
 
 export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
@@ -32,6 +32,16 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
     session.setWorkspace(name);
     setSaved(false);
   };
+
+  // K-009：其他页面（如工作区中心）切换工作区时联动刷新显示
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const name = (e as CustomEvent<string>).detail;
+      if (name) setCurrent(name);
+    };
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(WORKSPACE_CHANGED_EVENT, onChanged);
+  }, []);
 
   const handleSetDefault = async () => {
     try {

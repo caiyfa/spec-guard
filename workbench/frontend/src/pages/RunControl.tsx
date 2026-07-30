@@ -1,7 +1,8 @@
-/** RunControl — 执行控制：触发 / 结构化进度 / 实时日志流 / 终止 / 多用户队列 */
-import { useRef, useEffect, useState, useMemo } from 'react';
+/** RunControl — 执行控制：计划管理 / 触发 / 结构化进度 / 实时日志流 / 终止 / 多用户队列 */
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { runsApi, scenariosApi, plansApi, authApi, type Scenario, type TestPlan, type RunStatus } from '../api';
 import { useRunStream } from '../hooks/useRunStream';
+import PlanManager from '../components/PlanManager';
 
 const SCOPES = [
   { value: 'all', label: '全量（全部场景）' },
@@ -80,10 +81,17 @@ export default function RunControl() {
 
   useEffect(() => {
     scenariosApi.list().then(setScenarios);
-    plansApi.list().then((p) => {
-      setPlans(p);
-      if (p.length) setSelectedPlan(p[0].id);
-    });
+  }, []);
+
+  // K-011：计划列表由 PlanManager 加载并回调同步（保留当前选中；首次默认选第一个计划）
+  const handlePlansChange = useCallback((p: TestPlan[]) => {
+    setPlans(p);
+    setSelectedPlan(prev => prev || (p.length ? p[0].id : ''));
+  }, []);
+
+  const handleSelectPlan = useCallback((id: string) => {
+    setSelectedPlan(id);
+    setScope('all');
   }, []);
 
   // 当前计划对应的场景 ID 集合
@@ -175,7 +183,7 @@ export default function RunControl() {
       {/* 触发面板 */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* 计划选择器 */}
-        <select value={selectedPlan} onChange={(e) => { setSelectedPlan(e.target.value); setScope('all'); }}
+        <select value={selectedPlan} onChange={(e) => handleSelectPlan(e.target.value)}
           className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-sm">
           <option value="">全部场景</option>
           {plans.map((p) => <option key={p.id} value={p.id}>📋 {p.name}</option>)}
@@ -322,6 +330,13 @@ export default function RunControl() {
       )}
 
       <div className="flex-1 flex gap-3 min-h-0">
+        {/* 计划管理（K-011：从原场景管理页迁入） */}
+        <PlanManager
+          selectedPlan={selectedPlan}
+          onSelect={handleSelectPlan}
+          onPlansChange={handlePlansChange}
+        />
+
         {/* 场景进度面板 */}
         <div className="w-[320px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
           <div className="px-3 py-2 border-b border-border text-xs font-medium bg-surface-2">场景进度</div>

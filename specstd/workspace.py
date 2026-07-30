@@ -398,14 +398,19 @@ def pull(name: str) -> dict:
 
     old_commit = info.last_commit
 
-    # git fetch + checkout
+    # git fetch + checkout + pull（逐步检查返回码，失败不静默——K-009 修复）
+    steps = [
+        ("fetch", ["git", "fetch", "origin"], 60),
+        ("checkout", ["git", "checkout", info.branch], 30),
+        ("pull", ["git", "pull", "origin", info.branch], 60),
+    ]
     try:
-        subprocess.run(["git", "fetch", "origin"], cwd=str(clone_path),
-                        capture_output=True, text=True, timeout=60)
-        subprocess.run(["git", "checkout", info.branch], cwd=str(clone_path),
-                        capture_output=True, text=True, timeout=30)
-        subprocess.run(["git", "pull", "origin", info.branch], cwd=str(clone_path),
-                        capture_output=True, text=True, timeout=60)
+        for step_name, cmd, timeout in steps:
+            proc = subprocess.run(cmd, cwd=str(clone_path),
+                                  capture_output=True, text=True, timeout=timeout)
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()[:300]
+                return {"ok": False, "error": f"git {step_name} 失败: {detail}"}
     except Exception as e:
         return {"ok": False, "error": f"git pull 异常: {e}"}
 
