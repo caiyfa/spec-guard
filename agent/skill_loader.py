@@ -74,8 +74,8 @@ def clear_cache():
 def build_skills_xml(mode: str = "") -> str:
     """构建技能 XML 块，注入 system prompt。
 
-    K-014：按模式过滤（不分模式全量注入是 token 浪费——debug-failure 技能
-    在 generate 模式毫无意义）。mode 为空时返回全部（向后兼容）。
+    K-023 去模式化：全量注入（技能共 3 个 ~2.5k 字符，全量成本可忽略；
+    mode 参数保留仅为向后兼容，已无效）。
 
     格式：
         <skills>
@@ -86,9 +86,6 @@ def build_skills_xml(mode: str = "") -> str:
         </skills>
     """
     skills = list_skills()
-    if mode in _MODE_SKILLS:
-        allowed = _MODE_SKILLS[mode]
-        skills = [s for s in skills if s.name in allowed]
     if not skills:
         return ""
 
@@ -99,16 +96,6 @@ def build_skills_xml(mode: str = "") -> str:
         parts.append("  </skill>")
     parts.append("</skills>")
     return "\n".join(parts)
-
-
-# K-014: 技能 → 模式映射（未列出的模式不注入任何技能）
-_MODE_SKILLS: dict[str, set[str]] = {
-    "generate": {"generate-scenario", "validate-conformance"},
-    "debug": {"debug-failure", "validate-conformance"},
-    "analyze": {"validate-conformance"},
-    "audit": set(),
-    "chat": set(),
-}
 
 
 def _parse_skill_file(name: str, text: str) -> SkillDef:

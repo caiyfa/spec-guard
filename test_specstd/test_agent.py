@@ -304,6 +304,85 @@ class TestRuntime:
         assert "state" in types
         assert "assistant" in types
 
+    def test_tool_call_start_event(self):
+        """K-018：工具执行前必须发射 tool_call_start（长工具执行期间前端不再死寂）。
+
+        生产佐证：promote_draft 跑发布门禁子进程（上限 180s/份）执行期间零事件，
+        用户等待数分钟无任何反馈判为「一直没响应」。
+        """
+        mock = MockLLM([
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "c1", "type": "function",
+                 "function": {"name": "list_scenarios", "arguments": "{}"}}
+            ]},
+            {"role": "assistant", "content": "完成"},
+        ])
+        runtime = AgentRuntime(mock, max_turns=5)
+        events = []
+        runtime.events.subscribe(lambda e: events.append(e))
+        runtime.run("sys", "list")
+        types = [e["type"] for e in events]
+        assert "tool_call_start" in types
+        assert types.index("tool_call_start") < types.index("tool_call")
+        start_evt = next(e for e in events if e["type"] == "tool_call_start")
+        assert start_evt["tool"] == "list_scenarios"
+
+    def test_compaction_preserves_full_history(self, tmp_path):
+        """K-019：压缩只作用 LLM 工作副本——会话文件必须保留完整历史（页面展示不丢）。
+
+        生产佐证：用户真实会话导出仅 13 条（压缩态覆盖落盘），页面显示「明显变少」。
+        """
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        # 构造超过压缩阈值的历史（COMPACTION_THRESHOLD=16 条对话消息）
+        history = [{"role": "system", "content": "sys"}]
+        for i in range(20):
+            history.append({"role": "user", "content": f"问题{i}"})
+            history.append({"role": "assistant", "content": f"回答{i}"})
+        sm.save(sid, history)
+
+        received = []
+
+        class RecordingLLM(MockLLM):
+            def chat(self, messages, tools=None, temperature=0.7, on_delta=None):
+                received.append(len(messages))
+                return super().chat(messages, tools, temperature, on_delta)
+
+        # max_context_tokens=0 → 消息数阈值回退（>16 触发压缩）
+        runtime = AgentRuntime(RecordingLLM(), max_turns=2)
+        runtime.run("sys", "继续", session=sm, session_id=sid)
+
+        # ① LLM 收到的是压缩后的上下文（全量 42 条 → 压缩后约 12 条）
+        assert received and received[0] < 20
+        # ② 会话文件保留完整历史（全部 20 轮 + 本轮新消息），无压缩摘要覆盖
+        loaded = sm.load(sid)
+        contents = [str(m.get("content", "")) for m in loaded]
+        for i in range(20):
+            assert f"问题{i}" in contents and f"回答{i}" in contents
+        assert "继续" in contents
+
+    def test_llm_exception_graceful(self, tmp_path):
+        """K-018：LLM 调用异常兜底——落盘 + error 事件 + 优雅返回。
+
+        此前异常直接炸出 run：当轮消息不落盘，会话文件无痕迹，
+        用户重发时历史缺失（重启后「确认入库没响应」会话导出佐证）。
+        """
+        class RaisingLLM(MockLLM):
+            def chat(self, messages, tools=None, temperature=0.7, on_delta=None):
+                raise RuntimeError("网关连接超时")
+
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        runtime = AgentRuntime(RaisingLLM(), max_turns=3)
+        events = []
+        runtime.events.subscribe(lambda e: events.append(e))
+        messages = runtime.run("sys", "hello", session=sm, session_id=sid)
+        assert any("[ERROR] LLM 调用失败" in str(m.get("content", "")) for m in messages)
+        assert any(e["type"] == "error" and "网关连接超时" in e.get("message", "") for e in events)
+        # 已落盘（重发/导出可见痕迹）
+        loaded = sm.load(sid)
+        assert any("[ERROR] LLM 调用失败" in str(m.get("content", "")) for m in loaded)
+
 
 # ══════════════════════════════════════════════════════════
 # System Prompt
@@ -329,58 +408,41 @@ class TestSystemPrompt:
 
 
 class TestPromptOptimization:
-    """K-014：提示词深度优化（去 generate 化 / 按模式裁剪 / references 语义）。"""
+    """K-023：统一提示词（去模式化）——全量规范 + 全量技能 + 条件式任务指引。"""
 
-    def test_template_has_no_generate_conflict(self):
-        """P0 修复：通用模板不含 generate 专属段（消除与模式片段的指令冲突）。"""
-        prompt = build_system_prompt(mode="audit")
-        # generate 专属的交互/流程段不应出现在通用模板（只在 generate.md 模式片段）
-        assert "用户交互" not in prompt
-        assert "<plan>" not in prompt
-        # audit 模式片段应在（职责来自模式而非模板）
-        assert "当前模式：audit" in prompt
-
-    def test_format_spec_full_only_for_yaml_modes(self):
-        """format_spec 全量仅 generate/debug；其余模式一行指引。"""
-        p_gen = build_system_prompt(mode="generate")
-        p_chat = build_system_prompt(mode="chat")
-        assert "未注入全量格式规范" not in p_gen  # generate 拿全量
-        assert "未注入全量格式规范" in p_chat
-        # chat 模式显著更短
-        assert len(p_chat) < len(p_gen) * 0.6
-
-    def test_format_spec_pointer_for_audit(self):
-        """audit 模式给指引而非全量。"""
-        p = build_system_prompt(mode="audit")
-        assert "未注入全量格式规范" in p
-        assert "switch_mode" in p  # 指引包含切换路径
-
-    def test_no_mode_keeps_full_spec(self):
-        """mode 为空（未知）时保持全量注入（向后兼容）。"""
+    def test_unified_prompt_full_spec_and_skills(self):
+        """统一 prompt：全量 format_spec 常驻 + 全量技能注入（不再按模式裁剪）。"""
         p = build_system_prompt()
-        assert "未注入全量格式规范" not in p
+        assert "未注入全量格式规范" not in p  # 全量常驻
+        assert "generate-scenario" in p and "debug-failure" in p  # 全量技能
 
-    def test_skills_filtered_by_mode(self):
-        """skills 按模式过滤：generate 不含 debug-failure；空模式返回全部。"""
-        from agent.skill_loader import build_skills_xml
-        gen = build_skills_xml("generate")
-        assert "generate-scenario" in gen
-        assert "debug-failure" not in gen
-        dbg = build_skills_xml("debug")
-        assert "debug-failure" in dbg
-        assert "generate-scenario" not in dbg
-        all_xml = build_skills_xml("")
-        assert "generate-scenario" in all_xml and "debug-failure" in all_xml
-        # audit/chat 无技能
-        assert build_skills_xml("audit") == ""
+    def test_mode_guidance_conditional_sections(self):
+        """模式片段合并为「任务行为指引」条件章节（单一事实源仍是 modes/*.md）。"""
+        p = build_system_prompt()
+        assert "任务行为指引" in p
+        assert "当生成/修改场景" in p      # generate 流程
+        assert "DAG 拓扑设计" in p          # K-021 设计步并入
+        assert "当审计 spec 漏洞时" in p    # audit 职责
+        assert "当前模式" not in p          # 不再有模式态
+
+    def test_no_mode_switch_instruction(self):
+        """模板不再指导 switch_mode（机制已废弃，仅工具壳平滑过渡）。"""
+        p = build_system_prompt()
+        assert "切到 generate 模式" not in p
+        assert "切换到「场景生成」模式" not in p
 
     def test_references_section_present(self):
         """P2：@引用语义说明注入（LLM 不再靠猜 <references> 块）。"""
-        prompt = build_system_prompt(mode="chat")
+        prompt = build_system_prompt()
         assert "用户引用" in prompt
         assert "<references>" in prompt
 
-    def test_unknown_tool_recovery_hint_in_template(self):
-        """K-012/K-014 衔接：模板含未知工具自我纠正指引。"""
-        prompt = build_system_prompt(mode="chat")
-        assert "可用工具清单" in prompt
+    def test_skills_xml_all_skills(self):
+        """K-023：build_skills_xml 全量返回（mode 参数兼容但无效）。"""
+        from agent.skill_loader import build_skills_xml
+        all_xml = build_skills_xml()
+        assert "generate-scenario" in all_xml
+        assert "debug-failure" in all_xml
+        assert "validate-conformance" in all_xml
+        # mode 参数不再过滤
+        assert build_skills_xml("chat") == all_xml

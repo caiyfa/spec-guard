@@ -81,23 +81,14 @@ _FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 智能测试助手——契约�
 - 这是用户显式提供的上下文，优先采信，无需重复读取同一文件
 - @信息包 会把当前对话关联到对应场景，其文件清单见「基础信息包」段（如有）
 
-## 模式自主切换（H-3）
+## 任务行为指引（按任务类型遵循对应流程）
 
-你可以通过 switch_mode 工具在任务阶段转换时切换模式。
-切换时必须给出 reason（会展示给用户）。切换前用 todo_write 更新待办。
-若调用的工具在当前模式不可用，结果会返回当前可用工具清单——按需 switch_mode 后继续。
+{{ mode_guidance }}
 
 ## 待办系统（H-4）
 
 你可以通过 todo_write 工具维护任务待办列表，待办会实时展示给用户。
 """
-
-
-# K-014：只有生成/调试 YAML 的模式才注入全量格式规范（其余模式给一行指引，省 ~16k 字符/轮）
-_FORMAT_SPEC_MODES = {"generate", "debug"}
-_FORMAT_SPEC_POINTER = ("（本模式未注入全量格式规范。需要生成/修改场景 YAML 时："
-                        "用 query_registry 查 tool/oracle 目录，用 list_scenarios/read_scenario "
-                        "参考已有场景，或用 switch_mode 切到 generate 模式获取完整规范。）")
 
 
 def _load_prompt_template() -> str:
@@ -110,28 +101,48 @@ def _load_prompt_template() -> str:
     return _FALLBACK_PROMPT_TEMPLATE
 
 
-def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
-                         mode: str = "", scenario_context: str = "") -> str:
-    """构建 system prompt：format_spec + 工作区 AGENTS.md + 技能 + 模式片段 + 场景上下文。
+# K-023：去模式化——模式片段合并为统一「任务行为指引」的条件章节。
+# 模式文件（agent/modes/*.md）仍是单一事实源（热加载保留），此处仅做章节组装。
+_MODE_GUIDANCE_ORDER = [
+    ("generate", "生成/修改场景 YAML 时（含 DAG 编排、试执行、入库）"),
+    ("debug", "分析运行失败 / 归因修复时"),
+    ("audit", "审计 spec 漏洞时"),
+    ("analyze", "只读查询 / 覆盖分析时"),
+    ("chat", "自由对话 / 使用咨询时"),
+]
 
-    K-014 深度优化：
-    - format_spec 仅 generate/debug 模式注入全量（其余模式一行指引，省 ~16k 字符/轮）
-    - skills 按模式过滤（build_skills_xml(mode)）
-    - 模板已去 generate 化（P0 指令冲突修复：generate 流程只在 generate.md 模式片段中）
-    - 静态大块在前、动态内容（模式/场景上下文）在最后，保 prompt cache 前缀命中
+
+def _build_mode_guidance() -> str:
+    """把各模式文件的行为片段组装为条件式指引章节（去模式化：不再有工具门禁，
+    行为约束以「当…时遵循…」的条件指令呈现——LLM 对条件指令遵循度好，
+    且消除了模式切换 churn 与工具不可见事故，K-012/K-018/K-022 生产取证支持）。"""
+    sections = []
+    for mode_name, condition in _MODE_GUIDANCE_ORDER:
+        mode_def = load_mode(mode_name)
+        if mode_def and mode_def.prompt_fragment:
+            sections.append(f"### 当{condition}\n\n{mode_def.prompt_fragment.strip()}")
+    return "\n\n".join(sections) if sections else "（模式指引加载失败）"
+
+
+def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
+                        scenario_context: str = "") -> str:
+    """构建统一 system prompt（K-023 去模式化）。
+
+    - format_spec 全量常驻（不再按模式条件注入——条件注入是路由复杂度的回潮；
+      prompt cache 摊销重复成本）
+    - skills 全量注入（不再按模式过滤）
+    - 模式行为片段合并为「任务行为指引」条件章节（单一事实源仍是 modes/*.md）
+    - 静态大块在前、动态内容（场景上下文）在最后，保 prompt cache 前缀命中
     """
     if not format_spec_text:
-        if mode and mode not in _FORMAT_SPEC_MODES:
-            format_spec_text = _FORMAT_SPEC_POINTER
-        else:
-            try:
-                BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-                if str(BACKEND_DIR) not in sys.path:
-                    sys.path.insert(0, str(BACKEND_DIR))
-                from services.format_spec import generate_format_spec_md
-                format_spec_text = generate_format_spec_md()
-            except Exception:
-                format_spec_text = "（format_spec 加载失败，请用 query_registry 查询可用工具）"
+        try:
+            BACKEND_DIR = SG_ROOT / "workbench" / "backend"
+            if str(BACKEND_DIR) not in sys.path:
+                sys.path.insert(0, str(BACKEND_DIR))
+            from services.format_spec import generate_format_spec_md
+            format_spec_text = generate_format_spec_md()
+        except Exception:
+            format_spec_text = "（format_spec 加载失败，请用 query_registry 查询可用工具）"
 
     if not agents_md:
         try:
@@ -140,19 +151,14 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
         except Exception:
             agents_md = "（工作区未激活）"
 
-    # G3-2 + K-014: 技能按模式过滤注入（静态区，位于动态片段之前）
-    skills_xml = build_skills_xml(mode) or "（无）"
+    # G3-2：技能全量注入（K-023 不再按模式过滤）
+    skills_xml = build_skills_xml() or "（无）"
 
     prompt = (_load_prompt_template()
               .replace("{{ format_spec }}", format_spec_text)
               .replace("{{ agents_md }}", agents_md)
-              .replace("{{ skills_xml }}", skills_xml))
-
-    # 追加模式 prompt 片段（动态区）
-    if mode:
-        mode_def = load_mode(mode)
-        if mode_def and mode_def.prompt_fragment:
-            prompt += f"\n\n## 当前模式：{mode}\n\n{mode_def.prompt_fragment}"
+              .replace("{{ skills_xml }}", skills_xml)
+              .replace("{{ mode_guidance }}", _build_mode_guidance()))
 
     # 追加场景上下文（基础信息包）（最易变，放最后保前缀缓存）
     if scenario_context:
@@ -173,31 +179,19 @@ class AgentRuntime:
         self.llm = llm
         self.max_turns = max_turns
         self.events = EventBus()
+        # K-023：mode_name 仅作遗留标签（todos 的 mode 字段兼容），不再有工具门禁
         self.mode_name = mode_name
 
         # H-4: 待办状态
         self._todos: list[dict] = []
-        # H-3: 模式切换注入 + 工具集重建标记
-        self._pending_mode_notice: str = ""
-        self._tools_dirty: bool = False
         # 会话引用（供 meta 工具持久化用）
         self._session: Optional[SessionManager] = None
         self._session_id: Optional[str] = None
 
-        # 按模式过滤工具（meta 工具常驻所有模式）
-        if tools is not None:
-            # 显式传入优先
-            self.tools = tools
-        elif mode_name:
-            mode_def = load_mode(mode_name)
-            if mode_def:
-                # meta 工具常驻所有模式（含 tools=[] 的 chat 模式）
-                allowed = set(mode_def.tools) | META_TOOLS
-                self.tools = [t for t in ALL_TOOLS if t.name in allowed]
-            else:
-                self.tools = ALL_TOOLS
-        else:
-            self.tools = ALL_TOOLS
+        # K-023 去模式化：全量工具常驻（工具描述自带适用条件；写操作护栏在工具内部——
+        # drafts 沙箱/promote 三道闸+回滚/OVERWRITE_DENIED。模式白名单在生产中
+        # 防住的都是合法工作流：K-012 未知工具报错/K-018 模式落错/K-022「没有入库工具」）
+        self.tools = list(tools) if tools is not None else ALL_TOOLS
 
         # 重建 tool_map（meta 工具在 _execute_tool 中拦截，不映射到模块）
         self._tool_map = {}
@@ -238,21 +232,16 @@ class AgentRuntime:
 
         openai_tools = self._to_openai_tools()
 
+        # K-019：LLM 工作副本——压缩只作用于它；messages 保留完整历史用于持久化与展示。
+        # 此前直接压缩 messages 并全量落盘，会话文件被压缩态覆盖，
+        # 前端恢复后历史「明显变少」（用户真实会话导出取证：13 条 vs 实际数十条）
+        llm_messages = list(messages)
+
         for turn in range(self.max_turns):
-            # H-3: 模式切换后重建工具集
-            if self._tools_dirty:
-                openai_tools = self._to_openai_tools()
-                self._tools_dirty = False
-
-            # H-3: 注入模式切换通知（不动首条 system prompt）
-            if self._pending_mode_notice:
-                messages.append({"role": "system", "content": self._pending_mode_notice})
-                self._pending_mode_notice = None
-
-            # G3-1: 超阈值时触发压缩
-            if should_compact(messages, self.llm.max_context_tokens):
-                messages = compact(messages, self.llm, self.llm.max_context_tokens)
-                self.events.emit("compaction", message_count=len(messages))
+            # G3-1: 超阈值时触发压缩（只压 LLM 工作副本，完整历史不丢）
+            if should_compact(llm_messages, self.llm.max_context_tokens):
+                llm_messages = compact(llm_messages, self.llm, self.llm.max_context_tokens)
+                self.events.emit("compaction", message_count=len(llm_messages))
             self.events.emit("state", turn=turn, max_turns=self.max_turns)
 
             # K-012：非 mock 时启用 SSE 流式，逐 delta 转发前端（失败自动回退非流式）
@@ -261,7 +250,16 @@ class AgentRuntime:
                 def on_delta(text, _turn=turn):
                     self.events.emit("assistant_delta", delta=text, turn=_turn)
 
-            message, usage = self.llm.chat(messages, openai_tools, on_delta=on_delta)
+            # K-018：LLM 调用异常兜底——此前异常直接炸出 run（当轮消息不落盘，
+            # 用户重发时历史缺失；流式 stall 超时时表现为「一直没响应」且无痕迹）
+            try:
+                message, usage = self.llm.chat(llm_messages, openai_tools, on_delta=on_delta)
+            except Exception as e:
+                messages.append({"role": "system", "content": f"[ERROR] LLM 调用失败: {e}"})
+                if session and session_id:
+                    session.save(session_id, messages, metrics=self.llm.get_stats(), todos=self._todos)
+                self.events.emit("error", message=f"LLM 调用失败: {e}")
+                return messages
 
             # 发射事件（保留 reasoning_content 供前端显示）
             self.events.emit("assistant", message=message, turn=turn, usage=usage)
@@ -282,6 +280,7 @@ class AgentRuntime:
                     })
                 clean_message["tool_calls"] = cleaned_tc
             messages.append(clean_message)
+            llm_messages.append(clean_message)
 
             # 检查是否有 tool_calls
             tool_calls = clean_message.get("tool_calls")
@@ -290,6 +289,10 @@ class AgentRuntime:
 
             # 执行工具调用
             for tc in tool_calls:
+                # K-018：执行前先发射 tool_call_start——长工具（如 promote_draft 跑发布门禁
+                # 子进程上限 180s/份）此前执行期间零事件，前端死寂被用户判为「没响应」
+                self.events.emit("tool_call_start",
+                                 tool=tc.get("function", {}).get("name", ""), turn=turn)
                 result = self._execute_tool(tc)
                 tool_msg = {
                     "role": "tool",
@@ -297,16 +300,15 @@ class AgentRuntime:
                     "content": result,
                 }
                 messages.append(tool_msg)
+                llm_messages.append(tool_msg)
                 self.events.emit("tool_call", tool_call=tc, result=result, turn=turn)
 
             # 增量保存会话
             if session and session_id:
                 session.save(session_id, messages, todos=self._todos)
         else:
-            # G3-1: 熔断前也尝试压缩
-            if should_compact(messages, self.llm.max_context_tokens):
-                messages = compact(messages, self.llm, self.llm.max_context_tokens)
-                self.events.emit("compaction", message_count=len(messages))
+            # K-019：熔断分支不再压缩——压缩只服务 LLM 上下文（后续无 LLM 调用），
+            # messages 必须保留完整历史用于持久化与展示
             messages.append({"role": "system", "content": f"[FUSE] 已达到 max_turns={self.max_turns}，自动停止。"})
             self.events.emit("state", fused=True, max_turns=self.max_turns)
 
@@ -349,13 +351,9 @@ class AgentRuntime:
         # ── 常规工具 ──
         mod = self._tool_map.get(name)
         if not mod:
-            # K-012：区分「全局存在但当前模式未挂载」（如模式自动切换后 LLM 仍调旧模式工具）
-            # vs「真未知」——附可用工具清单 + switch_mode 提示，让 LLM 自我纠正而非流程断裂
+            # K-023：全量工具常驻后不存在「模式未挂载」——只剩真未知（LLM 编造的工具名），
+            # 附可用清单让 LLM 自我纠正（K-012 遗留自愈路径保留）
             available = "、".join(sorted(set(self._tool_map) | set(META_TOOLS)))
-            if name in TOOL_NAME_TO_MODULE:
-                return (f"工具 '{name}' 在当前模式（{self.mode_name or '默认'}）不可用。"
-                        f"当前可用工具: {available}。"
-                        f"如需使用该工具，请调用 switch_mode 切到包含它的模式后继续。")
             return f"未知工具: {name}。当前可用工具: {available}"
 
         try:
@@ -393,7 +391,9 @@ class AgentRuntime:
                 return "错误：每条待办必须包含 id 和 title"
             status = todo.get("status", "pending")
             if status not in ("pending", "in_progress", "done", "blocked"):
-                return f"错误：无效的 status: {status}"
+                # K-020：报错列合法值——LLM 曾猜 "completed" 被拒后只能靠猜重试
+                return (f"错误：无效的 status: {status}"
+                        f"（合法值: pending / in_progress / done / blocked）")
 
         self._todos = todos
         self.events.emit("todo_update", todos=self._todos)
@@ -408,75 +408,12 @@ class AgentRuntime:
         return f"待办已更新（{len(self._todos)} 项）"
 
     def _handle_switch_mode(self, arguments: dict) -> str:
-        """H-3: 处理 switch_mode — mid-run 模式切换。"""
-        new_mode = arguments.get("mode", "")
-        reason = arguments.get("reason", "")
+        """K-023：switch_mode 退化为无操作提示（模式机制已废弃）。
 
-        if not new_mode:
-            return "错误：缺少 mode 参数"
-        if not reason:
-            return "错误：缺少 reason 参数"
-
-        # 验证模式存在
-        mode_def = load_mode(new_mode)
-        if not mode_def:
-            return f"错误：未知模式: {new_mode}"
-
-        if new_mode == self.mode_name:
-            return f"已在 {new_mode} 模式，无需切换"
-
-        old_mode = self.mode_name
-        self._switch_mode(new_mode, reason, mode_def)
-
-        return f"已切换到 {new_mode} 模式。{reason}"
-
-    def _switch_mode(self, new_mode: str, reason: str, mode_def=None):
-        """mid-run 模式切换：注入新 system 消息 + 重建工具白名单 + 待办流转。
-
-        关键设计：不改首条 system prompt（保护 prompt cache），而是注入新 system 消息。
+        保留工具壳是为了平滑过渡——旧会话/旧提示词习惯里 LLM 仍可能调用它；
+        直接返回「所有工具已可用」的指引，比「未知工具」报错更能引导 LLM 继续任务。
         """
-        if mode_def is None:
-            mode_def = load_mode(new_mode)
-        if not mode_def:
-            return
+        return ("模式机制已废弃（K-023 简化设计）：所有工具对你直接可用，"
+                "无需切换模式。请按 system prompt 中「任务行为指引」的对应流程，"
+                "直接调用所需工具继续当前任务。")
 
-        old_mode = self.mode_name
-
-        # 1. 重建工具集（新白名单 + meta 工具常驻）
-        allowed = set(mode_def.tools) | META_TOOLS
-        self.tools = [t for t in ALL_TOOLS if t.name in allowed]
-        self._rebuild_tool_map()
-        self._tools_dirty = True  # 下一轮 LLM 调用前重建 openai_tools
-
-        # 2. 注入新模式约束（作为新 system 消息，不动首条）
-        switch_notice = (
-            f"【模式切换】{old_mode} → {new_mode}\n"
-            f"原因：{reason}\n\n"
-            f"新模式行为约束：\n{mode_def.prompt_fragment}"
-        )
-        self._pending_mode_notice = switch_notice
-
-        # 3. 自动更新待办：当前模式的 in_progress 项 → done，
-        #    新模式的第一个 pending 项 → in_progress
-        for todo in self._todos:
-            if todo.get("mode") == old_mode and todo.get("status") == "in_progress":
-                todo["status"] = "done"
-        for todo in self._todos:
-            if todo.get("mode") == new_mode and todo.get("status") == "pending":
-                todo["status"] = "in_progress"
-                break
-
-        # 4. 事件 + 状态
-        self.mode_name = new_mode
-        self.events.emit("mode_switch",
-                         from_mode=old_mode, to_mode=new_mode,
-                         source="agent", reason=reason, auto=True)
-
-        # 待办变更也 emit + 持久化
-        if self._todos:
-            self.events.emit("todo_update", todos=self._todos)
-            if self._session and self._session_id:
-                try:
-                    self._session.save_todos(self._session_id, self._todos)
-                except Exception:
-                    pass

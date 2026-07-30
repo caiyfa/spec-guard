@@ -128,7 +128,7 @@ export default function Scenarios() {
   // 启动 Agent 分析
   const handleLaunchAgent = () => {
     if (!meta) return;
-    navigate(`/agent?scenario_id=${meta.id}&mode=generate`);
+    navigate(`/agent?scenario_id=${meta.id}`);
   };
 
   // 回填已有场景继续编辑

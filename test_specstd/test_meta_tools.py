@@ -106,12 +106,14 @@ class TestTodoWrite:
         assert len(todo_events[0]["todos"]) == 1
 
     def test_todo_write_invalid_status(self):
-        """无效 status 返回错误。"""
+        """无效 status 返回错误（K-020：报错必须列合法值——LLM 曾猜 "completed"
+        被拒后只能靠猜重试，真实会话导出佐证）。"""
         runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
         result = runtime._execute_tool(_make_tool_call("todo_write", {"todos": [
-            {"id": "1", "title": "test", "status": "invalid"},
+            {"id": "1", "title": "test", "status": "completed"},
         ]}))
         assert "错误" in result
+        assert "pending" in result and "in_progress" in result and "done" in result
 
     def test_todo_write_missing_id(self):
         """缺少 id 返回错误。"""
@@ -241,239 +243,90 @@ class TestTodoPersistence:
 
 
 # ══════════════════════════════════════════════════════════
-# H-3: switch_mode 测试
+# K-023: switch_mode 退化为无操作提示（去模式化）
 # ══════════════════════════════════════════════════════════
 
-class TestSwitchMode:
-    def test_switch_mode_changes_mode_name(self):
-        """switch_mode 后 mode_name 变化。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        result = runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "草稿完成，开始审计",
-        }))
-        assert "audit" in result
-        assert runtime.mode_name == "audit"
+class TestSwitchModeDeprecated:
+    """K-023：模式机制废弃——switch_mode 变无操作提示，工具全量常驻。"""
 
-    def test_switch_mode_changes_tools(self):
-        """切换后工具白名单变化（audit 无 write_draft）。"""
+    def test_switch_mode_noop_hint(self):
+        """switch_mode 返回废弃提示，不改变任何状态（平滑过渡旧习惯）。"""
         runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        tool_names_before = {t.name for t in runtime.tools}
-        assert "write_draft" in tool_names_before  # generate 有 write_draft
-        runtime._execute_tool(_make_tool_call("switch_mode", {
+        tools_before = list(runtime.tools)
+        result = runtime._execute_tool(_make_tool_call("switch_mode", {
             "mode": "audit", "reason": "test",
         }))
-        tool_names_after = {t.name for t in runtime.tools}
-        assert "write_draft" not in tool_names_after  # audit 无 write_draft
-        assert "write_audit_report" in tool_names_after  # audit 有审计工具
+        assert "废弃" in result
+        assert runtime.mode_name == "generate"  # 未变
+        assert runtime.tools == tools_before    # 工具集未变
 
-    def test_switch_mode_first_system_unchanged(self):
-        """首条 system prompt 不被修改（prompt cache 保护）。"""
+    def test_all_tools_regardless_of_mode(self):
+        """K-023 核心：任何 mode_name（含空）都挂全量工具——不再有白名单门禁。
+
+        生产取证：模式白名单防住的都是合法工作流（K-012 未知工具报错 /
+        K-018 resume 模式落错 / K-022 audit 模式「没有入库工具」）。
+        """
+        for mode_name in ("generate", "debug", "analyze", "chat", "audit", ""):
+            runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name=mode_name)
+            tool_names = {t.name for t in runtime.tools}
+            for t in ("write_draft", "promote_drafts", "validate", "read_run_report",
+                      "run_scenario", "check_dag", "write_audit_report",
+                      "list_info_pack_artifacts"):
+                assert t in tool_names, f"mode={mode_name!r} 应有 {t}"
+
+    def test_meta_tools_in_openai_format(self):
+        """meta 工具出现在 OpenAI function calling 格式中。"""
+        runtime = AgentRuntime(MockLLM(), max_turns=1)
+        openai_tools = runtime._to_openai_tools()
+        names = {t["function"]["name"] for t in openai_tools}
+        assert "switch_mode" in names
+        assert "todo_write" in names
+
+    def test_no_mode_switch_events(self):
+        """run 中调用 switch_mode 不再产生 mode_switch 事件/通知注入。"""
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [
                 _make_tool_call("switch_mode", {"mode": "audit", "reason": "test"}),
             ]},
             {"role": "assistant", "content": "完成"},
         ])
-        runtime = AgentRuntime(mock, max_turns=5, mode_name="generate")
-        messages = runtime.run("ORIGINAL_SYSTEM_PROMPT", "hello")
-        # 首条 system prompt 不变
-        assert messages[0]["role"] == "system"
-        assert messages[0]["content"] == "ORIGINAL_SYSTEM_PROMPT"
-
-    def test_switch_mode_injects_notice(self):
-        """切换时注入新 system 消息声明新约束。"""
-        mock = MockLLM([
-            {"role": "assistant", "content": "", "tool_calls": [
-                _make_tool_call("switch_mode", {"mode": "audit", "reason": "草稿完成"}),
-            ]},
-            {"role": "assistant", "content": "完成"},
-        ])
-        runtime = AgentRuntime(mock, max_turns=5, mode_name="generate")
+        runtime = AgentRuntime(mock, max_turns=5)
+        events = []
+        runtime.events.subscribe(lambda e: events.append(e))
         messages = runtime.run("sys", "hello")
-        # 应有注入的 system 消息（含【模式切换】）
-        switch_msgs = [m for m in messages
-                       if m.get("role") == "system" and "模式切换" in m.get("content", "")]
-        assert len(switch_msgs) >= 1
-        assert "generate" in switch_msgs[0]["content"]
-        assert "audit" in switch_msgs[0]["content"]
-        assert "草稿完成" in switch_msgs[0]["content"]
-
-    def test_switch_mode_emits_event(self):
-        """mode_switch 事件正确 emit（from/to/reason/auto）。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        events = []
-        runtime.events.subscribe(lambda e: events.append(e))
-        runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "test reason",
-        }))
-        switch_events = [e for e in events if e["type"] == "mode_switch"]
-        assert len(switch_events) == 1
-        assert switch_events[0]["from_mode"] == "generate"
-        assert switch_events[0]["to_mode"] == "audit"
-        assert switch_events[0]["reason"] == "test reason"
-        assert switch_events[0]["auto"] is True
-
-    def test_switch_mode_unknown_mode(self):
-        """未知模式返回错误。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        result = runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "nonexistent", "reason": "test",
-        }))
-        assert "错误" in result
-        assert runtime.mode_name == "generate"  # 未变
-
-    def test_switch_mode_same_mode(self):
-        """同模式返回提示。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        result = runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "generate", "reason": "test",
-        }))
-        assert "无需切换" in result
-
-    def test_switch_mode_missing_reason(self):
-        """缺少 reason 返回错误。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        result = runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit",
-        }))
-        assert "错误" in result
-
-    def test_switch_mode_tools_dirty_rebuild(self):
-        """切换后 _tools_dirty 标记触发工具集重建。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        assert not runtime._tools_dirty
-        runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "test",
-        }))
-        assert runtime._tools_dirty  # 标记为脏
+        assert not [e for e in events if e["type"] == "mode_switch"]
+        assert not [m for m in messages
+                    if m.get("role") == "system" and "模式切换" in str(m.get("content", ""))]
 
 
 # ══════════════════════════════════════════════════════════
-# H-3: meta 工具常驻所有模式
-# ══════════════════════════════════════════════════════════
-
-class TestMetaToolsAllModes:
-    @pytest.mark.parametrize("mode_name", ["generate", "debug", "analyze", "chat", "audit"])
-    def test_meta_tools_in_all_modes(self, mode_name):
-        """5 个模式都包含 switch_mode 和 todo_write。"""
-        clear_cache()
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name=mode_name)
-        tool_names = {t.name for t in runtime.tools}
-        assert "switch_mode" in tool_names
-        assert "todo_write" in tool_names
-
-    def test_chat_mode_has_only_meta_tools(self):
-        """chat 模式仅有 meta 工具 + 产物查询工具（K-015 加入 list_info_pack_artifacts）。"""
-        clear_cache()
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="chat")
-        tool_names = {t.name for t in runtime.tools}
-        assert tool_names == META_TOOLS | {"list_info_pack_artifacts"}
-
-    def test_meta_tools_in_openai_format(self):
-        """meta 工具出现在 OpenAI function calling 格式中。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="chat")
-        openai_tools = runtime._to_openai_tools()
-        names = {t["function"]["name"] for t in openai_tools}
-        assert "switch_mode" in names
-        assert "todo_write" in names
-
-
-# ══════════════════════════════════════════════════════════
-# H-3+H-4: 模式切换时待办自动流转
-# ══════════════════════════════════════════════════════════
-
-class TestTodoAutoTransition:
-    def test_switch_mode_todo_transition(self):
-        """切换时 in_progress → done, pending → in_progress。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        # 设置初始待办
-        runtime._todos = [
-            {"id": "1", "title": "生成场景", "status": "in_progress", "mode": "generate"},
-            {"id": "2", "title": "审计漏洞", "status": "pending", "mode": "audit"},
-            {"id": "3", "title": "反馈研发", "status": "pending", "mode": "chat"},
-        ]
-        runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "草稿完成",
-        }))
-        # generate 的 in_progress → done
-        assert runtime._todos[0]["status"] == "done"
-        # audit 的第一个 pending → in_progress
-        assert runtime._todos[1]["status"] == "in_progress"
-        # chat 的 pending 不变
-        assert runtime._todos[2]["status"] == "pending"
-
-    def test_switch_mode_todo_emits_update(self):
-        """切换时待办变更 emit todo_update 事件。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        runtime._todos = [
-            {"id": "1", "title": "生成", "status": "in_progress", "mode": "generate"},
-            {"id": "2", "title": "审计", "status": "pending", "mode": "audit"},
-        ]
-        events = []
-        runtime.events.subscribe(lambda e: events.append(e))
-        runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "test",
-        }))
-        todo_events = [e for e in events if e["type"] == "todo_update"]
-        assert len(todo_events) >= 1
-        assert todo_events[-1]["todos"][0]["status"] == "done"
-        assert todo_events[-1]["todos"][1]["status"] == "in_progress"
-
-    def test_switch_mode_no_todos_no_error(self):
-        """无待办时切换不报错。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        assert len(runtime._todos) == 0
-        result = runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "test",
-        }))
-        assert "audit" in result
-
-
-# ══════════════════════════════════════════════════════════
-# H-3+H-4: 集成测试（通过 MockLLM + run()）
+# H-4: 集成测试（todo_write 在 run() 中工作）
 # ══════════════════════════════════════════════════════════
 
 class TestIntegration:
-    def test_todo_then_switch_in_run(self):
-        """在 run() 中先 todo_write 再 switch_mode。"""
+    def test_todo_write_in_run(self):
+        """在 run() 中 todo_write 更新待办并 emit 事件（K-023 后无模式流转）。"""
         mock = MockLLM([
-            # 第一轮：更新待办
             {"role": "assistant", "content": "", "tool_calls": [
                 _make_tool_call("todo_write", {"todos": [
-                    {"id": "1", "title": "生成场景", "status": "in_progress", "mode": "generate"},
-                    {"id": "2", "title": "审计漏洞", "status": "pending", "mode": "audit"},
+                    {"id": "1", "title": "生成场景", "status": "in_progress"},
+                    {"id": "2", "title": "审计漏洞", "status": "pending"},
                 ]}),
             ]},
-            # 第二轮：切换模式
-            {"role": "assistant", "content": "", "tool_calls": [
-                _make_tool_call("switch_mode", {"mode": "audit", "reason": "草稿完成"}),
-            ]},
-            # 第三轮：最终回复
             {"role": "assistant", "content": "任务完成"},
         ])
-        runtime = AgentRuntime(mock, max_turns=10, mode_name="generate")
+        runtime = AgentRuntime(mock, max_turns=10)
         events = []
         runtime.events.subscribe(lambda e: events.append(e))
         messages = runtime.run("sys", "生成场景并审计")
 
-        # 验证模式已切换
-        assert runtime.mode_name == "audit"
-        # 验证待办状态流转
-        assert runtime._todos[0]["status"] == "done"  # generate → done
-        assert runtime._todos[1]["status"] == "in_progress"  # audit → in_progress
-        # 验证事件
+        # 待办按写入原样保留（无模式自动流转）
+        assert runtime._todos[0]["status"] == "in_progress"
+        assert runtime._todos[1]["status"] == "pending"
         todo_events = [e for e in events if e["type"] == "todo_update"]
-        assert len(todo_events) >= 2  # 至少 2 次（todo_write + switch_mode 自动更新）
-        switch_events = [e for e in events if e["type"] == "mode_switch"]
-        assert len(switch_events) == 1
-        assert switch_events[0]["from_mode"] == "generate"
-        assert switch_events[0]["to_mode"] == "audit"
-        # 验证首条 system 不变
+        assert len(todo_events) >= 1
+        assert not [e for e in events if e["type"] == "mode_switch"]
         assert messages[0]["content"] == "sys"
-        # 验证注入了切换通知
-        switch_msgs = [m for m in messages
-                       if m.get("role") == "system" and "模式切换" in m.get("content", "")]
-        assert len(switch_msgs) >= 1
 
 
 # ══════════════════════════════════════════════════════════

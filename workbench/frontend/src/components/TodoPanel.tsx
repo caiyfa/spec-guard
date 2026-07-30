@@ -18,7 +18,6 @@ export interface TodoPanelProps {
   todos: StructuredTodo[];      // 结构化待办（todo_update 事件）
   planItems: string[];           // 遗留计划项（<plan> 标签）
   loading: boolean;
-  currentMode: string;
 }
 
 const STATUS_ICONS: Record<string, string> = {
@@ -35,11 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'text-gray-400',
 };
 
-const MODE_LABELS: Record<string, string> = {
-  generate: '✨生成', debug: '🐛调试', analyze: '🔍分析', chat: '💬对话', audit: '🔎审计',
-};
-
-export default function TodoPanel({ todos, planItems, loading, currentMode }: TodoPanelProps) {
+export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps) {
   // 优先使用结构化待办，无则回退到计划项
   const hasStructured = todos.length > 0;
 
@@ -51,26 +46,21 @@ export default function TodoPanel({ todos, planItems, loading, currentMode }: To
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {hasStructured ? (
-          // 结构化待办渲染
+          // 结构化待办渲染（K-023 去模式化：不再按模式分组/高亮）
           todos.map((todo, i) => {
             const icon = STATUS_ICONS[todo.status] || '○';
             const color = STATUS_COLORS[todo.status] || 'text-gray-400';
-            const isCurrentMode = todo.mode === currentMode;
-            const modeLabel = todo.mode ? (MODE_LABELS[todo.mode] || todo.mode) : '';
 
             return (
               <div
                 key={todo.id || i}
                 className={`text-xs flex items-start gap-1.5 ${color} ${
-                  isCurrentMode && todo.status === 'in_progress' ? 'bg-yellow-500/5 rounded px-1 -mx-1' : ''
+                  todo.status === 'in_progress' ? 'bg-yellow-500/5 rounded px-1 -mx-1' : ''
                 }`}
               >
                 <span className="flex-shrink-0 mt-0.5">{icon}</span>
                 <div className="flex-1 min-w-0">
                   <div>{todo.title}</div>
-                  {modeLabel && (
-                    <span className="text-[9px] text-gray-600">{modeLabel}</span>
-                  )}
                 </div>
               </div>
             );

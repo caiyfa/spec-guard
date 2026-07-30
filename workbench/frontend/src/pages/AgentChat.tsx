@@ -3,16 +3,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi } from '../api';
-import type { AgentMode, ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness } from '../api';
+import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness } from '../api';
 import SessionTree from '../components/SessionTree';
-import ModeDropdown from '../components/ModeDropdown';
 import TodoPanel from '../components/TodoPanel';
 import type { StructuredTodo } from '../components/TodoPanel';
 import FileViewer from '../components/FileViewer';
-
-const MODE_LABELS: Record<string, string> = {
-  generate: '✨生成', debug: '🐛调试', analyze: '🔍分析', chat: '💬对话', audit: '🔎审计',
-};
 
 interface ChatReference {
   type: 'info_pack' | 'file' | 'draft';
@@ -85,11 +80,6 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: '/generate-scenario', label: '场景生成技能', desc: '使用场景生成技能分析需求', type: 'skill' },
   { cmd: '/validate-conformance', label: '合规校验技能', desc: '校验场景 YAML 格式合规性', type: 'skill' },
   { cmd: '/debug-failure', label: '失败分析技能', desc: '分析运行报告中的失败场景', type: 'skill' },
-  { cmd: '/mode:generate', label: '切换到生成模式', desc: '场景生成模式（10 工具）', type: 'mode' },
-  { cmd: '/mode:debug', label: '切换到调试模式', desc: '场景调试模式（8 工具）', type: 'mode' },
-  { cmd: '/mode:analyze', label: '切换到分析模式', desc: '只读分析模式（6 工具）', type: 'mode' },
-  { cmd: '/mode:chat', label: '切换到对话模式', desc: '自由对话模式（0 工具）', type: 'mode' },
-  { cmd: '/mode:audit', label: '切换到审计模式', desc: 'Spec 审计模式（7 工具）', type: 'mode' },
   { cmd: '/new', label: '新会话', desc: '开始新的对话会话', type: 'action' },
   { cmd: '/clear', label: '清空对话', desc: '清空当前消息列表', type: 'action' },
   { cmd: '/undo', label: '撤销写入', desc: '撤销最后一次草稿写入（从 .bak 恢复）', type: 'action' },
@@ -103,23 +93,12 @@ interface ToolItem {
   result?: string;
   assistantText?: string;
 }
-interface ModeSwitchEvent {
-  id: number;
-  from: string;
-  to: string;
-  reason: string;
-  source: string;
-  auto: boolean;
-  msgIndex: number;  // messages.length at the time of switch
-}
-
 interface GroupedItem {
-  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete' | 'mode-switch';
+  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete';
   content?: string;
   tools?: ToolItem[];
   stepLabel?: string;   // 关联的待办步骤名称
   stepIdx?: number;    // 步骤索引
-  modeSwitch?: ModeSwitchEvent;  // 模式切换事件
   references?: ChatReference[];  // K-013: user 消息携带的 @引用
 }
 
@@ -150,7 +129,7 @@ function MarkdownText({ content }: { content: string }) {
                   </thead>
                   <tbody>
                     {tableRows.slice(2).map((row, ri) => (
-                      <tr key={ri}>{row.map((c, ci) => <td key={ci} className="border border-border px-1.5 py-0.5 text-gray-400">{c}</td>)} </tr>
+                      <tr key={ri}>{row.map((c, ci) => <td key={ci} className="border border-border px-1.5 py-0.5 text-gray-400">{c}</td>)}</tr>
                     ))}
                   </tbody>
                 </table>
@@ -243,31 +222,16 @@ function stripPlan(content: string): string {
   return content.replace(/<plan>[\s\S]*?<\/plan>/g, '').trim();
 }
 
-// ── 默认计划（按模式推断） + 工具→步骤映射 ──
-const DEFAULT_PLANS: Record<string, string[]> = {
-  generate: [
-    '读取基础信息包和需求文档',
-    '查询注册表（tool / oracle）',
-    '参考已有场景结构',
-    '获取场景 ID',
-    '生成场景 YAML',
-    '校验场景',
-    '写入草稿',
-  ],
-  debug: [
-    '读取运行报告',
-    '分析失败场景',
-    '读取场景和需求',
-    '查询 DB 证据',
-    '定位根因并给出修复建议',
-  ],
-  analyze: [
-    '读取需求和场景',
-    '分析覆盖完整性',
-    '输出分析报告',
-  ],
-  chat: [],
-};
+// ── 默认计划（K-023 去模式化：统一任务骨架） + 工具→步骤映射 ──
+const DEFAULT_PLANS: string[] = [
+  '读取基础信息包和需求文档',
+  '查询注册表（tool / oracle）',
+  '参考已有场景结构',
+  '获取场景 ID',
+  '生成场景 YAML',
+  '校验场景',
+  '写入草稿',
+];
 
 // 工具名 → 待办步骤序号映射（供 groupMessages 把工具调用归到对应步骤展示）
 const TOOL_TO_STEP: Record<string, number> = {
@@ -315,7 +279,7 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
         // 根据第一个工具名推断步骤
         const firstName = msg.tool_calls[0].function.name;
         const stepIdx = TOOL_TO_STEP[firstName];
-        const stepLabel = stepIdx !== undefined ? DEFAULT_PLANS.generate?.[stepIdx] : undefined;
+        const stepLabel = stepIdx !== undefined ? DEFAULT_PLANS[stepIdx] : undefined;
         // 如果步骤变化了，先 flush 上一组
         if (currentToolGroup && stepIdx !== undefined && currentToolGroup.stepIdx !== undefined && stepIdx !== currentToolGroup.stepIdx) {
           flushToolGroup();
@@ -324,7 +288,7 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
         // 如果新组的 stepIdx 更高，更新（可能同一步骤多次调用）
         if (stepIdx !== undefined && (currentToolGroup.stepIdx === undefined || stepIdx > currentToolGroup.stepIdx)) {
           currentToolGroup.stepIdx = stepIdx;
-          currentToolGroup.stepLabel = DEFAULT_PLANS.generate?.[stepIdx];
+          currentToolGroup.stepLabel = DEFAULT_PLANS[stepIdx];
         }
         const cleanContent = msg.content ? stripPlan(msg.content) : '';
         for (let i = 0; i < msg.tool_calls.length; i++) {
@@ -660,12 +624,11 @@ function InfoPackPanel({ meta, onUpdate, onError, onViewFile }: {
 }
 
 // ── 右侧面板组件（引用 + 信息包 + 上下文 + 待办） ──
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, currentMode, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile }: {
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
   loading: boolean;
-  currentMode: string;
   messages: ChatMessage[];
   ctxLimit: number;
   stats: AgentStats | null;
@@ -682,7 +645,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, currentMode,
       {scenarioMeta && <InfoPackPanel meta={scenarioMeta} onUpdate={onUpdateMeta} onError={onError} onViewFile={(p) => onViewFile(p)} />}
       {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} stats={stats} />}
       {(planItems.length > 0 || structuredTodos.length > 0) && (
-        <TodoPanel todos={structuredTodos} planItems={planItems} loading={loading} currentMode={currentMode} />
+        <TodoPanel todos={structuredTodos} planItems={planItems} loading={loading} />
       )}
     </div>
   );
@@ -710,8 +673,7 @@ export default function AgentChat() {
   const [searchParams] = useSearchParams();
   // K-013：scenarioId 状态化——@信息包 引用可在对话中关联场景（不再只能从场景管理页进入）
   const [scenarioId, setScenarioId] = useState(searchParams.get('scenario_id') || '');
-  const initialMode = searchParams.get('mode') || 'generate';
-  // H-5#3: 通知链接带 context 打开（debug_run_id 触发 debug 路由）
+  // H-5#3: 通知链接带 context 打开（debug_run_id 触发自动调试消息）
   const debugRunId = searchParams.get('debug_run_id') || '';
 
   // 从模块存储恢复状态（跨导航保持会话）
@@ -729,8 +691,6 @@ export default function AgentChat() {
 
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsVersion, setSessionsVersion] = useState(0);
-  const [modes, setModes] = useState<AgentMode[]>([]);
-  const [currentMode, setCurrentMode] = useState(initialMode);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [currentModelId, setCurrentModelId] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<ScenarioMeta | null>(null);
@@ -748,15 +708,12 @@ export default function AgentChat() {
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashQuery, setSlashQuery] = useState('');
   const [wsReconnect, setWsReconnect] = useState(0);
-  // H-2: 模式锁定与切换事件
-  const [lockedMode, setLockedMode] = useState('');  // 非空 = 锁定的模式名
-  const [modeSwitches, setModeSwitches] = useState<ModeSwitchEvent[]>([]);
-  const modeSwitchIdRef = useRef(0);
   // H-FE: 结构化待办（来自 todo_update 事件）
   const [structuredTodos, setStructuredTodos] = useState<StructuredTodo[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);  // K-018: WS 自动重连退避计数
   const autoSentRef = useRef(false);
   const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -786,7 +743,6 @@ export default function AgentChat() {
   }, []);
 
   useEffect(() => {
-    agentApi.getModes().then(r => setModes(r.modes || [])).catch(() => {});
     modelApi.list().then(r => {
       setModels(r.models || []);
       const def = r.models?.find(m => m.is_default);
@@ -853,7 +809,12 @@ export default function AgentChat() {
           });
         }
         break;
+      case 'tool_call_start':
+        // K-018：工具执行前置提示——长工具（promote 跑发布门禁等）执行期间不再死寂
+        setTurnInfo(`⚙ ${event.tool || 'tool'}`);
+        break;
       case 'tool_call':
+        setTurnInfo('');
         setMessages(prev => [...prev, { role: 'tool', content: String(event.result ?? '') }]);
         break;
       case 'done':
@@ -867,21 +828,6 @@ export default function AgentChat() {
         setStreamingText('');
         setLoading(false);
         setSessionsVersion(v => v + 1);
-        break;
-      case 'mode_switch':
-        // H-2: 处理模式自动切换事件
-        if (!lockedMode) {
-          setCurrentMode(event.to || 'chat');
-        }
-        setModeSwitches(prev => [...prev, {
-          id: ++modeSwitchIdRef.current,
-          from: event.from || '',
-          to: event.to || '',
-          reason: event.reason || '',
-          source: event.source || '',
-          auto: event.auto !== false,
-          msgIndex: messages.length,
-        }]);
         break;
       case 'todo_update':
         // H-FE: 结构化待办更新（todo_update 事件）
@@ -920,8 +866,33 @@ export default function AgentChat() {
       );
       _store.ws = ws;
       wsRef.current = ws;
-      ws.onopen = () => { _store.wsState = 'open'; if (_store.mounted) setWsState('open'); };
-      ws.onclose = () => { _store.wsState = 'closed'; if (_store.mounted) setWsState('closed'); };
+      ws.onopen = () => {
+        reconnectAttemptsRef.current = 0;
+        _store.wsState = 'open';
+        if (_store.mounted) {
+          setWsState('open');
+          setError(prev => prev.startsWith('连接已断开') ? '' : prev);
+        }
+      };
+      ws.onclose = () => {
+        _store.wsState = 'closed';
+        if ((ws as any)._intentional) return;  // 手动打断：handleStop 已处理重连
+        if (_store.mounted) {
+          setWsState('closed');
+          // K-018：断线时进行中的 run 已丢失——解除 loading 卡死并自动重连（指数退避）。
+          // 此前 onclose 只改状态不重连，handleSend 静默丢弃消息（「一直没响应」主因之一）
+          setLoading(false);
+          setStreamingText('');
+          if (reconnectAttemptsRef.current < 5) {
+            setError('连接已断开，正在自动重连…');
+            const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 10000);
+            reconnectAttemptsRef.current += 1;
+            window.setTimeout(() => { if (_store.mounted) setWsReconnect(v => v + 1); }, delay);
+          } else {
+            setError('连接已断开，自动重连失败——请刷新页面或检查后端服务');
+          }
+        }
+      };
       ws.onerror = () => { _store.wsState = 'closed'; if (_store.mounted) setWsState('closed'); };
       ws.onmessage = (e) => {
         const event = JSON.parse(e.data);
@@ -950,17 +921,17 @@ export default function AgentChat() {
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
         const msg = `请分析基础信息包中的文件，提取 FR/AC 锚点，生成测试场景 YAML 草稿。场景名称：${scenarioMeta.name}，模块：${scenarioMeta.module}`;
-        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS[currentMode] || []); setCtxUsage(null);
+        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS); setCtxUsage(null);
         setMessages(prev => [...prev, { role: 'user', content: msg }]);
         ws.send(JSON.stringify({
           message: msg, session_id: '', max_turns: 50,
-          workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
+          workspace: currentWorkspace, scenario_id: scenarioId,
           model_id: currentModelId,
-          context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
+          context: { current_page: currentPage, editing_scenario_id: scenarioId },
         }));
       }
     }
-  }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentMode, currentModelId, currentPage, lockedMode]);
+  }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentModelId, currentPage]);
 
   // H-5#3: 通知链接自动打开调试（debug_run_id 触发）
   useEffect(() => {
@@ -968,21 +939,17 @@ export default function AgentChat() {
       debugSentRef.current = true;
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
-        // 设置 debug 模式 + 路由上下文（last_run_failed=true 触发 H-2 路由器自动 debug）
-        setCurrentMode('debug');
-        setLockedMode('');  // 不锁定，允许路由器自动路由
         const msg = `定时任务运行失败，请分析运行 ${debugRunId} 的失败原因。使用 read_run_report 工具读取运行报告，定位失败场景和错误根因，给出修复建议。`;
-        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS['debug'] || []); setCtxUsage(null);
+        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS); setCtxUsage(null);
         setMessages(prev => [...prev, { role: 'user', content: msg }]);
         ws.send(JSON.stringify({
           message: msg, session_id: '', max_turns: 50,
-          workspace: currentWorkspace, mode: 'debug', scenario_id: '',
+          workspace: currentWorkspace, scenario_id: '',
           model_id: currentModelId,
           context: {
             current_page: 'execution',
             last_run_failed: true,
             editing_scenario_id: '',
-            locked_mode: '',
           },
         }));
       }
@@ -993,9 +960,17 @@ export default function AgentChat() {
   const handleSend = useCallback(() => {
     const userMsg = input.trim();
     const ws = wsRef.current;
-    if (!userMsg || loading || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!userMsg || loading) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      // K-018：此前静默 return——消息被丢弃且无任何提示（「一直没响应」主因之一）。
+      // 现在显式报错并立即触发重连；input 不清空，重连后可直接重发
+      setError('连接已断开，正在尝试重连…（消息未发送，重连后请重发）');
+      reconnectAttemptsRef.current = 0;
+      setWsReconnect(v => v + 1);
+      return;
+    }
     setInput(''); setSlashOpen(false); setAtOpen(false);
-    setLoading(true); setError(''); setTurnInfo(''); setPlanItems(DEFAULT_PLANS[currentMode] || []); setCtxUsage(null);
+    setLoading(true); setError(''); setTurnInfo(''); setPlanItems(DEFAULT_PLANS); setCtxUsage(null);
     const msgRefs = references.length ? [...references] : undefined;
     setReferences([]);
     // K-015：发送时才落实 info_pack 关联（右侧信息包面板随发送出现）
@@ -1008,16 +983,17 @@ export default function AgentChat() {
     setMessages(prev => [...prev, { role: 'user', content: userMsg, references: msgRefs }]);
     ws.send(JSON.stringify({
       message: userMsg, session_id: sessionId, max_turns: 50,
-      workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
+      workspace: currentWorkspace, scenario_id: scenarioId,
       model_id: currentModelId,
       references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
-      context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
+      context: { current_page: currentPage, editing_scenario_id: scenarioId },
     }));
-  }, [input, loading, sessionId, currentWorkspace, currentMode, scenarioId, currentModelId, currentPage, lockedMode, references]);
+  }, [input, loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, references]);
 
   // 打断会话
   const handleStop = useCallback(() => {
     if (wsRef.current) {
+      (wsRef.current as any)._intentional = true;  // K-018: 标记手动关闭，避免 onclose 重复调度重连
       wsRef.current.close();
     }
     setLoading(false);
@@ -1030,11 +1006,7 @@ export default function AgentChat() {
   // 斜杠命令处理
   const handleSlashSelect = (cmd: SlashCommand) => {
     setSlashOpen(false); setInput('');
-    if (cmd.type === 'mode') {
-      const newMode = cmd.cmd.replace('/mode:', '');
-      setCurrentMode(newMode);
-      setLockedMode(newMode);  // 斜杠命令切换也锁定
-    } else if (cmd.type === 'action') {
+    if (cmd.type === 'action') {
       if (cmd.cmd === '/new') {
         setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setPlanItems([]);
         localStorage.removeItem('sg_agent_session');
@@ -1048,9 +1020,9 @@ export default function AgentChat() {
           setMessages(prev => [...prev, { role: 'user', content: msg }]);
           ws.send(JSON.stringify({
             message: msg, session_id: sessionId, max_turns: 3,
-            workspace: currentWorkspace, mode: currentMode, scenario_id: scenarioId,
+            workspace: currentWorkspace, scenario_id: scenarioId,
             model_id: currentModelId,
-            context: { current_page: currentPage, editing_scenario_id: scenarioId, locked_mode: lockedMode },
+            context: { current_page: currentPage, editing_scenario_id: scenarioId },
           }));
         }
       } else if (cmd.cmd === '/export') {
@@ -1171,7 +1143,6 @@ export default function AgentChat() {
     setMessages(r.messages || []);
     setSessionId(id);
     setPlanItems([]);
-    setModeSwitches([]);  // H-2: 清空模式切换记录
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setStreamingText('');
     // 从历史消息中提取 plan
@@ -1202,7 +1173,6 @@ export default function AgentChat() {
 
   const handleNewSession = () => {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
-    setModeSwitches([]);  // H-2: 清空模式切换记录
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setStreamingText('');
     localStorage.removeItem('sg_agent_session');
@@ -1220,34 +1190,8 @@ export default function AgentChat() {
     } catch { setError('导出失败'); }
   };
 
-  // 分组消息（H-2: 插入模式切换卡片）
-  const grouped = useMemo(() => {
-    const groups = groupMessages(messages);
-    if (modeSwitches.length === 0) return groups;
-    // 在适当位置插入模式切换卡片
-    // 简化策略：按 msgIndex 找到对应分组位置插入
-    const result: GroupedItem[] = [];
-    let msgIdx = 0;
-    let switchIdx = 0;
-    for (const g of groups) {
-      // 计算当前组对应的 message 索引增量
-      if (g.type === 'user') msgIdx++;
-      else if (g.type === 'assistant-text') msgIdx++;
-      else if (g.type === 'tool-group') msgIdx += (g.tools?.length || 0) + 1;  // assistant + tool results
-      // 检查是否有切换事件应在此处插入
-      while (switchIdx < modeSwitches.length && modeSwitches[switchIdx].msgIndex <= msgIdx) {
-        result.push({ type: 'mode-switch', modeSwitch: modeSwitches[switchIdx] });
-        switchIdx++;
-      }
-      result.push(g);
-    }
-    // 剩余的切换事件追加到末尾
-    while (switchIdx < modeSwitches.length) {
-      result.push({ type: 'mode-switch', modeSwitch: modeSwitches[switchIdx] });
-      switchIdx++;
-    }
-    return result;
-  }, [messages, modeSwitches]);
+  // 分组消息
+  const grouped = useMemo(() => groupMessages(messages), [messages]);
 
   // K-013: 聚合会话中全部 @引用（右侧引用面板，按 type+path 去重）
   const allRefs = useMemo(() => {
@@ -1299,22 +1243,6 @@ export default function AgentChat() {
         <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
           <span className="text-green-500">✅</span>
           <span className="text-green-400/80">完成：{item.content}</span>
-        </div>
-      );
-    }
-    // mode-switch: 模式切换卡片（H-2）
-    if (item.type === 'mode-switch' && item.modeSwitch) {
-      const ms = item.modeSwitch;
-      const fromLabel = MODE_LABELS[ms.from] || ms.from;
-      const toLabel = MODE_LABELS[ms.to] || ms.to;
-      return (
-        <div key={idx} className="mb-2 flex items-center gap-2 px-3 py-1.5 bg-info/5 border border-info/20 rounded text-xs">
-          <span className="text-info/60">🔄</span>
-          <span className="text-gray-400">{fromLabel}</span>
-          <span className="text-gray-600">→</span>
-          <span className="text-info font-medium">{toLabel}</span>
-          {ms.auto && <span className="text-[10px] text-gray-600 ml-1">（自动）</span>}
-          <span className="text-[10px] text-gray-500 ml-auto">{ms.reason}</span>
         </div>
       );
     }
@@ -1467,18 +1395,7 @@ export default function AgentChat() {
             </div>
 
             {/* 底部选择器栏（K-012 收敛：仅模式下拉 + 模型下拉） */}
-            <div className="flex items-center gap-2 mt-2">
-              <ModeDropdown
-                currentMode={currentMode}
-                lockedMode={lockedMode}
-                modes={modes}
-                onSelectMode={(mode) => {
-                  setCurrentMode(mode);
-                  setLockedMode(mode);
-                }}
-                onUnlock={() => setLockedMode('')}
-              />
-              {models.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">              {models.length > 0 && (
                 <select
                   value={currentModelId}
                   onChange={e => setCurrentModelId(e.target.value)}
@@ -1496,7 +1413,7 @@ export default function AgentChat() {
         </div>
 
         {/* 右侧：引用 + 信息包 + 上下文用量 + 待办面板 */}
-        <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} currentMode={currentMode} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} />
+        <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} />
       </div>
 
       {/* K-013: 引用文件查看器（FileViewer 弹窗） */}

@@ -1,8 +1,8 @@
-"""meta — Agent 元控制工具（H-3/H-4）。
+"""meta — Agent 元控制工具（H-4）。
 
 工具：
   todo_write: 更新任务待办列表（H-4）
-  switch_mode: Agent 自主切换工作模式（H-3）
+  switch_mode: （K-023 已废弃）模式机制移除，保留壳平滑过渡
 
 注意：这两个工具在 AgentRuntime._execute_tool 中被特殊拦截，
 不通过常规 mod.handle 执行。MCP server 独立模式下返回提示信息。
@@ -18,13 +18,13 @@ if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
 
-# Meta 工具名称集合（所有模式常驻，不写入 modes/*.md 的 tools 白名单）
+# Meta 工具名称集合（常驻，不写入 modes/*.md 的 tools 白名单）
 META_TOOL_NAMES = frozenset({"switch_mode", "todo_write"})
 
 TOOLS = [
     Tool(
         name="todo_write",
-        description="更新任务待办列表。开始新任务、完成任务、切换模式前调用。"
+        description="更新任务待办列表。开始新任务、完成任务、阶段转换时调用。"
                     "待办会实时展示给用户，帮助用户了解当前进度。",
         inputSchema={
             "type": "object",
@@ -50,7 +50,7 @@ TOOLS = [
                             },
                             "mode": {
                                 "type": "string",
-                                "description": "该待办所属模式（generate/debug/analyze/chat/audit）",
+                                "description": "（遗留字段，可省略）该待办所属阶段标签",
                             },
                         },
                         "required": ["id", "title", "status"],
@@ -62,24 +62,20 @@ TOOLS = [
     ),
     Tool(
         name="switch_mode",
-        description="切换工作模式。当前任务阶段完成、需要进入下一阶段时调用。"
-                    "切换后工具集和行为约束会变化。"
-                    "可用模式：generate（生成场景）、debug（调试失败）、"
-                    "analyze（只读分析）、chat（自由对话）、audit（审计漏洞）。",
+        description="（已废弃，无任何效果）模式机制已移除，所有工具全程可用。"
+                    "请勿调用——直接按任务需要调用对应工具即可。",
         inputSchema={
             "type": "object",
             "properties": {
                 "mode": {
                     "type": "string",
-                    "enum": ["generate", "debug", "analyze", "chat", "audit"],
-                    "description": "目标模式",
+                    "description": "（忽略）",
                 },
                 "reason": {
                     "type": "string",
-                    "description": "切换原因（会展示给用户）",
+                    "description": "（忽略）",
                 },
             },
-            "required": ["mode", "reason"],
         },
     ),
 ]

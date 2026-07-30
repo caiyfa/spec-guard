@@ -140,7 +140,7 @@ class TestBuildBodyStrip:
 
 
 class TestUnknownToolHint:
-    """K-012：模式切换后工具白名单变化，_execute_tool 返回自我纠正提示。"""
+    """K-023：全量工具常驻后，只有「真未知」（LLM 编造）的工具名才触发纠正提示。"""
 
     def _runtime(self, mode: str) -> AgentRuntime:
         class _MockLLM:
@@ -148,18 +148,15 @@ class TestUnknownToolHint:
             max_context_tokens = 0
         return AgentRuntime(_MockLLM(), mode_name=mode)
 
-    def test_tool_not_in_mode_whitelist(self):
-        """audit 模式下调 generate 模式的 validate → 提示当前模式 + 可用清单 + switch_mode。"""
+    def test_all_tools_available_any_mode(self):
+        """K-023 核心：任何模式都可直接调用 validate 等工具——不再有「模式未挂载」。"""
         rt = self._runtime("audit")
-        result = rt._execute_tool({"function": {"name": "validate", "arguments": "{}"}})
-        assert "当前模式" in result
-        assert "audit" in result
-        assert "switch_mode" in result
-        assert "可用工具" in result
+        result = rt._execute_tool({"function": {"name": "validate", "arguments": "{\"content\": \"id: X\\nflow: []\\nverify: []\"}"}})
         assert "未知工具" not in result
+        assert "当前模式" not in result
 
     def test_truly_unknown_tool(self):
-        """完全不存在的工具 → 「未知工具」+ 可用清单。"""
+        """完全不存在的工具 → 「未知工具」+ 可用清单（自愈路径保留）。"""
         rt = self._runtime("audit")
         result = rt._execute_tool({"function": {"name": "nonexistent_xyz", "arguments": "{}"}})
         assert "未知工具: nonexistent_xyz" in result
