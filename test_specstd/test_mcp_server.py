@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 16  # K-015: 新增 promote_draft 后 15→16
+        assert len(ALL_TOOLS) == 19  # K-021⑥: 新增 promote_drafts 后 18→19
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -56,7 +56,9 @@ class TestToolRegistration:
                      "read_run_report", "db_evidence",
                      "write_audit_report", "report_vulnerability",
                      "todo_write", "switch_mode",
-                     "promote_draft"}  # H-3/H-4: meta 工具；K-015: promote_draft
+                     "promote_draft",  # H-3/H-4: meta 工具；K-015: promote_draft
+                     "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
+                     "promote_drafts"}  # K-021⑥: 批量入库
         assert names == expected
 
 
@@ -94,6 +96,45 @@ class TestSpecReader:
         delta_files = [f for f in files if f["is_delta"]]
         assert len(delta_files) > 0
 
+    # ── K-021①：双根扩展（Agent 可达 SpecGuard 全部内容）──
+
+    def test_read_spec_sg_prefix(self, workspace):
+        """sg:// 前缀强制 SpecGuard 仓库根。"""
+        result = _call(spec_reader, "read_spec", {"path": "sg://contracts_baseline.json"})
+        assert "fingerprint" in result[0].text or "version" in result[0].text
+
+    def test_read_spec_sg_fallback(self, workspace):
+        """工作区未命中时回退 SpecGuard 仓库根（仓库侧内容可达）。"""
+        result = _call(spec_reader, "read_spec", {"path": "contracts_baseline.json"})
+        assert "不存在" not in result[0].text
+        assert "fingerprint" in result[0].text or "version" in result[0].text
+
+    def test_read_spec_workspace_priority(self, workspace):
+        """双根同名时工作区优先（AGENTS.md 两边都有，原行为不变）。"""
+        result = _call(spec_reader, "read_spec", {"path": "AGENTS.md"})
+        assert "术语 Token" in result[0].text  # 工作区样例独有（SpecGuard 仓库根的 AGENTS.md 无此节）
+
+    def test_read_spec_sg_blocked_sensitive(self, workspace):
+        """敏感路径拒读：用户 DB / 会话记录 / .git / .env。"""
+        for p in ("sg://workbench/backend/data/workbench.db",
+                  "sg://agent/sessions/x/y.jsonl",
+                  "sg://.git/config",
+                  "sg://.env.devops"):
+            result = _call(spec_reader, "read_spec", {"path": p})
+            assert "OUT_OF_SCOPE" in result[0].text, f"{p} 应被拒读"
+
+    def test_read_spec_sg_traversal(self, workspace):
+        result = _call(spec_reader, "read_spec", {"path": "sg://../../etc/passwd"})
+        assert "OUT_OF_SCOPE" in result[0].text
+
+    def test_read_spec_binary_guard(self, workspace, tmp_path):
+        """二进制文件返回明确提示而非乱码/异常。"""
+        xlsx = tmp_path / "ws" / "specs" / "module1" / "feature1" / "data.xlsx"
+        xlsx.write_bytes(b"PK\x03\x04 fake xlsx")
+        result = _call(spec_reader, "read_spec",
+                       {"path": "specs/module1/feature1/data.xlsx"})
+        assert "二进制" in result[0].text
+
 
 # ══════════════════════════════════════════════════════════
 # scenario_tools
@@ -120,6 +161,73 @@ class TestScenarioTools:
         data = json.loads(result[0].text)
         assert "next_id" in data
         assert data["next_id"].startswith("PP-RC-")
+
+    # ── K-021③：check_dag DAG 预演 ──
+
+    def test_check_dag_library(self):
+        """场景库建图：无环、有拓扑序（离线，真实场景库）。"""
+        result = _call(scenario_tools, "check_dag", {"include_drafts": False})
+        data = json.loads(result[0].text)
+        assert data["ok"], f"场景库不应有环/漂移: {data}"
+        assert data["scenario_count"] > 0
+        assert len(data["topo_order"]) == data["scenario_count"]
+
+    def test_check_dag_cycle_detected(self, workspace):
+        """并入草稿后检测到循环依赖 → ok=False + cycles。"""
+        from specstd.workspace import drafts_dir
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "CYC-A-001.yaml").write_text(
+            "id: CYC-A-001\ntitle: 环A\ndepends_on: [CYC-B-001]\n"
+            "flow:\n  - call: {method: GET, path: /api, save: r}\n"
+            "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
+        (d / "CYC-B-001.yaml").write_text(
+            "id: CYC-B-001\ntitle: 环B\ndepends_on: [CYC-A-001]\n"
+            "flow:\n  - call: {method: GET, path: /api, save: r}\n"
+            "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
+        result = _call(scenario_tools, "check_dag", {"include_drafts": True})
+        data = json.loads(result[0].text)
+        assert not data["ok"]
+        assert data["cycles"], "应报告循环依赖"
+        assert "CYC-A-001" in data["cycles"][0]
+
+    def test_check_dag_focus(self, workspace):
+        """focus：输出上游闭包与下游依赖者（草稿依赖真实场景）。"""
+        from specstd.workspace import drafts_dir
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "FOCUS-TEST-001.yaml").write_text(
+            "id: FOCUS-TEST-001\ntitle: 焦点\ndepends_on: [IS-PREP-002]\n"
+            "flow:\n  - call: {method: GET, path: /api, save: r}\n"
+            "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
+        result = _call(scenario_tools, "check_dag",
+                       {"include_drafts": True, "focus": "FOCUS-TEST-001"})
+        data = json.loads(result[0].text)
+        assert data["focus"]["upstream_chain"] == ["IS-PREP-002"]
+        assert data["focus"]["dep_status"][0]["status"] in ("match", "minor_drift")
+
+    def test_check_dag_dangling_dep(self, workspace):
+        """草稿悬空依赖 → orphans 报告（ok=False）。"""
+        from specstd.workspace import drafts_dir
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "ORPH-001.yaml").write_text(
+            "id: ORPH-001\ntitle: 孤儿\ndepends_on: [NOPE-999]\n"
+            "flow:\n  - call: {method: GET, path: /api, save: r}\n"
+            "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
+        result = _call(scenario_tools, "check_dag", {"include_drafts": True})
+        data = json.loads(result[0].text)
+        assert not data["ok"]
+        assert "ORPH-001" in data["orphans"]
+        assert data["orphans"]["ORPH-001"] == ["NOPE-999"]
+
+    def test_run_scenario_param_guard(self):
+        """run_scenario 参数守卫：scenario_id 与 draft 必须二选一（离线快速失败）。"""
+        r1 = _call(scenario_tools, "run_scenario", {})
+        assert "二选一" in r1[0].text
+        r2 = _call(scenario_tools, "run_scenario",
+                   {"scenario_id": "X-001", "draft": "Y.yaml"})
+        assert "二选一" in r2[0].text
 
 
 # ══════════════════════════════════════════════════════════
@@ -243,6 +351,29 @@ verify:
         assert len(cover_errors) > 0, "编造的 FR 应报 COVER 错误"
         assert any("FR-099" in f["message"] for f in cover_errors)
 
+    def test_validate_missing_covers_warns(self, workspace):
+        """K-020：doc.covers 缺失必须 WARN（此前零告警——Agent 在 ANCHOR 误报后
+        学会「删 covers 就能过」，批量产生 30 份无锚点草稿，FR 溯源断裂）。"""
+        yaml_content = """id: TEST-VAL-005
+version: 0.1
+title: 无covers场景
+doc:
+  given: g
+  when: w
+  then: t
+flow:
+  - call: {method: GET, path: /api/test, save: resp}
+verify:
+  - status: {eq: 200}
+"""
+        result = _call(validator, "validate", {"content": yaml_content})
+        data = json.loads(result[0].text)
+        cover_warns = [f for f in data["findings"] if f["rule"] == "COVERS" and f["level"] == "WARN"]
+        assert len(cover_warns) > 0, "缺失 covers 应报 WARN"
+        assert any("强制" in f["message"] or "锚点" in f["message"] for f in cover_warns)
+        # WARN 不阻断（verdict 由 ERROR 决定）
+        assert data["summary"]["error"] == 0
+
     def test_validate_empty_flow_verify(self, workspace):
         yaml_content = """id: TEST-VAL-003
 version: 0.1
@@ -272,3 +403,66 @@ verify: []
         result = _call(validator, "validate", {"content": "id: BAD\n  bad: [unclosed"})
         data = json.loads(result[0].text)
         assert data["verdict"] == "ERROR"
+
+    # ── K-021②：T4/T5/T7 依赖连通性（此前 Agent 的 validate 不查 depends_on）──
+
+    _DEP_YAML = """id: TEST-DEP-001
+version: 0.1
+title: 依赖测试
+doc:
+  covers: [FR-001]
+depends_on: %s
+flow:
+  - call: {method: GET, path: /api/test, save: resp}
+verify:
+  - status: {eq: 200}
+"""
+
+    def test_validate_t4_dangling_dep(self, workspace, monkeypatch):
+        """depends_on 悬空引用 → T4 ERROR（此前不查，到发布门禁才炸）。"""
+        monkeypatch.setattr(validator, "_scenario_index", lambda: {})
+        result = _call(validator, "validate",
+                       {"content": self._DEP_YAML % "[NOPE-999]"})
+        data = json.loads(result[0].text)
+        t4 = [f for f in data["findings"] if f["rule"] == "T4" and f["level"] == "ERROR"]
+        assert t4 and "NOPE-999" in t4[0]["message"]
+        assert data["verdict"] == "REJECT"
+
+    def test_validate_t4_draft_dep_ok(self, workspace, monkeypatch):
+        """依赖 drafts/ 同批次草稿（生成期合法）→ 无 T4 ERROR。"""
+        monkeypatch.setattr(validator, "_scenario_index", lambda: {
+            "TL-PREP-001": {"version": "0.1", "source": "draft:TL-PREP-001.yaml"}})
+        result = _call(validator, "validate",
+                       {"content": self._DEP_YAML % "[{id: TL-PREP-001, version: ^0}]"})
+        data = json.loads(result[0].text)
+        t4_err = [f for f in data["findings"] if f["rule"] == "T4" and f["level"] == "ERROR"]
+        assert not t4_err, f"草稿依赖不应误报: {t4_err}"
+
+    def test_validate_t4_version_drift(self, workspace, monkeypatch):
+        """版本期望不可满足（^1 vs 实际 0.1）→ T4 ERROR。"""
+        monkeypatch.setattr(validator, "_scenario_index", lambda: {
+            "TL-PREP-001": {"version": "0.1", "source": "scenarios"}})
+        result = _call(validator, "validate",
+                       {"content": self._DEP_YAML % "[{id: TL-PREP-001, version: ^1}]"})
+        data = json.loads(result[0].text)
+        t4 = [f for f in data["findings"] if f["rule"] == "T4" and f["level"] == "ERROR"]
+        assert t4 and "不可满足" in t4[0]["message"]
+
+    def test_validate_t7_string_dep_warns(self, workspace, monkeypatch):
+        """字符串形式依赖（未声明版本期望）→ T7 WARN 建议 ^X。"""
+        monkeypatch.setattr(validator, "_scenario_index", lambda: {
+            "TL-PREP-001": {"version": "0.1", "source": "scenarios"}})
+        result = _call(validator, "validate",
+                       {"content": self._DEP_YAML % "[TL-PREP-001]"})
+        data = json.loads(result[0].text)
+        t7 = [f for f in data["findings"] if f["rule"] == "T7" and f["level"] == "WARN"]
+        assert t7 and "^X" in t7[0]["message"]
+
+    def test_validate_t5_orphan_warns(self, workspace, monkeypatch):
+        """scenario 类型无依赖且非 prep → T5 WARN（孤例提示）。"""
+        monkeypatch.setattr(validator, "_scenario_index", lambda: {})
+        result = _call(validator, "validate",
+                       {"content": self._DEP_YAML % "[]"})
+        data = json.loads(result[0].text)
+        t5 = [f for f in data["findings"] if f["rule"] == "T5" and f["level"] == "WARN"]
+        assert t5, "无依赖 scenario 应报 T5 WARN"

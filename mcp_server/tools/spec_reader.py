@@ -1,27 +1,53 @@
-"""spec_reader — 读取当前工作区的 spec 文件。
+"""spec_reader — 读取当前工作区的 spec 文件 + SpecGuard 仓库内容（K-021 双根）。
 
 工具：
-  read_spec: 读取单个文件（只读，越界路径拒绝）
+  read_spec: 读取单个文件（只读，越界/敏感路径拒绝）
   list_spec_files: 列出文件树（含 delta 标记）
+
+K-021：Agent 能力设定为「能获取 SpecGuard 所有内容」——read_spec 双根解析：
+  - 默认相对工作区根（原行为不变），未命中时回退 SpecGuard 仓库根
+    （scenarios/ docs/ contracts_baseline.json release 报告等仅存在于仓库侧的内容）
+  - sg:// 前缀强制 SpecGuard 仓库根（消除双根同名歧义，如 AGENTS.md）
+  - 敏感路径拒读：.git / workbench/backend/data（用户 DB）/ agent/sessions（会话记录）/
+    node_modules / __pycache__ / .env*；二进制文件（xlsx/pdf/png/db 等）返回不可读提示
 """
 
 import json
+from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 from specstd.workspace import safe_resolve, get_active_workspace
 
+SG_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# K-021：SpecGuard 仓库侧的敏感/噪音目录（拒读）
+_SG_BLOCKED_PARTS = {".git", "node_modules", "__pycache__", ".pytest_cache"}
+_SG_BLOCKED_PREFIXES = (
+    "workbench/backend/data",  # 用户/会话 SQLite DB
+    "agent/sessions",          # 会话记录（含用户数据）
+)
+# 二进制扩展名（文本读取无意义，明确提示而非抛异常或输出乱码）
+_BINARY_EXTS = {".xlsx", ".xls", ".pdf", ".png", ".jpg", ".jpeg", ".gif",
+                ".db", ".sqlite", ".zip", ".jar", ".pyc"}
+# 文本读取上限（防超大文件撑爆上下文）
+_MAX_READ = 200 * 1024
+
 TOOLS = [
     Tool(
         name="read_spec",
-        description="读取当前激活工作区的 spec 文件（只读，越界路径拒绝）。"
-                    "可读 AGENTS.md、specs/**/*.md、specs/**/*.yaml、changes/**/* 等。",
+        description="读取文件内容（只读，越界/敏感路径拒绝）。"
+                    "默认相对当前激活工作区根（AGENTS.md、specs/**、changes/**、.specguard/** 等）；"
+                    "工作区未命中时自动回退 SpecGuard 仓库根（scenarios/**、docs/**、"
+                    "contracts_baseline.json、release 报告等）；"
+                    "sg:// 前缀强制 SpecGuard 仓库根（消除双根同名歧义）。",
         inputSchema={
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "相对工作区根的文件路径（如 AGENTS.md, specs/module1/feature1/spec.md）"
+                    "description": "相对工作区根的路径（如 specs/module1/feature1/spec.md），"
+                                   "或 sg:// 前缀的 SpecGuard 仓库路径（如 sg://scenarios/employee/person-profile/PP-RC-001.yaml）"
                 }
             },
             "required": ["path"]
@@ -53,20 +79,72 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     return []
 
 
+def _resolve_sg_root(path: str) -> Path | None:
+    """K-021：相对 SpecGuard 仓库根解析（越界/敏感路径返回 None）。"""
+    if not path or ".." in Path(path).parts:
+        return None
+    try:
+        resolved = (SG_ROOT / path).resolve()
+        resolved.relative_to(SG_ROOT)
+    except (ValueError, OSError):
+        return None
+    rel = str(resolved.relative_to(SG_ROOT)).replace("\\", "/")
+    parts = set(resolved.relative_to(SG_ROOT).parts)
+    if parts & _SG_BLOCKED_PARTS:
+        return None
+    if any(rel == bp or rel.startswith(bp + "/") for bp in _SG_BLOCKED_PREFIXES):
+        return None
+    if resolved.name.startswith(".env"):
+        return None
+    return resolved
+
+
+def _read_text_guarded(resolved: Path, display_path: str) -> list[TextContent]:
+    """带二进制/大小守卫的文本读取。"""
+    if resolved.suffix.lower() in _BINARY_EXTS:
+        return [TextContent(type="text", text=(
+            f"二进制文件不可文本读取: {display_path}（{resolved.suffix}）。"
+            f"如需其中信息，请让用户在对话中 @引用 或转换为文本格式"))]
+    raw = resolved.read_bytes()
+    truncated = len(raw) > _MAX_READ
+    if truncated:
+        raw = raw[:_MAX_READ]
+    content = raw.decode("utf-8", errors="replace")
+    if truncated:
+        content += f"\n\n[截断] 文件超过 {_MAX_READ // 1024}KB，仅显示前段"
+    return [TextContent(type="text", text=content)]
+
+
 def _handle_read_spec(arguments: dict) -> list[TextContent]:
     path = arguments.get("path", "")
     if not path:
         return [TextContent(type="text", text="错误：缺少 path 参数")]
 
+    # K-021：sg:// 前缀强制 SpecGuard 仓库根
+    if path.startswith("sg://"):
+        sg_path = path[len("sg://"):]
+        resolved = _resolve_sg_root(sg_path)
+        if resolved is None:
+            return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界或敏感目录: {path}")]
+        if not resolved.is_file():
+            return [TextContent(type="text", text=f"错误：文件不存在: {path}")]
+        return _read_text_guarded(resolved, path)
+
+    # 第一根：工作区（原行为）
     resolved = safe_resolve(path)
-    if resolved is None:
+    if resolved is not None and resolved.is_file():
+        return _read_text_guarded(resolved, path)
+
+    # 第二根：SpecGuard 仓库（K-021 回退——scenarios/docs/contracts 等仓库侧内容）
+    sg_resolved = _resolve_sg_root(path)
+    if sg_resolved is not None and sg_resolved.is_file():
+        return _read_text_guarded(sg_resolved, path)
+
+    if resolved is None and sg_resolved is None:
         return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界或工作区未激活: {path}")]
-
-    if not resolved.is_file():
-        return [TextContent(type="text", text=f"错误：文件不存在: {path}")]
-
-    content = resolved.read_text(encoding="utf-8")
-    return [TextContent(type="text", text=content)]
+    return [TextContent(type="text", text=(
+        f"错误：文件不存在: {path}（已查找工作区根与 SpecGuard 仓库根；"
+        f"仓库侧路径可用 sg:// 前缀明确指定）"))]
 
 
 def _handle_list_spec_files(arguments: dict) -> list[TextContent]:

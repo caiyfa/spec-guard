@@ -47,9 +47,15 @@ def _drafts_root() -> Path:
 
 
 def _scenarios_root() -> Path:
-    """获取场景库目录（工作区 scenarios/，无工作区回退 SG_ROOT/scenarios/）。"""
+    """场景库目录（工作区 scenarios/ 存在则用，否则回退 SpecGuard 仓库 scenarios/）。
+
+    K-016 修复：spec 工作区克隆通常没有 scenarios/（场景库在 SpecGuard 仓库根），
+    与 services.draft_promote._scenarios_root 同一策略。
+    """
     ws = get_workspace_root()
-    return (ws / "scenarios") if ws else (SG_ROOT / "scenarios")
+    if ws and (ws / "scenarios").is_dir():
+        return ws / "scenarios"
+    return SG_ROOT / "scenarios"
 
 
 def _trash_dir() -> Path:
@@ -71,7 +77,7 @@ def _guard_filename(filename: str) -> Path:
 
 
 def _guard_module(module: str) -> Path:
-    """校验入库模块目录（必须为 scenarios/ 下已存在的目录）。"""
+    """校验入库模块目录（必须在 scenarios/ 之内；K-017：不存在时自动创建）。"""
     if not module or ".." in module or module.startswith(("/", "\\")):
         raise HTTPException(status_code=400, detail=f"非法模块路径: {module}")
     scenarios_root = _scenarios_root()
@@ -81,7 +87,8 @@ def _guard_module(module: str) -> Path:
     except ValueError:
         raise HTTPException(status_code=400, detail=f"模块路径越界: {module}")
     if not target.is_dir():
-        raise HTTPException(status_code=404, detail=f"模块目录不存在: {module}")
+        # K-017：自动创建模块目录（而非报「模块目录不存在」）
+        target.mkdir(parents=True, exist_ok=True)
     return target
 
 

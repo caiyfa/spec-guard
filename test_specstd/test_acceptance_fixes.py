@@ -391,13 +391,21 @@ class TestD1DraftsGate:
             dr._guard_filename("evil.py")  # 非 YAML
         assert dr._guard_filename("PP-X-001.yaml").name == "PP-X-001.yaml"
 
-    def test_module_guard(self):
+    def test_module_guard(self, tmp_path, monkeypatch):
         from fastapi import HTTPException
         dr = self._import_drafts_router()
+        # K-017 后 _guard_module 会自动创建目录——必须隔离 scenarios_root，防污染真实仓库
+        fake_root = tmp_path / "scenarios"
+        (fake_root / "employee" / "person-profile").mkdir(parents=True)
+        monkeypatch.setattr(dr, "_scenarios_root", lambda: fake_root)
         with pytest.raises(HTTPException):
             dr._guard_module("../engine")
         with pytest.raises(HTTPException):
-            dr._guard_module("nonexistent-module-xyz")
+            dr._guard_module("/abs/path")
+        # K-017：不存在的模块目录自动创建（而非报错）
+        created = dr._guard_module("new-module/sub")
+        assert created.is_dir()
+        assert created == fake_root / "new-module" / "sub"
         assert dr._guard_module("employee/person-profile").is_dir()
 
     def test_promote_flow(self, tmp_path, monkeypatch):

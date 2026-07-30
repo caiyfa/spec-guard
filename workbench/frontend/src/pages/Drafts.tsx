@@ -11,6 +11,7 @@ export default function Drafts() {
   const [content, setContent] = useState<string>('');
   const [report, setReport] = useState<ValidateReport | null>(null);
   const [targetModule, setTargetModule] = useState<string>('');
+  const [customModule, setCustomModule] = useState('');  // K-017: 「新建模块…」手动输入
   const [busy, setBusy] = useState<'validate' | 'promote' | 'discard' | ''>('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState('');
@@ -57,12 +58,18 @@ export default function Drafts() {
   };
 
   const handlePromote = async () => {
-    if (!selected || !targetModule) return;
-    if (!window.confirm(`确认将 ${selected} 入库到 scenarios/${targetModule}/？\n将依次执行：格式校验 → 更新契约基线 → 发布门禁（失败自动回滚）`)) return;
+    if (!selected) return;
+    // K-017：模块目录后端自动创建；「新建模块…」选项时使用手动输入的路径
+    const effectiveModule = targetModule === '__new__' ? customModule.trim() : targetModule;
+    if (!effectiveModule) {
+      setMessage({ ok: false, text: '❌ 请选择入库模块，或选择「新建模块…」输入新模块路径' });
+      return;
+    }
+    if (!window.confirm(`确认将 ${selected} 入库到 scenarios/${effectiveModule}/？\n将依次执行：格式校验 → 更新契约基线 → 发布门禁（失败自动回滚）`)) return;
     setBusy('promote');
     setMessage(null);
     try {
-      const r = await draftsApi.promote(selected, targetModule);
+      const r = await draftsApi.promote(selected, effectiveModule);
       setMessage({ ok: true, text: `✅ 入库成功：${r.target}${r.gate?.skipped ? '（门禁已跳过）' : '（发布门禁 PASS）'}` });
       setSelected('');
       setContent('');
@@ -170,8 +177,18 @@ export default function Drafts() {
                 onChange={e => setTargetModule(e.target.value)}
                 className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300"
               >
+                {modules.length === 0 && <option value="">（无已有模块）</option>}
                 {modules.map(m => <option key={m} value={m}>{m}</option>)}
+                <option value="__new__">＋ 新建模块…</option>
               </select>
+              {targetModule === '__new__' && (
+                <input
+                  value={customModule}
+                  onChange={e => setCustomModule(e.target.value)}
+                  placeholder="新模块路径（如 system-settings/tag-library）"
+                  className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300 w-56"
+                />
+              )}
               <button
                 onClick={handlePromote}
                 disabled={busy !== '' || (report !== null && report.verdict !== 'PASS')}

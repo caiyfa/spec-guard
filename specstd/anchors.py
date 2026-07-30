@@ -15,7 +15,7 @@ from typing import Optional
 import yaml
 
 from specstd.schema import (
-    FR_HEADING_RE, FR_INLINE_RE, AC_RE,
+    FR_HEADING_RE, FR_LIST_RE, FR_INLINE_RE, AC_RE,
     DELTA_MARKER_RE, TASK_REF_RE,
     DELTA_SECTION_RE, DELTA_SECTIONS,
     SECTION_ADDED, SECTION_MODIFIED, SECTION_REMOVED,
@@ -33,22 +33,34 @@ from specstd.schema import (
 def parse_spec_md(path: Path) -> list[AnchorInfo]:
     """解析单个 spec.md，提取 FR 锚点和关联 AC。
 
-    FR 锚点格式：### FR-<id>:（如 ### FR-001: 查询人员档案）
+    FR 锚点格式（两种都识别，K-020）：
+    - 标题格式：### FR-<id>: 标题
+    - 列表定义格式：- **FR-<id>**：描述（真实工作区 spec 的合法写法，
+      如 tdm specs/system-settings/tag-library/spec.md——仅匹配行首列表项+
+      加粗+冒号的定义格式，正文内联引用 **FR-001** 不算锚点；
+      此前只认标题格式 → FR-004 误报「不存在」→ Agent 删 covers 绕过，溯源断裂）
     AC 锚点：AC-<number>（在 FR 锚点下方文本中）
     """
     text = path.read_text(encoding="utf-8")
     results: list[AnchorInfo] = []
 
-    # 找到所有 FR 锚点位置
-    fr_matches = list(FR_HEADING_RE.finditer(text))
-    for i, m in enumerate(fr_matches):
-        fr_id = m.group(1)
-        title = m.group(2).strip().rstrip("：：")
-        
+    # 合并两种格式的匹配，按出现位置排序；重复 FR 保留全部出现
+    # （唯一性冲突由 conformance.py 的 ANCHOR 规则检测，不在此判重）
+    raw = [(m.start(), m.end(), m.group(1), m.group(2))
+           for m in FR_HEADING_RE.finditer(text)]
+    raw += [(m.start(), m.end(), m.group(1), m.group(2))
+            for m in FR_LIST_RE.finditer(text)]
+    raw.sort(key=lambda x: x[0])
+    fr_matches = raw
+
+    for i, (start, end, fr_id, title_raw) in enumerate(fr_matches):
+        title = title_raw.strip().rstrip("：：")
+
         # 截取到下一个 FR 锚点之前的文本，提取 AC
-        chunk_start = m.end()
-        chunk_end = fr_matches[i + 1].start() if i + 1 < len(fr_matches) else len(text)
-        chunk = text[chunk_start:chunk_end]
+        # （列表格式的定义行本身常含 AC，需并入扫描——该行已被正则整体消费）
+        chunk_start = end
+        chunk_end = fr_matches[i + 1][0] if i + 1 < len(fr_matches) else len(text)
+        chunk = title_raw + "\n" + text[chunk_start:chunk_end]
         ac_ids = sorted(set(AC_RE.findall(chunk)))
 
         # 从路径推断 module/feature
@@ -115,10 +127,16 @@ def resolve_covers(covers: list[str], anchors: dict[str, AnchorInfo]) -> list[Fi
         if fr_id not in anchors:
             # 尝试提供 hint：找最接近的 FR ID
             hint = _suggest_similar(fr_id, list(anchors.keys()))
+            # K-020：附行为指引——Agent 曾在此误报后删除 covers 绕过校验（溯源断裂）。
+            # 真实工作区存在列表定义格式（- **FR-xxx**：），已兼容；仍误报时必须上报而非绕过
             findings.append(Finding(
                 rule=RuleName.ANCHOR.value,
                 level=RuleLevel.ERROR.value,
-                message=f"covers 引用的 FR '{fr_id}' 在当前工作区的 spec.md 中不存在",
+                message=(f"covers 引用的 FR '{fr_id}' 在当前工作区的 spec.md 中不存在。"
+                         f"请先用 read_spec 核实该 FR 是否真实存在（支持的锚点格式："
+                         f"### FR-xxx: 标题 或 - **FR-xxx**： 列表定义）；"
+                         f"若确认存在却仍报此错，属于校验器误报——禁止删除 covers 绕过，"
+                         f"必须向用户报告并等待指示"),
                 detail={"hint": hint} if hint else {},
             ))
     return findings

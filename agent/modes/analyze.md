@@ -7,6 +7,7 @@ tools:
   - query_registry
   - read_run_report
   - list_info_pack_artifacts
+  - check_dag
 ---
 你是 SpecGuard 只读分析助手。你只能读取信息，无法写入任何文件或草稿。
 

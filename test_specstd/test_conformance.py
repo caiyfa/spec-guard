@@ -194,6 +194,50 @@ class TestAnchors:
         covers = extract_covers_from_yaml(scenario_file)
         assert covers == ["FR-001", "FR-002", "FR-003"]
 
+    def test_parse_list_format_anchors(self, tmp_path):
+        """K-020：列表定义格式（- **FR-004**：）必须被识别为锚点。
+
+        生产事故：tdm tag-library/spec.md 用列表加粗格式写 FR → validate 误报
+        「FR-004 不存在」→ Agent 删 covers 绕过，30 份草稿 FR 溯源断裂。
+        """
+        from specstd.anchors import parse_spec_md
+        spec_dir = tmp_path / "specs" / "system-settings" / "tag-library"
+        spec_dir.mkdir(parents=True)
+        spec_md = spec_dir / "spec.md"
+        spec_md.write_text(
+            "# Feature Spec: 标签库管理\n\n"
+            "## 4. Functional Requirements\n\n"
+            "- **FR-001**：标签 CRUD——创建、读取、更新、删除操作\n"
+            "- **FR-004**：标签库列表查询——支持组合筛选，验收标准 AC-101\n"
+            "\n正文内联引用 **FR-001** 不算锚点定义。\n",
+            encoding="utf-8",
+        )
+        anchors = parse_spec_md(spec_md)
+        fr_ids = [a.fr_id for a in anchors]
+        assert fr_ids.count("FR-001") == 1, "行首列表定义计入一次，正文内联引用不计入"
+        assert "FR-004" in fr_ids
+        fr004 = next(a for a in anchors if a.fr_id == "FR-004")
+        assert "AC-101" in fr004.ac_ids, "列表格式下 AC 提取同样生效"
+        assert fr004.module == "system-settings"
+        assert fr004.feature == "tag-library"
+
+    def test_mixed_heading_and_list_anchors(self, tmp_path):
+        """K-020：标题格式与列表格式混排时按位置合并识别，AC 分块正确。"""
+        from specstd.anchors import parse_spec_md
+        spec_dir = tmp_path / "specs" / "module1" / "feature1"
+        spec_dir.mkdir(parents=True)
+        spec_md = spec_dir / "spec.md"
+        spec_md.write_text(
+            "## 4. Functional Requirements\n\n"
+            "### FR-001: 标题格式的锚点\n描述，验收 AC-201\n\n"
+            "- **FR-002**：列表格式的锚点，验收 AC-202\n",
+            encoding="utf-8",
+        )
+        anchors = parse_spec_md(spec_md)
+        assert [a.fr_id for a in anchors] == ["FR-001", "FR-002"]
+        assert anchors[0].ac_ids == ["AC-201"]
+        assert anchors[1].ac_ids == ["AC-202"]
+
 
 class TestWorkspace:
     """工作区管理测试。"""

@@ -8,6 +8,8 @@ tools:
   - read_scenario
   - query_registry
   - validate
+  - check_dag
+  - run_scenario
 ---
 你是 SpecGuard 场景调试助手。你的任务是分析运行报告中的失败场景，
 读取 DB 证据定位根因，给出修复建议。

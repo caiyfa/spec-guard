@@ -216,10 +216,13 @@ class TestPromote:
     def _setup(self, ws, monkeypatch, verdict="PASS"):
         from services import draft_promote as dp
         monkeypatch.setattr(dp, "_rebuild_baseline", lambda: None)
+        # 关键隔离：ws(spec 仓库样例)无 scenarios/，K-016 回退会落到真实仓库根——
+        # 必须钉到 tmp，防止测试产物写入真实 scenarios/（本测试类曾因此互相 conflict）
+        monkeypatch.setattr(dp, "_scenarios_root", lambda: ws / "scenarios")
         import mcp_server.tools.validator as v
         monkeypatch.setattr(v, "validate_scenario_content",
                             lambda content: {"verdict": verdict, "scenario": "TL-001", "findings": []})
-        (ws / "scenarios" / "module1").mkdir(parents=True, exist_ok=True)
+        # K-017：不预建模块目录——promote 应自动创建
         from specstd.workspace import drafts_dir
         d = drafts_dir()
         d.mkdir(parents=True, exist_ok=True)
@@ -233,9 +236,44 @@ class TestPromote:
         assert (ws / "scenarios" / "module1" / "TL-001.yaml").is_file()
         assert not (d / "TL-001.yaml").exists()
 
+    def test_promote_auto_creates_module_dir(self, ws, monkeypatch):
+        """K-017：模块目录不存在时自动创建（含多级路径），不报错。"""
+        dp, d = self._setup(ws, monkeypatch)
+        (d / "TL-003.yaml").write_text("id: TL-003\n", encoding="utf-8")
+        r = dp.promote("TL-003.yaml", "system-settings/tag-library", skip_gate=True)
+        assert r["ok"]
+        assert (ws / "scenarios" / "system-settings" / "tag-library" / "TL-003.yaml").is_file()
+
+    def test_promote_sg_root_fallback_no_value_error(self, ws, monkeypatch, tmp_path):
+        """K-019：scenarios 根回退 SG_ROOT 侧（工作区外）时，return 不得抛 ValueError。
+
+        生产事故：promote 实际成功（文件已移动+基线已重建+门禁已通过），
+        return 语句 target.relative_to(工作区根) 抛「not in the subpath of」，
+        工具误报失败，Agent 据此放弃剩余 6 份入库（用户会话导出佐证）。
+        """
+        from services import draft_promote as dp
+        monkeypatch.setattr(dp, "_rebuild_baseline", lambda: None)
+        # 模拟 K-016 回退：scenarios 根在工作区之外（SG_ROOT 侧）
+        sg_repo = tmp_path / "sg_repo"
+        monkeypatch.setattr(dp, "_scenarios_root", lambda: sg_repo / "scenarios")
+        monkeypatch.setattr(dp, "SG_ROOT", sg_repo)
+        import mcp_server.tools.validator as v
+        monkeypatch.setattr(v, "validate_scenario_content",
+                            lambda content: {"verdict": "PASS", "scenario": "TL-009", "findings": []})
+        from specstd.workspace import drafts_dir
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "TL-009.yaml").write_text("id: TL-009\n", encoding="utf-8")
+        r = dp.promote("TL-009.yaml", "system-settings/tag-library", skip_gate=True)
+        assert r["ok"] and r["scenario_id"] == "TL-009"
+        assert r["target"] == "scenarios/system-settings/tag-library/TL-009.yaml"
+        assert (sg_repo / "scenarios" / "system-settings" / "tag-library" / "TL-009.yaml").is_file()
+        assert not (d / "TL-009.yaml").exists()
+
     def test_promote_conflict(self, ws, monkeypatch):
         dp, d = self._setup(ws, monkeypatch)
         (d / "TL-001.yaml").write_text("id: TL-001\n", encoding="utf-8")
+        (ws / "scenarios" / "module1").mkdir(parents=True, exist_ok=True)
         (ws / "scenarios" / "module1" / "TL-001.yaml").write_text("existing", encoding="utf-8")
         with pytest.raises(dp.PromoteError) as ei:
             dp.promote("TL-001.yaml", "module1", skip_gate=True)
@@ -254,6 +292,99 @@ class TestPromote:
             dp.promote("TL-002.yaml", "module1", skip_gate=True)
         assert ei.value.code == "validation_failed"
         assert (d / "TL-002.yaml").is_file()  # 格式闸拒绝，草稿未移动
+
+
+class TestPromoteBatch:
+    """K-021⑥：批量入库（一次基线重建 + 一次门禁；不合格单份跳过；失败整批回滚）。"""
+
+    def _setup(self, ws, monkeypatch, verdict="PASS"):
+        from services import draft_promote as dp
+        calls = {"rebuild": 0, "gate": 0}
+        monkeypatch.setattr(dp, "_rebuild_baseline",
+                            lambda: calls.__setitem__("rebuild", calls["rebuild"] + 1))
+        # 关键隔离：钉到 tmp，防测试产物写入真实 scenarios/（同 TestPromote 教训）
+        monkeypatch.setattr(dp, "_scenarios_root", lambda: ws / "scenarios")
+        import mcp_server.tools.validator as v
+        monkeypatch.setattr(v, "validate_scenario_content",
+                            lambda content: {"verdict": verdict, "scenario": "TL-B", "findings": []})
+        from specstd.workspace import drafts_dir
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        return dp, d, calls
+
+    def test_batch_success_baseline_once(self, ws, monkeypatch):
+        """两份草稿一次入库：基线只重建一次（逐份 promote 会跑 N 次）。"""
+        dp, d, calls = self._setup(ws, monkeypatch)
+        (d / "TL-B1.yaml").write_text("id: TL-B1\n", encoding="utf-8")
+        (d / "TL-B2.yaml").write_text("id: TL-B2\n", encoding="utf-8")
+        r = dp.promote_batch(["TL-B1.yaml", "TL-B2.yaml"], "module1", skip_gate=True)
+        assert r["ok"] and len(r["promoted"]) == 2 and not r["skipped"]
+        assert calls["rebuild"] == 1
+        assert (ws / "scenarios" / "module1" / "TL-B1.yaml").is_file()
+        assert (ws / "scenarios" / "module1" / "TL-B2.yaml").is_file()
+        assert not (d / "TL-B1.yaml").exists() and not (d / "TL-B2.yaml").exists()
+
+    def test_batch_default_all_drafts(self, ws, monkeypatch):
+        """filenames 省略 → drafts/ 全部 YAML。"""
+        dp, d, _ = self._setup(ws, monkeypatch)
+        (d / "TL-B1.yaml").write_text("id: TL-B1\n", encoding="utf-8")
+        (d / "TL-B2.yaml").write_text("id: TL-B2\n", encoding="utf-8")
+        r = dp.promote_batch(None, "module1", skip_gate=True)
+        assert r["ok"] and len(r["promoted"]) == 2
+
+    def test_batch_partial_skip(self, ws, monkeypatch):
+        """不合格单份跳过（不拖垮整批）：1 份校验失败 + 1 份正常 → 1 入库 1 跳过。"""
+        dp, d, _ = self._setup(ws, monkeypatch)
+        import mcp_server.tools.validator as v
+        monkeypatch.setattr(v, "validate_scenario_content", lambda content: (
+            {"verdict": "PASS", "scenario": "TL-GOOD", "findings": []}
+            if "GOOD" in content else
+            {"verdict": "REJECT", "scenario": "TL-BAD",
+             "findings": [{"level": "ERROR", "rule": "T1", "message": "bad"}]}))
+        (d / "TL-GOOD.yaml").write_text("id: TL-GOOD\n", encoding="utf-8")
+        (d / "TL-BAD.yaml").write_text("id: TL-BAD\n", encoding="utf-8")
+        r = dp.promote_batch(None, "module1", skip_gate=True)
+        assert r["ok"] and len(r["promoted"]) == 1 and len(r["skipped"]) == 1
+        assert r["skipped"][0]["file"] == "TL-BAD.yaml"
+        assert (ws / "scenarios" / "module1" / "TL-GOOD.yaml").is_file()
+        assert (d / "TL-BAD.yaml").is_file()  # 不合格草稿留在 drafts
+
+    def test_batch_gate_failure_rollback(self, ws, monkeypatch):
+        """门禁失败整批回滚：文件回 drafts/，无半截入库。"""
+        dp, d, _ = self._setup(ws, monkeypatch)
+        monkeypatch.setattr(dp, "_run_release_gate",
+                            lambda: {"ok": False, "output": "gate boom", "skipped": False})
+        (d / "TL-B1.yaml").write_text("id: TL-B1\n", encoding="utf-8")
+        (d / "TL-B2.yaml").write_text("id: TL-B2\n", encoding="utf-8")
+        with pytest.raises(dp.PromoteError) as ei:
+            dp.promote_batch(None, "module1", skip_gate=False)
+        assert ei.value.code == "gate_failed"
+        assert (d / "TL-B1.yaml").is_file() and (d / "TL-B2.yaml").is_file()
+        assert not (ws / "scenarios" / "module1" / "TL-B1.yaml").exists()
+
+    def test_batch_none_qualified(self, ws, monkeypatch):
+        """全部不合格 → ok=False 且不动任何文件。"""
+        dp, d, _ = self._setup(ws, monkeypatch, verdict="REJECT")
+        (d / "TL-B1.yaml").write_text("id: TL-B1\n", encoding="utf-8")
+        r = dp.promote_batch(None, "module1", skip_gate=True)
+        assert not r["ok"] and len(r["skipped"]) == 1
+        assert (d / "TL-B1.yaml").is_file()
+
+
+class TestScenariosRootFallback:
+    """K-016：场景库根回退（spec 工作区无 scenarios/ 时回退 SpecGuard 仓库根）。
+
+    生产佐证：草稿评审页 modules 为空 → 入库按钮静默无反应。
+    """
+
+    def test_workspace_without_scenarios_falls_back(self, ws):
+        from services import draft_promote as dp
+        assert dp._scenarios_root() == dp.SG_ROOT / "scenarios"
+
+    def test_workspace_with_scenarios_preferred(self, ws):
+        from services import draft_promote as dp
+        (ws / "scenarios").mkdir()
+        assert dp._scenarios_root() == ws / "scenarios"
 
 
 class TestGitDiscovery:

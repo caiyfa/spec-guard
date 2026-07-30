@@ -57,6 +57,11 @@ DELTA_OPTIONAL_FILES = [FILE_API_DELTA_YAML]
 # FR 锚点标题：### FR-001: 或 ### FR-SEC-001:（支持字母数字下划线 ID）
 FR_HEADING_RE = re.compile(r"^###\s+(FR-[\w-]+)\s*[:：]\s*(.*)$", re.MULTILINE)
 
+# FR 列表定义：- **FR-001**：描述（K-020：真实工作区 spec 的合法写法——
+# tdm specs/system-settings/tag-library/spec.md 等用列表加粗而非三级标题；
+# 仅匹配「行首列表项 + 加粗 FR + 冒号」的定义格式，正文内联引用 **FR-001** 不算锚点）
+FR_LIST_RE = re.compile(r"^\s*[-*]\s+\*\*(FR-[\w-]+)\*\*\s*[:：]\s*(.*)$", re.MULTILINE)
+
 # FR 内联引用：**FR-001**（在文本中引用其他 FR）
 FR_INLINE_RE = re.compile(r"\*\*(FR-[\w-]+)\*\*")
 

@@ -126,6 +126,25 @@ TOOLS = [
             "required": ["filename", "module"]
         }
     ),
+    Tool(
+        name="promote_drafts",
+        description="批量草稿入库（多份一键入库，K-021⑥）：逐份格式校验（不合格单份跳过并给出原因）"
+                    "→ 合格批次整批移入 scenarios/{module}/ → 一次契约基线更新 → 一次发布门禁"
+                    "（失败整批回滚）。多份草稿入库必须用它（逐份 promote_draft 会重复跑全量门禁）；"
+                    "仅在用户明确确认入库后调用。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "filenames": {"type": "array", "items": {"type": "string"},
+                               "description": "要入库的草稿文件名清单（省略 = drafts/ 全部 YAML 草稿）"},
+                "module": {"type": "string",
+                            "description": "目标模块目录（相对 scenarios/，如 system-settings/tag-library）"},
+                "skip_gate": {"type": "boolean",
+                               "description": "跳过发布门禁（仅调试用途，默认 false）", "default": False}
+            },
+            "required": ["module"]
+        }
+    ),
 ]
 
 
@@ -136,7 +155,37 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_undo_draft(arguments)
     elif name == "promote_draft":
         return _handle_promote_draft(arguments)
+    elif name == "promote_drafts":
+        return _handle_promote_drafts(arguments)
     return []
+
+
+def _handle_promote_drafts(arguments: dict) -> list[TextContent]:
+    """K-021⑥：批量入库（与 promote_draft 同一服务层）。"""
+    filenames = arguments.get("filenames") or None
+    module = arguments.get("module", "")
+    skip_gate = bool(arguments.get("skip_gate", False))
+    if not module:
+        return [TextContent(type="text", text="错误：缺少 module 参数")]
+    if filenames is not None and not isinstance(filenames, list):
+        return [TextContent(type="text", text="错误：filenames 必须是数组")]
+
+    try:
+        from services import draft_promote
+        try:
+            from services.auth import current_emp_no
+            emp_no = current_emp_no()
+        except Exception:
+            emp_no = ""
+        result = draft_promote.promote_batch(filenames, module,
+                                             skip_gate=skip_gate, emp_no=emp_no)
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+    except Exception as e:
+        code = getattr(e, "code", "error")
+        detail = getattr(e, "detail", None)
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error_code": code, "error": str(e), **(detail or {}),
+        }, ensure_ascii=False, indent=2))]
 
 
 def _handle_promote_draft(arguments: dict) -> list[TextContent]:
