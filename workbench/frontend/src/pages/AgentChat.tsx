@@ -253,6 +253,7 @@ const DEFAULT_PLANS: Record<string, string[]> = {
   chat: [],
 };
 
+// 工具名 → 待办步骤序号映射（供 groupMessages 把工具调用归到对应步骤展示）
 const TOOL_TO_STEP: Record<string, number> = {
   read_info_pack: 0, read_spec: 0, list_spec_files: 0,
   query_registry: 1,
@@ -265,18 +266,6 @@ const TOOL_TO_STEP: Record<string, number> = {
   read_run_report: 0,
   db_evidence: 3,
 };
-
-// ── 根据已完成的工具调用推断计划进度 ──
-function inferPlanProgress(plan: string[], tools: ToolItem[]): number {
-  let maxStep = -1;
-  for (const t of tools) {
-    const step = TOOL_TO_STEP[t.name];
-    if (step !== undefined && t.result) {
-      maxStep = Math.max(maxStep, step);
-    }
-  }
-  return maxStep;
-}
 
 // ── 将扁平消息列表分组（按待办步骤关联 + 完成提示） ──
 function groupMessages(messages: ChatMessage[]): GroupedItem[] {
@@ -352,7 +341,7 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
 }
 
 // ── 单个工具调用块（可折叠） ──
-function ToolCallBlock({ tool, idx }: { tool: ToolItem; idx: number }) {
+function ToolCallBlock({ tool }: { tool: ToolItem }) {
   const [expanded, setExpanded] = useState(false);
   const hasResult = tool.result !== undefined;
   const resultPreview = hasResult ? tool.result!.substring(0, 100) : '';
@@ -434,7 +423,7 @@ function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLabel?: s
             <div className="text-xs text-gray-400 px-1 py-0.5">{tools[0].assistantText}</div>
           )}
           {tools.map((tool, ti) => (
-            <ToolCallBlock key={ti} tool={tool} idx={ti} />
+            <ToolCallBlock key={ti} tool={tool} />
           ))}
         </div>
       )}
@@ -683,9 +672,6 @@ export default function AgentChat() {
         setTurnInfo('');
         setLoading(false);
         setSessionsVersion(v => v + 1);
-        // 待办完成状态依赖 inferPlanProgress 从工具调用推断：
-        // write_draft (step 6) 被调用且有结果 → 所有步骤自动 ✅
-        // LLM 暂停等待用户输入时不会误标完成
         break;
       case 'mode_switch':
         // H-2: 处理模式自动切换事件

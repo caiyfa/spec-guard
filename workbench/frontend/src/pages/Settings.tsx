@@ -69,7 +69,7 @@ export default function Settings() {
         {tab === 'db' && <DbTab raw={raw} setRaw={setRaw} />}
         {tab === 'models' && <ModelsTab />}
         {tab === 'yaml' && <YamlTab raw={raw} setRaw={setRaw} loading={loading} />}
-        {tab === 'sso' && <SsoTab raw={raw} setRaw={setRaw} />}
+        {tab === 'sso' && <SsoTab raw={raw} />}
         {tab === 'audit' && <AuditTab />}
       </div>
     </div>
@@ -216,7 +216,7 @@ function ModelsTab() {
   const handleSetDefault = async () => {
     if (!selectedId) return;
     try {
-      const m = await modelApi.setDefault(selectedId);
+      await modelApi.setDefault(selectedId);
       setModels(prev => prev.map(x => ({ ...x, is_default: x.id === selectedId })));
       setMsg('✓ 已设为默认');
     } catch (e: any) { setMsg(`✗ ${e.message}`); }
@@ -358,7 +358,7 @@ function _toForm(m: ModelConfig) {
 // ══════════════════════════════════════════════════════════
 
 function YamlTab({ raw, setRaw, loading }: { raw: string; setRaw: (v: string) => void; loading: boolean }) {
-  const insertTemplate = (template: string) => setRaw((prev as string) + '\n' + template);
+  const insertTemplate = (template: string) => setRaw(raw + '\n' + template);
 
   return (
     <div className="flex gap-3 h-full">
@@ -396,13 +396,10 @@ function YamlTab({ raw, setRaw, loading }: { raw: string; setRaw: (v: string) =>
 // Tab 4: SSO / 网关
 // ══════════════════════════════════════════════════════════
 
-function SsoTab({ raw, setRaw }: { raw: string; setRaw: (v: string) => void }) {
+function SsoTab({ raw }: { raw: string }) {
   const [ssoForm, setSsoForm] = useState({ domain: '', app_id: '', tdm_base: '', hr_center_base: '', oss_base: '', default_resource_code: '' });
 
   useEffect(() => {
-    try {
-      const parsed = raw ? JSON.parse(raw) : {}; // 简单解析（实际用 js-yaml 更好）
-    } catch { /* YAML 不是 JSON */ }
     referenceApi.envConfig().then((r) => {
       const p = r.parsed as Record<string, any>;
       setSsoForm({

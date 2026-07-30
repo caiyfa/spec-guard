@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { schedulesApi } from '../api';
 import type { ScheduledJob } from '../api';
-import { session } from '../api';
 
 const CRON_PRESETS: { label: string; value: string }[] = [
   { label: '每小时', value: '0 * * * *' },
