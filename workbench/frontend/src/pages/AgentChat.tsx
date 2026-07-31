@@ -91,7 +91,6 @@ interface ToolItem {
   name: string;
   args: string;
   result?: string;
-  assistantText?: string;
 }
 interface GroupedItem {
   type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete';
@@ -99,6 +98,7 @@ interface GroupedItem {
   tools?: ToolItem[];
   stepLabel?: string;   // 关联的待办步骤名称
   stepIdx?: number;    // 步骤索引
+  thought?: boolean;    // K-024: 工具调用前的思考文本（轻量样式，常驻可见）
   references?: ChatReference[];  // K-013: user 消息携带的 @引用
 }
 
@@ -276,6 +276,14 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
       groups.push({ type: 'user', content: msg.content, references: msg.references });
     } else if (msg.role === 'assistant') {
       if (msg.tool_calls && msg.tool_calls.length > 0) {
+        const cleanContent = msg.content ? stripPlan(msg.content) : '';
+        // K-024：思考文本提升为独立可见气泡——此前塞进 tools[0].assistantText 藏进
+        // 折叠的工具组（工具跑完用户只剩一行「7/7 工具」，完全看不到为什么调用；
+        // 生产会话取证：100 轮带思考文本的工具调用全部不可见）
+        if (cleanContent) {
+          flushToolGroup();  // 保证时序：上一工具组 → 思考 → 新工具组
+          groups.push({ type: 'assistant-text', content: cleanContent, thought: true });
+        }
         // 根据第一个工具名推断步骤
         const firstName = msg.tool_calls[0].function.name;
         const stepIdx = TOOL_TO_STEP[firstName];
@@ -290,12 +298,10 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
           currentToolGroup.stepIdx = stepIdx;
           currentToolGroup.stepLabel = DEFAULT_PLANS[stepIdx];
         }
-        const cleanContent = msg.content ? stripPlan(msg.content) : '';
         for (let i = 0; i < msg.tool_calls.length; i++) {
           currentToolGroup.tools!.push({
             name: msg.tool_calls[i].function.name,
             args: msg.tool_calls[i].function.arguments,
-            assistantText: i === 0 && cleanContent ? cleanContent : undefined,
           });
         }
       } else {
@@ -318,6 +324,97 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
   }
   flushToolGroup();
   return groups;
+}
+
+// ── K-024：工具参数/结果的友好渲染 ──
+function tryParseJson(text: string): any {
+  try { return JSON.parse(text); } catch { return undefined; }
+}
+
+/** 长文本截断 + 展开/收起 */
+function TruncText({ text, limit = 120, className = 'text-gray-400' }: { text: string; limit?: number; className?: string }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= limit) return <span className={`${className} break-all`}>{text}</span>;
+  return (
+    <span className={`${className} break-all`}>
+      {open ? text : text.slice(0, limit) + '…'}
+      <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }} className="text-info/80 hover:text-info ml-1">
+        {open ? '收起' : '展开'}
+      </button>
+    </span>
+  );
+}
+
+/** 单个值渲染（标量/对象自适应） */
+function SmartValue({ value }: { value: any }) {
+  if (value === null || value === undefined) return <span className="text-gray-600">null</span>;
+  if (typeof value === 'boolean') return <span className={value ? 'text-green-400' : 'text-red-400'}>{String(value)}</span>;
+  if (typeof value === 'number') return <span className="text-yellow-300/80">{String(value)}</span>;
+  if (typeof value === 'object') return <TruncText text={JSON.stringify(value, null, 0)} limit={150} />;
+  return <TruncText text={String(value)} />;
+}
+
+/** JSON 对象 → 键值行；非 JSON → 原文截断 */
+function KeyValueView({ text }: { text: string }) {
+  const parsed = tryParseJson(text);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const entries = Object.entries(parsed);
+    if (entries.length === 0) return <span className="text-gray-600">{'{}'}</span>;
+    return (
+      <div className="space-y-0.5">
+        {entries.map(([k, v]) => (
+          <div key={k} className="flex gap-1.5 items-start">
+            <span className="text-info/70 flex-shrink-0">{k}:</span>
+            <SmartValue value={v} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (Array.isArray(parsed)) {
+    return (
+      <div className="space-y-0.5">
+        <div className="text-gray-500">数组 · 共 {parsed.length} 项</div>
+        {parsed.slice(0, 3).map((item, i) => (
+          <div key={i} className="text-gray-500 truncate">{JSON.stringify(item)?.slice(0, 120)}</div>
+        ))}
+        {parsed.length > 3 && <div className="text-gray-600">…</div>}
+      </div>
+    );
+  }
+  return <TruncText text={text} limit={300} />;
+}
+
+/** 结果渲染：validate 报告特渲（verdict + findings），其余走键值/文本 */
+function ResultView({ result }: { result: string }) {
+  const parsed = tryParseJson(result);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'verdict' in parsed) {
+    const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className={parsed.verdict === 'PASS' ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
+            {parsed.verdict}
+          </span>
+          {parsed.scenario && <span className="text-gray-500">{parsed.scenario}</span>}
+          {parsed.summary && (
+            <span className="text-gray-600">error {parsed.summary.error ?? 0} / warn {parsed.summary.warn ?? 0}</span>
+          )}
+        </div>
+        {findings.length > 0 && (
+          <div className="space-y-0.5">
+            {findings.slice(0, 5).map((f: any, i: number) => (
+              <div key={i} className={f.level === 'ERROR' ? 'text-red-400' : 'text-gray-500'}>
+                [{f.level}·{f.rule}] <TruncText text={String(f.message ?? '')} limit={150} />
+              </div>
+            ))}
+            {findings.length > 5 && <div className="text-gray-600">…共 {findings.length} 条</div>}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return <KeyValueView text={result} />;
 }
 
 // ── 单个工具调用块（可折叠） ──
@@ -344,20 +441,21 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         )}
         {!hasResult && <span className="text-yellow-500/50 animate-pulse">⏳</span>}
       </button>
-      {/* 展开内容 */}
+      {/* 展开内容（K-024：键值化友好渲染，不再直接甩原始 JSON） */}
       {expanded && (
-        <div className="px-2 pb-2 space-y-1">
-          {tool.assistantText && (
-            <div className="text-gray-300 text-xs mb-1">{tool.assistantText}</div>
-          )}
+        <div className="px-2 pb-2 space-y-1.5">
           <div>
             <div className="text-gray-600 text-[10px] mb-0.5">参数</div>
-            <pre className="text-gray-500 text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-40">{tool.args}</pre>
+            <div className="text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-60">
+              <KeyValueView text={tool.args} />
+            </div>
           </div>
           {hasResult && (
             <div>
               <div className="text-gray-600 text-[10px] mb-0.5">结果</div>
-              <pre className={`text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-60 ${isError ? 'text-red-400' : 'text-gray-400'}`}>{tool.result}</pre>
+              <div className={`text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-red-400' : ''}`}>
+                <ResultView result={tool.result!} />
+              </div>
             </div>
           )}
         </div>
@@ -396,12 +494,9 @@ function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLabel?: s
         )}
         {!allDone && <span className="text-yellow-500/50 text-[10px] animate-pulse">⏳</span>}
       </button>
-      {/* 展开时显示各工具调用 */}
+      {/* 展开时显示各工具调用（思考文本已在组外独立展示，K-024） */}
       {groupExpanded && (
         <div className="space-y-1 ml-2">
-          {tools[0]?.assistantText && (
-            <div className="text-xs text-gray-400 px-1 py-0.5">{tools[0].assistantText}</div>
-          )}
           {tools.map((tool, ti) => (
             <ToolCallBlock key={ti} tool={tool} />
           ))}
@@ -1231,6 +1326,14 @@ export default function AgentChat() {
       );
     }
     if (item.type === 'assistant-text') {
+      // K-024：思考文本（工具调用前的意图说明）用轻量样式——常驻可见但视觉上轻于正式回复
+      if (item.thought) {
+        return (
+          <div key={idx} className="mb-1.5 px-2 py-1 border-l-2 border-info/30 text-xs text-gray-400 italic">
+            <MarkdownText content={item.content || ''} />
+          </div>
+        );
+      }
       return (
         <div key={idx} className="mb-2 px-1 py-1">
           <MarkdownText content={item.content || ''} />
