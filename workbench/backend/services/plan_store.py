@@ -50,9 +50,13 @@ def _load_all_scenarios() -> list[dict]:
 
 
 def list_plans() -> list[dict]:
-    """列出全部测试计划"""
+    """列出全部测试计划（K-025：无激活工作区时返回空列表而非 500）"""
+    try:
+        root = _plans_root()
+    except RuntimeError:
+        return []
     plans = []
-    for f in sorted(_plans_root().iterdir()):
+    for f in sorted(root.iterdir()):
         if not f.suffix in (".yaml", ".yml"):
             continue
         with open(f, "r", encoding="utf-8") as fh:

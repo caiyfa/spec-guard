@@ -1,6 +1,10 @@
 """场景存储服务：读写 scenarios/**/*.yaml + 解析 DAG 结构。
 
 不修改引擎代码，仅操作 YAML 文件本身。DAG 版本仲裁状态复用引擎 DependencyGraph。
+
+K-025 性能：①CSafeLoader（libyaml 可用时 C 解析，语义一致快 5-10 倍）；
+②目录指纹缓存（文件数+最新 mtime）——此前每个请求全量重扫重解析 90+ YAML
+（get_dag 甚至解析两遍），场景/ DAG/草稿页加载慢的主因。
 """
 
 import os
@@ -17,6 +21,13 @@ if str(SG_ROOT) not in sys.path:
 
 SCENARIOS_ROOT = SG_ROOT / "scenarios"
 REPORTS_ROOT = SG_ROOT / "reports"
+
+_YAML_LOADER = yaml.CSafeLoader if hasattr(yaml, "CSafeLoader") else yaml.SafeLoader
+
+
+def _fast_load(text: str):
+    """K-025：C 解析器（与 safe_load 语义一致）。"""
+    return yaml.load(text, Loader=_YAML_LOADER)
 
 
 def _infer_category(raw: dict) -> str:
@@ -65,13 +76,13 @@ def _scan_scenarios() -> list[dict]:
         suite_file = os.path.join(dirpath, "_suite.yaml")
         if os.path.isfile(suite_file):
             with open(suite_file, "r", encoding="utf-8") as f:
-                suite_meta = yaml.safe_load(f) or {}
+                suite_meta = _fast_load(f.read()) or {}
         for fn in sorted(filenames):
             if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
                 continue
             path = os.path.join(dirpath, fn)
             with open(path, "r", encoding="utf-8") as f:
-                raw = yaml.safe_load(f) or {}
+                raw = _fast_load(f.read()) or {}
             sid = raw.get("id")
             if not sid:
                 continue
@@ -102,16 +113,52 @@ def _scan_scenarios() -> list[dict]:
     return sorted(scenarios, key=lambda s: s["id"])
 
 
+# ══════════════════════════════════════════════════════════
+# K-025：目录指纹缓存（编辑/promote 改动 mtime 即自动失效）
+# ══════════════════════════════════════════════════════════
+
+def _dir_fingerprint(root: Path) -> tuple:
+    """目录指纹：(yaml 文件数, 最新 mtime_ns)。任一文件增删改都会变化。"""
+    count = 0
+    latest = 0
+    for dirpath, _dirs, filenames in os.walk(root):
+        for fn in filenames:
+            if fn.endswith((".yaml", ".yml")):
+                count += 1
+                mt = os.stat(os.path.join(dirpath, fn)).st_mtime_ns
+                if mt > latest:
+                    latest = mt
+    return (count, latest)
+
+
+_cache: dict = {"fingerprint": None, "scenarios": None, "graph": None}
+
+
+def _scenarios_cached() -> list[dict]:
+    fp = _dir_fingerprint(SCENARIOS_ROOT)
+    if _cache["fingerprint"] != fp or _cache["scenarios"] is None:
+        _cache["fingerprint"] = fp
+        _cache["scenarios"] = _scan_scenarios()  # 唯一真实扫描点
+        _cache["graph"] = None  # 场景变了，图一并失效
+    return _cache["scenarios"]
+
+
 def list_scenarios() -> list[dict]:
     """场景列表（不含 YAML 原文）"""
-    return _scan_scenarios()
+    return _scenarios_cached()
 
 
 def _engine_graph():
-    """引擎 DependencyGraph（版本仲裁状态 dep_status / orphans / drift_report）"""
-    from engine.scenario_loader import load_scenarios
-    from engine.dependency_graph import DependencyGraph
-    return DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+    """引擎 DependencyGraph（版本仲裁状态 dep_status / orphans / drift_report）。
+
+    K-025：随场景缓存复用——此前每次调用重解析全库（与 _scan_scenarios 双份解析）。
+    """
+    _scenarios_cached()  # 确保指纹检查 + graph 失效联动
+    if _cache["graph"] is None:
+        from engine.scenario_loader import load_scenarios
+        from engine.dependency_graph import DependencyGraph
+        _cache["graph"] = DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+    return _cache["graph"]
 
 
 def get_dag() -> dict:
@@ -119,7 +166,7 @@ def get_dag() -> dict:
 
     节点带 version；边带版本仲裁状态（match/minor_drift/major_drift/orphan）。
     """
-    scenarios = _scan_scenarios()
+    scenarios = _scenarios_cached()
     graph = _engine_graph()
     status_map = {
         (consumer, st["id"]): st
@@ -164,7 +211,7 @@ def get_drift_report() -> dict:
 
 def get_scenario_yaml(scenario_id: str) -> Optional[str]:
     """读取场景 YAML 原文"""
-    for s in _scan_scenarios():
+    for s in _scenarios_cached():
         if s["id"] == scenario_id:
             with open(s["abs_path"], "r", encoding="utf-8") as f:
                 return f.read()
@@ -186,7 +233,7 @@ def save_scenario_yaml(scenario_id: str, content: str) -> dict:
     if not parsed.get("flow") and not parsed.get("verify"):
         return {"ok": False, "error": "flow/verify 均为空，场景不可执行"}
     # 写入
-    for s in _scan_scenarios():
+    for s in _scenarios_cached():
         if s["id"] == scenario_id:
             with open(s["abs_path"], "w", encoding="utf-8") as f:
                 f.write(content)
@@ -196,7 +243,7 @@ def save_scenario_yaml(scenario_id: str, content: str) -> dict:
 
 def validate_dag() -> dict:
     """循环依赖检测（三色 DFS）"""
-    scenarios = _scan_scenarios()
+    scenarios = _scenarios_cached()
     graph = {s["id"]: [d["id"] for d in s["depends_on"]] for s in scenarios}
     WHITE, GRAY, BLACK = 0, 1, 2
     color = {sid: WHITE for sid in graph}

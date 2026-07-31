@@ -63,33 +63,46 @@ def _scenario_index() -> dict[str, dict]:
 
     K-021②：草稿纳入索引——生成期同批次草稿互相依赖是合法的（prep 草稿先入库，
     或整批一起入库），只查场景库会把合法依赖误报成悬空。
+    K-025：场景库部分走 scenario_store 指纹缓存（此前每次 validate 全量重解析
+    90+ YAML，Agent 批量校验时成本随草稿数线性放大）；草稿部分每次扫（少且常变）。
     """
     import yaml as _yaml
     index: dict[str, dict] = {}
-
-    def _absorb(f: Path, source: str):
-        try:
-            raw = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-        except Exception:
-            return
-        sid = raw.get("id")
-        if sid:
-            index[str(sid)] = {"version": str(raw.get("version", "0.1")), "source": source}
 
     try:
         from specstd.workspace import drafts_dir
         d = drafts_dir()
         if d.is_dir():
             for f in sorted(d.glob("*.yaml")) + sorted(d.glob("*.yml")):
-                _absorb(f, f"draft:{f.name}")
+                try:
+                    raw = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                except Exception:
+                    continue
+                sid = raw.get("id")
+                if sid:
+                    index[str(sid)] = {"version": str(raw.get("version", "0.1")),
+                                       "source": f"draft:{f.name}"}
     except Exception:
         pass
     try:
-        from services.draft_promote import _scenarios_root  # K-016 同构的回退逻辑
-        root = _scenarios_root()
-        if root.is_dir():
+        # K-016 同构的场景库根（工作区有 scenarios/ 则用，否则 SpecGuard 仓库根）
+        from services.draft_promote import _scenarios_root
+        from services.scenario_store import _scenarios_cached, SCENARIOS_ROOT as _SS_ROOT
+        if _scenarios_root() == _SS_ROOT:
+            # K-025：主路径走指纹缓存（此前每次 validate 全量重解析 90+ YAML）
+            for s in _scenarios_cached():
+                index[str(s["id"])] = {"version": str(s.get("version", "0.1")), "source": "scenarios"}
+        else:
+            # 工作区自带 scenarios/ 的少见路径：直接扫（量小，不缓存）
+            root = _scenarios_root()
             for f in sorted(root.rglob("*.yaml")) + sorted(root.rglob("*.yml")):
-                _absorb(f, "scenarios")
+                try:
+                    raw = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                except Exception:
+                    continue
+                sid = raw.get("id")
+                if sid:
+                    index[str(sid)] = {"version": str(raw.get("version", "0.1")), "source": "scenarios"}
     except Exception:
         pass
     return index

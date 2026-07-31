@@ -44,7 +44,7 @@ function Test-OurBackend {
 
 function Test-OurFrontend {
     try {
-        $r = Invoke-WebRequest -Uri 'http://localhost:5173' -TimeoutSec 2 -UseBasicParsing
+        $r = Invoke-WebRequest -Uri 'http://127.0.0.1:5173' -TimeoutSec 2 -UseBasicParsing
         return ($r.Content -match 'SpecGuard')
     } catch { return $false }
 }
@@ -162,7 +162,7 @@ if (Test-Port 5173) {
 
 $frontendOut = Join-Path $LogDir 'frontend.log'
 $frontendErr = Join-Path $LogDir 'frontend.err.log'
-Write-Host "[启动] 前端 Vite     http://localhost:5173  (后台隐藏进程)" -ForegroundColor Green
+Write-Host "[启动] 前端 Vite     http://127.0.0.1:5173  (后台隐藏进程)" -ForegroundColor Green
 $frontendProc = Start-Process pwsh -ArgumentList @(
     '-NoProfile', '-Command',
     "Set-Location '$FrontendDir'; npm run dev"
@@ -183,12 +183,12 @@ Write-Host ""
 
 if ($ready) {
     Write-Host "启动完成 ✅" -ForegroundColor Green
-    Write-Host "  前端工作台:  http://localhost:5173  （mock 登录页：输工号直接登录）"
+    Write-Host "  前端工作台:  http://127.0.0.1:5173  （mock 登录页：输工号直接登录）"
     Write-Host "  后端 API:    http://127.0.0.1:9100/docs  （--reload：改后端代码自动重载）"
     Write-Host "  后端日志:    $backendOut"
     Write-Host "  前端日志:    $frontendOut"
     Write-Host "  生产部署:    pwsh serve-prod.ps1"
-    if (-not $NoBrowser) { Start-Process "http://localhost:5173" }
+    if (-not $NoBrowser) { Start-Process "http://127.0.0.1:5173" }
 } else {
     Write-Host "⚠️ 服务未在 60s 内就绪，请检查日志: $LogDir" -ForegroundColor Red
     exit 1
