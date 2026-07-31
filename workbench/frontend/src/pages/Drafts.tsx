@@ -138,6 +138,15 @@ export default function Drafts() {
               <div className="text-[10px] text-gray-600 mt-0.5">
                 {d.modified}{d.author ? ` · ${d.author}` : ''}
               </div>
+              {/* K-026：信息包关联可见化——此前仅 stale 时 tooltip 提及，用户看不到草稿来自哪个信息包 */}
+              {d.source_meta && (
+                <div className="text-[10px] mt-0.5">
+                  <span className="px-1 py-0.5 rounded bg-info/15 text-info/90"
+                    title={`本草稿由信息包 ${d.source_meta} 派生（Agent 对话生成）`}>
+                    📦 {d.source_meta}
+                  </span>
+                </div>
+              )}
             </button>
           ))}
         </div>

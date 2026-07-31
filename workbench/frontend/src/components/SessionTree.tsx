@@ -16,9 +16,28 @@ interface Props {
   currentWorkspace: string;
   onSelectSession: (id: string, workspace: string) => void;
   onNewSession: () => void;
+  collapsed?: boolean;          // K-037：收起为细条
+  onToggleCollapse?: () => void;
 }
 
-export default function SessionTree({ sessions, currentSessionId, currentWorkspace, onSelectSession, onNewSession }: Props) {
+export default function SessionTree({ sessions, currentSessionId, currentWorkspace, onSelectSession, onNewSession, collapsed, onToggleCollapse }: Props) {
+  // K-037：收起态——细条（展开按钮 + 新会话 + 竖排标题）
+  if (collapsed) {
+    return (
+      <div className="w-9 flex-shrink-0 bg-surface-2 border-r border-border flex flex-col items-center py-2 gap-1.5">
+        <button onClick={onToggleCollapse} title="展开会话列表"
+          className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+          »
+        </button>
+        <button onClick={onNewSession} title="新会话"
+          className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-sm">
+          ＋
+        </button>
+        <span className="text-[9px] text-gray-600 mt-1" style={{ writingMode: 'vertical-rl' }}>会话列表</span>
+      </div>
+    );
+  }
+
   // 按工作区分组
   const grouped: Record<string, SessionItem[]> = {};
   for (const s of sessions) {
@@ -41,7 +60,13 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
     <div className="w-60 flex-shrink-0 bg-surface-2 border-r border-border flex flex-col h-full">
       {/* 顶栏 */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-[10px] text-gray-500">会话列表</span>
+        <span className="flex items-center gap-1 text-[10px] text-gray-500">
+          <button onClick={onToggleCollapse} title="收起会话列表"
+            className="w-4 h-4 rounded text-gray-600 hover:text-info hover:bg-surface-3 text-[10px] leading-none">
+            «
+          </button>
+          会话列表
+        </span>
         <button onClick={onNewSession}
           className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">
           + 新会话

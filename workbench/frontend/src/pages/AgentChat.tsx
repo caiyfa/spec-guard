@@ -1,7 +1,8 @@
 /** AgentChat — 左侧会话树 + 中间对话区 + 右侧面板（K-012 简洁化：底部仅模式/模型下拉 + 输入框） */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import type { JSX } from 'react';
+import { useSearchParams } from 'react-router';
 import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi } from '../api';
 import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness } from '../api';
 import SessionTree from '../components/SessionTree';
@@ -635,14 +636,33 @@ function RefPanel({ refs, onView }: {
 }
 
 // ── 基础信息包面板（K-013：条目化 + 新鲜度徽标 + 变更发现补入） ──
-function InfoPackPanel({ meta, onUpdate, onError, onViewFile }: {
+function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen = false }: {
   meta: ScenarioMeta;
   onUpdate: (m: ScenarioMeta) => void;
   onError: (msg: string) => void;
   onViewFile: (path: string) => void;
+  defaultOpen?: boolean;  // K-032：页签内直接展开
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [freshness, setFreshness] = useState<InfoPackFreshness | null>(null);
+  const [uploading, setUploading] = useState(false);  // K-033
+  const fileInputRef = useRef<HTMLInputElement>(null);  // K-033
+
+  // K-033：上传材料到信息包（xlsx/docx/pdf 后端自动转文本可读）
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';  // 允许重复选同一文件
+    if (!file) return;
+    setUploading(true);
+    try {
+      const updated = await scenarioApi.uploadInfoPackFile(meta.id, file);
+      onUpdate(updated);
+    } catch (err) {
+      onError(`上传失败: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const loadFreshness = useCallback(() => {
     scenarioApi.infoPackFreshness(meta.id).then(setFreshness).catch(() => setFreshness(null));
@@ -662,16 +682,33 @@ function InfoPackPanel({ meta, onUpdate, onError, onViewFile }: {
 
   return (
     <div className="px-3 py-2 border-b border-border">
-      <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
-        <span>
-          📦 基础信息包（{meta.info_pack.length}）
-          {freshness && freshness.stale_count > 0 && (
-            <span className="text-yellow-400 text-[9px] ml-1">⚠️ {freshness.stale_count} 项已变更</span>
-          )}
-        </span>
-        <span className="text-[9px] text-gray-600">{open ? '▲' : '▼'}</span>
-      </button>
+      <div className="flex items-center justify-between">
+        <button onClick={() => setOpen(v => !v)}
+          className="flex-1 flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
+          <span>
+            📦 基础信息包（{meta.info_pack.length}）
+            {freshness && freshness.stale_count > 0 && (
+              <span className="text-yellow-400 text-[9px] ml-1">⚠️ {freshness.stale_count} 项已变更</span>
+            )}
+          </span>
+          <span className="text-[9px] text-gray-600">{open ? '▲' : '▼'}</span>
+        </button>
+        {/* K-033：直接上传材料到信息包（不再只能 git 拉取） */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="ml-1 text-[10px] px-1.5 py-0.5 rounded border border-border text-gray-500 hover:text-info hover:border-info/40 disabled:opacity-40"
+          title="上传材料到信息包（xlsx/docx/pdf/md/csv 等，≤20MB）"
+        >
+          {uploading ? '上传中…' : '⬆ 上传'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleUpload}
+        />
+      </div>
       {open && (
         <div className="mt-1.5">
           <div className="max-h-40 overflow-y-auto">
@@ -719,7 +756,16 @@ function InfoPackPanel({ meta, onUpdate, onError, onViewFile }: {
 }
 
 // ── 右侧面板组件（引用 + 信息包 + 上下文 + 待办） ──
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile }: {
+// ── K-032：右侧页签面板（待办首页 + 信息包页签 + 文件各自页签） ──
+interface FileTab {
+  path: string;
+  kind: 'file' | 'draft';
+  content: string;
+  format?: 'raw' | 'markdown' | 'text';
+  loading: boolean;
+}
+
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -732,16 +778,93 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
   onError: (msg: string) => void;
   references: ChatReference[];
   onViewFile: (path: string, kind?: 'file' | 'draft') => void;
+  fileTabs: FileTab[];
+  activeTab: string;
+  onSelectTab: (id: string) => void;
+  onCloseTab: (path: string) => void;
+  width: number | string;  // K-033：拖拽调宽（父组件托管）；K-039：最大化时 '100%'
+  onCollapse?: () => void;  // K-037：收起为细条（父组件托管）
+  maximized?: boolean;          // K-039：面板最大化（吃掉会话区）
+  onToggleMaximize?: () => void;
 }) {
-  if (!ctxUsage && planItems.length === 0 && structuredTodos.length === 0 && !scenarioMeta && references.length === 0) return null;
-  return (
-    <div className="w-56 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col overflow-y-auto">
-      {references.length > 0 && <RefPanel refs={references} onView={onViewFile} />}
-      {scenarioMeta && <InfoPackPanel meta={scenarioMeta} onUpdate={onUpdateMeta} onError={onError} onViewFile={(p) => onViewFile(p)} />}
-      {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} stats={stats} />}
-      {(planItems.length > 0 || structuredTodos.length > 0) && (
-        <TodoPanel todos={structuredTodos} planItems={planItems} loading={loading} />
+  const isFileTab = activeTab.startsWith('file:');
+  const activeFile = isFileTab ? fileTabs.find(t => `file:${t.path}` === activeTab) : null;
+
+  const tabBtn = (id: string, label: string, closable = false, path = '') => (
+    <button
+      key={id}
+      onClick={() => onSelectTab(id)}
+      className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] border-b-2 whitespace-nowrap transition-colors ${
+        activeTab === id
+          ? 'border-info text-gray-200 bg-surface-3/50'
+          : 'border-transparent text-gray-500 hover:text-gray-300'
+      }`}
+      title={path || label}
+    >
+      <span className="max-w-[120px] truncate">{label}</span>
+      {closable && (
+        <span
+          onClick={(e) => { e.stopPropagation(); onCloseTab(path); }}
+          className="text-gray-600 hover:text-red-400 ml-0.5"
+        >✕</span>
       )}
+    </button>
+  );
+
+  return (
+    <div
+      className="flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col min-h-0"
+      style={{ width }}
+    >      {/* 页签条（K-032：参考编辑器页签样式） */}
+      <div className="flex items-center border-b border-border overflow-x-auto flex-shrink-0">
+        {tabBtn('todos', '📋 待办')}
+        {scenarioMeta && tabBtn('pack', `📦 信息包(${scenarioMeta.info_pack.length})`)}
+        {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
+        {onToggleMaximize && (
+          <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
+            className="ml-auto px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0">
+            {maximized ? '⤡' : '⤢'}
+          </button>
+        )}
+        {onCollapse && (
+          <button onClick={onCollapse} title="收起面板"
+            className={`${onToggleMaximize ? '' : 'ml-auto '}px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0`}>
+            »
+          </button>
+        )}
+      </div>
+
+      {/* 页签内容 */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {activeTab === 'todos' && (
+          <>
+            {references.length > 0 && <RefPanel refs={references} onView={onViewFile} />}
+            {(planItems.length > 0 || structuredTodos.length > 0) && (
+              <TodoPanel todos={structuredTodos} planItems={planItems} loading={loading} />
+            )}
+            {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} stats={stats} />}
+            {references.length === 0 && planItems.length === 0 && structuredTodos.length === 0 && !ctxUsage && (
+              <div className="text-xs text-gray-600 text-center py-6">暂无上下文与待办</div>
+            )}
+          </>
+        )}
+        {activeTab === 'pack' && scenarioMeta && (
+          <InfoPackPanel meta={scenarioMeta} onUpdate={onUpdateMeta} onError={onError}
+            onViewFile={(p) => onViewFile(p)} defaultOpen />
+        )}
+        {activeFile && (
+          <div className="h-full min-h-0 flex flex-col">
+            <div className="px-3 py-1.5 border-b border-border text-[10px] font-mono text-gray-500 truncate flex-shrink-0"
+              title={activeFile.path}>
+              {activeFile.path}
+            </div>
+            <div className="flex-1 min-h-0">
+              <FileViewer path={activeFile.path} content={activeFile.content}
+                loading={activeFile.loading} format={activeFile.format} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -799,7 +922,69 @@ export default function AgentChat() {
   const [atMetas, setAtMetas] = useState<ScenarioMeta[]>([]);
   const [atDrafts, setAtDrafts] = useState<DraftItem[]>([]);
   const [atFileResults, setAtFileResults] = useState<{ path: string; preview: string }[]>([]);
-  const [viewFile, setViewFile] = useState<{ path: string; content: string; loading: boolean } | null>(null);
+  // K-032：文件页签（取代 modal 弹窗）+ 活动页签（'todos' | 'pack' | `file:{path}`）
+  const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
+  const [activeSideTab, setActiveSideTab] = useState('todos');
+  // K-037：会话列表 / 右侧面板 独立收起展开（localStorage 持久化）
+  const [sessCollapsed, setSessCollapsed] = useState(() => localStorage.getItem('sg_sess_collapsed') === '1');
+  const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('sg_side_collapsed') === '1');
+  const toggleSessCollapsed = useCallback(() =>
+    setSessCollapsed(v => { localStorage.setItem('sg_sess_collapsed', v ? '0' : '1'); return !v; }), []);
+  const toggleSideCollapsed = useCallback(() =>
+    setSideCollapsed(v => { localStorage.setItem('sg_side_collapsed', v ? '0' : '1'); return !v; }), []);
+  const expandSideTo = useCallback((tab: string) => {
+    setActiveSideTab(tab);
+    setSideCollapsed(false);
+    localStorage.setItem('sg_side_collapsed', '0');
+  }, []);
+  // K-039：一键占满——专注模式（会话区全宽）/ 面板最大化（吃掉会话区）
+  const [focusMode, setFocusMode] = useState(false);
+  const [sideMax, setSideMax] = useState(false);
+  const preFocusRef = useRef<{ sess: boolean; side: boolean } | null>(null);
+  const toggleFocusMode = useCallback(() => {
+    setFocusMode(v => {
+      if (!v) {
+        // 进入专注：记住两侧状态并全部收起（专注是临时态，恢复时不改持久偏好）
+        preFocusRef.current = { sess: sessCollapsed, side: sideCollapsed };
+        setSessCollapsed(true); setSideCollapsed(true); setSideMax(false);
+      } else {
+        const p = preFocusRef.current;
+        if (p) { setSessCollapsed(p.sess); setSideCollapsed(p.side); }
+      }
+      return !v;
+    });
+  }, [sessCollapsed, sideCollapsed]);
+  const toggleSideMax = useCallback(() => {
+    setSideMax(v => {
+      if (!v) { setSideCollapsed(false); setFocusMode(false); }  // 最大化必展开面板
+      return !v;
+    });
+  }, []);
+  // K-033：右侧拖拽调宽（localStorage 持久化）
+  const [sideWidth, setSideWidth] = useState(() => {
+    const saved = parseInt(localStorage.getItem('sg_side_width') || '');
+    return Number.isFinite(saved) && saved >= 220 ? saved : 288;
+  });
+  const sideWidthRef = useRef(sideWidth);
+  sideWidthRef.current = sideWidth;
+  useEffect(() => { localStorage.setItem('sg_side_width', String(sideWidth)); }, [sideWidth]);
+
+  // K-033：拖拽柄（左缘拖动调宽，范围 220 ~ 70% 视口）
+  const startSideDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sideWidthRef.current;
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(Math.max(startW + (startX - ev.clientX), 220), window.innerWidth * 0.7);
+      setSideWidth(Math.round(w));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashQuery, setSlashQuery] = useState('');
   const [wsReconnect, setWsReconnect] = useState(0);
@@ -1074,6 +1259,7 @@ export default function AgentChat() {
       autoSentRef.current = true;  // 不触发向导自动发送
       setScenarioId(packRef.path);
       scenarioApi.getMeta(packRef.path).then(setScenarioMeta).catch(() => {});
+      expandSideTo('pack');  // K-037：面板收起时随发送自动展开到信息包页签
     }
     setMessages(prev => [...prev, { role: 'user', content: userMsg, references: msgRefs }]);
     ws.send(JSON.stringify({
@@ -1083,7 +1269,28 @@ export default function AgentChat() {
       references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
       context: { current_page: currentPage, editing_scenario_id: scenarioId },
     }));
-  }, [input, loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, references]);
+  }, [input, loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, references, expandSideTo]);
+
+  // K-034：聊天框上传附件 → 自动创建信息包并加 info_pack chip（发送时才关联，同 K-015 语义）
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const [attaching, setAttaching] = useState(false);
+  const handleAttachFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setAttaching(true); setError('');
+    try {
+      const meta = await scenarioApi.autoCreateInfoPack(Array.from(files));
+      setReferences(prev => [
+        ...prev.filter(r => r.type !== 'info_pack'),  // info_pack chip 唯一，新包替换旧包
+        { type: 'info_pack', path: meta.id, sha: '', label: `${meta.name}（${(meta.info_pack || []).length} 个文件）` },
+      ]);
+      setAtMetas(prev => [meta, ...prev.filter(m => m.id !== meta.id)]);
+    } catch (e: any) {
+      setError(`附件上传失败：${e?.message || e}`);
+    } finally {
+      setAttaching(false);
+      if (attachInputRef.current) attachInputRef.current.value = '';
+    }
+  };
 
   // 打断会话
   const handleStop = useCallback(() => {
@@ -1204,16 +1411,35 @@ export default function AgentChat() {
     inputRef.current?.focus();
   };
 
-  // K-013: 打开引用文件查看器（FileViewer 弹窗）
+  // K-032: 打开引用文件——新增/激活右侧文件页签（取代 modal 弹窗）
   const openFileViewer = useCallback(async (path: string, kind: 'file' | 'draft' = 'file') => {
-    setViewFile({ path, content: '', loading: true });
+    const tabId = `file:${path}`;
+    setActiveSideTab(tabId);
+    setSideCollapsed(false);  // K-037：面板收起时打开文件自动展开
+    localStorage.setItem('sg_side_collapsed', '0');
+    setSideWidth(w => Math.max(w, 460));  // K-033：文件页签自动至少 460 宽（xlsx 表格）
+    // 已打开过 → 直接激活（保留已加载内容）
+    let already = false;
+    setFileTabs(prev => {
+      if (prev.some(t => t.path === path)) { already = true; return prev; }
+      return [...prev, { path, kind, content: '', loading: true }];
+    });
+    if (already) return;
     try {
       const r = kind === 'draft' ? await draftsApi.read(path) : await workspaceApi.readFile(path);
-      setViewFile({ path, content: r.content, loading: false });
+      setFileTabs(prev => prev.map(t =>
+        t.path === path ? { ...t, content: r.content, loading: false, format: (r as any).format } : t));
     } catch {
-      setViewFile(null);
+      setFileTabs(prev => prev.filter(t => t.path !== path));
+      setActiveSideTab('todos');
       setError(`读取文件失败: ${path}`);
     }
+  }, []);
+
+  // K-032: 关闭文件页签（关闭当前活动页签时回落到待办页）
+  const closeFileTab = useCallback((path: string) => {
+    setFileTabs(prev => prev.filter(t => t.path !== path));
+    setActiveSideTab(prev => prev === `file:${path}` ? 'todos' : prev);
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1235,16 +1461,28 @@ export default function AgentChat() {
   // K-012: 恢复会话（会话项点击 / 页面刷新自动恢复共用）
   const restoreSession = useCallback(async (id: string, ws: string) => {
     const r = await agentApi.getSession(id, ws);
-    setMessages(r.messages || []);
+    const msgs = r.messages || [];
+    setMessages(msgs);
     setSessionId(id);
     setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setStreamingText('');
     // 从历史消息中提取 plan
-    for (const m of (r.messages || [])) {
+    for (const m of msgs) {
       if (m.role === 'assistant' && m.content) {
         const plan = extractPlan(m.content);
         if (plan) setPlanItems(plan);
+      }
+    }
+    // K-032③：恢复信息包关联——scenarioId 此前只从 URL 参数初始化，
+    // 服务重启/刷新后为空 → 引用 chip 在（消息 refs 持久化）但信息包文件看不到。
+    // 从消息 refs 中找到最近一个 info_pack 引用恢复关联（getMeta 由 scenarioId effect 触发）
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const pack = (msgs[i].references || []).find((ref: any) => ref.type === 'info_pack');
+      if (pack) {
+        autoSentRef.current = true;  // 恢复语义，不触发场景向导自动发送
+        setScenarioId(pack.path);
+        break;
       }
     }
   }, []);
@@ -1270,6 +1508,9 @@ export default function AgentChat() {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setStreamingText('');
+    // K-032：新会话同步清理信息包关联与文件页签
+    setScenarioId(''); setScenarioMeta(null);
+    setFileTabs([]); setActiveSideTab('todos');
     localStorage.removeItem('sg_agent_session');
   };
 
@@ -1360,21 +1601,30 @@ export default function AgentChat() {
 
   return (
     <div className="flex h-full">
-      {/* 左侧：会话树 */}
-      <SessionTree
-        sessions={sessions}
-        currentSessionId={sessionId}
-        currentWorkspace={currentWorkspace}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
-      />
+      {/* 左侧：会话树（K-037：可收起为细条；K-039：面板最大化时整列隐藏） */}
+      {!sideMax && (
+        <SessionTree
+          sessions={sessions}
+          currentSessionId={sessionId}
+          currentWorkspace={currentWorkspace}
+          onSelectSession={handleSelectSession}
+          onNewSession={handleNewSession}
+          collapsed={sessCollapsed}
+          onToggleCollapse={toggleSessCollapsed}
+        />
+      )}
 
       {/* 中间+右侧 */}
       <div className="flex-1 flex min-w-0">
-        {/* 对话区 */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* 对话区（K-039：面板最大化时 display:none 隐藏——不卸载，WS/滚动/输入状态全保留） */}
+        <div className={`flex-1 flex flex-col min-w-0 ${sideMax ? 'hidden' : ''}`}>
           {/* 顶部信息栏 */}
           <div className="flex-shrink-0 px-4 py-1.5 border-b border-border flex items-center gap-3 text-[10px] text-gray-500">
+            {/* K-037：会话列表切换（细条收起时的另一入口） */}
+            <button onClick={toggleSessCollapsed} title={sessCollapsed ? '展开会话列表' : '收起会话列表'}
+              className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
+              {sessCollapsed ? '»' : '«'} 会话
+            </button>
             <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>
               {wsState === 'open' ? '●' : '○'}
             </span>
@@ -1394,6 +1644,16 @@ export default function AgentChat() {
               </>
             )}
             <div className="ml-auto">{turnInfo}</div>
+            {/* K-039：专注模式（一键收起两侧，会话区占满；再点恢复原布局） */}
+            <button onClick={toggleFocusMode} title={focusMode ? '退出专注，恢复两侧面板' : '专注模式：收起两侧，会话区占满'}
+              className={`transition-colors px-1 rounded hover:bg-surface-3 ${focusMode ? 'text-info' : 'text-gray-500 hover:text-info'}`}>
+              {focusMode ? '⤡ 退出专注' : '⤢ 专注'}
+            </button>
+            {/* K-037：右侧面板切换 */}
+            <button onClick={toggleSideCollapsed} title={sideCollapsed ? '展开面板（待办/信息包/文件）' : '收起面板'}
+              className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
+              面板 {sideCollapsed ? '«' : '»'}
+            </button>
           </div>
 
           {/* 消息列表 — 统一背景 */}
@@ -1465,8 +1725,24 @@ export default function AgentChat() {
               </div>
             )}
 
-            {/* 输入框 + 发送/停止按钮 */}
+            {/* 输入框 + 附件 + 发送/停止按钮 */}
             <div className="flex gap-2 items-end">
+              {/* K-034: 附件上传（自动创建信息包） */}
+              <input
+                ref={attachInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => handleAttachFiles(e.target.files)}
+              />
+              <button
+                onClick={() => attachInputRef.current?.click()}
+                disabled={attaching || loading || wsState !== 'open'}
+                title="上传附件（自动创建信息包并关联到本轮对话）"
+                className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">📎</span>}
+              </button>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -1515,25 +1791,48 @@ export default function AgentChat() {
           </div>
         </div>
 
-        {/* 右侧：引用 + 信息包 + 上下文用量 + 待办面板 */}
-        <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} />
-      </div>
-
-      {/* K-013: 引用文件查看器（FileViewer 弹窗） */}
-      {viewFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setViewFile(null)}>
-          <div className="w-[760px] max-w-[90vw] h-[80vh] bg-surface border border-border rounded-xl overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 py-2.5 border-b border-border flex items-center justify-between bg-surface-2 flex-shrink-0">
-              <span className="text-xs font-mono text-gray-300 truncate">{viewFile.path}</span>
-              <button onClick={() => setViewFile(null)} className="text-gray-500 hover:text-gray-300">✕</button>
-            </div>
-            <div className="flex-1 min-h-0">
-              <FileViewer path={viewFile.path} content={viewFile.content} loading={viewFile.loading} />
-            </div>
+        {/* K-037：右侧面板（可收起为细条；收起时拖拽柄隐藏） */}
+        {sideCollapsed ? (
+          <div className="w-9 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
+            <button onClick={toggleSideCollapsed} title="展开面板"
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+              «
+            </button>
+            <button onClick={() => expandSideTo('todos')} title="待办"
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+              📋
+            </button>
+            {scenarioMeta && (
+              <button onClick={() => expandSideTo('pack')} title={`信息包（${scenarioMeta.info_pack.length}）`}
+                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+                📦
+              </button>
+            )}
+            {fileTabs.length > 0 && (
+              <button onClick={() => expandSideTo(activeSideTab.startsWith('file:') ? activeSideTab : `file:${fileTabs[fileTabs.length - 1].path}`)}
+                title={`文件页签（${fileTabs.length}）`}
+                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+                📄
+                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{fileTabs.length}</span>
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        ) : (
+          <>
+            {/* K-033：右侧拖拽柄（左缘拖动调宽面板；K-039：最大化时隐藏） */}
+            {!sideMax && (
+              <div
+                onMouseDown={startSideDrag}
+                className="w-1 flex-shrink-0 cursor-col-resize hover:bg-info/40 active:bg-info/60 transition-colors"
+                title="拖拽调整面板宽度"
+              />
+            )}
+
+            {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} />
+          </>
+        )}
+      </div>
     </div>
   );
 }

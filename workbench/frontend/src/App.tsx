@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router';
 import Dashboard from './pages/Dashboard';
 import Scenarios from './pages/Scenarios';
 import RunControl from './pages/RunControl';

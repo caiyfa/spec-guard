@@ -1,6 +1,8 @@
 /** Dashboard — 总览（Tab 切换：运行总览 / 格式规范） */
 import { useEffect, useState, useMemo, useRef } from 'react';
+import type { JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { scenariosApi, runsApi, referenceApi, type Scenario, type RunSummary } from '../api';
@@ -161,7 +163,7 @@ function SpecTab({ specMd, specLoading, exportMd }: {
             <div className="text-gray-500 text-xs text-center py-8">加载中…</div>
           ) : specMd ? (
             <div className="spec-md text-[13px] leading-6 text-gray-300">
-              <ReactMarkdown components={mdComponents}>{specMd}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{specMd}</ReactMarkdown>
             </div>
           ) : (
             <div className="text-gray-500 text-xs text-center py-8">切换到格式规范 Tab 加载</div>

@@ -63,6 +63,8 @@ export default function DagEditor() {
   const [dagData, setDagData] = useState<DagData | null>(null);
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState('');
+  const [selectedModule, setSelectedModule] = useState('');  // K-027: 模块分组筛选
+  const [searchQuery, setSearchQuery] = useState('');        // K-027: 场景搜索定位
   const [error, setError] = useState('');
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
   const [showDrift, setShowDrift] = useState(false);
@@ -131,18 +133,47 @@ export default function DagEditor() {
     scenariosApi.validate().then((r) => setDagValid(r.ok));
   }, [layoutDag]);
 
-  // 计划过滤后的 DAG
+  // K-027：模块清单（从场景列表收集，按名称排序）
+  const modules = useMemo(() => {
+    const set = new Set<string>();
+    scenarios.forEach((s) => { if (s.module) set.add(s.module); });
+    return [...set].sort();
+  }, [scenarios]);
+
+  // 计划 + 模块 + 搜索 三重过滤后的 DAG
   const filteredDag = useMemo(() => {
-    if (!dagData || !selectedPlan) return dagData;
-    const plan = plans.find((p) => p.id === selectedPlan);
-    if (!plan) return dagData;
-    const ids = new Set((plan.filter?.scenarios || []) as string[]);
-    if (!ids.size) return dagData;
-    return {
-      nodes: dagData.nodes.filter((n) => ids.has(n.id)),
-      edges: dagData.edges.filter((e) => ids.has(e.source) && ids.has(e.target)),
-    };
-  }, [dagData, selectedPlan, plans]);
+    if (!dagData) return dagData;
+    let nodes = dagData.nodes;
+    let edges = dagData.edges;
+    // ① 计划过滤
+    if (selectedPlan) {
+      const plan = plans.find((p) => p.id === selectedPlan);
+      const ids = new Set((plan?.filter?.scenarios || []) as string[]);
+      if (ids.size) nodes = nodes.filter((n) => ids.has(n.id));
+    }
+    // ② 模块过滤（选中模块的场景 + 其直接上下游，保持依赖边可见）
+    if (selectedModule) {
+      const inModule = new Set(
+        nodes.filter((n) => (n.data as { module?: string }).module === selectedModule).map((n) => n.id)
+      );
+      const keep = new Set(inModule);
+      edges.forEach((e) => {
+        if (inModule.has(e.source) || inModule.has(e.target)) {
+          keep.add(e.source); keep.add(e.target);
+        }
+      });
+      nodes = nodes.filter((n) => keep.has(n.id));
+    }
+    // ③ 搜索过滤（id/title 模糊）
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      nodes = nodes.filter((n) =>
+        n.id.toLowerCase().includes(q) ||
+        ((n.data as { title?: string }).title || '').toLowerCase().includes(q));
+    }
+    const ids = new Set(nodes.map((n) => n.id));
+    return { nodes, edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
+  }, [dagData, selectedPlan, selectedModule, searchQuery, plans]);
 
   // 计划变更时重新布局
   useEffect(() => {
@@ -238,12 +269,28 @@ export default function DagEditor() {
         )}
         {/* 计划选择器 */}
         <select value={selectedPlan} onChange={(e) => setSelectedPlan(e.target.value)}
-          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs">
+          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+          title="按测试计划筛选场景">
           <option value="">全部场景</option>
           {plans.map((p) => <option key={p.id} value={p.id}>📋 {p.name}</option>)}
         </select>
-        {/* ID 查询（创建场景时用） */}
-        <IdQueryTool />
+        {/* K-027：模块分组筛选（含直接上下游，保持依赖边可见） */}
+        <select value={selectedModule} onChange={(e) => setSelectedModule(e.target.value)}
+          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+          title="按模块分组筛选（含直接上下游）">
+          <option value="">全部模块</option>
+          {modules.map((m) => <option key={m} value={m}>📁 {m}</option>)}
+        </select>
+        {/* K-027：场景搜索定位（id/标题模糊） */}
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 搜索场景 ID / 标题"
+          className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+        />
+        <span className="text-[10px] text-gray-600">
+          {filteredDag && dagData ? `${filteredDag.nodes.length}/${dagData.nodes.length} 节点` : ''}
+        </span>
         {/* 类型图例 */}
         <div className="flex gap-2 ml-auto">
           {Object.entries(CATEGORY_META).map(([key, meta]) => (
@@ -329,45 +376,3 @@ export default function DagEditor() {
   );
 }
 
-/** ID 查询工具（创建场景时查下一可用 ID / 校验唯一性） */
-function IdQueryTool() {
-  const [prefix, setPrefix] = useState('PP');
-  const [type, setType] = useState('RC');
-  const [result, setResult] = useState('');
-  const [checkId, setCheckId] = useState('');
-  const [checkResult, setCheckResult] = useState('');
-
-  const queryNext = async () => {
-    try {
-      const r = await referenceApi.nextId(prefix, type);
-      setResult(`${r.next_id}`);
-    } catch { setResult('查询失败'); }
-  };
-
-  const checkUnique = async () => {
-    if (!checkId) return;
-    try {
-      const r = await referenceApi.validateId(checkId);
-      setCheckResult(r.unique ? `✅ 可用` : `❌ 已占用`);
-    } catch { setCheckResult('校验失败'); }
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 text-[10px]">
-      <select value={prefix} onChange={(e) => setPrefix(e.target.value)}
-        className="bg-surface-3 border border-border rounded px-1 py-0.5">
-        {['PP', 'IS', 'IP', 'SS', 'EV'].map((p) => <option key={p}>{p}</option>)}
-      </select>
-      <select value={type} onChange={(e) => setType(e.target.value)}
-        className="bg-surface-3 border border-border rounded px-1 py-0.5">
-        {['RC', 'SNAP', 'PERM', 'SEC', 'PREP'].map((t) => <option key={t}>{t}</option>)}
-      </select>
-      <button onClick={queryNext} className="text-info hover:underline" title="查询下一可用 ID">🆔</button>
-      {result && <span className="text-pass font-mono">{result}</span>}
-      <input value={checkId} onChange={(e) => setCheckId(e.target.value)}
-        placeholder="校验ID" className="w-20 bg-surface-3 border border-border rounded px-1 py-0.5 font-mono" />
-      <button onClick={checkUnique} className="text-info hover:underline">校验</button>
-      {checkResult && <span className="font-mono">{checkResult}</span>}
-    </div>
-  );
-}

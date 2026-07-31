@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { scenarioApi, workspaceApi, session } from '../api';
 import type { ScenarioMeta } from '../api';
 import FileTree from '../components/FileTree';

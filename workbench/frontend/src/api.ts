@@ -53,6 +53,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// ── 文件上传（FormData：Content-Type 由浏览器带 boundary，不能预设 JSON）──
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  return uploadFiles<T>(path, [file]);
+}
+
+// 多文件上传（字段名 files，可附表单字段 fields）
+export async function uploadFiles<T>(path: string, files: File[], fields?: Record<string, string>): Promise<T> {
+  const token = session.getToken();
+  const ws = session.getWorkspace();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (ws) headers['X-SG-Workspace'] = ws;
+  const fd = new FormData();
+  for (const f of files) fd.append(files.length > 1 ? 'files' : 'file', f);
+  if (fields) for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: fd });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('未登录或登录已过期');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(String(err.detail || `HTTP ${res.status}`));
+  }
+  return res.json();
+}
+
 // ── 认证 ──
 export interface CurrentUser {
   emp_no: string;
@@ -364,7 +391,10 @@ export const workspaceApi = {
   specFiles: (subdir?: string) =>
     request<{ files: any[]; workspace: string }>(`/workspace/spec-files${subdir ? `?subdir=${subdir}` : ''}`),
   readFile: (path: string) =>
-    request<{ path: string; content: string }>(`/workspace/read-file?path=${encodeURIComponent(path)}`),
+    request<{ path: string; content: string; format?: 'raw' | 'markdown' | 'text' }>(`/workspace/read-file?path=${encodeURIComponent(path)}`),
+  // K-036：原始字节（base64）——办公文档保真预览（SheetJS/mammoth/pdf blob）需要原文件
+  readFileRaw: (path: string) =>
+    request<{ path: string; raw_base64: string; format: string }>(`/workspace/read-file?path=${encodeURIComponent(path)}&raw=true`),
   fileHash: (path: string) =>
     request<{ path: string; sha: string }>(`/workspace/file-hash?path=${encodeURIComponent(path)}`),
   search: (q: string) =>
@@ -562,6 +592,11 @@ export const scenarioApi = {
     }),
   listMeta: () =>
     request<{ metas: ScenarioMeta[] }>('/scenarios/meta-list'),
+  uploadInfoPackFile: (id: string, file: File) =>
+    uploadFile<ScenarioMeta>(`/scenarios/${encodeURIComponent(id)}/info-pack/upload`, file),
+  // K-034：聊天框上传附件 → 自动创建信息包（多文件一次成一个包）
+  autoCreateInfoPack: (files: File[], name = '') =>
+    uploadFiles<ScenarioMeta>('/scenarios/info-pack/auto-create', files, name ? { name } : undefined),
   infoPackFreshness: (id: string) =>
     request<InfoPackFreshness>(`/scenarios/${encodeURIComponent(id)}/info-pack/freshness`),
 };

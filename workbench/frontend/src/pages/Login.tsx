@@ -2,7 +2,7 @@
 // UAC 回跳：登录成功后 UAC 重定向回本页并携带 token（参数名兼容 accessToken/token）
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { authApi, session } from '../api';
 
 export default function Login() {

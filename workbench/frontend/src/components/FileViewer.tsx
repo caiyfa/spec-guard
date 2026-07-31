@@ -4,37 +4,66 @@
  * - .yaml/.yml: 语法高亮
  * - .html/.htm: iframe srcdoc 渲染
  * - .json: 语法高亮 + 折叠
+ * - .csv: 表格渲染
+ * - K-030: format 提示（办公文档转换结果）：markdown → react-markdown / text → 纯文本
  * - 其他: 纯文本
  */
 
 import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getFileExt } from './FileTree';
+import OfficeViewer from './OfficeViewer';
+
+// K-036：办公文档走保真预览（SheetJS/pdf 原生/mammoth），不再用转换文本渲染
+const OFFICE_EXTS = new Set(['.xlsx', '.pdf', '.docx']);
 
 interface FileViewerProps {
   path: string;
   content: string;
   loading?: boolean;
+  format?: 'raw' | 'markdown' | 'text';  // K-030: 后端转换提示（xlsx→markdown 等）
 }
 
-export default function FileViewer({ path, content, loading }: FileViewerProps) {
+export default function FileViewer({ path, content, loading, format }: FileViewerProps) {
   const ext = useMemo(() => getFileExt(path), [path]);
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+      <div className="h-full flex items-center justify-center text-gray-500 text-sm">
         读取中...
       </div>
+    );
+  }
+
+  // K-036：办公文档保真预览（原始字节前端解析，content/format 不再用于这三类）
+  if (OFFICE_EXTS.has(ext)) {
+    return <OfficeViewer path={path} />;
+  }
+
+  // K-030：后端转换提示优先（xlsx→markdown 表格、docx/pdf→文本）
+  if (format === 'markdown') {
+    return (
+      <div className="spec-md h-full overflow-y-auto p-4 text-sm">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      </div>
+    );
+  }
+  if (format === 'text') {
+    return (
+      <pre className="h-full overflow-auto p-3 text-xs font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap block">
+        {content}
+      </pre>
     );
   }
 
   // Markdown 渲染
   if (ext === '.md' || ext === '.markdown') {
     return (
-      <div className="spec-md flex-1 overflow-y-auto p-4 text-sm">
-        <ReactMarkdown>{content}</ReactMarkdown>
+      <div className="spec-md h-full overflow-y-auto p-4 text-sm">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
       </div>
     );
   }
@@ -45,7 +74,7 @@ export default function FileViewer({ path, content, loading }: FileViewerProps) 
       <iframe
         srcDoc={content}
         sandbox="allow-same-origin"
-        className="flex-1 w-full bg-white border-0"
+        className="h-full w-full bg-white border-0"
         title={path}
       />
     );
@@ -55,7 +84,7 @@ export default function FileViewer({ path, content, loading }: FileViewerProps) 
   if (ext === '.yaml' || ext === '.yml' || ext === '.json' || ext === '.py' || ext === '.ts' || ext === '.js' || ext === '.tsx') {
     const lang = ext === '.yml' ? 'yaml' : ext.slice(1);
     return (
-      <div className="flex-1 overflow-auto">
+      <div className="h-full overflow-auto">
         <SyntaxHighlighter
           language={lang}
           style={vscDarkPlus}
@@ -79,7 +108,7 @@ export default function FileViewer({ path, content, loading }: FileViewerProps) 
     const lines = content.split('\n').filter(l => l.trim());
     const rows = lines.map(l => l.split(','));
     return (
-      <div className="flex-1 overflow-auto p-3">
+      <div className="h-full overflow-auto p-3">
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>{rows[0]?.map((h, i) => (
@@ -106,7 +135,7 @@ export default function FileViewer({ path, content, loading }: FileViewerProps) 
 
   // 纯文本
   return (
-    <pre className="flex-1 overflow-auto p-3 text-xs font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap">
+    <pre className="h-full overflow-auto p-3 text-xs font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap block">
       {content}
     </pre>
   );
