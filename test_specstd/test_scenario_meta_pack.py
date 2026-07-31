@@ -244,6 +244,53 @@ class TestPromote:
         assert r["ok"]
         assert (ws / "scenarios" / "system-settings" / "tag-library" / "TL-003.yaml").is_file()
 
+    def test_promote_creates_suite_yaml(self, ws, monkeypatch):
+        """K-026：promote 到无 _suite.yaml 的目录时自动创建（module 元信息）。
+
+        此前新模块目录无套件元信息 → 场景 module='' → DAG 编排按模块分组找不到。
+        """
+        dp, d = self._setup(ws, monkeypatch)
+        (d / "TL-004.yaml").write_text("id: TL-004\n", encoding="utf-8")
+        dp.promote("TL-004.yaml", "system-settings/tag-library", skip_gate=True)
+        suite = ws / "scenarios" / "system-settings" / "tag-library" / "_suite.yaml"
+        assert suite.is_file()
+        assert "module: system-settings/tag-library" in suite.read_text(encoding="utf-8")
+
+    def test_promote_records_lineage(self, ws, monkeypatch):
+        """K-026：promote 成功后血缘落盘（信息包 → 已入库场景正向链路）。
+
+        草稿的 scenario_id 来自 drafts/_meta.json（write_draft K-013 记录）。
+        """
+        import json as _json
+        dp, d = self._setup(ws, monkeypatch)
+        import mcp_server.tools.validator as v
+        # 按内容返回真实场景 ID（_setup 的恒 TL-001 mock 不适用于血缘断言）
+        monkeypatch.setattr(v, "validate_scenario_content", lambda content: {
+            "verdict": "PASS",
+            "scenario": content.split("id:")[1].split()[0] if "id:" in content else "X",
+            "findings": []})
+        (d / "TL-005.yaml").write_text("id: TL-005\n", encoding="utf-8")
+        (d / "_meta.json").write_text(
+            _json.dumps({"TL-005.yaml": {"scenario_id": "SG-META-0001"}}), encoding="utf-8")
+        dp.promote("TL-005.yaml", "module1", skip_gate=True)
+        promoted = scenario_meta.get_promotions("SG-META-0001")
+        assert len(promoted) == 1
+        assert promoted[0]["scenario_id"] == "TL-005"
+        assert promoted[0]["module"] == "module1"
+        assert promoted[0]["draft"] == "TL-005.yaml"
+        # 重复入库同场景 → 更新而非追加
+        (ws / "scenarios" / "module1" / "TL-005.yaml").unlink()  # 模拟修改后重入库
+        (d / "TL-005.yaml").write_text("id: TL-005\n", encoding="utf-8")
+        dp.promote("TL-005.yaml", "module1", skip_gate=True)
+        assert len(scenario_meta.get_promotions("SG-META-0001")) == 1
+
+    def test_promote_no_meta_no_lineage_no_crash(self, ws, monkeypatch):
+        """无 _meta.json 关联时静默跳过血缘（不影响入库主流程）。"""
+        dp, d = self._setup(ws, monkeypatch)
+        (d / "TL-006.yaml").write_text("id: TL-006\n", encoding="utf-8")
+        r = dp.promote("TL-006.yaml", "module1", skip_gate=True)
+        assert r["ok"]
+
     def test_promote_sg_root_fallback_no_value_error(self, ws, monkeypatch, tmp_path):
         """K-019：scenarios 根回退 SG_ROOT 侧（工作区外）时，return 不得抛 ValueError。
 
@@ -292,6 +339,68 @@ class TestPromote:
             dp.promote("TL-002.yaml", "module1", skip_gate=True)
         assert ei.value.code == "validation_failed"
         assert (d / "TL-002.yaml").is_file()  # 格式闸拒绝，草稿未移动
+
+
+class TestInfoPackUpload:
+    """K-033：信息包直接上传材料（不再只能 git 拉取工作区文件）。"""
+
+    @staticmethod
+    def _fake_upload(filename: str, data: bytes):
+        class FakeUpload:
+            async def read(self):
+                return data
+        u = FakeUpload()
+        u.filename = filename
+        return u
+
+    def test_upload_adds_entry_and_file(self, ws):
+        """上传 → 文件落盘 .specguard/uploads/ + 条目（带 sha 指纹）加入信息包。"""
+        import asyncio
+        from routers.scenarios import api_upload_info_pack_file
+
+        meta = _create("上传测试")
+        result = asyncio.run(api_upload_info_pack_file(
+            meta["id"], self._fake_upload("补充材料.md", "# 补充说明\n内容".encode("utf-8"))))
+        paths = [e["path"] for e in result["info_pack"]]
+        assert ".specguard/uploads/补充材料.md" in paths
+        # 文件真实落盘 + 条目带 sha
+        from specstd.workspace import safe_resolve
+        p = safe_resolve(".specguard/uploads/补充材料.md")
+        assert p and p.is_file()
+        entry = next(e for e in result["info_pack"] if e["path"].endswith("补充材料.md"))
+        assert entry["sha"]
+
+    def test_upload_dedup_filename(self, ws):
+        """同名上传第二次 → -1 后缀去重（不覆盖）。"""
+        import asyncio
+        from routers.scenarios import api_upload_info_pack_file
+
+        meta = _create("去重测试")
+        asyncio.run(api_upload_info_pack_file(meta["id"], self._fake_upload("a.md", b"v1")))
+        result = asyncio.run(api_upload_info_pack_file(meta["id"], self._fake_upload("a.md", b"v2")))
+        paths = [e["path"] for e in result["info_pack"]]
+        assert ".specguard/uploads/a.md" in paths
+        assert ".specguard/uploads/a-1.md" in paths
+        from specstd.workspace import safe_resolve
+        assert safe_resolve(".specguard/uploads/a.md").read_text() == "v1"  # 原文件未被覆盖
+
+    def test_upload_bad_filename_rejected(self, ws):
+        """非法文件名：隐藏文件（.env 等）→ 400；路径穿越被 .name 剥离中性化。"""
+        import asyncio
+        from fastapi import HTTPException
+        from routers.scenarios import api_upload_info_pack_file
+
+        meta = _create("非法文件名测试")
+        with pytest.raises(HTTPException) as ei:
+            asyncio.run(api_upload_info_pack_file(
+                meta["id"], self._fake_upload(".env", b"SECRET=x")))
+        assert ei.value.status_code == 400
+
+        # 路径穿越：Path.name 剥离目录部分，落盘仍在 uploads/ 内（中性化而非拒绝）
+        result = asyncio.run(api_upload_info_pack_file(
+            meta["id"], self._fake_upload("../../etc/evil.md", b"x")))
+        paths = [e["path"] for e in result["info_pack"]]
+        assert ".specguard/uploads/evil.md" in paths
 
 
 class TestPromoteBatch:
@@ -431,3 +540,61 @@ class TestGitDiscovery:
         assert r["inside_stale"] == ["specs/module1/feature1/spec.md"]
         assert "specs/module1/feature1/new-api.md" in r["outside_changes"]
         assert r["base_commit"] != r["head_commit"]
+
+
+class TestAutoCreateInfoPack:
+    """K-034：聊天框上传附件 → 自动创建信息包（无需先走创建向导）。"""
+
+    @staticmethod
+    def _fake_upload(filename: str, data: bytes):
+        class FakeUpload:
+            async def read(self):
+                return data
+        u = FakeUpload()
+        u.filename = filename
+        return u
+
+    def test_auto_create_multi_files(self, ws):
+        """多文件一次成一个包：meta 创建 + 全部落盘 + 条目化，默认名取首个文件名。"""
+        import asyncio
+        from routers.scenarios import api_auto_create_info_pack
+
+        files = [
+            self._fake_upload("对比导出.xlsx", b"pk\x03\x04fake"),
+            self._fake_upload("说明.md", "# 说明\n".encode("utf-8")),
+        ]
+        result = asyncio.run(api_auto_create_info_pack(files, name="", ws_name="ws1"))
+        assert result["id"].startswith("SG-META-")
+        assert result["name"] == "对比导出"  # 未指定名 → 首个文件名去扩展名
+        assert result["workspace"] == "ws1"
+        paths = [e["path"] for e in result["info_pack"]]
+        assert ".specguard/uploads/对比导出.xlsx" in paths
+        assert ".specguard/uploads/说明.md" in paths
+        # 文件真实落盘
+        from specstd.workspace import safe_resolve
+        assert safe_resolve(".specguard/uploads/对比导出.xlsx").is_file()
+        assert safe_resolve(".specguard/uploads/说明.md").is_file()
+
+    def test_auto_create_explicit_name(self, ws):
+        """显式名称优先于默认名。"""
+        import asyncio
+        from routers.scenarios import api_auto_create_info_pack
+
+        result = asyncio.run(api_auto_create_info_pack(
+            [self._fake_upload("a.md", b"v1")], name="我的信息包", ws_name="ws1"))
+        assert result["name"] == "我的信息包"
+
+    def test_auto_create_rejects_bad_file(self, ws):
+        """空文件/隐藏文件拒绝，且不创建 meta。"""
+        import asyncio
+        from fastapi import HTTPException
+        from routers.scenarios import api_auto_create_info_pack
+
+        before = len(scenario_meta.list_meta(workspace="ws1"))
+        with pytest.raises(HTTPException):
+            asyncio.run(api_auto_create_info_pack(
+                [self._fake_upload("a.md", b"")], name="", ws_name="ws1"))
+        with pytest.raises(HTTPException):
+            asyncio.run(api_auto_create_info_pack(
+                [self._fake_upload(".env", b"SECRET=1")], name="", ws_name="ws1"))
+        assert len(scenario_meta.list_meta(workspace="ws1")) == before

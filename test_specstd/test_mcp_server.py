@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 19  # K-021⑥: 新增 promote_drafts 后 18→19
+        assert len(ALL_TOOLS) == 20  # K-027: 新增 edit_dependency 后 19→20
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -58,7 +58,8 @@ class TestToolRegistration:
                      "todo_write", "switch_mode",
                      "promote_draft",  # H-3/H-4: meta 工具；K-015: promote_draft
                      "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
-                     "promote_drafts"}  # K-021⑥: 批量入库
+                     "promote_drafts",  # K-021⑥: 批量入库
+                     "edit_dependency"}  # K-027: DAG 依赖边编排
         assert names == expected
 
 
@@ -128,11 +129,15 @@ class TestSpecReader:
         assert "OUT_OF_SCOPE" in result[0].text
 
     def test_read_spec_binary_guard(self, workspace, tmp_path):
-        """二进制文件返回明确提示而非乱码/异常。"""
-        xlsx = tmp_path / "ws" / "specs" / "module1" / "feature1" / "data.xlsx"
-        xlsx.write_bytes(b"PK\x03\x04 fake xlsx")
+        """非办公二进制文件（zip 等）返回明确提示而非乱码/异常。
+
+        K-030 起 xlsx/docx/pdf 转为文本预览（见 test_file_preview.py），
+        其余二进制仍拒读。
+        """
+        z = tmp_path / "ws" / "specs" / "module1" / "feature1" / "data.zip"
+        z.write_bytes(b"PK\x03\x04 fake zip")
         result = _call(spec_reader, "read_spec",
-                       {"path": "specs/module1/feature1/data.xlsx"})
+                       {"path": "specs/module1/feature1/data.zip"})
         assert "二进制" in result[0].text
 
 
@@ -228,6 +233,73 @@ class TestScenarioTools:
         r2 = _call(scenario_tools, "run_scenario",
                    {"scenario_id": "X-001", "draft": "Y.yaml"})
         assert "二选一" in r2[0].text
+
+    # ── K-027：edit_dependency 依赖边编排 ──
+
+    @pytest.fixture()
+    def dag_lib(self, tmp_path, monkeypatch):
+        """隔离场景库：A（无依赖）+ B（无依赖），指向 tmp 并清缓存。"""
+        lib = tmp_path / "scenarios"
+        lib.mkdir()
+        (lib / "A-001.yaml").write_text(
+            "id: A-001\ntitle: 上游\nversion: \"1.0\"\n"
+            "flow:\n  - call: {method: GET, path: /a, save: r}\n"
+            "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
+        (lib / "B-001.yaml").write_text(
+            "id: B-001\ntitle: 下游\nversion: \"0.1\"\n"
+            "flow:\n  - call: {method: GET, path: /b, save: r}\n"
+            "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
+        from services import scenario_store
+        monkeypatch.setattr(scenario_store, "SCENARIOS_ROOT", lib)
+        monkeypatch.setattr(scenario_tools, "SCENARIOS_ROOT", lib)
+        scenario_store._cache["fingerprint"] = None
+        scenario_store._cache["scenarios"] = None
+        scenario_store._cache["graph"] = None
+        yield lib
+        scenario_store._cache["fingerprint"] = None
+        scenario_store._cache["scenarios"] = None
+        scenario_store._cache["graph"] = None
+
+    def test_edit_dependency_add(self, dag_lib):
+        """add：B 依赖 A（版本期望自动推导 ^1），depends_on 写进 YAML。"""
+        r = _call(scenario_tools, "edit_dependency",
+                  {"scenario_id": "B-001", "action": "add", "dep_id": "A-001"})
+        data = json.loads(r[0].text)
+        assert data["ok"], data
+        assert any(d["id"] == "A-001" and d["version"] == "^1" for d in data["depends_on"])
+        content = (dag_lib / "B-001.yaml").read_text(encoding="utf-8")
+        assert "A-001" in content
+
+    def test_edit_dependency_remove(self, dag_lib):
+        """add 后 remove：depends_on 清空（YAML 注释保留——文本外科手术）。"""
+        _call(scenario_tools, "edit_dependency",
+              {"scenario_id": "B-001", "action": "add", "dep_id": "A-001"})
+        r = _call(scenario_tools, "edit_dependency",
+                  {"scenario_id": "B-001", "action": "remove", "dep_id": "A-001"})
+        data = json.loads(r[0].text)
+        assert data["ok"], data
+        assert not any(d["id"] == "A-001" for d in data["depends_on"])
+
+    def test_edit_dependency_cycle_rejected(self, dag_lib):
+        """环校验：B→A 后再加 A→B → cycle 拒绝。"""
+        _call(scenario_tools, "edit_dependency",
+              {"scenario_id": "B-001", "action": "add", "dep_id": "A-001"})
+        r = _call(scenario_tools, "edit_dependency",
+                  {"scenario_id": "A-001", "action": "add", "dep_id": "B-001"})
+        data = json.loads(r[0].text)
+        assert not data["ok"] and data["error_code"] == "cycle"
+
+    def test_edit_dependency_guards(self, dag_lib):
+        """守卫：自依赖 / 场景不存在 / 依赖目标不存在。"""
+        r1 = _call(scenario_tools, "edit_dependency",
+                   {"scenario_id": "B-001", "action": "add", "dep_id": "B-001"})
+        assert "自依赖" in r1[0].text
+        r2 = _call(scenario_tools, "edit_dependency",
+                   {"scenario_id": "NOPE-001", "action": "add", "dep_id": "A-001"})
+        assert "不存在" in r2[0].text
+        r3 = _call(scenario_tools, "edit_dependency",
+                   {"scenario_id": "B-001", "action": "add", "dep_id": "NOPE-999"})
+        assert "不存在" in r3[0].text
 
 
 # ══════════════════════════════════════════════════════════
