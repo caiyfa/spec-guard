@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecGuard · specflow 需求侧交互原型</title>
+<style>
+/* ============ specflow 交互原型 V2 · 暗色工作台主题 ============ */
+:root{
+  --bg:#0b0f17; --surface:#121826; --surface-2:#182034; --surface-3:#1f2940;
+  --line:#26304a; --line-strong:#33405e;
+  --text:#c9d4e8; --text-strong:#eef3fc; --faint:#7c8aa5;
+  --test:#38bdf8; --test-soft:rgba(56,189,248,.12);
+  --req:#a78bfa; --req-soft:rgba(167,139,250,.14);
+  --pos:#34d399; --pos-soft:rgba(52,211,153,.12);
+  --warn:#fbbf24; --warn-soft:rgba(251,191,36,.12);
+  --neg:#f87171; --neg-soft:rgba(248,113,113,.14);
+  --mono:'SF Mono','JetBrains Mono',Consolas,monospace;
+  --font:'Helvetica Neue','Inter',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:var(--font);cursor:pointer}
+
+/* ── 顶部：原型导航 ── */
+.proto-bar{height:46px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.proto-bar .logo{font-weight:700;font-size:13px;color:var(--text-strong);margin-right:8px}
+.proto-bar .logo em{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--req);background:var(--req-soft);border:1px solid rgba(167,139,250,.35);padding:1px 6px;border-radius:3px;margin-left:6px}
+.nav-tab{padding:6px 14px;border-radius:6px;border:1px solid transparent;background:none;color:var(--faint);font-size:12.5px;transition:all .2s}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.on{color:var(--text-strong);background:var(--surface-3);border-color:var(--line-strong)}
+.proto-bar .hint{margin-left:auto;font-size:11px;color:var(--faint);font-family:var(--mono)}
+.screen{flex:1;display:none;min-height:0}
+.screen.on{display:flex;flex-direction:column;animation:scrIn .35s ease}
+@keyframes scrIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ════════════ 屏 1 · 出发仪式 ════════════ */
+#scr-stage{align-items:center;justify-content:center;position:relative;overflow:hidden}
+.stage-bg{position:absolute;inset:0;background-image:radial-gradient(rgba(99,140,255,.14) 1px,transparent 1px);background-size:26px 26px;animation:gridDrift 24s linear infinite}
+@keyframes gridDrift{from{background-position:0 0}to{background-position:52px 52px}}
+.stage-inner{position:relative;text-align:center;max-width:860px;width:92%}
+.stage-kicker{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--faint);text-transform:uppercase;margin-bottom:10px}
+.stage-title{font-size:26px;font-weight:700;color:var(--text-strong);margin-bottom:6px}
+.stage-sub{font-size:13px;color:var(--faint);margin-bottom:34px}
+.mission-row{display:flex;gap:22px;justify-content:center;perspective:900px}
+.m-card{width:300px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px 24px;text-align:left;position:relative;cursor:pointer;transition:transform .35s ease,opacity .35s ease,box-shadow .35s ease;transform-style:preserve-3d}
+.m-card::before{content:'';position:absolute;inset:-1px;border-radius:14px;padding:1.5px;background:conic-gradient(from var(--ang,0deg),transparent 0 65%,var(--mc) 80%,transparent 95%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .3s;animation:spin 4s linear infinite paused}
+.m-card:hover::before{opacity:1;animation-play-state:running}
+@property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
+@keyframes spin{to{--ang:360deg}}
+.m-card:hover{box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.m-card .mi{font-size:30px;margin-bottom:12px}
+.m-card h3{font-size:17px;color:var(--text-strong);margin-bottom:6px}
+.m-card .mt{font-family:var(--mono);font-size:10px;letter-spacing:1px;margin-bottom:10px}
+.m-card p{font-size:12.5px;color:var(--faint);line-height:1.7}
+.m-card .mchips{margin-top:14px;display:flex;flex-wrap:wrap;gap:5px}
+.m-card .mchip{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:9px;border:1px solid var(--line-strong);color:var(--faint)}
+.m-card[data-side=test]{--mc:var(--test)} .m-card[data-side=test] .mt{color:var(--test)}
+.m-card[data-side=req]{--mc:var(--req)} .m-card[data-side=req] .mt{color:var(--req)}
+.m-card.picked{border-color:var(--mc)}
+.m-card.dismissed{opacity:.12;transform:scale(.94);pointer-events:none}
+.loadout{margin:26px auto 0;max-width:420px;text-align:left;opacity:0;transition:opacity .4s}
+.loadout.on{opacity:1}
+.loadout li{list-style:none;font-family:var(--mono);font-size:12px;color:var(--text);padding:5px 0;opacity:0;transform:translateX(-10px)}
+.loadout.on li{animation:fly .35s forwards}
+.loadout li:nth-child(1){animation-delay:.05s}.loadout li:nth-child(2){animation-delay:.2s}
+.loadout li:nth-child(3){animation-delay:.35s}.loadout li:nth-child(4){animation-delay:.5s}
+@keyframes fly{to{opacity:1;transform:none}}
+.go-btn{margin-top:22px;padding:10px 44px;border-radius:9px;border:none;font-size:14px;font-weight:700;color:#0b0f17;opacity:0;pointer-events:none;transition:opacity .4s,transform .15s}
+.go-btn.on{opacity:1;pointer-events:auto;animation:pulseBtn 2s infinite}
+.go-btn:hover{transform:translateY(-1px)}
+@keyframes pulseBtn{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.18)}50%{box-shadow:0 0 0 8px rgba(255,255,255,0)}}
+.stage-kbd{margin-top:26px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.stage-kbd b{border:1px solid var(--line-strong);border-radius:4px;padding:1px 6px;color:var(--text)}
+
+/* ════════════ 会话三栏骨架 ════════════ */
+.ws{flex:1;display:grid;grid-template-columns:230px 1fr 380px;min-height:0}
+.stree{border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.stree .st-head{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.stree .st-head span{font-size:12px;font-weight:700;color:var(--text-strong)}
+.new-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--line-strong);background:var(--surface-3);color:var(--text);font-size:11.5px}
+.new-btn:hover{border-color:var(--req);color:var(--req)}
+.st-filter{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.st-filter button{flex:1;padding:3px 0;font-size:10.5px;border-radius:5px;border:1px solid var(--line);background:none;color:var(--faint)}
+.st-filter button.on{color:var(--text-strong);background:var(--surface-3)}
+.sess{padding:9px 12px;border-left:2px solid transparent;cursor:pointer;border-bottom:1px solid rgba(38,48,74,.5)}
+.sess:hover{background:var(--surface-2)}
+.sess.on{background:var(--surface-3);border-left-color:var(--req)}
+.sess .st-row{display:flex;align-items:center;gap:6px}
+.sess .badge{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;flex:0 0 auto}
+.badge.req{color:var(--req);background:var(--req-soft)}
+.badge.test{color:var(--test);background:var(--test-soft)}
+.sess .st-title{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess .st-sub{font-size:10px;color:var(--faint);margin-top:3px;font-family:var(--mono)}
+.chatcol{display:flex;flex-direction:column;min-height:0}
+.chat-band{height:3px;flex:0 0 auto}
+.chat-scroll{flex:1;overflow-y:auto;padding:20px 26px;min-height:0}
+.msg{display:flex;gap:10px;margin-bottom:18px;animation:msgIn .3s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.msg .av{width:28px;height:28px;border-radius:7px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:14px}
+.msg.user .av{background:var(--surface-3)}
+.msg.ai .av{background:var(--req-soft)}
+.msg .mb{max-width:78%}
+.msg .mrole{font-size:10.5px;color:var(--faint);margin-bottom:4px;font-family:var(--mono)}
+.msg .mtext{font-size:13px;line-height:1.75;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:0 10px 10px 10px;padding:10px 14px}
+.msg.user{flex-direction:row-reverse}
+.msg.user .mtext{background:var(--surface-3);border-radius:10px 0 10px 10px}
+.msg.user .mrole{text-align:right}
+.qchip{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--warn);background:var(--warn-soft);padding:1px 7px;border-radius:3px;margin-right:4px}
+.chat-input{flex:0 0 auto;border-top:1px solid var(--line);padding:12px 18px;display:flex;gap:10px;background:var(--surface)}
+.chat-input input{flex:1;background:var(--bg);border:1px solid var(--line-strong);border-radius:8px;padding:9px 14px;color:var(--text);font-size:13px;outline:none;font-family:var(--font)}
+.chat-input input:focus{border-color:var(--req)}
+.send-btn{padding:9px 22px;border-radius:8px;border:none;background:var(--req);color:#fff;font-weight:600;font-size:13px}
+.send-btn.test{background:var(--test);color:#06202e}
+.demo-btn{padding:9px 12px;border-radius:8px;border:1px dashed var(--line-strong);background:none;color:var(--faint);font-size:11.5px}
+.demo-btn:hover{color:var(--warn);border-color:var(--warn)}
+.panel{border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.p-tabs{display:flex;border-bottom:1px solid var(--line);flex:0 0 auto}
+.p-tab{flex:1;padding:9px 0;text-align:center;font-size:11.5px;color:var(--faint);background:none;border:none;border-bottom:2px solid transparent}
+.p-tab.on{color:var(--text-strong);border-bottom-color:var(--req)}
+.p-body{flex:1;overflow-y:auto;padding:14px;min-height:0}
+.p-pane{display:none}.p-pane.on{display:block}
+
+/* 决策台账 */
+.ld-item{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:9px;background:var(--surface-2)}
+.ld-item .ld-top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.pri{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px}
+.pri.p0{color:var(--neg);background:var(--neg-soft)} .pri.p1{color:var(--warn);background:var(--warn-soft)} .pri.p2{color:var(--faint);background:var(--surface-3)}
+.ld-st{margin-left:auto;font-family:var(--mono);font-size:10px}
+.ld-st.pending{color:var(--neg)} .ld-st.resolved{color:var(--pos)}
+.ld-q{font-size:12.5px;color:var(--text);line-height:1.6}
+.ld-a{font-size:11.5px;color:var(--faint);margin-top:5px;line-height:1.6}
+.ld-a b{color:var(--pos)}
+.ld-link{font-family:var(--mono);font-size:10px;color:var(--req);margin-top:5px}
+.gate{margin-top:6px;border:1px solid var(--line-strong);border-radius:8px;padding:10px 12px;background:var(--surface)}
+.gate .gt{font-size:11px;font-weight:700;color:var(--text-strong);margin-bottom:6px;font-family:var(--mono)}
+.gate .gr{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);padding:2.5px 0}
+.gate .gr b{font-family:var(--mono)}
+
+/* 五维评分 · 雷达图 */
+.radar-wrap{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:6px 4px 2px}
+.radar-total{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 0;font-size:12px}
+.radar-total b{font-family:var(--mono);font-size:15px;color:var(--warn)}
+.radar-legend{font-size:10px;color:var(--faint);padding:0 10px 8px;line-height:1.6}
+.sc-notes{margin-top:10px}
+.sc-note2{display:flex;gap:8px;font-size:10.5px;color:var(--faint);padding:4px 2px;line-height:1.5;border-bottom:1px dashed rgba(38,48,74,.6)}
+.sc-note2 b{font-family:var(--mono);flex:0 0 auto}
+
+/* spec 草案 */
+.draft-pre{font-family:var(--mono);font-size:11px;line-height:1.8;color:var(--text);white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px}
+.tbd{color:var(--warn);background:var(--warn-soft);padding:0 4px;border-radius:3px}
+.frk{color:var(--req)}
+
+/* 图谱通用 */
+.g-wrap{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:6px}
+.g-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--faint);padding:8px 4px 2px;font-family:var(--mono)}
+.g-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
+g.node{cursor:pointer}
+g.node.dim{opacity:.32}
+g.node.dim:hover{opacity:.7}
+.pulse{animation:nodePulse 1.6s infinite}
+@keyframes nodePulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.2}}
+.g-info{margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface-2);font-size:11.5px;color:var(--faint);line-height:1.7;min-height:52px}
+.g-info b{color:var(--text-strong)}
+.g-info .bl{margin-top:4px;font-family:var(--mono);font-size:10.5px;color:var(--req);line-height:1.7}
+
+/* 覆盖缺口 · 三泳道看板 */
+.cov-board{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.cov-col{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px;min-height:280px}
+.cov-col .cc-h{font-size:11px;font-weight:700;padding:2px 4px 8px;display:flex;justify-content:space-between;align-items:center}
+.cov-col .cc-h .cnt{font-family:var(--mono);font-size:10px;font-weight:400;color:var(--faint)}
+.cov-col.gap .cc-h{color:var(--neg)} .cov-col.draft .cc-h{color:var(--warn)} .cov-col.ok .cc-h{color:var(--pos)}
+.fr-card{border:1px solid var(--line-strong);border-left:3px solid var(--fc);border-radius:7px;background:var(--surface-2);padding:7px 9px;margin-bottom:7px;cursor:pointer;transition:all .15s}
+.fr-card:hover{transform:translateY(-1px);background:var(--surface-3)}
+.fr-card .fn{font-size:11.5px;font-weight:700;color:var(--text-strong);line-height:1.3}
+.fr-card .fc2{font-family:var(--mono);font-size:9px;color:var(--faint);margin-top:2px}
+.fr-card .fm{font-size:10px;color:var(--faint);margin-top:4px;line-height:1.45}
+.cov-col.gap .fr-card{--fc:var(--neg)} .cov-col.draft .fr-card{--fc:var(--warn)} .cov-col.ok .fr-card{--fc:var(--pos)}
+
+/* ════════════ 屏 4 · 血缘链（分阶段） ════════════ */
+#scr-line{padding:22px 30px;overflow:auto}
+.line-head{margin-bottom:16px}
+.line-head h2{font-size:18px;color:var(--text-strong);margin-bottom:4px}
+.line-head p{font-size:12.5px;color:var(--faint)}
+.band{border:1px solid var(--line);border-left:3px solid var(--bc);border-radius:10px;background:var(--surface);padding:12px 16px}
+.band-h{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.band-h .bn{font-family:var(--mono);font-size:10px;color:#fff;background:var(--bc);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.band-h .bt{font-size:13px;font-weight:700;color:var(--text-strong)}
+.band-h .bs{font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+.band.req{--bc:var(--req)} .band.ext{--bc:var(--warn)} .band.test{--bc:var(--test)} .band.fb{--bc:var(--pos)}
+.band-body{display:flex;align-items:center;flex-wrap:wrap;row-gap:12px}
+.cn{min-width:124px;background:var(--bg);border:1px solid var(--line-strong);border-radius:10px;padding:9px 12px;cursor:pointer;transition:all .2s}
+.cn:hover{border-color:var(--req);transform:translateY(-2px)}
+.cn.sel{border-color:var(--req);box-shadow:0 0 0 3px var(--req-soft),0 6px 18px rgba(167,139,250,.15);transform:translateY(-2px)}
+.cn .ct{font-family:var(--mono);font-size:9px;letter-spacing:.5px;margin-bottom:3px;color:var(--faint)}
+.cn .cl{font-size:12.5px;color:var(--text-strong);font-weight:700}
+.cn .cid{font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:2px}
+.cn.ext{border-style:dashed;border-color:var(--warn)} .cn.ext .ct{color:var(--warn)}
+.cn.broken{border-style:dashed;opacity:.55} .cn.broken .cl{color:var(--faint)}
+.carr{color:var(--faint);padding:0 6px;font-size:14px;flex:0 0 auto}
+.between{display:flex;align-items:center;gap:10px;padding:7px 0 7px 26px;color:var(--faint);font-size:12px}
+.between .bl-label{font-family:var(--mono);font-size:10px}
+.loop-back{margin-top:10px;border:1px dashed var(--pos);border-radius:10px;padding:10px 16px;color:var(--pos);font-family:var(--mono);font-size:11.5px;display:flex;align-items:center;gap:10px}
+.ln-detail{margin-top:16px;max-width:820px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);padding:16px 18px}
+.ln-detail .dt{font-family:var(--mono);font-size:11px;color:var(--req);margin-bottom:6px}
+.ln-detail h3{font-size:15px;color:var(--text-strong);margin-bottom:8px}
+.ln-detail p{font-size:12.5px;color:var(--text);line-height:1.8}
+.ln-detail .art{margin-top:10px;font-size:11.5px;color:var(--faint);line-height:1.8}
+.ln-detail .art b{color:var(--text)}
+.ln-detail .up{margin-top:10px;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.ln-detail .up b{color:var(--req)}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="logo">SpecGuard · specflow 交互原型<em>V2</em></div>
+  <button class="nav-tab on" data-go="scr-stage">① 出发仪式</button>
+  <button class="nav-tab" data-go="scr-req">② 需求面试会话</button>
+  <button class="nav-tab" data-go="scr-test">③ 覆盖缺口看板</button>
+  <button class="nav-tab" data-go="scr-line">④ 血缘链（分阶段）</button>
+  <span class="hint">决策 ④⑤⑥⑦ · 功能名替代编号 · 雷达图 · 泳道看板 · 阶段分带</span>
+</div>
+
+<!-- ═══ 屏 1 · 出发仪式 ═══ -->
+<div class="screen on" id="scr-stage">
+  <div class="stage-bg"></div>
+  <div class="stage-inner">
+    <div class="stage-kicker">New Session · 选择本次使命</div>
+    <div class="stage-title">装配你的 Agent</div>
+    <div class="stage-sub">用途创建后即锁定 —— 使命必达，不可中途变更</div>
+    <div class="mission-row" id="missionRow">
+      <div class="m-card" data-side="test" tabindex="0">
+        <div class="mi">🧪</div><div class="mt">TEST WORKBENCH</div><h3>测试工作台</h3>
+        <p>契约驱动的场景测试：读 Spec 生成 YAML 用例、DAG 编排、执行与失败归因。</p>
+        <div class="mchips"><span class="mchip">19 工具</span><span class="mchip">统一提示词</span><span class="mchip">草稿/计划面板</span></div>
+      </div>
+      <div class="m-card" data-side="req" tabindex="0">
+        <div class="mi">🧭</div><div class="mt">REQUIREMENT INTERVIEW</div><h3>需求面试</h3>
+        <p>AI 面试官多轮盘问需求，P0/P1/P2 决策台账，五维评分，冻结规格进基线。</p>
+        <div class="mchips"><span class="mchip">specflow 工具集</span><span class="mchip">台账/评分明板</span><span class="mchip">影响面图谱</span></div>
+      </div>
+    </div>
+    <ul class="loadout" id="loadout"></ul>
+    <button class="go-btn" id="goBtn">出发 →</button>
+    <div class="stage-kbd"><b>←</b><b>→</b> 切换 &nbsp;·&nbsp; <b>Enter</b> 出发 &nbsp;·&nbsp; <b>Esc</b> 取消</div>
+  </div>
+</div>
+
+<!-- ═══ 屏 2 · 需求面试会话 ═══ -->
+<div class="screen" id="scr-req">
+  <div class="ws">
+    <div class="stree">
+      <div class="st-head"><span>会话</span><button class="new-btn" onclick="go('scr-stage')">＋ 新会话</button></div>
+      <div class="st-filter"><button>全部</button><button class="on">🧭 需求</button><button>🧪 测试</button></div>
+      <div class="sess on"><div class="st-row"><span class="badge req">面试</span><span class="st-title">九宫格落位规则调整</span></div><div class="st-sub">IV-007 · P0 剩 2 · 进行中</div></div>
+      <div class="sess"><div class="st-row"><span class="badge req">面试</span><span class="st-title">盘点活动作废范围扩展</span></div><div class="st-sub">IV-003 · 已冻结 ✅</div></div>
+      <div class="sess"><div class="st-row"><span class="badge test">测试</span><span class="st-title">PP-RC-008 场景生成</span></div><div class="st-sub">昨天 · 草稿 3 份</div></div>
+    </div>
+    <div class="chatcol">
+      <div class="chat-band" style="background:var(--req)"></div>
+      <div class="chat-scroll" id="reqChat">
+        <div class="msg ai"><div class="av">🧭</div><div class="mb"><div class="mrole">面试官 · IV-007</div>
+          <div class="mtext">已装载「九宫格落位规则调整」议题。基线里相关功能点：<b>绩效域落位规则</b>、<b>名单过滤</b>。上轮执行遗留 1 条未闭环 SPQ（落位后名单未刷新）——已放入本次信息包。<br><br><span class="qchip">Q1 · P0</span>本次调整只改「绩效域」的落位规则，还是三个域（绩效/潜能/综合）一起动？</div></div></div>
+        <div class="msg user"><div class="av">👤</div><div class="mb"><div class="mrole">产品经理</div>
+          <div class="mtext">只动绩效域。潜能和综合域维持现有规则。</div></div></div>
+        <div class="msg ai"><div class="av">🧭</div><div class="mb"><div class="mrole">面试官 · IV-007</div>
+          <div class="mtext"><span class="qchip">Q2 · P0</span>新规则生效后，<b>存量已落位名单</b>怎么处理——按新规则重算覆盖，还是冻结存量只对新会话生效？这决定「绩效域落位规则」是修改还是新增。右侧「影响面」已把波及的功能点标红了。</div></div></div>
+      </div>
+      <div class="chat-input">
+        <input id="reqInput" placeholder="回答面试官的问题…（Enter 发送）">
+        <button class="demo-btn" onclick="demoLedger()">⚡ 演示：决策落账</button>
+        <button class="send-btn" onclick="reqSend()">发送</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="p-tabs">
+        <button class="p-tab on" data-pt="pt-ledger">决策台账</button>
+        <button class="p-tab" data-pt="pt-score">五维评分</button>
+        <button class="p-tab" data-pt="pt-draft">spec 草案</button>
+        <button class="p-tab" data-pt="pt-graph">影响面</button>
+      </div>
+      <div class="p-body">
+        <!-- 决策台账 -->
+        <div class="p-pane on" id="pt-ledger">
+          <div class="ld-item"><div class="ld-top"><span class="pri p0">P0</span><span style="font-family:var(--mono);font-size:10px;color:var(--faint)">D-031</span><span class="ld-st resolved">✓ 已决</span></div>
+            <div class="ld-q">调整范围：仅绩效域，还是三域同改？</div>
+            <div class="ld-a">决策：<b>仅绩效域</b>。潜能/综合域规则冻结不变。—— 产品经理 07-31 10:12</div>
+            <div class="ld-link">→ 绩效域落位规则 · Q1</div></div>
+          <div class="ld-item" id="ldPending"><div class="ld-top"><span class="pri p0">P0</span><span style="font-family:var(--mono);font-size:10px;color:var(--faint)">D-032</span><span class="ld-st pending">● 待定</span></div>
+            <div class="ld-q">存量已落位名单：重算覆盖 vs 冻结存量？</div>
+            <div class="ld-link">→ 绩效域落位规则(改?) / 名单刷新(增?) · Q2</div></div>
+          <div class="ld-item"><div class="ld-top"><span class="pri p1">P1</span><span style="font-family:var(--mono);font-size:10px;color:var(--faint)">D-033</span><span class="ld-st pending">● 待定</span></div>
+            <div class="ld-q">SPQ-005 遗留：落位后名单刷新延迟是否进本次范围？</div>
+            <div class="ld-link">→ SPQ-005 · 名单过滤</div></div>
+          <div class="gate"><div class="gt">P0 清零门禁</div>
+            <div class="gr"><span>P0 待定</span><b style="color:var(--neg)" id="gateP0">1 项</b></div>
+            <div class="gr"><span>影响面图确认</span><b style="color:var(--neg)">未确认</b></div>
+            <div class="gr"><span>五维评分</span><b style="color:var(--warn)">68 / 70</b></div>
+            <div class="gr"><span>冻结放行</span><b>🔒 未达成</b></div></div>
+        </div>
+        <!-- 五维评分 · 雷达图 -->
+        <div class="p-pane" id="pt-score">
+          <div class="radar-wrap"><svg id="radarSvg" width="352" height="268" viewBox="0 0 352 268"></svg></div>
+          <div class="radar-total"><span>合计（加权）</span><b>68 / 70 未及格</b></div>
+          <div class="radar-legend">虚线环 = 及格线 70；机打维度由 specstd 校验器给出，主观维度为 LLM 建议分、QA 确认后生效。</div>
+          <div class="sc-notes">
+            <div class="sc-note2"><b style="color:var(--pos)">78</b><span>逻辑完整性 · 机打：11 章齐全 ✓ SHALL 语句 ✓</span></div>
+            <div class="sc-note2"><b style="color:var(--warn)">62</b><span>预期清晰度 · LLM 建议：存量处理语义待 D-032 落锤</span></div>
+            <div class="sc-note2"><b style="color:var(--pos)">85</b><span>需求覆盖率 · 机打：PRD §2.7 条目全映射</span></div>
+            <div class="sc-note2"><b style="color:var(--neg)">55</b><span>边界异常 · 机打：缺「规则切换中落位」异常场景</span></div>
+            <div class="sc-note2"><b style="color:var(--pos)">70</b><span>前置条件 · 机打：绩效域数据快照前置已声明</span></div>
+          </div>
+        </div>
+        <!-- spec 草案 -->
+        <div class="p-pane" id="pt-draft">
+<div class="draft-pre"><span class="frk">绩效域落位规则</span>  [V1.1 MODIFIED]
+系统 SHALL 按新规则计算绩效域落位：
+- 绩效≥4.5 → 第 9 宫格（原 ≥4.2）
+- 存量名单：<span class="tbd">待确认 ← D-032</span>
+权限：tdm:grid:place（不变）
+→ task: <span class="tbd">待 D-032 决策后生成</span>
+
+<span class="frk">落位名单刷新</span>  [delta:grid-rule-perf ADDED?]
+<span class="tbd">是否纳入本期取决于 D-033（SPQ-005）</span>
+
+## Changelog（草案）
+🔧 [delta:grid-rule-perf] 落位阈值上调</div>
+        </div>
+        <!-- 影响面图谱 -->
+        <div class="p-pane" id="pt-graph">
+          <div class="g-wrap"><svg id="impactSvg" width="352" height="320" viewBox="0 0 352 320"></svg></div>
+          <div class="g-legend"><span><i style="background:var(--req)"></i>议题焦点</span><span><i style="background:var(--neg)"></i>受影响</span><span><i style="background:var(--test)"></i>覆盖场景</span><span><i style="background:#3a4763"></i>无关</span></div>
+          <div class="g-info" id="impactInfo">点击节点查看 backlink——「哪些场景覆盖我 / 哪些 delta 改过我 / 哪些决策引用我」。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 屏 3 · 覆盖缺口看板（测试侧） ═══ -->
+<div class="screen" id="scr-test">
+  <div class="ws">
+    <div class="stree">
+      <div class="st-head"><span>会话</span><button class="new-btn" onclick="go('scr-stage')">＋ 新会话</button></div>
+      <div class="st-filter"><button>全部</button><button>🧭 需求</button><button class="on">🧪 测试</button></div>
+      <div class="sess"><div class="st-row"><span class="badge req">面试</span><span class="st-title">九宫格落位规则调整</span></div><div class="st-sub">IV-007 · 进行中</div></div>
+      <div class="sess on" style="border-left-color:var(--test)"><div class="st-row"><span class="badge test">测试</span><span class="st-title">盘点活动场景补齐</span></div><div class="st-sub">缺口 3 个功能点</div></div>
+    </div>
+    <div class="chatcol">
+      <div class="chat-band" style="background:var(--test)"></div>
+      <div class="chat-scroll">
+        <div class="msg user"><div class="av">👤</div><div class="mb"><div class="mrole">测试人员</div><div class="mtext">盘点活动模块还有哪些功能点没场景覆盖？</div></div></div>
+        <div class="msg ai"><div class="av">🧪</div><div class="mb"><div class="mrole">测试工作台</div>
+          <div class="mtext">右侧看板：<b>3 个功能点无覆盖</b>（左列红色：名单刷新、活动模板复制、批量导入），2 个仅有待审草稿（中列黄色）。建议优先补「作废级联删除」——它是 extend-void-scope 的新增条目，P0 回归阻塞项。要我现在生成吗？</div></div></div>
+      </div>
+      <div class="chat-input"><input placeholder="继续对话…"><button class="send-btn test">发送</button></div>
+    </div>
+    <div class="panel">
+      <div class="p-tabs"><button class="p-tab on">覆盖缺口看板</button><button class="p-tab">草稿</button><button class="p-tab">计划</button></div>
+      <div class="p-body">
+        <div class="cov-board" id="covBoard"></div>
+        <div class="g-info" id="covInfo">点击功能点卡片查看覆盖它的场景（backlink）。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 屏 4 · 血缘链（分阶段） ═══ -->
+<div class="screen" id="scr-line">
+  <div class="line-head">
+    <h2>血缘链 · Story Line</h2>
+    <p>四个阶段分带：需求 → 研发（外部锚点）→ 验证 → 反哺闭环。虚线节点 = 外部引用/断链；点击节点看详情。</p>
+  </div>
+  <div id="stages"></div>
+  <div class="loop-back">⟳ SPQ-005 已自动进入 IV-007 面试信息包 —— 回到 ① 需求阶段，闭环</div>
+  <div class="ln-detail" id="lineDetail"></div>
+</div>
+
+<script>
+/* ── 屏间路由 ── */
+function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('on',t.dataset.go===id));}
+document.querySelectorAll('.nav-tab').forEach(t=>t.onclick=()=>go(t.dataset.go));
+
+/* ── 屏 1 · 出发仪式 ── */
+const cards=[...document.querySelectorAll('.m-card')],loadout=document.getElementById('loadout'),goBtn=document.getElementById('goBtn');
+let picked=null;
+const LOADOUTS={test:['✓ 系统提示词 · 场景生成规范已装载','✓ 19 个工具已就绪','✓ 右侧面板 · 草稿/计划/覆盖看板 已挂载','🔒 用途将在创建后锁定 · 产物入 .specguard/'],
+req:['✓ 系统提示词 · 面试官人格 + 提问维度库已装载','✓ specflow 工具集已就绪','✓ 右侧面板 · 台账/评分/草案/影响面 已挂载','🔒 用途将在创建后锁定 · 产物入 .specflow/']};
+cards.forEach(c=>{
+  c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    c.style.transform=`rotateY(${x*8}deg) rotateX(${-y*8}deg) translateY(-4px)`;});
+  c.addEventListener('mouseleave',()=>c.style.transform='');
+  c.addEventListener('click',()=>pick(c.dataset.side));});
+function pick(side){picked=side;
+  cards.forEach(c=>{c.classList.toggle('picked',c.dataset.side===side);c.classList.toggle('dismissed',c.dataset.side!==side);});
+  loadout.classList.remove('on');void loadout.offsetWidth;
+  loadout.innerHTML=LOADOUTS[side].map((t,i)=>`<li class="${i===3?'':'ok'}" style="color:${i===3?'var(--warn)':''}">${t}</li>`).join('');
+  loadout.classList.add('on');
+  goBtn.textContent=side==='req'?'出发 · 开始面试 →':'出发 · 进入工作台 →';
+  goBtn.style.background=side==='req'?'var(--req)':'var(--test)';
+  goBtn.classList.add('on');}
+goBtn.onclick=()=>picked&&go(picked==='req'?'scr-req':'scr-test');
+document.addEventListener('keydown',e=>{
+  if(!document.getElementById('scr-stage').classList.contains('on'))return;
+  if(e.key==='ArrowLeft')pick('test');if(e.key==='ArrowRight')pick('req');
+  if(e.key==='Enter'&&picked)goBtn.click();
+  if(e.key==='Escape'){picked=null;cards.forEach(c=>c.classList.remove('picked','dismissed'));loadout.classList.remove('on');goBtn.classList.remove('on');}});
+
+/* ── 屏 2 · scripted chat ── */
+const reqChat=document.getElementById('reqChat'),reqInput=document.getElementById('reqInput');
+const REPLIES=['<span class="qchip">Q3 · P0</span>明白。若存量冻结，「绩效域落位规则」维持修改、「名单刷新」拆成新增功能点单独管——确认这样拆分吗？',
+'已记录。P0 剩最后 1 项：请到右侧「影响面」点击「绩效域落位规则」确认波及范围，确认后门禁放行。'];
+let ri=0;
+function reqSend(){const v=reqInput.value.trim();if(!v)return;
+  reqChat.insertAdjacentHTML('beforeend',`<div class="msg user"><div class="av">👤</div><div class="mb"><div class="mrole">产品经理</div><div class="mtext">${v.replace(/</g,'&lt;')}</div></div></div>`);
+  reqInput.value='';
+  setTimeout(()=>{reqChat.insertAdjacentHTML('beforeend',`<div class="msg ai"><div class="av">🧭</div><div class="mb"><div class="mrole">面试官 · IV-007</div><div class="mtext">${REPLIES[ri++%REPLIES.length]}</div></div></div>`);
+    reqChat.scrollTop=reqChat.scrollHeight;},450);
+  reqChat.scrollTop=reqChat.scrollHeight;}
+reqInput.addEventListener('keydown',e=>e.key==='Enter'&&reqSend());
+function demoLedger(){const el=document.getElementById('ldPending');if(!el)return;
+  el.querySelector('.ld-st').className='ld-st resolved';el.querySelector('.ld-st').textContent='✓ 已决';
+  el.insertAdjacentHTML('beforeend','<div class="ld-a">决策：<b>冻结存量</b>，仅对新会话生效；落位规则维持修改，刷新逻辑拆新增功能点。—— 产品经理 刚刚</div>');
+  document.getElementById('gateP0').textContent='0 项';document.getElementById('gateP0').style.color='var(--pos)';}
+
+/* ── 右面板页签 ── */
+document.querySelectorAll('#scr-req .p-tab[data-pt]').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('#scr-req .p-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  document.querySelectorAll('#scr-req .p-pane').forEach(p=>p.classList.toggle('on',p.id===t.dataset.pt));});
+
+/* ── 五维评分 · 五角雷达图 ── */
+(function(){
+  const NS='http://www.w3.org/2000/svg',svg=document.getElementById('radarSvg');
+  const cx=176,cy=132,R=86;
+  const D=[['逻辑完整性',78],['需求覆盖率',85],['边界异常',55],['前置条件',70],['预期清晰度',62]];
+  const pt=(i,r)=>{const a=(-90+i*72)*Math.PI/180;return[cx+Math.cos(a)*r,cy+Math.sin(a)*r];};
+  const poly=r=>D.map((_,i)=>pt(i,r).join(',')).join(' ');
+  const mk=(tag,attrs)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);svg.appendChild(e);return e;};
+  [0.25,0.5,0.75,1].forEach(f=>mk('polygon',{points:poly(R*f),fill:'none',stroke:'#26304a','stroke-width':1}));
+  mk('polygon',{points:poly(R*0.7),fill:'none',stroke:'var(--warn)','stroke-width':1,'stroke-dasharray':'4 4',opacity:.7});  // 及格线 70
+  D.forEach((d,i)=>{const [x,y]=pt(i,R);mk('line',{x1:cx,y1:cy,x2:x,y2:y,stroke:'#26304a','stroke-width':1});
+    const [lx,ly]=pt(i,R+16),[vx,vy]=pt(i,R*d[1]/100);
+    mk('text',{x:lx,y:ly,'text-anchor':'middle','font-size':10,fill:'var(--text)','font-family':'var(--font)'}).textContent=d[0];
+    mk('text',{x:lx,y:ly+11,'text-anchor':'middle','font-size':9.5,fill:d[1]>=70?'var(--pos)':d[1]>=60?'var(--warn)':'var(--neg)','font-family':'var(--mono)'}).textContent=d[1];});
+  mk('polygon',{points:D.map((d,i)=>pt(i,R*d[1]/100).join(',')).join(' '),fill:'rgba(167,139,250,.22)',stroke:'var(--req)','stroke-width':2});
+  D.forEach((d,i)=>{const [vx,vy]=pt(i,R*d[1]/100);mk('circle',{cx:vx,cy:vy,r:3.2,fill:'var(--req)',stroke:'#0b0f17','stroke-width':1.5});});
+})();
+
+/* ── SVG 图谱工具（两行标签：功能名 + 编号） ── */
+function draw(svg,nodes,edges,onClick){
+  const NS='http://www.w3.org/2000/svg';
+  edges.forEach(e=>{const A=nodes[e.a],B=nodes[e.b],l=document.createElementNS(NS,'line');
+    l.setAttribute('x1',A.x);l.setAttribute('y1',A.y);l.setAttribute('x2',B.x);l.setAttribute('y2',B.y);
+    l.setAttribute('stroke',e.hot?'#f87171':e.cy?'#38bdf8':'#2a3550');
+    l.setAttribute('stroke-width',e.hot||e.cy?'1.8':'1');
+    if(e.dim)l.setAttribute('stroke-dasharray','3 4');svg.appendChild(l);});
+  Object.entries(nodes).forEach(([id,n])=>{const g=document.createElementNS(NS,'g');g.setAttribute('class','node'+(n.dim?' dim':''));
+    const c=document.createElementNS(NS,'circle');c.setAttribute('cx',n.x);c.setAttribute('cy',n.y);c.setAttribute('r',n.r||14);
+    c.setAttribute('fill',n.fill);c.setAttribute('stroke',n.stroke);c.setAttribute('stroke-width','2');
+    if(n.pulse)c.setAttribute('class','pulse');
+    const t1=document.createElementNS(NS,'text');t1.setAttribute('x',n.x);t1.setAttribute('y',n.y+(n.r||14)+13);
+    t1.setAttribute('text-anchor','middle');t1.setAttribute('font-size',n.focus?'11':'10');t1.setAttribute('fill','var(--text-strong)');
+    if(n.focus)t1.setAttribute('font-weight','700');t1.textContent=n.name;
+    const t2=document.createElementNS(NS,'text');t2.setAttribute('x',n.x);t2.setAttribute('y',n.y+(n.r||14)+24);
+    t2.setAttribute('text-anchor','middle');t2.setAttribute('font-size','8.5');t2.setAttribute('fill','var(--faint)');
+    t2.setAttribute('font-family','monospace');t2.textContent=id;
+    g.append(c,t1,t2);g.onclick=()=>onClick(id,n);svg.append(g);});}
+
+/* ── 屏 2 · 影响面图谱（功能名 · 四态） ── */
+const IMPACT={
+ 'FR-006':{name:'绩效域落位规则',x:176,y:80,r:17,fill:'var(--req-soft)',stroke:'var(--req)',pulse:1,focus:1,hot:1,
+   bl:['covers ← 落位主流程 PP-RC-005 · 九宫格回归 GP-101','delta ← extend-void-scope（上次修改）','决策 ← D-031 仅绩效域 · D-032 存量待定']},
+ 'FR-009':{name:'名单过滤',x:56,y:190,r:14,fill:'var(--neg-soft)',stroke:'var(--neg)',hot:1,
+   bl:['covers ← 九宫格回归 GP-101','决策 ← D-033（SPQ-005 刷新延迟）']},
+ 'FR-012':{name:'名单刷新',x:296,y:190,r:14,fill:'var(--neg-soft)',stroke:'var(--neg)',hot:1,
+   bl:['delta ← grid-rule-perf（拟新增）','决策 ← D-032 拆分结果','covers ← 无（缺口，需生成场景）']},
+ 'FR-008':{name:'落位结果导出',x:176,y:218,r:14,fill:'var(--neg-soft)',stroke:'var(--neg)',hot:1,
+   bl:['covers ← 导出校验 EX-07','受 FR-006 阈值调整波及']},
+ 'FR-001':{name:'活动创建',x:48,y:52,r:13,fill:'#1a2336',stroke:'#3a4763',dim:1,bl:['covers ← 活动生命周期 AC-01（与本期无关）']},
+ 'FR-011':{name:'数据权限',x:304,y:52,r:13,fill:'#1a2336',stroke:'#3a4763',dim:1,bl:['covers ← 权限矩阵 PM-03（与本期无关）']},
+ 'FR-013':{name:'活动模板',x:70,y:288,r:13,fill:'#1a2336',stroke:'#3a4763',dim:1,bl:['无覆盖（历史缺口，非本期）']},
+ 'FR-015':{name:'批量导入',x:282,y:288,r:13,fill:'#1a2336',stroke:'#3a4763',dim:1,bl:['无覆盖（历史缺口，非本期）']},
+ 'PP-RC-005':{name:'落位主流程',x:66,y:118,r:11,fill:'var(--test-soft)',stroke:'var(--test)',hot:1,sc:1,
+   bl:['covers → 绩效域落位规则','受影响：规则变更后需回归']},
+ 'GP-101':{name:'九宫格回归',x:288,y:118,r:11,fill:'var(--test-soft)',stroke:'var(--test)',hot:1,sc:1,
+   bl:['covers → 绩效域落位规则 · 名单过滤','受影响：两个覆盖点都需回归']},
+ 'EX-07':{name:'导出校验',x:176,y:288,r:11,fill:'var(--test-soft)',stroke:'var(--test)',sc:1,
+   bl:['covers → 落位结果导出','轻度波及：导出字段不变，阈值快照需重取']}};
+draw(document.getElementById('impactSvg'),IMPACT,[
+ {a:'FR-006',b:'FR-009',hot:1},{a:'FR-006',b:'FR-012',hot:1},{a:'FR-006',b:'FR-008',hot:1},
+ {a:'PP-RC-005',b:'FR-006',cy:1},{a:'GP-101',b:'FR-006',cy:1},{a:'GP-101',b:'FR-009',cy:1},{a:'EX-07',b:'FR-008',cy:1},
+ {a:'FR-001',b:'FR-013',dim:1},{a:'FR-011',b:'FR-015',dim:1}],
+ (id,n)=>{document.getElementById('impactInfo').innerHTML=`<b>${n.name}</b> <span style="font-family:var(--mono);font-size:10px">${id}</span><div class="bl">${n.bl.join('<br>')}</div>`;});
+
+/* ── 屏 3 · 覆盖缺口三泳道看板（功能名） ── */
+const COV_COLS=[
+ {cls:'gap',title:'🔴 无覆盖 · 缺口',items:[
+   {name:'作废级联删除',id:'FR-012',m:'extend-void-scope 新增 · P0 阻塞',bl:'无场景 covers —— 建议立即生成'},
+   {name:'活动模板复制',id:'FR-013',m:'V2 推迟项提前？',bl:'无场景 covers —— 历史缺口'},
+   {name:'批量导入',id:'FR-015',m:'ERD v6 §4.3',bl:'无场景 covers —— 历史缺口'}]},
+ {cls:'draft',title:'🟡 草稿待审',items:[
+   {name:'落位调整审批',id:'FR-003',m:'草稿 d-118 · 待评审',bl:'covers ← 草稿 d-118（未入库，不计覆盖）'},
+   {name:'落位结果导出',id:'FR-008',m:'草稿 d-121 · 待评审',bl:'covers ← 草稿 d-121（未入库，不计覆盖）'}]},
+ {cls:'ok',title:'🟢 已覆盖',items:[
+   {name:'活动创建',id:'FR-001',m:'2 场景 · 最近 PASS',bl:'covers ← AC-01 创建流程 · AC-02 重复名 409'},
+   {name:'活动启动',id:'FR-002',m:'1 场景 · 最近 PASS',bl:'covers ← AC-03 启动下发'},
+   {name:'名单上传',id:'FR-005',m:'2 场景 · 最近 PASS',bl:'covers ← UL-01 上传 · UL-02 超上限 400'},
+   {name:'绩效域落位规则',id:'FR-006',m:'2 场景 · ⚠ 规则将变',bl:'covers ← PP-RC-005 · GP-101（delta 冻结后需回归）'},
+   {name:'权限校验',id:'FR-007',m:'1 场景 · 最近 PASS',bl:'covers ← PM-03 权限矩阵'},
+   {name:'名单过滤',id:'FR-009',m:'1 场景 · 最近 FAIL',bl:'covers ← GP-101（run#23 FAIL → SPQ-005）'}]}];
+document.getElementById('covBoard').innerHTML=COV_COLS.map(col=>
+ `<div class="cov-col ${col.cls}"><div class="cc-h">${col.title}<span class="cnt">${col.items.length}</span></div>`+
+ col.items.map((f,i)=>`<div class="fr-card" data-c="${col.cls}" data-i="${i}"><div class="fn">${f.name}</div><div class="fc2">${f.id}</div><div class="fm">${f.m}</div></div>`).join('')+'</div>').join('');
+document.querySelectorAll('.fr-card').forEach(c=>c.onclick=()=>{
+  const f=COV_COLS.find(x=>x.cls===c.dataset.c).items[+c.dataset.i];
+  document.getElementById('covInfo').innerHTML=`<b>${f.name}</b> <span style="font-family:var(--mono);font-size:10px">${f.id}</span><div class="bl">${f.bl}</div>`;});
+
+/* ── 屏 4 · 血缘链（四阶段分带） ── */
+const STAGES=[
+ {cls:'req',n:'①',t:'需求阶段',s:'specflow · 面试→决策→冻结',nodes:[
+   {id:'IV-003',t:'需求面试',l:'作废范围扩展面试',s:'已归档 ✅',d:'多轮面试记录 + 决策过程 + 影响面图快照，三份留档产物。',up:'输入：SPQ-002（上轮执行反哺，入 info_pack）'},
+   {id:'D-012',t:'决策台账',l:'作废级联含 6 张结果表',s:'P0 已决',d:'P0 决策：作废必须级联删除 会话→参与人→快照→6 张结果表，不可逆。',up:'← IV-003 · Q7'},
+   {id:'delta',t:'冻结 delta',l:'extend-void-scope',s:'三段式 ✓ V1-V6 全过',d:'delta-spec.md：新增「作废级联删除」/ 修改「已关闭可重开」「名单过滤」；manifest 与 markdown 一致。',up:'← IV-003（落笔挂链字段）'},
+   {id:'作废级联删除',t:'规格锚点',l:'FR-012 · 新增功能点',s:'[delta 标记]',d:'系统 SHALL 作废时级联删除 6 张结果表。spec ↔ task 双向锁定。',up:'← delta:extend-void-scope'}]},
+ {cls:'ext',n:'②',t:'研发阶段',s:'业务项目侧 · 外部锚点（登记引用）',nodes:[
+   {id:'PR#482',t:'外部锚点 ↗',l:'级联删除实现',s:'禅道 A-02-Δ',cls:'ext',d:'external_refs 登记：禅道 task → PR#482 → 单测。SpecGuard 只登记引用，不管理资产。',up:'linked: 作废级联删除'},
+   {id:'UT-??',t:'断链示例',l:'单测报告未登记',s:'⚠ 落笔未挂链',cls:'broken',d:'灰色虚线 = 链断点。单测报告存在但未登记 external_refs——合规校验 WARNING 项。',up:'—'}]},
+ {cls:'test',n:'③',t:'验证阶段',s:'SpecGuard 测试侧 · 场景→计划→执行',nodes:[
+   {id:'PP-RC-005',t:'场景测试',l:'作废级联 E2E 场景',s:'covers FR-012',d:'场景 YAML：covers [作废级联删除]，source_delta=extend-void-scope；DB oracle 校对 6 表级联。',up:'← 作废级联删除 · source_delta 字段',sel:1},
+   {id:'plan#7',t:'测试计划',l:'delta 导入生成',s:'版本化',d:'计划只能由 delta 导入生成——extend-void-scope 圈定 4 个场景。',up:'← delta:extend-void-scope'},
+   {id:'run#23',t:'执行报告',l:'4 PASS / 1 FAIL',s:'已归档',d:'报告按 plan_id 归档；FAIL 场景进入失败归因。',up:'← plan#7'}]},
+ {cls:'fb',n:'④',t:'反哺闭环',s:'feedback · 归因→台账→下轮面试',nodes:[
+   {id:'SPQ-005',t:'反哺台账',l:'落位后名单未刷新',s:'pending · 待定性',d:'归因：疑似产品缺陷（名单刷新延迟）。已自动进入 IV-007 面试信息包——成为本轮面试 Q3 素材。',up:'← run#23 · 名单过滤'}]}];
+const flat=[];STAGES.forEach(st=>st.nodes.forEach(n=>flat.push(n)));
+document.getElementById('stages').innerHTML=STAGES.map((st,si)=>
+ `<div class="band ${st.cls}"><div class="band-h"><span class="bn">${st.n}</span><span class="bt">${st.t}</span><span class="bs">${st.s}</span></div>
+  <div class="band-body">${st.nodes.map((n,ni)=>{const gi=flat.indexOf(n);
+    return `${ni?'<span class="carr">→</span>':''}<div class="cn ${n.cls||''}" data-i="${gi}"><div class="ct">${n.t}</div><div class="cl">${n.l}</div><div class="cid">${n.id} · ${n.s}</div></div>`;}).join('')}</div></div>`
+ +(si<STAGES.length-1?'<div class="between">↓<span class="bl-label">'+(si===0?'冻结合入基线 · spec↔task 双向锁定':si===1?'外部锚点登记 · 链可跨界资产不跨界':'执行完成 · 结果反哺')+'</span></div>':'')).join('');
+const lineDetail=document.getElementById('lineDetail');
+function showNode(i){const n=flat[i];
+  document.querySelectorAll('.cn').forEach(c=>c.classList.toggle('sel',+c.dataset.i===i));
+  lineDetail.innerHTML=`<div class="dt">${n.t} · ${n.id}</div><h3>${n.l}</h3><p>${n.d}</p>
+  <div class="art">状态：<b>${n.s}</b></div><div class="up">上游血缘：<b>${n.up}</b></div>`;}
+document.querySelectorAll('.cn').forEach(c=>c.onclick=()=>showNode(+c.dataset.i));
+showNode(flat.findIndex(n=>n.sel));
+</script>
+</body>
+</html>
