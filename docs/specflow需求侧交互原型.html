@@ -34,7 +34,7 @@ button{font-family:var(--font);cursor:pointer}
 .screen.on{display:flex;flex-direction:column;animation:scrIn .35s ease}
 @keyframes scrIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-/* ════════════ 屏 1 · 出发仪式 ════════════ */
+/* ════════════ 屏 1 · 新建会话（模式选择） ════════════ */
 #scr-stage{align-items:center;justify-content:center;position:relative;overflow:hidden}
 .stage-bg{position:absolute;inset:0;background-image:radial-gradient(rgba(99,140,255,.14) 1px,transparent 1px);background-size:26px 26px;animation:gridDrift 24s linear infinite}
 @keyframes gridDrift{from{background-position:0 0}to{background-position:52px 52px}}
@@ -58,18 +58,7 @@ button{font-family:var(--font);cursor:pointer}
 .m-card[data-side=test]{--mc:var(--test)} .m-card[data-side=test] .mt{color:var(--test)}
 .m-card[data-side=req]{--mc:var(--req)} .m-card[data-side=req] .mt{color:var(--req)}
 .m-card.picked{border-color:var(--mc)}
-.m-card.dismissed{opacity:.12;transform:scale(.94);pointer-events:none}
-.loadout{margin:26px auto 0;max-width:420px;text-align:left;opacity:0;transition:opacity .4s}
-.loadout.on{opacity:1}
-.loadout li{list-style:none;font-family:var(--mono);font-size:12px;color:var(--text);padding:5px 0;opacity:0;transform:translateX(-10px)}
-.loadout.on li{animation:fly .35s forwards}
-.loadout li:nth-child(1){animation-delay:.05s}.loadout li:nth-child(2){animation-delay:.2s}
-.loadout li:nth-child(3){animation-delay:.35s}.loadout li:nth-child(4){animation-delay:.5s}
-@keyframes fly{to{opacity:1;transform:none}}
-.go-btn{margin-top:22px;padding:10px 44px;border-radius:9px;border:none;font-size:14px;font-weight:700;color:#0b0f17;opacity:0;pointer-events:none;transition:opacity .4s,transform .15s}
-.go-btn.on{opacity:1;pointer-events:auto;animation:pulseBtn 2s infinite}
-.go-btn:hover{transform:translateY(-1px)}
-@keyframes pulseBtn{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.18)}50%{box-shadow:0 0 0 8px rgba(255,255,255,0)}}
+.m-card.dismissed{opacity:.12;transform:scale(.94)}
 .stage-kbd{margin-top:26px;font-family:var(--mono);font-size:11px;color:var(--faint)}
 .stage-kbd b{border:1px solid var(--line-strong);border-radius:4px;padding:1px 6px;color:var(--text)}
 
@@ -177,6 +166,31 @@ g.node.dim:hover{opacity:.7}
 .fr-card .fm{font-size:10px;color:var(--faint);margin-top:4px;line-height:1.45}
 .cov-col.gap .fr-card{--fc:var(--neg)} .cov-col.draft .fr-card{--fc:var(--warn)} .cov-col.ok .fr-card{--fc:var(--pos)}
 
+/* ── 材料包 / 草稿 / 计划 / 执行（屏2材料页 + 屏3测试工作台） ── */
+#scr-test .p-tab.on{border-bottom-color:var(--test)}
+.mat-h{font-size:11px;font-weight:700;color:var(--text-strong);margin:13px 2px 6px;display:flex;align-items:center;gap:6px}
+.mat-h:first-child{margin-top:2px}
+.mat-card{border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:8px 10px;margin-bottom:7px}
+.mat-card .mt2{font-size:11.5px;font-weight:700;color:var(--text-strong);line-height:1.4;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mat-card .md2{font-size:10.5px;color:var(--faint);margin-top:4px;line-height:1.55}
+.mat-src{font-family:var(--mono);font-size:9px;color:var(--faint);margin:2px 2px 4px}
+.frq{border-left:3px solid var(--req);background:var(--bg);border-radius:0 6px 6px 0;padding:6px 9px;margin-bottom:6px;font-size:11px;line-height:1.55;color:var(--text)}
+.frq b{font-family:var(--mono);font-size:10px;color:var(--req);margin-right:5px}
+.gate-chips{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 2px}
+.gchip{font-family:var(--mono);font-size:9.5px;padding:2px 8px;border-radius:9px;border:1px solid var(--line-strong);color:var(--faint)}
+.gchip.ok{color:var(--pos);border-color:rgba(52,211,153,.5)} .gchip.wait{color:var(--warn);border-color:rgba(251,191,36,.5)}
+.yaml-pre{font-family:var(--mono);font-size:10px;line-height:1.65;color:var(--text);white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px}
+.yaml-pre .cm{color:var(--faint)} .yaml-pre .kw{color:var(--test)}
+.batch{border:1px solid var(--line);border-left:3px solid var(--test);border-radius:7px;background:var(--surface-2);padding:7px 10px;margin-bottom:7px}
+.batch .bh{font-size:11px;font-weight:700;color:var(--text-strong)}
+.batch .bd{font-size:10.5px;color:var(--faint);margin-top:3px;line-height:1.5}
+.batch.b-pend{border-left-color:var(--warn);border-style:dashed}
+.run-sum{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:9px 12px;margin-bottom:8px;font-size:11.5px;color:var(--text-strong)}
+.run-row{display:flex;gap:8px;align-items:baseline;padding:6px 8px;border-bottom:1px solid rgba(38,48,74,.5);font-size:11px}
+.run-row .rs{flex:0 0 auto;font-family:var(--mono);font-size:10px}
+.run-row .rt{flex:1;color:var(--text)}
+.run-row .rd{font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+
 /* ════════════ 屏 4 · 血缘链（分阶段） ════════════ */
 #scr-line{padding:22px 30px;overflow:auto}
 .line-head{margin-bottom:16px}
@@ -209,26 +223,55 @@ g.node.dim:hover{opacity:.7}
 .ln-detail .art b{color:var(--text)}
 .ln-detail .up{margin-top:10px;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
 .ln-detail .up b{color:var(--req)}
+
+/* ════════════ 屏 5 · 全景图谱（星座图 + 时间轴 + diff） ════════════ */
+#scr-pano{padding:16px 22px;gap:10px;overflow:auto}
+.pano-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+.lens-btn{padding:5px 12px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--faint);font-size:12px;transition:all .2s}
+.lens-btn:hover{color:var(--text)}
+.lens-btn.on{color:var(--text-strong);border-color:var(--req);background:var(--req-soft)}
+.pano-lenshint{font-size:11px;color:var(--faint);font-family:var(--mono)}
+.crumb{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.crumb b{color:var(--req);cursor:pointer}
+.crumb b:hover{text-decoration:underline}
+.pano-stage{flex:1;min-height:400px;background:var(--bg);border:1px solid var(--line);border-radius:12px;position:relative;overflow:hidden}
+.pano-stage svg{width:100%;height:100%;display:block}
+.pano-stage svg.zin{animation:scrIn .3s ease}
+.pano-stage svg *{user-select:none}
+.pano-info{position:absolute;right:14px;bottom:14px;max-width:400px;border:1px solid var(--line-strong);border-radius:9px;background:rgba(18,24,38,.94);padding:10px 13px;font-size:11.5px;color:var(--faint);line-height:1.7}
+.pano-info b{color:var(--text-strong)}
+.pano-info .bl{font-family:var(--mono);font-size:10.5px;color:var(--req);margin-top:3px;line-height:1.7}
+.tl-wrap{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 16px;flex:0 0 auto}
+.tl-lab{font-family:var(--mono);font-size:10.5px;color:var(--faint);flex:0 0 auto}
+.tl-track{flex:1;position:relative;padding:6px 6px 0}
+.tl-track input{width:100%;accent-color:var(--req);cursor:pointer}
+.tl-marks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:2px;text-align:center}
+.tl-marks span.on{color:var(--req);font-weight:700}
+.diff-btn{padding:6px 14px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface-3);color:var(--text);font-size:12px;flex:0 0 auto;transition:all .2s}
+.diff-btn.on{border-color:var(--pos);color:var(--pos);background:var(--pos-soft)}
+.diff-sum{font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.7;flex:0 0 auto;min-height:20px}
+.diff-sum b{font-weight:700}
 </style>
 </head>
 <body>
 
 <div class="proto-bar">
-  <div class="logo">SpecGuard · specflow 交互原型<em>V2</em></div>
-  <button class="nav-tab on" data-go="scr-stage">① 出发仪式</button>
+  <div class="logo">SpecGuard · specflow 交互原型<em>V3</em></div>
+  <button class="nav-tab on" data-go="scr-stage">① 新建会话</button>
   <button class="nav-tab" data-go="scr-req">② 需求面试会话</button>
-  <button class="nav-tab" data-go="scr-test">③ 覆盖缺口看板</button>
+  <button class="nav-tab" data-go="scr-test">③ 测试工作台会话</button>
   <button class="nav-tab" data-go="scr-line">④ 血缘链（分阶段）</button>
-  <span class="hint">决策 ④⑤⑥⑦ · 功能名替代编号 · 雷达图 · 泳道看板 · 阶段分带</span>
+  <button class="nav-tab" data-go="scr-pano">⑤ 全景图谱</button>
+  <span class="hint">决策 ④⑤⑥⑦ · 功能名替代编号 · 雷达图 · 泳道看板 · 阶段分带 · 语义缩放全景 · 时间轴/diff</span>
 </div>
 
-<!-- ═══ 屏 1 · 出发仪式 ═══ -->
+<!-- ═══ 屏 1 · 新建会话（模式选择） ═══ -->
 <div class="screen on" id="scr-stage">
   <div class="stage-bg"></div>
   <div class="stage-inner">
-    <div class="stage-kicker">New Session · 选择本次使命</div>
-    <div class="stage-title">装配你的 Agent</div>
-    <div class="stage-sub">用途创建后即锁定 —— 使命必达，不可中途变更</div>
+    <div class="stage-kicker">New Session</div>
+    <div class="stage-title">选择会话用途</div>
+    <div class="stage-sub">点击卡片直接开启会话 · 用途创建后锁定，不可中途变更</div>
     <div class="mission-row" id="missionRow">
       <div class="m-card" data-side="test" tabindex="0">
         <div class="mi">🧪</div><div class="mt">TEST WORKBENCH</div><h3>测试工作台</h3>
@@ -241,9 +284,7 @@ g.node.dim:hover{opacity:.7}
         <div class="mchips"><span class="mchip">specflow 工具集</span><span class="mchip">台账/评分明板</span><span class="mchip">影响面图谱</span></div>
       </div>
     </div>
-    <ul class="loadout" id="loadout"></ul>
-    <button class="go-btn" id="goBtn">出发 →</button>
-    <div class="stage-kbd"><b>←</b><b>→</b> 切换 &nbsp;·&nbsp; <b>Enter</b> 出发 &nbsp;·&nbsp; <b>Esc</b> 取消</div>
+    <div class="stage-kbd"><b>←</b><b>→</b> 切换 &nbsp;·&nbsp; <b>Enter</b> 开启 &nbsp;·&nbsp; 单击直接开始</div>
   </div>
 </div>
 
@@ -261,7 +302,7 @@ g.node.dim:hover{opacity:.7}
       <div class="chat-band" style="background:var(--req)"></div>
       <div class="chat-scroll" id="reqChat">
         <div class="msg ai"><div class="av">🧭</div><div class="mb"><div class="mrole">面试官 · IV-007</div>
-          <div class="mtext">已装载「九宫格落位规则调整」议题。基线里相关功能点：<b>绩效域落位规则</b>、<b>名单过滤</b>。上轮执行遗留 1 条未闭环 SPQ（落位后名单未刷新）——已放入本次信息包。<br><br><span class="qchip">Q1 · P0</span>本次调整只改「绩效域」的落位规则，还是三个域（绩效/潜能/综合）一起动？</div></div></div>
+          <div class="mtext">已装载「九宫格落位规则调整」议题。基线里相关功能点：<b>绩效域落位规则</b>、<b>名单过滤</b>。上轮执行遗留 1 条未闭环 SPQ（落位后名单未刷新）——已放入本次信息包（右栏「材料包」页签）。<br><br><span class="qchip">Q1 · P0</span>本次调整只改「绩效域」的落位规则，还是三个域（绩效/潜能/综合）一起动？</div></div></div>
         <div class="msg user"><div class="av">👤</div><div class="mb"><div class="mrole">产品经理</div>
           <div class="mtext">只动绩效域。潜能和综合域维持现有规则。</div></div></div>
         <div class="msg ai"><div class="av">🧭</div><div class="mb"><div class="mrole">面试官 · IV-007</div>
@@ -275,14 +316,35 @@ g.node.dim:hover{opacity:.7}
     </div>
     <div class="panel">
       <div class="p-tabs">
-        <button class="p-tab on" data-pt="pt-ledger">决策台账</button>
+        <button class="p-tab on" data-pt="pt-pack">材料包</button>
+        <button class="p-tab" data-pt="pt-ledger">决策台账</button>
         <button class="p-tab" data-pt="pt-score">五维评分</button>
         <button class="p-tab" data-pt="pt-draft">spec 草案</button>
         <button class="p-tab" data-pt="pt-graph">影响面</button>
       </div>
       <div class="p-body">
+        <!-- 材料包（面试输入材料 · info_pack 物化） -->
+        <div class="p-pane on" id="pt-pack">
+          <div class="mat-h">🎯 议题卡</div>
+          <div class="mat-card"><div class="mt2">IV-007 · 九宫格落位规则调整</div>
+            <div class="md2">发起人：产品经理 · 2026-07-31 开标<br>来源：PRD v3.2 §2.7 ＋ SPQ-005 反哺<br>冻结目标：delta <b>grid-rule-perf</b>（三段式 + manifest 一致）</div></div>
+          <div class="mat-h">📖 基线摘录（specstd 锚点 · 只读引用）</div>
+          <div class="frq"><b>FR-003</b><code>tdm_result_person_grid</code> 存储三组轴值（perf_level / pot_level × 分域） [V1.0]　<span style="color:var(--warn)">← 本次拟改</span></div>
+          <div class="frq"><b>FR-002</b>格子标签优先级：活动自定义（<code>tdm_inv_grid_config.grid_label</code>）＞ 系统默认标签 [V1.0]</div>
+          <div class="frq"><b>FR-008</b>落位明细 <code>platformRank</code> 取值「快照列优先 ＋ 实时兜底」 [V1.0]</div>
+          <div class="mat-src">来源：specs/inventory/grid-placement/spec.md · 锚点定位不断链 · 真实基线</div>
+          <div class="mat-h">🧊 未闭环 SPQ（上轮执行反哺）</div>
+          <div class="mat-card"><div class="mt2">SPQ-005 · 落位后名单未刷新 <span class="ld-st pending">● pending</span></div>
+            <div class="md2">← run#23 · IS-RVT-002 FAIL 归因（疑似产品缺陷，诚实 FAIL 非环境 SKIP）<br>已列入本轮 Q3 提问素材 —— 闭环的最后一边</div></div>
+          <div class="mat-h">📊 上轮执行摘要</div>
+          <div class="mat-card"><div class="mt2">run#23 · plan#7 · 4 PASS / 1 FAIL</div>
+            <div class="md2">FAIL ＝ 名单刷新延迟；报告归档于工作区 <code>.specguard/reports/</code></div></div>
+          <div class="mat-h">🗂 历史相关决策（不得推翻，仅可增补）</div>
+          <div class="mat-card"><div class="mt2">D-012（IV-003）作废级联含 6 张结果表 ✅</div>
+            <div class="md2">extend-void-scope 已冻结入基线；本轮面试仅处理绩效域落位规则，不重开旧账</div></div>
+        </div>
         <!-- 决策台账 -->
-        <div class="p-pane on" id="pt-ledger">
+        <div class="p-pane" id="pt-ledger">
           <div class="ld-item"><div class="ld-top"><span class="pri p0">P0</span><span style="font-family:var(--mono);font-size:10px;color:var(--faint)">D-031</span><span class="ld-st resolved">✓ 已决</span></div>
             <div class="ld-q">调整范围：仅绩效域，还是三域同改？</div>
             <div class="ld-a">决策：<b>仅绩效域</b>。潜能/综合域规则冻结不变。—— 产品经理 07-31 10:12</div>
@@ -330,7 +392,7 @@ g.node.dim:hover{opacity:.7}
         <!-- 影响面图谱 -->
         <div class="p-pane" id="pt-graph">
           <div class="g-wrap"><svg id="impactSvg" width="352" height="320" viewBox="0 0 352 320"></svg></div>
-          <div class="g-legend"><span><i style="background:var(--req)"></i>议题焦点</span><span><i style="background:var(--neg)"></i>受影响</span><span><i style="background:var(--test)"></i>覆盖场景</span><span><i style="background:#3a4763"></i>无关</span></div>
+          <div class="g-legend"><span><i style="background:var(--req)"></i>议题焦点</span><span><i style="background:var(--neg)"></i>受影响</span><span><i style="background:var(--test)"></i>覆盖场景</span><span><i style="background:#3a4763"></i>无关 · 压暗全景底图</span></div>
           <div class="g-info" id="impactInfo">点击节点查看 backlink——「哪些场景覆盖我 / 哪些 delta 改过我 / 哪些决策引用我」。</div>
         </div>
       </div>
@@ -338,29 +400,96 @@ g.node.dim:hover{opacity:.7}
   </div>
 </div>
 
-<!-- ═══ 屏 3 · 覆盖缺口看板（测试侧） ═══ -->
+<!-- ═══ 屏 3 · 测试工作台会话（缺口→草稿→计划→执行 全链路） ═══ -->
 <div class="screen" id="scr-test">
   <div class="ws">
     <div class="stree">
       <div class="st-head"><span>会话</span><button class="new-btn" onclick="go('scr-stage')">＋ 新会话</button></div>
       <div class="st-filter"><button>全部</button><button>🧭 需求</button><button class="on">🧪 测试</button></div>
-      <div class="sess"><div class="st-row"><span class="badge req">面试</span><span class="st-title">九宫格落位规则调整</span></div><div class="st-sub">IV-007 · 进行中</div></div>
-      <div class="sess on" style="border-left-color:var(--test)"><div class="st-row"><span class="badge test">测试</span><span class="st-title">盘点活动场景补齐</span></div><div class="st-sub">缺口 3 个功能点</div></div>
+      <div class="sess"><div class="st-row"><span class="badge req">面试</span><span class="st-title">九宫格落位规则调整</span></div><div class="st-sub">IV-007 · P0 剩 2 · 进行中</div></div>
+      <div class="sess on" style="border-left-color:var(--test)"><div class="st-row"><span class="badge test">测试</span><span class="st-title">盘点活动管理场景补齐</span></div><div class="st-sub">13 FR 零覆盖 · 草稿 2 份</div></div>
+      <div class="sess"><div class="st-row"><span class="badge test">测试</span><span class="st-title">run#23 失败归因</span></div><div class="st-sub">SPQ-005 待定性</div></div>
     </div>
     <div class="chatcol">
       <div class="chat-band" style="background:var(--test)"></div>
-      <div class="chat-scroll">
-        <div class="msg user"><div class="av">👤</div><div class="mb"><div class="mrole">测试人员</div><div class="mtext">盘点活动模块还有哪些功能点没场景覆盖？</div></div></div>
+      <div class="chat-scroll" id="testChat">
+        <div class="msg user"><div class="av">👤</div><div class="mb"><div class="mrole">测试人员</div>
+          <div class="mtext">盘点活动管理 13 个 FR 目前零场景覆盖，先从哪个补？</div></div></div>
         <div class="msg ai"><div class="av">🧪</div><div class="mb"><div class="mrole">测试工作台</div>
-          <div class="mtext">右侧看板：<b>3 个功能点无覆盖</b>（左列红色：名单刷新、活动模板复制、批量导入），2 个仅有待审草稿（中列黄色）。建议优先补「作废级联删除」——它是 extend-void-scope 的新增条目，P0 回归阻塞项。要我现在生成吗？</div></div></div>
+          <div class="mtext">右侧「覆盖缺口」泳道：<b>13 个 FR 全红</b>（真实基线 specs/system-settings/inventory-activity）。建议顺序——① <b>FR-012 作废级联删除</b>：extend-void-scope 本期新增，P0 回归阻塞项；② FR-005/FR-006 状态单向流转；③ FR-001 重名 409。数据准备可直接复用 <b>IS-PREP-002/003</b>（活动+会话+人员，exclusive 实例）。要我为 FR-012 生成草稿吗？</div></div></div>
       </div>
-      <div class="chat-input"><input placeholder="继续对话…"><button class="send-btn test">发送</button></div>
+      <div class="chat-input">
+        <input id="testInput" placeholder="继续对话…（Enter 发送）">
+        <button class="demo-btn" onclick="demoDraft()">⚡ 演示：生成草稿</button>
+        <button class="send-btn test" onclick="testSend()">发送</button>
+      </div>
     </div>
     <div class="panel">
-      <div class="p-tabs"><button class="p-tab on">覆盖缺口看板</button><button class="p-tab">草稿</button><button class="p-tab">计划</button></div>
+      <div class="p-tabs">
+        <button class="p-tab on" data-pt="tt-cov">覆盖缺口</button>
+        <button class="p-tab" data-pt="tt-draft">草稿</button>
+        <button class="p-tab" data-pt="tt-plan">计划</button>
+        <button class="p-tab" data-pt="tt-run">执行</button>
+      </div>
       <div class="p-body">
-        <div class="cov-board" id="covBoard"></div>
-        <div class="g-info" id="covInfo">点击功能点卡片查看覆盖它的场景（backlink）。</div>
+        <!-- 覆盖缺口三泳道 -->
+        <div class="p-pane on" id="tt-cov">
+          <div class="cov-board" id="covBoard"></div>
+          <div class="g-info" id="covInfo">点击功能点卡片查看 backlink。数据 = 真实 spec 锚点（盘点活动管理 13 FR）+ 真实场景库。</div>
+        </div>
+        <!-- 草稿（三道闸） -->
+        <div class="p-pane" id="tt-draft">
+          <div class="mat-card" id="d118" style="display:none;border-color:rgba(56,189,248,.45)">
+            <div class="mt2">d-118 · IA-VOID-001 作废级联逻辑删除 E2E <span class="gchip wait">① 人工评审 ● 待评审</span><span class="gchip ok">② 格式校验 ✓</span><span class="gchip">③ 发布门禁 ⏸</span></div>
+            <div class="md2">covers [FR-012] · 来源：extend-void-scope 导入建议 · 三道闸全过前不可 promote（Agent 不会自己入库）</div>
+            <pre class="yaml-pre"><span class="cm"># 格式 2.0 · doc 层给人看 / flow+verify 给机器跑</span>
+<span class="kw">id:</span> IA-VOID-001
+<span class="kw">title:</span> 作废活动级联逻辑删除（会话→人员→快照→结果表）
+<span class="kw">doc:</span>
+  <span class="kw">given:</span> 活动 ACTIVE 且含 1 个 COMPLETED 会话（IS-PREP-003 独占实例）
+  <span class="kw">when:</span>  DELETE /api/inventory/activities/{id}（确认作废）
+  <span class="kw">then:</span>  ① activity_status=VOID；② 会话/人员 deleted=1；③ 6 张结果表 deleted=1
+  <span class="kw">covers:</span> [FR-012]
+<span class="kw">depends_on:</span>
+  - {id: IS-PREP-003, mode: exclusive, version: ^0}
+<span class="kw">flow:</span>
+  - call: {method: DELETE, path: "/api/inventory/activities/{{IS-PREP-003.activityId}}", save: resp}
+  - db_query: {sql: 级联 6 表 deleted 标志校对, save: cascade_db}
+<span class="kw">verify:</span>
+  - status: {eq: 200, of: resp}
+  - json: {of: cascade_db, path: "$[0].pending_rows", eq: 0}</pre>
+          </div>
+          <div class="mat-card">
+            <div class="mt2">d-121 · IA-NAME-409 活动重名冲突 <span class="gchip wait">① 人工评审 ● 待评审</span><span class="gchip ok">② 格式校验 ✓</span><span class="gchip">③ 发布门禁 ⏸</span></div>
+            <div class="md2">covers [FR-001] · <code>activity_name</code> 全局唯一，重复创建返回 409 · 昨天生成</div>
+          </div>
+        </div>
+        <!-- 计划（delta 导入 · DAG 批次） -->
+        <div class="p-pane" id="tt-plan">
+          <div class="mat-card"><div class="mt2">plan#7 · extend-void-scope 回归批次 <span class="gchip ok">v3</span></div>
+            <div class="md2">来源：delta extend-void-scope（IV-003 已冻结）——计划只能由 delta 导入生成，禁止手动新建</div></div>
+          <div class="mat-h">DAG 批次（depends_on 拓扑 + shared/exclusive 调度）</div>
+          <div class="batch"><div class="bh">batch 0 · 数据准备</div>
+            <div class="bd">IS-PREP-002 活动+会话+3人（shared） · IS-PREP-003 活动+COMPLETED 会话（exclusive）</div></div>
+          <div class="batch b-pend"><div class="bh">batch 1 · 主验证（待 d-118 评审后编入）</div>
+            <div class="bd">IA-VOID-001（草稿 d-118） · IS-RVT-001/002/003 退回语义回归</div></div>
+          <div class="batch"><div class="bh">batch 2 · 旁系回归</div>
+            <div class="bd">GP-IMP-001/002 九宫格导入容错（0/"-"、越界行级隔离）</div></div>
+          <div class="mat-src">DAG 校验：无环 ✓ · 版本仲裁 ^0 ✓ · dependency_graph 确定性校验</div>
+        </div>
+        <!-- 执行（报告 + 反哺闭环） -->
+        <div class="p-pane" id="tt-run">
+          <div class="run-sum"><b>run#23</b><span>plan#7 · SIT · 07-30 21:14</span><b style="color:var(--pos)">4 PASS</b><b style="color:var(--neg)">1 FAIL</b></div>
+          <div class="run-row"><span class="rs" style="color:var(--pos)">✓</span><span class="rt">IS-RVT-001 退回已完成会话 → 再完成</span><span class="rd">1.2s</span></div>
+          <div class="run-row"><span class="rs" style="color:var(--pos)">✓</span><span class="rt">IS-RVT-003 进行中会话退回 → 400 拒绝</span><span class="rd">0.8s</span></div>
+          <div class="run-row"><span class="rs" style="color:var(--pos)">✓</span><span class="rt">GP-IMP-001 九宫格 0/"-" 导入容错</span><span class="rd">2.1s</span></div>
+          <div class="run-row"><span class="rs" style="color:var(--pos)">✓</span><span class="rt">GP-IMP-002 落位越界行级隔离</span><span class="rd">1.9s</span></div>
+          <div class="run-row"><span class="rs" style="color:var(--neg)">✗</span><span class="rt">IS-RVT-002 CLOSED 活动退回 —— 名单刷新延迟</span><span class="rd">1.4s</span></div>
+          <div class="mat-card" style="margin-top:8px;border-color:rgba(248,113,113,.4)">
+            <div class="mt2">失败归因：疑似产品缺陷（诚实 FAIL，非环境 SKIP）</div>
+            <div class="md2">→ SPQ-005「落位后名单未刷新」已建台账（pending 待定性）<br>⟳ 已自动进入 <b>IV-007 面试信息包</b> —— 屏②「材料包」可见，闭环回到需求阶段</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -377,36 +506,52 @@ g.node.dim:hover{opacity:.7}
   <div class="ln-detail" id="lineDetail"></div>
 </div>
 
+<!-- ═══ 屏 5 · 全景图谱（语义缩放 + 时间轴 + 演化 diff） ═══ -->
+<div class="screen" id="scr-pano">
+  <div class="pano-top">
+    <button class="lens-btn on" data-lens="topic">🧭 面试选题</button>
+    <button class="lens-btn" data-lens="debt">🧊 测试债地图</button>
+    <button class="lens-btn" data-lens="map">🗺 系统概览</button>
+    <span class="pano-lenshint" id="lensHint"></span>
+    <span class="crumb" id="panoCrumb">系统星座图</span>
+  </div>
+  <div class="pano-stage">
+    <svg id="panoSvg" viewBox="0 0 1100 460" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="pano-info" id="panoInfo">点击星团进入模块内视图（L1）。</div>
+  </div>
+  <div class="tl-wrap">
+    <span class="tl-lab">⏱ 里程碑快照</span>
+    <div class="tl-track">
+      <input type="range" id="tlRange" min="0" max="3" step="1" value="3">
+      <div class="tl-marks" id="tlMarks"></div>
+    </div>
+    <button class="diff-btn" id="diffBtn">⇄ 演化 diff：关</button>
+  </div>
+  <div class="diff-sum" id="diffSum"></div>
+</div>
+
 <script>
 /* ── 屏间路由 ── */
 function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('on',t.dataset.go===id));}
 document.querySelectorAll('.nav-tab').forEach(t=>t.onclick=()=>go(t.dataset.go));
 
-/* ── 屏 1 · 出发仪式 ── */
-const cards=[...document.querySelectorAll('.m-card')],loadout=document.getElementById('loadout'),goBtn=document.getElementById('goBtn');
-let picked=null;
-const LOADOUTS={test:['✓ 系统提示词 · 场景生成规范已装载','✓ 19 个工具已就绪','✓ 右侧面板 · 草稿/计划/覆盖看板 已挂载','🔒 用途将在创建后锁定 · 产物入 .specguard/'],
-req:['✓ 系统提示词 · 面试官人格 + 提问维度库已装载','✓ specflow 工具集已就绪','✓ 右侧面板 · 台账/评分/草案/影响面 已挂载','🔒 用途将在创建后锁定 · 产物入 .specflow/']};
+/* ── 屏 1 · 新建会话（模式选择，点击卡片直达会话） ── */
+const cards=[...document.querySelectorAll('.m-card')];
+let focused=null;
 cards.forEach(c=>{
   c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
     c.style.transform=`rotateY(${x*8}deg) rotateX(${-y*8}deg) translateY(-4px)`;});
   c.addEventListener('mouseleave',()=>c.style.transform='');
-  c.addEventListener('click',()=>pick(c.dataset.side));});
-function pick(side){picked=side;
-  cards.forEach(c=>{c.classList.toggle('picked',c.dataset.side===side);c.classList.toggle('dismissed',c.dataset.side!==side);});
-  loadout.classList.remove('on');void loadout.offsetWidth;
-  loadout.innerHTML=LOADOUTS[side].map((t,i)=>`<li class="${i===3?'':'ok'}" style="color:${i===3?'var(--warn)':''}">${t}</li>`).join('');
-  loadout.classList.add('on');
-  goBtn.textContent=side==='req'?'出发 · 开始面试 →':'出发 · 进入工作台 →';
-  goBtn.style.background=side==='req'?'var(--req)':'var(--test)';
-  goBtn.classList.add('on');}
-goBtn.onclick=()=>picked&&go(picked==='req'?'scr-req':'scr-test');
+  c.addEventListener('click',()=>enter(c.dataset.side));});
+function focusCard(side){focused=side;
+  cards.forEach(c=>{c.classList.toggle('picked',c.dataset.side===side);c.classList.toggle('dismissed',!!side&&c.dataset.side!==side);});}
+function enter(side){go(side==='req'?'scr-req':'scr-test');}
 document.addEventListener('keydown',e=>{
   if(!document.getElementById('scr-stage').classList.contains('on'))return;
-  if(e.key==='ArrowLeft')pick('test');if(e.key==='ArrowRight')pick('req');
-  if(e.key==='Enter'&&picked)goBtn.click();
-  if(e.key==='Escape'){picked=null;cards.forEach(c=>c.classList.remove('picked','dismissed'));loadout.classList.remove('on');goBtn.classList.remove('on');}});
+  if(e.key==='ArrowLeft')focusCard('test');if(e.key==='ArrowRight')focusCard('req');
+  if(e.key==='Enter'&&focused)enter(focused);
+  if(e.key==='Escape')focusCard(null);});
 
 /* ── 屏 2 · scripted chat ── */
 const reqChat=document.getElementById('reqChat'),reqInput=document.getElementById('reqInput');
@@ -494,28 +639,47 @@ draw(document.getElementById('impactSvg'),IMPACT,[
  {a:'FR-001',b:'FR-013',dim:1},{a:'FR-011',b:'FR-015',dim:1}],
  (id,n)=>{document.getElementById('impactInfo').innerHTML=`<b>${n.name}</b> <span style="font-family:var(--mono);font-size:10px">${id}</span><div class="bl">${n.bl.join('<br>')}</div>`;});
 
-/* ── 屏 3 · 覆盖缺口三泳道看板（功能名） ── */
+/* ── 屏 3 · 覆盖缺口三泳道看板（真实 spec 锚点 · 盘点活动管理 13 FR 零覆盖） ── */
 const COV_COLS=[
- {cls:'gap',title:'🔴 无覆盖 · 缺口',items:[
-   {name:'作废级联删除',id:'FR-012',m:'extend-void-scope 新增 · P0 阻塞',bl:'无场景 covers —— 建议立即生成'},
-   {name:'活动模板复制',id:'FR-013',m:'V2 推迟项提前？',bl:'无场景 covers —— 历史缺口'},
-   {name:'批量导入',id:'FR-015',m:'ERD v6 §4.3',bl:'无场景 covers —— 历史缺口'}]},
+ {cls:'gap',title:'🔴 无覆盖 · 缺口（盘点活动管理）',items:[
+   {name:'作废级联逻辑删除',id:'FR-012',m:'extend-void-scope 本期新增 · P0 阻塞',bl:'级联：会话→人员→快照→6 张结果表。无场景 covers —— 建议立即生成（点「⚡ 演示：生成草稿」）'},
+   {name:'DRAFT→ACTIVE 单向流转',id:'FR-005',m:'V1.0 · 状态机',bl:'无场景 covers —— 历史缺口'},
+   {name:'ACTIVE→CLOSED 单向流转',id:'FR-006',m:'Q21：CLOSED 可重开会话',bl:'无场景 covers —— 历史缺口'},
+   {name:'在途会话禁改盘点日期',id:'FR-013',m:'V1.1 增补',bl:'无场景 covers —— 历史缺口'},
+   {name:'乐观锁 version 冲突',id:'FR-010',m:'并发更新返回冲突错误',bl:'无场景 covers —— 历史缺口'}]},
  {cls:'draft',title:'🟡 草稿待审',items:[
-   {name:'落位调整审批',id:'FR-003',m:'草稿 d-118 · 待评审',bl:'covers ← 草稿 d-118（未入库，不计覆盖）'},
-   {name:'落位结果导出',id:'FR-008',m:'草稿 d-121 · 待评审',bl:'covers ← 草稿 d-121（未入库，不计覆盖）'}]},
- {cls:'ok',title:'🟢 已覆盖',items:[
-   {name:'活动创建',id:'FR-001',m:'2 场景 · 最近 PASS',bl:'covers ← AC-01 创建流程 · AC-02 重复名 409'},
-   {name:'活动启动',id:'FR-002',m:'1 场景 · 最近 PASS',bl:'covers ← AC-03 启动下发'},
-   {name:'名单上传',id:'FR-005',m:'2 场景 · 最近 PASS',bl:'covers ← UL-01 上传 · UL-02 超上限 400'},
-   {name:'绩效域落位规则',id:'FR-006',m:'2 场景 · ⚠ 规则将变',bl:'covers ← PP-RC-005 · GP-101（delta 冻结后需回归）'},
-   {name:'权限校验',id:'FR-007',m:'1 场景 · 最近 PASS',bl:'covers ← PM-03 权限矩阵'},
-   {name:'名单过滤',id:'FR-009',m:'1 场景 · 最近 FAIL',bl:'covers ← GP-101（run#23 FAIL → SPQ-005）'}]}];
+   {name:'作废级联逻辑删除',id:'FR-012 · d-118',m:'演示生成 · 过②闸待①闸',bl:'covers ← 草稿 d-118（未入库，不计覆盖）'},
+   {name:'活动重名 409',id:'FR-001 · d-121',m:'activity_name 全局唯一 · 待评审',bl:'covers ← 草稿 d-121（未入库，不计覆盖）'}]},
+ {cls:'ok',title:'🟢 已覆盖（相邻功能点参照）',items:[
+   {name:'会话退回语义',id:'inventory-session FR-012',m:'3 场景 · 最近 FAIL',bl:'covers ← IS-RVT-001/002/003（run#23 FAIL → SPQ-005）'},
+   {name:'九宫格导入容错',id:'grid-placement',m:'2 场景 · 最近 PASS',bl:'执行 ← GP-IMP-001/002（covers 锚点待补）'},
+   {name:'360 导入容错',id:'eval-360',m:'2 场景 · 最近 PASS',bl:'执行 ← EV-IMP-001/002'}]}];
 document.getElementById('covBoard').innerHTML=COV_COLS.map(col=>
  `<div class="cov-col ${col.cls}"><div class="cc-h">${col.title}<span class="cnt">${col.items.length}</span></div>`+
  col.items.map((f,i)=>`<div class="fr-card" data-c="${col.cls}" data-i="${i}"><div class="fn">${f.name}</div><div class="fc2">${f.id}</div><div class="fm">${f.m}</div></div>`).join('')+'</div>').join('');
 document.querySelectorAll('.fr-card').forEach(c=>c.onclick=()=>{
   const f=COV_COLS.find(x=>x.cls===c.dataset.c).items[+c.dataset.i];
   document.getElementById('covInfo').innerHTML=`<b>${f.name}</b> <span style="font-family:var(--mono);font-size:10px">${f.id}</span><div class="bl">${f.bl}</div>`;});
+
+/* ── 屏 3 · 测试工作台（页签切换 + scripted chat + 演示生成草稿） ── */
+document.querySelectorAll('#scr-test .p-tab[data-pt]').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('#scr-test .p-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  document.querySelectorAll('#scr-test .p-pane').forEach(p=>p.classList.toggle('on',p.id===t.dataset.pt));});
+const testChat=document.getElementById('testChat'),testInput=document.getElementById('testInput');
+const TREPLIES=['已读 <span style="font-family:var(--mono);font-size:10.5px">specs/system-settings/inventory-activity/spec.md</span> 锚点 <b>FR-012</b>（作废级联：会话→人员→快照→6 张结果表），复用 IS-PREP-003 独占实例 → <b>草稿 d-118 已生成</b>（已切到右栏「草稿」页签）。格式校验 ✓：格式 2.0 ✓ 锚点存在 ✓ covers 标签 ✓。',
+'d-118 只过了第②闸（格式校验）。第①闸 <b>人工评审</b> 在你——评审通过后我才会把它编入 plan#7 的 batch 1；第③闸发布门禁（release_check）在入库时自动跑。'];
+let ti=0;
+function testPost(role,html){testChat.insertAdjacentHTML('beforeend',`<div class="msg ${role}"><div class="av">${role==='user'?'👤':'🧪'}</div><div class="mb"><div class="mrole">${role==='user'?'测试人员':'测试工作台'}</div><div class="mtext">${html}</div></div></div>`);
+  testChat.scrollTop=testChat.scrollHeight;}
+function revealDraft(){const d=document.getElementById('d118');if(d)d.style.display='';}
+function testSend(){const v=testInput.value.trim();if(!v)return;
+  testPost('user',v.replace(/</g,'&lt;'));testInput.value='';
+  setTimeout(()=>{testPost('ai',TREPLIES[ti%TREPLIES.length]);if(ti===0){revealDraft();document.querySelector('#scr-test .p-tab[data-pt="tt-draft"]').click();}ti++;},450);}
+testInput.addEventListener('keydown',e=>e.key==='Enter'&&testSend());
+function demoDraft(){if(ti>0)return;
+  testPost('user','为 FR-012 作废级联删除生成场景草稿');
+  setTimeout(()=>{testPost('ai',TREPLIES[0]);ti=1;revealDraft();
+    document.querySelector('#scr-test .p-tab[data-pt="tt-draft"]').click();},450);}
 
 /* ── 屏 4 · 血缘链（四阶段分带） ── */
 const STAGES=[
@@ -546,6 +710,188 @@ function showNode(i){const n=flat[i];
   <div class="art">状态：<b>${n.s}</b></div><div class="up">上游血缘：<b>${n.up}</b></div>`;}
 document.querySelectorAll('.cn').forEach(c=>c.onclick=()=>showNode(+c.dataset.i));
 showNode(flat.findIndex(n=>n.sel));
+
+/* ═══ 屏 5 · 全景图谱：L0 模块星座 / L1 功能点 / L2 FR邻域 / 时间轴快照 / 演化 diff ═══
+   数据来源：真实工作区 specstd/workspaces/_clones/tdm（28 功能 · 298 FR · 25 场景 covers） */
+const PANODATA={"eras":[{"id":"init","label":"V1.0 初始基线","date":"07-09"},{"id":"refactor","label":"history-inventory-refactor 归档","date":"07-21"},{"id":"es","label":"es-acceleration 归档","date":"07-21"},{"id":"now","label":"当前 · smart-tag 进行中","date":"07-31"}],"l0mods":{"system-settings":{"name":"系统设置","x":230,"y":120},"inventory":{"name":"盘点操作","x":500,"y":230},"employee":{"name":"人员管理","x":230,"y":340},"evaluation":{"name":"360评价","x":760,"y":110},"data":{"name":"数据管理","x":530,"y":400},"es-acceleration":{"name":"ES 加速","x":820,"y":320}},"l0edges":[{"a":"system-settings","b":"inventory","w":3},{"a":"inventory","b":"employee","w":3},{"a":"inventory","b":"evaluation","w":2},{"a":"inventory","b":"data","w":2},{"a":"employee","b":"es-acceleration","w":2},{"a":"evaluation","b":"data","w":1.2}],"l1":{"system-settings":[{"id":"system-settings/dropdown-config","name":"下拉选项动态配置","health":100,"counts":[8,8,8,8],"era":0,"nCov":0,"nGap":8},{"id":"system-settings/grid-config","name":"九宫格配置","health":100,"counts":[5,5,5,5],"era":0,"nCov":0,"nGap":5},{"id":"system-settings/inventory-activity","name":"盘点活动管理","health":100,"counts":[13,13,13,13],"era":0,"nCov":0,"nGap":13},{"id":"system-settings/notification","name":"通知模块","health":100,"counts":[14,14,14,14],"era":0,"nCov":0,"nGap":14},{"id":"system-settings/operation-log","name":"操作日志","health":100,"counts":[5,5,5,5],"era":0,"nCov":0,"nGap":5},{"id":"system-settings/platform-corp","name":"平台业务单元查询","health":100,"counts":[6,6,6,6],"era":0,"nCov":0,"nGap":6},{"id":"system-settings/tag-library","name":"标签库","health":null,"counts":[0,0,0,7],"era":3,"nCov":0,"nGap":7}],"inventory":[{"id":"inventory/annual-perf","name":"历年绩效","health":100,"counts":[4,4,4,4],"era":0,"nCov":0,"nGap":4},{"id":"inventory/capability-assessment","name":"盘点能力评估","health":100,"counts":[8,8,8,8],"era":0,"nCov":0,"nGap":8},{"id":"inventory/exp-tag","name":"关键工作经历标签","health":100,"counts":[6,6,6,6],"era":0,"nCov":0,"nGap":6},{"id":"inventory/grid-placement","name":"九宫格落位","health":92,"counts":[8,8,8,8],"era":0,"nCov":0,"nGap":8},{"id":"inventory/history-import","name":"历史盘点导入","health":92,"counts":[19,17,17,17],"era":0,"nCov":0,"nGap":17},{"id":"inventory/inventory-person","name":"盘点人员清单","health":75,"counts":[23,23,23,23],"era":0,"nCov":0,"nGap":23},{"id":"inventory/inventory-session","name":"盘点会话管理","health":100,"counts":[13,13,13,13],"era":0,"nCov":1,"nGap":12},{"id":"inventory/person-eval","name":"综合评价","health":100,"counts":[6,6,6,6],"era":0,"nCov":0,"nGap":6},{"id":"inventory/person-reserve","name":"人才储备","health":100,"counts":[4,4,4,4],"era":0,"nCov":0,"nGap":4},{"id":"inventory/step4-import","name":"Step4 结果导入","health":82,"counts":[12,12,12,12],"era":0,"nCov":0,"nGap":12},{"id":"inventory/tagging-engine","name":"智能打标引擎","health":null,"counts":[0,0,0,13],"era":3,"nCov":0,"nGap":13}],"employee":[{"id":"employee/person-profile","name":"干部全景档案","health":85,"counts":[22,22,22,22],"era":0,"nCov":9,"nGap":13},{"id":"employee/person-search","name":"人才搜索","health":69,"counts":[22,22,22,22],"era":0,"nCov":0,"nGap":22}],"evaluation":[{"id":"evaluation/eval-360","name":"360评价管理","health":100,"counts":[7,7,7,7],"era":0,"nCov":0,"nGap":7}],"data":[{"id":"data/data-export","name":"数据导出","health":100,"counts":[6,6,6,6],"era":0,"nCov":0,"nGap":6},{"id":"data/data-import","name":"数据导入","health":100,"counts":[5,5,5,5],"era":0,"nCov":0,"nGap":5},{"id":"data/file-conversion","name":"Step4 导入文件转换","health":100,"counts":[27,27,27,27],"era":0,"nCov":0,"nGap":27},{"id":"data/history-inventory","name":"历史盘点记录","health":93,"counts":[8,8,8,8],"era":0,"nCov":0,"nGap":8}],"es-acceleration":[{"id":"es-acceleration/es-field-registry","name":"ES 字段注册表","health":98,"counts":[0,0,8,8],"era":2,"nCov":0,"nGap":8},{"id":"es-acceleration/es-incremental-sync","name":"ES 增量同步覆盖扩展","health":100,"counts":[0,0,10,10],"era":2,"nCov":0,"nGap":10},{"id":"es-acceleration/es-profile-resolver","name":"ES Profile 解析器","health":86,"counts":[0,0,9,9],"era":2,"nCov":0,"nGap":9}]},"l1edges":{"data":[{"a":"data/data-export","b":"data/history-inventory","w":2},{"a":"data/data-import","b":"data/history-inventory","w":1}],"employee":[{"a":"employee/person-profile","b":"employee/person-search","w":2}],"es-acceleration":[],"evaluation":[],"inventory":[{"a":"inventory/capability-assessment","b":"inventory/person-eval","w":3},{"a":"inventory/grid-placement","b":"inventory/inventory-person","w":1},{"a":"inventory/grid-placement","b":"inventory/person-eval","w":3},{"a":"inventory/annual-perf","b":"inventory/history-import","w":3},{"a":"inventory/history-import","b":"inventory/person-eval","w":3},{"a":"inventory/history-import","b":"inventory/person-reserve","w":2},{"a":"inventory/person-eval","b":"inventory/person-reserve","w":1},{"a":"inventory/person-eval","b":"inventory/step4-import","w":3},{"a":"inventory/person-reserve","b":"inventory/step4-import","w":3}],"system-settings":[{"a":"system-settings/dropdown-config","b":"system-settings/grid-config","w":1},{"a":"system-settings/dropdown-config","b":"system-settings/inventory-activity","w":1},{"a":"system-settings/dropdown-config","b":"system-settings/operation-log","w":1},{"a":"system-settings/grid-config","b":"system-settings/inventory-activity","w":1},{"a":"system-settings/inventory-activity","b":"system-settings/notification","w":1},{"a":"system-settings/inventory-activity","b":"system-settings/operation-log","w":3}]},"l2":{"data/data-export":{"frs":[{"id":"FR-001","t":"所有导出统一接入 ExportExcel","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"导出上限 5000 行，超出截断（防止大","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"前端通过 bizType 路由到对应导出","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"导出文件上传 OSS，返回 fileKe","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"前端使用 pollExport 模式（提","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"每个导出服务为独立 Spring Bea","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"data/data-import":{"frs":[{"id":"FR-001","t":"支持导入类型：历年绩效 / 盘点能力 /","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"每类有标准 Excel 模板（含列名+示","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"导入前校验列名完整性；行级校验错误不中断","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"导入操作记录到 tdm_log_oper","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"单次导入上限 2000 行","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"data/file-conversion":{"frs":[{"id":"FR-001","t":"接口交互采用 OSS Key 模式——前","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"支持单独传入其中一个 fileKey，另","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"文件类型自动识别——根据 Sheet 名","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"映射配置化——源 Sheet/列名到目标","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"双行表头合并 + 多段模糊匹配——源文件","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"值转换插件化——通过 transform","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"排名拆分——RANK_SPLIT 插件将","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"工作经历展开——盘点汇总表的跨平台/跨区","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"能力明细展开——传统金融汇总表的能力评价","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"360 总分 Sheet 一列拆三行——","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"转换结果上传 OSS，返回 fileKe","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"映射配置支持 enabled 开关，可快","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"Sheet 名中含\"不需要\"标记的 Sh","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-014","t":"底部标注缺失的列自动跳过——盘点产出汇总","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-015","t":"零决策上传原则——用户只需上传文件，系统","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-016","t":"自动变体识别规则——基于列存在性推断盘点","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-017","t":"统一超集映射配置——96 条映射作为单一","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-018","t":"OSS 文件不存在校验——任一 file","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-019","t":"会话人员基础字段补充——请求可选传入 s","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-020","t":"历史盘点 DHR 人员基础信息补充——请","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-021","t":"tdm_sys_import_mappi","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-022","t":"TdmSysImportMappingR","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-023","t":"FileConvertService.c","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-024","t":"Eval360SurveyConvert","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-025","t":"Eval360SurveyConvert","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-026","t":"转换响应必须新增 infos 字段（Li","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-027","t":"集团职层判断必须经 determineE","era":0,"modAt":1,"goneAt":null,"cov":"gap"}],"frEdges":[["FR-020","FR-019"]],"scenarios":[]},"data/history-inventory":{"frs":[{"id":"FR-001","t":"列表默认按 grid_data[0].g","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"筛选条件采用嵌套多维度搜索模式（basi","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"列表字段从 tdm_snap_profi","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"导出操作记录至 tdm_log_oper","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"权限：corpCode 从 basicC","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"列表分页默认 20 条/页","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"查询数据源——从 tdm_snap_pr","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"会话状态过滤——查询条件必须限定 ses","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"employee/person-profile":{"frs":[{"id":"FR-001","t":"当前模式（全局聚合）：数据来自各 Sna","era":0,"modAt":null,"goneAt":null,"cov":"ok"},{"id":"FR-002","t":"切片模式：数据来自 tdm_snap_p","era":0,"modAt":null,"goneAt":null,"cov":"ok"},{"id":"FR-003","t":"强制切片查询历史盘点（不得用当前最新数据","era":0,"modAt":null,"goneAt":null,"cov":"ok"},{"id":"FR-004","t":"模块：基本信息 / 内部工作经历 / 外","era":0,"modAt":null,"goneAt":null,"cov":"ok"},{"id":"FR-005","t":"快照重建运维接口（POST /api/s","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"盘点结果上下文注入：快照生成/重建时，对","era":0,"modAt":null,"goneAt":null,"cov":"ok"},{"id":"FR-007","t":"RESULT 快照基础信息继承：RESU","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"快照计算字段时点基准——BasicInf","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"快照状态型字段 DHR 历史覆盖（生成路","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"快照状态型字段 DHR 历史覆盖（读取路","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"snapshot_json 显式持久化—","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"DHR 查询方法规范——DhrBasic","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"全景档案盘点结果平台维度权限过滤（MyS","era":0,"modAt":1,"goneAt":null,"cov":"ok"},{"id":"FR-014","t":"全景档案盘点结果平台维度权限过滤（ES ","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-015","t":"全景档案接口权限逻辑升级支持 group","era":0,"modAt":1,"goneAt":null,"cov":"ok"},{"id":"FR-016","t":"全景档案 verticalManager","era":0,"modAt":1,"goneAt":null,"cov":"ok"},{"id":"FR-017","t":"全景档案盘点结果 verticalMan","era":0,"modAt":1,"goneAt":null,"cov":"ok"},{"id":"FR-018","t":"教育经历快照时点过滤语义修正——Educ","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-019","t":"考勤休假快照年份上限过滤——Attend","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-020","t":"全景档案人才标签 Tab——全景档案页面","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-031","t":"全景档案盘点结果 groupLevel ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-032","t":"能力标签会话维度分组与双模式查询——Pe","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[["FR-014","FR-013"],["FR-031","FR-013"],["FR-031","FR-017"],["FR-032","FR-031"]],"scenarios":[{"id":"PP-PERM-003","covers":["FR-016","FR-017"]},{"id":"PP-PERM-004","covers":["FR-013","FR-015"]},{"id":"PP-RC-001","covers":["FR-001","FR-004"]},{"id":"PP-RC-002","covers":["FR-001"]},{"id":"PP-RC-003","covers":["FR-001"]},{"id":"PP-RC-004","covers":["FR-001"]},{"id":"PP-RC-005","covers":["FR-002","FR-003"]},{"id":"PP-RC-006","covers":["FR-002"]},{"id":"PP-RC-007","covers":["FR-002"]},{"id":"PP-SEC-002","covers":["FR-013","FR-015"]},{"id":"PP-SNAP-001","covers":["FR-002","FR-003"]},{"id":"PP-SNAP-002","covers":["FR-006"]}]},"employee/person-search":{"frs":[{"id":"FR-001","t":"支持 basicConditions +","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"区间查询统一对象 {min, max}（","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"搜索字段映射表（ERD §7.2-7.5","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"人员按需写入 tdm_emp_emplo","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"分页 LIMIT OFFSET，默认 2","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"禁止前置通配 LIKE（%张 不允许），","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"权限——总部全量，平台限本平台（corp","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"教育经历查询——使用 EXISTS 子查","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"关键工作经历查询 —— tag_type","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"绩效与盘点动态筛选 —— 组内 AND ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"函数不包列 —— 索引列上禁止套函数（如","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"perfConditions 使用 EX","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"盘点人员搜索（POST /api/emp","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-014","t":"AI 自然语言智能搜索——通过 Dify","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-015","t":"搜索后端可切换 —— 通过配置项 tdm","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-016","t":"新增 PermissionScope 值","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-017","t":"DataPermissionServic","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-018","t":"hr-center Feign 客户端 ","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-019","t":"人才搜索接口（/api/employee","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-020","t":"ES 人员搜索接口权限逻辑升级——Per","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-021","t":"ES 落位字段 keyword 化——l","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-022","t":"人才标签筛选维度——筛选项增加人才标签大","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"es-acceleration/es-field-registry":{"frs":[{"id":"FR-001","t":"定义 @EsField 注解，属性包含：","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"EsFieldRegistry 启动时扫","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"EsMappingGenerator 从","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"EsSyncSqlGenerator 从","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"EsConditionBuilder 从","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"启动时校验：注解 mapping vs ","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"补齐 16 个缺失字段（360 详细 7","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"提供 /api/es/admin/reg","era":2,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"es-acceleration/es-incremental-sync":{"frs":[{"id":"FR-001","t":"新增 Eval360ImportComp","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"新增 Step4ImportComple","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"新增 PersonLockStatusC","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"新增 CapabilityAssessm","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"扩展 EsSyncService.inc","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"增量同步失败自动重试（EsSyncRet","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"保留 XXL-JOB 每日全量同步作为最","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"提供 /api/es/admin/syn","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"历史盘点导入完成后，在 triggerP","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"在 EsIncrementalSyncL","era":2,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"es-acceleration/es-profile-resolver":{"frs":[{"id":"FR-001","t":"新增 EsProfileResolver","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"ES Profile 解析器使用 ES ","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"ES GET 命中后，将 EsEmplo","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"字典字段（gender/national","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"计算字段由 Java 实时计算：age（","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"ES GET 未命中（文档不存在或超时）","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"ProfileVO 采用 dataSou","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"ES Profile 解析器受 es.p","era":2,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"提供 ES vs MySQL 对比验证接","era":2,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"evaluation/eval-360":{"frs":[{"id":"FR-001","t":"排名导入时自动解析文本：前20%→ran","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"360 维度分类枚举 8 类：TOTAL","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"总分支持区间查询（total_score","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"一名人员一活动一平台一类型唯一（uk_e","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"开放题反馈按评价角色（上级/下级/合作伙","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"对比查看：按 invPersonIdLi","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"搜索条件自动去除前后空格：value 字","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/annual-perf":{"frs":[{"id":"FR-001","t":"绩效结果枚举：A / B+ / B / ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"一人一年度唯一（业务唯一，按 emp_i","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"perf_score 为可选的绩效分数（","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"前端默认展示近 5 年，其余可展开","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/capability-assessment":{"frs":[{"id":"FR-001","t":"JSON+子表双写：主表 capabil","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"一人一活动一平台唯一条目（uk_emp_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"子表能力项支持等级值（高/中/低）和文本","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"按 emp_id + activity_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"leader_cap_level 取自综","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"子表能力项名称支持自定义输入，等级值高/","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"快照采集（CapabilityColle","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"快照采集（CapabilityColle","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/exp-tag":{"frs":[{"id":"FR-001","t":"4 种标签类型：CROSS_PLATFO","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"CROSS_PLATFORM 由定时任务","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"CROSS_REGION 的 tag_d","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"CROSS_FUNCTION/OVERS","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"关键工作经历标签与打标引擎统一——现有 ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"已有 exp-tag 数据兼容——全景档","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/grid-placement":{"frs":[{"id":"FR-001","t":"九宫格矩阵数据按 activity_id","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"格子标签优先级：活动自定义（tdm_in","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"tdm_result_person_gr","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"明细列表必须支持按部门、姓名、职层、平台","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"历史趋势返回最近 5 个盘点活动的 gr","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"权限：总部全量，下属平台限本平台数据","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"九宫格矩阵对比接口接受 invPerso","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"落位明细 platformRank（平台","era":0,"modAt":1,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/history-import":{"frs":[{"id":"FR-001","t":"导入文件为多 Sheet Excel 工","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"Sheet 名与导入类型的映射规则必须按","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"所有写入行的 session_id 设为","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"❌ REMOVED — 人员清单 She","era":0,"modAt":1,"goneAt":1,"cov":"gap"},{"id":"FR-005","t":"各结果 Sheet 的列校验规则必须与当","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"导入完成后，必须异步触发快照生成 → t","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"快照生成完毕后，活动保持 ACTIVE ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"10-Sheet 整体一个事务（Q50 ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"❌ REMOVED — 与 FR-008","era":0,"modAt":null,"goneAt":1,"cov":"gap"},{"id":"FR-010","t":"单 Sheet 上限 2000 行","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"导入仅管理员可操作（总部全量 / 平台限","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"导入操作记录至 tdm_log_oper","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"所有 result 表（tdm_resu","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-014","t":"历史盘点导入时，系统必须从\"综合评价\"S","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-015","t":"各结果 Sheet 的工号校验必须校验工","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-016","t":"历史盘点导入时，系统必须从\"综合评价\"S","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-017","t":"历史盘点导入创建人员时，createPe","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-018","t":"360维度得分保存时，必须将用户填写的维","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-019","t":"历史盘点导入 fillEvalEmpIn","era":0,"modAt":1,"goneAt":null,"cov":"gap"}],"frEdges":[["FR-004","FR-014"],["FR-004","FR-015"],["FR-009","FR-008"]],"scenarios":[]},"inventory/inventory-person":{"frs":[{"id":"FR-001","t":"一个人员在一个会话中唯一（uk_sess","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"添加时以 emp_no（工号）作为人员标","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"锁定后异步触发快照生成（tdm_snap","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"高潜字段 is_high_potenti","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"高潜标记/取消为幂等操作——标记=置 Y","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"活动作废（VOID）时，关联的 pers","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"已锁定人员不可直接删除，需先解锁","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"列表查询通过 emp_id JOIN t","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"权限：总部全量，平台限本平台","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"批量操作（删除/锁定/解锁/标记高潜/取","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"批量操作采用全有或全无策略——若任一条记","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"支持 Excel 批量导入人员：前端先上","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"snapshot_json 显式持久化—","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-014","t":"tdm_inv_person 表新增 v","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-015","t":"PersonVO 新增 vertical","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-016","t":"TdmInvPersonService.","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-017","t":"盘点人员查询接口（/api/invent","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-018","t":"tdm_inv_person 表新增 u","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-019","t":"新增批量维护接口 POST /api/i","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-020","t":"盘点人员清单查询接口权限过滤升级——Td","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-021","t":"vertical_manager 值改为","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-022","t":"PersonVO 新增 useVerti","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-023","t":"盘点人员清单查询接口（POST /api","era":0,"modAt":1,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/inventory-session":{"frs":[{"id":"FR-001","t":"会话由活动+平台唯一确定（uk_acti","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"创建会话时 current_step 初","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"步骤推进为单向递增（current_st","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"Step 5 确认后自动触发完成（cur","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"重开会话时 current_step 保","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"仅 ACTIVE 或 CLOSED 状态","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"权限：总部全量，下属平台限本平台（cor","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"会话详情接口返回字段含 personCo","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"「已存在」判定口径：activity_i","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"会话列表和详情接口返回 activity","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"会话列表查询支持 activityTyp","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"盘点导入访谈记录与打标触发——盘点会话导","era":0,"modAt":null,"goneAt":null,"cov":"ok"},{"id":"FR-013","t":"盘点人员列表打标结果展示——人员管理列表","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[{"id":"IS-RVT-001","covers":["FR-012"]},{"id":"IS-RVT-002","covers":["FR-012"]},{"id":"IS-RVT-003","covers":["FR-012"]}]},"inventory/person-eval":{"frs":[{"id":"FR-001","t":"一人一活动一平台唯一（uk_emp_ac","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"V6.5 新增 grid_positio","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"eval_year 保留但模板不再填写（","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"supports JSON 额外动态维度","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"导入 UPSERT，已存在数据覆盖","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"新增 hr_independent_ev","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/person-reserve":{"frs":[{"id":"FR-001","t":"一人一活动一平台唯一（uk_emp_ac","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"准备度枚举：T0（可立即继任）/ T1（","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"管理意愿枚举：是/否/待确认","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"绩效贡献和能力评价为 5 级枚举（高/中","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/step4-import":{"frs":[{"id":"FR-001","t":"单一 bizType: step4Imp","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"模板含 9 个 Sheet（使用说明 +","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"导入解析时静默跳过工号为空的行","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"去重按各维度业务键判断（综合评价/人才储","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"校验报错时错误消息带 [Sheet名] ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"保存时覆盖导入（先删后插）：收集本次导入","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"单次导入上限 2000 行（合计所有 S","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"枚举值下拉校验必须仅保留工作经历 (ta","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"导入时将中文下拉文案转换为英文码值存储必","era":0,"modAt":1,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"tdm_eval_360_dimensi","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"360价值观 UPSERT 查询条件修正","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"各 Sheet 必填字段校验（valid","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"inventory/tagging-engine":{"frs":[{"id":"FR-001","t":"Dify 统一打标——主观标签将访谈评价","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"AI 回调模式——提交任务给 AI 后立","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"三类打标触发方式——AUTO（定时任务）","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"客观标签增量打标——JSON 快照对比检","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"混合触发任务拆分——同时选中客观+主观标","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"手动补偿接口——trigger-obje","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"失败人员补偿重试——retry-fail","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"三色 diff 展示——change_t","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"人员标签结果表同步——任务完成后根据 A","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"AI 标签入库回写——用户点击「+」后创","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"数据权限控制——能力标签（ADVANTA","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"无访谈记录人员处理——清空主观标签，ch","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"标签匹配范围——根据人员平台捞取 ACT","era":3,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/dropdown-config":{"frs":[{"id":"FR-001","t":"系统必须以 (config_key, c","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"系统必须支持按 config_key、c","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"系统必须在编辑时锁定 config_ke","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"系统必须在更新时自动刷新 update_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"前端查询选项接口（公开）必须过滤 is_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"配置变更后，前端无需刷新页面即可获取最新","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"删除操作必须二次确认，且记录操作日志","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"权限控制：仅「总部人才发展管理员」和「系","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/grid-config":{"frs":[{"id":"FR-001","t":"支持按 activity_id + co","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"标签优先级：活动自定义（tdm_inv_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"系统默认标签硬编码于后端常量（1=高绩效","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"配置变更后批量更新关联快照的 grid_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"activity_id=NULL 的记录","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/inventory-activity":{"frs":[{"id":"FR-001","t":"activity_name 全局唯一，重","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"新增时必须至少选择一个适用平台（tdm_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"编辑时适用平台采用全量替换策略（先删后插","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"DRAFT 和 ACTIVE 状态的活动","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"DRAFT → ACTIVE 为单向状态","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"ACTIVE → CLOSED 为单向状","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"盘点活动超过 inventory_dat","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"所有状态变更（新增/编辑/启动/关闭/作","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"列表查询默认不返回 deleted=1 ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"版本号 version 字段用于乐观锁，","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"权限控制——「总部人才发展管理员」「系统","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"作废操作级联逻辑删除（Q22）：tdm_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"编辑活动时，若活动下存在 IN_PROG","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/notification":{"frs":[{"id":"FR-001","t":"统一通过 hr-center SNM d","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"支持飞书/邮件/短信三渠道（由 SNM ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"全局开关（tdm.notificatio","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"按场景开关（tdm.notificati","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"模板编码可覆盖（tdm.notifica","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"配置通过 Nacos femsp.ife","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"定时任务场景（#1#2）采用 last_","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-008","t":"到期提醒场景（#3）由检测逻辑控制（仅在","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-009","t":"事件场景（#4-#9）不做去重，每次事件","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-010","t":"通知为非核心业务，所有异常 catch ","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-011","t":"发送结果记录到 tdm_log_noti","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-012","t":"支持分页查询通知日志（按场景、状态、活动","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-013","t":"支持手动重发失败通知","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-014","t":"支持今日发送统计摘要","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/operation-log":{"frs":[{"id":"FR-001","t":"操作日志由各业务接口通过 AOP 或异步","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"支持按时间范围、operator、ope","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"仅查询（日志不可修改、不可删除）","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"保留策略：日志保留 90 天，超期归档（","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"权限：仅系统管理员和总部人才发展管理员可","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/platform-corp":{"frs":[{"id":"FR-001","t":"系统必须根据当前用户的数据权限过滤返回的","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"系统必须支持按平台编码(platform","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"请求必须携带 resourceCode（","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"数据权限通过 Feign 调用 HR C","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"超管用户由 HR Center 返回全部","era":0,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"HR Center 权限 API 调用异","era":0,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]},"system-settings/tag-library":{"frs":[{"id":"FR-001","t":"标签 CRUD——创建、读取、更新、删除","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-002","t":"标签名称唯一性校验——创建时若名称与同平","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-003","t":"失效标签处理——标签状态改为失效后，不再","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-004","t":"标签库列表查询——支持按标签名称（模糊）","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-005","t":"重新打标触发——多选标签触发重新打标，混","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-006","t":"下拉选项接口——返回 status=AC","era":3,"modAt":null,"goneAt":null,"cov":"gap"},{"id":"FR-007","t":"删除已被引用的标签——返回 409 + ","era":3,"modAt":null,"goneAt":null,"cov":"gap"}],"frEdges":[],"scenarios":[]}}};
+const NOW=3;
+const LENSHINT={
+ topic:'🧭 面试选题入口：紫色脉冲 = 本期 delta 活跃 · Δ徽标 = smart-tag 进行中 —— 点星团决定这轮面试谈什么',
+ debt:'🧊 测试债地图：❄ = 健康分 <80 的功能点（真实 STATUS.md 评分）—— 生成模式的选题依据',
+ map:'🗺 系统概览：边粗细 = 跨模块耦合强度 —— 新人 onboarding 从这张星座图开始'};
+let pano={level:'L0',mod:null,feat:null,sel:null,era:NOW,lens:'topic',diff:false};
+const panoSvg=document.getElementById('panoSvg'),PNS='http://www.w3.org/2000/svg';
+function pmk(t,a){const e=document.createElementNS(PNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+const presentAt=(n,e)=>n.era<=e&&!(n.goneAt&&e>=n.goneAt);
+const visAt=(n,e)=>pano.diff?(presentAt(n,e)||presentAt(n,NOW)):presentAt(n,e);
+function nodeStatus(n,sel){const a=presentAt(n,sel),b=presentAt(n,NOW);
+ if(!a&&b)return'added';if(a&&!b)return'removed';
+ if(a&&b&&n.modAt&&n.modAt>sel)return'modified';return'same';}
+function circ(n,cx,cy,r){const out=[];for(let i=0;i<n;i++){const a=-Math.PI/2+i*2*Math.PI/n;out.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r]);}return out;}
+const featsOf=mod=>PANODATA.l1[mod]||[];
+const frsOf=feat=>(PANODATA.l2[feat]||{frs:[]}).frs;
+const featName=fid=>{for(const m in PANODATA.l1){const f=PANODATA.l1[m].find(x=>x.id===fid);if(f)return f.name;}return fid;};
+const eraLbl=e=>PANODATA.eras[e].label;
+function modFrTotal(mod,e){return featsOf(mod).reduce((s,f)=>s+f.counts[e],0);}
+function modDelta(mod,e){ // 该快照档的 delta 活跃度：新增功能点 + 新增/修改 FR
+ let n=featsOf(mod).filter(f=>f.era===e).length;
+ featsOf(mod).forEach(f=>frsOf(f.id).forEach(x=>{if(x.era===e&&e>0)n++;else if(x.modAt===e)n++;}));
+ return n;}
+function modDiff(mod,sel){const s={a:0,r:0,m:0};
+ featsOf(mod).forEach(f=>frsOf(f.id).forEach(x=>{const st=nodeStatus(x,sel);
+  if(st==='added')s.a++;else if(st==='removed')s.r++;else if(st==='modified')s.m++;}));return s;}
+function featDiff(fid,sel){const s={a:0,r:0,m:0};
+ frsOf(fid).forEach(x=>{const st=nodeStatus(x,sel);
+  if(st==='added')s.a++;else if(st==='removed')s.r++;else if(st==='modified')s.m++;});return s;}
+function renderPano(){
+ panoSvg.innerHTML='';panoSvg.classList.remove('zin');void panoSvg.getBoundingClientRect();panoSvg.classList.add('zin');
+ document.getElementById('lensHint').textContent=LENSHINT[pano.lens];
+ const C=document.getElementById('panoCrumb');
+ C.innerHTML=pano.level==='L0'?'系统星座图'
+  :pano.level==='L1'?`<b onclick="panoLevel('L0')">系统星座图</b> / ${PANODATA.l0mods[pano.mod].name}`
+  :`<b onclick="panoLevel('L0')">系统星座图</b> / <b onclick="panoLevel('L1','${pano.mod}')">${PANODATA.l0mods[pano.mod].name}</b> / ${featName(pano.feat)}`;
+ document.getElementById('tlMarks').innerHTML=PANODATA.eras.map((e,i)=>`<span class="${i===pano.era?'on':''}">${e.label}<br>${e.date}</span>`).join('');
+ if(pano.level==='L0')renderL0();else if(pano.level==='L1')renderL1();else renderL2();
+ renderDiffSum();}
+function renderL0(){
+ const diffs=(pano.diff&&pano.era<NOW)?true:false;
+ PANODATA.l0edges.forEach(e=>{const A=PANODATA.l0mods[e.a],B=PANODATA.l0mods[e.b];
+  panoSvg.appendChild(pmk('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,stroke:'#33405e','stroke-width':pano.lens==='map'?e.w*1.8:e.w,opacity:pano.lens==='map'?.9:.55}));});
+ Object.entries(PANODATA.l0mods).forEach(([id,m])=>{
+  const total=modFrTotal(id,pano.era),nF=featsOf(id).length,r=22+total*0.18;
+  let fill='#1a2336',stroke='#3a4763',pulse=false,badge=null;
+  if(pano.lens==='topic'){const d=modDelta(id,pano.era);
+   if(d>0){stroke='var(--req)';fill='var(--req-soft)';pulse=pano.era===NOW;}
+   const d3=modDelta(id,NOW);if(d3>0&&pano.era===NOW)badge={t:'Δ'+d3,c:'var(--req)',fg:'#0b0f17'};}
+  if(pano.lens==='debt'){const bad=featsOf(id).filter(f=>f.health!==null&&f.health<80).length;
+   const mid=featsOf(id).filter(f=>f.health!==null&&f.health<100).length;
+   if(bad>0){stroke='#94a3b8';fill='rgba(148,163,184,.10)';badge={t:'❄'+bad,c:'#94a3b8',fg:'#0b0f17'};}
+   else if(mid>0){stroke='var(--warn)';fill='var(--warn-soft)';badge={t:mid,c:'var(--warn)',fg:'#0b0f17'};}}
+  let sub=`FR ${total} · ${nF} 功能`;
+  if(diffs){const d=modDiff(id,pano.era);if(d.a||d.r||d.m){
+   stroke=d.a?'var(--pos)':d.m?'var(--warn)':'var(--neg)';
+   fill=d.a?'rgba(52,211,153,.12)':d.m?'rgba(251,191,36,.10)':'var(--neg-soft)';
+   sub=`+${d.a}  -${d.r}  ~${d.m}`;}}
+  const g=pmk('g',{class:'node'});
+  const c=pmk('circle',{cx:m.x,cy:m.y,r,fill,stroke,'stroke-width':2.4});
+  if(pulse)c.setAttribute('class','pulse');
+  const t1=pmk('text',{x:m.x,y:m.y-2,'text-anchor':'middle','font-size':13,fill:'var(--text-strong)','font-weight':700});t1.textContent=m.name;
+  const t2=pmk('text',{x:m.x,y:m.y+14,'text-anchor':'middle','font-size':9.5,fill:'var(--faint)','font-family':'monospace'});t2.textContent=sub;
+  g.append(c,t1,t2);
+  if(badge){const bc=pmk('circle',{cx:m.x+r*0.72,cy:m.y-r*0.72,r:11,fill:badge.c,stroke:'#0b0f17','stroke-width':2});
+   const bt=pmk('text',{x:m.x+r*0.72,y:m.y-r*0.72+3.5,'text-anchor':'middle','font-size':9,fill:badge.fg,'font-weight':700});bt.textContent=badge.t;
+   g.append(bc,bt);}
+  g.style.cursor='pointer';g.onclick=()=>panoLevel('L1',id);
+  panoSvg.appendChild(g);});
+ document.getElementById('panoInfo').innerHTML='语义缩放：<b>L0 星座图 → L1 功能点 → L2 FR 邻域</b>。数据 = 真实工作区（28 功能 · 298 FR · 25 场景）。点击星团进入模块。';}
+function renderL1(){
+ const feats=featsOf(pano.mod),pos=circ(feats.length,550,225,Math.min(120+feats.length*10,185));
+ const fpos={};feats.forEach((f,i)=>fpos[f.id]=pos[i]);
+ (PANODATA.l1edges[pano.mod]||[]).forEach(e=>{const A=fpos[e.a],B=fpos[e.b];
+  if(!A||!B)return;
+  panoSvg.appendChild(pmk('line',{x1:A[0],y1:A[1],x2:B[0],y2:B[1],stroke:'#33405e','stroke-width':e.w,opacity:.5}));});
+ feats.forEach((f,i)=>{
+  const[x,y]=pos[i],cnt=f.counts[pano.era],r=13+cnt*0.9;
+  if(pano.diff?!((f.counts[pano.era]||0)+(f.counts[NOW]||0)):!cnt)return;
+  let fill='#1a2336',stroke='#3a4763',dash=null,pulse=false,badge=null;
+  if(f.nCov>0&&f.nGap===0){fill='var(--pos-soft)';stroke='var(--pos)';}
+  else if(f.nCov===0){fill='var(--neg-soft)';stroke='var(--neg)';}
+  else{fill='var(--warn-soft)';stroke='var(--warn)';}
+  if(pano.lens==='debt'){if(f.health===null){stroke='#7c8aa5';dash='4 3';}
+   else if(f.health<80){stroke='#94a3b8';fill='rgba(148,163,184,.10)';badge={t:'❄'+f.health,c:'#94a3b8',fg:'#0b0f17'};}
+   else if(f.health<100){badge={t:f.health,c:'var(--warn)',fg:'#0b0f17'};}}
+  let sub=`FR ${cnt} · 健康 ${f.health===null?'新':f.health}`;
+  if(pano.diff){const d=featDiff(f.id,pano.era);
+   if(f.era>pano.era){fill='rgba(52,211,153,.15)';stroke='var(--pos)';pulse=true;sub=`新增功能点 +${f.counts[NOW]} FR`;}
+   else if(d.a||d.r||d.m){if(d.m||d.a){fill='rgba(251,191,36,.12)';stroke='var(--warn)';}sub=`+${d.a} -${d.r} ~${d.m}`;}}
+  const g=pmk('g',{class:'node'});
+  const c=pmk('circle',{cx:x,cy:y,r,fill,stroke,'stroke-width':2});
+  if(dash)c.setAttribute('stroke-dasharray',dash);
+  if(pulse)c.setAttribute('class','pulse');
+  const t1=pmk('text',{x,y:y+r+13,'text-anchor':'middle','font-size':10.5,fill:'var(--text-strong)'});t1.textContent=f.name;
+  const t2=pmk('text',{x,y:y+r+24,'text-anchor':'middle','font-size':8.5,fill:'var(--faint)','font-family':'monospace'});t2.textContent=sub;
+  g.append(c,t1,t2);
+  if(badge){const bc=pmk('circle',{cx:x+r*0.75,cy:y-r*0.75,r:11,fill:badge.c,stroke:'#0b0f17','stroke-width':2});
+   const bt=pmk('text',{x:x+r*0.75,y:y-r*0.75+3.5,'text-anchor':'middle','font-size':8.5,fill:badge.fg,'font-weight':700});bt.textContent=badge.t;
+   g.append(bc,bt);}
+  g.style.cursor='pointer';g.onclick=()=>panoLevel('L2',f.id);
+  panoSvg.appendChild(g);});
+ // 中心模块锚点
+ const cc=pmk('circle',{cx:550,cy:225,r:26,fill:'var(--surface-3)',stroke:'var(--line-strong)','stroke-width':1.5});
+ const ct=pmk('text',{x:550,y:229,'text-anchor':'middle','font-size':11,fill:'var(--text-strong)','font-weight':700});ct.textContent=PANODATA.l0mods[pano.mod].name;
+ panoSvg.append(cc,ct);
+ document.getElementById('panoInfo').innerHTML=`<b>${PANODATA.l0mods[pano.mod].name}</b> · L1 功能点视图（${eraLbl(pano.era)}）——节点色 = 覆盖状态（绿全覆盖 / 红零覆盖 / 黄部分）；点击功能点进入 L2 FR 邻域。`;}
+function renderL2(){
+ const D=PANODATA.l2[pano.feat],sel=pano.era;
+ const frs=D.frs.filter(n=>visAt(n,sel)),pos=circ(Math.max(frs.length,1),400,225,Math.min(60+frs.length*7,170));
+ const fpos={};frs.forEach((n,i)=>fpos[n.id]=pos[i]);
+ const scs=(D.scenarios||[]).filter(s=>s.covers.some(c=>fpos[c]));
+ scs.forEach((s,i)=>{fpos[s.id]=[860+(i%2)*110,60+Math.floor(i/2)*52];});
+ const nb=id=>{const s=new Set([id]);
+  D.frEdges.forEach(([a,b])=>{if(a===id)s.add(b);if(b===id)s.add(a);});
+  scs.forEach(sc=>{if(sc.id===id)sc.covers.forEach(c=>s.add(c));if(sc.covers.includes(id))s.add(sc.id);});
+  return s;};
+ const N=pano.sel?nb(pano.sel):null;
+ // 边
+ D.frEdges.forEach(([a,b])=>{if(!fpos[a]||!fpos[b])return;
+  panoSvg.appendChild(pmk('line',{x1:fpos[a][0],y1:fpos[a][1],x2:fpos[b][0],y2:fpos[b][1],stroke:'#2a3550','stroke-width':1.3,opacity:N&&!(N.has(a)&&N.has(b))?.25:1}));});
+ scs.forEach(s=>s.covers.forEach(c=>{if(!fpos[c])return;
+  panoSvg.appendChild(pmk('line',{x1:fpos[s.id][0],y1:fpos[s.id][1],x2:fpos[c][0],y2:fpos[c][1],stroke:'#38bdf8','stroke-width':1.4,opacity:N&&!(N.has(s.id))?.2:.85}));}));
+ // FR 节点
+ frs.forEach(n=>{
+  const[x,y]=fpos[n.id];let fill='#1a2336',stroke='#3a4763',dash=null,pulse=false;
+  if(n.cov==='ok'){fill='var(--pos-soft)';stroke='var(--pos)';}
+  else{fill='var(--neg-soft)';stroke='var(--neg)';}
+  if(pano.diff){const st=nodeStatus(n,sel);
+   if(st==='added'){fill='rgba(52,211,153,.15)';stroke='var(--pos)';pulse=true;}
+   else if(st==='removed'){fill='transparent';stroke='var(--neg)';dash='5 4';}
+   else if(st==='modified'){fill='rgba(251,191,36,.14)';stroke='var(--warn)';}}
+  const dim=N&&!N.has(n.id);
+  const g=pmk('g',{class:'node'+(dim?' dim':'')});
+  const c=pmk('circle',{cx:x,cy:y,r:15,fill,stroke,'stroke-width':2});
+  if(dash)c.setAttribute('stroke-dasharray',dash);
+  if(pulse)c.setAttribute('class','pulse');
+  const t1=pmk('text',{x,y:y+27,'text-anchor':'middle','font-size':9.5,fill:'var(--text-strong)'});t1.textContent=n.t||n.id;
+  const t2=pmk('text',{x,y:y+37,'text-anchor':'middle','font-size':8,fill:'var(--faint)','font-family':'monospace'});t2.textContent=n.id;
+  g.append(c,t1,t2);g.style.cursor='pointer';
+  g.onclick=()=>{pano.sel=pano.sel===n.id?null:n.id;renderL2();showL2FR(n);};
+  panoSvg.appendChild(g);});
+ // 场景节点（方块）
+ scs.forEach(s=>{
+  const[x,y]=fpos[s.id],dim=N&&!N.has(s.id);
+  const g=pmk('g',{class:'node'+(dim?' dim':'')});
+  g.appendChild(pmk('rect',{x:x-13,y:y-13,width:26,height:26,rx:6,fill:'var(--test-soft)',stroke:'var(--test)','stroke-width':2}));
+  const t=pmk('text',{x,y:y+27,'text-anchor':'middle','font-size':8.5,fill:'var(--test)','font-family':'monospace'});t.textContent=s.id;
+  g.appendChild(t);g.style.cursor='pointer';
+  g.onclick=()=>{pano.sel=pano.sel===s.id?null:s.id;renderL2();
+   document.getElementById('panoInfo').innerHTML=`<b>${s.id}</b> 场景<div class="bl">covers → ${s.covers.join(' · ')}</div>`;};
+  panoSvg.appendChild(g);});
+ if(!pano.sel)document.getElementById('panoInfo').innerHTML=`<b>${featName(pano.feat)}</b> · L2 FR 邻域（${eraLbl(pano.era)}）——圆 = FR（绿有场景覆盖 / 红缺口），方块 = 场景。点击节点聚焦其邻域，其余压暗为底图。`;}
+function showL2FR(n){
+ const scs=(PANODATA.l2[pano.feat].scenarios||[]).filter(s=>s.covers.includes(n.id)).map(s=>s.id);
+ const delta=n.era>0?eraLbl(n.era)+(n.era===NOW?'（进行中）':' 新增'):(n.modAt?eraLbl(n.modAt)+' 修改':'V1.0 基线');
+ const st=pano.diff?({'added':'🟢 本期新增','removed':'🔴 本期移除','modified':'🟡 本期修改','same':'无变化'}[nodeStatus(n,pano.era)]):'';
+ document.getElementById('panoInfo').innerHTML=`<b>${n.t||n.id}</b> <span style="font-family:var(--mono);font-size:10px">${n.id}</span> ${st}
+ <div class="bl">covers ← ${scs.length?scs.join(' · '):'无（缺口）'}<br>delta ← ${delta}<br>互提 → ${(PANODATA.l2[pano.feat].frEdges.filter(([a,b])=>a===n.id||b===n.id).map(([a,b])=>a===n.id?b:a).join(' · ')||'无')}</div>`;}
+function renderDiffSum(){
+ const el=document.getElementById('diffSum'),btn=document.getElementById('diffBtn');
+ btn.textContent=pano.diff?'⇄ 演化 diff：开':'⇄ 演化 diff：关';
+ btn.classList.toggle('on',pano.diff);
+ if(!pano.diff){el.innerHTML='';return;}
+ if(pano.era===NOW){el.innerHTML='当前快照 vs 当前 —— 无差异。把滑块拖到更早的里程碑，看系统长出了什么。';return;}
+ const d=Object.keys(PANODATA.l0mods).map(m=>modDiff(m,pano.era))
+  .reduce((s,x)=>({a:s.a+x.a,r:s.r+x.r,m:s.m+x.m}),{a:0,r:0,m:0});
+ el.innerHTML=`📸 <b>${eraLbl(pano.era)}</b> → <b>当前</b>：<b style="color:var(--pos)">+${d.a} 新增</b> · <b style="color:var(--neg)">-${d.r} 移除</b> · <b style="color:var(--warn)">~${d.m} 修改</b>　｜　快照指纹 <span style="font-family:var(--mono)">ws@${PANODATA.eras[pano.era].id} · 真实 specs 解析</span>（可凭指纹 checkout 重建校验）`;}
+function panoLevel(lv,a){pano.level=lv;pano.sel=null;
+ if(lv==='L1')pano.mod=a;if(lv==='L2'){pano.feat=a;
+  pano.mod=Object.keys(PANODATA.l1).find(m=>PANODATA.l1[m].some(f=>f.id===a))||pano.mod;}
+ renderPano();}
+document.querySelectorAll('.lens-btn').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.lens-btn').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+ pano.lens=b.dataset.lens;renderPano();});
+document.getElementById('tlRange').oninput=e=>{pano.era=+e.target.value;pano.sel=null;renderPano();};
+document.getElementById('diffBtn').onclick=()=>{pano.diff=!pano.diff;renderPano();};
+renderPano();
 </script>
 </body>
 </html>

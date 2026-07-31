@@ -76,15 +76,15 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   ├── session.py                #   会话管理（多用户按工号隔离，agent/sessions/{emp}/）
 │   ├── llm_client.py             #   LLM 客户端（配置热加载，DB 驱动）
 │   ├── compactor.py              #   长对话压缩（超限自动摘要早期轮次）
-│   ├── mode_loader.py + modes/   #   工作模式加载（generate/debug/analyze/chat，热加载 30s TTL）
+│   ├── mode_loader.py + modes/   #   工作模式加载（generate/debug/analyze/audit/chat，热加载 30s TTL）
 │   ├── skill_loader.py + skills/ #   技能加载（generate-scenario/validate-conformance/debug-failure）
 │   ├── prompts/system.md.j2      #   system prompt Jinja 模板（注入 modes/skills）
 │   ├── cli.py                    #   POC 独立验证入口
 │   └── sessions/                 #   会话产物（.jsonl，不入 git）
 │
 ├── mcp_server/                   # MCP 工具层（stdio，Agent 通过工具操作仓库）
-│   ├── server.py                 #   stdio 入口（注册 6 模块 / 11 个工具）
-│   └── tools/                    #   spec_reader/scenario_tools/registry_query/draft_writer/validator/attribution
+│   ├── server.py                 #   stdio 入口（注册 8 模块 / 24 个工具）
+│   └── tools/                    #   spec_reader/scenario_tools/registry_query/draft_writer/validator/attribution/audit/meta
 │       ├── info_pack.py          #     基础信息包读写（尚未挂载到 server.TOOL_MODULES）
 │       └── live_registry.py      #     运行时 tool 注册器（导入时注册 engine 适配包）
 │
@@ -106,13 +106,13 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │
 ├── (drafts/plans/reports 已迁移至各工作区的 .specguard/ 目录，见 specstd/workspace.py)
 └── workbench/                    # 可视化工作台
-    ├── backend/                  #   FastAPI（main.py + routers/×12 + services/×12，含 RBAC + 工作区中间件）
+    ├── backend/                  #   FastAPI（main.py + routers/×15 + services/×20，含 RBAC + 工作区中间件）
     │   ├── routers/              #   auth/users/scenarios/runs/reference/plans/spec_validation/
-    │   │                         #   agent/workspace/feedback/drafts/settings
+    │   │                         #   agent/workspace/feedback/drafts/settings/notify/schedules
     │   └── services/             #   auth(会话+RBAC)/runner/scenario_store/plan_store/format_spec/
-    │                             #   deps_editor/spec_validator/covers_gate/user_store/
-    │                             #   llm_config/model_config/scenario_meta
-    └── frontend/                 #   React 18 + Vite 5 + TS（DAG 画布/执行控制/场景编辑器/AgentChat）
+    │                             #   deps_editor/spec_validator/covers_gate/user_store/crypto/
+    │                             #   llm_config/model_config/scenario_meta/scheduler/file_preview
+    └── frontend/                 #   React 19 + Vite 6 + TS（DAG 画布/执行控制/场景编辑器/AgentChat）
 ```
 
 ---
