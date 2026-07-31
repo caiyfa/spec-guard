@@ -21,6 +21,8 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
+_RAW_MAX_BYTES = 30 * 1024 * 1024  # K-036：保真预览原始字节上限 30MB
+
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
@@ -276,16 +278,35 @@ def api_spec_files(subdir: str = "", ws_name: str = Depends(resolve_workspace)):
 
 
 @router.get("/read-file")
-def api_read_file(path: str, ws_name: str = Depends(resolve_workspace)):
-    """读取请求工作区的文件（授权校验由 resolve_workspace 完成）。"""
+def api_read_file(path: str, raw: bool = False, ws_name: str = Depends(resolve_workspace)):
+    """读取请求工作区的文件（授权校验由 resolve_workspace 完成）。
+
+    K-030：办公文档（xlsx/docx/pdf）经 file_preview 转换为 Markdown/文本，
+    format 字段提示前端渲染方式（此前 read_text 对二进制直接 500）。
+    K-036：raw=true 时返回原始字节（base64）——前端保真预览（SheetJS 解析
+    合并单元格/pdf 原生查看器/docx mammoth）需要原文件，文本转换会丢格式。
+    """
     resolved = safe_resolve(path, ws_name)
     if resolved is None:
         raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界或工作区不存在: {path}")
     if not resolved.is_file():
         raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
 
-    content = resolved.read_text(encoding="utf-8")
-    return {"path": path, "content": content}
+    if raw:
+        import base64
+        data = resolved.read_bytes()
+        if len(data) > _RAW_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="文件超过 30MB，不支持保真预览")
+        return {"path": path, "raw_base64": base64.b64encode(data).decode("ascii"),
+                "format": resolved.suffix.lower().lstrip(".")}
+
+    from services import file_preview
+    if file_preview.is_office_doc(resolved):
+        fmt, text = file_preview.preview_text(resolved)
+        return {"path": path, "content": text, "format": fmt}
+
+    content = resolved.read_text(encoding="utf-8", errors="replace")
+    return {"path": path, "content": content, "format": "raw"}
 
 
 @router.get("/file-hash")

@@ -1,6 +1,6 @@
 """场景管理 API：列表 / DAG / YAML 读写 / 校验 / 依赖编辑 / 漂移报告"""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from services.auth import require_role, resolve_workspace
@@ -75,6 +75,82 @@ def api_update_info_pack(scenario_id: str, body: UpdateInfoPackBody):
     if result is None:
         raise HTTPException(status_code=404, detail=f"场景元数据不存在: {scenario_id}")
     return result
+
+
+_UPLOAD_MAX_BYTES = 20 * 1024 * 1024  # 20MB
+
+
+def _sanitize_upload(filename: str | None, data: bytes) -> str:
+    """上传文件通用校验：剥离客户端路径 + 拒绝隐藏/空/超限文件，返回安全文件名。"""
+    from pathlib import Path as _Path
+    name = _Path(filename or "").name  # 剥离客户端路径
+    if not name or name.startswith(".") or ".." in name:
+        raise HTTPException(status_code=400, detail=f"非法文件名: {filename}")
+    if not data:
+        raise HTTPException(status_code=400, detail="空文件")
+    if len(data) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="文件超过 20MB 上限")
+    return name
+
+
+def _save_to_uploads(filename: str, data: bytes):
+    """落盘 .specguard/uploads/（重名 -1/-2 去重不覆盖），返回工作区相对路径。"""
+    from specstd.workspace import specguard_dir
+    sg_dir = specguard_dir()
+    uploads = sg_dir / "uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    target = uploads / filename
+    stem, suffix = target.stem, target.suffix
+    n = 1
+    while target.exists():
+        target = uploads / f"{stem}-{n}{suffix}"
+        n += 1
+    target.write_bytes(data)
+    return str(target.relative_to(sg_dir.parent)).replace("\\", "/")
+
+
+@router.post("/info-pack/auto-create", dependencies=[Depends(require_role("admin", "tester"))])
+async def api_auto_create_info_pack(
+    files: list[UploadFile] = File(...),
+    name: str = Form(""),
+    ws_name: str = Depends(resolve_workspace),
+):
+    """K-034：聊天框上传附件 → 自动创建信息包（无需先走创建向导）。
+
+    多个文件一次成一个信息包：落盘 .specguard/uploads/ + create_meta + 条目化，
+    返回完整 meta，前端据此加入 info_pack 引用 chip（发送时才关联会话）。
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="未选择文件")
+    rel_paths: list[str] = []
+    for f in files:
+        data = await f.read()
+        rel_paths.append(_save_to_uploads(_sanitize_upload(f.filename, data), data))
+    pack_name = name.strip() or rel_paths[0].rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    meta = scenario_meta.create_meta(name=pack_name, module="", workspace=ws_name or "")
+    updated = scenario_meta.update_info_pack(meta["id"], rel_paths)
+    return updated or meta
+
+
+@router.post("/{scenario_id}/info-pack/upload", dependencies=[Depends(require_role("admin", "tester"))])
+async def api_upload_info_pack_file(scenario_id: str, file: UploadFile = File(...)):
+    """K-033：直接上传材料到信息包（不再只能 git 拉取工作区文件）。
+
+    文件落盘 .specguard/uploads/{filename}（工作区内，safe_resolve 可读、
+    git diff 变更发现已过滤 .specguard 不产生噪音），路径加入信息包条目
+    （sha 指纹由 update_info_pack 归一化时自动计算）。重名自动 -1/-2 去重。
+    """
+    meta = scenario_meta.get_meta(scenario_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail=f"场景元数据不存在: {scenario_id}")
+
+    data = await file.read()
+    rel = _save_to_uploads(_sanitize_upload(file.filename, data), data)
+    files = [e.get("path") for e in (meta.get("info_pack") or []) if isinstance(e, dict)]
+    if rel not in files:
+        files.append(rel)
+    updated = scenario_meta.update_info_pack(scenario_id, files)
+    return updated or meta
 
 
 @router.get("/{scenario_id}/info-pack/freshness", dependencies=[Depends(require_role("admin", "tester"))])

@@ -128,6 +128,52 @@ def _write_info_pack(sid: str, files: list[dict]):
     )
 
 
+# ══════════════════════════════════════════════════════════
+# K-026：入库血缘（信息包 → 已入库场景 正向链路）
+# ══════════════════════════════════════════════════════════
+
+def _promoted_path(sid: str) -> Path:
+    """入库血缘 sidecar：.specguard/info_packs/{sid}.promoted.json。"""
+    return info_packs_dir() / f"{sid}.promoted.json"
+
+
+def record_promotion(sid: str, scenario_id: str, module: str, draft: str):
+    """记录一次草稿入库（promote 成功后调用）：场景 ID + 模块 + 来源草稿 + 时间。
+
+    打通「信息包 → 草稿 → 入库场景」正向链路——此前 promote 后 lineage 丢失，
+    信息包面板/DAG 编排/执行无法反查哪些场景由该信息包产出。
+    """
+    import json as _json
+    from datetime import datetime as _dt
+    if not sid or not scenario_id:
+        return
+    items = get_promotions(sid)
+    # 同一场景重复入库（修复后重入库）→ 更新而非追加
+    items = [it for it in items if it.get("scenario_id") != scenario_id]
+    items.append({
+        "scenario_id": scenario_id,
+        "module": module,
+        "draft": draft,
+        "promoted_at": _dt.now().isoformat(timespec="seconds"),
+    })
+    path = _promoted_path(sid)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def get_promotions(sid: str) -> list[dict]:
+    """读取入库血缘（无记录返回 []）。"""
+    import json as _json
+    path = _promoted_path(sid)
+    if not path.is_file():
+        return []
+    try:
+        data = _json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
 def _next_id() -> str:
     """生成下一个场景元数据 ID（SG-META-序号）。"""
     _ensure_table()

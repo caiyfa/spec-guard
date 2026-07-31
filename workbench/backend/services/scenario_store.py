@@ -95,6 +95,11 @@ def _scan_scenarios() -> list[dict]:
                     deps.append({"id": d["id"], "mode": d.get("mode", "shared"),
                                  "version": d.get("version"),
                                  "optional": bool(d.get("optional"))})
+            try:
+                rel_path = str(Path(path).relative_to(SG_ROOT))
+            except ValueError:
+                # 根被重定向的场景（测试/多库场景）：相对场景库根
+                rel_path = str(Path(path).relative_to(SCENARIOS_ROOT))
             scenarios.append({
                 "id": sid,
                 "title": raw.get("title", ""),
@@ -107,7 +112,7 @@ def _scan_scenarios() -> list[dict]:
                 "category": _infer_category(raw),
                 "covers": (raw.get("doc") or {}).get("covers", []),
                 "module": suite_meta.get("module", ""),
-                "path": str(Path(path).relative_to(SG_ROOT)),
+                "path": rel_path,
                 "abs_path": path,
             })
     return sorted(scenarios, key=lambda s: s["id"])
@@ -186,6 +191,7 @@ def get_dag() -> dict:
                 "tags": s["tags"],
                 "has_teardown": s["has_teardown"],
                 "category": s["category"],
+                "module": s.get("module", ""),  # K-027：DAG 页按模块分组筛选
             },
         })
         for dep in s["depends_on"]:

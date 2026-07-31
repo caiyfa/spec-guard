@@ -86,6 +86,28 @@ TOOLS = [
             }
         }
     ),
+    Tool(
+        name="edit_dependency",
+        description="编排场景依赖边（K-027 补全 Agent 的 DAG 编排能力）：给库内场景添加/移除 "
+                    "depends_on 条目（文本外科手术，保留 YAML 注释）。depends_on 写在【下游消费者】身上——"
+                    "add 时 scenario_id=下游、dep_id=上游。自带守卫：自依赖拒绝、目标不存在拒绝、"
+                    "循环依赖 409。版本期望自动按上游当前版本推导 ^主版本（推荐语义）。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "scenario_id": {"type": "string",
+                                "description": "下游场景 ID（depends_on 写在它身上）"},
+                "action": {"type": "string", "enum": ["add", "remove"],
+                           "description": "add=添加依赖边 / remove=移除依赖边"},
+                "dep_id": {"type": "string",
+                           "description": "上游场景 ID（被依赖方）"},
+                "mode": {"type": "string", "enum": ["shared", "exclusive"],
+                         "description": "依赖模式（默认 shared 只读共享；写型消费用 exclusive）",
+                         "default": "shared"}
+            },
+            "required": ["scenario_id", "action", "dep_id"]
+        }
+    ),
 ]
 
 
@@ -100,6 +122,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_check_dag(arguments)
     elif name == "run_scenario":
         return _handle_run_scenario(arguments)
+    elif name == "edit_dependency":
+        return _handle_edit_dependency(arguments)
     return []
 
 
@@ -372,3 +396,70 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
         out["reason"] = record.skip_reason
 
     return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False, indent=2))]
+
+def _handle_edit_dependency(arguments: dict) -> list[TextContent]:
+    """编排依赖边（K-027：deps_editor 文本外科手术 + 服务端守卫）。
+
+    与 routers/scenarios.py 的 /deps 端点同一语义（自依赖/存在性/环校验），
+    供 Agent 直接编排库内场景 DAG——此前只能给新草稿声明 depends_on，
+    已入库场景的依赖边只能在画布上手工连线。
+    """
+    scenario_id = str(arguments.get("scenario_id", "") or "")
+    action = str(arguments.get("action", "") or "")
+    dep_id = str(arguments.get("dep_id", "") or "")
+    mode = str(arguments.get("mode", "") or "shared")
+
+    if not scenario_id or not dep_id:
+        return [TextContent(type="text", text="错误：缺少 scenario_id 或 dep_id 参数")]
+    if action not in ("add", "remove"):
+        return [TextContent(type="text", text=f"错误：action 非法: {action}（仅支持 add/remove）")]
+    if mode not in ("shared", "exclusive"):
+        return [TextContent(type="text", text=f"错误：mode 非法: {mode}（仅支持 shared/exclusive）")]
+    if scenario_id == dep_id:
+        return [TextContent(type="text", text="错误：不允许自依赖")]
+
+    from services import deps_editor, scenario_store
+
+    scenarios = {s["id"]: s for s in scenario_store.list_scenarios()}
+    if scenario_id not in scenarios:
+        return [TextContent(type="text", text=f"错误：场景 {scenario_id} 不存在")]
+    if action == "add" and dep_id not in scenarios:
+        return [TextContent(type="text", text=f"错误：依赖目标 {dep_id} 不存在")]
+
+    if action == "add":
+        # 环校验：dep 的依赖闭包中若已含本场景，新增边将成环
+        from engine.dependency_graph import DependencyGraph
+        from engine.scenario_loader import load_scenarios
+        graph = DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+        if scenario_id in graph.closure(dep_id):
+            return [TextContent(type="text", text=json.dumps({
+                "ok": False, "error_code": "cycle",
+                "error": f"会形成循环依赖: {scenario_id} → {dep_id} → … → {scenario_id}",
+            }, ensure_ascii=False, indent=2))]
+        try:
+            deps_editor.add_dep(
+                scenarios[scenario_id]["abs_path"], dep_id, mode,
+                scenarios[dep_id]["version"])
+        except deps_editor.DepsEditError as e:
+            return [TextContent(type="text", text=json.dumps(
+                {"ok": False, "error_code": "edit_failed", "error": str(e)},
+                ensure_ascii=False, indent=2))]
+    else:
+        try:
+            deps_editor.remove_dep(scenarios[scenario_id]["abs_path"], dep_id)
+        except deps_editor.DepsEditError as e:
+            return [TextContent(type="text", text=json.dumps(
+                {"ok": False, "error_code": "edit_failed", "error": str(e)},
+                ensure_ascii=False, indent=2))]
+
+    # 编辑后返回最新 depends_on（文件 mtime 变化 → 场景缓存自动失效重扫）
+    updated = {s["id"]: s for s in scenario_store.list_scenarios()}[scenario_id]
+    return [TextContent(type="text", text=json.dumps({
+        "ok": True,
+        "scenario_id": scenario_id,
+        "action": action,
+        "dep_id": dep_id,
+        "depends_on": updated["depends_on"],
+        "note": "版本期望已按上游当前版本自动推导（^主版本）；"
+                "建议用 check_dag 复核整体拓扑，validate 复核该场景格式",
+    }, ensure_ascii=False, indent=2))]

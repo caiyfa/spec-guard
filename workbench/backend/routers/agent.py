@@ -140,7 +140,13 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
                 if resolved and resolved.is_file():
                     raw = resolved.read_bytes()
                     sha = hashlib.sha256(raw).hexdigest()[:12]
-                    content = raw.decode("utf-8", errors="replace")
+                    # K-030：办公文档（xlsx/docx/pdf）经 file_preview 转文本——
+                    # 此前 errors="replace" 解码出乱码注入，Agent 读不懂信息包里的 xlsx
+                    from services import file_preview
+                    if file_preview.is_office_doc(resolved):
+                        _fmt, content = file_preview.preview_text(resolved)
+                    else:
+                        content = raw.decode("utf-8", errors="replace")
             elif rtype == "draft":
                 # 草稿文件名守卫（与 draft_writer 一致：禁路径分隔符和 ..）
                 name = rid.replace("/", "").replace("\\", "").replace("..", "")

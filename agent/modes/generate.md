@@ -42,6 +42,8 @@ tools:
 4. **输出拓扑设计表**（场景 ID → depends_on → 产出/消费的变量）请用户确认
 5. 用户确认后，生成期间每完成一批用 **check_dag**（include_drafts=true）预演：
    无环、无悬空依赖（T4）、无 DRIFT 才继续
+6. **已入库场景**的依赖边用 **edit_dependency** 编排（scenario_id=下游、dep_id=上游，
+   自带环校验与版本期望推导）；编排后用 check_dag 复核整体拓扑
 
 ### 第二步：逐个生成场景
 用户确认后，**一次只生成一个场景**：

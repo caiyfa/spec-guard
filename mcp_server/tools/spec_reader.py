@@ -100,10 +100,28 @@ def _resolve_sg_root(path: str) -> Path | None:
 
 
 def _read_text_guarded(resolved: Path, display_path: str) -> list[TextContent]:
-    """带二进制/大小守卫的文本读取。"""
-    if resolved.suffix.lower() in _BINARY_EXTS:
+    """带二进制/大小守卫的文本读取。
+
+    K-030：办公文档（xlsx/docx/pdf）经 file_preview 转换为 Markdown/文本——
+    Agent 可直接读信息包里的 xlsx（标签库维护test-cases.xlsx 是关键信息源，
+    此前只能拒读）；其他二进制仍拒读。
+    """
+    ext = resolved.suffix.lower()
+    if ext in {".xlsx", ".docx", ".pdf"}:
+        try:
+            import sys as _sys
+            BACKEND_DIR = SG_ROOT / "workbench" / "backend"
+            if str(BACKEND_DIR) not in _sys.path:
+                _sys.path.insert(0, str(BACKEND_DIR))
+            from services import file_preview
+            _fmt, text = file_preview.preview_text(resolved)
+            note = f"[{ext} 已转换为文本预览，大文件可能截断]\n\n"
+            return [TextContent(type="text", text=note + text)]
+        except Exception as e:
+            return [TextContent(type="text", text=f"办公文档转换失败: {display_path}: {e}")]
+    if ext in _BINARY_EXTS:
         return [TextContent(type="text", text=(
-            f"二进制文件不可文本读取: {display_path}（{resolved.suffix}）。"
+            f"二进制文件不可文本读取: {display_path}（{ext}）。"
             f"如需其中信息，请让用户在对话中 @引用 或转换为文本格式"))]
     raw = resolved.read_bytes()
     truncated = len(raw) > _MAX_READ

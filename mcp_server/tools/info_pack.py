@@ -149,6 +149,16 @@ def _handle_list_artifacts(arguments: dict) -> list[TextContent]:
         "note": "草稿关联自 K-013 起由 write_draft 的 scenario_id 参数记录；更早的草稿无关联记录。"
                 "promoted_or_missing=true 表示草稿已入库或已删除。",
     }
+
+    # K-026：入库血缘（信息包 → 已入库场景）——串联 DAG 编排与执行
+    try:
+        promoted = scenario_meta.get_promotions(scenario_id)
+        if promoted:
+            result["promoted_scenarios"] = promoted
+            result["summary"]["promoted_count"] = len(promoted)
+    except Exception:
+        pass
+
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
 
 
@@ -186,7 +196,14 @@ def _handle_read_info_pack(arguments: dict) -> list[TextContent]:
             parts.append(f"--- {file_path} [已删除] ---\n[文件不存在：引用后已被删除或移动]\n")
             continue
         try:
-            content = resolved.read_text(encoding="utf-8")
+            # K-030：办公文档（xlsx/docx/pdf）经 file_preview 转文本——
+            # 信息包关键文件常是 xlsx（read_text 直接 UnicodeDecodeError）
+            from services import file_preview
+            if file_preview.is_office_doc(resolved):
+                _fmt, content = file_preview.preview_text(resolved)
+                content = f"[办公文档已转换为文本预览]\n{content}"
+            else:
+                content = resolved.read_text(encoding="utf-8", errors="replace")
             mark = ""
             if stored_sha:
                 try:

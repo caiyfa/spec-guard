@@ -125,6 +125,44 @@ def _display_target(target: Path) -> str:
     return str(target)
 
 
+def _ensure_suite_yaml(module_dir: Path, module: str):
+    """K-026：目标模块目录无 _suite.yaml 时自动创建（module 元信息）。
+
+    此前 promote 到新建目录后场景 module=''——DAG 编排/场景列表按模块分组时
+    新场景无归属（90 节点里找不到），用户反馈「入库后在 DAG 编排里选不到」。
+    """
+    suite = module_dir / "_suite.yaml"
+    if suite.exists():
+        return
+    feature = module_dir.name
+    suite.write_text(
+        f"# 套件元信息（promote 自动创建，K-026）\n"
+        f"feature: {feature}\n"
+        f"module: {module}\n",
+        encoding="utf-8",
+    )
+
+
+def _record_lineage(filenames: list[str], scenario_ids: list[str], module: str):
+    """K-026：promote 成功后把草稿→场景血缘写入信息包 sidecar。
+
+    草稿的 scenario_id（SG-META-xxxx）来自 drafts/_meta.json（write_draft K-013 记录）。
+    """
+    try:
+        import json as _json
+        meta_path = _drafts_root() / "_meta.json"
+        if not meta_path.is_file():
+            return
+        meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+        from services import scenario_meta
+        for fn, sc_id in zip(filenames, scenario_ids):
+            sid = (meta.get(fn) or {}).get("scenario_id", "")
+            if sid:
+                scenario_meta.record_promotion(sid, sc_id, module, fn)
+    except Exception:
+        pass  # 血缘记录失败不影响入库主流程
+
+
 def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "") -> dict:
     """入库：格式校验 PASS → 移入 scenarios/{module}/ → 更新契约基线 → 发布门禁。
 
@@ -177,6 +215,10 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
         user_store.audit(emp_no, "promote_draft", filename, module)
     except Exception:
         pass
+
+    # K-026：模块元信息 + 入库血缘（信息包 → 场景正向链路）
+    _ensure_suite_yaml(module_dir, module)
+    _record_lineage([filename], [report.get("scenario", "")], module)
 
     return {
         "ok": True,
@@ -269,6 +311,10 @@ def promote_batch(filenames: list[str] | None, module: str,
         user_store.audit(emp_no, "promote_drafts", f"{len(moved)}份", module)
     except Exception:
         pass
+
+    # K-026：模块元信息 + 入库血缘（信息包 → 场景正向链路）
+    _ensure_suite_yaml(module_dir, module)
+    _record_lineage([m["file"] for m in moved], [m["scenario_id"] for m in moved], module)
 
     return {
         "ok": True,
