@@ -1,10 +1,13 @@
-"""scenario_tools — 场景列表 / 读取 / ID 分配 / DAG 预演。
+"""scenario_tools — 场景列表 / 读取 / ID 分配 / DAG 预演 / 依赖建议。
 
 工具：
   list_scenarios: 列出全部场景
   read_scenario: 读取单个场景 YAML
   next_scenario_id: 获取下一可用场景 ID
   check_dag: DAG 预演（K-021③：拓扑序/环/DRIFT/孤例，含草稿并入）
+  run_scenario: 试执行场景/草稿（K-021④，in-process run_single）
+  edit_dependency: 编排库内场景依赖边（K-027，文本外科手术）
+  suggest_deps: 依赖建议（K-046，dep_suggest 确定性引擎——替代肉眼推理）
 """
 
 import json
@@ -108,6 +111,24 @@ TOOLS = [
             "required": ["scenario_id", "action", "dep_id"]
         }
     ),
+    Tool(
+        name="suggest_deps",
+        description="依赖建议（K-046，确定性引擎·纯读）：扫描场景库 + drafts/ 草稿的 {{...}} 插值，"
+                    "自动匹配 save 变量生产者，给出建议依赖边（含理由与置信度）。"
+                    "跨场景引用 {{SC-ID.save.path}} → 高置信；{{var.path}} 变量匹配 → 中置信。"
+                    "已声明/传递依赖、自依赖、会成环的自动剔除。"
+                    "生成草稿后用它决定该连哪些边，替代逐个人肉眼推理；"
+                    "采纳后库内场景用 edit_dependency 落地，草稿把 depends_on 写进 draft YAML。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "target_id": {"type": "string",
+                              "description": "可选：只为指定场景/草稿出建议（默认全部）"},
+                "drafts_only": {"type": "boolean",
+                                "description": "只为 drafts/ 草稿出建议（默认 false）"}
+            }
+        }
+    ),
 ]
 
 
@@ -124,6 +145,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_run_scenario(arguments)
     elif name == "edit_dependency":
         return _handle_edit_dependency(arguments)
+    elif name == "suggest_deps":
+        return _handle_suggest_deps(arguments)
     return []
 
 
@@ -396,6 +419,31 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
         out["reason"] = record.skip_reason
 
     return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False, indent=2))]
+
+def _handle_suggest_deps(arguments: dict) -> list[TextContent]:
+    """依赖建议（K-046）：services.dep_suggest 确定性引擎的 MCP 出口。
+
+    与 HTTP 端点（/api/drafts/suggest-deps、/api/scenarios/{id}/suggest-deps）同一实现。
+    """
+    from services import dep_suggest
+    from services.draft_promote import _scenarios_root
+
+    target_id = str(arguments.get("target_id", "") or "")
+    drafts_only = bool(arguments.get("drafts_only", False))
+
+    try:
+        from specstd.workspace import drafts_dir
+        d_root = drafts_dir()
+    except Exception:
+        d_root = None
+
+    out = dep_suggest.suggest_deps(_scenarios_root(), d_root,
+                                   target_id=target_id, drafts_only=drafts_only)
+    out["note"] = ("建议由确定性引擎产出（插值扫描 + save 匹配 + 环预检）；"
+                   "采纳后库内场景用 edit_dependency 落地，草稿把 depends_on 写进 YAML；"
+                   "落地后用 check_dag 复核整体拓扑")
+    return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False, indent=2))]
+
 
 def _handle_edit_dependency(arguments: dict) -> list[TextContent]:
     """编排依赖边（K-027：deps_editor 文本外科手术 + 服务端守卫）。

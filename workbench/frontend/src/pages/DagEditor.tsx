@@ -5,16 +5,19 @@
  * - 选边 Delete/Backspace → 移除依赖 → 自动重排
  * - 节点点击 → 右侧抽屉打开场景编辑器；点空白处收起
  * - 边着色：绿=版本匹配 / 蓝=minor 漂移 / 琥珀=major 漂移(DRIFT) / 红虚线=缺失(ORPHANED)
+ * K-046：?focus= 高亮居中（草稿入库落点）+ 节点依赖建议面板（抽屉内一键采纳）
+ *        + Shift 框选/ Ctrl 点选多节点 → 工具栏「执行选中」跳 RunControl 预选
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   ReactFlow, Background, Controls, MiniMap,
   useNodesState, useEdgesState,
-  type Node, type Edge, type Connection,
+  type Node, type Edge, type Connection, type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { scenariosApi, referenceApi, runsApi, plansApi } from '../api';
-import type { DagData, Scenario, EmpRole, OracleRef, UpstreamVar, EnvVar, TestPlan, DriftItem } from '../api';
+import type { DagData, Scenario, EmpRole, OracleRef, UpstreamVar, EnvVar, TestPlan, DriftItem, DepSuggestion } from '../api';
 import ScenarioFormEditor from '../components/ScenarioFormEditor';
 import ScenarioNode, { CATEGORY_META } from '../components/ScenarioNode';
 import { layoutDagByELK, NODE_WIDTH, NODE_HEIGHT } from '../utils/elkLayout';
@@ -70,6 +73,13 @@ export default function DagEditor() {
   const [error, setError] = useState('');
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
   const [showDrift, setShowDrift] = useState(false);
+  // K-046：流程衔接——focus 聚焦 / 依赖建议 / 多选执行
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus') || '';
+  const focusAppliedRef = useRef(false);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const [suggestions, setSuggestions] = useState<DepSuggestion[]>([]);
 
   // 加载参考数据
   useEffect(() => {
@@ -104,6 +114,8 @@ export default function DagEditor() {
       //（Dify 同策略；同时规避 ResizeObserver 不可用环境下边不渲染的问题）
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
+      // K-046：focus 高亮放在布局数据流里（异步重排/verdicts 刷新会重建 nodes，命令式打标会被覆盖）
+      className: n.id === focusId ? 'ring-2 ring-info rounded-lg shadow-lg' : undefined,
       data: {
         label: n.id,
         title: (n.data as { title?: string }).title || '',
@@ -124,7 +136,7 @@ export default function DagEditor() {
     const positions = await layoutDagByELK(flowNodes, flowEdges);
     setNodes(flowNodes.map((n) => ({ ...n, position: positions.get(n.id) || { x: 0, y: 0 } })));
     setEdges(flowEdges);
-  }, [verdicts, setNodes, setEdges]);
+  }, [verdicts, focusId, setNodes, setEdges]);
 
   // 初始加载 DAG
   useEffect(() => {
@@ -182,6 +194,19 @@ export default function DagEditor() {
     if (filteredDag) layoutDag(filteredDag);
   }, [filteredDag, layoutDag]);
 
+  // K-046：?focus= 聚焦——布局完成后居中目标节点（高亮由 layoutDag 数据流负责，此处只居中一次）
+  useEffect(() => {
+    if (!focusId || !rfInstance || focusAppliedRef.current || nodes.length === 0) return;
+    const n = nodes.find((x) => x.id === focusId);
+    if (!n) return;
+    focusAppliedRef.current = true;
+    rfInstance.setCenter(n.position.x + NODE_WIDTH / 2, n.position.y + NODE_HEIGHT / 2,
+      { zoom: 1.15, duration: 500 });
+  }, [focusId, rfInstance, nodes]);
+
+  // K-046：多选节点（Shift 框选 / Ctrl 点选）→ 执行选中
+  const selectedIds = useMemo(() => nodes.filter((n) => n.selected).map((n) => n.id), [nodes]);
+
   // 保存后刷新 DAG（自动重排）+ 漂移报告
   const refreshDag = useCallback(() => {
     scenariosApi.dag().then((dag) => {
@@ -229,15 +254,31 @@ export default function DagEditor() {
     refreshDag();
   }, [refreshDag]);
 
-  // 点击节点 → 打开抽屉编辑器
+  // 点击节点 → 打开抽屉编辑器 + 拉取依赖建议（K-046）
   const onNodeClick = useCallback((_: unknown, node: Node) => {
     setSelected(node.id);
     scenariosApi.get(node.id).then((r) => setYamlContent(r.content)).catch(() => setYamlContent(''));
     referenceApi.upstreamVars(node.id).then(setUpstreamVars).catch(() => setUpstreamVars([]));
+    scenariosApi.suggestDeps(node.id)
+      .then((r) => setSuggestions(r.suggestions || []))
+      .catch(() => setSuggestions([]));
   }, []);
 
   // 点空白处收起抽屉
-  const onPaneClick = useCallback(() => setSelected(null), []);
+  const onPaneClick = useCallback(() => { setSelected(null); setSuggestions([]); }, []);
+
+  // K-046：采纳依赖建议（走现有 /deps 端点，服务端环校验兜底）
+  const handleAcceptSuggestion = useCallback(async (sug: DepSuggestion) => {
+    if (!selected) return;
+    setError('');
+    try {
+      await scenariosApi.editDep(selected, { action: 'add', dep_id: sug.dep_id, mode: 'shared' });
+      setSuggestions((prev) => prev.filter((s) => s.dep_id !== sug.dep_id));
+      refreshDag();
+    } catch (e) {
+      setError(`连线失败: ${e instanceof Error ? e.message : e}`);
+    }
+  }, [selected, refreshDag]);
 
   // 保存回调
   const handleSave = useCallback(async (yaml: string) => {
@@ -293,6 +334,16 @@ export default function DagEditor() {
         <span className="text-[10px] text-gray-600">
           {filteredDag && dagData ? `${filteredDag.nodes.length}/${dagData.nodes.length} 节点` : ''}
         </span>
+        {/* K-046：多选执行（Shift 框选 / Ctrl 点选后一键跳 RunControl 预选） */}
+        {selectedIds.length > 0 && (
+          <button
+            onClick={() => navigate(`/run?ids=${selectedIds.join(',')}`)}
+            className="px-2.5 py-1 bg-info text-white rounded text-xs hover:bg-info/90"
+            title={`执行选中场景：${selectedIds.join('、')}`}
+          >
+            ▶ 执行选中（{selectedIds.length}）
+          </button>
+        )}
         {/* 类型图例 */}
         <div className="flex gap-2 ml-auto">
           {Object.entries(CATEGORY_META).map(([key, meta]) => (
@@ -342,6 +393,7 @@ export default function DagEditor() {
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
             onConnect={onConnect} onEdgesDelete={onEdgesDelete}
             onNodeClick={onNodeClick} onPaneClick={onPaneClick}
+            onInit={setRfInstance}
             nodeTypes={nodeTypes}
             deleteKeyCode={['Backspace', 'Delete']}
             fitView proOptions={{ hideAttribution: true }}
@@ -358,8 +410,36 @@ export default function DagEditor() {
           <div className="w-[46%] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-2">
               <span className="text-xs text-gray-400 font-mono">{selected}</span>
-              <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-fail text-sm" title="收起编辑器">✕</button>
+              <button onClick={() => { setSelected(null); setSuggestions([]); }} className="text-gray-500 hover:text-fail text-sm" title="收起编辑器">✕</button>
             </div>
+            {/* K-046：依赖建议面板（确定性引擎扫描插值得出，一键采纳连线） */}
+            {suggestions.length > 0 && (
+              <div className="px-3 py-2 border-b border-info/40 bg-info/5">
+                <div className="text-info text-[11px] font-medium mb-1">
+                  💡 {suggestions.length} 条依赖建议（扫描 {'{{...}}'} 插值匹配生产者）
+                </div>
+                <ul className="space-y-1">
+                  {suggestions.map((s, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      <span className={`px-1 py-0.5 rounded ${
+                        s.confidence === 'high' ? 'bg-pass/20 text-pass' : 'bg-warn/20 text-warn'
+                      }`}>{s.confidence === 'high' ? '高置信' : '中置信'}</span>
+                      <span className="font-mono text-gray-200">{s.dep_id}</span>
+                      <span className="text-gray-500 truncate flex-1" title={s.reason}>
+                        {s.dep_title || s.reason}
+                      </span>
+                      <button
+                        onClick={() => handleAcceptSuggestion(s)}
+                        title={s.reason}
+                        className="px-2 py-0.5 bg-info/20 text-info rounded hover:bg-info/30"
+                      >
+                        采纳
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="flex-1 min-h-0">
               <ScenarioFormEditor
                 scenarioId={selected}

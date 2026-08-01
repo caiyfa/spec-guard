@@ -192,6 +192,8 @@ export const scenariosApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  suggestDeps: (id: string) =>
+    request<DepSuggestResult>(`/scenarios/${encodeURIComponent(id)}/suggest-deps`),
 };
 
 // ── 执行控制 ──
@@ -215,10 +217,15 @@ export interface RunSummary {
 }
 
 export const runsApi = {
-  trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = []) =>
+  trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = [],
+            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean }) =>
     request<{ ok: boolean; run_id?: string; queued?: boolean; queue_id?: number; position?: number }>('/runs/trigger', {
       method: 'POST',
-      body: JSON.stringify({ scope, target, env, breakpoints }),
+      body: JSON.stringify({
+        scope, target, env, breakpoints,
+        prep_only: !!light?.prepOnly,
+        skip_upstream_verify: !!light?.skipUpstreamVerify,
+      }),
     }),
   abort: () => request<{ ok: boolean }>('/runs/abort', { method: 'POST' }),
   resume: () => request<{ ok: boolean }>('/runs/resume', { method: 'POST' }),
@@ -531,6 +538,19 @@ export const draftsApi = {
   modules: () => request<{ modules: string[] }>('/drafts/modules'),
   read: (filename: string) =>
     request<{ filename: string; content: string }>(`/drafts/${encodeURIComponent(filename)}`),
+  update: (filename: string, content: string) =>
+    request<{ ok: boolean }>(`/drafts/${encodeURIComponent(filename)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  suggestDeps: () => request<DepSuggestResult>('/drafts/suggest-deps'),
+  addDep: (filename: string, depId: string, mode = 'shared') =>
+    request<{ ok: boolean; consumer: string; dep_id: string }>(`/drafts/${encodeURIComponent(filename)}/deps`, {
+      method: 'POST',
+      body: JSON.stringify({ dep_id: depId, mode }),
+    }),
+  trialRun: (filename: string) =>
+    request<TrialRunResult>(`/drafts/${encodeURIComponent(filename)}/trial-run`, { method: 'POST' }),
   validate: (filename: string) =>
     request<ValidateReport>(`/drafts/${encodeURIComponent(filename)}/validate`, { method: 'POST' }),
   promote: (filename: string, module: string) =>
@@ -541,6 +561,44 @@ export const draftsApi = {
   discard: (filename: string) =>
     request<{ ok: boolean; trashed_to: string }>(`/drafts/${encodeURIComponent(filename)}/discard`, { method: 'POST' }),
 };
+
+// ── K-046：依赖建议 / 草稿试跑 ──
+export interface DepSuggestion {
+  consumer: string;
+  consumer_title: string;
+  consumer_is_draft?: boolean;
+  dep_id: string;
+  dep_title: string;
+  dep_version: string;
+  reason: string;
+  confidence: 'high' | 'medium';
+  kind: 'cross_ref' | 'var_match';
+}
+
+export interface DepSuggestResult {
+  ok: boolean;
+  suggestions: DepSuggestion[];
+  unresolved: Record<string, string[]>;
+}
+
+export interface TrialRunRecord {
+  scenario_id: string;
+  verdict: string;
+  duration_ms?: number;
+  error?: string;
+  reason?: string;
+}
+
+export interface TrialRunResult {
+  ok: boolean;
+  target?: string;
+  verdict?: string;
+  env?: string;
+  records?: TrialRunRecord[];
+  report_dir?: string;
+  error?: string;
+  reason?: string;
+}
 
 // ── 场景创建向导（G2-1）──
 // K-013：info_pack 条目化（sha=内容指纹，commit=git 工作区 HEAD，added_at=添加时间）

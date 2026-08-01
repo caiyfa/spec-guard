@@ -3,8 +3,12 @@
 端点：
   GET    /api/drafts                        草稿列表（含解析出的场景 id/标题）
   GET    /api/drafts/modules                可入库的模块目录（scenarios/ 下）
+  GET    /api/drafts/suggest-deps           全部草稿的依赖建议（K-046，dep_suggest 确定性引擎）
   GET    /api/drafts/{filename}             草稿内容
+  PUT    /api/drafts/{filename}             保存草稿内容（K-046，写前 .bak 备份 + 审计）
   POST   /api/drafts/{filename}/validate    格式校验（与 MCP validate 同一实现）
+  POST   /api/drafts/{filename}/deps        草稿连线：文本外科手术加 depends_on（K-046）
+  POST   /api/drafts/{filename}/trial-run   草稿试跑（K-046，与 MCP run_scenario 同一语义）
   POST   /api/drafts/{filename}/promote     入库：校验 → 移动 → 基线更新 → 发布门禁（失败回滚）
   POST   /api/drafts/{filename}/discard     废弃（移入 drafts/_trash/）
 
@@ -12,6 +16,7 @@
 - 仅 drafts/ 目录可读可写；filename 禁止路径分隔符与 ..
 - 入库目标限定 scenarios/ 下已存在模块目录
 - 发布门禁 release_check.py 失败自动回滚，不产生半截入库
+- K-046：编辑/连线/试跑只作用于 drafts/ 沙箱，入库仍必须走 promote 三道闸
 """
 
 import shutil
@@ -162,6 +167,17 @@ def list_modules():
     return {"modules": modules}
 
 
+@router.get("/suggest-deps")
+def suggest_draft_deps():
+    """全部草稿的依赖建议（K-046：dep_suggest 确定性引擎，纯读）。
+
+    扫描草稿 + 场景库的 {{...}} 插值 needs 侧，匹配 save 生产者，
+    返回建议边（含理由/置信度）；已声明/传递依赖、自依赖、会成环的自动剔除。
+    """
+    from services import dep_suggest
+    return dep_suggest.suggest_deps(_scenarios_root(), _drafts_root(), drafts_only=True)
+
+
 @router.get("/{filename}")
 def read_draft(filename: str):
     """读取单个草稿内容。"""
@@ -169,6 +185,145 @@ def read_draft(filename: str):
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
     return {"filename": filename, "content": path.read_text(encoding="utf-8")}
+
+
+# ══════════════════════════════════════════════════════════
+# K-046：草稿微调 / 连线 / 试跑（沙箱内操作，不入库、不触发基线重建）
+# ══════════════════════════════════════════════════════════
+
+class DraftSaveBody(BaseModel):
+    content: str
+
+
+def _update_meta(filename: str) -> None:
+    """更新 _meta.json 的 updated_at（保留既有 author/scenario_id 关联）。"""
+    import json as _json
+    meta_path = _drafts_root() / "_meta.json"
+    meta = {}
+    if meta_path.is_file():
+        try:
+            meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+    entry = meta.get(filename) or {}
+    entry["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    meta[filename] = entry
+    meta_path.write_text(_json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@router.put("/{filename}", dependencies=[Depends(require_role("admin", "tester"))])
+def save_draft(filename: str, body: DraftSaveBody):
+    """保存草稿内容（K-046：评审期可微调，不再只有「作废」一条路）。
+
+    写前自动 .bak 备份（对齐 draft_writer patch 惯例，undo 可恢复）；
+    仅写 drafts/ 沙箱——入库仍必须走 promote 三道闸。
+    """
+    from services.auth import current_emp_no
+    from services import user_store
+
+    path = _guard_filename(filename)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
+    # 基本可解析性检查（完整格式校验交给 validate 闸，此处只防明显写坏）
+    try:
+        yaml.safe_load(body.content)
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=422, detail=f"YAML 解析失败，未写入: {e}")
+    shutil.copy2(str(path), str(path) + ".bak")
+    path.write_text(body.content, encoding="utf-8")
+    _update_meta(filename)
+    user_store.audit(current_emp_no(), "edit_draft", f"编辑草稿 {filename}")
+    return {"ok": True, "filename": filename}
+
+
+class DraftDepBody(BaseModel):
+    dep_id: str
+    mode: str = "shared"
+
+
+@router.post("/{filename}/deps", dependencies=[Depends(require_role("admin", "tester"))])
+def add_draft_dep(filename: str, body: DraftDepBody):
+    """草稿连线（K-046）：deps_editor 文本外科手术加 depends_on，与库内场景同一语义。
+
+    守卫：自依赖拒绝、dep 目标必须存在（库内场景或另一草稿）、环预检（草稿并入图）。
+    """
+    from services import deps_editor, dep_suggest
+    from services.auth import current_emp_no
+    from services import user_store
+
+    path = _guard_filename(filename)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
+    if body.mode not in ("shared", "exclusive"):
+        raise HTTPException(status_code=400, detail=f"mode 非法: {body.mode}")
+
+    nodes = dep_suggest.scan_nodes(_scenarios_root(), _drafts_root())
+    by_id = {n.id: n for n in nodes}
+    try:
+        consumer_raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=422, detail=f"草稿 YAML 解析失败: {e}")
+    consumer_id = str(consumer_raw.get("id", "") or "")
+    if not consumer_id:
+        raise HTTPException(status_code=422, detail="草稿缺少 id 字段，无法连线")
+    if body.dep_id == consumer_id:
+        raise HTTPException(status_code=400, detail="不允许自依赖")
+    dep = by_id.get(body.dep_id)
+    if not dep:
+        raise HTTPException(status_code=404, detail=f"依赖目标不存在: {body.dep_id}")
+
+    # 环预检：草稿并入图后，consumer 若在 dep 的依赖闭包中则成环
+    graph = dep_suggest._build_graph(_scenarios_root(), _drafts_root())
+    if graph and consumer_id in graph.by_id and body.dep_id in graph.by_id:
+        try:
+            if consumer_id in graph.closure(body.dep_id):
+                raise HTTPException(status_code=409,
+                                    detail=f"会形成循环依赖: {consumer_id} → {body.dep_id} → … → {consumer_id}")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    shutil.copy2(str(path), str(path) + ".bak")
+    try:
+        deps_editor.add_dep(str(path), body.dep_id, body.mode, dep.version or "0.1")
+    except deps_editor.DepsEditError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    _update_meta(filename)
+    user_store.audit(current_emp_no(), "edit_draft_dep",
+                     f"草稿 {filename}({consumer_id}) 加依赖 {body.dep_id}({body.mode})")
+    return {"ok": True, "consumer": consumer_id, "dep_id": body.dep_id, "mode": body.mode}
+
+
+@router.post("/{filename}/trial-run", dependencies=[Depends(require_role("admin", "tester"))])
+async def trial_run_draft(filename: str):
+    """草稿试跑（K-046：与 MCP run_scenario 同一语义的 HTTP 化薄封装）。
+
+    草稿并入依赖图 → in-process run_single 按闭包执行（真实环境联网调用）。
+    未入库先验证，豁免 covers 闸（草稿可能尚未锚定 FR）；报告落 .specguard/reports/。
+    """
+    import asyncio
+    from services.auth import current_emp_no
+    from services import user_store
+
+    path = _guard_filename(filename)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
+
+    from mcp_server.tools.scenario_tools import _handle_run_scenario
+    # MCP handler 返回 TextContent 列表；复用确保两套入口同一语义（asyncio.to_thread 透传工作区 contextvar）
+    contents = await asyncio.to_thread(
+        lambda: asyncio.run(_handle_run_scenario({"draft": filename})))
+    import json as _json
+    try:
+        result = _json.loads(contents[0].text)
+    except Exception:
+        result = {"ok": False, "error": contents[0].text if contents else "未知错误"}
+    if result.get("error", "").startswith("错误："):
+        raise HTTPException(status_code=400, detail=result["error"])
+    user_store.audit(current_emp_no(), "trial_run_draft",
+                     f"试跑草稿 {filename} → {result.get('verdict', '?')}")
+    return result
 
 
 # ══════════════════════════════════════════════════════════

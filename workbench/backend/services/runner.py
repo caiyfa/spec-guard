@@ -2,13 +2,19 @@
 
 包装 `python -m pytest` 命令，流式读取输出并广播给前端。
 不修改引擎代码。
+
+K-047：子进程创建从 asyncio.create_subprocess_exec 改为 subprocess.Popen + 读线程——
+uvicorn --reload 在 Windows 下给服务端 SelectorEventLoop（use_subprocess 语义反转），
+asyncio 子进程直接 NotImplementedError；Popen 不依赖事件循环 flavor，dev/prod 通吃。
 """
 
 import asyncio
 import json
 import os
 import signal
+import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -27,11 +33,29 @@ def _get_reports_root() -> Path:
         return SG_ROOT / "reports"
 
 
+def _spawn_pytest(cmd: list[str], env: str) -> subprocess.Popen:
+    """创建 pytest 子进程（K-047：subprocess.Popen，不依赖事件循环 flavor）。
+
+    uvicorn --reload 在 Windows 给服务端 SelectorEventLoop（其 use_subprocess 语义
+    与直觉相反：reload 模式反而返回 Selector），asyncio.create_subprocess_exec 在该
+    loop 上直接 NotImplementedError（空消息）。Popen 在任何 loop 下都可用。
+    text 模式 + 行缓冲：读线程按行迭代即可。
+    """
+    return subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        cwd=str(SG_ROOT),
+        env={**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())},
+        text=True, encoding="utf-8", errors="replace", bufsize=1,
+    )
+
+
 class RunManager:
     """管理单次 pytest 执行的生命周期 + WebSocket 广播 + 断点暂停/恢复"""
 
     def __init__(self):
-        self.process: Optional[asyncio.subprocess.Process] = None
+        self.process: Optional[subprocess.Popen] = None
         self.run_id: Optional[str] = None
         self.plan_id: str = ""
         self.status: str = "idle"  # idle / running / paused / completed / aborted
@@ -84,7 +108,8 @@ class RunManager:
     async def trigger(self, scope: str = "all", target: str = "", env: str = "sit",
                       plan_id: str = "", strict_deps: bool = False,
                       emp_no: str = "", workspace: str = "",
-                      queue_id: Optional[int] = None) -> dict:
+                      queue_id: Optional[int] = None,
+                      prep_only: bool = False, skip_upstream_verify: bool = False) -> dict:
         """触发执行
 
         scope: all / module / scenario / tag / engine_modes
@@ -93,6 +118,8 @@ class RunManager:
         strict_deps: 严格依赖模式（SG_STRICT_DEPS=1 注入子进程，DRIFT/ORPHANED → BLOCKED）
         emp_no/workspace: 触发人与工作区（多用户归属，M8）
         queue_id: 来自队列的消费（内部用；为 None 时新建队表记录）
+        prep_only / skip_upstream_verify: K-046 轻量执行选项（conftest 已支持，此处透传）。
+            注意：run_queue 表无对应字段，进入队列等待的执行不保留这两个选项。
 
         已有执行时进入 FIFO 队列（run_queue 表持久化），返回 queued + position。
         """
@@ -120,8 +147,8 @@ class RunManager:
         self.current_emp_no = emp_no
         self.current_workspace = workspace
 
-        # 构建 pytest 命令
-        cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short"]
+        # 构建 pytest 命令（K-049：-s 关闭输出捕获，trace_id 等调用上下文实时流入执行日志）
+        cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short", "-s"]
         if scope == "scenario" and target:
             cmd += ["-k", target]
         elif scope == "tag" and target:
@@ -133,6 +160,10 @@ class RunManager:
         # all: 不加过滤
         if strict_deps:
             cmd += ["--strict-deps"]
+        if prep_only:
+            cmd += ["--prep-only"]
+        if skip_upstream_verify:
+            cmd += ["--skip-upstream-verify"]
 
         self.run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         self.plan_id = plan_id
@@ -151,18 +182,18 @@ class RunManager:
             "started_at": self.started_at,
         })
 
-        # 启动子进程
+        # 启动子进程（K-047：Popen；失败时队表标记 failed，不再遗留 running 卡死队列）
         try:
-            self.process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(SG_ROOT),
-                env={**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())},
-            )
+            self.process = _spawn_pytest(cmd, env)
         except Exception as e:
             self.status = "idle"
-            return {"ok": False, "error": f"启动失败: {e}"}
+            if self._queue_id:
+                user_store.update_run_queue(self._queue_id, "failed", finished=True)
+                self._queue_id = None
+            self.current_emp_no = ""
+            self.current_workspace = ""
+            # K-047：异常带类型名——空 str(e) 的异常（如 NotImplementedError）不再无法排查
+            return {"ok": False, "error": f"启动失败: {type(e).__name__}: {e}"}
 
         # 后台读取输出
         asyncio.create_task(self._stream_output())
@@ -170,23 +201,11 @@ class RunManager:
         return {"ok": True, "run_id": self.run_id}
 
     async def _stream_output(self):
-        """逐行读取子进程输出，解析 pytest 结果并广播"""
+        """读取子进程输出并广播，收尾（通知 + 队列消费）"""
         proc = self.process
-        if not proc or not proc.stdout:
+        if not proc:
             return
-
-        while True:
-            line = await proc.stdout.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace").rstrip()
-            self._output_lines.append(text)
-
-            # 解析 pytest 输出中的场景结果
-            event = self._parse_line(text)
-            await self.broadcast({"type": "output", "line": text, **event})
-
-        await proc.wait()
+        await self._drain_output(proc)
         self.status = "completed" if proc.returncode == 0 else "completed"
         await self.broadcast({
             "type": "finished",
@@ -199,6 +218,32 @@ class RunManager:
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()
+
+    async def _drain_output(self, proc: subprocess.Popen):
+        """读线程逐行推入 asyncio.Queue 并广播，直到进程输出 EOF（K-047 共用模式）。"""
+        if not proc or not proc.stdout:
+            return
+        loop = asyncio.get_running_loop()
+        q: asyncio.Queue = asyncio.Queue()
+
+        def _reader():
+            try:
+                for raw in proc.stdout:
+                    loop.call_soon_threadsafe(q.put_nowait, raw.rstrip("\r\n"))
+            finally:
+                loop.call_soon_threadsafe(q.put_nowait, None)
+
+        threading.Thread(target=_reader, daemon=True).start()
+
+        while True:
+            text = await q.get()
+            if text is None:
+                break
+            self._output_lines.append(text)
+            event = self._parse_line(text)
+            await self.broadcast({"type": "output", "line": text, **event})
+
+        await asyncio.to_thread(proc.wait)
 
     def _parse_line(self, line: str) -> dict:
         """解析 pytest 输出行，提取场景 verdict"""
@@ -355,33 +400,17 @@ class RunManager:
                 "scenarios": batch,
             })
 
-            cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short", "-k", target]
+            cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short", "-s", "-k", target]
             if getattr(self, "_strict_deps", False):
                 cmd += ["--strict-deps"]
             try:
-                self.process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
-                    cwd=str(SG_ROOT),
-                    env={**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())},
-                )
+                self.process = _spawn_pytest(cmd, env)
             except Exception as e:
-                await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {e}"})
+                await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {type(e).__name__}: {e}"})
                 continue
 
-            # 读取输出
-            if self.process and self.process.stdout:
-                while True:
-                    line = await self.process.stdout.readline()
-                    if not line:
-                        break
-                    text = line.decode("utf-8", errors="replace").rstrip()
-                    self._output_lines.append(text)
-                    event = self._parse_line(text)
-                    await self.broadcast({"type": "output", "line": text, **event})
-
-                await self.process.wait()
+            # 读取输出（K-047：与 _stream_output 同一读线程模式）
+            await self._drain_output(self.process)
 
             self.completed_scenarios.extend(batch)
             self.pending_scenarios = [s for s in self.pending_scenarios if s not in batch]

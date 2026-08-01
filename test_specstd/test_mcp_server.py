@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 20  # K-027: 新增 edit_dependency 后 19→20
+        assert len(ALL_TOOLS) == 21  # K-046: 新增 suggest_deps 后 20→21
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -59,7 +59,8 @@ class TestToolRegistration:
                      "promote_draft",  # H-3/H-4: meta 工具；K-015: promote_draft
                      "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
                      "promote_drafts",  # K-021⑥: 批量入库
-                     "edit_dependency"}  # K-027: DAG 依赖边编排
+                     "edit_dependency",  # K-027: DAG 依赖边编排
+                     "suggest_deps"}  # K-046: 依赖建议（确定性引擎）
         assert names == expected
 
 

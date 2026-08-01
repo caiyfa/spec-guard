@@ -1,8 +1,13 @@
-"""全景档案测试套件入口：加载 scenarios/employee/person-profile/，按 DAG 序参数化执行。
+"""全库场景测试套件入口（K-048）：加载 scenarios/ 全部模块，按场景 ID 参数化执行。
+
+替代原 test_person_profile.py（仅参数化 employee/person-profile 一个模块）——
+此前执行控制里选 EV/IS/TL 等模块的场景，`pytest -k` 收集为 0（54 deselected），
+表现为「单选执行失败/空跑」；统一入口后任意模块场景均可执行。
 
 运行方式：
     python -m pytest -v                      # 全量（拓扑序）
-    python -m pytest -k PP-RC-005 -v         # 单场景（自动回溯上游准备环境）
+    python -m pytest -k EV-IMP-001 -v        # 单场景（自动回溯上游准备环境）
+    python -m pytest -m P0 -v                # 按标签（场景 tags 转 pytest mark）
     python -m pytest --prep-only             # 仅执行上游环境准备
 """
 
@@ -15,18 +20,26 @@ SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SG_ROOT not in sys.path:
     sys.path.insert(0, SG_ROOT)
 
-from engine.scenario_loader import load_module_scenarios   # noqa: E402
-from engine.scenario_runner import run_with_deps           # noqa: E402
-from engine.execution_record import (                       # noqa: E402
+from engine.scenario_loader import load_scenarios           # noqa: E402
+from engine.scenario_runner import run_with_deps            # noqa: E402
+from engine.execution_record import (                        # noqa: E402
     VERDICT_PASS, VERDICT_SKIP, VERDICT_BLOCKED,
 )
 
-MODULE_PATH = os.path.join("employee", "person-profile")
-SCENARIOS = load_module_scenarios(os.path.join(SG_ROOT, "scenarios"), MODULE_PATH)
+SCENARIOS = load_scenarios(os.path.join(SG_ROOT, "scenarios"))
 
 
-@pytest.mark.parametrize("scenario", SCENARIOS, ids=[s.id for s in SCENARIOS])
-def test_person_profile_scenario(scenario, rctx):
+def _params():
+    """场景 → pytest.param（id=场景 ID，tags 转 mark 供 -m 过滤）。"""
+    out = []
+    for s in SCENARIOS:
+        marks = [getattr(pytest.mark, t) for t in (s.tags or []) if t.isidentifier()]
+        out.append(pytest.param(s, id=s.id, marks=marks))
+    return out
+
+
+@pytest.mark.parametrize("scenario", _params())
+def test_scenario(scenario, rctx):
     """每个场景一个用例：run_with_deps 内部完成依赖闭包回溯执行"""
     record = run_with_deps(scenario, rctx)
 

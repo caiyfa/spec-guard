@@ -29,6 +29,8 @@ class TriggerBody(BaseModel):
     env: str = "sit"         # 目标环境
     breakpoints: list[str] = []   # 断点场景 ID 列表
     strict_deps: bool = False     # 严格依赖模式（DRIFT/ORPHANED → BLOCKED）
+    prep_only: bool = False           # K-046 轻量执行：只跑上游环境准备
+    skip_upstream_verify: bool = False  # K-046 轻量执行：上游只跑 flow 不断言
     # 注意：covers 校验不可由客户端跳过（V10 修复）——engine_modes 由服务端按 scope 判定豁免
 
 
@@ -64,7 +66,9 @@ async def api_trigger(body: TriggerBody,
     else:
         result = await run_manager.trigger(scope=body.scope, target=body.target, env=body.env,
                                            strict_deps=body.strict_deps,
-                                           emp_no=user.emp_no, workspace=workspace)
+                                           emp_no=user.emp_no, workspace=workspace,
+                                           prep_only=body.prep_only,
+                                           skip_upstream_verify=body.skip_upstream_verify)
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
     return result

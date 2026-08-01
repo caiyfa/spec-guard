@@ -1,10 +1,23 @@
 // 草稿区三道闸（D1）：评审 → 格式校验 → 发布门禁 → 入库 / 废弃
+// K-046：评审期可编辑微调（表单/YAML 双模式）+ 依赖建议一键连线 + 未入库试跑，
+//        入库成功自动跳转 DAG 编排聚焦——产出→编排→执行不再断线
 
-import { useCallback, useEffect, useState } from 'react';
-import { draftsApi } from '../api';
-import type { DraftItem, ValidateReport } from '../api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { draftsApi, referenceApi, scenariosApi } from '../api';
+import type {
+  DraftItem, ValidateReport, DepSuggestion, TrialRunResult,
+  EmpRole, OracleRef, UpstreamVar, EnvVar,
+} from '../api';
+import ScenarioFormEditor from '../components/ScenarioFormEditor';
+
+/** verdict 配色（PASS/FAIL/SKIP/BLOCKED） */
+const VERDICT_STYLE: Record<string, string> = {
+  PASS: 'text-pass', FAIL: 'text-fail', SKIP: 'text-skip', BLOCKED: 'text-blocked',
+};
 
 export default function Drafts() {
+  const navigate = useNavigate();
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [modules, setModules] = useState<string[]>([]);
   const [selected, setSelected] = useState<string>('');
@@ -12,9 +25,19 @@ export default function Drafts() {
   const [report, setReport] = useState<ValidateReport | null>(null);
   const [targetModule, setTargetModule] = useState<string>('');
   const [customModule, setCustomModule] = useState('');  // K-017: 「新建模块…」手动输入
-  const [busy, setBusy] = useState<'validate' | 'promote' | 'discard' | ''>('');
+  const [busy, setBusy] = useState<'validate' | 'promote' | 'discard' | 'save' | 'trial' | 'dep' | ''>('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState('');
+  // K-046：依赖建议 + 试跑结果
+  const [allSuggestions, setAllSuggestions] = useState<DepSuggestion[]>([]);
+  const [unresolved, setUnresolved] = useState<Record<string, string[]>>({});
+  const [trialResult, setTrialResult] = useState<TrialRunResult | null>(null);
+  // K-046：编辑器参考数据（与 DagEditor 同一来源）
+  const [empRoles, setEmpRoles] = useState<EmpRole[]>([]);
+  const [oracles, setOracles] = useState<OracleRef[]>([]);
+  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+  const [upstreamVars, setUpstreamVars] = useState<UpstreamVar[]>([]);
+  const [allScenarios, setAllScenarios] = useState<{ id: string; title: string }[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -27,13 +50,45 @@ export default function Drafts() {
     }
   }, [targetModule]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const refreshSuggestions = useCallback(async () => {
+    try {
+      const r = await draftsApi.suggestDeps();
+      setAllSuggestions(r.suggestions || []);
+      setUnresolved(r.unresolved || {});
+    } catch { /* 建议加载失败不阻断主流程 */ }
+  }, []);
+
+  useEffect(() => { refresh(); refreshSuggestions(); }, [refresh, refreshSuggestions]);
+  useEffect(() => {
+    referenceApi.empRoles().then(setEmpRoles).catch(() => {});
+    referenceApi.oracles().then(setOracles).catch(() => {});
+    referenceApi.envVars().then(setEnvVars).catch(() => {});
+    scenariosApi.list().then(list => setAllScenarios(list.map(s => ({ id: s.id, title: s.title })))).catch(() => {});
+  }, []);
+
+  /** 当前选中草稿的场景 ID（列表项已解析出） */
+  const selectedDraft = useMemo(() => drafts.find(d => d.filename === selected), [drafts, selected]);
+  const selectedScenarioId = selectedDraft?.scenario_id || '';
+
+  /** 当前草稿的依赖建议（consumer = 场景 ID） */
+  const suggestions = useMemo(
+    () => allSuggestions.filter(s => s.consumer === selectedScenarioId),
+    [allSuggestions, selectedScenarioId],
+  );
+  const selectedUnresolved = unresolved[selectedScenarioId] || [];
+
+  // 上游变量参考（草稿的 depends_on 可能刚加，id 未必在库内——失败静默置空）
+  useEffect(() => {
+    if (!selectedScenarioId) { setUpstreamVars([]); return; }
+    referenceApi.upstreamVars(selectedScenarioId).then(setUpstreamVars).catch(() => setUpstreamVars([]));
+  }, [selectedScenarioId, content]);
 
   const handleSelect = async (filename: string) => {
     setSelected(filename);
     setReport(null);
     setMessage(null);
     setError('');
+    setTrialResult(null);
     try {
       const r = await draftsApi.read(filename);
       setContent(r.content);
@@ -57,6 +112,56 @@ export default function Drafts() {
     }
   };
 
+  /** K-046：编辑器保存（写回 drafts/ 沙箱，写前后端自动 .bak 备份） */
+  const handleSave = async (yamlStr: string) => {
+    if (!selected) return;
+    setBusy('save');
+    try {
+      await draftsApi.update(selected, yamlStr);
+      const r = await draftsApi.read(selected);
+      setContent(r.content);
+      setReport(null);          // 内容已变，旧校验报告失效
+      await refreshSuggestions();  // 依赖建议随之重算
+    } finally {
+      setBusy('');
+    }
+  };
+
+  /** K-046：采纳依赖建议（文本外科手术写入草稿 depends_on） */
+  const handleAcceptDep = async (sug: DepSuggestion) => {
+    if (!selected) return;
+    setBusy('dep');
+    setMessage(null);
+    try {
+      await draftsApi.addDep(selected, sug.dep_id);
+      const r = await draftsApi.read(selected);
+      setContent(r.content);
+      setMessage({ ok: true, text: `✅ 已连线：${selectedScenarioId} → 依赖 ${sug.dep_id}` });
+      await refreshSuggestions();
+    } catch (e: any) {
+      setMessage({ ok: false, text: `❌ 连线失败：${e.message}` });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  /** K-046：草稿试跑（未入库先验证，与 Agent run_scenario 同一语义） */
+  const handleTrialRun = async () => {
+    if (!selected) return;
+    if (!window.confirm(`试跑将真实调用目标环境（按依赖闭包执行，会产生真实测试数据）。\n确认试跑 ${selectedScenarioId || selected}？`)) return;
+    setBusy('trial');
+    setMessage(null);
+    setTrialResult(null);
+    try {
+      const r = await draftsApi.trialRun(selected);
+      setTrialResult(r);
+    } catch (e: any) {
+      setTrialResult({ ok: false, error: e.message || '试跑失败' });
+    } finally {
+      setBusy('');
+    }
+  };
+
   const handlePromote = async () => {
     if (!selected) return;
     // K-017：模块目录后端自动创建；「新建模块…」选项时使用手动输入的路径
@@ -70,11 +175,14 @@ export default function Drafts() {
     setMessage(null);
     try {
       const r = await draftsApi.promote(selected, effectiveModule);
-      setMessage({ ok: true, text: `✅ 入库成功：${r.target}${r.gate?.skipped ? '（门禁已跳过）' : '（发布门禁 PASS）'}` });
+      const sid = r.scenario_id || selectedScenarioId;
+      setMessage({ ok: true, text: `✅ 入库成功：${r.target}${r.gate?.skipped ? '（门禁已跳过）' : '（发布门禁 PASS）'}，即将跳转 DAG 编排…` });
       setSelected('');
       setContent('');
       setReport(null);
       await refresh();
+      // K-046：入库不是终点——跳 DAG 聚焦新节点继续编排
+      setTimeout(() => navigate(`/dag?focus=${encodeURIComponent(sid)}`), 800);
     } catch (e: any) {
       setMessage({ ok: false, text: `❌ 入库失败：${e.message}` });
     } finally {
@@ -108,47 +216,56 @@ export default function Drafts() {
         <div className="mb-3">
           <h2 className="text-lg font-bold text-gray-200">📝 草稿评审</h2>
           <p className="text-xs text-gray-500 mt-1">
-            Agent 产物三道闸：人工评审 doc 层 → 格式校验 → 发布门禁，缺一不入库。
+            Agent 产物三道闸：人工评审（可微调）→ 格式校验 → 发布门禁，缺一不入库。
           </p>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1.5">
           {drafts.length === 0 && (
             <div className="text-center text-gray-600 text-sm py-10">草稿区为空</div>
           )}
-          {drafts.map(d => (
-            <button
-              key={d.filename}
-              onClick={() => handleSelect(d.filename)}
-              className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
-                selected === d.filename
-                  ? 'border-info bg-info/10'
-                  : 'border-border bg-surface-2 hover:bg-surface-3'
-              }`}
-            >
-              <div className="text-sm text-gray-200 font-mono">
-                {d.scenario_id || d.filename}
-                {d.stale && (
-                  <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-normal"
-                    title={`来源信息包（${d.source_meta}）存在已变更/已删除文件，草稿内容可能过时`}>
-                    ⚠️ 信息包已变更
-                  </span>
-                )}
-              </div>
-              <div className="text-xs text-gray-500 truncate">{d.title || d.filename}</div>
-              <div className="text-[10px] text-gray-600 mt-0.5">
-                {d.modified}{d.author ? ` · ${d.author}` : ''}
-              </div>
-              {/* K-026：信息包关联可见化——此前仅 stale 时 tooltip 提及，用户看不到草稿来自哪个信息包 */}
-              {d.source_meta && (
-                <div className="text-[10px] mt-0.5">
-                  <span className="px-1 py-0.5 rounded bg-info/15 text-info/90"
-                    title={`本草稿由信息包 ${d.source_meta} 派生（Agent 对话生成）`}>
-                    📦 {d.source_meta}
-                  </span>
+          {drafts.map(d => {
+            const sugCount = allSuggestions.filter(s => s.consumer === d.scenario_id).length;
+            return (
+              <button
+                key={d.filename}
+                onClick={() => handleSelect(d.filename)}
+                className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                  selected === d.filename
+                    ? 'border-info bg-info/10'
+                    : 'border-border bg-surface-2 hover:bg-surface-3'
+                }`}
+              >
+                <div className="text-sm text-gray-200 font-mono">
+                  {d.scenario_id || d.filename}
+                  {d.stale && (
+                    <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-normal"
+                      title={`来源信息包（${d.source_meta}）存在已变更/已删除文件，草稿内容可能过时`}>
+                      ⚠️ 信息包已变更
+                    </span>
+                  )}
+                  {sugCount > 0 && (
+                    <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-info/20 text-info font-normal"
+                      title="确定性引擎检测到可连线的依赖建议">
+                      💡 {sugCount} 条建议
+                    </span>
+                  )}
                 </div>
-              )}
-            </button>
-          ))}
+                <div className="text-xs text-gray-500 truncate">{d.title || d.filename}</div>
+                <div className="text-[10px] text-gray-600 mt-0.5">
+                  {d.modified}{d.author ? ` · ${d.author}` : ''}
+                </div>
+                {/* K-026：信息包关联可见化——此前仅 stale 时 tooltip 提及，用户看不到草稿来自哪个信息包 */}
+                {d.source_meta && (
+                  <div className="text-[10px] mt-0.5">
+                    <span className="px-1 py-0.5 rounded bg-info/15 text-info/90"
+                      title={`本草稿由信息包 ${d.source_meta} 派生（Agent 对话生成）`}>
+                      📦 {d.source_meta}
+                    </span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -173,13 +290,21 @@ export default function Drafts() {
         ) : (
           <>
             {/* 操作栏 */}
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <button
                 onClick={handleValidate}
                 disabled={busy !== ''}
                 className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-sm hover:bg-surface-2 disabled:opacity-40"
               >
                 {busy === 'validate' ? '校验中…' : '① 格式校验'}
+              </button>
+              <button
+                onClick={handleTrialRun}
+                disabled={busy !== ''}
+                title="未入库先试跑：按依赖闭包真实执行（与 Agent run_scenario 同一语义）"
+                className="px-3 py-1.5 bg-warn/20 text-warn rounded text-sm hover:bg-warn/30 disabled:opacity-40"
+              >
+                {busy === 'trial' ? '试跑中…（联网执行，请稍候）' : '▶ 试跑'}
               </button>
               <select
                 value={targetModule}
@@ -215,6 +340,71 @@ export default function Drafts() {
               </button>
             </div>
 
+            {/* K-046：依赖建议面板 */}
+            {(suggestions.length > 0 || selectedUnresolved.length > 0) && (
+              <div className="mb-3 px-3 py-2 rounded-lg border border-info/40 bg-info/5 text-sm">
+                <div className="text-info text-xs font-medium mb-1.5">
+                  💡 依赖建议（确定性引擎扫描插值得出，采纳即写入 depends_on）
+                </div>
+                <ul className="space-y-1">
+                  {suggestions.map((s, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      <span className={`px-1 py-0.5 rounded ${
+                        s.confidence === 'high' ? 'bg-pass/20 text-pass' : 'bg-warn/20 text-warn'
+                      }`}>{s.confidence === 'high' ? '高置信' : '中置信'}</span>
+                      <span className="font-mono text-gray-200">{s.dep_id}</span>
+                      <span className="text-gray-500 truncate flex-1" title={s.reason}>
+                        {s.dep_title || s.reason}
+                      </span>
+                      <button
+                        onClick={() => handleAcceptDep(s)}
+                        disabled={busy !== ''}
+                        title={s.reason}
+                        className="px-2 py-0.5 bg-info/20 text-info rounded hover:bg-info/30 disabled:opacity-40"
+                      >
+                        采纳
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {selectedUnresolved.length > 0 && (
+                  <div className="mt-1.5 text-[11px] text-gray-500"
+                    title="这些插值根没有匹配到任何生产者，可能是运行时内置变量或悬空引用">
+                    ⚠️ 未解析引用：{selectedUnresolved.join('、')}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* K-046：试跑结果 */}
+            {trialResult && (
+              <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${
+                trialResult.ok ? 'border-green-700/50 bg-green-900/20' : 'border-red-700/50 bg-red-900/20'
+              }`}>
+                <div className={trialResult.ok ? 'text-green-400' : 'text-red-400'}>
+                  {trialResult.ok ? `✓ 试跑通过（${trialResult.env || 'sit'}）`
+                    : `✗ 试跑 ${trialResult.verdict || '失败'}${trialResult.error ? `：${trialResult.error}` : ''}`}
+                </div>
+                {trialResult.records && trialResult.records.length > 0 && (
+                  <ul className="mt-1.5 space-y-0.5">
+                    {trialResult.records.map((r, i) => (
+                      <li key={i} className="text-xs">
+                        <span className={`font-medium ${VERDICT_STYLE[r.verdict] || 'text-gray-400'}`}>
+                          {r.verdict}
+                        </span>
+                        <span className="ml-2 font-mono text-gray-300">{r.scenario_id}</span>
+                        {r.error && <span className="ml-2 text-red-400/80">{r.error}</span>}
+                        {r.reason && <span className="ml-2 text-gray-500">{r.reason}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {trialResult.report_dir && (
+                  <div className="mt-1 text-[10px] text-gray-600">报告：{trialResult.report_dir}</div>
+                )}
+              </div>
+            )}
+
             {/* 校验报告 */}
             {report && (
               <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${
@@ -236,10 +426,23 @@ export default function Drafts() {
               </div>
             )}
 
-            {/* YAML 内容 */}
-            <pre className="flex-1 overflow-auto bg-surface-1 border border-border rounded-lg p-3 text-xs text-gray-300 font-mono whitespace-pre-wrap">
-              {content}
-            </pre>
+            {/* K-046：可编辑微调（表单/YAML 双模式，与 DAG 抽屉编辑器同一组件） */}
+            <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden">
+              {content ? (
+                <ScenarioFormEditor
+                  scenarioId={selectedScenarioId || selected}
+                  yamlContent={content}
+                  empRoles={empRoles}
+                  oracles={oracles}
+                  upstreamVars={upstreamVars}
+                  envVars={envVars}
+                  allScenarios={allScenarios}
+                  onSave={handleSave}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-600 text-sm">加载中…</div>
+              )}
+            </div>
           </>
         )}
       </div>

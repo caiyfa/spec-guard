@@ -1,6 +1,9 @@
 """通用 HTTP 客户端：Bearer 认证 + 401 自动重取重试 + 可选 X-Api-Version 版本头校验。
 
 account 为 None 时不带 Authorization 头（用于"未登录"类场景）。
+
+K-049：每次请求打印调用上下文（method/path/status/响应体 trace id）——
+执行日志（pytest stdout → 工作台日志流）可直接拿到 ifelc-trace_id 排查 BUG。
 """
 
 import re
@@ -8,6 +11,27 @@ import re
 import requests
 
 VERSION_PATTERN = re.compile(r'^\d+\.\d+\.\d+(?:-SNAPSHOT)?\([0-9a-f]{7,8}\)$')
+# TDM 网关统一响应包装里的请求跟踪 ID（ifelc-trace_id / ifelc_trace_id 兼容）
+_TRACE_ID_PATTERN = re.compile(r'ifelc[-_]trace[-_]id"\s*:\s*"([^"]+)"')
+
+
+def _trace_id_of(resp):
+    """提取请求跟踪 ID（K-049）：响应体 ifelc-trace_id（网关统一包装）优先，响应头兜底。
+
+    响应体兼容 ifelc-trace_id / ifelc_trace_id / ifelc-trace-id 三种键形态；
+    不设 Content-Type 门禁（网关个别接口返回 text/plain 包装的 JSON），
+    仅扫前 4KB 控制大响应开销。
+    """
+    try:
+        m = _TRACE_ID_PATTERN.search(resp.text[:4096])
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    for k, v in resp.headers.items():
+        if "trace" in k.lower() and v:
+            return str(v)
+    return ""
 
 
 class ApiError(Exception):
@@ -46,6 +70,10 @@ class HttpClient:
                             headers=headers, cookies=cookies)
         if self.check_version:
             self._check_version_header(resp, path)
+        # K-049：调用上下文日志（执行日志排查 BUG 的关键锚点：trace id 可在网关全链追踪）
+        trace = _trace_id_of(resp)
+        print(f"[SpecGuard] {method} {path} → {resp.status_code}"
+              + (f" | trace={trace}" if trace else ""), flush=True)
         if raise_on_error and resp.status_code >= 400:
             raise ApiError(resp.status_code, self._safe_json(resp))
         return resp

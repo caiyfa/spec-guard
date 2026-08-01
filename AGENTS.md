@@ -100,7 +100,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │
 ├── test_suites/                  # pytest 入口（testpaths 指向）
 │   ├── test_engine_modes.py      #   引擎离线自测（shared/exclusive/teardown，无需网络/DB）
-│   └── test_person_profile.py    #   场景参数化入口
+│   └── test_scenarios.py         #   全库场景参数化入口（K-048：替代原单模块入口，tags→mark）
 ├── test_engine/                  # 引擎组件单测（call/python/deps_editor/versioning；需显式指定路径）
 ├── test_specstd/                 # specstd 包单测（conformance/anchors/signature/workspace/agent/mcp/multiuser）
 │

@@ -253,3 +253,20 @@ def api_edit_dep(scenario_id: str, body: DepEditBody):
     updated = next((n for n in dag["nodes"] if n["id"] == scenario_id), None)
     edges = [e for e in dag["edges"] if e["target"] == scenario_id]
     return {"ok": True, "scenario": updated, "depends_on": edges}
+
+
+@router.get("/{scenario_id}/suggest-deps")
+def api_suggest_deps(scenario_id: str):
+    """单场景依赖建议（K-046：dep_suggest 确定性引擎，纯读）。
+
+    DAG 页孤节点「💡 有建议」数据源：扫描该场景的 {{...}} 插值 needs 侧，
+    匹配 save 生产者给出建议边（含理由/置信度）；已覆盖/自依赖/成环的自动剔除。
+    """
+    from services import dep_suggest
+    from services.scenario_store import SCENARIOS_ROOT
+    from specstd.workspace import drafts_dir
+    try:
+        d_root = drafts_dir()
+    except Exception:
+        d_root = None
+    return dep_suggest.suggest_deps(SCENARIOS_ROOT, d_root, target_id=scenario_id)
