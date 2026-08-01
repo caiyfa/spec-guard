@@ -186,6 +186,15 @@ def _handle_read_report(arguments: dict) -> list[TextContent]:
         with open(run_json_path, "r", encoding="utf-8") as f:
             run_data = json.load(f)
 
+    # K-053：触发上下文（trigger.json——选中场景/环境/轻量选项/触发人）
+    trigger_path = run_dir / "trigger.json"
+    trigger = {}
+    if trigger_path.is_file():
+        try:
+            trigger = json.loads(trigger_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
     # 读取 cases/ 下的单场景详情
     cases_dir = run_dir / "cases"
     failed_cases = []
@@ -208,6 +217,12 @@ def _handle_read_report(arguments: dict) -> list[TextContent]:
             except Exception:
                 continue
 
+    # K-053：run.json cases 提供完整场景清单（id+verdict），Agent 无需逐个翻 case 文件
+    cases_brief = [
+        {"id": c.get("id"), "verdict": c.get("verdict"), "duration_ms": c.get("duration_ms", 0)}
+        for c in run_data.get("cases", [])
+    ]
+
     # 读取 report.md（如果存在）
     report_md_path = run_dir / "report.md"
     report_md = ""
@@ -220,6 +235,8 @@ def _handle_read_report(arguments: dict) -> list[TextContent]:
         "started_at": run_data.get("started_at"),
         "finished_at": run_data.get("finished_at"),
         "stats": run_data.get("stats", {}),
+        "trigger": trigger,          # K-053：触发上下文（无 trigger.json 时为空 dict）
+        "cases": cases_brief,        # K-053：全部场景清单（id+verdict）
         "total_cases": len(all_cases),
         "failed_cases": failed_cases,
         "report_md_preview": report_md,

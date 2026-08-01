@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.1.0"
+SPEC_VERSION = "2.2.0"
 SPEC_UPDATED = "2026-07-24"
 SPEC_CHANGELOG = [
+    ("2.2.0", "2026-08-01", "K-055 微服务体系适配：call 新增 service 服务前缀路由；db_query 新增 schema 多库连接；新增 resolve_account/precheck_permission 工具；internal token 服务凭证"),
     ("2.1.0", "2026-07-24", "call 升级 Apifox 参数体系（headers/cookies/body_type: json/form/urlencoded/raw/binary）；新增 python 原语（flow/verify/teardown 三段可用）"),
     ("2.0.0", "2026-07-24", "格式 2.0：3 原语 + tool 信封；version 契约版本；depends_on 版本期望与 optional；DRIFT/ORPHANED verdict；T6 契约指纹校验"),
     ("1.4.1", "2026-07-23", "修复章节编号冲突（1.7/1.9 重复），步骤类型表补 poll 轮询"),
@@ -205,14 +206,15 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 
 | 步骤类型 | 格式 | 产出变量 |
 |----------|------|----------|
-| `call` | `{as?, method, path, params?, headers?, cookies?, body_type?, json?/form?/urlencoded?/raw?/file?, save, timeout?}` | `save.status`、`save.json`、`save.headers` |
-| `db_query` | `{sql, save, note?}` | 查询结果行数组（裸数组，可直接被 json 断言消费） |
+| `call` | `{as?, service?, method, path, params?, headers?, cookies?, body_type?, json?/form?/urlencoded?/raw?/file?, save, timeout?}` | `save.status`、`save.json`、`save.headers` |
+| `db_query` | `{sql, schema?, save, note?}` | 查询结果行数组（裸数组，可直接被 json 断言消费） |
 | `poll` | `{call, until, interval_ms?, timeout_ms?, on_timeout?, save}` | 末轮响应（结构同 call） |
 | `python` | `{script 或 file, save?}` | `output` 变量 / `ns` 直写 / `save(k,v)` |
 | `tool` | `{use, with?, save?}` | 由工具声明决定（见第八章 tool 目录） |
 
 **call 原语（Apifox 风格参数体系）**：
-- `as`：账号别名（default 等），`none`/`anonymous` 表示不带 token 的匿名调用
+- `as`：账号别名（default 等），`none`/`anonymous` 表示不带 token 的匿名调用；`internal` = internal token 服务凭证（K-055，无用户身份，限参数驱动接口）
+- `service`：服务前缀路由（K-055，默认 tdm）——取 env 配置 `{service}_base`（如 hr_center/oss/uac），场景只写服务内相对路径，服务段不再丢失
 - `headers` / `cookies`：KV dict，支持 `{{var}}` 插值；`headers` 可显式覆盖 `Authorization`（负向测试用）
 - `body_type`（默认按 `json` 字段推断）：
 
@@ -225,6 +227,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 | `binary` | `file: "path/to/file"` | 文件字节流 body（octet-stream） |
 
 - `db_query.sql`：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，支持 `{{var}}` 插值
+- `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / tdm / uac），未配置该连接时场景 SKIP
 - `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）
 
 ### 1.7 断言类型（verify 断言）

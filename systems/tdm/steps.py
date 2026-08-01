@@ -58,6 +58,29 @@ register_tool(
     outputs=["file_path", "file_size", "ossKey", "fileName"],
 )
 
+register_tool(
+    "resolve_account",
+    desc="动态账号解析（K-055：按资源码从权限体系找真实账号，权限表初筛 + data-info 复核，"
+         "替代静态 accounts 配置；无候选时 SKIP）",
+    args={
+        "resource_code": "资源码（可选，默认取 env.resource_code）",
+        "corp_code": "要求平台在权限范围内（可选）",
+        "role_code": "限定角色 code（可选）",
+    },
+    outputs=["emp_no", "ad", "emp_name", "role_code"],
+)
+
+register_tool(
+    "precheck_permission",
+    desc="资源码权限预检（K-055：场景首步使用；账号无权限时立即 SKIP，替代跑到一半 FAIL）",
+    args={
+        "account": "账号别名（默认 default）",
+        "resource_code": "资源码（可选，默认取 env.resource_code）",
+        "corp_code": "要求平台在权限范围内（可选）",
+    },
+    outputs=["corp_all", "corp_codes", "level_all", "levels", "vm_all", "vm_codes", "has_any"],
+)
+
 
 def make_select_emp(pool, queries):
     def step_select_emp(body, rctx, ns, record):
@@ -141,6 +164,101 @@ def step_fetch_permission(body, rctx, ns, record):
         "vm_all": scope.vm_all, "vm_codes": sorted(scope.vm_codes),
         "has_any": scope.has_any(),
     }
+
+
+def step_resolve_account(body, rctx, ns, record):
+    """动态账号解析（K-055）：按资源码从权限体系找真实账号，替代静态 accounts 配置。
+
+    用法：{resolve_account: {resource_code: VIEW_TELENT_SEARCH, corp_code?: 1002, role_code?: TDM_ADMIN, save: acct}}
+    流程：
+      ① DB 权限表找候选工号（role_account_result ⨝ role_account ⨝ role_page，确定性）
+      ② data-info API 复核（internal token——参数驱动接口无需 Authing，阶段 0 已验证）
+      ③ 输出 {emp_no, ad, emp_name, role_code} 注入 ns；无候选 → SKIP（诚实语义）
+    适用：EX-4cba827f 类「需要特定权限账号但静态池未配置」的场景。
+    """
+    resource_code = render(body["resource_code"], ns) if body.get("resource_code") \
+        else rctx.shared_ns.get("env", {}).get("resource_code", "TDM_SNAPSHOT_ARCHIVE")
+    corp_code = render(body["corp_code"], ns) if body.get("corp_code") else ""
+    role_code = render(body["role_code"], ns) if body.get("role_code") else ""
+
+    db = rctx.dbs.get("default") or rctx.db
+    if db is None:
+        raise SkipScenario("resolve_account 需要 DB（权限表查询），当前环境 DB 不可用")
+
+    # ① 权限表找候选：绑定了该资源码的角色账户对应的工号
+    sql = (
+        "SELECT DISTINCT parr.emp_no, parr.username, parr.emp_name, pra.role_code "
+        "FROM permission_role_account_result parr "
+        "INNER JOIN permission_role_account pra ON parr.role_account_id = pra.id "
+        "INNER JOIN permission_role_page prp ON pra.role_code = prp.role_code "
+        "WHERE prp.resource_code = %s AND parr.deleted = 0 AND pra.deleted = 0 AND prp.deleted = 0"
+    )
+    params = [resource_code]
+    if role_code:
+        sql += " AND pra.role_code = %s"
+        params.append(role_code)
+    sql += " LIMIT 50"
+    candidates = db.query(sql, params)
+    if not candidates:
+        raise SkipScenario(
+            f"权限体系中找不到绑定资源码 {resource_code} 的账号"
+            f"{'（限定角色 ' + role_code + '）' if role_code else ''}——请检查资源码或权限配置")
+
+    # ② data-info 复核（internal token 优先：无身份服务凭证即可调参数驱动接口）
+    if getattr(rctx, "_hr_oracle", None) is None:
+        rctx._hr_oracle = HrCenterOracle(rctx.env["hr_center_base"], rctx.token_provider)
+    verify_account = (rctx.token_provider.INTERNAL_ACCOUNT
+                      if getattr(rctx.token_provider, "_internal_cfg", None) else None)
+    rejected = []
+    for cand in candidates:
+        scope = rctx._hr_oracle.fetch_scope(cand["emp_no"], resource_code,
+                                            account=verify_account or cand["username"])
+        if scope.raw_status == "exception":
+            continue  # 单个候选复核异常不阻断，试下一个
+        if not scope.has_any():
+            rejected.append(f"{cand['emp_no']}(无权限)")
+            continue
+        if corp_code and not scope.corp_all and corp_code not in scope.corp_codes:
+            rejected.append(f"{cand['emp_no']}(平台 {corp_code} 不在权限范围 {sorted(scope.corp_codes)})")
+            continue
+        result = {
+            "emp_no": cand["emp_no"],
+            "ad": cand["username"] or cand["emp_no"],
+            "emp_name": cand.get("emp_name", ""),
+            "role_code": cand["role_code"],
+        }
+        record.steps.append(StepTrace(
+            type="resolve_account",
+            note=f"动态解析 {resource_code} → {result['emp_no']}({result['emp_name']}, {result['role_code']})"))
+        return result
+
+    raise SkipScenario(
+        f"资源码 {resource_code} 的 {len(candidates)} 个候选账号均未通过复核"
+        f"{'（要求平台 ' + corp_code + '）' if corp_code else ''}: {'; '.join(rejected[:3])}")
+
+
+def step_precheck_permission(body, rctx, ns, record):
+    """资源码权限预检（K-055）：账号对资源码无任何权限 → 首步即 SKIP（替代跑到一半 FAIL）。
+
+    用法（场景首步）：{precheck_permission: {account: default, resource_code: TDM_INV_ACTIVITY}}
+    corp_code 可选：同时要求指定平台在权限范围内。
+    """
+    result = step_fetch_permission(body, rctx, ns, record)
+    if not result["has_any"]:
+        alias = body.get("account", "default")
+        info = rctx.account_info(alias) or {}
+        raise SkipScenario(
+            f"账号 {alias}（{info.get('emp_no', '?')}）对资源码 "
+            f"{body.get('resource_code') or rctx.shared_ns.get('env', {}).get('resource_code')} "
+            "无任何数据权限——预检不通过，场景 SKIP（诚实语义：账号配置缺口非产品缺陷）")
+    corp_code = render(body["corp_code"], ns) if body.get("corp_code") else ""
+    if corp_code and not result["corp_all"] and corp_code not in result["corp_codes"]:
+        raise SkipScenario(
+            f"账号对平台 {corp_code} 无权限（权限范围: {result['corp_codes']}）——预检不通过，场景 SKIP")
+    print(f"[SpecGuard] 权限预检通过: {body.get('account', 'default')} @ "
+          f"{body.get('resource_code') or rctx.shared_ns.get('env', {}).get('resource_code')}"
+          f"（corp_all={result['corp_all']}, corps={result['corp_codes'][:5]}）", flush=True)
+    return result
 
 
 def step_oss_upload(body, rctx, ns, record):
@@ -268,3 +386,5 @@ def register_steps(registry, env_config, pool, queries):
     registry.step("fetch_permission", step_fetch_permission)
     registry.step("oss_upload", step_oss_upload)
     registry.step("oss_download", step_oss_download)
+    registry.step("resolve_account", step_resolve_account)
+    registry.step("precheck_permission", step_precheck_permission)

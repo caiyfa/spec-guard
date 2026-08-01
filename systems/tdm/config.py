@@ -61,20 +61,30 @@ def load_env(env_name="sit"):
     with open(path, "r", encoding="utf-8") as f:
         cfg = _substitute(yaml.safe_load(f) or {})
 
-    # DB 密码回退：env yaml 为空 → SG_DB_PASSWORD 环境变量 → devops .env.devops
-    db = cfg.setdefault("db", {})
-    if not db.get("password"):
-        db["password"] = os.environ.get("SG_DB_PASSWORD", "")
-    if not db.get("password"):
-        devops = _read_devops_env()
-        suffix = "_UAT" if env_name.lower() == "uat" else ""
-        db["password"] = devops.get(f"DB_PASSWORD{suffix}", "")
-        # host/user/port 也允许从 devops 凭据补全
-        if not db.get("host"):
-            db["host"] = devops.get(f"DB_HOST{suffix}", "")
-        if not db.get("user"):
-            db["user"] = devops.get(f"DB_USER{suffix}", "")
-        if not db.get("port"):
-            db["port"] = int(devops.get(f"DB_PORT{suffix}", "3306") or "3306")
+    # DB 密码回退（K-055 多 schema 感知）：逐连接回退——
+    # env yaml 为空 → SG_DB_PASSWORD_{SCHEMA} → SG_DB_PASSWORD → devops .env.devops
+    from engine.db_oracle import normalize_db_config
+    db_cfg = cfg.setdefault("db", {})
+    conns, _ = normalize_db_config(db_cfg)
+    devops = None
+    suffix = "_UAT" if env_name.lower() == "uat" else ""
+    for name, conn in conns.items():
+        if conn.get("password"):
+            continue
+        conn["password"] = (
+            os.environ.get(f"SG_DB_PASSWORD_{name.upper()}", "")
+            or os.environ.get("SG_DB_PASSWORD", "")
+        )
+        if not conn["password"]:
+            if devops is None:
+                devops = _read_devops_env()
+            conn["password"] = devops.get(f"DB_PASSWORD{suffix}", "")
+            # host/user/port 也允许从 devops 凭据补全
+            if not conn.get("host"):
+                conn["host"] = devops.get(f"DB_HOST{suffix}", "")
+            if not conn.get("user"):
+                conn["user"] = devops.get(f"DB_USER{suffix}", "")
+            if not conn.get("port"):
+                conn["port"] = int(devops.get(f"DB_PORT{suffix}", "3306") or "3306")
     cfg["env_name"] = env_name
     return cfg

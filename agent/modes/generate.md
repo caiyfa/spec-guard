@@ -50,6 +50,18 @@ tools:
    以它的输出校验拓扑设计是否遗漏——不要逐个人肉眼推理插值该由谁生产；
    采纳的建议：草稿把 depends_on 写进 YAML，库内场景用 edit_dependency 落地
 
+### 第 1.6 步：权限预检与账号策略（K-055，涉及权限/写操作的场景必做）
+1. **权限敏感场景首步加预检**：`tool: {use: precheck_permission, with: {resource_code: X, corp_code?: Y}}`——
+   账号无权限时场景首步即 SKIP（诚实语义），而不是跑到一半 FAIL
+2. **需要特定权限账号时优先动态解析**：`tool: {use: resolve_account, with: {resource_code: X, corp_code?: Y}, save: acct}`——
+   从权限体系实时找有权限的真实工号（权限表+data-info 复核），不要硬编码工号；
+   静态 accounts 只用于 default/no_access 这类基础角色
+3. **跨服务调用用 service 字段**：`call: {service: hr_center, method: POST, path: /api/permission/...}`——
+   服务段（hr-center/oss/uac 等）由 env 的 `{service}_base` 提供，场景只写服务内相对路径
+4. **参数驱动接口可用 internal 账号**：`as: internal`（internal token 服务凭证，免 Authing 风控）；
+   业务写接口（身份取自 token）不可用 internal，必须用真实用户账号
+
+
 ### 第二步：逐个生成场景
 用户确认后，**一次只生成一个场景**：
 1. 用 next_scenario_id 获取 ID

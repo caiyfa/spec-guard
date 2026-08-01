@@ -76,7 +76,8 @@ class LeaseRegistry:
 
 class RunContext:
     def __init__(self, registry, env_config, token_provider, graph, run_dir,
-                 skip_upstream_verify=False, prep_only=False, db=None, strict_deps=False):
+                 skip_upstream_verify=False, prep_only=False, db=None, strict_deps=False,
+                 dbs=None):
         self.registry = registry
         self.env = env_config
         self.token_provider = token_provider
@@ -84,7 +85,9 @@ class RunContext:
         self.run_dir = run_dir
         self.skip_upstream_verify = skip_upstream_verify
         self.prep_only = prep_only
-        self.db = db                     # engine.db_oracle.ReadOnlyDb（可为 None）
+        self.db = db                     # 默认连接 engine.db_oracle.ReadOnlyDb（可为 None）
+        # K-055：多 schema 命名连接注册表（{"default": ReadOnlyDb, "tdm": ...}）；未传时由 db 合成
+        self.dbs = dbs if dbs is not None else ({"default": db} if db else {})
         self.strict_deps = strict_deps   # 严格依赖模式：DRIFT/ORPHANED 退化为 BLOCKED（发版门禁用）
         self.leases = LeaseRegistry()    # session 级资源租约注册表（工号池/账号/配置层共用）
         self.records = []              # list[ExecutionRecord] 本次运行全部记录
@@ -96,25 +99,39 @@ class RunContext:
             "resource_code": env_config.get("default_resource_code", "TDM_SNAPSHOT_ARCHIVE"),
             "vars": env_config.get("vars", {}),   # REQ-3：自定义变量段全量暴露
         }
-        self._clients = {}             # account -> HttpClient
+        self._clients = {}             # (service, account) -> HttpClient（K-055 服务路由）
 
-    def http_client(self, account):
-        """按账号别名获取客户端（account=None 表示不带 token 的匿名调用）。
+    def http_client(self, account, service="tdm"):
+        """按账号别名 + 服务获取客户端（account=None 表示不带 token 的匿名调用）。
 
+        K-055 服务前缀路由：service → env 配置的 `{service}_base`（如 hr_center_base/
+        oss_base/uac_base），解决「接口全路径的服务段（hr-center 等）丢失」——
+        场景只写服务内相对路径，服务由 service 字段声明。
         别名（default/restricted 等）必须在 env 配置 accounts 中映射为真实 AD 账号；
         未配置时抛 SkipScenario（支持"受限账号后补，缺账号时 SKIP"的场景约定）。
+        服务 base 未配置同样 SkipScenario（环境配置缺口，不误报 FAIL）。
         """
-        key = account or "__anonymous__"
+        key = (service, account or "__anonymous__")
         if key not in self._clients:
+            base = self.env.get(f"{service}_base")
+            if not base:
+                raise SkipScenario(
+                    f"环境配置缺少 {service}_base（service={service} 的服务地址，"
+                    f"请在 systems/{{system}}/config/env.*.yaml 补充）")
             real_account = None
             if account:
-                real_account = self.account_emp_no(account)
+                # K-055：账号声明 type: internal → 走 internal token（无身份服务凭证）
+                info = self.account_info(account)
+                if info and info.get("type") == "internal":
+                    real_account = self.token_provider.INTERNAL_ACCOUNT
+                else:
+                    real_account = self.account_emp_no(account)
                 if not real_account:
                     raise SkipScenario(
                         f"账号别名 '{account}' 未在环境配置 accounts 中定义"
                         f"（请在 systems/{{system}}/config/env.*.yaml 的 accounts 补充真实 AD 账号）")
             self._clients[key] = HttpClient(
-                self.env["tdm_base"],
+                base,
                 token_provider=self.token_provider if real_account else None,
                 account=real_account,
                 check_version=bool(self.env.get("check_version_header", False)),
@@ -225,7 +242,9 @@ def step_call(body, rctx, ns, record):
     account = body.get("as", "default")
     if account in ("none", "anonymous"):
         account = None
-    client = rctx.http_client(account)
+    # K-055：服务前缀路由——service 字段（默认 tdm，支持 {{}} 插值）
+    service = str(render(body.get("service", "tdm"), ns) or "tdm")
+    client = rctx.http_client(account, service)
     method = body.get("method", "GET").upper()
     path = render(body["path"], ns)
     params = render(body.get("params"), ns)
@@ -309,12 +328,19 @@ def step_set_var(body, rctx, ns, record):
 
 
 def step_db_query(body, rctx, ns, record):
-    """只读 SQL 查询：{sql: 'SELECT ...', save: rows}。sql 支持 {{var}} 插值。"""
-    if rctx.db is None:
-        raise SkipScenario("当前环境 DB 不可用，db_query 步骤无法执行")
+    """只读 SQL 查询：{sql: 'SELECT ...', save: rows}。sql 支持 {{var}} 插值。
+
+    K-055：可选 schema 字段——多 schema 命名连接注册表（env db 段 dict-of-dicts），
+    默认 default；schema 未配置 → SkipScenario（环境配置缺口，诚实语义）。
+    """
+    schema = str(render(body.get("schema", "default"), ns) or "default")
+    db = rctx.dbs.get(schema) or (rctx.db if schema == "default" else None)
+    if db is None:
+        available = sorted(rctx.dbs) or ["（无可用连接）"]
+        raise SkipScenario(f"当前环境 DB schema '{schema}' 不可用（可用: {available}），db_query 步骤无法执行")
     sql = render(body["sql"], ns)
     started = time.time()
-    rows = rctx.db.query(sql)
+    rows = db.query(sql)
     elapsed = int((time.time() - started) * 1000)
     record.db_traces.append({"purpose": body.get("note", "db_query"),
                              "sql": sql, "rows": len(rows),

@@ -200,6 +200,15 @@ class RunManager:
             "started_at": self.started_at,
         })
         self._write_output_log(f"> {self.run_id} | env={env} | {' '.join(cmd)}")
+        # K-053：触发上下文结构化落盘（Agent 按任务号可查到选了哪些场景/什么环境）
+        self._write_trigger_context({
+            "run_id": self.run_id, "scope": scope, "target": target,
+            "selected_scenarios": target.split(" or ") if (scope == "scenario" and target) else [],
+            "env": env, "plan_id": plan_id,
+            "prep_only": prep_only, "skip_upstream_verify": skip_upstream_verify,
+            "strict_deps": strict_deps,
+            "emp_no": emp_no, "workspace": workspace, "started_at": self.started_at,
+        })
 
         # 启动子进程（K-047：Popen；失败时队表标记 failed，不再遗留 running 卡死队列）
         try:
@@ -249,6 +258,17 @@ class RunManager:
                 f.write(text + "\n")
         except Exception:
             pass  # 落盘失败不影响执行与直播
+
+    def _write_trigger_context(self, ctx: dict):
+        """K-053：触发上下文结构化落盘（{reports}/{run_id}/trigger.json）——
+        选中场景/环境/轻量选项/触发人/工作区。Agent 按任务号排查时不用解析 cmd 文本。"""
+        if not self._run_dir:
+            return
+        try:
+            with open(self._run_dir / "trigger.json", "w", encoding="utf-8") as f:
+                json.dump(ctx, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     def _record_failures(self):
         """K-052：执行完成后把失败场景写入失败索引（failures/index.jsonl）——
@@ -367,6 +387,13 @@ class RunManager:
         # K-050：执行日志落盘目录（与引擎报告同目录）
         self._run_dir = _get_reports_root() / self.run_id
         self._run_dir.mkdir(parents=True, exist_ok=True)
+        # K-053：断点路径的触发上下文
+        self._write_trigger_context({
+            "run_id": self.run_id, "scope": "breakpoint", "target": " or ".join(scenario_ids),
+            "selected_scenarios": list(scenario_ids), "breakpoints": breakpoints,
+            "env": env, "plan_id": plan_id, "strict_deps": strict_deps,
+            "emp_no": emp_no, "workspace": workspace, "started_at": self.started_at,
+        })
 
         # 无断点 → 直接全量执行
         if not breakpoints:

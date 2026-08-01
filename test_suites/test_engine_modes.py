@@ -431,7 +431,7 @@ def _make_rctx_with_poll_client(client):
     graph = DependencyGraph([])
     rctx = RunContext(registry=reg, env_config={"tdm_base": "http://stub"},
                       token_provider=None, graph=graph, run_dir=".")
-    rctx._clients["default"] = client
+    rctx._clients[("tdm", "default")] = client  # K-055：client 缓存键改 (service, account)
     # 预置账号配置
     rctx.env["accounts"] = {"default": {"ad": "test", "emp_no": "90000000"}}
     return rctx

@@ -36,7 +36,7 @@ class _FakeClient:
 
 
 def _rctx(client):
-    return SimpleNamespace(http_client=lambda account: client, db=None)
+    return SimpleNamespace(http_client=lambda account, service='tdm': client, db=None, dbs={})
 
 
 # ══════════════════════════════════════════════════════════

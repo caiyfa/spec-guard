@@ -60,21 +60,11 @@ def _setup_runtime(system: str, env: str, scenarios_root: Path,
         cfg_mod = importlib.import_module(f"systems.{system}.config")
         env_config = cfg_mod.load_env(env)
 
-    # 2. DB（只读，可选；配置缺失或连接失败时返回 None，相关能力降级为 SKIP）
-    db = None
-    db_cfg = env_config.get("db") or {}
-    if db_cfg.get("host") and db_cfg.get("user"):
-        try:
-            conn = ReadOnlyDb(
-                host=db_cfg["host"], port=db_cfg.get("port", 3306),
-                user=db_cfg["user"], password=db_cfg.get("password", ""),
-                database=db_cfg.get("name", "hr_center"),
-                charset=db_cfg.get("charset", "utf8mb4"),
-            )
-            conn.scalar("SELECT 1")
-            db = conn
-        except Exception as e:
-            print(f"[plan_executor WARN] DB 连接失败，DB 校对降级为 SKIP: {e}")
+    # 2. DB（K-055：多 schema 命名连接注册表，与 conftest 共用装配函数；
+    #    单个连接失败降级跳过，不阻断其他 schema）
+    from engine.db_oracle import build_db_connections
+    dbs, default_name = build_db_connections(env_config.get("db"))
+    db = dbs.get(default_name)
 
     # 3. Registry（引擎内置 + 系统适配包）
     registry = Registry()
@@ -85,13 +75,14 @@ def _setup_runtime(system: str, env: str, scenarios_root: Path,
     # 4. TokenProvider
     sso = env_config.get("sso") or {}
     token_provider = TokenProvider(
-        sso.get("domain", ""), sso.get("app_id", ""), sso.get("password", ""))
+        sso.get("domain", ""), sso.get("app_id", ""), sso.get("password", ""),
+        internal_token_cfg=env_config.get("internal_token"))
 
     # 5. 场景库 + DAG（依赖解析需要跨模块可见 → 加载全部场景）
     scenarios = load_scenarios(str(scenarios_root))
     graph = DependencyGraph(scenarios)
 
-    return env_config, db, registry, token_provider, graph
+    return env_config, db, registry, token_provider, graph, dbs
 
 
 # ══════════════════════════════════════════════════════════
@@ -163,7 +154,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
         return {"run_id": "", "status": "failed",
                 "error": f"场景库目录不存在: {scenarios_root}", "results": []}
 
-    env_config, db, registry, token_provider, graph = _setup_runtime(
+    env_config, db, registry, token_provider, graph, dbs = _setup_runtime(
         system, env_name, scenarios_root, strict_deps)
 
     # ── 3. 构建运行上下文 ──
@@ -187,6 +178,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
         graph=graph,
         run_dir=str(run_dir),
         db=db,
+        dbs=dbs,
         strict_deps=strict_deps,
     )
 

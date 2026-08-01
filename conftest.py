@@ -59,24 +59,24 @@ def env_config(sg_system, pytestconfig):
 
 
 @pytest.fixture(scope="session")
-def db(env_config):
-    """只读 DB 连接（配置缺失或连接失败时返回 None，相关能力降级为 SKIP）"""
-    cfg = env_config.get("db") or {}
-    if not cfg.get("host") or not cfg.get("user"):
-        return None
-    try:
-        conn = ReadOnlyDb(
-            host=cfg["host"], port=cfg.get("port", 3306),
-            user=cfg["user"], password=cfg.get("password", ""),
-            database=cfg.get("name", "hr_center"),
-            charset=cfg.get("charset", "utf8mb4"),
-        )
-        conn.scalar("SELECT 1")
-    except Exception as e:
-        print(f"[SpecGuard WARN] DB 连接失败，DB 校对能力降级为 SKIP: {e}")
-        return None
-    yield conn
-    conn.close()
+def db_registry(env_config):
+    """K-055：命名 DB 连接注册表（多 schema）——(dbs dict, default_name)。
+
+    env yaml db 段双形态：旧单 dict（视为 default）/ 新 dict-of-dicts。
+    连接失败单个降级（WARN + 跳过），不阻断其他 schema。
+    """
+    from engine.db_oracle import build_db_connections
+    dbs, default_name = build_db_connections(env_config.get("db"))
+    yield dbs, default_name
+    for conn in dbs.values():
+        conn.close()
+
+
+@pytest.fixture(scope="session")
+def db(db_registry):
+    """默认只读 DB 连接（缺失/失败为 None，相关能力降级为 SKIP）"""
+    dbs, default_name = db_registry
+    return dbs.get(default_name)
 
 
 @pytest.fixture(scope="session")
@@ -93,7 +93,8 @@ def registry(sg_system, env_config, db):
 @pytest.fixture(scope="session")
 def token_provider(env_config):
     sso = env_config.get("sso") or {}
-    return TokenProvider(sso.get("domain", ""), sso.get("app_id", ""), sso.get("password", ""))
+    return TokenProvider(sso.get("domain", ""), sso.get("app_id", ""), sso.get("password", ""),
+                         internal_token_cfg=env_config.get("internal_token"))
 
 
 @pytest.fixture(scope="session")
@@ -104,7 +105,7 @@ def scenario_graph():
 
 
 @pytest.fixture(scope="session")
-def rctx(registry, env_config, token_provider, scenario_graph, sg_system, pytestconfig, db):
+def rctx(registry, env_config, token_provider, scenario_graph, sg_system, pytestconfig, db_registry):
     """运行上下文：session 结束时统一落盘 JSON + MD 报告
 
     K-050：SG_RUN_ID 环境变量优先——工作台执行控制传入任务编号（EX-xxxxxxxx），
@@ -115,6 +116,7 @@ def rctx(registry, env_config, token_provider, scenario_graph, sg_system, pytest
     run_dir = os.path.join(REPORTS_ROOT, run_id)
     os.makedirs(run_dir, exist_ok=True)
 
+    dbs, default_name = db_registry
     ctx = RunContext(
         registry=registry,
         env_config=env_config,
@@ -123,7 +125,8 @@ def rctx(registry, env_config, token_provider, scenario_graph, sg_system, pytest
         run_dir=run_dir,
         skip_upstream_verify=pytestconfig.getoption("--skip-upstream-verify"),
         prep_only=pytestconfig.getoption("--prep-only"),
-        db=db,
+        db=dbs.get(default_name),
+        dbs=dbs,
         strict_deps=pytestconfig.getoption("--strict-deps"),
     )
     yield ctx

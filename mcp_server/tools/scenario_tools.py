@@ -329,7 +329,7 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
     system = (ws.system if ws else "") or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
 
     try:
-        env_config, db, registry, token_provider, graph = _setup_runtime(
+        env_config, db, registry, token_provider, graph, dbs = _setup_runtime(
             system, env_name, scenarios_root, strict_deps)
     except Exception as e:
         return [TextContent(type="text", text=json.dumps(
@@ -376,7 +376,7 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
 
     rctx = RunContext(registry=registry, env_config=env_config,
                       token_provider=token_provider, graph=graph,
-                      run_dir=str(run_dir), db=db, strict_deps=strict_deps)
+                      run_dir=str(run_dir), db=db, dbs=dbs, strict_deps=strict_deps)
 
     scenario = graph.by_id[target_id]
     try:

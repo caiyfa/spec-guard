@@ -37,22 +37,54 @@ class TokenProvider:
     REFRESH_MARGIN_SECONDS = 300   # 剩余有效期 < 5min 重新获取
     MAX_RETRIES = 3
 
-    def __init__(self, sso_domain, app_id, password, interval=0.2):
+    INTERNAL_ACCOUNT = "__internal__"  # K-055：internal token 专用账号键（无用户身份的服务凭证）
+
+    def __init__(self, sso_domain, app_id, password, interval=0.2, internal_token_cfg=None):
         self.sso_domain = sso_domain.rstrip("/")
         self.app_id = app_id
         self.password = password
         self.interval = interval          # 批量换取时账号间隔（节流）
         self._cache = {}                  # account -> (token, exp)
         self._last_signin_at = 0.0
+        # K-055：internal token 配置（{url, client_id, client_secret, scope}）
+        # 适用：参数驱动接口（data-info 等）与服务级调用，规避 Authing 风控；
+        # 不携带用户身份，业务写接口仍须真实用户 Authing token（阶段 0 已验证）
+        self._internal_cfg = internal_token_cfg or None
 
     def get_token(self, account):
         """获取指定账号的 token（裸 token，不带 Bearer 前缀）"""
+        # K-055：internal 账号走 client-credentials grant（无 Authing 交互、无风控面）
+        if account == self.INTERNAL_ACCOUNT:
+            if not self._internal_cfg:
+                raise TokenError(
+                    "账号配置 type: internal 但环境缺少 internal_token 段"
+                    "（请在 env.*.yaml 补充 url/client_id/client_secret）")
+            return self._get_internal_token()
         cached = self._cache.get(account)
         if cached:
             token, exp = cached
             if exp and exp - int(time.time()) > self.REFRESH_MARGIN_SECONDS:
                 return token
         return self._signin(account)
+
+    def _get_internal_token(self):
+        """client-credentials grant 获取 internal token（uatToken.py 同款契约）。"""
+        cached = self._cache.get(self.INTERNAL_ACCOUNT)
+        if cached:
+            token, exp = cached
+            if exp and exp - int(time.time()) > self.REFRESH_MARGIN_SECONDS:
+                return token
+        cfg = self._internal_cfg
+        url = (f"{cfg['url']}?clientId={cfg['client_id']}"
+               f"&clientSecret={cfg['client_secret']}&scope={cfg.get('scope', 'internal')}")
+        resp = requests.post(url, timeout=15)
+        data = resp.json()
+        token = (data.get("data") or {}).get("access_token")
+        if not token:
+            raise TokenError(f"internal token 获取失败: HTTP {resp.status_code} {str(data)[:200]}")
+        payload = parse_jwt(token) or {}
+        self._cache[self.INTERNAL_ACCOUNT] = (token, payload.get("exp"))
+        return token
 
     def invalidate(self, account):
         self._cache.pop(account, None)

@@ -15,12 +15,17 @@
 .PARAMETER NoBrowser
     启动完成后不自动打开浏览器
 
+.PARAMETER Stats
+    只显示启动历史统计（不启动服务）
+
 .EXAMPLE
     pwsh start-workbench.ps1
     pwsh start-workbench.ps1 -NoBrowser
+    pwsh start-workbench.ps1 -Stats
 #>
 param(
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [switch]$Stats
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,7 +34,42 @@ $BackendDir  = Join-Path $SgRoot 'workbench\backend'
 $FrontendDir = Join-Path $SgRoot 'workbench\frontend'
 $LogDir      = Join-Path $SgRoot 'workbench\backend\data\logs'   # data/ 已 gitignore
 $PidFile     = Join-Path $LogDir 'dev-pids.json'
+$HistoryFile = Join-Path $LogDir 'start-history.jsonl'           # 启动历史（K-054）
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+# ── 启动历史统计（K-054：记录每次启动时间/结果/端口 PID，统计次数）──
+function Get-StartHistory {
+    if (-not (Test-Path $HistoryFile)) { return @() }
+    $items = @()
+    foreach ($line in (Get-Content $HistoryFile -Encoding utf8 -ErrorAction SilentlyContinue)) {
+        if ($line.Trim()) { try { $items += ($line | ConvertFrom-Json) } catch {} }
+    }
+    return $items
+}
+
+function Show-StartStats([array]$History, [int]$Tail = 10) {
+    $today = (Get-Date).ToString('yyyy-MM-dd')
+    $todayCount = @($History | Where-Object { $_.ts -like "$today*" }).Count
+    $okCount = @($History | Where-Object { $_.ok }).Count
+    Write-Host "  累计启动 $($History.Count) 次（成功 $okCount / 失败 $($History.Count - $okCount)）· 今日 $todayCount 次" -ForegroundColor DarkCyan
+    if ($History.Count -gt 0) {
+        $last = $History[-1]
+        Write-Host "  上次启动: $($last.ts)（$(if ($last.ok) { '就绪' } else { '未就绪' })）" -ForegroundColor DarkGray
+    }
+}
+
+# -Stats：只看历史不启动
+if ($Stats) {
+    Write-Host "=== SpecGuard Workbench 启动历史 ===" -ForegroundColor Cyan
+    $h = @(Get-StartHistory)
+    Show-StartStats $h
+    $h | Select-Object -Last 10 | ForEach-Object {
+        $mark = if ($_.ok) { '✅' } else { '❌' }
+        Write-Host ("  {0} {1}  auth={2} backend_pid={3} frontend_pid={4}" -f $mark, $_.ts, $_.auth, $_.backend_pid, $_.frontend_pid)
+    }
+    if ($h.Count -eq 0) { Write-Host "  （暂无记录）" -ForegroundColor DarkGray }
+    exit 0
+}
 
 function Test-Port([int]$Port) {
     return [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
@@ -95,6 +135,8 @@ function Stop-PortProcess([int]$Port) {
 }
 
 Write-Host "=== SpecGuard Workbench 开发模式启动 ===" -ForegroundColor Cyan
+$startHistory = @(Get-StartHistory)
+Show-StartStats $startHistory
 
 # ── 依赖自检：Python ──
 Write-Host "[检查] Python 依赖 ..." -ForegroundColor Green
@@ -181,12 +223,23 @@ foreach ($i in 1..60) {
 }
 Write-Host ""
 
+# ── 记录本次启动（K-054：时间/结果/认证模式/进程 PID 追加 jsonl）──
+$record = [ordered]@{
+    ts           = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    ok           = $ready
+    auth         = $authMode
+    backend_pid  = $backendProc.Id
+    frontend_pid = $frontendProc.Id
+}
+($record | ConvertTo-Json -Compress) | Add-Content $HistoryFile -Encoding utf8
+
 if ($ready) {
-    Write-Host "启动完成 ✅" -ForegroundColor Green
+    Write-Host "启动完成 ✅（第 $($startHistory.Count + 1) 次启动）" -ForegroundColor Green
     Write-Host "  前端工作台:  http://127.0.0.1:5173  （mock 登录页：输工号直接登录）"
     Write-Host "  后端 API:    http://127.0.0.1:9100/docs  （--reload：改后端代码自动重载）"
     Write-Host "  后端日志:    $backendOut"
     Write-Host "  前端日志:    $frontendOut"
+    Write-Host "  启动统计:    pwsh start-workbench.ps1 -Stats"
     Write-Host "  生产部署:    pwsh serve-prod.ps1"
     if (-not $NoBrowser) { Start-Process "http://127.0.0.1:5173" }
 } else {
