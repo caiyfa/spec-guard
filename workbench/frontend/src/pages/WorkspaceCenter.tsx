@@ -78,7 +78,11 @@ export default function WorkspaceCenter({ role }: { role: string }) {
   // 选中工作区：写入 session（全局生效）并加载文档
   const handleSelect = useCallback((name: string) => {
     if (!name || name === selectedRef.current) return;
-    session.setWorkspace(name); // 触发 WORKSPACE_CHANGED_EVENT（自身监听器会因同名守卫忽略）
+    // K-042：必须先同步更新 ref 再派发事件——selectedRef.current 平时在渲染期赋值（第 51 行），
+    // 而 setWorkspace 同步派发 WORKSPACE_CHANGED_EVENT，自身 onChanged 监听在同一调用栈内触发，
+    // 此时 setSelected 尚未触发重渲染、ref 还是旧值 → 守卫失效 → handleSelect 无限递归爆栈
+    selectedRef.current = name;
+    session.setWorkspace(name); // 触发 WORKSPACE_CHANGED_EVENT（自身监听器因上面的同步守卫忽略）
     setSelected(name);
     setActiveFile('');
     setFileContent('');
