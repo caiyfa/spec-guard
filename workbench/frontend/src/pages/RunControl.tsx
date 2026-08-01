@@ -1,15 +1,14 @@
-/** RunControl — 执行控制（K-046 轻量化）：场景多选直跑 / 计划可选装载 / 轻量选项 / 实时日志流 / 多用户队列
+/** RunControl — 执行控制（K-050）：场景多选直跑 / 执行上下文确认 / 任务编号 / 日志专注模式
  *
  * K-046：计划依赖是过时的纯前端设计（后端 runs/trigger 本就支持 scope=scenario 直跑）。
- * 现在默认视图 = 场景多选列表，勾选即跑；计划降级为「从计划装载」快捷方式
- * （装载后未改动选择 → 走 plansApi.run 保留计划归档；改动过 → ad-hoc 直跑）。
+ * K-050：测试计划区块整体移除——执行只需要「选场景 → 确认上下文 → 跑」；
+ *        确认执行后进入日志专注模式（选择区收起，执行日志放大）。
  * ?ids=A,B,C 预选（DAG 框选「执行选中」的落点）。
  */
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { runsApi, scenariosApi, plansApi, authApi, type Scenario, type TestPlan, type RunStatus } from '../api';
+import { runsApi, scenariosApi, authApi, type Scenario, type RunStatus } from '../api';
 import { useRunStream } from '../hooks/useRunStream';
-import PlanManager from '../components/PlanManager';
 import Modal from '../components/Modal';
 
 const SCOPES = [
@@ -38,7 +37,6 @@ export default function RunControl() {
   const [searchParams] = useSearchParams();
   const [error, setError] = useState('');
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [plans, setPlans] = useState<TestPlan[]>([]);
   const [showLog, setShowLog] = useState(true);
   const [breakpoints] = useState<Set<string>>(new Set());
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
@@ -49,8 +47,6 @@ export default function RunControl() {
   // ?ids= 预选（DAG 编排「执行选中」跳转的落点）
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() =>
     new Set((searchParams.get('ids') || '').split(',').map(s => s.trim()).filter(Boolean)));
-  const [loadedPlanId, setLoadedPlanId] = useState('');   // 从哪个计划装载的（空=手动选择）
-  const [selDirty, setSelDirty] = useState(false);        // 装载后是否改动过选择
   const [moduleFilter, setModuleFilter] = useState('');
   const [searchQ, setSearchQ] = useState('');
   const [prepOnly, setPrepOnly] = useState(false);
@@ -61,6 +57,10 @@ export default function RunControl() {
   const [target, setTarget] = useState('');
   // K-049：触发前执行上下文确认（不是点一下就直接跑）
   const [showConfirm, setShowConfirm] = useState(false);
+  // K-050：日志专注模式——确认执行后选择区收起，执行日志放大
+  const [logFocus, setLogFocus] = useState(false);
+  // K-052：任务号一键复制反馈
+  const [copied, setCopied] = useState(false);
 
   // 队列状态轮询（M8：当前执行归属 + 排队列表）
   useEffect(() => {
@@ -121,26 +121,12 @@ export default function RunControl() {
     return { upstream: [...upstream].sort(), total: selectedIds.size + upstream.size };
   }, [dagEdges, selectedIds]);
 
-  // K-011：计划列表由 PlanManager 加载并回调同步（K-046：不再默认选中第一个计划）
-  const handlePlansChange = useCallback((p: TestPlan[]) => setPlans(p), []);
-
-  /** K-046：从计划装载 = 把 plan.filter.scenarios 填入勾选（未改动 → 触发时走计划路径） */
-  const handleLoadPlan = useCallback((id: string) => {
-    setLoadedPlanId(id);
-    if (!id) return;
-    const plan = plans.find((p) => p.id === id);
-    const ids = (plan?.filter?.scenarios || []) as string[];
-    setSelectedIds(new Set(ids));
-    setSelDirty(false);
-  }, [plans]);
-
   const toggleId = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-    setSelDirty(true);
   }, []);
 
   // 模块清单
@@ -193,10 +179,7 @@ export default function RunControl() {
     try {
       let result: { ok: boolean; queued?: boolean; position?: number } | undefined;
       const light = { prepOnly, skipUpstreamVerify };
-      if (loadedPlanId && !selDirty) {
-        // 计划装载且未改动 → 走计划路径（保留 covers 闸/计划 env/断点/报告归档）
-        result = await plansApi.run(loadedPlanId);
-      } else if (selectedIds.size > 0) {
+      if (selectedIds.size > 0) {
         // K-046：勾选直跑（后端原生支持 "A or B" 的 pytest -k 表达式）
         const expr = [...selectedIds].join(' or ');
         result = breakpoints.size > 0
@@ -212,6 +195,8 @@ export default function RunControl() {
         setError(`已有执行进行中，已加入队列（第 ${result.position} 位）`);
         const s = await runsApi.status();
         setRunStatus(s);
+      } else if (result?.ok) {
+        setLogFocus(true);  // K-050：确认执行后进入日志专注模式
       }
     } catch (e: unknown) { setError(e instanceof Error ? e.message : '触发失败'); }
   };
@@ -237,29 +222,41 @@ export default function RunControl() {
     running: '◉', PASSED: '✓', FAILED: '✗', SKIPPED: '⊘', ERROR: '✗',
   };
 
-  const triggerLabel = loadedPlanId && !selDirty
-    ? `🚀 执行计划（${selectedIds.size} 场景）`
-    : selectedIds.size > 0
-      ? `🚀 执行选中（${selectedIds.size}）`
-      : '🚀 触发执行';
+  // K-050：当前任务编号（从 started 事件提取，日志头部展示）
+  const currentRunId = useMemo(() => {
+    const started = events.filter((e) => e.type === 'started');
+    const last = started[started.length - 1] as { run_id?: string } | undefined;
+    return last?.run_id || '';
+  }, [events]);
+
+  // K-052：任务号一键复制（排障报号零成本）
+  const copyRunId = useCallback(async () => {
+    if (!currentRunId) return;
+    try {
+      await navigator.clipboard.writeText(currentRunId);
+    } catch {
+      // 剪贴板 API 不可用（非安全上下文）时降级
+      const ta = document.createElement('textarea');
+      ta.value = currentRunId;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [currentRunId]);
+
+  const triggerLabel = selectedIds.size > 0
+    ? `🚀 执行选中（${selectedIds.size}）`
+    : '🚀 触发执行';
 
   return (
     <div className="space-y-4 h-full flex flex-col">
       <h2 className="text-lg font-semibold">▶️ 执行控制</h2>
 
-      {/* 触发面板（K-046：选择优先，计划为可选装载，高级范围模式折叠） */}
+      {/* 触发面板（K-050：选择优先，无计划耦合，高级范围模式折叠） */}
       <div className="flex items-center gap-3 flex-wrap">
-        <select value={loadedPlanId} onChange={(e) => handleLoadPlan(e.target.value)}
-          className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-sm"
-          title="可选：从测试计划装载场景清单（装载后未改动 → 走计划执行路径）">
-          <option value="">手动选择场景</option>
-          {plans.map((p) => <option key={p.id} value={p.id}>📋 从计划装载：{p.name}</option>)}
-        </select>
-        {loadedPlanId && selDirty && (
-          <span className="text-[10px] text-warn" title="选择已被手动修改，触发时将按勾选项直跑而非计划路径">
-            ⚠️ 已改动选择，将直跑勾选项
-          </span>
-        )}
         {/* K-046：轻量执行选项（conftest 原生支持，runner 透传） */}
         <label className="text-xs text-gray-500 flex items-center gap-1"
           title="只跑上游环境准备（prep 场景），跳过消费场景">
@@ -269,7 +266,7 @@ export default function RunControl() {
           title="上游场景只跑 flow 不做 verify 断言（加快闭包执行）">
           <input type="checkbox" checked={skipUpstreamVerify} onChange={(e) => setSkipUpstreamVerify(e.target.checked)} /> 上游不断言
         </label>
-        <button onClick={() => setShowConfirm(true)} disabled={(running && !isPaused) || (!loadedPlanId && selectedIds.size === 0 && !showAdvanced)}
+        <button onClick={() => setShowConfirm(true)} disabled={(running && !isPaused) || (selectedIds.size === 0 && !showAdvanced)}
           className="px-4 py-1.5 rounded-md text-sm font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-40">
           {isPaused ? '⏸ 已暂停' : running ? '⏳ 执行中…' : triggerLabel}
         </button>
@@ -438,21 +435,27 @@ export default function RunControl() {
       )}
 
       <div className="flex-1 flex gap-3 min-h-0">
-        {/* 计划管理（K-011：从原场景管理页迁入；K-046：仅作装载与管理，不再是执行前提） */}
-        <PlanManager
-          selectedPlan={loadedPlanId}
-          onSelect={handleLoadPlan}
-          onPlansChange={handlePlansChange}
-        />
+        {/* K-050：日志专注模式——选择区收起为窄条，点击返回 */}
+        {logFocus && (
+          <button
+            onClick={() => setLogFocus(false)}
+            className="w-10 flex-shrink-0 border border-border rounded-lg bg-surface-2 hover:bg-surface-3 flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-info"
+            title="返回场景选择"
+          >
+            <span className="text-sm">«</span>
+            <span className="text-[10px] [writing-mode:vertical-rl]">{selectedIds.size} 已选</span>
+          </button>
+        )}
 
-        {/* K-046：场景多选列表（选择 + 进度一体） */}
+        {/* K-046：场景多选列表（选择 + 进度一体）；K-050：专注模式下隐藏 */}
+        {!logFocus && (
         <div className="w-[380px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
           <div className="px-3 py-2 border-b border-border bg-surface-2 space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium">场景选择（{selectedIds.size} 已选）</span>
-              <button onClick={() => { setSelectedIds(new Set(filteredScenarios.map(s => s.id))); setSelDirty(true); }}
+              <button onClick={() => setSelectedIds(new Set(filteredScenarios.map(s => s.id)))}
                 className="text-[10px] text-info hover:underline ml-auto">全选当前</button>
-              <button onClick={() => { setSelectedIds(new Set()); setSelDirty(true); }}
+              <button onClick={() => setSelectedIds(new Set())}
                 className="text-[10px] text-gray-500 hover:text-fail">清空</button>
             </div>
             <div className="flex gap-1.5">
@@ -485,13 +488,35 @@ export default function RunControl() {
             )}
           </div>
         </div>
+        )}
 
-        {/* 日志流 */}
+        {/* 日志流（K-050：头部含任务编号 + 专注切换；专注模式下占满宽度） */}
         {showLog && (
-          <div ref={logRef}
-            className="flex-1 min-w-0 border border-border rounded-lg p-4 overflow-y-auto font-mono text-xs leading-5" style={{ background: 'rgb(var(--code-bg))' }}>
+          <div className="flex-1 min-w-0 border border-border rounded-lg overflow-hidden flex flex-col">
+            <div className="px-3 py-1.5 border-b border-border bg-surface-2 flex items-center gap-2 text-[11px]">
+              <span className="text-gray-500 font-medium">执行日志</span>
+              {currentRunId && (
+                <span className="flex items-center gap-1">
+                  <span className="font-mono text-info" title="任务编号：报告目录与日志文件同名，排错时报此编号">
+                    {currentRunId}
+                  </span>
+                  <button onClick={copyRunId}
+                    className="text-gray-500 hover:text-info"
+                    title="复制任务编号">
+                    {copied ? <span className="text-pass">✓</span> : '📋'}
+                  </button>
+                </span>
+              )}
+              <button onClick={() => setLogFocus(!logFocus)}
+                className="ml-auto text-gray-500 hover:text-info"
+                title={logFocus ? '退出专注，返回场景选择' : '专注日志（收起选择区）'}>
+                {logFocus ? '⤡ 退出专注' : '⤢ 专注日志'}
+              </button>
+            </div>
+            <div ref={logRef}
+              className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-5" style={{ background: 'rgb(var(--code-bg))' }}>
             {events.length === 0 ? (
-              <p className="text-gray-600">勾选场景后点击「执行选中」；或从计划装载整组执行…</p>
+              <p className="text-gray-600">勾选场景后点击「执行选中」；或在高级模式按范围执行…</p>
             ) : (
               events.map((e, i) => {
                 if (e.type === 'started') return <div key={i} className="text-info mt-2">▶ {e.cmd}</div>;
@@ -509,6 +534,7 @@ export default function RunControl() {
                 return <div key={i} className={cls}>{line}</div>;
               })
             )}
+            </div>
           </div>
         )}
       </div>
@@ -519,11 +545,9 @@ export default function RunControl() {
           <div className="grid grid-cols-[88px_1fr] gap-y-2 gap-x-3">
             <span className="text-gray-500">执行方式</span>
             <span className="text-gray-200">
-              {loadedPlanId && !selDirty
-                ? `📋 计划路径：${plans.find(p => p.id === loadedPlanId)?.name || loadedPlanId}`
-                : selectedIds.size > 0
-                  ? '☑️ 勾选直跑（pytest -k 表达式）'
-                  : `🎯 范围执行：${SCOPES.find(s => s.value === scope)?.label || scope}${target ? ` · ${target}` : ''}`}
+              {selectedIds.size > 0
+                ? '☑️ 勾选直跑（pytest -k 表达式）'
+                : `🎯 范围执行：${SCOPES.find(s => s.value === scope)?.label || scope}${target ? ` · ${target}` : ''}`}
             </span>
             <span className="text-gray-500">环境</span>
             <span className="text-gray-200 font-mono">sit</span>

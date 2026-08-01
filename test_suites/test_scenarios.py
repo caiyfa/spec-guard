@@ -23,7 +23,7 @@ if SG_ROOT not in sys.path:
 from engine.scenario_loader import load_scenarios           # noqa: E402
 from engine.scenario_runner import run_with_deps            # noqa: E402
 from engine.execution_record import (                        # noqa: E402
-    VERDICT_PASS, VERDICT_SKIP, VERDICT_BLOCKED,
+    VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIP, VERDICT_BLOCKED,
 )
 
 SCENARIOS = load_scenarios(os.path.join(SG_ROOT, "scenarios"))
@@ -42,6 +42,19 @@ def _params():
 def test_scenario(scenario, rctx):
     """每个场景一个用例：run_with_deps 内部完成依赖闭包回溯执行"""
     record = run_with_deps(scenario, rctx)
+
+    # K-051：闭包内失败上游的原因打进 stdout（-s 实时流入执行日志）——
+    # 否则日志只有「本场景未执行」一句，排错要翻 run.json 才能看到上游为何 FAIL
+    if record.verdict == VERDICT_BLOCKED:
+        try:
+            upstream_ids = rctx.graph.closure(scenario.id)
+        except Exception:
+            upstream_ids = []
+        for r in rctx.records:
+            if (r.scenario_id in upstream_ids and r.scenario_id != scenario.id
+                    and r.verdict == VERDICT_FAIL and getattr(r, "failure", None)):
+                print(f"[SpecGuard] 上游 {r.scenario_id} FAIL: "
+                      f"{r.failure.get('message', '')[:300]}", flush=True)
 
     if record.verdict == VERDICT_SKIP:
         pytest.skip(record.skip_reason or "场景跳过")

@@ -59,6 +59,34 @@ def test_tool_unknown_rejected():
         step_tool({"use": "no_such_tool"}, rctx, {}, record)
 
 
+# ══════════════════════════════════════════════════════════
+# set_var 顶层命名空间注入（K-051：format_spec §3.4 契约——无 save 裸名引用）
+# ══════════════════════════════════════════════════════════
+
+def test_set_var_merges_into_ns_without_save():
+    """无 save 时 vars 注入顶层 ns（{{activity_name}} 裸名可解析）——规范契约"""
+    from engine.scenario_runner import step_set_var
+    ns = {"suffix": "001"}
+    record = ExecutionRecord(scenario_id="T-002")
+    result = step_set_var({"vars": {"activity_name": "SG-{{suffix}}", "corp_code": "1002"}},
+                          SimpleNamespace(), ns, record)
+    assert ns["activity_name"] == "SG-001"
+    assert ns["corp_code"] == "1002"
+    assert result["corp_code"] == "1002"  # 返回值保留（带 save 用法兼容）
+
+
+def test_set_var_with_save_still_works():
+    """带 save 用法不回归：ns[save] 由 flow 循环写入（此处模拟），顶层同样可用"""
+    from engine.scenario_runner import step_set_var
+    ns = {}
+    record = ExecutionRecord(scenario_id="T-003")
+    values = step_set_var({"vars": {"no": "90024713"}}, SimpleNamespace(), ns, record)
+    # flow 循环的等价行为：save 名注入
+    ns["emp"] = values
+    assert ns["emp"]["no"] == "90024713"
+    assert ns["no"] == "90024713"  # K-051 后顶层也可达（与规范一致，无副作用）
+
+
 def test_tool_missing_use_rejected():
     rctx, _ = _fake_rctx_with_tool()
     record = ExecutionRecord(scenario_id="T-001")

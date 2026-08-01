@@ -294,8 +294,16 @@ def step_call(body, rctx, ns, record):
 
 
 def step_set_var(body, rctx, ns, record):
-    """变量设置：{save: emp, vars: {no: '90024713', name: '张超'}}"""
+    """变量设置：{save: emp, vars: {no: '90024713', name: '张超'}}
+
+    K-051：vars 直接注入顶层命名空间——format_spec §3.4 契约即
+    `tool: {use: set_var, with: {vars: {activity_name: ...}}}` 后以 `{{activity_name}}`
+    裸名引用（无 save）；此前无 save 时返回值被 flow 循环丢弃，变量全部未定义
+    （IS-PREP-002/003 即按规范书写却 FAIL: 变量未定义）。带 save 的旧用法
+    （{{emp.no}}）不受影响——ns[save] 仍由 flow 循环写入。
+    """
     values = {k: render(v, ns) for k, v in (body.get("vars") or {}).items()}
+    ns.update(values)
     record.steps.append(StepTrace(type="set_var", note=f"设置变量: {values}"))
     return values
 

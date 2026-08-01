@@ -11,6 +11,7 @@ asyncio 子进程直接 NotImplementedError；Popen 不依赖事件循环 flavor
 import asyncio
 import json
 import os
+import secrets
 import signal
 import subprocess
 import sys
@@ -24,6 +25,15 @@ from fastapi import WebSocket
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # 仓库根
 
 
+def _new_run_id() -> str:
+    """K-050：任务编号——EX- 固定前缀（EXecution）+ 8 位随机 hex。
+
+    替代时间戳 run_id：排错时报编号即可唯一定位（报告目录/日志文件/run.json 同名），
+    不再靠「大概几点跑的」回忆。collision 空间 32bit，单用户串行+队列场景足够。
+    """
+    return "EX-" + secrets.token_hex(4)
+
+
 def _get_reports_root() -> Path:
     """获取报告目录（优先工作区 .specguard/reports/，无工作区回退 SG_ROOT/reports/）。"""
     try:
@@ -33,20 +43,24 @@ def _get_reports_root() -> Path:
         return SG_ROOT / "reports"
 
 
-def _spawn_pytest(cmd: list[str], env: str) -> subprocess.Popen:
+def _spawn_pytest(cmd: list[str], env: str, run_id: str = "") -> subprocess.Popen:
     """创建 pytest 子进程（K-047：subprocess.Popen，不依赖事件循环 flavor）。
 
     uvicorn --reload 在 Windows 给服务端 SelectorEventLoop（其 use_subprocess 语义
     与直觉相反：reload 模式反而返回 Selector），asyncio.create_subprocess_exec 在该
     loop 上直接 NotImplementedError（空消息）。Popen 在任何 loop 下都可用。
     text 模式 + 行缓冲：读线程按行迭代即可。
+    K-050：SG_RUN_ID 透传——引擎报告目录与任务编号同名（报告/日志/run.json 一线索）。
     """
+    child_env = {**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())}
+    if run_id:
+        child_env["SG_RUN_ID"] = run_id
     return subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         cwd=str(SG_ROOT),
-        env={**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())},
+        env=child_env,
         text=True, encoding="utf-8", errors="replace", bufsize=1,
     )
 
@@ -74,6 +88,7 @@ class RunManager:
         self.current_batch: list[str] = []        # 当前批次场景
         self.paused_at: str = ""                  # 暂停在哪个场景前
         self._resume_event: Optional[asyncio.Event] = None
+        self._run_dir: Optional[Path] = None      # K-050：报告目录（output.log 落盘处）
 
     @property
     def is_running(self) -> bool:
@@ -165,11 +180,14 @@ class RunManager:
         if skip_upstream_verify:
             cmd += ["--skip-upstream-verify"]
 
-        self.run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self.run_id = _new_run_id()
         self.plan_id = plan_id
         self.started_at = datetime.now().isoformat(timespec="seconds")
         self.status = "running"
         self._output_lines = []
+        # K-050：执行日志落盘——与引擎报告同目录（{reports}/{run_id}/output.log）
+        self._run_dir = _get_reports_root() / self.run_id
+        self._run_dir.mkdir(parents=True, exist_ok=True)
         self._scope = scope  # D2：通知推送豁免 engine_modes 用
         if queue_id is None:
             user_store.audit(emp_no, "trigger_run", scope, f"queue_id={self._queue_id}")
@@ -181,10 +199,11 @@ class RunManager:
             "cmd": " ".join(cmd),
             "started_at": self.started_at,
         })
+        self._write_output_log(f"> {self.run_id} | env={env} | {' '.join(cmd)}")
 
         # 启动子进程（K-047：Popen；失败时队表标记 failed，不再遗留 running 卡死队列）
         try:
-            self.process = _spawn_pytest(cmd, env)
+            self.process = _spawn_pytest(cmd, env, self.run_id)
         except Exception as e:
             self.status = "idle"
             if self._queue_id:
@@ -215,9 +234,36 @@ class RunManager:
         })
         self.process = None
         # D2 修复：执行完成后按注册表自动推送飞书通知（fail/drift/skip 事件）
+        self._record_failures()  # K-052：失败索引（场景×任务号×原因台账）
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()
+
+    def _write_output_log(self, text: str):
+        """K-050：执行日志落盘（{reports}/{run_id}/output.log）——此前 stdout 流只存内存，
+        后端重启即失，排错只能靠回忆。与引擎报告同目录，报任务编号即可拿到完整现场。"""
+        if not self._run_dir:
+            return
+        try:
+            with open(self._run_dir / "output.log", "a", encoding="utf-8") as f:
+                f.write(text + "\n")
+        except Exception:
+            pass  # 落盘失败不影响执行与直播
+
+    def _record_failures(self):
+        """K-052：执行完成后把失败场景写入失败索引（failures/index.jsonl）——
+        「场景 × 任务号 × 失败原因」台账，Agent list_failures 工具与人工追溯共用。"""
+        try:
+            from services import failure_index
+            root = _get_reports_root()
+            n = failure_index.append_failures(root, self.run_id)
+            # 断点分批执行的报告在 {run_id}-bN 目录，逐批收录
+            for batch_dir in sorted(root.glob(f"{self.run_id}-b*")):
+                n += failure_index.append_failures(root, batch_dir.name)
+            if n:
+                self._write_output_log(f"> {self.run_id} | {n} 条失败已记入 failures/index.jsonl")
+        except Exception:
+            pass  # 索引失败不影响执行结论
 
     async def _drain_output(self, proc: subprocess.Popen):
         """读线程逐行推入 asyncio.Queue 并广播，直到进程输出 EOF（K-047 共用模式）。"""
@@ -240,6 +286,7 @@ class RunManager:
             if text is None:
                 break
             self._output_lines.append(text)
+            self._write_output_log(text)
             event = self._parse_line(text)
             await self.broadcast({"type": "output", "line": text, **event})
 
@@ -310,13 +357,16 @@ class RunManager:
         self.current_emp_no = emp_no
         self.current_workspace = workspace
 
-        self.run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self.run_id = _new_run_id()
         self.plan_id = plan_id
         self.breakpoints = breakpoints
         self.pending_scenarios = list(scenario_ids)
         self.completed_scenarios = []
         self.started_at = datetime.now().isoformat(timespec="seconds")
         self._output_lines = []
+        # K-050：执行日志落盘目录（与引擎报告同目录）
+        self._run_dir = _get_reports_root() / self.run_id
+        self._run_dir.mkdir(parents=True, exist_ok=True)
 
         # 无断点 → 直接全量执行
         if not breakpoints:
@@ -403,8 +453,10 @@ class RunManager:
             cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short", "-s", "-k", target]
             if getattr(self, "_strict_deps", False):
                 cmd += ["--strict-deps"]
+            self._write_output_log(f"> batch {batch_idx} | {' '.join(cmd)}")
             try:
-                self.process = _spawn_pytest(cmd, env)
+                # 批次报告目录加 -bN 后缀：同属一个任务编号族，又避免批次间 run.json 相互覆盖
+                self.process = _spawn_pytest(cmd, env, f"{self.run_id}-b{batch_idx}")
             except Exception as e:
                 await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {type(e).__name__}: {e}"})
                 continue
@@ -429,6 +481,7 @@ class RunManager:
         })
         self.process = None
         # D2 修复：断点分段执行完成后同样自动推送通知
+        self._record_failures()  # K-052：失败索引（场景×任务号×原因台账）
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()

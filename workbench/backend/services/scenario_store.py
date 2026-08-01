@@ -276,12 +276,27 @@ def validate_dag() -> dict:
     return {"ok": len(cycles) == 0, "cycles": cycles}
 
 
+def _reports_root() -> Path:
+    """报告目录（K-050：工作区 .specguard/reports/ 优先，无工作区回退 SG_ROOT/reports/）。
+
+    此前硬编码 SG_ROOT/reports——多工作区下执行报告落在工作区 .specguard/reports/，
+    历史/详情/用例三个读取端全部 404（EX- 任务编号验证时暴露）。
+    与 runner._get_reports_root 同一策略。
+    """
+    try:
+        from specstd.workspace import reports_dir
+        return reports_dir()
+    except Exception:
+        return REPORTS_ROOT
+
+
 def list_reports(limit: int = 20) -> list[dict]:
     """历史运行列表（读 reports/ 目录）"""
-    if not REPORTS_ROOT.is_dir():
+    reports_root = _reports_root()
+    if not reports_root.is_dir():
         return []
     runs = []
-    for d in sorted(REPORTS_ROOT.iterdir(), reverse=True):
+    for d in sorted(reports_root.iterdir(), reverse=True):
         run_json = d / "run.json"
         if run_json.is_file():
             import json
@@ -305,8 +320,7 @@ def list_reports(limit: int = 20) -> list[dict]:
 def get_report(run_id: str) -> Optional[dict]:
     """读取单次运行的 run.json"""
     import json
-    run_dir = REPORTS_ROOT / run_id
-    run_json = run_dir / "run.json"
+    run_json = _reports_root() / run_id / "run.json"
     if not run_json.is_file():
         return None
     with open(run_json, "r", encoding="utf-8") as f:
@@ -316,7 +330,7 @@ def get_report(run_id: str) -> Optional[dict]:
 def get_case(run_id: str, case_file: str) -> Optional[dict]:
     """读取单场景详情 JSON"""
     import json
-    case_path = REPORTS_ROOT / run_id / case_file
+    case_path = _reports_root() / run_id / case_file
     if not case_path.is_file():
         return None
     with open(case_path, "r", encoding="utf-8") as f:

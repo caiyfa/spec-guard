@@ -186,6 +186,22 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 
 ---
 
+## 故障排查（按任务号，K-050/K-052）
+
+每次执行控制触发的运行都有**任务号**（`EX-` + 8 位随机 hex，如 `EX-9e31916f`）。排错以任务号为唯一线索，不要靠时间回忆：
+
+| 产物 | 位置 | 内容 |
+|------|------|------|
+| 执行日志 | `{workspace}/.specguard/reports/{EX-xxx}/output.log` | pytest 全量 stdout，含 `[SpecGuard] METHOD path → status \| trace={ifelc-trace_id}` 调用链锚点 |
+| 结构化报告 | 同目录 `run.json` / `report.md` / `cases/*.json` | verdict 分布、失败 category/message、断言差异、步骤轨迹 |
+| 失败索引 | `{workspace}/.specguard/reports/failures/index.jsonl` | 「场景 × 任务号 × 失败原因」台账（每次运行完成自动追加，幂等） |
+
+**排障动线**：`failures/index.jsonl` 按场景反查任务号 → `output.log` 看调用链（trace_id 可在网关全链追踪）→ `cases/*.json` 看断言差异。
+**Agent 工具链**（对话中排查/优化失败场景）：`list_failures`（某场景最近在什么任务号失败）→ `read_run_log`（任务号取日志）→ `read_run_report`（断言差异）→ `db_evidence`（DB 校对）。断点分批执行的报告在 `{EX-xxx}-b{N}/` 批次目录。
+K-050 之前的旧报告只有时间戳目录 + run.json/report.md（无 output.log）。
+
+---
+
 ## 多系统接入（systems/{system}/ 适配包契约）
 
 接入新被测系统 = 新增 `systems/{system}/` 子包，需提供：

@@ -105,8 +105,12 @@ def scenario_graph():
 
 @pytest.fixture(scope="session")
 def rctx(registry, env_config, token_provider, scenario_graph, sg_system, pytestconfig, db):
-    """运行上下文：session 结束时统一落盘 JSON + MD 报告"""
-    run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    """运行上下文：session 结束时统一落盘 JSON + MD 报告
+
+    K-050：SG_RUN_ID 环境变量优先——工作台执行控制传入任务编号（EX-xxxxxxxx），
+    报告目录与任务编号同名；CLI 直跑回退时间戳。
+    """
+    run_id = os.environ.get("SG_RUN_ID") or datetime.now().strftime("%Y-%m-%d_%H%M%S")
     started_at = datetime.now().isoformat(timespec="seconds")
     run_dir = os.path.join(REPORTS_ROOT, run_id)
     os.makedirs(run_dir, exist_ok=True)

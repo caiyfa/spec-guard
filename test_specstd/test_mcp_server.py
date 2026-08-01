@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 21  # K-046: 新增 suggest_deps 后 20→21
+        assert len(ALL_TOOLS) == 23  # K-052: 新增 list_failures/read_run_log 后 21→23
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -60,7 +60,8 @@ class TestToolRegistration:
                      "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
                      "promote_drafts",  # K-021⑥: 批量入库
                      "edit_dependency",  # K-027: DAG 依赖边编排
-                     "suggest_deps"}  # K-046: 依赖建议（确定性引擎）
+                     "suggest_deps",  # K-046: 依赖建议（确定性引擎）
+                     "list_failures", "read_run_log"}  # K-052: 失败索引 + 按任务号读日志
         assert names == expected
 
 
