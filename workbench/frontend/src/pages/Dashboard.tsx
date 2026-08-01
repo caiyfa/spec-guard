@@ -4,7 +4,8 @@ import type { JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useJsTokens } from '../theme';
 import { scenariosApi, runsApi, referenceApi, type Scenario, type RunSummary } from '../api';
 
 type DashTab = 'overview' | 'spec';
@@ -74,7 +75,7 @@ export default function Dashboard() {
                 { label: '阻塞', value: stats.blocked, color: 'text-blocked' },
                 { label: '总计', value: stats.total, color: 'text-info' },
               ].map((c) => (
-                <div key={c.label} className="bg-surface-2 border border-border rounded-lg p-4">
+                <div key={c.label} className="card-hover">
                   <div className={`text-2xl font-bold font-mono ${c.color}`}>{c.value}</div>
                   <div className="text-xs text-gray-500 mt-1">{c.label}</div>
                 </div>
@@ -119,7 +120,7 @@ export default function Dashboard() {
                     <td className="px-4 py-2 text-xs text-gray-400">{s.tags.join(', ')}</td>
                     <td className="px-4 py-2 text-xs">
                       {s.depends_on.length > 0 ? (
-                        <span className={s.depends_on.some(d => d.mode === 'exclusive') ? 'text-[#f0883e]' : 'text-gray-500'}>
+                        <span className={s.depends_on.some(d => d.mode === 'exclusive') ? 'text-warn' : 'text-gray-500'}>
                           ⛓ {s.depends_on.map(d => d.id).join(', ')}
                         </span>
                       ) : <span className="text-gray-600">—</span>}
@@ -241,6 +242,7 @@ function extractToc(md: string): { id: string; text: string; level: number }[] {
 /** 可折叠代码块 */
 function CollapsibleCodeBlock({ language, children }: { language: string; children: string }) {
   const [collapsed, setCollapsed] = useState(false);
+  const tokens = useJsTokens();  // K-043
   const lines = children.split('\n').length;
   const preview = children.split('\n').slice(0, 3).join('\n');
 
@@ -254,16 +256,16 @@ function CollapsibleCodeBlock({ language, children }: { language: string; childr
         </button>
       </div>
       {collapsed ? (
-        <div className="bg-[#0a0e14] border border-border rounded-b-lg px-3 py-2">
+        <div className="border border-border rounded-b-lg px-3 py-2" style={{ background: tokens.codeBg }}>
           <pre className="text-[11px] text-gray-500 font-mono">{preview}{lines > 3 ? '\n…' : ''}</pre>
         </div>
       ) : (
         <SyntaxHighlighter
           language={language === 'yaml' ? 'yaml' : language}
-          style={oneDark}
+          style={tokens.dark ? oneDark : oneLight}
           customStyle={{
             margin: 0, borderRadius: '0 0 8px 8px',
-            border: '1px solid #2d3646', borderTop: 'none',
+            border: 'none',
             fontSize: '11px', lineHeight: '1.5',
           }}
           showLineNumbers

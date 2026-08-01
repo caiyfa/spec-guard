@@ -2,6 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import './styles/themes.css'  // K-043：四主题变量（独立 CSS 文件，vite 原生处理）
+import { initTheme } from './theme'
+
+initTheme()  // K-043：主题对齐兜底（index.html 内联脚本已防 FOUC）
 
 /**
  * ResizeObserver 兜底：CDP 无帧环境（自动化浏览器/jsdom）下原生 RO 不触发回调，

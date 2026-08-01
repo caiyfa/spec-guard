@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SpecGuard</title>
+    <script>
+      // K-043：防 FOUC——CSS 加载前按已存主题预设 data-theme + 背景色（与 src/theme.ts 键名一致）
+      (function () {
+        var id = localStorage.getItem('sg_theme') || 'midnight';
+        if (!/^(midnight|dusk|oled|light|frost)$/.test(id)) id = 'midnight';
+        document.documentElement.dataset.theme = id;
+        var bg = { midnight: '#0d1117', dusk: '#120e1c', oled: '#000000', light: '#f6f8fa', frost: '#101824' }[id];
+        document.documentElement.style.background = bg;
+        // K-044：背景图恢复（防刷新闪烁）
+        var img = localStorage.getItem('sg_bg_image');
+        if (img) {
+          var t = parseInt(localStorage.getItem('sg_bg_transparency') || '50', 10);
+          var bp = parseInt(localStorage.getItem('sg_bg_blur_pct') || '0', 10);
+          document.documentElement.dataset.bg = '1';
+          document.documentElement.style.setProperty('--bg-image', 'url("' + img + '")');
+          document.documentElement.style.setProperty('--bg-opacity', String(1 - t / 100));
+          document.documentElement.style.setProperty('--bg-blur', (bp * 0.2).toFixed(1) + 'px');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

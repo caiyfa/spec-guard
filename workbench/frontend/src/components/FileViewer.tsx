@@ -14,10 +14,11 @@ import { useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getFileExt } from './FileTree';
 import OfficeViewer from './OfficeViewer';
 import MermaidBlock from './MermaidBlock';
+import { useJsTokens } from '../theme';
 
 // K-036：办公文档走保真预览（SheetJS/pdf 原生/mammoth），不再用转换文本渲染
 const OFFICE_EXTS = new Set(['.xlsx', '.pdf', '.docx']);
@@ -140,14 +141,15 @@ function YamlViewer({ content }: { content: string }) {
   const [showOutline, setShowOutline] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const outline = useMemo(() => extractYamlOutline(content), [content]);
+  const tokens = useJsTokens();  // K-043：高亮主题与代码底色跟随主题
 
   return (
     <div className="h-full flex min-h-0 relative">
       <div ref={containerRef} className="flex-1 min-w-0 h-full overflow-auto">
         <SyntaxHighlighter
           language="yaml"
-          style={vscDarkPlus}
-          customStyle={{ margin: 0, background: '#0a0e14', padding: '16px', fontSize: '12px', minHeight: '100%' }}
+          style={tokens.dark ? vscDarkPlus : oneLight}
+          customStyle={{ margin: 0, background: tokens.codeBg, padding: '16px', fontSize: '12px', minHeight: '100%' }}
           showLineNumbers
           wrapLines
           lineProps={(n: number) => ({ id: `yl-${n}` }) as any}
@@ -176,6 +178,7 @@ interface FileViewerProps {
 
 export default function FileViewer({ path, content, loading, format }: FileViewerProps) {
   const ext = useMemo(() => getFileExt(path), [path]);
+  const tokens = useJsTokens();  // K-043
 
   if (loading) {
     return (
@@ -229,10 +232,10 @@ export default function FileViewer({ path, content, loading, format }: FileViewe
       <div className="h-full overflow-auto">
         <SyntaxHighlighter
           language={lang}
-          style={vscDarkPlus}
+          style={tokens.dark ? vscDarkPlus : oneLight}
           customStyle={{
             margin: 0,
-            background: '#0a0e14',
+            background: tokens.codeBg,
             padding: '16px',
             fontSize: '12px',
             minHeight: '100%',

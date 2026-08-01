@@ -13,6 +13,7 @@ import StepFormCard, { type StepData } from './StepFormCard';
 import type { LocalVar } from './VariablePopover';
 import type { EmpRole, OracleRef, UpstreamVar, EnvVar, ScenarioDetail } from '../api';
 import { referenceApi } from '../api';
+import { useJsTokens } from '../theme';
 
 interface Props {
   scenarioId: string;
@@ -84,6 +85,7 @@ export default function ScenarioFormEditor({
   const [yamlText, setYamlText] = useState('');
   const [tab, setTab] = useState<TabKey>('flow');
   const [mode, setMode] = useState<'form' | 'yaml'>('form');
+  const tokens = useJsTokens();  // K-043：Monaco 主题跟随
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -191,7 +193,7 @@ export default function ScenarioFormEditor({
       {/* ── YAML 模式 ── */}
       {mode === 'yaml' && (
         <div className="flex-1 min-h-0">
-          <Editor language="yaml" theme="vs-dark" value={yamlText}
+          <Editor language="yaml" theme={tokens.monaco} value={yamlText}
             onChange={(v) => setYamlText(v || '')}
             options={{ fontSize: 12, minimap: { enabled: false }, wordWrap: 'on', scrollBeyondLastLine: false }} />
         </div>
@@ -465,7 +467,7 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
           ))}
         </select>
         <button onClick={() => onChange({ ...dep, mode: dep.mode === 'shared' ? 'exclusive' : 'shared' })}
-          className={`text-[10px] px-2 py-1 rounded border flex-shrink-0 ${dep.mode === 'exclusive' ? 'border-[#f0883e] text-[#f0883e] bg-[#f0883e]/10' : 'border-border text-gray-500'}`}>
+          className={`text-[10px] px-2 py-1 rounded border flex-shrink-0 ${dep.mode === 'exclusive' ? 'border-warn text-warn bg-warn/10' : 'border-border text-gray-500'}`}>
           {dep.mode}
         </button>
         <button onClick={onRemove} className="text-gray-600 hover:text-fail text-xs flex-shrink-0">✕</button>

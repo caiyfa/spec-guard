@@ -18,12 +18,13 @@ import type { DagData, Scenario, EmpRole, OracleRef, UpstreamVar, EnvVar, TestPl
 import ScenarioFormEditor from '../components/ScenarioFormEditor';
 import ScenarioNode, { CATEGORY_META } from '../components/ScenarioNode';
 import { layoutDagByELK, NODE_WIDTH, NODE_HEIGHT } from '../utils/elkLayout';
+import { useJsTokens } from '../theme';
 
 const nodeTypes = { scenario: ScenarioNode };
 
 /** 边状态配色（match 低调灰 / minor 蓝 / major 琥珀 / orphan 红虚线） */
 const EDGE_STATUS_STYLE: Record<string, { stroke: string; dash?: string }> = {
-  match: { stroke: '#2d3646' },
+  match: { stroke: '' },  // match 走 tokens.edgeStroke（K-043）
   minor_drift: { stroke: '#58a6ff' },
   major_drift: { stroke: '#d29922' },
   orphan: { stroke: '#f85149', dash: '6 4' },
@@ -49,6 +50,7 @@ function isReachable(from: string, to: string, edges: Edge[]): boolean {
 }
 
 export default function DagEditor() {
+  const tokens = useJsTokens();  // K-043
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -115,7 +117,7 @@ export default function DagEditor() {
       return {
         id: e.id, source: e.source, target: e.target, animated: e.animated,
         label: e.label || undefined,
-        style: { stroke: st.stroke, strokeDasharray: st.dash },
+        style: { stroke: (e.status && e.status !== 'match') ? st.stroke : tokens.edgeStroke, strokeDasharray: st.dash },
       };
     });
 
@@ -343,10 +345,11 @@ export default function DagEditor() {
             nodeTypes={nodeTypes}
             deleteKeyCode={['Backspace', 'Delete']}
             fitView proOptions={{ hideAttribution: true }}
+            colorMode={tokens.dark ? 'dark' : 'light'}
           >
-            <Background color="#2d3646" gap={20} />
+            <Background color={tokens.rfBackground} gap={20} />
             <Controls />
-            <MiniMap nodeColor="#161b22" maskColor="rgba(13,17,23,0.8)" style={{ background: '#0d1117' }} />
+            <MiniMap nodeColor={tokens.minimapNode} maskColor={tokens.minimapMask} style={{ background: tokens.minimapBg }} />
           </ReactFlow>
         </div>
 

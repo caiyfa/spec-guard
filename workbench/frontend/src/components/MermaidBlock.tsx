@@ -6,19 +6,21 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useTheme } from '../theme';
 
 let _seq = 0;
 
 export default function MermaidBlock({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
+  const theme = useTheme();  // K-043：mermaid 主题跟随（dark/default）
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const mermaid = (await import('mermaid')).default;
-        mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
+        mermaid.initialize({ startOnLoad: false, theme: theme.dark ? 'dark' : 'default', securityLevel: 'strict' });
         const { svg } = await mermaid.render(`mmd-${++_seq}`, code);
         if (alive && ref.current) ref.current.innerHTML = svg;
       } catch (e: any) {
@@ -26,7 +28,7 @@ export default function MermaidBlock({ code }: { code: string }) {
       }
     })();
     return () => { alive = false; };
-  }, [code]);
+  }, [code, theme.dark]);
 
   if (error) {
     return (

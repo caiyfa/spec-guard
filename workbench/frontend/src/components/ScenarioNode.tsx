@@ -5,6 +5,7 @@
  * Handle：左 target / 右 source（ELK RIGHT 方向，支撑 onConnect 连线建依赖）
  */
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { useJsTokens } from '../theme';
 
 export const CATEGORY_META: Record<string, { icon: string; label: string; color: string }> = {
   producer: { icon: '📤', label: '产出', color: '#3fb950' },
@@ -29,15 +30,16 @@ export type ScenarioNodeType = Node<{
 export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeType>) {
   const cat = CATEGORY_META[data.category || 'validator'] || CATEGORY_META.validator;
   const borderColor = (data.verdict && VERDICT_COLORS[data.verdict]) || cat.color + '66';
+  const tokens = useJsTokens();  // K-043：节点配色跟随主题
   return (
     <div
       className="rounded-lg px-2.5 py-2 text-left"
       style={{
         width: 220,
         minHeight: 88,
-        background: '#161b22',
+        background: tokens.nodeBg,
         border: `2px solid ${selected ? '#58a6ff' : borderColor}`,
-        color: '#e6edf3',
+        color: tokens.nodeText,
         fontSize: 11,
         boxShadow: selected ? '0 0 0 2px rgba(88,166,255,0.25)' : undefined,
       }}
@@ -49,7 +51,7 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
         {data.version && (
           <span
             className="ml-auto text-[9px] px-1 py-px rounded font-mono"
-            style={{ color: '#9da7b3', background: '#21262d', border: '1px solid #30363d' }}
+            style={{ color: tokens.nodeSubText, background: tokens.nodeSubBg, border: `1px solid ${tokens.edgeStroke}` }}
             title={`契约版本 v${data.version}`}
           >
             v{data.version}
@@ -60,7 +62,7 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
         <div
           className="mt-1 text-[10px] leading-tight overflow-hidden"
           style={{
-            color: '#9da7b3',
+            color: tokens.nodeSubText,
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',

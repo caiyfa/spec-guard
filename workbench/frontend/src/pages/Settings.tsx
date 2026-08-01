@@ -1,6 +1,7 @@
 /** Settings — 环境配置统一设置页面（Tab 布局：数据库 / 模型配置 / YAML / SSO） */
 import React, { useEffect, useState, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
+import { useJsTokens } from '../theme';
 import { referenceApi, modelApi, settingsApi } from '../api';
 import type { ModelConfig } from '../api';
 
@@ -358,6 +359,7 @@ function _toForm(m: ModelConfig) {
 // ══════════════════════════════════════════════════════════
 
 function YamlTab({ raw, setRaw, loading }: { raw: string; setRaw: (v: string) => void; loading: boolean }) {
+  const tokens = useJsTokens();  // K-043
   const insertTemplate = (template: string) => setRaw(raw + '\n' + template);
 
   return (
@@ -366,7 +368,7 @@ function YamlTab({ raw, setRaw, loading }: { raw: string; setRaw: (v: string) =>
         {loading ? (
           <div className="h-full flex items-center justify-center text-gray-500">加载中…</div>
         ) : (
-          <Editor language="yaml" theme="vs-dark" value={raw}
+          <Editor language="yaml" theme={tokens.monaco} value={raw}
             onChange={(v) => setRaw(v || '')}
             options={{ fontSize: 13, minimap: { enabled: false }, wordWrap: 'on', scrollBeyondLastLine: false }} />
         )}

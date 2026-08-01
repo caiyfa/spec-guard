@@ -17,6 +17,7 @@ import Drafts from './pages/Drafts';
 import Login from './pages/Login';
 import AdminUsers from './pages/AdminUsers';
 import WorkspaceSelector from './components/WorkspaceSelector';
+import ThemeSwitcher from './components/ThemeSwitcher';
 import { authApi, session } from './api';
 import type { CurrentUser } from './api';
 
@@ -223,7 +224,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
       >
         {/* Logo 区 */}
         <div className="p-4 border-b border-border flex-shrink-0">
-          <h1 className="text-sm font-bold text-info whitespace-nowrap">🛡 SpecGuard</h1>
+          <h1 className="text-sm font-bold brand-gradient whitespace-nowrap">🛡 SpecGuard</h1>
           <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">测试流水线工作台</p>
         </div>
 
@@ -323,6 +324,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <WorkspaceSelector user={user} />
           </div>
           <div className="flex items-center gap-3 text-sm">
+            <ThemeSwitcher />
             <span className="text-gray-300">{user.name}</span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               user.role === 'admin' ? 'bg-purple-900/50 text-purple-300'

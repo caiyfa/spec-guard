@@ -309,7 +309,7 @@ export default function RunControl() {
 
           {/* 输出尾部 */}
           {breakpointHit.context?.output_tail && (
-            <details className="bg-[#0a0e14] rounded-lg">
+            <details className="rounded-lg" style={{ background: 'rgb(var(--code-bg))' }}>
               <summary className="px-3 py-1.5 text-[10px] text-gray-500 cursor-pointer">📄 最近输出（{breakpointHit.context.output_tail.length} 行）</summary>
               <pre className="px-3 py-2 text-[10px] text-gray-400 font-mono max-h-32 overflow-y-auto">
                 {breakpointHit.context.output_tail.join('\n')}
@@ -355,7 +355,7 @@ export default function RunControl() {
         {/* 日志流 */}
         {showLog && (
           <div ref={logRef}
-            className="flex-1 min-w-0 bg-[#0a0e14] border border-border rounded-lg p-4 overflow-y-auto font-mono text-xs leading-5">
+            className="flex-1 min-w-0 border border-border rounded-lg p-4 overflow-y-auto font-mono text-xs leading-5" style={{ background: 'rgb(var(--code-bg))' }}>
             {events.length === 0 ? (
               <p className="text-gray-600">等待执行…</p>
             ) : (

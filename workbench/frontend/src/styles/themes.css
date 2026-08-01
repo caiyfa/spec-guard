@@ -1,0 +1,195 @@
+/**
+ * themes.css — K-043 四主题 CSS 变量引擎
+ *
+ * 所有颜色走变量（RGB 三元组，tailwind 以 rgb(var(--x) / <alpha-value>) 引用，
+ * 支持 /透明度 修饰）。切换主题 = <html data-theme="xxx">，全站零组件改动。
+ *
+ * gray 阶是文字层级变量（不是真实灰色）：深主题下 gray-300 是浅灰文字，
+ * 浅主题下 gray-300 是深灰文字——549 处 gray-* 类名因此无需修改。
+ */
+
+/* ── midnight 暗夜蓝（默认，GitHub-dark 精修）── */
+:root, [data-theme='midnight'] {
+  color-scheme: dark;
+  --surface-1: 13 17 23;      /* #0d1117 页面底 */
+  --surface-2: 22 27 34;      /* #161b22 卡片/面板 */
+  --surface-3: 33 40 53;      /* #212835 悬浮/输入框 */
+  --border: 45 54 70;         /* #2d3646 */
+  --info: 88 166 255;         /* #58a6ff */
+  --pass: 63 185 80;          /* #3fb950 */
+  --fail: 248 81 73;          /* #f85149 */
+  --skip: 210 153 34;         /* #d29922 */
+  --blocked: 137 87 229;      /* #8957e5 */
+  --warn: 240 136 62;         /* #f0883e */
+  /* 文字灰阶（浅→深）：主文字→弱化→占位 */
+  --gray-100: 243 246 249;
+  --gray-200: 230 237 243;
+  --gray-300: 201 209 217;
+  --gray-400: 157 167 179;
+  --gray-500: 125 135 148;
+  --gray-600: 90 100 112;
+  --gray-700: 66 75 86;
+  --gray-900: 8 11 16;
+  --overlay: 0 0 0;           /* 遮罩色（配 /60 透明度） */
+  --code-bg: 10 14 20;        /* #0a0e14 代码块底 */
+  --shadow: 0 4px 16px rgb(0 0 0 / 0.35);
+  --accent-soft: 88 166 255;  /* 渐变/光晕用 */
+}
+
+/* ── dusk 暮光紫 ── */
+[data-theme='dusk'] {
+  color-scheme: dark;
+  --surface-1: 18 14 28;      /* #120e1c */
+  --surface-2: 26 20 40;      /* #1a1428 */
+  --surface-3: 38 30 56;      /* #261e38 */
+  --border: 58 47 82;         /* #3a2f52 */
+  --info: 167 139 250;        /* #a78bfa 紫罗兰 */
+  --pass: 74 222 128;         /* #4ade80 */
+  --fail: 251 113 133;        /* #fb7185 */
+  --skip: 251 191 36;         /* #fbbf24 */
+  --blocked: 96 165 250;      /* #60a5fa 蓝紫互换角色 */
+  --warn: 251 146 60;         /* #fb923c */
+  --gray-100: 245 243 255;
+  --gray-200: 237 233 254;
+  --gray-300: 214 208 232;
+  --gray-400: 172 164 196;
+  --gray-500: 136 128 162;
+  --gray-600: 102 95 128;
+  --gray-700: 72 66 96;
+  --gray-900: 10 7 18;
+  --overlay: 8 5 16;
+  --code-bg: 14 10 24;        /* #0e0a18 */
+  --shadow: 0 4px 18px rgb(6 3 14 / 0.45);
+  --accent-soft: 167 139 250;
+}
+
+/* ── oled 墨黑 ── */
+[data-theme='oled'] {
+  color-scheme: dark;
+  --surface-1: 0 0 0;
+  --surface-2: 14 14 16;      /* #0e0e10 */
+  --surface-3: 26 26 30;      /* #1a1a1e */
+  --border: 44 44 50;         /* #2c2c32 */
+  --info: 96 205 255;         /* #60cdff 高对比亮蓝 */
+  --pass: 86 211 100;         /* #56d364 */
+  --fail: 255 110 103;        /* #ff6e67 */
+  --skip: 227 179 65;         /* #e3b341 */
+  --blocked: 158 110 240;     /* #9e6ef0 */
+  --warn: 245 154 86;         /* #f59a56 */
+  --gray-100: 250 250 250;
+  --gray-200: 245 245 245;
+  --gray-300: 214 214 214;
+  --gray-400: 168 168 168;
+  --gray-500: 132 132 132;
+  --gray-600: 98 98 98;
+  --gray-700: 70 70 70;
+  --gray-900: 4 4 5;
+  --overlay: 0 0 0;
+  --code-bg: 6 6 8;
+  --shadow: 0 4px 20px rgb(0 0 0 / 0.6);
+  --accent-soft: 96 205 255;
+}
+
+/* ── light 明亮白 ── */
+[data-theme='light'] {
+  color-scheme: light;
+  --surface-1: 246 248 250;   /* #f6f8fa 页面底 */
+  --surface-2: 255 255 255;   /* 卡片白 */
+  --surface-3: 238 242 246;   /* #eef2f6 悬浮/输入 */
+  --border: 208 215 224;      /* #d0d7e0 */
+  --info: 37 99 235;          /* #2563eb */
+  --pass: 22 163 74;          /* #16a34a */
+  --fail: 220 38 38;          /* #dc2626 */
+  --skip: 202 138 4;          /* #ca8a04 */
+  --blocked: 124 58 237;      /* #7c3aed */
+  --warn: 234 88 12;          /* #ea580c */
+  /* 灰阶语义反转：gray-200=最深主文字，gray-700=最浅弱化 */
+  --gray-100: 17 24 39;
+  --gray-200: 31 41 55;
+  --gray-300: 55 65 81;
+  --gray-400: 75 85 99;
+  --gray-500: 107 114 128;
+  --gray-600: 142 149 161;
+  --gray-700: 170 177 186;
+  --gray-900: 255 255 255;
+  --overlay: 15 23 42;
+  --code-bg: 246 248 250;     /* 浅底代码块 */
+  --shadow: 0 4px 14px rgb(15 23 42 / 0.10);
+  --accent-soft: 37 99 235;
+}
+
+/* ── frost 磨砂（玻璃拟态：半透明 surface + backdrop 模糊，配合背景图效果最佳）── */
+[data-theme='frost'] {
+  color-scheme: dark;
+  --surface-1: 16 24 36;      /* 深蓝灰（玻璃下透出背景图） */
+  --surface-2: 24 34 50;
+  --surface-3: 36 50 70;
+  --border: 70 90 115;
+  --info: 34 211 238;         /* #22d3ee 冰青 */
+  --pass: 74 222 128;
+  --fail: 251 113 133;
+  --skip: 251 191 36;
+  --blocked: 129 140 248;     /* #818cf8 冰蓝紫 */
+  --warn: 251 146 60;
+  --gray-100: 240 249 255;
+  --gray-200: 224 238 247;
+  --gray-300: 196 216 229;
+  --gray-400: 158 184 201;
+  --gray-500: 124 152 171;
+  --gray-600: 92 120 139;
+  --gray-700: 64 90 108;
+  --gray-900: 8 14 22;
+  --overlay: 4 8 14;
+  --code-bg: 12 18 28;
+  --shadow: 0 8px 32px rgb(2 6 12 / 0.45);
+  --accent-soft: 34 211 238;
+}
+
+/* 磨砂质感：主要容器半透明 + 背景模糊（specificity 压过 utility） */
+[data-theme='frost'] body,
+[data-theme='frost'] .bg-surface-2,
+[data-theme='frost'] .bg-surface-3,
+[data-theme='frost'] .card,
+[data-theme='frost'] aside,
+[data-theme='frost'] header {
+  background-color: rgb(var(--surface-2) / 0.55);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+[data-theme='frost'] body { background-color: rgb(var(--surface-1) / 0.45); }
+[data-theme='frost'] .bg-surface-3 { background-color: rgb(var(--surface-3) / 0.5); }
+
+/* ── K-044：自定义背景图层（三层模型，仅 html[data-bg='1'] 时生效） ──
+   层叠：body::before 图片层(z 0) → body::after 主题罩层(z 0，压图保可读) → #root 内容(z 1)。
+   教训：负 z-index 会让图片画在 body 自身背景之下被彻底盖住（首版 bug）。 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: var(--bg-opacity, 0.5);       /* JS 侧由「透明度」换算：opacity = 1 - 透明度 */
+  filter: blur(var(--bg-blur, 0px));
+  pointer-events: none;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+html[data-bg='1'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: rgb(var(--surface-1) / 0.62);   /* 罩层：保证前景可读，磨砂主题更透 */
+  pointer-events: none;
+}
+html[data-bg='1'][data-theme='frost'] body::after {
+  background: rgb(var(--surface-1) / 0.28);
+}
+html[data-bg='1'] #root {
+  position: relative;
+  z-index: 1;
+}
+/* 有背景图时 body 底色让位（图片与罩层接管），磨砂主题容器保持半透明玻璃 */
+html[data-bg='1'] body { background-color: transparent; }

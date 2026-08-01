@@ -2,23 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-}
+/* K-043：四主题变量引擎在 src/styles/themes.css，由 main.tsx 直接 import（postcss 无 import 插件，@import 无效） */
 
 body {
   @apply bg-surface text-gray-200 font-sans antialiased;
 }
 
-/* React Flow 暗色适配 */
+/* ── K-043：滚动条美化（细轨 + 主题色 thumb） ── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border) / 0.8);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--gray-600) / 0.9); }
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--border) / 0.8) transparent; }
+
+/* ── K-043：交互过渡统一 ── */
+button, a, select, input, textarea, [role='button'] {
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.1s ease;
+}
+button:active:not(:disabled) { transform: scale(0.98); }
+
+/* ── K-043：卡片与按钮组件类 ── */
+@layer components {
+  .card {
+    @apply bg-surface-2 border border-border rounded-xl p-4;
+    box-shadow: 0 1px 2px rgb(var(--overlay) / 0.08);
+  }
+  .card-hover {
+    @apply card;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+    border-color: rgb(var(--info) / 0.35);
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-info;
+  }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn-primary:disabled { @apply opacity-40 cursor-not-allowed; }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm text-gray-400 border border-border bg-surface-2;
+  }
+  .btn-ghost:hover:not(:disabled) { @apply text-info border-info/50; }
+  .btn-ghost:disabled { @apply opacity-40 cursor-not-allowed; }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-fail;
+  }
+  .btn-danger:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn-danger:disabled { @apply opacity-40 cursor-not-allowed; }
+  .input {
+    @apply bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 outline-none;
+  }
+  .input:focus { @apply border-info; }
+}
+
+/* React Flow 主题适配（颜色走变量） */
 .react-flow__node {
   @apply text-xs;
 }
 .react-flow__edge-path {
-  stroke: #2d3646;
+  stroke: rgb(var(--border));
 }
 .react-flow__edge.animated .react-flow__edge-path {
-  stroke: #f0883e;
+  stroke: rgb(var(--warn));
 }
 
 /* MD 渲染样式 */
@@ -29,14 +80,25 @@ body {
 .spec-md p { @apply my-2 text-gray-400; }
 .spec-md ul, .spec-md ol { @apply my-2 ml-5 space-y-1; }
 .spec-md li { @apply text-gray-400; }
-.spec-md ul li::marker { content: '• '; color: #58a6ff; }
+.spec-md ul li::marker { content: '• '; color: rgb(var(--info)); }
 .spec-md table { @apply w-full my-3 text-xs border-collapse; }
 .spec-md th { @apply text-left text-gray-500 font-medium px-2 py-1.5 border-b border-border bg-surface-3/50; }
 .spec-md td { @apply px-2 py-1.5 border-b border-border/30 text-gray-400; }
 .spec-md code { @apply bg-surface-3 text-info/80 px-1 py-0.5 rounded text-[11px] font-mono; }
-.spec-md pre { @apply bg-[#0a0e14] border border-border rounded-lg p-3 my-3 overflow-x-auto; }
+.spec-md pre { @apply border border-border rounded-lg p-3 my-3 overflow-x-auto; background: rgb(var(--code-bg)); }
 .spec-md pre code { @apply bg-transparent text-gray-300 p-0 text-[11px]; }
 .spec-md blockquote { @apply border-l-2 border-info/40 pl-3 my-3 text-gray-500 italic; }
 .spec-md hr { @apply border-border my-4; }
 .spec-md a { @apply text-info hover:underline; }
 .spec-md strong { @apply text-gray-200 font-semibold; }
+
+/* mermaid 图表背景与文字跟随主题（SVG 内文本） */
+[data-theme='light'] .mermaid svg { background: transparent; }
+
+/* K-043：顶栏品牌渐变文字 */
+.brand-gradient {
+  background: linear-gradient(120deg, rgb(var(--info)), rgb(var(--blocked)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

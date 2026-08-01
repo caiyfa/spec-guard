@@ -72,15 +72,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-1">
-      <div className="w-96 bg-surface-2 border border-border rounded-xl p-8">
+    <div className="min-h-screen flex items-center justify-center bg-surface-1 relative overflow-hidden">
+      {/* K-043：氛围光晕背景（主题色渐变，深主题可见/浅主题淡雅） */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: `radial-gradient(600px 400px at 20% 15%, rgb(var(--info) / 0.12), transparent 60%),
+                     radial-gradient(700px 500px at 85% 80%, rgb(var(--blocked) / 0.10), transparent 60%)`,
+      }} />
+      <div className="w-96 relative bg-surface-2/80 border border-border rounded-2xl p-8 backdrop-blur-sm" style={{ boxShadow: 'var(--shadow)' }}>
         <div className="text-center mb-6">
-          <h1 className="text-xl font-bold text-info">🛡 SpecGuard</h1>
+          <h1 className="text-xl font-bold brand-gradient">🛡 SpecGuard</h1>
           <p className="text-xs text-gray-500 mt-1">契约驱动的后端场景测试工作台</p>
         </div>
 
         {error && (
-          <div className="mb-4 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+          <div className="mb-4 px-3 py-2 rounded-lg text-sm bg-fail/15 text-fail border border-fail/40">
             {error}
           </div>
         )}
@@ -92,7 +97,7 @@ export default function Login() {
             </p>
             <button
               onClick={gotoUac}
-              className="w-full py-2.5 bg-info text-white rounded-lg text-sm font-medium hover:bg-info/90 transition-colors"
+              className="btn-primary w-full py-2.5"
             >
               前往集团 SSO 登录
             </button>
@@ -101,7 +106,7 @@ export default function Login() {
 
         {mode === 'mock' && (
           <div className="space-y-3">
-            <p className="text-xs text-yellow-500 text-center">
+            <p className="text-xs text-skip text-center">
               开发模式（SG_AUTH_MODE=mock），输入工号直接登录
             </p>
             <input
@@ -109,19 +114,19 @@ export default function Login() {
               onChange={e => setEmpNo(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && mockLogin()}
               placeholder="工号 / AD 账号（如 90024166 或 caiyunfei）"
-              className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none"
+              className="input w-full"
             />
             <input
               value={name}
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && mockLogin()}
               placeholder="姓名（可选）"
-              className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none"
+              className="input w-full"
             />
             <button
               onClick={mockLogin}
               disabled={!empNo.trim() || busy}
-              className="w-full py-2.5 bg-info text-white rounded-lg text-sm font-medium hover:bg-info/90 disabled:opacity-40 transition-colors"
+              className="btn-primary w-full py-2.5"
             >
               {busy ? '登录中…' : '登录'}
             </button>
