@@ -199,3 +199,47 @@ class TestClosureAndGaps:
         r = preflight.scan_dependencies(["NOPE-999"], scenarios_root=str(lib),
                                         env_config=_env_config())
         assert r.get("error"), "未知场景应返回 error 字段"
+
+
+# ══════════════════════════════════════════════════════════
+# apply_overrides 执行变量覆盖（T-312）
+# ══════════════════════════════════════════════════════════
+
+class TestApplyOverrides:
+    """T-312：预检缺失项用户输入值 → 合并进环境配置（弹窗输入替代改配置文件）。"""
+
+    def test_account_override_ad(self):
+        cfg = {"accounts": {"default": {"ad": "u1"}}}
+        out = preflight.apply_overrides(cfg, [{"kind": "account", "name": "platformNoCorp", "value": "caiyunfei"}])
+        assert out["accounts"]["platformNoCorp"] == {"ad": "caiyunfei"}
+
+    def test_account_override_with_emp_no(self):
+        """value 支持 ad:emp_no 双段。"""
+        cfg = {"accounts": {}}
+        out = preflight.apply_overrides(cfg, [{"kind": "account", "name": "restricted", "value": "ad2:90020000"}])
+        assert out["accounts"]["restricted"] == {"ad": "ad2", "emp_no": "90020000"}
+
+    def test_env_override_top_key(self):
+        cfg = {"resource_code": "OLD"}
+        out = preflight.apply_overrides(cfg, [{"kind": "env", "name": "resource_code", "value": "NEW"}])
+        assert out["resource_code"] == "NEW"
+
+    def test_env_override_vars_subkey(self):
+        cfg = {"vars": {"a": "1"}}
+        out = preflight.apply_overrides(cfg, [{"kind": "env", "name": "vars.inv_code", "value": "INV-9"}])
+        assert out["vars"]["inv_code"] == "INV-9"
+        assert out["vars"]["a"] == "1", "不应覆盖 vars 其他键"
+
+    def test_empty_value_ignored(self):
+        """空值/未填写的输入不生效（弹窗只提交有值的项）。"""
+        cfg = {"accounts": {}}
+        out = preflight.apply_overrides(cfg, [{"kind": "account", "name": "ghost", "value": ""},
+                                              {"kind": "env", "name": "k", "value": "  "}])
+        assert "ghost" not in out["accounts"]
+        assert "k" not in out
+
+    def test_original_cfg_untouched(self):
+        """不落盘、不改原配置（纯读副本）。"""
+        cfg = {"accounts": {"a": {"ad": "u1"}}}
+        preflight.apply_overrides(cfg, [{"kind": "account", "name": "b", "value": "u2"}])
+        assert cfg["accounts"] == {"a": {"ad": "u1"}}, "原配置不应被修改"

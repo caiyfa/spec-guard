@@ -66,7 +66,7 @@ def _get_reports_root() -> Path:
 
 
 def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
-                  account_override: str = "") -> subprocess.Popen:
+                  account_override: str = "", overrides: Optional[list] = None) -> subprocess.Popen:
     """创建 pytest 子进程（K-047：subprocess.Popen，不依赖事件循环 flavor）。
 
     uvicorn --reload 在 Windows 给服务端 SelectorEventLoop（其 use_subprocess 语义
@@ -74,6 +74,8 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
     loop 上直接 NotImplementedError（空消息）。Popen 在任何 loop 下都可用。
     text 模式 + 行缓冲：读线程按行迭代即可。
     K-050：SG_RUN_ID 透传——引擎报告目录与任务编号同名（报告/日志/run.json 一线索）。
+    T-312：SG_OVERRIDES 透传——确认弹窗输入的变量覆盖（账号/env 键），
+    conftest env_config fixture 合并进环境配置（与 K-056 SG_ACCOUNT_OVERRIDE 同模式）。
     """
     child_env = {**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())}
     if run_id:
@@ -81,6 +83,8 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
     if account_override:
         # K-056：执行时账号选择（确认弹窗选定）→ 子进程 conftest 重映射 default 别名
         child_env["SG_ACCOUNT_OVERRIDE"] = account_override
+    if overrides:
+        child_env["SG_OVERRIDES"] = json.dumps(overrides, ensure_ascii=False)
     # T-118：Windows 下独立进程组——terminate/kill 不殃及父进程树，
     # 避免 uvicorn reloader 僵尸占端口类事故（docs 67d69c0 运维教训）
     kwargs = {}
@@ -207,7 +211,8 @@ class RunManager:
                       emp_no: str = "", workspace: str = "",
                       queue_id: Optional[int] = None,
                       prep_only: bool = False, skip_upstream_verify: bool = False,
-                      account_override: str = "") -> dict:
+                      account_override: str = "",
+                      overrides: Optional[list] = None) -> dict:
         """触发执行
 
         scope: all / module / scenario / tag / engine_modes
@@ -218,6 +223,8 @@ class RunManager:
         queue_id: 来自队列的消费（内部用；为 None 时新建队表记录）
         prep_only / skip_upstream_verify / account_override: K-046/K-056 轻量执行与账号选项。
             T-114：run_queue 表已持久化这三项，排队后重放不丢（此前静默丢失）。
+        overrides: T-312 执行变量覆盖 [{kind: account|env, name, value}]——确认弹窗
+            预检缺失项的输入值，SG_OVERRIDES 注入子进程由 conftest 合并。
 
         已有执行时进入 FIFO 队列（run_queue 表持久化），返回 queued + position。
         """
@@ -227,7 +234,7 @@ class RunManager:
                 emp_no=emp_no, scope=scope, target=target, env=env, plan_id=plan_id,
                 breakpoints=[], strict_deps=strict_deps, workspace=workspace,
                 prep_only=prep_only, skip_upstream_verify=skip_upstream_verify,
-                account_override=account_override)
+                account_override=account_override, overrides=overrides)
             user_store.audit(emp_no, "enqueue_run", scope, f"queue_id={qid}")
             queued = [r for r in user_store.list_run_queue() if r["status"] == "queued"]
             position = next((i + 1 for i, r in enumerate(queued) if r["id"] == qid), len(queued))
@@ -245,7 +252,7 @@ class RunManager:
                 emp_no=emp_no, scope=scope, target=target, env=env, plan_id=plan_id,
                 breakpoints=[], strict_deps=strict_deps, workspace=workspace, status="running",
                 prep_only=prep_only, skip_upstream_verify=skip_upstream_verify,
-                account_override=account_override)
+                account_override=account_override, overrides=overrides)
         self.current_emp_no = emp_no
         self.current_workspace = workspace
 
@@ -289,12 +296,13 @@ class RunManager:
             "env": env, "plan_id": plan_id,
             "prep_only": prep_only, "skip_upstream_verify": skip_upstream_verify,
             "strict_deps": strict_deps, "account_override": account_override,
+            "overrides": overrides,
             "emp_no": emp_no, "workspace": workspace, "started_at": self.started_at,
         })
 
         # 启动子进程（K-047：Popen；失败时队表标记 failed，不再遗留 running 卡死队列）
         try:
-            self.process = _spawn_pytest(cmd, env, self.run_id, account_override)
+            self.process = _spawn_pytest(cmd, env, self.run_id, account_override, overrides)
         except Exception as e:
             # T-115：spawn 失败补发终态广播（此前 started 先广播且无 finished →
             # 前端永久卡「执行中」显示一个不存在的任务号）
@@ -337,6 +345,8 @@ class RunManager:
             ctx_parts.append(f"工作区={workspace}")
         if plan_id:
             ctx_parts.append(f"计划={plan_id}")
+        if overrides:
+            ctx_parts.append(f"覆盖={len(overrides)}项")
         self._write_output_log(f"> {self.run_id} | {' | '.join(ctx_parts)} | {' '.join(cmd)}")
 
         # 后台读取输出
@@ -519,20 +529,23 @@ class RunManager:
                                        env: str = "sit", plan_id: str = "",
                                        strict_deps: bool = False,
                                        emp_no: str = "", workspace: str = "",
-                                       queue_id: Optional[int] = None) -> dict:
+                                       queue_id: Optional[int] = None,
+                                       overrides: Optional[list] = None) -> dict:
         """带断点的分段执行
 
         将场景列表按断点切分为多个批次，逐批执行：
         - 批次间遇到断点场景时暂停，广播上下文，等待 resume 信号
         - 无断点时退化为一次性全量执行
         - 已有执行时进入 FIFO 队列（M8）
+        overrides: T-312 执行变量覆盖（SG_OVERRIDES 透传每批次）。
         """
         if self.is_running:
             from services import user_store
             target = " or ".join(scenario_ids)
             qid = user_store.enqueue_run(
                 emp_no=emp_no, scope="breakpoint", target=target, env=env, plan_id=plan_id,
-                breakpoints=breakpoints, strict_deps=strict_deps, workspace=workspace)
+                breakpoints=breakpoints, strict_deps=strict_deps, workspace=workspace,
+                overrides=overrides)
             user_store.audit(emp_no, "enqueue_run", "breakpoint", f"queue_id={qid}")
             queued = [r for r in user_store.list_run_queue() if r["status"] == "queued"]
             position = next((i + 1 for i, r in enumerate(queued) if r["id"] == qid), len(queued))
@@ -548,7 +561,7 @@ class RunManager:
             self._queue_id = user_store.enqueue_run(
                 emp_no=emp_no, scope="breakpoint", target=" or ".join(scenario_ids), env=env,
                 plan_id=plan_id, breakpoints=breakpoints, strict_deps=strict_deps,
-                workspace=workspace, status="running")
+                workspace=workspace, status="running", overrides=overrides)
         self.current_emp_no = emp_no
         self.current_workspace = workspace
 
@@ -578,9 +591,10 @@ class RunManager:
             target = " or ".join(scenario_ids)
             return await self.trigger(scope="scenario", target=target, env=env, plan_id=plan_id,
                                       strict_deps=strict_deps, emp_no=emp_no, workspace=workspace,
-                                      queue_id=queue_id)
+                                      queue_id=queue_id, overrides=overrides)
 
         self._strict_deps = strict_deps
+        self._overrides = overrides  # T-312：批次 spawn 时透传 SG_OVERRIDES
 
         # 有断点 → 分批执行
         batches = self._split_batches(scenario_ids, breakpoints)
@@ -663,7 +677,8 @@ class RunManager:
             self._write_output_log(f"> batch {batch_idx} | {' '.join(cmd)}")
             try:
                 # 批次报告目录加 -bN 后缀：同属一个任务编号族，又避免批次间 run.json 相互覆盖
-                self.process = _spawn_pytest(cmd, env, f"{self.run_id}-b{batch_idx}")
+                self.process = _spawn_pytest(cmd, env, f"{self.run_id}-b{batch_idx}",
+                                             overrides=getattr(self, "_overrides", None))
             except Exception as e:
                 await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {type(e).__name__}: {e}"})
                 # T-112：abort 后不再尝试下一批
@@ -767,6 +782,11 @@ class RunManager:
             breakpoints = _json.loads(row.get("breakpoints") or "[]")
         except Exception:
             breakpoints = []
+        # T-312：重放时透传持久化的变量覆盖（确认弹窗输入值）
+        try:
+            overrides = _json.loads(row.get("overrides") or "[]")
+        except Exception:
+            overrides = []
         # 队列执行的上下文（原请求上下文已结束，用存储的工作区重建）
         from specstd.workspace import set_context_workspace
         set_context_workspace(row.get("workspace") or None)
@@ -778,7 +798,8 @@ class RunManager:
                 scenario_ids=scenario_ids, breakpoints=breakpoints,
                 env=row["env"], plan_id=row["plan_id"],
                 strict_deps=bool(row["strict_deps"]), emp_no=row["emp_no"],
-                workspace=row.get("workspace", ""), queue_id=row["id"])
+                workspace=row.get("workspace", ""), queue_id=row["id"],
+                overrides=overrides)
         else:
             # T-114：重放时透传持久化的轻量选项（此前排队后静默丢失用户选择）
             await self.trigger(scope=row["scope"], target=row["target"], env=row["env"],
@@ -787,7 +808,8 @@ class RunManager:
                                queue_id=row["id"],
                                prep_only=bool(row.get("prep_only")),
                                skip_upstream_verify=bool(row.get("skip_upstream_verify")),
-                               account_override=row.get("account_override", ""))
+                               account_override=row.get("account_override", ""),
+                               overrides=overrides)
 
     async def _push_run_notifications(self):
         """D2：运行结束后推送场景级通知（T-304：实现收口到模块级 push_run_notifications）。

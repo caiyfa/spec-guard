@@ -34,6 +34,7 @@ class TriggerBody(BaseModel):
     prep_only: bool = False           # K-046 轻量执行：只跑上游环境准备
     skip_upstream_verify: bool = False  # K-046 轻量执行：上游只跑 flow 不断言
     account_override: str = ""        # K-056 执行时账号选择：alias 覆盖场景 as: default
+    overrides: list[dict] = []        # T-312 变量覆盖：[{kind: account|env, name, value}]（预检弹窗输入值）
     # 注意：covers 校验不可由客户端跳过（V10 修复）——engine_modes 由服务端按 scope 判定豁免
 
 
@@ -65,6 +66,7 @@ async def api_trigger(body: TriggerBody,
             strict_deps=body.strict_deps,
             emp_no=user.emp_no,
             workspace=workspace,
+            overrides=body.overrides,
         )
     else:
         result = await run_manager.trigger(scope=body.scope, target=body.target, env=body.env,
@@ -72,7 +74,8 @@ async def api_trigger(body: TriggerBody,
                                            emp_no=user.emp_no, workspace=workspace,
                                            prep_only=body.prep_only,
                                            skip_upstream_verify=body.skip_upstream_verify,
-                                           account_override=body.account_override)
+                                           account_override=body.account_override,
+                                           overrides=body.overrides)
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
     return result

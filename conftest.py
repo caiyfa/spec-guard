@@ -69,6 +69,22 @@ def env_config(sg_system, pytestconfig):
             cfg["_account_override"] = override
         else:
             print(f"[SpecGuard WARN] SG_ACCOUNT_OVERRIDE={override} 不在 accounts 中，忽略")
+    # T-312：执行前预检变量覆盖（确认弹窗输入值）——SG_OVERRIDES JSON 数组
+    # [{kind: account|env, name, value}]，runner spawn 时注入，合并进环境配置。
+    # services 包在 workbench/backend 下，需补 path（runner 侧同源逻辑）
+    overrides_json = os.environ.get("SG_OVERRIDES", "").strip()
+    if overrides_json:
+        try:
+            import json
+            backend_dir = os.path.join(SG_ROOT, "workbench", "backend")
+            if backend_dir not in sys.path:
+                sys.path.insert(0, backend_dir)
+            from services.preflight import apply_overrides
+            cfg = apply_overrides(cfg, json.loads(overrides_json))
+        except ImportError:
+            print("[SpecGuard WARN] SG_OVERRIDES 存在但无法加载 services.preflight，忽略覆盖")
+        except Exception as e:
+            print(f"[SpecGuard WARN] SG_OVERRIDES 应用失败: {e}")
     return cfg
 
 

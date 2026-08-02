@@ -66,6 +66,8 @@ export default function RunControl() {
   // T-311：执行前依赖预检——弹窗前先扫描闭包内账号/env 键/跨场景引用（EX-92a9252f 教训）
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
+  // T-312：预检缺失项的用户输入值（key=`${kind}::${name}` → 输入值；仅提交有值的项）
+  const [overrideInputs, setOverrideInputs] = useState<Record<string, string>>({});
   // K-050：日志专注模式——确认执行后选择区收起，执行日志放大
   const [logFocus, setLogFocus] = useState(false);
   // K-052：任务号一键复制反馈
@@ -196,6 +198,7 @@ export default function RunControl() {
   /** T-311：确认弹窗打开前先扫描依赖（闭包内账号/env 键/跨场景引用），扫描完再弹 */
   const openConfirm = async () => {
     setPreflight(null);
+    setOverrideInputs({});  // T-312：新一次扫描清空上次输入
     if (selectedIds.size === 0) { setShowConfirm(true); return; }
     setPreflightLoading(true);
     try {
@@ -205,6 +208,15 @@ export default function RunControl() {
     finally { setPreflightLoading(false); setShowConfirm(true); }
   };
 
+  /** T-312：有输入的覆盖项 → [{kind, name, value}]（空值不提交） */
+  const collectOverrides = () =>
+    Object.entries(overrideInputs)
+      .filter(([, v]) => v.trim() !== '')
+      .map(([k, v]) => {
+        const sep = k.indexOf('::');
+        return { kind: k.slice(0, sep), name: k.slice(sep + 2), value: v.trim() };
+      });
+
   /** K-049：触发分两步——先弹执行上下文确认，用户确认后才真正触发 */
   const doTrigger = async () => {
     setShowConfirm(false);
@@ -213,17 +225,18 @@ export default function RunControl() {
     try {
       let result: { ok: boolean; queued?: boolean; position?: number } | undefined;
       const light = { prepOnly, skipUpstreamVerify, accountOverride };
+      const overrides = collectOverrides();  // T-312：预检缺失项的输入值
       if (selectedIds.size > 0) {
         // K-046：勾选直跑（后端原生支持 "A or B" 的 pytest -k 表达式）
         const expr = [...selectedIds].join(' or ');
         result = breakpoints.size > 0
-          ? await runsApi.trigger('scenario', expr, 'sit', [...breakpoints], light)
-          : await runsApi.trigger('scenario', expr, 'sit', [], light);
+          ? await runsApi.trigger('scenario', expr, 'sit', [...breakpoints], light, overrides)
+          : await runsApi.trigger('scenario', expr, 'sit', [], light, overrides);
       } else {
         // 高级模式：按范围执行
         result = breakpoints.size > 0
-          ? await runsApi.trigger(scope, target, 'sit', [...breakpoints], light)
-          : await runsApi.trigger(scope, target, 'sit', [], light);
+          ? await runsApi.trigger(scope, target, 'sit', [...breakpoints], light, overrides)
+          : await runsApi.trigger(scope, target, 'sit', [], light, overrides);
       }
       if (result?.queued) {
         setError(`已有执行进行中，已加入队列（第 ${result.position} 位）`);
@@ -632,17 +645,43 @@ export default function RunControl() {
               </>
             )}
             {preflight && preflight.has_gaps && (
-              <div className="col-span-2 px-2 py-1.5 bg-fail/5 border border-fail/30 rounded space-y-0.5 max-h-28 overflow-y-auto">
+              <div className="col-span-2 px-2 py-1.5 bg-fail/5 border border-fail/30 rounded space-y-1.5 max-h-36 overflow-y-auto">
                 {preflight.missing_accounts.map((g) => (
-                  <div key={g.account} className="text-[11px] text-fail">
-                    🔑 账号 <span className="font-mono">{g.account}</span> 未在环境配置 accounts 定义
-                    <span className="text-gray-500">（{g.scenarios.join('、')} → 将 SKIP）</span>
+                  <div key={g.account} className="text-[11px]">
+                    <div className="text-fail">
+                      🔑 账号 <span className="font-mono">{g.account}</span> 未在环境配置 accounts 定义
+                      <span className="text-gray-500">（{g.scenarios.join('、')} → 将 SKIP）</span>
+                    </div>
+                    {/* T-312：直接输入 AD 账号替代改配置文件 */}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <input
+                        value={overrideInputs[`account::${g.account}`] || ''}
+                        onChange={(e) => setOverrideInputs(prev => ({ ...prev, [`account::${g.account}`]: e.target.value }))}
+                        placeholder={`输入 AD 账号（或 ad:工号）替代配置`}
+                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-0.5 text-[11px] font-mono text-gray-200 focus:border-info outline-none" />
+                      {!!overrideInputs[`account::${g.account}`]?.trim() && (
+                        <span className="text-pass shrink-0">✓ 覆盖执行</span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {preflight.missing_env.map((g) => (
-                  <div key={g.key} className="text-[11px] text-warn">
-                    🌐 环境键 <span className="font-mono">{g.key}</span> 缺失
-                    <span className="text-gray-500">（{g.scenarios.join('、')}）</span>
+                  <div key={g.key} className="text-[11px]">
+                    <div className="text-warn">
+                      🌐 环境键 <span className="font-mono">{g.key}</span> 缺失
+                      <span className="text-gray-500">（{g.scenarios.join('、')}）</span>
+                    </div>
+                    {/* T-312：直接输入值替代改配置文件 */}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <input
+                        value={overrideInputs[`env::${g.key}`] || ''}
+                        onChange={(e) => setOverrideInputs(prev => ({ ...prev, [`env::${g.key}`]: e.target.value }))}
+                        placeholder={`输入 ${g.key} 的值`}
+                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-0.5 text-[11px] font-mono text-gray-200 focus:border-info outline-none" />
+                      {!!overrideInputs[`env::${g.key}`]?.trim() && (
+                        <span className="text-pass shrink-0">✓ 覆盖执行</span>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {preflight.unresolved_upstream.map((g) => (
@@ -651,7 +690,9 @@ export default function RunControl() {
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
                   </div>
                 ))}
-                <p className="text-[10px] text-gray-500 pt-0.5">缺失项执行时按诚实语义 SKIP 不报 FAIL；仍可确认执行，或先补齐环境配置。</p>
+                <p className="text-[10px] text-gray-500 pt-0.5">
+                  缺失项执行时按诚实语义 SKIP 不报 FAIL；可直接在上方输入值覆盖执行（仅本次运行生效，不改配置文件），或确认执行，或先补齐环境配置。
+                </p>
               </div>
             )}
             {/* T-204：看门狗超时（修改入口在设置页「执行」Tab） */}

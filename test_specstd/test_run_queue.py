@@ -63,7 +63,18 @@ class TestEnqueueOptions:
         conn.close()
         user_store.init_db(db_file)
         cols = {r[1] for r in sqlite3.connect(db_file).execute("PRAGMA table_info(run_queue)")}
-        assert {"prep_only", "skip_upstream_verify", "account_override"} <= cols
+        assert {"prep_only", "skip_upstream_verify", "account_override", "overrides"} <= cols
+
+    def test_overrides_survive_roundtrip(self, db):
+        """T-312：变量覆盖（确认弹窗输入值）入队后读回一致。"""
+        ov = [{"kind": "account", "name": "platformNoCorp", "value": "caiyunfei"},
+              {"kind": "env", "name": "vars.xx", "value": "1"}]
+        qid = user_store.enqueue_run(
+            emp_no="u1", scope="scenario", target="TL-RC-014", env="sit", plan_id="",
+            breakpoints=[], strict_deps=False, workspace="ws1", overrides=ov)
+        row = user_store.get_run_queue_item(qid, db_path=db)
+        import json
+        assert json.loads(row["overrides"]) == ov
 
 
 class TestQueueReplay:
@@ -83,6 +94,7 @@ class TestQueueReplay:
             "env": "sit", "plan_id": "", "breakpoints": "[]", "strict_deps": 1,
             "workspace": "ws1", "emp_no": "u1",
             "prep_only": 1, "skip_upstream_verify": 1, "account_override": "acc2",
+            "overrides": '[{"kind": "account", "name": "platformNoCorp", "value": "ad9"}]',
         }])
         monkeypatch.setattr(mgr, "trigger", fake_trigger)
         monkeypatch.setattr(mgr, "broadcast", fake_audit)
@@ -92,5 +104,7 @@ class TestQueueReplay:
         asyncio.run(mgr._start_next_from_queue())
         assert calls["prep_only"] is True
         assert calls["skip_upstream_verify"] is True
+        # T-312：变量覆盖随队列重放透传（解析回列表）
+        assert calls["overrides"] == [{"kind": "account", "name": "platformNoCorp", "value": "ad9"}]
         assert calls["account_override"] == "acc2"
         assert calls["queue_id"] == 9

@@ -251,7 +251,8 @@ export interface PreflightResult {
 
 export const runsApi = {
   trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = [],
-            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean; accountOverride?: string }) =>
+            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean; accountOverride?: string },
+            overrides: { kind: string; name: string; value: string }[] = []) =>
     request<{ ok: boolean; run_id?: string; queued?: boolean; queue_id?: number; position?: number }>('/runs/trigger', {
       method: 'POST',
       body: JSON.stringify({
@@ -259,6 +260,7 @@ export const runsApi = {
         prep_only: !!light?.prepOnly,
         skip_upstream_verify: !!light?.skipUpstreamVerify,
         account_override: light?.accountOverride || '',
+        overrides,  // T-312：预检弹窗输入的变量覆盖（账号/env 键）
       }),
     }),
   accounts: () => request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string }>('/runs/accounts'),

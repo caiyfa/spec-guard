@@ -47,13 +47,17 @@ def mgr(monkeypatch, tmp_path):
     monkeypatch.setattr(runner_mod, "_get_reports_root", lambda: tmp_path)
     m = runner_mod.RunManager()
     spawns: list = []
+    spawn_args: list = []
 
-    def fake_spawn(cmd, env, run_id="", account_override=""):
+    def fake_spawn(cmd, env, run_id="", account_override="", overrides=None):
         spawns.append(run_id)
+        spawn_args.append({"run_id": run_id, "account_override": account_override,
+                           "overrides": overrides})
         return FakeProc()
 
     monkeypatch.setattr(runner_mod, "_spawn_pytest", fake_spawn)
     m._spawns = spawns
+    m._spawn_args = spawn_args
     return m
 
 
@@ -267,6 +271,62 @@ class TestLogHeaderContext:
         assert "90024166" in head, "头行应含触发人工号"
         assert "ad2" in head, "头行应含执行账号"
         assert "tdm" in head, "头行应含工作区"
+
+
+class TestVariableOverrides:
+    """T-312：确认弹窗变量覆盖（输入值）→ SG_OVERRIDES 注入子进程。"""
+
+    def _stub(self, m, monkeypatch):
+        from services import user_store
+        monkeypatch.setattr(user_store, "enqueue_run", lambda *a, **k: 1)
+        monkeypatch.setattr(user_store, "audit", lambda *a, **k: None)
+        monkeypatch.setattr(user_store, "update_run_queue", lambda *a, **k: True)
+        monkeypatch.setattr(m, "broadcast", _recorder([]))
+        monkeypatch.setattr(m, "_record_failures", lambda: None)
+
+        async def _noop(*a, **k):
+            pass
+
+        monkeypatch.setattr(m, "_push_run_notifications", _noop)
+        monkeypatch.setattr(m, "_finish_current_run", _noop)
+
+    def test_overrides_forwarded_to_spawn(self, mgr, monkeypatch):
+        """trigger(overrides=[...]) → _spawn_pytest 收到同一份 overrides。"""
+        self._stub(mgr, monkeypatch)
+        ov = [{"kind": "account", "name": "platformNoCorp", "value": "caiyunfei"}]
+
+        async def run():
+            return await mgr.trigger(scope="scenario", target="TL-RC-014",
+                                     env="sit", emp_no="u1", workspace="ws1",
+                                     overrides=ov)
+
+        result = asyncio.run(run())
+        assert result["ok"] is True
+        assert mgr._spawn_args[-1]["overrides"] == ov, "spawn 应收到覆盖值"
+
+    def test_log_header_counts_overrides(self, mgr, monkeypatch, tmp_path):
+        """T-310 头行追加「覆盖=N项」——日志可看出本次有变量覆盖。"""
+        self._stub(mgr, monkeypatch)
+
+        async def run():
+            return await mgr.trigger(scope="scenario", target="TL-RC-014",
+                                     env="sit", emp_no="u1", workspace="ws1",
+                                     overrides=[{"kind": "account", "name": "x", "value": "y"}])
+
+        result = asyncio.run(run())
+        head = (tmp_path / result["run_id"] / "output.log").read_text(encoding="utf-8").splitlines()[0]
+        assert "覆盖=1项" in head
+
+    def test_no_overrides_no_env_flag(self, mgr, monkeypatch):
+        """未填输入值时不给 spawn 传覆盖（SG_OVERRIDES 不注入）。"""
+        self._stub(mgr, monkeypatch)
+
+        async def run():
+            return await mgr.trigger(scope="scenario", target="TL-RC-014",
+                                     env="sit", emp_no="u1", workspace="ws1")
+
+        asyncio.run(run())
+        assert mgr._spawn_args[-1]["overrides"] is None
 
 
 class TestSpawnFailureBroadcast:

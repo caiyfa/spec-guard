@@ -90,6 +90,7 @@ def init_db(db_path: Path | None = None):
             ("prep_only", "ALTER TABLE run_queue ADD COLUMN prep_only INTEGER NOT NULL DEFAULT 0"),
             ("skip_upstream_verify", "ALTER TABLE run_queue ADD COLUMN skip_upstream_verify INTEGER NOT NULL DEFAULT 0"),
             ("account_override", "ALTER TABLE run_queue ADD COLUMN account_override TEXT NOT NULL DEFAULT ''"),
+            ("overrides", "ALTER TABLE run_queue ADD COLUMN overrides TEXT NOT NULL DEFAULT ''"),
         ):
             try:
                 conn.execute(ddl)
@@ -303,11 +304,12 @@ def enqueue_run(emp_no: str, scope: str, target: str, env: str, plan_id: str,
                 breakpoints: list[str], strict_deps: bool, workspace: str = "",
                 status: str = "queued", db_path: Path | None = None,
                 prep_only: bool = False, skip_upstream_verify: bool = False,
-                account_override: str = "") -> int:
+                account_override: str = "", overrides=None) -> int:
     """入队，返回队列项 id（status 可为 queued/running）。
 
     T-114：轻量选项持久化——此前只存 strict_deps/breakpoints，排队后重放
     静默丢失 prep_only/skip_upstream_verify/account_override（用户选择）。
+    T-312：overrides（确认弹窗变量覆盖输入值）同样持久化，排队重放不丢。
     """
     import json as _json
     init_db(db_path)
@@ -315,11 +317,12 @@ def enqueue_run(emp_no: str, scope: str, target: str, env: str, plan_id: str,
         cur = conn.execute(
             "INSERT INTO run_queue (emp_no, scope, target, env, plan_id, breakpoints,"
             " strict_deps, workspace, status, created_at,"
-            " prep_only, skip_upstream_verify, account_override)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " prep_only, skip_upstream_verify, account_override, overrides)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (emp_no, scope, target, env, plan_id, _json.dumps(breakpoints),
              1 if strict_deps else 0, workspace, status, _now(),
-             1 if prep_only else 0, 1 if skip_upstream_verify else 0, account_override),
+             1 if prep_only else 0, 1 if skip_upstream_verify else 0, account_override,
+             _json.dumps(overrides or [], ensure_ascii=False)),
         )
         return int(cur.lastrowid)
 

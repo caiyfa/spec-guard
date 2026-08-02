@@ -198,6 +198,42 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
     }
 
 
+def apply_overrides(cfg: dict, overrides) -> dict:
+    """T-312：执行变量覆盖——弹窗输入值合并进环境配置（替代改配置文件）。
+
+    overrides: [{kind: "account"|"env", name: 别名/键, value: 值}]
+    - account: cfg.accounts[name] = {ad, emp_no?}（value 格式 "ad" 或 "ad:emp_no"）
+    - env: 顶层键直接赋值；vars.xxx → cfg.vars[xxx]
+    空 name/value 忽略；返回副本，不落盘、不改原配置。
+    conftest 从 SG_OVERRIDES 环境变量读取后调用本函数（与预检同源，避免双份语义）。
+    """
+    if not overrides:
+        return cfg
+    cfg = dict(cfg)
+    for ov in overrides or []:
+        if not isinstance(ov, dict):
+            continue
+        kind = ov.get("kind")
+        name = str(ov.get("name") or "").strip()
+        value = str(ov.get("value") or "").strip()
+        if not name or not value:
+            continue
+        if kind == "account":
+            accounts = dict(cfg.get("accounts") or {})
+            parts = value.split(":", 1)
+            info = {"ad": parts[0].strip()}
+            if len(parts) > 1 and parts[1].strip():
+                info["emp_no"] = parts[1].strip()
+            accounts[name] = info
+            cfg["accounts"] = accounts
+        elif kind == "env":
+            if name.startswith("vars."):
+                cfg.setdefault("vars", {})[name[5:]] = value
+            else:
+                cfg[name] = value
+    return cfg
+
+
 def _load_env(env_name: str, system: str) -> dict:
     """加载环境配置（与 runs/accounts 端点同源）。失败时告警并返回空（不抛）。"""
     import importlib
