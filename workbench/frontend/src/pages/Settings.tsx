@@ -1,58 +1,33 @@
-/** Settings — 环境配置统一设置页面（Tab 布局：数据库 / 模型配置 / YAML / SSO） */
-import React, { useEffect, useState, useCallback } from 'react';
-import Editor from '@monaco-editor/react';
-import { useJsTokens } from '../theme';
+/** Settings — 系统设置（SpecGuard 自身运行基础信息：数据库连接 / 模型配置 / 审计 / 执行参数）。
+ *
+ * 职责边界（T-308）：
+ * - 本页 = SpecGuard 运行所需：DB 校验连接（引擎只读断言数据源）、LLM 模型、审计开关、看门狗超时
+ * - 环境设置（🌐 环境配置页）= 测试执行基础信息：被测系统网关/账号池/资源码/SSO，按环境（sit/uat）维护
+ * - 环境信息（YAML/SSO 预览）入口已迁移至「环境配置」页，本页不再重复
+ */
+import { useEffect, useState, useCallback } from 'react';
 import { referenceApi, modelApi, settingsApi } from '../api';
 import type { ModelConfig } from '../api';
 
-type Tab = 'db' | 'models' | 'yaml' | 'sso' | 'audit' | 'run';
+type Tab = 'db' | 'models' | 'audit' | 'run';
 
 const TAB_LABELS: Record<Tab, string> = {
   db: '🗄 数据库',
   models: '🧠 模型配置',
-  yaml: '📄 YAML',
-  sso: '🔑 SSO/网关',
   audit: '🔍 审计',
   run: '▶ 执行',
 };
 
 export default function Settings() {
   const [tab, setTab] = useState<Tab>('models');
-  const [raw, setRaw] = useState('');
-  const [saveMsg, setSaveMsg] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    referenceApi.envConfig().then((r) => setRaw(r.raw))
-      .catch(() => setRaw('# 加载失败'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const save = async () => {
-    setSaveMsg('');
-    try {
-      await referenceApi.saveEnvConfig(raw);
-      setSaveMsg('✓ 已保存（下次执行生效）');
-    } catch (e: unknown) {
-      setSaveMsg(`✗ ${e instanceof Error ? e.message : '保存失败'}`);
-    }
-  };
 
   return (
     <div className="h-full flex flex-col">
       {/* 顶栏 */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">⚙️ 环境设置</h2>
-        {tab === 'yaml' && (
-          <button onClick={save}
-            className="px-4 py-1.5 rounded-md text-sm font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
-            💾 保存 YAML
-          </button>
-        )}
+        <h2 className="text-lg font-semibold">⚙️ 系统设置</h2>
+        <span className="text-[10px] text-gray-600">SpecGuard 运行基础信息 · 被测系统环境信息见「🌐 环境配置」</span>
       </div>
-      {saveMsg && tab === 'yaml' && (
-        <p className={`text-sm mb-2 ${saveMsg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{saveMsg}</p>
-      )}
 
       {/* Tab 栏 */}
       <div className="flex gap-1 mb-3 border-b border-border">
@@ -68,10 +43,8 @@ export default function Settings() {
 
       {/* Tab 内容 */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'db' && <DbTab raw={raw} setRaw={setRaw} />}
+        {tab === 'db' && <DbTab />}
         {tab === 'models' && <ModelsTab />}
-        {tab === 'yaml' && <YamlTab raw={raw} setRaw={setRaw} loading={loading} />}
-        {tab === 'sso' && <SsoTab raw={raw} />}
         {tab === 'audit' && <AuditTab />}
         {tab === 'run' && <RunTab />}
       </div>
@@ -83,12 +56,16 @@ export default function Settings() {
 // Tab 1: 数据库连接
 // ══════════════════════════════════════════════════════════
 
-function DbTab({ raw, setRaw }: { raw: string; setRaw: (v: string) => void }) {
+function DbTab() {
   const [dbForm, setDbForm] = useState({ host: '', port: 3306, user: '', password: '', name: 'hr_center', charset: 'utf8mb4' });
   const [dbTestMsg, setDbTestMsg] = useState('');
+  const [env, setEnv] = useState('sit');
+  const [raw, setRaw] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    referenceApi.envConfig().then((r) => {
+    referenceApi.envConfig(env).then((r) => {
+      setRaw(r.raw);
       const db = (r.parsed as Record<string, Record<string, unknown>>)?.db || {};
       setDbForm({
         host: String(db.host || ''), port: Number(db.port || 3306),
@@ -96,7 +73,7 @@ function DbTab({ raw, setRaw }: { raw: string; setRaw: (v: string) => void }) {
         name: String(db.name || 'hr_center'), charset: String(db.charset || 'utf8mb4'),
       });
     }).catch(() => {});
-  }, []);
+  }, [env]);
 
   const updateDb = (key: string, value: string | number) => {
     const next = { ...dbForm, [key]: value };
@@ -120,11 +97,23 @@ function DbTab({ raw, setRaw }: { raw: string; setRaw: (v: string) => void }) {
     } catch { /* ignore */ }
   };
 
+  const save = async () => {
+    setSaving(true);
+    setDbTestMsg('');
+    try {
+      await referenceApi.saveEnvConfig(raw, env);
+      setDbTestMsg('✓ 已保存（引擎只读校验连接，下次执行生效）');
+    } catch (e: unknown) {
+      setDbTestMsg(`❌ ${e instanceof Error ? e.message : '保存失败'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const testDb = async () => {
     setDbTestMsg('测试中…');
-    await referenceApi.saveEnvConfig(raw).catch(() => {});
     try {
-      const r = await referenceApi.testDb();
+      const r = await referenceApi.testDb(env);
       setDbTestMsg(r.ok ? `✅ ${r.message}` : `❌ ${r.error}`);
     } catch (e: unknown) { setDbTestMsg(`❌ ${e instanceof Error ? e.message : '测试失败'}`); }
   };
@@ -134,10 +123,22 @@ function DbTab({ raw, setRaw }: { raw: string; setRaw: (v: string) => void }) {
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-gray-300">数据库连接配置</span>
         <div className="flex items-center gap-2">
+          <select value={env} onChange={(e) => setEnv(e.target.value)}
+            className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[10px]"
+            title="按环境维护（env.{env}.yaml 的 db 段）">
+            <option value="sit">sit</option>
+            <option value="uat">uat</option>
+          </select>
+          <button onClick={save} disabled={saving}
+            className="text-[10px] px-2 py-1 rounded bg-pass/15 text-pass hover:bg-pass/25 disabled:opacity-50">💾 保存</button>
           <button onClick={testDb} className="text-[10px] px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20">🔌 测试连接</button>
           {dbTestMsg && <span className="text-[10px]">{dbTestMsg}</span>}
         </div>
       </div>
+      <p className="text-[10px] text-gray-600 mb-3">
+        SpecGuard 引擎只读校验连接（db_oracle 断言数据源）——属系统设置；
+        被测系统业务信息（网关/账号/资源码/SSO）在「🌐 环境配置」页维护。db 段物理存于 env.{env}.yaml。
+      </p>
       <div className="grid grid-cols-3 gap-3">
         <Field label="主机" value={dbForm.host} onChange={(v) => updateDb('host', v)} />
         <Field label="端口" value={String(dbForm.port)} onChange={(v) => updateDb('port', Number(v) || 3306)} />
@@ -357,92 +358,6 @@ function _toForm(m: ModelConfig) {
 }
 
 // ══════════════════════════════════════════════════════════
-// Tab 3: YAML 编辑器
-// ══════════════════════════════════════════════════════════
-
-function YamlTab({ raw, setRaw, loading }: { raw: string; setRaw: (v: string) => void; loading: boolean }) {
-  const tokens = useJsTokens();  // K-043
-  const insertTemplate = (template: string) => setRaw(raw + '\n' + template);
-
-  return (
-    <div className="flex gap-3 h-full">
-      <div className="flex-1 border border-border rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="h-full flex items-center justify-center text-gray-500">加载中…</div>
-        ) : (
-          <Editor language="yaml" theme={tokens.monaco} value={raw}
-            onChange={(v) => setRaw(v || '')}
-            options={{ fontSize: 13, minimap: { enabled: false }, wordWrap: 'on', scrollBeyondLastLine: false }} />
-        )}
-      </div>
-      <div className="w-[260px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
-        <div className="px-3 py-2 border-b border-border text-xs font-medium bg-surface-2">配置说明</div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs text-gray-400">
-          <Section title="网关地址"><KV k="tdm_base" v="TDM 业务网关" /><KV k="hr_center_base" v="权限中台" /><KV k="oss_base" v="OSS 附件" /></Section>
-          <Section title="资源码"><KV k="default_resource_code" v="权限资源码" /></Section>
-          <Section title="账号池"><KV k="accounts.default" v="主测试账号" /><KV k="accounts.no_access" v="fail-secure 专用" /></Section>
-          <Section title="数据库"><KV k="db.host" v="MySQL 主机" /><KV k="db.name" v="数据库名" /></Section>
-          <Section title="SSO"><KV k="sso.domain" v="Authing SSO 域名" /><KV k="sso.app_id" v="应用 ID" /></Section>
-          <div className="border-t border-border pt-3">
-            <div className="text-[11px] font-medium text-gray-300 mb-2">快速插入</div>
-            <button onClick={() => insertTemplate('\n# 受限账号\n# restricted: {ad: "TODO_AD", emp_no: "TODO_EMPNO"}')}
-              className="w-full text-left text-[11px] px-2 py-1.5 rounded bg-surface-3 text-gray-400 hover:text-info hover:bg-info/10 mb-1">+ restricted 账号</button>
-            <button onClick={() => insertTemplate('\ncheck_version_header: false')}
-              className="w-full text-left text-[11px] px-2 py-1.5 rounded bg-surface-3 text-gray-400 hover:text-info hover:bg-info/10">+ check_version_header</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════
-// Tab 4: SSO / 网关
-// ══════════════════════════════════════════════════════════
-
-function SsoTab({ raw }: { raw: string }) {
-  const [ssoForm, setSsoForm] = useState({ domain: '', app_id: '', tdm_base: '', hr_center_base: '', oss_base: '', default_resource_code: '' });
-
-  useEffect(() => {
-    referenceApi.envConfig().then((r) => {
-      const p = r.parsed as Record<string, any>;
-      setSsoForm({
-        domain: p?.sso?.domain || '', app_id: p?.sso?.app_id || '',
-        tdm_base: p?.tdm_base || '', hr_center_base: p?.hr_center_base || '',
-        oss_base: p?.oss_base || '', default_resource_code: p?.default_resource_code || '',
-      });
-    }).catch(() => {});
-  }, [raw]);
-
-  return (
-    <div className="bg-surface-2 border border-border rounded-lg p-4 max-w-2xl space-y-4">
-      <div>
-        <span className="text-xs font-medium text-gray-300">SSO 配置</span>
-        <div className="grid grid-cols-2 gap-3 mt-2">
-          <Field label="SSO 域名" value={ssoForm.domain} onChange={() => {}} placeholder="https://xxx.authing.cn" />
-          <Field label="App ID" value={ssoForm.app_id} onChange={() => {}} placeholder="app_xxx" />
-        </div>
-      </div>
-      <div>
-        <span className="text-xs font-medium text-gray-300">网关地址</span>
-        <div className="grid grid-cols-1 gap-3 mt-2">
-          <Field label="TDM 业务网关" value={ssoForm.tdm_base} onChange={() => {}} placeholder="https://sit-tdm.xxx.com" />
-          <Field label="权限中台" value={ssoForm.hr_center_base} onChange={() => {}} placeholder="https://sit-hr.xxx.com" />
-          <Field label="OSS 附件服务" value={ssoForm.oss_base} onChange={() => {}} placeholder="https://oss.xxx.com" />
-        </div>
-      </div>
-      <div>
-        <span className="text-xs font-medium text-gray-300">资源码</span>
-        <div className="grid grid-cols-1 gap-3 mt-2">
-          <Field label="默认资源码" value={ssoForm.default_resource_code} onChange={() => {}} placeholder="TDM_ADMIN" />
-        </div>
-      </div>
-      <p className="text-[10px] text-gray-600">SSO 和网关配置通过 YAML Tab 编辑保存。此处为只读预览。</p>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════
 // Tab 6: 执行（T-204 看门狗超时配置）
 // ══════════════════════════════════════════════════════════
 
@@ -571,10 +486,4 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (<div><div className="text-[11px] font-medium text-gray-300 mb-1">{title}</div><div className="space-y-1">{children}</div></div>);
-}
 
-function KV({ k, v }: { k: string; v: string }) {
-  return (<div className="flex justify-between"><span className="font-mono text-info/70">{k}</span><span className="text-gray-500 text-right">{v}</span></div>);
-}

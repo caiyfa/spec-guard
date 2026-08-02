@@ -1,8 +1,8 @@
-/** EnvironmentConfig — 环境信息独立维护页（T-306）
+/** EnvironmentConfig — 环境信息独立维护页（T-306/T-308）
  *
- * 独立于「系统设置」的环境配置入口：环境切换（sit/uat…）+ YAML 原文编辑
- * （Monaco，防丢中文注释）+ 结构化预览（网关/账号池/资源码/DB/SSO）+ DB 连通测试。
- * 环境信息是执行上下文的核心（网关/账号/凭据），独立菜单避免与模型/审计等混杂。
+ * 职责：测试执行基础信息——被测系统侧（网关/账号池/资源码/SSO），按环境（sit/uat）维护。
+ * 边界（T-308）：数据库连接属 SpecGuard 引擎校验基础设施，维护入口在「系统设置 → 数据库」；
+ * 本页 YAML 原文为 env.{env}.yaml 整文件（含 db 段），结构化预览不重复展示 DB。
  */
 import { useCallback, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
@@ -37,8 +37,6 @@ export default function EnvironmentConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
-  const [dbMsg, setDbMsg] = useState('');
-  const [testing, setTesting] = useState(false);
 
   // 环境列表
   useEffect(() => {
@@ -74,23 +72,9 @@ export default function EnvironmentConfig() {
     }
   };
 
-  const testDb = async () => {
-    setTesting(true);
-    setDbMsg('');
-    try {
-      const r = await referenceApi.testDb(currentEnv);
-      setDbMsg(r.ok ? `✓ ${r.message || '连接正常'}` : `✗ ${r.error || '连接失败'}`);
-    } catch (e: unknown) {
-      setDbMsg(`✗ ${e instanceof Error ? e.message : '测试失败'}`);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  // 结构化预览（解析 env YAML 的关键区块）
+  // 结构化预览（测试执行基础信息：网关/账号池/资源码/SSO；DB 归系统设置，不在此重复）
   const p = parsed as Record<string, any>;
   const accounts = (p.accounts || {}) as Record<string, { ad?: string; emp_no?: string; type?: string }>;
-  const db = (p.db || {}) as Record<string, string>;
 
   return (
     <div className="h-full flex flex-col space-y-3">
@@ -108,15 +92,9 @@ export default function EnvironmentConfig() {
           className="px-3 py-1 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-50">
           💾 保存
         </button>
-        <button onClick={testDb} disabled={testing}
-          className="px-3 py-1 rounded text-xs bg-info/20 text-info border border-info/30 hover:bg-info/30 disabled:opacity-50">
-          {testing ? '测试中…' : '🔌 测试 DB 连接'}
-        </button>
         {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
-        <span className="ml-auto text-[10px] text-gray-600">systems/tdm/config/env.{currentEnv}.yaml</span>
+        <span className="ml-auto text-[10px] text-gray-600">测试执行基础信息 · 数据库连接在「系统设置」维护</span>
       </div>
-
-      {dbMsg && <div className={`text-xs px-3 py-1.5 rounded ${dbMsg.startsWith('✓') ? 'text-pass bg-pass/10' : 'text-fail bg-fail/10'}`}>{dbMsg}</div>}
 
       {!exists && (
         <div className="text-xs text-warn bg-warn/10 border border-warn/30 rounded px-3 py-2">
@@ -125,7 +103,7 @@ export default function EnvironmentConfig() {
       )}
 
       <div className="flex-1 flex gap-3 min-h-0">
-        {/* YAML 原文编辑（Monaco，防 js-yaml 往返丢中文注释） */}
+        {/* YAML 原文编辑（Monaco，防 js-yaml 往返丢中文注释；整文件含 db 段） */}
         <div className="flex-1 border border-border rounded-lg overflow-hidden">
           {loading ? (
             <div className="h-full flex items-center justify-center text-gray-500">加载中…</div>
@@ -136,7 +114,7 @@ export default function EnvironmentConfig() {
           )}
         </div>
 
-        {/* 结构化预览（只读解析，帮助核对关键字段） */}
+        {/* 结构化预览（被测系统执行信息） */}
         <div className="w-[280px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
           <div className="px-3 py-2 border-b border-border text-xs font-medium bg-surface-2">结构化预览（env.{currentEnv}）</div>
           <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs text-gray-400">
@@ -144,6 +122,7 @@ export default function EnvironmentConfig() {
               <KV k="tdm_base" v={String(p.tdm_base || '')} />
               <KV k="hr_center_base" v={String(p.hr_center_base || '')} />
               <KV k="oss_base" v={String(p.oss_base || '')} />
+              <KV k="oss_download_base" v={String(p.oss_download_base || '')} />
             </Section>
             <Section title="资源码">
               <KV k="default_resource_code" v={String(p.default_resource_code || '')} />
@@ -155,17 +134,13 @@ export default function EnvironmentConfig() {
               ))}
               {Object.keys(accounts).length === 0 && <div className="text-gray-600">（未配置）</div>}
             </Section>
-            <Section title="数据库">
-              <KV k="db.host" v={String(db.host || '')} />
-              <KV k="db.name" v={String(db.name || '')} />
-              <KV k="db.user" v={String(db.user || '')} />
-            </Section>
             <Section title="SSO">
               <KV k="sso.domain" v={String((p.sso as Record<string, string>)?.domain || '')} />
               <KV k="sso.app_id" v={String((p.sso as Record<string, string>)?.app_id || '')} />
             </Section>
             <div className="border-t border-border pt-2 text-[10px] text-gray-600">
               编辑走 Monaco 原文（保中文注释）；保存即写盘 env.{currentEnv}.yaml，下次执行生效。
+              <span className="text-gray-500"> 数据库连接（SpecGuard 校验数据源）维护入口：系统设置 → 数据库。</span>
             </div>
           </div>
         </div>
