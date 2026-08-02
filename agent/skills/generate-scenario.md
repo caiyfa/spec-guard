@@ -22,6 +22,17 @@ trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、�
 - `verify` 中的 oracle 名称必须已注册
 - 字段命名：集合字段用 `List` 结尾，字段一律驼峰
 - 插值：`{{a.b.c}}` 点号路径，类型保留
+- **声明执行依赖（格式 2.3.0 起，预检扫描数据源）**：在机器读层加 `requires` 段，声明
+  flow/verify 用到的账号别名、环境键与跨场景变量引用（缺失 → 执行前预检弹窗预警）：
+  ```yaml
+  requires:
+    accounts: [platformNoCorp]      # flow as:/fetch_permission 引用的账号别名
+    env: [resource_code]            # {{env.*}} 引用的环境键（vars.xxx 子键用点号）
+    upstream: [IS-PREP-001]         # {{上游ID.*}} 变量来源场景（须已在 depends_on）
+  ```
+  `accounts` 别名必须是目标环境 `env.{env}.yaml` 的 `accounts` 段已定义的真实 AD 账号；
+  拿不准环境有没有该账号时，向用户确认或参考环境配置页。requires 不进契约指纹，
+  增删无需 bump version；未声明时预检扫描器会从 flow 文本静态兜底提取。
 
 ### 信息不足时
 

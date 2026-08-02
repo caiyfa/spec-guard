@@ -25,6 +25,7 @@ class Scenario:
     flow: list = field(default_factory=list)
     teardown: list = field(default_factory=list)     # 清理步骤（与 flow 同语法，session 末 LIFO 执行）
     produces: list = field(default_factory=list)     # 产出资源声明 [{resource, state}]（文档化+调度提示）
+    requires: dict = field(default_factory=dict)     # 2.3.0：执行依赖声明 {accounts:[], env:[], upstream:[]}（预检扫描用）
     verify: list = field(default_factory=list)
     suite: dict = field(default_factory=dict)     # 所属套件元信息（feature/module/spec_ref/...）
     path: str = ""                                # 源文件路径
@@ -95,6 +96,27 @@ def _normalize_produces(raw, path):
     return items
 
 
+def _normalize_requires(raw, path):
+    """2.3.0：requires 执行依赖声明归一化。
+
+    {accounts: [别名], env: [点号路径], upstream: [场景ID]}。
+    格式错误抛 ScenarioLoadError（T8 校验）；合法值按序去重。
+    """
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        raise ScenarioLoadError(f"{path}: requires 应为映射 {accounts/env/upstream}，实际: {raw}")
+    out = {}
+    for key in ("accounts", "env", "upstream"):
+        val = raw.get(key)
+        if val is None:
+            continue
+        if not isinstance(val, list) or not all(isinstance(x, str) and x.strip() for x in val):
+            raise ScenarioLoadError(f"{path}: requires.{key} 应为非空字符串数组，实际: {val}")
+        out[key] = list(dict.fromkeys(val))  # 去重保序
+    return out
+
+
 def _load_yaml(path):
     # K-025：libyaml 可用时用 C 解析器（语义与 SafeLoader 完全一致；
     # 实测 90 文件全量解析 0.55s → 0.27s，配合 scenario_store 指纹缓存消除重复解析）
@@ -141,6 +163,7 @@ def _parse_scenario(path, suite_meta):
         flow=flow,
         teardown=raw.get("teardown") or [],
         produces=_normalize_produces(raw.get("produces"), path),
+        requires=_normalize_requires(raw.get("requires"), path),
         verify=verify,
         suite=suite_meta,
         path=str(path),

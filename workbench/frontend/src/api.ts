@@ -216,6 +216,39 @@ export interface RunSummary {
   leases: Record<string, Record<string, string>>;
 }
 
+// T-311：执行前依赖预检结果（runs/preflight）
+export interface PreflightGap {
+  key?: string;        // missing_env
+  account?: string;    // missing_accounts
+  ref?: string;        // unresolved_upstream
+  scenarios: string[];
+}
+export interface PreflightScenario {
+  id: string;
+  accounts: string[];
+  env_keys: string[];
+  upstream_refs: string[];
+  missing_accounts: string[];
+  missing_env: string[];
+  unresolved_upstream: string[];
+  has_gaps: boolean;
+}
+export interface PreflightResult {
+  env: string;
+  system: string;
+  selected: string[];
+  scenario_count: number;
+  scenarios: PreflightScenario[];
+  accounts: string[];
+  env_keys: string[];
+  upstream_refs: string[];
+  missing_accounts: PreflightGap[];
+  missing_env: PreflightGap[];
+  unresolved_upstream: PreflightGap[];
+  has_gaps: boolean;
+  error?: string;
+}
+
 export const runsApi = {
   trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = [],
             light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean; accountOverride?: string }) =>
@@ -229,6 +262,9 @@ export const runsApi = {
       }),
     }),
   accounts: () => request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string }>('/runs/accounts'),
+  // T-311：执行前依赖预检（确认弹窗前静态比对账号/env 键/跨场景引用）
+  preflight: (scenarios: string[], env?: string) =>
+    request<PreflightResult>(`/runs/preflight?scenarios=${encodeURIComponent(scenarios.join(','))}${env ? `&env=${encodeURIComponent(env)}` : ''}`),
   log: (runId: string, tail = 500) =>
     request<{ run_id: string; total_lines: number; log: string }>(`/runs/${encodeURIComponent(runId)}/log?tail=${tail}`),
   context: (runId: string) =>

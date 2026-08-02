@@ -7,7 +7,7 @@
  */
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { runsApi, scenariosApi, authApi, settingsApi, type Scenario, type RunStatus } from '../api';
+import { runsApi, scenariosApi, authApi, settingsApi, type Scenario, type RunStatus, type PreflightResult } from '../api';
 import { useRunStream } from '../hooks/useRunStream';
 import Modal from '../components/Modal';
 
@@ -63,6 +63,9 @@ export default function RunControl() {
   const [target, setTarget] = useState('');
   // K-049：触发前执行上下文确认（不是点一下就直接跑）
   const [showConfirm, setShowConfirm] = useState(false);
+  // T-311：执行前依赖预检——弹窗前先扫描闭包内账号/env 键/跨场景引用（EX-92a9252f 教训）
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
   // K-050：日志专注模式——确认执行后选择区收起，执行日志放大
   const [logFocus, setLogFocus] = useState(false);
   // K-052：任务号一键复制反馈
@@ -190,6 +193,18 @@ export default function RunControl() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [events]);
 
+  /** T-311：确认弹窗打开前先扫描依赖（闭包内账号/env 键/跨场景引用），扫描完再弹 */
+  const openConfirm = async () => {
+    setPreflight(null);
+    if (selectedIds.size === 0) { setShowConfirm(true); return; }
+    setPreflightLoading(true);
+    try {
+      const r = await runsApi.preflight([...selectedIds]);
+      setPreflight(r.error ? null : r);
+    } catch { setPreflight(null); }
+    finally { setPreflightLoading(false); setShowConfirm(true); }
+  };
+
   /** K-049：触发分两步——先弹执行上下文确认，用户确认后才真正触发 */
   const doTrigger = async () => {
     setShowConfirm(false);
@@ -285,9 +300,9 @@ export default function RunControl() {
           title="上游场景只跑 flow 不做 verify 断言（加快闭包执行）">
           <input type="checkbox" checked={skipUpstreamVerify} onChange={(e) => setSkipUpstreamVerify(e.target.checked)} /> 上游不断言
         </label>
-        <button onClick={() => setShowConfirm(true)} disabled={(running && !isPaused) || (selectedIds.size === 0 && !showAdvanced)}
+        <button onClick={openConfirm} disabled={(running && !isPaused) || (selectedIds.size === 0 && !showAdvanced) || preflightLoading}
           className="px-4 py-1.5 rounded-md text-sm font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-40">
-          {isPaused ? '⏸ 已暂停' : running ? '⏳ 执行中…' : triggerLabel}
+          {preflightLoading ? '🔍 扫描依赖中…' : isPaused ? '⏸ 已暂停' : running ? '⏳ 执行中…' : triggerLabel}
         </button>
         {isPaused && (
           <button onClick={resume}
@@ -601,6 +616,44 @@ export default function RunControl() {
                 </>
               ) : '按范围执行时的全部命中场景'}
             </span>
+            {/* T-311：执行前依赖预检——弹窗前扫描闭包内账号/env 键/跨场景引用（EX-92a9252f 教训） */}
+            {selectedIds.size > 0 && (
+              <>
+                <span className="text-gray-500">依赖扫描</span>
+                <span className="text-xs">
+                  {preflightLoading ? <span className="text-gray-500">扫描中…</span> : !preflight ? (
+                    <span className="text-gray-500">未扫描</span>
+                  ) : preflight.has_gaps ? (
+                    <span className="text-warn">⚠️ 有缺失（账号 {preflight.missing_accounts.length} · 环境键 {preflight.missing_env.length} · 跨场景引用 {preflight.unresolved_upstream.length}）</span>
+                  ) : (
+                    <span className="text-pass">✅ 依赖就绪（账号 {preflight.accounts.length} · 环境键 {preflight.env_keys.length} · 上游引用 {preflight.upstream_refs.length}）</span>
+                  )}
+                </span>
+              </>
+            )}
+            {preflight && preflight.has_gaps && (
+              <div className="col-span-2 px-2 py-1.5 bg-fail/5 border border-fail/30 rounded space-y-0.5 max-h-28 overflow-y-auto">
+                {preflight.missing_accounts.map((g) => (
+                  <div key={g.account} className="text-[11px] text-fail">
+                    🔑 账号 <span className="font-mono">{g.account}</span> 未在环境配置 accounts 定义
+                    <span className="text-gray-500">（{g.scenarios.join('、')} → 将 SKIP）</span>
+                  </div>
+                ))}
+                {preflight.missing_env.map((g) => (
+                  <div key={g.key} className="text-[11px] text-warn">
+                    🌐 环境键 <span className="font-mono">{g.key}</span> 缺失
+                    <span className="text-gray-500">（{g.scenarios.join('、')}）</span>
+                  </div>
+                ))}
+                {preflight.unresolved_upstream.map((g) => (
+                  <div key={g.ref} className="text-[11px] text-warn">
+                    🔗 跨场景引用 <span className="font-mono">{g.ref}</span> 不在本次依赖闭包
+                    <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
+                  </div>
+                ))}
+                <p className="text-[10px] text-gray-500 pt-0.5">缺失项执行时按诚实语义 SKIP 不报 FAIL；仍可确认执行，或先补齐环境配置。</p>
+              </div>
+            )}
             {/* T-204：看门狗超时（修改入口在设置页「执行」Tab） */}
             <span className="text-gray-500">看门狗</span>
             <span className="text-gray-200">

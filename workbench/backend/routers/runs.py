@@ -144,6 +144,21 @@ def api_failures(scenario_id: str = "", limit: int = 10):
     return failure_index.query_failures(_get_reports_root(), scenario_id, limit)
 
 
+@router.get("/preflight", dependencies=[Depends(get_current_user)])
+def api_preflight(scenarios: str = "", env: str = ""):
+    """T-311：执行前依赖预检——确认执行弹窗前扫描闭包内场景的执行依赖。
+
+    EX-92a9252f 教训：TL-RC-014 需要的账号别名 platformNoCorp 未配置，跑完才 SKIP。
+    这里静态比对闭包内全部场景的账号/env 键/跨场景变量引用，缺失先行预警。
+    纯读：不触发执行、不落盘。
+    """
+    from services import preflight
+    ids = [s.strip() for s in (scenarios or "").split(",") if s.strip()]
+    if not ids:
+        return {"error": "缺少 scenarios 参数（逗号分隔的场景 ID 列表）"}
+    return preflight.scan_dependencies(ids, env_name=env or os.environ.get("SG_ENV", "sit"))
+
+
 @router.get("/accounts", dependencies=[Depends(get_current_user)])
 def api_run_accounts(workspace: str = Depends(optional_workspace)):
     """K-056：执行时可选账号清单（确认执行上下文弹窗的数据源）。

@@ -1,0 +1,211 @@
+"""preflight — 执行前依赖预检扫描（T-311）。
+
+背景：EX-92a9252f 选中 TL-RC-014 执行——账号别名 platformNoCorp 未在环境配置
+accounts 定义，跑完才 SKIP（output.log 只剩「账号别名未定义」一句）。
+本模块在确认执行弹窗前静态比对闭包内全部场景的执行依赖，缺失先行预警。
+
+依赖来源（合并去重）：
+1. requires 声明段（格式 2.3.0）：accounts / env / upstream
+2. 静态兜底：flow/verify/teardown 原文正则提取
+   - `as: xxx` / `account: xxx` → 账号别名（保留字 none/anonymous 除外）
+   - `{{env.xxx}}` → 环境键（点号路径，vars.* 子键）
+   - `{{场景ID.xxx}}` → 跨场景变量引用（场景 ID 以大写字母开头）
+
+比对目标（与引擎运行期一致）：
+- accounts 别名 → env 配置 accounts 段有无定义
+- env 键 → env 配置顶层键 / vars 子键
+- 跨场景引用 → 引用场景 ID 是否在本次执行闭包内（不在 = EX-8200eada 类
+  「变量未定义」提前暴露）
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+
+import yaml
+
+SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(SG_ROOT) not in sys.path:
+    sys.path.insert(0, str(SG_ROOT))
+
+_YAML_LOADER = yaml.CSafeLoader if hasattr(yaml, "CSafeLoader") else yaml.SafeLoader
+
+# 静态提取正则（flow/verify/teardown 以 YAML 文本重排后扫描）
+_AS_RE = re.compile(r"^\s*as:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$", re.M)
+_ACCOUNT_RE = re.compile(r"^\s*account:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$", re.M)
+_ENV_KEY_RE = re.compile(r"\{\{env\.([A-Za-z0-9_.]+)\}\}")
+# 跨场景变量引用：{{场景ID.save.字段}}（场景 ID = 大写字母开头 + 字母数字/连字符）
+_UPSTREAM_RE = re.compile(r"\{\{([A-Z][A-Z0-9][A-Z0-9_-]*)\.(?:[^.}]+)")
+
+# 保留字账号：as: none/anonymous = 不带 token 匿名调用（引擎语义）
+_RESERVED_ACCOUNTS = {"none", "anonymous", "null", "undefined"}
+
+
+def _load_yaml(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.load(f.read(), Loader=_YAML_LOADER) or {}
+
+
+def _static_accounts(text):
+    """静态提取账号别名（as:/account: 字段，排除保留字）。"""
+    out = set()
+    for m in _AS_RE.findall(text or "") + _ACCOUNT_RE.findall(text or ""):
+        if m not in _RESERVED_ACCOUNTS:
+            out.add(m)
+    return out
+
+
+def _static_env_keys(text):
+    """静态提取 {{env.*}} 环境键（点号路径）。"""
+    return set(_ENV_KEY_RE.findall(text or ""))
+
+
+def _static_upstream_refs(text):
+    """静态提取跨场景变量引用来源场景 ID。"""
+    return set(_UPSTREAM_RE.findall(text or ""))
+
+
+def _merge_deps(scenario_raw, text):
+    """requires 声明 ∪ 静态提取（合并去重）。"""
+    req = scenario_raw.get("requires") or {}
+    accounts = set(_static_accounts(text))
+    accounts |= set(req.get("accounts") or [])
+    env_keys = set(_static_env_keys(text))
+    env_keys |= set(req.get("env") or [])
+    upstream = set(_static_upstream_refs(text))
+    upstream |= set(req.get("upstream") or [])
+    return sorted(accounts), sorted(env_keys), sorted(upstream)
+
+
+def _env_has_key(env_config, key):
+    """env 键比对——与引擎 env 命名空间语义一致（scenario_runner:98-101）：
+    {{env.resource_code}} ← env 配置 default_resource_code（有默认值回退，不缺失）；
+    {{env.vars.*}} ← env 配置 vars 子段；其余为 env 配置顶层键。"""
+    if key == "resource_code":
+        return True  # 引擎回退默认值 TDM_SNAPSHOT_ARCHIVE，运行期不会未定义
+    if key.startswith("vars."):
+        return (env_config.get("vars") or {}).get(key[5:]) is not None
+    return key in env_config
+
+
+def _closure(scenarios: dict, selected: list) -> dict:
+    """依赖闭包（含自身）：BFS 回溯 depends_on。返回 {id: raw}。"""
+    seen, stack = {}, list(selected)
+    while stack:
+        sid = stack.pop()
+        if sid in seen:
+            continue
+        raw = scenarios.get(sid)
+        if raw is None:
+            continue
+        seen[sid] = raw
+        deps = raw.get("depends_on") or []
+        for d in deps:
+            did = d["id"] if isinstance(d, dict) else d
+            if did not in seen:
+                stack.append(did)
+    return seen
+
+
+def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
+                      env_config=None, system: str = "") -> dict:
+    """闭包内场景执行依赖预检。
+
+    scenario_ids: 选中场景 ID 列表
+    scenarios_root: 场景库根（默认工作区场景库；测试注入）
+    env_config: 环境配置 dict（默认 systems.{system}.load_env(env_name)）
+    system: 被测系统（默认工作区/SPEC_GUARD_SYSTEM/tdm）
+
+    返回：{env, system, scenarios:[...], accounts, env_keys, upstream_refs,
+          missing_accounts, missing_env, unresolved_upstream, has_gaps, error?}
+    """
+    root = Path(scenarios_root) if scenarios_root else None
+    env = env_config if env_config is not None else _load_env(env_name, system)
+
+    # 全库场景 YAML（id → raw）
+    scenarios: dict = {}
+    if root is None:
+        from services.scenario_store import SCENARIOS_ROOT
+        root = Path(SCENARIOS_ROOT)
+    for dirpath, _dirs, filenames in os.walk(root):
+        for fn in sorted(filenames):
+            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+                continue
+            p = Path(dirpath) / fn
+            try:
+                raw = _load_yaml(p)
+            except Exception:
+                continue
+            sid = raw.get("id")
+            if sid:
+                scenarios[str(sid)] = raw
+
+    # 未知选中场景 → error（前端提示，不抛异常）
+    unknown = [s for s in scenario_ids if s not in scenarios]
+    if unknown:
+        return {"error": f"未知场景: {', '.join(unknown)}", "scenarios": []}
+
+    closure = _closure(scenarios, scenario_ids)
+    env_accounts = (env or {}).get("accounts") or {}
+
+    items, all_accounts, all_env, all_up = [], set(), set(), set()
+    for sid, raw in sorted(closure.items()):
+        # flow/verify/teardown 以 YAML 文本重排（dict repr 无法跑正则）
+        text = ""
+        for section in ("flow", "verify", "teardown"):
+            val = raw.get(section)
+            if val:
+                text += yaml.safe_dump(val, allow_unicode=True) + "\n"
+        accounts, env_keys, upstream = _merge_deps(raw, text)
+        miss_acc = [a for a in accounts if a not in env_accounts]
+        miss_env = [k for k in env_keys if not _env_has_key(env, k)]
+        miss_up = [u for u in upstream if u not in closure]
+        all_accounts |= set(accounts)
+        all_env |= set(env_keys)
+        all_up |= set(upstream)
+        items.append({
+            "id": sid,
+            "accounts": accounts, "env_keys": env_keys, "upstream_refs": upstream,
+            "missing_accounts": miss_acc, "missing_env": miss_env,
+            "unresolved_upstream": miss_up,
+            "has_gaps": bool(miss_acc or miss_env or miss_up),
+        })
+
+    def _group(attr):
+        """缺失项按「键 → 涉及场景」归组。"""
+        m: dict = {}
+        for it in items:
+            for v in it[attr]:
+                m.setdefault(v, []).append(it["id"])
+        return [{"key" if attr == "missing_env" else "account" if attr == "missing_accounts" else "ref": k,
+                 "scenarios": sorted(v)} for k, v in m.items()]
+
+    has_gaps = any(it["has_gaps"] for it in items)
+    return {
+        "env": env_name,
+        "system": system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm"),
+        "selected": list(scenario_ids),
+        "scenario_count": len(closure),
+        "scenarios": items,
+        "accounts": sorted(all_accounts),
+        "env_keys": sorted(all_env),
+        "upstream_refs": sorted(all_up),
+        "missing_accounts": _group("missing_accounts"),
+        "missing_env": _group("missing_env"),
+        "unresolved_upstream": _group("unresolved_upstream"),
+        "has_gaps": has_gaps,
+    }
+
+
+def _load_env(env_name: str, system: str) -> dict:
+    """加载环境配置（与 runs/accounts 端点同源）。失败时告警并返回空（不抛）。"""
+    import importlib
+    sys_name = system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    try:
+        mod = importlib.import_module(f"systems.{sys_name}")
+        return mod.load_env(env_name) or {}
+    except Exception as e:
+        print(f"[SpecGuard WARN] preflight 环境配置加载失败 "
+              f"(systems.{sys_name}.load_env('{env_name}')): {type(e).__name__}: {e}")
+        return {}

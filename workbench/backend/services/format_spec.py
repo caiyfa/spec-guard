@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.2.0"
-SPEC_UPDATED = "2026-07-24"
+SPEC_VERSION = "2.3.0"
+SPEC_UPDATED = "2026-08-02"
 SPEC_CHANGELOG = [
+    ("2.3.0", "2026-08-02", "新增 2.6 requires 执行依赖声明（accounts/env/upstream）与 T8 校验——执行前预检扫描器静态读取，弹窗前预警缺失账号/环境键；requires 不进契约指纹"),
     ("2.2.0", "2026-08-01", "K-055 微服务体系适配：call 新增 service 服务前缀路由；db_query 新增 schema 多库连接；新增 resolve_account/precheck_permission 工具；internal token 服务凭证"),
     ("2.1.0", "2026-07-24", "call 升级 Apifox 参数体系（headers/cookies/body_type: json/form/urlencoded/raw/binary）；新增 python 原语（flow/verify/teardown 三段可用）"),
     ("2.0.0", "2026-07-24", "格式 2.0：3 原语 + tool 信封；version 契约版本；depends_on 版本期望与 optional；DRIFT/ORPHANED verdict；T6 契约指纹校验"),
@@ -438,6 +439,33 @@ produces 是契约的一部分：删改产出 = MAJOR bump。
 每个步骤的 `save` 声明产出变量名，后续步骤和下游场景通过 `{{save名.字段}}` 引用。
 save 变量名是契约的一部分：改名 = MAJOR bump，新增 = MINOR bump。
 
+### 2.6 requires — 声明执行依赖（可选，2.3.0 起）
+
+声明本场景执行所依赖的账号别名、环境键与上游变量来源——供**执行前预检**扫描器
+静态读取（选中场景后、确认执行弹窗前，缺失项先行预警，避免跑完才 SKIP）：
+
+```yaml
+requires:
+  accounts: [platformNoCorp]      # flow as:/fetch_permission 引用的账号别名（须在 env accounts 定义）
+  env: [resource_code]            # {{env.*}} 引用的环境键（顶层键或 vars.xxx 点号路径）
+  upstream: [IS-PREP-001]         # {{上游ID.*}} 变量来源场景（须已在 depends_on 声明）
+```
+
+**字段语义**：
+- `accounts`：账号别名清单。别名必须能在当前环境 `env.{env}.yaml` 的 `accounts` 段找到；
+  缺失时引擎运行期会 SKIP（诚实语义），预检提前暴露
+- `env`：环境键点号路径（`resource_code` / `vars.xxx` / `tdm_base` 等）。缺失时引擎运行期
+  按步骤类型 SKIP 或报环境配置缺口，预检提前暴露
+- `upstream`：跨场景变量引用的来源场景 ID（`{{IS-PREP-001.session.json.data.id}}` 的
+  `IS-PREP-001`）。必须已在 `depends_on` 声明，否则校验报错
+
+**约束**：
+- `requires` 是**执行依赖声明**，不是契约产出——**不进契约指纹**（指纹 = produces + save + covers），
+  增删 requires 无需 bump version
+- 未声明时预检扫描器会**静态兜底**：从 flow/verify 文本正则提取 `as:` 账号别名、
+  `{{env.*}}` 环境键与 `{{上游ID.*}}` 跨场景引用，声明与静态提取合并去重
+- 存量场景未声明 requires 亦可预检（静态兜底），新写场景建议声明
+
 ---
 
 ## 三、变量引用语法
@@ -529,6 +557,11 @@ GET /api/reference/next-id?prefix=PP&type=RC
 | T5 | WARN | scenario 类型无 depends_on 且非 prep 标签 → 疑似孤例 |
 | T6 | ERROR | 契约指纹已变更但 version 未 bump（比对 contracts_baseline.json） |
 | T7 | WARN | 依赖未声明版本期望（接受任意版本），建议补 version: ^X |
+
+**T8 补充（2.3.0）**：`requires` 段格式校验：
+- `accounts` 非空字符串数组；`env` 为点号路径（`vars.xxx` 合法）；`upstream` 必须指向
+  已存在场景 ID **且**已在 `depends_on` 声明（否则 ERROR）
+- requires 不进契约指纹（指纹 = produces + save + covers），增删无需 bump version
 
 **T6 补充**：version 已 bump 但契约未变化 → WARN（冗余 bump）；新场景未入基线 → INFO（需更新基线）。
 基线文件 `contracts_baseline.json` 随 git 提交，由迁移脚本或发布检查流程更新。
