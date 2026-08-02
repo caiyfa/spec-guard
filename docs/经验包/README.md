@@ -23,3 +23,4 @@
 | 日期 | 任务号 | 现象 | 根因（环节） | 修复 | 预防 |
 |---|---|---|---|---|---|
 | 2026-08-02 | [EX-8200eada](2026-08-02-EX-8200eada-变量未定义-权限缺失.md) | `变量未定义: activity.json.data.id` | SIT 权限体系 TDM_INV_ACTIVITY 资源码无绑定账号（环境） | 写型场景首步补 precheck_permission（2d969c4）；SIT 授权待环境侧 | 写型场景首步 precheck；环境交付 checklist 绑定写型资源码 |
+| 2026-08-02 | [测试污染生产配置](2026-08-02-测试污染生产配置-monkeypatch双实例陷阱.md) | env.sit.yaml 被测试覆盖截断 | monkeypatch 双模块实例（sys.path 双路径导入，测试基建） | 同实例导入修复 + git checkout 恢复（4be2aee 前后） | 写盘测试验证模块同实例；跑完查 git status |
