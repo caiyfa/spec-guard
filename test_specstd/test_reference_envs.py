@@ -68,11 +68,19 @@ class TestEnvEndpoints:
         assert r.status_code == 400
 
     def test_save_env_config_roundtrip(self, client, tmp_path, monkeypatch):
-        """保存到指定环境文件（YAML 校验 + 写盘）。"""
+        """保存到指定环境文件（YAML 校验 + 写盘）。
+
+        双保险（经验包 2026-08-02-测试污染生产配置）：monkeypatch 目标必须与 main
+        同模块实例（from routers import reference），且真实 env.sit.yaml 的 mtime
+        不得变化——monkeypatch 失效会立即红而非静默污染生产配置。
+        """
         from routers import reference  # 与 main 同一模块实例（BACKEND_DIR sys.path）
+        real_env = reference.SYSTEMS_TDM / "config" / "env.sit.yaml"
+        real_mtime = real_env.stat().st_mtime_ns if real_env.is_file() else None
         target = tmp_path / "config"
         target.mkdir(parents=True)
         monkeypatch.setattr(reference, "SYSTEMS_TDM", tmp_path)
+        assert reference.SYSTEMS_TDM == tmp_path, "monkeypatch 未生效（模块实例不一致）"
         (tmp_path / "config").mkdir(exist_ok=True)
 
         r = client.put("/api/reference/env-config?env=sit", json={"raw": "accounts:\n  default: {ad: u1, emp_no: '90000001'}\n"})
@@ -80,6 +88,9 @@ class TestEnvEndpoints:
         assert r.json()["ok"] is True
         saved = (tmp_path / "config" / "env.sit.yaml").read_text(encoding="utf-8")
         assert "default" in saved
+        # mtime 守卫：真实配置未被写
+        if real_mtime is not None:
+            assert real_env.stat().st_mtime_ns == real_mtime, "真实 env.sit.yaml 被测试写入！monkeypatch 失效"
 
     def test_save_rejects_bad_yaml(self, client, tmp_path, monkeypatch):
         from routers import reference  # 与 main 同一模块实例（BACKEND_DIR sys.path）
