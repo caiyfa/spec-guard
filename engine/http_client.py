@@ -6,9 +6,13 @@ K-049：每次请求打印调用上下文（method/path/status/响应体 trace i
 执行日志（pytest stdout → 工作台日志流）可直接拿到 ifelc-trace_id 排查 BUG。
 """
 
+import json
 import re
+import time
 
 import requests
+
+from engine.execution_record import truncate  # T-314：响应摘要与报告 body_excerpt 同源
 
 VERSION_PATTERN = re.compile(r'^\d+\.\d+\.\d+(?:-SNAPSHOT)?\([0-9a-f]{7,8}\)$')
 # TDM 网关统一响应包装里的请求跟踪 ID（ifelc-trace_id / ifelc_trace_id 兼容）
@@ -61,6 +65,7 @@ class HttpClient:
         headers/cookies：Apifox 风格自定义头与 Cookie（KV dict，已在步骤层完成插值）。
         合并顺序：Authorization 先置，自定义 headers 后合并——允许负向测试显式覆盖认证头。
         """
+        _t0 = time.time()
         resp = self._do(method, path, params, json_body, files, data, timeout,
                         headers=headers, cookies=cookies)
         # 401 自动失效缓存并重取重试一次（仅带账号的客户端）
@@ -70,9 +75,22 @@ class HttpClient:
                             headers=headers, cookies=cookies)
         if self.check_version:
             self._check_version_header(resp, path)
-        # K-049：调用上下文日志（执行日志排查 BUG 的关键锚点：trace id 可在网关全链追踪）
+        # T-314：调用锚点带完整执行现场——状态 + 耗时 + 响应体摘要 + trace。
+        # 此前只有「METHOD path → status | trace」，请求/响应体详情只在 run.json，
+        # 执行日志与报告对不上（EX-a78498c3）。摘要与报告 body_excerpt 同源（truncate）；
+        # 数组方括号转圆括号——防 runner._parse_line 把 [XX-XXX] 误判为场景 ID。
+        elapsed = int((time.time() - _t0) * 1000)
         trace = _trace_id_of(resp)
-        print(f"[SpecGuard] {method} {path} → {resp.status_code}"
+        excerpt = ""
+        try:
+            body = self._safe_json(resp)
+            if body is not None:
+                excerpt = json.dumps(truncate(body), ensure_ascii=False)
+                excerpt = excerpt.replace("[", "(").replace("]", ")")
+        except Exception:
+            pass
+        print(f"[SpecGuard] {method} {path} → {resp.status_code} | {elapsed}ms"
+              + (f" | body={excerpt}" if excerpt else "")
               + (f" | trace={trace}" if trace else ""), flush=True)
         if raise_on_error and resp.status_code >= 400:
             raise ApiError(resp.status_code, self._safe_json(resp))

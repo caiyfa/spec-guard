@@ -428,3 +428,11 @@ class TestParseLine:
 
     def test_plain_output_no_verdict(self):
         assert self._parse("[SpecGuard] POST /api/x -> 200") == {}
+
+    def test_specguard_anchor_with_verdict_words_ignored(self):
+        """T-314：引擎锚点行不得参与 verdict 解析——body 摘要可能含 FAILED/ERROR 词。"""
+        ev = self._parse("[SpecGuard] POST /api/system/tags → 500 | 12ms | "
+                         'body={"message": "VALIDATION FAILED"} | trace=t-1')
+        assert ev == {}, f"锚点行不应误判 verdict: {ev}"
+        ev2 = self._parse("[SpecGuard] 断言 errResp.status == 400 → ❌FAIL | 实际状态 500 ≠ 预期 400")
+        assert ev2 == {}

@@ -713,6 +713,19 @@ def _assert_json_ops(body, actual, ns, trace):
         trace.expr += " 存在"
 
 
+def format_assertion_log(trace) -> str:
+    """T-314：断言结果日志行——每条 verify 实时进执行日志（-s stdout）。
+
+    此前断言详情只在 run.json（case JSON assertions），执行日志只有场景末尾
+    pytest.fail 的 evidence 摘要——EX-a78498c3 类失败看不到逐条断言过程。
+    """
+    flag = "✅PASS" if trace.passed else "❌FAIL"
+    line = f"[SpecGuard] 断言 {getattr(trace, 'expr', '?')} → {flag}"
+    if not trace.passed and getattr(trace, "message", ""):
+        line += f" | {trace.message}"
+    return line
+
+
 def _run_verifies(scenario, rctx, ns, record, last_call_ref):
     first_fail_category = None
     for v in scenario.verify:
@@ -726,6 +739,7 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
                                    passed=actual == expected,
                                    message="" if actual == expected else f"实际状态 {actual} ≠ 预期 {expected}")
             record.assertions.append(trace)
+            print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
             if not trace.passed and not first_fail_category:
                 first_fail_category = CAT_ASSERT
 
@@ -755,6 +769,7 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
                 else:
                     trace.passed, trace.message = False, str(e)
             record.assertions.append(trace)
+            print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
             if not trace.passed and not first_fail_category:
                 first_fail_category = CAT_ASSERT
 
@@ -769,6 +784,7 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
             except AssertionError as e:
                 trace.passed, trace.message = False, str(e)
             record.assertions.append(trace)
+            print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
             if not trace.passed and not first_fail_category:
                 first_fail_category = CAT_ORACLE
 
@@ -803,6 +819,7 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
             except AssertionError as e:
                 trace.passed, trace.message = False, str(e)
             record.assertions.append(trace)
+            print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
             if not trace.passed and not first_fail_category:
                 first_fail_category = CAT_ASSERT
     return first_fail_category
@@ -840,6 +857,14 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
                 raise ValueError(f"步骤格式错误（应为单键 dict）: {step}")
             step_type, body = next(iter(step.items()))
             body = body or {}
+            # T-314：非 call 步骤的轨迹进日志（call 详情由 http_client 锚点承担）
+            if step_type != "call":
+                brief = ""
+                if step_type == "tool" and isinstance(body, dict):
+                    brief = f" | use={body.get('use', '')}"
+                elif step_type == "db_query" and isinstance(body, dict):
+                    brief = f" | sql={str(body.get('sql', ''))[:80]}"
+                print(f"[SpecGuard] 步骤 {step_type}{brief}", flush=True)
             handler = rctx.registry.get_step(step_type)
             value = handler(body, rctx, ns, record)
             save_name = body.get("save") if isinstance(body, dict) else None

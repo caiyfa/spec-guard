@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 23  # K-052: 新增 list_failures/read_run_log 后 21→23
+        assert len(ALL_TOOLS) == 24  # T-313: 新增 scan_compliance 后 23→24
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -61,7 +61,8 @@ class TestToolRegistration:
                      "promote_drafts",  # K-021⑥: 批量入库
                      "edit_dependency",  # K-027: DAG 依赖边编排
                      "suggest_deps",  # K-046: 依赖建议（确定性引擎）
-                     "list_failures", "read_run_log"}  # K-052: 失败索引 + 按任务号读日志
+                     "list_failures", "read_run_log",  # K-052: 失败索引 + 按任务号读日志
+                     "scan_compliance"}  # T-313: 全库格式合规缺口扫描
         assert names == expected
 
 

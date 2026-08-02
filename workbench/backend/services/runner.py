@@ -493,7 +493,11 @@ class RunManager:
 
         T-303：正则提取——仅匹配场景 ID 形态的 [XX-XXX-NNN]；
         非参数化行（如 engine_modes 的 test_shared）verdict 有值但 scenario_id 为空。
+        T-314：引擎锚点行（[SpecGuard] 前缀）跳过——body 摘要可能含 FAILED/ERROR 词，
+        误判会污染 verdictMap（响应体里 "VALIDATION FAILED" 会让场景显示 FAILED）。
         """
+        if line.lstrip().startswith("[SpecGuard]"):
+            return {}
         m = self._VERDICT_RE.search(line)
         if not m:
             return {}
