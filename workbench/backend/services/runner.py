@@ -43,7 +43,8 @@ def _get_reports_root() -> Path:
         return SG_ROOT / "reports"
 
 
-def _spawn_pytest(cmd: list[str], env: str, run_id: str = "") -> subprocess.Popen:
+def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
+                  account_override: str = "") -> subprocess.Popen:
     """创建 pytest 子进程（K-047：subprocess.Popen，不依赖事件循环 flavor）。
 
     uvicorn --reload 在 Windows 给服务端 SelectorEventLoop（其 use_subprocess 语义
@@ -55,6 +56,9 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "") -> subprocess.Pope
     child_env = {**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())}
     if run_id:
         child_env["SG_RUN_ID"] = run_id
+    if account_override:
+        # K-056：执行时账号选择（确认弹窗选定）→ 子进程 conftest 重映射 default 别名
+        child_env["SG_ACCOUNT_OVERRIDE"] = account_override
     return subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -124,7 +128,8 @@ class RunManager:
                       plan_id: str = "", strict_deps: bool = False,
                       emp_no: str = "", workspace: str = "",
                       queue_id: Optional[int] = None,
-                      prep_only: bool = False, skip_upstream_verify: bool = False) -> dict:
+                      prep_only: bool = False, skip_upstream_verify: bool = False,
+                      account_override: str = "") -> dict:
         """触发执行
 
         scope: all / module / scenario / tag / engine_modes
@@ -206,13 +211,13 @@ class RunManager:
             "selected_scenarios": target.split(" or ") if (scope == "scenario" and target) else [],
             "env": env, "plan_id": plan_id,
             "prep_only": prep_only, "skip_upstream_verify": skip_upstream_verify,
-            "strict_deps": strict_deps,
+            "strict_deps": strict_deps, "account_override": account_override,
             "emp_no": emp_no, "workspace": workspace, "started_at": self.started_at,
         })
 
         # 启动子进程（K-047：Popen；失败时队表标记 failed，不再遗留 running 卡死队列）
         try:
-            self.process = _spawn_pytest(cmd, env, self.run_id)
+            self.process = _spawn_pytest(cmd, env, self.run_id, account_override)
         except Exception as e:
             self.status = "idle"
             if self._queue_id:

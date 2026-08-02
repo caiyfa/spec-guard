@@ -51,6 +51,9 @@ export default function RunControl() {
   const [searchQ, setSearchQ] = useState('');
   const [prepOnly, setPrepOnly] = useState(false);
   const [skipUpstreamVerify, setSkipUpstreamVerify] = useState(false);
+  // K-056：执行时账号选择（确认弹窗提供，不必改系统设置）
+  const [accountOptions, setAccountOptions] = useState<Record<string, { ad: string; emp_no: string; type: string }>>({});
+  const [accountOverride, setAccountOverride] = useState('');  // '' = 场景声明的 default
   // 高级模式（按范围执行：tag/单场景表达式/全量/引擎自测）
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [scope, setScope] = useState('all');
@@ -100,6 +103,7 @@ export default function RunControl() {
   useEffect(() => {
     scenariosApi.list().then(setScenarios);
     scenariosApi.dag().then((d) => setDagEdges(d.edges || [])).catch(() => {});
+    runsApi.accounts().then((r) => setAccountOptions(r.accounts || {})).catch(() => {});
   }, []);
 
   // ── K-046 补：执行上下文（闭包预览）──
@@ -178,7 +182,7 @@ export default function RunControl() {
     clear();
     try {
       let result: { ok: boolean; queued?: boolean; position?: number } | undefined;
-      const light = { prepOnly, skipUpstreamVerify };
+      const light = { prepOnly, skipUpstreamVerify, accountOverride };
       if (selectedIds.size > 0) {
         // K-046：勾选直跑（后端原生支持 "A or B" 的 pytest -k 表达式）
         const expr = [...selectedIds].join(' or ');
@@ -551,6 +555,24 @@ export default function RunControl() {
             </span>
             <span className="text-gray-500">环境</span>
             <span className="text-gray-200 font-mono">sit</span>
+            {/* K-056：执行时账号选择（不再只能改系统设置） */}
+            <span className="text-gray-500">执行账号</span>
+            <span>
+              <select value={accountOverride} onChange={(e) => setAccountOverride(e.target.value)}
+                className="bg-surface-3 border border-border rounded px-2 py-1 text-sm text-gray-200">
+                <option value="">场景声明（default）</option>
+                {Object.entries(accountOptions).map(([alias, info]) => (
+                  <option key={alias} value={alias}>
+                    {alias}{info.type === 'internal' ? '（internal token）' : info.emp_no ? `（${info.emp_no}）` : ''}
+                  </option>
+                ))}
+              </select>
+              {accountOverride && accountOptions[accountOverride] && (
+                <span className="ml-2 text-[10px] text-info">
+                  场景 as: default 将以 {accountOptions[accountOverride].ad || accountOverride} 执行
+                </span>
+              )}
+            </span>
             <span className="text-gray-500">执行范围</span>
             <span className="text-gray-200">
               {selectedIds.size > 0 ? (

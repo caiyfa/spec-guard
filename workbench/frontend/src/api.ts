@@ -218,15 +218,21 @@ export interface RunSummary {
 
 export const runsApi = {
   trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = [],
-            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean }) =>
+            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean; accountOverride?: string }) =>
     request<{ ok: boolean; run_id?: string; queued?: boolean; queue_id?: number; position?: number }>('/runs/trigger', {
       method: 'POST',
       body: JSON.stringify({
         scope, target, env, breakpoints,
         prep_only: !!light?.prepOnly,
         skip_upstream_verify: !!light?.skipUpstreamVerify,
+        account_override: light?.accountOverride || '',
       }),
     }),
+  accounts: () => request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string }>('/runs/accounts'),
+  log: (runId: string, tail = 500) =>
+    request<{ run_id: string; total_lines: number; log: string }>(`/runs/${encodeURIComponent(runId)}/log?tail=${tail}`),
+  context: (runId: string) =>
+    request<{ run_id: string; context: Record<string, unknown> | null; hint?: string }>(`/runs/${encodeURIComponent(runId)}/context`),
   abort: () => request<{ ok: boolean }>('/runs/abort', { method: 'POST' }),
   resume: () => request<{ ok: boolean }>('/runs/resume', { method: 'POST' }),
   status: () => request<RunStatus>('/runs/status'),

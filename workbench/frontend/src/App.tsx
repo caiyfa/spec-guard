@@ -84,7 +84,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/run', label: '测试执行', roles: TESTER_UP },
       { to: '/schedules', label: '定时任务', roles: TESTER_UP },
-      { to: '/history', label: '历史对比', roles: ALL },
+      { to: '/history', label: '执行记录', roles: ALL },
       { to: '/attribution', label: '失败归因', roles: ALL },
     ],
   },

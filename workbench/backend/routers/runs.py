@@ -2,6 +2,7 @@
 
 触发前校验 covers 关联（M3 验收：covers 校验未通过禁止触发执行）。
 """
+import os
 import sys
 from pathlib import Path
 
@@ -31,6 +32,7 @@ class TriggerBody(BaseModel):
     strict_deps: bool = False     # 严格依赖模式（DRIFT/ORPHANED → BLOCKED）
     prep_only: bool = False           # K-046 轻量执行：只跑上游环境准备
     skip_upstream_verify: bool = False  # K-046 轻量执行：上游只跑 flow 不断言
+    account_override: str = ""        # K-056 执行时账号选择：alias 覆盖场景 as: default
     # 注意：covers 校验不可由客户端跳过（V10 修复）——engine_modes 由服务端按 scope 判定豁免
 
 
@@ -68,7 +70,8 @@ async def api_trigger(body: TriggerBody,
                                            strict_deps=body.strict_deps,
                                            emp_no=user.emp_no, workspace=workspace,
                                            prep_only=body.prep_only,
-                                           skip_upstream_verify=body.skip_upstream_verify)
+                                           skip_upstream_verify=body.skip_upstream_verify,
+                                           account_override=body.account_override)
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result["error"])
     return result
@@ -126,6 +129,72 @@ def api_status():
 def api_history(limit: int = 20):
     """历史运行列表"""
     return list_reports(limit=limit)
+
+
+@router.get("/accounts", dependencies=[Depends(get_current_user)])
+def api_run_accounts(workspace: str = Depends(optional_workspace)):
+    """K-056：执行时可选账号清单（确认执行上下文弹窗的数据源）。
+
+    来源为当前工作区系统适配包的 env 配置 accounts 段——执行时选择，
+    不必每次改系统设置。
+    """
+    import importlib
+    from specstd.workspace import get_active_workspace
+    ws = get_active_workspace()
+    system = (ws.system if ws else "") or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    try:
+        mod = importlib.import_module(f"systems.{system}")
+        env_config = mod.load_env(os.environ.get("SG_ENV", "sit"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"环境配置加载失败: {e}")
+    accounts = {}
+    for alias, cfg in (env_config.get("accounts") or {}).items():
+        if isinstance(cfg, str):
+            cfg = {"ad": cfg}
+        accounts[alias] = {
+            "ad": cfg.get("ad", ""),
+            "emp_no": cfg.get("emp_no", ""),
+            "type": cfg.get("type", "user"),
+        }
+    return {"accounts": accounts, "env": env_config.get("env_name", "sit")}
+
+
+@router.get("/{run_id}/log", dependencies=[Depends(get_current_user)])
+def api_get_run_log(run_id: str, tail: int = 500):
+    """K-056：执行日志读取（output.log 尾部 N 行，执行记录页详情用）。
+
+    与 MCP read_run_log 同一守卫（RUN_ID_RE + 越界检查）。
+    """
+    import re
+    if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$", run_id or ""):
+        raise HTTPException(status_code=400, detail=f"非法 run_id: {run_id}")
+    from services.scenario_store import _reports_root
+    reports_root = _reports_root()
+    log_path = (reports_root / run_id / "output.log").resolve()
+    try:
+        log_path.relative_to(reports_root.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"路径越界: {run_id}")
+    if not log_path.is_file():
+        raise HTTPException(status_code=404, detail=f"执行日志不存在（K-050 之前的运行无 output.log）: {run_id}")
+    lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    tail = max(1, min(tail, 5000))
+    return {"run_id": run_id, "total_lines": len(lines), "log": "\n".join(lines[-tail:])}
+
+
+@router.get("/{run_id}/context", dependencies=[Depends(get_current_user)])
+def api_get_run_context(run_id: str):
+    """K-056：触发上下文（trigger.json：选中场景/环境/账号/轻量选项/触发人）。"""
+    import json as _json
+    import re
+    if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$", run_id or ""):
+        raise HTTPException(status_code=400, detail=f"非法 run_id: {run_id}")
+    from services.scenario_store import _reports_root
+    ctx_path = _reports_root() / run_id / "trigger.json"
+    if not ctx_path.is_file():
+        return {"run_id": run_id, "context": None,
+                "hint": "K-053 之前的运行无 trigger.json"}
+    return {"run_id": run_id, "context": _json.loads(ctx_path.read_text(encoding="utf-8"))}
 
 
 @router.get("/{run_id}", dependencies=[Depends(get_current_user)])

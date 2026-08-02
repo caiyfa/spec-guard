@@ -48,14 +48,28 @@ def sg_system():
 
 @pytest.fixture(scope="session")
 def env_config(sg_system, pytestconfig):
-    """加载 systems/{system}/config/env.{env}.yaml"""
+    """加载 systems/{system}/config/env.{env}.yaml
+
+    K-056：SG_ACCOUNT_OVERRIDE 环境变量——执行控制确认弹窗选定的账号别名，
+    将其配置重映射到 default 别名（场景 as: default 即以所选账号执行）。
+    """
     env_name = pytestconfig.getoption("--env")
     mod = importlib.import_module(f"systems.{sg_system}")
     if hasattr(mod, "load_env"):
-        return mod.load_env(env_name)
-    # 适配包未暴露 load_env 时退回 config 模块
-    cfg_mod = importlib.import_module(f"systems.{sg_system}.config")
-    return cfg_mod.load_env(env_name)
+        cfg = mod.load_env(env_name)
+    else:
+        # 适配包未暴露 load_env 时退回 config 模块
+        cfg_mod = importlib.import_module(f"systems.{sg_system}.config")
+        cfg = cfg_mod.load_env(env_name)
+    override = os.environ.get("SG_ACCOUNT_OVERRIDE", "").strip()
+    if override:
+        accounts = cfg.get("accounts") or {}
+        if override in accounts:
+            accounts["default"] = accounts[override]
+            cfg["_account_override"] = override
+        else:
+            print(f"[SpecGuard WARN] SG_ACCOUNT_OVERRIDE={override} 不在 accounts 中，忽略")
+    return cfg
 
 
 @pytest.fixture(scope="session")
