@@ -3,7 +3,7 @@
  * 保留：ROOT_LAYOUT_OPTIONS 调优参数 / 懒加载 / collectLayout / normaliseBounds / 层内 Y 居中
  * 砍掉：嵌套容器布局（iteration/loop）、分支端口排序（if-else 多出口）——SpecGuard 场景图为扁平 DAG
  */
-import type { Edge, Node } from '@xyflow/react';
+import type { Edge } from '@xyflow/react';
 
 let elk: import('elkjs/lib/elk-api').ELK | undefined;
 
@@ -59,8 +59,9 @@ export interface LayoutInfo { x: number; y: number; layer?: number }
 
 interface ElkChildShape { id: string; width: number; height: number; x?: number; y?: number; layoutOptions?: Record<string, string> }
 
-/** nodes/edges → ELK 布局坐标（含层内 Y 轴居中，移植自 Dify use-workflow-organize.helpers） */
-export async function layoutDagByELK(nodes: Node[], edges: Edge[]): Promise<Map<string, LayoutInfo>> {
+/** nodes/edges → ELK 布局坐标（含层内 Y 轴居中，移植自 Dify use-workflow-organize.helpers）。
+ *  nodes 参数只需 id（布局前节点尚无 position） */
+export async function layoutDagByELK(nodes: Array<{ id: string }>, edges: Edge[]): Promise<Map<string, LayoutInfo>> {
   const graph = {
     id: 'specguard-dag',
     layoutOptions: ROOT_LAYOUT_OPTIONS,

@@ -489,6 +489,14 @@ export const settingsApi = {
   // K-007: spec 签名基线自动更新开关
   getAuditBaseline: () =>
     request<{ auto_update: boolean }>('/settings/audit-baseline'),
+  // T-204: 执行看门狗超时（秒，0=禁用）
+  getRunTimeout: () =>
+    request<{ timeout_sec: number; source: string }>('/settings/run-timeout'),
+  setRunTimeout: (timeoutSec: number) =>
+    request<{ ok: boolean; timeout_sec: number }>('/settings/run-timeout', {
+      method: 'POST',
+      body: JSON.stringify({ timeout_sec: timeoutSec }),
+    }),
   setAuditBaseline: (autoUpdate: boolean) =>
     request<{ ok: boolean; auto_update: boolean }>('/settings/audit-baseline', {
       method: 'POST',

@@ -149,3 +149,24 @@ class TestListReportsBatchGrouping:
         runs = ss.list_reports(limit=20)
         ids = [r["run_id"] for r in runs]
         assert ids == ["EX-main0001"], f"批次目录不应单独成条: {ids}"
+
+    def test_get_report_merges_batches(self, tmp_path, monkeypatch):
+        """T-203：主报告详情归并 -bN 批次 case（History 批次展开数据源）。"""
+        import json
+        reports = tmp_path / "reports"
+        main = reports / "EX-main0001"
+        main.mkdir(parents=True)
+        (main / "run.json").write_text(json.dumps({
+            "run_id": "EX-main0001", "env": "sit", "cases": [{"id": "A", "verdict": "PASS"}]}),
+            encoding="utf-8")
+        b0 = reports / "EX-main0001-b0"
+        b0.mkdir()
+        (b0 / "run.json").write_text(json.dumps({
+            "run_id": "EX-main0001-b0", "cases": [{"id": "B", "verdict": "FAIL"}]}),
+            encoding="utf-8")
+        monkeypatch.setattr(ss, "_reports_root", lambda: reports)
+        data = ss.get_report("EX-main0001")
+        assert data is not None
+        assert data["cases"][0]["id"] == "A"
+        assert data["batches"][0]["dir"] == "EX-main0001-b0"
+        assert data["batches"][0]["cases"][0]["verdict"] == "FAIL"

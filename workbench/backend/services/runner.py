@@ -36,12 +36,21 @@ def _new_run_id() -> str:
 
 
 def _run_timeout_sec() -> float:
-    """T-118：看门狗超时配置——SG_RUN_TIMEOUT 秒（0/缺省 = 禁用）。
+    """T-118/T-204：看门狗超时配置——settings KV（run_timeout_sec）优先，回退环境变量 SG_RUN_TIMEOUT。
 
     进程挂死（网络黑洞/poll 死循环）时自动终止并标 timeout，不再永久占用队列。
+    0 = 禁用（不设超时）。
     """
+    raw = ""
     try:
-        return float(os.environ.get("SG_RUN_TIMEOUT", "0") or 0)
+        from services.settings_store import get_setting
+        raw = get_setting("run_timeout_sec", "")
+    except Exception:
+        pass
+    if not raw:
+        raw = os.environ.get("SG_RUN_TIMEOUT", "")
+    try:
+        return float(raw or 0)
     except ValueError:
         return 0.0
 

@@ -85,6 +85,22 @@ function RunDetail({ runId }: { runId: string }) {
         </div>
       </div>
 
+      {/* T-203：断点批次详情（{run_id}-bN 的 case，T-120 归组后的可读面） */}
+      {((detail?.batches || []) as { dir: string; cases: CaseBrief[] }[]).map((b) => (
+        <div key={b.dir} className="bg-surface-2 border border-border rounded-lg p-3">
+          <div className="text-xs font-medium text-gray-400 mb-2">批次 {b.dir.replace(/^.*-b/, '#')}（{b.cases.length}）</div>
+          <div className="space-y-0.5 max-h-40 overflow-y-auto">
+            {b.cases.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
+                <span className="font-mono text-gray-300">{c.id}</span>
+                {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
       {/* 执行日志 */}
       <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
         <button onClick={() => setShowLog(!showLog)}

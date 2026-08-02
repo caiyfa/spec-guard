@@ -25,6 +25,7 @@ export type ScenarioNodeType = Node<{
   version?: string;
   category?: string;
   verdict?: string;
+  isBreakpoint?: boolean;  // T-202：计划断点场景画布标记
 }>;
 
 export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeType>) {
@@ -48,6 +49,9 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
       <div className="flex items-center gap-1.5">
         <span>{cat.icon}</span>
         <span className="font-mono font-semibold truncate">{data.label}</span>
+        {data.isBreakpoint && (
+          <span className="text-[10px]" title="计划断点：执行到该场景前暂停">🔴</span>
+        )}
         {data.version && (
           <span
             className="ml-auto text-[9px] px-1 py-px rounded font-mono"

@@ -372,13 +372,31 @@ def list_reports(limit: int = 20) -> list[dict]:
 
 
 def get_report(run_id: str) -> Optional[dict]:
-    """读取单次运行的 run.json"""
+    """读取单次运行的 run.json
+
+    T-203：断点分批执行的 case 在 {run_id}-bN 目录——主报告归并 batches 字段
+    （T-120 历史归组后的详情可读面，History 主任务下展开批次）。
+    """
     import json
-    run_json = _reports_root() / run_id / "run.json"
+    root = _reports_root()
+    run_json = root / run_id / "run.json"
     if not run_json.is_file():
         return None
     with open(run_json, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    batches = []
+    for d in sorted(root.glob(f"{run_id}-b*")):
+        bjson = d / "run.json"
+        if bjson.is_file():
+            try:
+                with open(bjson, "r", encoding="utf-8") as f:
+                    bdata = json.load(f)
+                batches.append({"dir": d.name, "cases": bdata.get("cases", [])})
+            except Exception:
+                continue
+    if batches:
+        data["batches"] = batches
+    return data
 
 
 def get_case(run_id: str, case_file: str) -> Optional[dict]:

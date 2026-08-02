@@ -106,13 +106,20 @@ export default function DagEditor() {
     }).catch(() => {});
   }, []);
 
+  // T-202：计划断点集合（选中计划时画布标记「在该场景前暂停」的场景）
+  const breakpointSet = useMemo(() => {
+    if (!selectedPlan) return new Set<string>();
+    const plan = plans.find((p) => p.id === selectedPlan);
+    return new Set((plan?.breakpoints || []) as string[]);
+  }, [selectedPlan, plans]);
+
   // ELK 布局并渲染 DAG（异步）
   const layoutDag = useCallback(async (dag: DagData) => {
-    const flowNodes: Node[] = dag.nodes.map((n) => ({
+    const flowNodes = dag.nodes.map((n) => ({
       id: n.id,
       type: 'scenario',
-      position: { x: 0, y: 0 },
-      // 显式尺寸：v12 跳过 ResizeObserver 测量等待，节点/边立即可渲染
+      // 节点尺寸与 ELK 布局参数一致（elkljs 布局需要精确尺寸；固定宽高规避
+      // 字体加载差异导致的布局抖动，如无 ResizeObserver 环境边不渲染的问题
       //（Dify 同策略；同时规避 ResizeObserver 不可用环境下边不渲染的问题）
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
@@ -124,6 +131,8 @@ export default function DagEditor() {
         version: (n.data as { version?: string }).version || '',
         category: (n.data as { category?: string }).category || 'validator',
         verdict: verdicts[n.id] || '',
+        // T-202：计划断点场景画布标记（选中计划时生效）
+        isBreakpoint: breakpointSet.has(n.id),
       },
     }));
     const flowEdges: Edge[] = dag.edges.map((e) => {
@@ -142,7 +151,7 @@ export default function DagEditor() {
     const positions = await layoutDagByELK(flowNodes, flowEdges);
     setNodes(flowNodes.map((n) => ({ ...n, position: positions.get(n.id) || { x: 0, y: 0 } })));
     setEdges(flowEdges);
-  }, [verdicts, focusId, setNodes, setEdges]);
+  }, [verdicts, focusId, breakpointSet, setNodes, setEdges]);
 
   // 初始加载 DAG
   useEffect(() => {
@@ -312,7 +321,10 @@ export default function DagEditor() {
         const r = await scenariosApi.suggestDeps(sid);
         for (const sug of r.suggestions || []) {
           try {
-            await scenariosApi.editDep(sid, { action: 'add', dep_id: sug.dep_id, mode: 'shared' });
+            await scenariosApi.editDep(sid, {
+              action: 'add', dep_id: sug.dep_id, mode: 'shared',
+              note: `${sug.confidence} ${sug.kind}`,
+            });
             added++;
           } catch { /* 环校验等拒绝单条，继续 */ }
         }
@@ -323,6 +335,37 @@ export default function DagEditor() {
       : '所选场景没有可采纳的依赖建议');
     if (added) refreshDag();
   }, [selectedIds, refreshDag]);
+
+  // T-201：孤节点补全——无依赖上游的场景批量扫描建议并采纳（T-105 验收点补全）
+  const handleCompleteOrphans = useCallback(async () => {
+    if (!dagData) return;
+    const withInEdge = new Set(dagData.edges.map((e) => e.target));
+    const orphans = dagData.nodes.map((n) => n.id).filter((id) => !withInEdge.has(id));
+    if (!orphans.length) {
+      setError('没有孤节点（所有场景都有依赖上游）');
+      return;
+    }
+    setError('');
+    let added = 0;
+    for (const sid of orphans) {
+      try {
+        const r = await scenariosApi.suggestDeps(sid);
+        for (const sug of r.suggestions || []) {
+          try {
+            await scenariosApi.editDep(sid, {
+              action: 'add', dep_id: sug.dep_id, mode: 'shared',
+              note: `${sug.confidence} ${sug.kind}`,
+            });
+            added++;
+          } catch { /* 单条拒绝继续 */ }
+        }
+      } catch { /* 单个场景失败不阻断 */ }
+    }
+    setError(added
+      ? `孤节点补全完成：扫描 ${orphans.length} 个无上游场景，采纳 ${added} 条依赖`
+      : `孤节点扫描完成：${orphans.length} 个无上游场景均无可采纳建议`);
+    if (added) refreshDag();
+  }, [dagData, refreshDag]);
 
   // 保存回调
   const handleSave = useCallback(async (yaml: string) => {
@@ -423,6 +466,14 @@ export default function DagEditor() {
         </div>
         <button onClick={refreshDag} className="text-[10px] text-gray-500 hover:text-info px-2 py-1 rounded border border-border hover:border-info/40" title="重新布局">
           🔄 重排
+        </button>
+        {/* T-201：孤节点补全——无上游场景批量扫描建议并采纳 */}
+        <button
+          onClick={handleCompleteOrphans}
+          className="text-[10px] text-gray-500 hover:text-pass px-2 py-1 rounded border border-border hover:border-pass/40"
+          title="扫描无依赖上游的场景，批量采纳依赖建议（跨场景变量引用补全）"
+        >
+          🟢 补全孤节点
         </button>
       </div>
 

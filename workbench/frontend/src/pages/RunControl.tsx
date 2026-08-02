@@ -7,7 +7,7 @@
  */
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { runsApi, scenariosApi, authApi, type Scenario, type RunStatus } from '../api';
+import { runsApi, scenariosApi, authApi, settingsApi, type Scenario, type RunStatus } from '../api';
 import { useRunStream } from '../hooks/useRunStream';
 import Modal from '../components/Modal';
 
@@ -103,10 +103,13 @@ export default function RunControl() {
   const isPaused = !!breakpointHit;
 
   const [dagEdges, setDagEdges] = useState<{ source: string; target: string }[]>([]);
+  // T-204：看门狗超时（确认弹窗可见；修改入口在设置页「执行」Tab）
+  const [runTimeoutSec, setRunTimeoutSec] = useState(0);
   useEffect(() => {
     scenariosApi.list().then(setScenarios);
     scenariosApi.dag().then((d) => setDagEdges(d.edges || [])).catch(() => {});
     runsApi.accounts().then((r) => setAccountOptions(r.accounts || {})).catch(() => {});
+    settingsApi.getRunTimeout().then((r) => setRunTimeoutSec(r.timeout_sec)).catch(() => {});
   }, []);
 
   // ── K-046 补：执行上下文（闭包预览）──
@@ -598,6 +601,13 @@ export default function RunControl() {
                 </>
               ) : '按范围执行时的全部命中场景'}
             </span>
+            {/* T-204：看门狗超时（修改入口在设置页「执行」Tab） */}
+            <span className="text-gray-500">看门狗</span>
+            <span className="text-gray-200">
+              {runTimeoutSec > 0
+                ? <span className="font-mono">{Math.floor(runTimeoutSec / 60)} 分 {runTimeoutSec % 60} 秒（超时自动终止）</span>
+                : '未启用（0 = 不设超时）'}
+            </span>
             {/* T-119：断点设置——按选中顺序列出，勾选=在该场景前暂停（后端已支持分批执行） */}
             {selectedIds.size > 0 && (
               <span className="text-gray-500">断点</span>
@@ -619,8 +629,7 @@ export default function RunControl() {
                 )}
               </div>
             )}
-            {(prepOnly || skipUpstreamVerify) && (
-              <>
+            {(prepOnly || skipUpstreamVerify) && (              <>
                 <span className="text-gray-500">轻量选项</span>
                 <span className="text-warn">
                   {prepOnly && '仅准备（只跑上游 prep）'}{prepOnly && skipUpstreamVerify && ' · '}

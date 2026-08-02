@@ -216,3 +216,32 @@ def set_audit_baseline(body: AuditBaselineBody, user=Depends(require_role("admin
     from services import settings_store
     settings_store.set_bool(settings_store.KEY_AUDIT_AUTO_UPDATE_BASELINE, body.auto_update)
     return {"ok": True, "auto_update": body.auto_update}
+
+
+class RunTimeoutBody(BaseModel):
+    timeout_sec: int  # 秒；0 = 禁用看门狗
+
+
+@router.get("/run-timeout")
+def get_run_timeout(user=Depends(require_role("admin", "tester"))):
+    """T-204：执行看门狗超时配置（秒，0=禁用；缺省回退环境变量 SG_RUN_TIMEOUT）。"""
+    from services import settings_store
+    raw = settings_store.get_setting("run_timeout_sec", "")
+    if not raw:
+        import os
+        raw = os.environ.get("SG_RUN_TIMEOUT", "")
+    try:
+        val = int(float(raw or 0))
+    except ValueError:
+        val = 0
+    return {"timeout_sec": val, "source": "settings" if settings_store.get_setting("run_timeout_sec", "") else "env"}
+
+
+@router.post("/run-timeout")
+def set_run_timeout(body: RunTimeoutBody, user=Depends(require_role("admin"))):
+    """T-204：设置执行看门狗超时（0=禁用）。对后续触发的执行生效（无需重启）。"""
+    from services import settings_store
+    if body.timeout_sec < 0:
+        raise HTTPException(status_code=400, detail="timeout_sec 必须 ≥ 0（0=禁用）")
+    settings_store.set_setting("run_timeout_sec", str(body.timeout_sec))
+    return {"ok": True, "timeout_sec": body.timeout_sec}

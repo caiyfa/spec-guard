@@ -5,7 +5,7 @@ import { useJsTokens } from '../theme';
 import { referenceApi, modelApi, settingsApi } from '../api';
 import type { ModelConfig } from '../api';
 
-type Tab = 'db' | 'models' | 'yaml' | 'sso' | 'audit';
+type Tab = 'db' | 'models' | 'yaml' | 'sso' | 'audit' | 'run';
 
 const TAB_LABELS: Record<Tab, string> = {
   db: '🗄 数据库',
@@ -13,6 +13,7 @@ const TAB_LABELS: Record<Tab, string> = {
   yaml: '📄 YAML',
   sso: '🔑 SSO/网关',
   audit: '🔍 审计',
+  run: '▶ 执行',
 };
 
 export default function Settings() {
@@ -72,6 +73,7 @@ export default function Settings() {
         {tab === 'yaml' && <YamlTab raw={raw} setRaw={setRaw} loading={loading} />}
         {tab === 'sso' && <SsoTab raw={raw} />}
         {tab === 'audit' && <AuditTab />}
+        {tab === 'run' && <RunTab />}
       </div>
     </div>
   );
@@ -436,6 +438,65 @@ function SsoTab({ raw }: { raw: string }) {
         </div>
       </div>
       <p className="text-[10px] text-gray-600">SSO 和网关配置通过 YAML Tab 编辑保存。此处为只读预览。</p>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// Tab 6: 执行（T-204 看门狗超时配置）
+// ══════════════════════════════════════════════════════════
+
+function RunTab() {
+  const [timeoutSec, setTimeoutSec] = useState(0);
+  const [source, setSource] = useState('env');
+  const [msg, setMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    settingsApi.getRunTimeout()
+      .then((r) => { setTimeoutSec(r.timeout_sec); setSource(r.source); })
+      .catch(() => setMsg('✗ 加载失败'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setMsg('');
+    try {
+      const r = await settingsApi.setRunTimeout(timeoutSec);
+      setTimeoutSec(r.timeout_sec);
+      setSource('settings');
+      setMsg('✓ 已保存（后续触发的执行生效，无需重启）');
+    } catch (e: unknown) {
+      setMsg(`✗ ${e instanceof Error ? e.message : '保存失败'}`);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl p-1">
+      <div className="rounded-md border border-border bg-surface-3 p-4">
+        <h3 className="text-sm font-medium text-gray-200 mb-1">执行看门狗超时（T-118）</h3>
+        <p className="text-[11px] text-gray-500 mb-3">
+          单次执行超过该时长（从触发起算）自动强制终止并标记 timeout——进程挂死不再永久占用执行队列。
+          <span className="text-gray-600"> 0 = 禁用。</span>
+          {source === 'env' && <span className="text-warn"> 当前由环境变量 SG_RUN_TIMEOUT 控制，保存后以设置值为准。</span>}
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number" min={0} step={60}
+            value={timeoutSec}
+            disabled={loading}
+            onChange={(e) => setTimeoutSec(Number(e.target.value) || 0)}
+            className="w-32 bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200"
+            placeholder="0 = 禁用"
+          />
+          <span className="text-xs text-gray-500">秒</span>
+          <button onClick={save}
+            className="px-3 py-1.5 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
+            💾 保存
+          </button>
+          {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
+        </div>
+      </div>
     </div>
   );
 }
