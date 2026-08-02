@@ -210,6 +210,22 @@ def validate_scenario_content(content: str) -> dict:
         except Exception:
             pass  # 引擎未就绪时跳过 T4/T7
 
+    # T8（2.3.0）：requires.upstream 必须在 depends_on 声明——否则跨场景变量
+    # {{上游ID.*}} 运行期「变量未定义」（EX-8200eada 教训：声明依赖但未声明来源）
+    req = raw.get("requires") or {}
+    if isinstance(req, dict):
+        req_up = req.get("upstream") or []
+        dep_ids = {
+            d if isinstance(d, str) else (d.get("id", "") if isinstance(d, dict) else "")
+            for d in deps
+        }
+        for up in req_up:
+            if up not in dep_ids:
+                findings.append({"level": "ERROR", "rule": "T8", "scenario": sid,
+                                 "message": f"requires.upstream 引用 {up} 未在 depends_on 声明——"
+                                            f"跨场景变量 {{{{{up}.*}}}} 运行期会「变量未定义」。"
+                                            f"请在 depends_on 声明该依赖，或在 requires.upstream 移除"})
+
     # T5 无孤例（scenario 类型无依赖且非 prep 标签 → 疑似孤立场景）
     tags = raw.get("tags") or []
     if test_type == "scenario" and not deps and "prep" not in tags:

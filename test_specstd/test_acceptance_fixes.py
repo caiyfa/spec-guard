@@ -165,6 +165,44 @@ class TestV8V9LiveRegistry:
         assert "snapshot_frozen" in names
         assert "profile_matches_db" in names
 
+    def test_validator_t8_requires_upstream_in_depends_on(self):
+        """T-313：T8 语义校验——requires.upstream 未在 depends_on → ERROR（运行期变量未定义）。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-T8
+version: "0.1"
+depends_on: []
+requires:
+  upstream: [IS-PREP-001]
+flow:
+  - call: {method: GET, path: /api/x, save: resp}
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        t8 = [f for f in report["findings"] if f["rule"] == "T8"]
+        assert t8, f"requires.upstream 不在 depends_on 应报 T8: {report['findings']}"
+        assert t8[0]["level"] == "ERROR"
+        assert "IS-PREP-001" in t8[0]["message"]
+
+    def test_validator_t8_accepts_declared_upstream(self):
+        """requires.upstream 已在 depends_on → 不报 T8。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-T8B
+version: "0.1"
+depends_on: [IS-PREP-001]
+requires:
+  upstream: [IS-PREP-001]
+flow:
+  - call: {method: GET, path: /api/x, save: resp}
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        t8 = [f for f in report["findings"] if f["rule"] == "T8"]
+        assert not t8, f"已在 depends_on 声明不应报 T8: {t8}"
+
     def test_query_registry_oracle_dynamic(self):
         import asyncio
         from mcp_server.tools import registry_query

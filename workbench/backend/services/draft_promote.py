@@ -163,10 +163,28 @@ def _record_lineage(filenames: list[str], scenario_ids: list[str], module: str):
         pass  # 血缘记录失败不影响入库主流程
 
 
-def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "") -> dict:
+def _rollback_promote(target: Path, draft_path: Path, backup: Path | None):
+    """promote 失败回滚：新文件移回 drafts/；replace 模式恢复原文件 + 清理备份。"""
+    try:
+        if target.exists():
+            shutil.move(str(target), str(draft_path))
+    except Exception:
+        pass
+    if backup and backup.exists():
+        try:
+            shutil.move(str(backup), str(target))
+        except Exception:
+            pass
+
+
+def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "",
+            replace: bool = False) -> dict:
     """入库：格式校验 PASS → 移入 scenarios/{module}/ → 更新契约基线 → 发布门禁。
 
     发布门禁失败自动回滚（文件移回 drafts/，基线还原）。
+    T-313：replace=True 时允许覆盖同名场景（Agent 更新已有场景的写入路径）——
+    原文件备份 .bak，任一步失败自动回滚（原文件恢复 + 备份清理）；成功后备份删除
+    （场景库在 git 内，历史可 diff）。
     成功返回 {ok, scenario_id, target, validate, gate}；失败抛 PromoteError。
     """
     from mcp_server.tools.validator import validate_scenario_content
@@ -176,14 +194,21 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
         raise PromoteError("draft_not_found", f"草稿不存在: {filename}")
     module_dir = _guard_module(module)
     target = module_dir / filename
+    backup: Path | None = None
     if target.exists():
-        raise PromoteError("conflict", f"目标已存在同名场景: {module}/{filename}")
+        if not replace:
+            raise PromoteError("conflict", f"目标已存在同名场景: {module}/{filename}")
+        # T-313：replace 模式——原文件备份（失败恢复用），覆盖更新
+        backup = target.with_suffix(target.suffix + ".bak")
+        shutil.copy2(str(target), str(backup))
     # K-019：展示路径在副作用前算好（该计算曾抛 ValueError 导致「成功报失败」）
     display_target = _display_target(target)
 
     # 闸 1：格式校验
     report = validate_scenario_content(path.read_text(encoding="utf-8"))
     if report["verdict"] != "PASS":
+        if backup and backup.exists():
+            backup.unlink(missing_ok=True)  # 校验未通过不产生备份残留
         raise PromoteError("validation_failed", "格式校验未通过，禁止入库",
                            detail={"findings": report["findings"]})
 
@@ -192,7 +217,7 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
     try:
         _rebuild_baseline()
     except Exception as e:
-        shutil.move(str(target), str(path))  # 回滚
+        _rollback_promote(target, path, backup)
         raise PromoteError("baseline_failed", f"契约基线更新失败，已回滚: {e}")
 
     # 闸 2：发布门禁（release_check.py）
@@ -201,13 +226,20 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
         gate = _run_release_gate()
         if not gate["ok"]:
             # 回滚：文件移回 + 基线还原
-            shutil.move(str(target), str(path))
+            _rollback_promote(target, path, backup)
             try:
                 _rebuild_baseline()
             except Exception:
                 pass
             raise PromoteError("gate_failed", "发布门禁未通过，已回滚",
                                detail={"gate_output": gate.get("output", "")})
+
+    # 成功后清理 replace 备份（场景库在 git 内，历史可 diff）
+    if backup and backup.exists():
+        try:
+            backup.unlink()
+        except Exception:
+            pass
 
     # 审计：草稿入库留痕（M6 审计要求）
     try:

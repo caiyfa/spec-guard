@@ -344,6 +344,7 @@ def validate_draft(filename: str):
 class PromoteBody(BaseModel):
     module: str          # 目标模块目录（相对 scenarios/，如 employee/person-profile）
     skip_gate: bool = False  # 仅调试用途跳过发布门禁（默认 False，正常入库必须过门禁）
+    replace: bool = False    # T-313：覆盖同名场景（Agent 更新已有场景；原文件备份+失败回滚）
 
 
 @router.post("/{filename}/promote", dependencies=[Depends(require_role("admin", "tester"))])
@@ -351,13 +352,14 @@ def promote_draft(filename: str, body: PromoteBody):
     """入库：格式校验 PASS → 移入 scenarios/{module}/ → 更新契约基线 → 发布门禁。
 
     发布门禁失败自动回滚（文件移回 drafts/，基线还原）。
+    T-313：replace=true 覆盖同名场景（更新已有场景的写入路径）。
     K-015：核心逻辑抽取至 services.draft_promote（MCP promote_draft 工具复用同一实现）。
     """
     from services import draft_promote
     from services.auth import current_emp_no
     try:
         return draft_promote.promote(filename, body.module, skip_gate=body.skip_gate,
-                                     emp_no=current_emp_no())
+                                     emp_no=current_emp_no(), replace=body.replace)
     except draft_promote.PromoteError as e:
         status = draft_promote.HTTP_STATUS.get(e.code, 500)
         raise HTTPException(status_code=status,

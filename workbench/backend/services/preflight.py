@@ -198,6 +198,80 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
     }
 
 
+def scan_compliance(scenarios_root=None) -> dict:
+    """T-313：全库格式合规缺口扫描——Agent 更新已有场景的依据。
+
+    对每个场景比对「requires 声明」与「静态提取的 flow/verify/teardown 依赖」：
+    - missing_*: flow 用到但 requires 未声明（2.3.0 存量场景缺口，需补声明）
+    - extra_requires: requires 声明了但 flow 未用到（冗余，WARN）
+    - t8_violations: requires.upstream 不在 depends_on（T8 语义违规）
+
+    返回 {total, compliant_count, gaps: [...], summary}。纯读。
+    """
+    root = Path(scenarios_root) if scenarios_root else None
+    if root is None:
+        from services.scenario_store import SCENARIOS_ROOT
+        root = Path(SCENARIOS_ROOT)
+
+    scenarios: dict = {}
+    for dirpath, _dirs, filenames in os.walk(root):
+        for fn in sorted(filenames):
+            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+                continue
+            p = Path(dirpath) / fn
+            try:
+                raw = _load_yaml(p)
+            except Exception:
+                continue
+            sid = raw.get("id")
+            if sid:
+                scenarios[str(sid)] = raw
+
+    gaps = []
+    for sid, raw in sorted(scenarios.items()):
+        text = ""
+        for section in ("flow", "verify", "teardown"):
+            val = raw.get(section)
+            if val:
+                text += yaml.safe_dump(val, allow_unicode=True) + "\n"
+        # 纯静态提取（不含 requires）——与声明比对，才能暴露「用到未声明」
+        accounts = set(_static_accounts(text))
+        env_keys = set(_static_env_keys(text))
+        upstream = set(_static_upstream_refs(text))
+        req = raw.get("requires") or {}
+        declared = {"accounts": set(req.get("accounts") or []),
+                    "env": set(req.get("env") or []),
+                    "upstream": set(req.get("upstream") or [])}
+        missing_accounts = sorted(accounts - declared["accounts"])
+        missing_env = sorted(env_keys - declared["env"])
+        missing_upstream = sorted(upstream - declared["upstream"])
+        extra_requires = sorted(
+            (declared["accounts"] | declared["env"] | declared["upstream"]) - accounts - env_keys - upstream)
+        deps = {d["id"] if isinstance(d, dict) else d for d in (raw.get("depends_on") or [])}
+        t8 = sorted(declared["upstream"] - deps)
+        if missing_accounts or missing_env or missing_upstream or extra_requires or t8:
+            gaps.append({
+                "scenario_id": sid,
+                "missing_accounts": missing_accounts,
+                "missing_env": missing_env,
+                "missing_upstream": missing_upstream,
+                "extra_requires": extra_requires,
+                "t8_violations": t8,
+            })
+
+    by_type = {"missing_accounts": 0, "missing_env": 0, "missing_upstream": 0,
+               "extra_requires": 0, "t8_violations": 0}
+    for g in gaps:
+        for k in by_type:
+            by_type[k] += len(g[k])
+    return {
+        "total": len(scenarios),
+        "compliant_count": len(scenarios) - len(gaps),
+        "gaps": gaps,
+        "summary": {"gap_scenarios": len(gaps), **by_type},
+    }
+
+
 def apply_overrides(cfg: dict, overrides) -> dict:
     """T-312：执行变量覆盖——弹窗输入值合并进环境配置（替代改配置文件）。
 

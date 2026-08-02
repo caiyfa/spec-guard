@@ -243,3 +243,59 @@ class TestApplyOverrides:
         cfg = {"accounts": {"a": {"ad": "u1"}}}
         preflight.apply_overrides(cfg, [{"kind": "account", "name": "b", "value": "u2"}])
         assert cfg["accounts"] == {"a": {"ad": "u1"}}, "原配置不应被修改"
+
+
+# ══════════════════════════════════════════════════════════
+# scan_compliance 全库格式合规缺口扫描（T-313）
+# ══════════════════════════════════════════════════════════
+
+class TestScanCompliance:
+    """T-313：Agent 更新已有场景的依据——哪些场景 flow 用到但 requires 未声明。"""
+
+    def test_reports_missing_requires_declarations(self, lib):
+        """as: 账号 + {{env.*}} 键 + 跨场景引用未声明 → 缺口列出。"""
+        _write(lib, "TL-RC-014", _scenario_yaml(
+            "TL-RC-014",
+            flow='  - call:\n      as: platformNoCorp\n      method: POST\n      path: /x\n'
+                 '      params:\n        code: "{{env.resource_code}}"\n'
+                 '        id: "{{IS-PREP-001.session.json.data.id}}"\n',
+            depends='["IS-PREP-001"]'))
+        _write(lib, "IS-PREP-001", _scenario_yaml(
+            "IS-PREP-001", flow='  - call:\n      as: default\n      method: POST\n      path: /p\n'))
+        r = preflight.scan_compliance(scenarios_root=str(lib))
+        gaps = {g["scenario_id"]: g for g in r["gaps"]}
+        g = gaps["TL-RC-014"]
+        assert "platformNoCorp" in g["missing_accounts"], "as: 账号应列为未声明"
+        assert "resource_code" in g["missing_env"], "{{env.*}} 键应列为未声明"
+        assert "IS-PREP-001" in g["missing_upstream"], "跨场景引用应列为未声明"
+        assert r["total"] == 2
+        # IS-PREP-001 只用了 default 且未声明 → 也是缺口
+        assert gaps["IS-PREP-001"]["missing_accounts"] == ["default"]
+
+    def test_compliant_scenario_not_listed(self, lib):
+        """requires 声明齐全 → 不在缺口清单。"""
+        _write(lib, "OK-001", _scenario_yaml(
+            "OK-001",
+            flow='  - call:\n      as: default\n      method: GET\n      path: /ok\n',
+            requires={"accounts": ["default"]}))
+        r = preflight.scan_compliance(scenarios_root=str(lib))
+        assert r["gaps"] == [], f"声明齐全不应报缺口: {r['gaps']}"
+
+    def test_extra_requires_flagged(self, lib):
+        """requires 声明了但 flow 未用到 → 冗余声明 WARN。"""
+        _write(lib, "RC-003", _scenario_yaml(
+            "RC-003",
+            flow='  - call:\n      as: default\n      method: GET\n      path: /ok\n',
+            requires={"accounts": ["default", "ghost_alias"]}))
+        r = preflight.scan_compliance(scenarios_root=str(lib))
+        assert r["gaps"][0]["extra_requires"] == ["ghost_alias"]
+
+    def test_t8_upstream_not_in_depends_on(self, lib):
+        """T8：requires.upstream 声明了但不在 depends_on → 语义违规。"""
+        _write(lib, "T8-001", _scenario_yaml(
+            "T8-001",
+            flow='  - call:\n      as: default\n      method: GET\n      path: /t\n',
+            requires={"upstream": ["IS-PREP-001"]},
+            depends="[]"))
+        r = preflight.scan_compliance(scenarios_root=str(lib))
+        assert r["gaps"][0]["t8_violations"] == ["IS-PREP-001"]

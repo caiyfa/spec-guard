@@ -30,6 +30,7 @@ from mcp_server.tools import (  # noqa: E402
     attribution,
     audit,
     meta,
+    compliance,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -45,6 +46,7 @@ TOOL_MODULES = [
     attribution,
     audit,
     meta,
+    compliance,
 ]
 
 ALL_TOOLS: list[Tool] = []

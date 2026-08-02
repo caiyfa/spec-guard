@@ -113,7 +113,8 @@ TOOLS = [
     Tool(
         name="promote_draft",
         description="草稿入库：格式校验 PASS → 移入 scenarios/{module}/ → 契约基线更新 → 发布门禁"
-                    "（失败自动回滚，不产生半截入库）。仅在用户明确确认入库后调用。",
+                    "（失败自动回滚，不产生半截入库）。仅在用户明确确认入库后调用。"
+                    "T-313：replace=true 覆盖同名场景（更新已有场景的写入路径，原文件备份+失败回滚）。",
         inputSchema={
             "type": "object",
             "properties": {
@@ -121,7 +122,9 @@ TOOLS = [
                 "module": {"type": "string",
                             "description": "目标模块目录（相对 scenarios/，如 employee/person-profile）"},
                 "skip_gate": {"type": "boolean",
-                               "description": "跳过发布门禁（仅调试用途，默认 false）", "default": False}
+                               "description": "跳过发布门禁（仅调试用途，默认 false）", "default": False},
+                "replace": {"type": "boolean",
+                             "description": "覆盖同名场景（更新已有场景用；缺省 false 时同名冲突）", "default": False}
             },
             "required": ["filename", "module"]
         }
@@ -189,10 +192,14 @@ def _handle_promote_drafts(arguments: dict) -> list[TextContent]:
 
 
 def _handle_promote_draft(arguments: dict) -> list[TextContent]:
-    """K-015：草稿入库（与 API /drafts/{filename}/promote 同一实现）。"""
+    """K-015：草稿入库（与 API /drafts/{filename}/promote 同一实现）。
+
+    T-313：replace=true 覆盖同名场景（更新已有场景）；缺省 false 时同名冲突。
+    """
     filename = arguments.get("filename", "")
     module = arguments.get("module", "")
     skip_gate = bool(arguments.get("skip_gate", False))
+    replace = bool(arguments.get("replace", False))
     if not filename or not module:
         return [TextContent(type="text", text="错误：缺少 filename 或 module 参数")]
 
@@ -203,7 +210,8 @@ def _handle_promote_draft(arguments: dict) -> list[TextContent]:
             emp_no = current_emp_no()
         except Exception:
             emp_no = ""
-        result = draft_promote.promote(filename, module, skip_gate=skip_gate, emp_no=emp_no)
+        result = draft_promote.promote(filename, module, skip_gate=skip_gate,
+                                       emp_no=emp_no, replace=replace)
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
     except Exception as e:
         code = getattr(e, "code", "error")
