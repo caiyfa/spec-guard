@@ -98,3 +98,41 @@ class TestEnvEndpoints:
         r = client.put("/api/reference/env-config?env=sit", json={"raw": "a: [unclosed"})
         assert r.status_code == 200
         assert r.json()["ok"] is False
+
+
+class TestSharedScope:
+    """T-309：共享通用层（systems/_shared/config）——跨系统配置复用。"""
+
+    def test_shared_env_config_read(self, client):
+        """共享层文件可读（sso 已迁移至共享层）。"""
+        r = client.get("/api/reference/env-config?env=sit&scope=shared")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["scope"] == "shared"
+        assert data["exists"] is True
+        assert "sso" in data["parsed"], "共享层应包含 sso 段"
+
+    def test_envs_lists_shared_layer(self, client):
+        r = client.get("/api/reference/envs")
+        names = [e["name"] for e in r.json()["shared_envs"]]
+        assert "sit" in names
+
+    def test_shared_save_isolated(self, client, tmp_path, monkeypatch):
+        """共享层保存写到 _shared/config（与系统层隔离）。"""
+        from routers import reference
+        shared_dir = tmp_path / "_shared" / "config"
+        monkeypatch.setattr(reference, "_SHARED_CONFIG_DIR", shared_dir)
+        monkeypatch.setattr(reference, "SYSTEMS_TDM", tmp_path / "systems" / "tdm")
+        r = client.put("/api/reference/env-config?env=sit&scope=shared",
+                       json={"raw": "sso:\n  domain: http://shared.example.com\n"})
+        assert r.status_code == 200
+        assert r.json()["scope"] == "shared"
+        saved = (shared_dir / "env.sit.yaml").read_text(encoding="utf-8")
+        assert "shared.example.com" in saved
+
+    def test_merge_env_system_overrides_shared(self):
+        """合并语义：系统键覆盖共享同键（顶层合并）。"""
+        from systems._shared import merge_env
+        merged = merge_env({"sso": {"domain": "s"}, "a": 1}, {"sso": {"domain": "sys"}, "b": 2})
+        assert merged["sso"]["domain"] == "sys"
+        assert merged["a"] == 1 and merged["b"] == 2

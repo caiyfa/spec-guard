@@ -207,38 +207,48 @@ def ref_env_vars():
 # ── 环境配置读写 ──────────────────────────────────────────
 
 _ENV_GLOB = "env.*.yaml"
+_SHARED_CONFIG_DIR = SYSTEMS_TDM.parent / "_shared" / "config"   # systems/_shared/config（跨系统通用层，T-309）
 
 
-def _env_file(env: str) -> Path:
-    """按环境名定位配置：systems/{system}/config/env.{env}.yaml（默认 sit）。"""
+def _env_file(env: str, scope: str = "system") -> Path:
+    """按环境名与配置层定位文件：
+    scope=system → systems/{system}/config/env.{env}.yaml
+    scope=shared → systems/_shared/config/env.{env}.yaml（跨系统通用）
+    """
     name = (env or "sit").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
         raise HTTPException(status_code=400, detail=f"环境名非法: {env}")
-    return SYSTEMS_TDM / "config" / f"env.{name}.yaml"
+    if scope not in ("system", "shared"):
+        raise HTTPException(status_code=400, detail=f"scope 非法: {scope}（仅支持 system/shared）")
+    base = _SHARED_CONFIG_DIR if scope == "shared" else SYSTEMS_TDM / "config"
+    return base / f"env.{name}.yaml"
 
 
 @router.get("/envs")
 def list_envs():
-    """T-306：可用环境列表（扫描 systems/{system}/config/env.*.yaml）。
+    """T-306/T-309：可用环境列表（系统层 + 共享通用层）。
 
-    独立环境配置菜单的数据源——环境信息不再只有 sit 一份。
+    systems/{system}/config/env.*.yaml 为系统专属；systems/_shared/config/env.*.yaml
+    为跨系统通用（共享打底，系统覆盖）。
     """
     files = sorted((SYSTEMS_TDM / "config").glob(_ENV_GLOB))
     envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in files]
-    return {"system": "tdm", "envs": envs,
+    shared_files = sorted(_SHARED_CONFIG_DIR.glob(_ENV_GLOB)) if _SHARED_CONFIG_DIR.is_dir() else []
+    shared_envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in shared_files]
+    return {"system": "tdm", "envs": envs, "shared_envs": shared_envs,
             "current": envs[0]["name"] if envs else "sit"}
 
 
 @router.get("/env-config")
-def get_env_config(env: str = "sit"):
-    """读取环境配置（返回 YAML 原文 + 解析后的结构化数据；env 默认 sit 向后兼容）"""
-    env_file = _env_file(env)
+def get_env_config(env: str = "sit", scope: str = "system"):
+    """读取环境配置（YAML 原文 + 结构化；scope=system 系统专属 / scope=shared 共享通用）"""
+    env_file = _env_file(env, scope)
     if not env_file.is_file():
-        return {"raw": "", "parsed": {}, "env": env, "exists": False}
+        return {"raw": "", "parsed": {}, "env": env, "scope": scope, "exists": False}
     with open(env_file, "r", encoding="utf-8") as f:
         raw = f.read()
     parsed = yaml.safe_load(raw) or {}
-    return {"raw": raw, "parsed": parsed, "env": env, "exists": True}
+    return {"raw": raw, "parsed": parsed, "env": env, "scope": scope, "exists": True}
 
 
 class EnvConfigBody(BaseModel):
@@ -246,19 +256,19 @@ class EnvConfigBody(BaseModel):
 
 
 @router.put("/env-config", dependencies=[Depends(require_role("admin"))])
-def save_env_config(body: EnvConfigBody, env: str = "sit"):
-    """保存环境配置（校验 YAML 语法后写入；env 默认 sit 向后兼容）"""
+def save_env_config(body: EnvConfigBody, env: str = "sit", scope: str = "system"):
+    """保存环境配置（校验 YAML 语法后写入；scope=system / shared）"""
     try:
         parsed = yaml.safe_load(body.raw)
     except yaml.YAMLError as e:
         return {"ok": False, "error": f"YAML 语法错误: {e}"}
     if not isinstance(parsed, dict):
         return {"ok": False, "error": "配置必须是 YAML 对象"}
-    env_file = _env_file(env)
+    env_file = _env_file(env, scope)
     env_file.parent.mkdir(parents=True, exist_ok=True)
     with open(env_file, "w", encoding="utf-8") as f:
         f.write(body.raw)
-    return {"ok": True, "env": env}
+    return {"ok": True, "env": env, "scope": scope}
 
 
 @router.post("/test-db", dependencies=[Depends(require_role("admin"))])

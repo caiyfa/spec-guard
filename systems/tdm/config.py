@@ -1,9 +1,10 @@
 """TDM 系统环境配置加载。
 
-配置优先级：
-1. config/env.{env}.yaml 中的值
-2. ${VAR:default} 占位符 → 环境变量替换（无环境变量时用 default）
-3. DB 密码为空时回退读取 devops 技能凭据 ~/.qoder/skills/devops/scripts/.env.devops
+配置优先级（T-309 分层）：
+1. 共享通用配置 systems/_shared/config/env.{env}.yaml（跨系统复用，不存在则跳过）
+2. 本系统配置 systems/tdm/config/env.{env}.yaml —— 系统键覆盖共享同键（顶层合并）
+3. ${VAR:default} 占位符 → 环境变量替换（无环境变量时用 default）
+4. DB 密码为空时回退读取 devops 技能凭据 ~/.qoder/skills/devops/scripts/.env.devops
 """
 
 import os
@@ -54,12 +55,16 @@ def _read_devops_env():
 
 
 def load_env(env_name="sit"):
-    """加载 systems/tdm/config/env.{env_name}.yaml，完成占位符替换与凭据回退"""
+    """加载环境配置（共享通用层 + 本系统层合并，系统覆盖共享），完成占位符替换与凭据回退"""
+    from systems._shared import load_shared_env, merge_env
+
     path = os.path.join(_CONFIG_DIR, f"env.{env_name}.yaml")
     if not os.path.isfile(path):
         raise ConfigError(f"环境配置不存在: {path}")
     with open(path, "r", encoding="utf-8") as f:
-        cfg = _substitute(yaml.safe_load(f) or {})
+        system_cfg = _substitute(yaml.safe_load(f) or {})
+    # T-309：共享通用配置打底（不存在返回 {}），系统键覆盖共享同键
+    cfg = merge_env(load_shared_env(env_name), system_cfg)
 
     # DB 密码回退（K-055 多 schema 感知）：逐连接回退——
     # env yaml 为空 → SG_DB_PASSWORD_{SCHEMA} → SG_DB_PASSWORD → devops .env.devops

@@ -382,14 +382,14 @@ export const referenceApi = {
       `/reference/next-id?prefix=${prefix}&type=${type}`),
   validateId: (id: string) =>
     request<{ id: string; unique: boolean; conflicts: string[] }>(`/reference/validate-id/${id}`),
-  // T-306：环境配置独立菜单——环境列表 + 按环境读写
+  // T-306/T-309：环境配置独立菜单——环境列表（系统层 + 共享通用层）+ 按环境/配置层读写
   envs: () =>
-    request<{ system: string; envs: EnvEntry[]; current: string }>('/reference/envs'),
-  envConfig: (env = 'sit') =>
-    request<{ raw: string; parsed: Record<string, unknown>; env: string; exists: boolean }>(
-      `/reference/env-config?env=${encodeURIComponent(env)}`),
-  saveEnvConfig: (raw: string, env = 'sit') =>
-    request<{ ok: boolean; env: string }>(`/reference/env-config?env=${encodeURIComponent(env)}`, {
+    request<{ system: string; envs: EnvEntry[]; shared_envs: EnvEntry[]; current: string }>('/reference/envs'),
+  envConfig: (env = 'sit', scope: 'system' | 'shared' = 'system') =>
+    request<{ raw: string; parsed: Record<string, unknown>; env: string; scope: string; exists: boolean }>(
+      `/reference/env-config?env=${encodeURIComponent(env)}&scope=${scope}`),
+  saveEnvConfig: (raw: string, env = 'sit', scope: 'system' | 'shared' = 'system') =>
+    request<{ ok: boolean; env: string; scope: string }>(`/reference/env-config?env=${encodeURIComponent(env)}&scope=${scope}`, {
       method: 'PUT',
       body: JSON.stringify({ raw }),
     }),
