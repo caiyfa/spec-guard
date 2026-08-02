@@ -139,6 +139,19 @@ def _dir_fingerprint(root: Path) -> tuple:
 _cache: dict = {"fingerprint": None, "scenarios": None, "graph": None}
 
 
+class _DegradedGraph:
+    """T-101：场景库存在依赖环时的降级图——仲裁数据置空，仅保 /dag 与历史可用。
+
+    环清单由 get_drift_report 合并返回；修复场景库（保存/编辑）后指纹变化即恢复真图。
+    """
+
+    dep_status = {}
+    orphans = {}
+
+    def drift_report(self):
+        return []
+
+
 def _scenarios_cached() -> list[dict]:
     fp = _dir_fingerprint(SCENARIOS_ROOT)
     if _cache["fingerprint"] != fp or _cache["scenarios"] is None:
@@ -157,12 +170,19 @@ def _engine_graph():
     """引擎 DependencyGraph（版本仲裁状态 dep_status / orphans / drift_report）。
 
     K-025：随场景缓存复用——此前每次调用重解析全库（与 _scan_scenarios 双份解析）。
+    T-101：建图遇依赖环不抛 500——降级为空仲裁图（环清单由 get_drift_report 合并返回），
+    坏图（如 git 拉取带入）不再瘫痪 /dag 与历史页面。
     """
     _scenarios_cached()  # 确保指纹检查 + graph 失效联动
     if _cache["graph"] is None:
         from engine.scenario_loader import load_scenarios
-        from engine.dependency_graph import DependencyGraph
-        _cache["graph"] = DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+        from engine.dependency_graph import DependencyGraph, CycleError
+        try:
+            _cache["graph"] = DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+        except CycleError as e:
+            print(f"[SpecGuard WARN] 场景库存在依赖环，DAG 仲裁降级: {e}")
+            _cache["graph"] = _DegradedGraph()
+            _cache["cycles"] = validate_dag()["cycles"]
     return _cache["graph"]
 
 
@@ -210,9 +230,13 @@ def get_dag() -> dict:
 
 
 def get_drift_report() -> dict:
-    """漂移/缺失报告（DAG 页与 Dashboard 漂移区块数据源）"""
+    """漂移/缺失报告（DAG 页与 Dashboard 漂移区块数据源）
+
+    T-101：库存在依赖环时合并返回 cycles 环清单（降级图无仲裁数据）。
+    """
     graph = _engine_graph()
-    return {"items": graph.drift_report(), "orphans": graph.orphans}
+    return {"items": graph.drift_report(), "orphans": graph.orphans,
+            "cycles": _cache.get("cycles", [])}
 
 
 def get_scenario_yaml(scenario_id: str) -> Optional[str]:
@@ -224,8 +248,42 @@ def get_scenario_yaml(scenario_id: str) -> Optional[str]:
     return None
 
 
+def _cycle_check_with(scenario_id: str, new_depends_raw) -> Optional[str]:
+    """T-101：保存前环预检——以「新 depends_on」替换目标场景后构造全库依赖图。
+
+    - 成环 → 返回错误信息（含环路径），不写盘；
+    - 孤儿依赖（上游不存在）不拦截——缺失上游运行时判 ORPHANED（诚实语义）；
+    - depends_on 格式非法（mode/version）→ 返回错误（此前静默存盘、建图时才炸）。
+    返回 None 表示通过。
+    """
+    from engine.dependency_graph import DependencyGraph, CycleError
+    from engine.scenario_loader import Scenario, ScenarioLoadError, _normalize_depends
+    try:
+        new_deps = _normalize_depends(new_depends_raw, f"待保存场景 {scenario_id}")
+    except ScenarioLoadError as e:
+        return str(e)
+    scenarios = [
+        Scenario(id=s["id"], version=s["version"], depends_on=s["depends_on"],
+                 teardown=bool(s["has_teardown"]))
+        for s in _scenarios_cached()
+    ]
+    for sc in scenarios:
+        if sc.id == scenario_id:
+            sc.depends_on = new_deps
+            break
+    try:
+        DependencyGraph(scenarios)
+    except CycleError as e:
+        return str(e)
+    return None
+
+
 def save_scenario_yaml(scenario_id: str, content: str) -> dict:
-    """保存场景 YAML（校验格式后写入）"""
+    """保存场景 YAML（校验格式后写入）
+
+    T-101：保存前环预检——新依赖与全库成环时拒绝写盘（此前坏图落盘后
+    get_dag 建图 500、pytest scenario_graph fixture 同源崩溃，执行链路瘫痪）。
+    """
     # 校验 YAML 语法
     try:
         parsed = yaml.safe_load(content)
@@ -238,6 +296,10 @@ def save_scenario_yaml(scenario_id: str, content: str) -> dict:
     # 校验 flow/verify 至少有一个
     if not parsed.get("flow") and not parsed.get("verify"):
         return {"ok": False, "error": "flow/verify 均为空，场景不可执行"}
+    # T-101：依赖环/格式预检（依赖目标不存在的孤儿允许保存）
+    cycle_err = _cycle_check_with(scenario_id, parsed.get("depends_on"))
+    if cycle_err:
+        return {"ok": False, "error": cycle_err}
     # 写入
     for s in _scenarios_cached():
         if s["id"] == scenario_id:
@@ -248,31 +310,14 @@ def save_scenario_yaml(scenario_id: str, content: str) -> dict:
 
 
 def validate_dag() -> dict:
-    """循环依赖检测（三色 DFS）"""
+    """循环依赖检测（T-102：算法收口到 engine.detect_cycles，删除本地重复 DFS）。
+
+    与引擎构造路径（抛第一个环）行为一致，但返回全部环清单（前端/降级展示用）。
+    """
+    from engine.dependency_graph import detect_cycles
     scenarios = _scenarios_cached()
-    graph = {s["id"]: [d["id"] for d in s["depends_on"]] for s in scenarios}
-    WHITE, GRAY, BLACK = 0, 1, 2
-    color = {sid: WHITE for sid in graph}
-    cycles = []
-
-    def dfs(node, path):
-        color[node] = GRAY
-        path.append(node)
-        for nb in graph.get(node, []):
-            if nb not in color:
-                continue
-            if color[nb] == GRAY:
-                cycle_start = path.index(nb)
-                cycles.append(path[cycle_start:] + [nb])
-            elif color[nb] == WHITE:
-                dfs(nb, path)
-        path.pop()
-        color[node] = BLACK
-
-    for sid in graph:
-        if color[sid] == WHITE:
-            dfs(sid, [])
-
+    edges = {s["id"]: [d["id"] for d in s["depends_on"]] for s in scenarios}
+    cycles = detect_cycles(edges)
     return {"ok": len(cycles) == 0, "cycles": cycles}
 
 
@@ -291,12 +336,21 @@ def _reports_root() -> Path:
 
 
 def list_reports(limit: int = 20) -> list[dict]:
-    """历史运行列表（读 reports/ 目录）"""
+    """历史运行列表（读 reports/ 目录）
+
+    T-120：断点批次目录（{run_id}-bN）不单独成条——同一任务归并到主任务展示
+    （此前 History 页把同一任务拆成 N 条记录）。
+    """
     reports_root = _reports_root()
     if not reports_root.is_dir():
         return []
     runs = []
     for d in sorted(reports_root.iterdir(), reverse=True):
+        # T-120：跳过批次目录（EX-xxx-b0 等），批次 case 经主任务详情/失败索引读取
+        name = d.name
+        dash = name.rfind("-b")
+        if dash > 0 and name[dash + 2:].isdigit():
+            continue
         run_json = d / "run.json"
         if run_json.is_file():
             import json

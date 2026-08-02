@@ -2,6 +2,7 @@
 
 触发前校验 covers 关联（M3 验收：covers 校验未通过禁止触发执行）。
 """
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -131,6 +132,18 @@ def api_history(limit: int = 20):
     return list_reports(limit=limit)
 
 
+@router.get("/failures", dependencies=[Depends(get_current_user)])
+def api_failures(scenario_id: str = "", limit: int = 10):
+    """T-121：失败索引台账（K-052）——「场景 × 任务号 × 失败原因」查询面。
+
+    此前只有 MCP 工具（attribution.list_failures）可查，前端 History 无入口。
+    按场景过滤 + 时间倒序，纯读。
+    """
+    from services import failure_index
+    from services.runner import _get_reports_root
+    return failure_index.query_failures(_get_reports_root(), scenario_id, limit)
+
+
 @router.get("/accounts", dependencies=[Depends(get_current_user)])
 def api_run_accounts(workspace: str = Depends(optional_workspace)):
     """K-056：执行时可选账号清单（确认执行上下文弹窗的数据源）。
@@ -216,8 +229,33 @@ def api_get_case(run_id: str, case_file: str):
 
 
 @router.websocket("/stream")
-async def ws_stream(ws: WebSocket, _user: CurrentUser = Depends(get_current_user_ws)):
-    """WebSocket 实时执行流（WS 专用认证依赖；token 经 query 参数传入）"""
+async def ws_stream(ws: WebSocket):
+    """WebSocket 实时执行流（T-123：token 首帧认证，不再经 query 明文留痕）。
+
+    连接建立后客户端首帧必须发送 {"type": "auth", "token": "..."}；
+    10s 内未认证或 token 非法 → 关闭连接（4401）。认证语义与原
+    get_current_user_ws 一致（_validate_token + upsert_user）。
+    """
+    await ws.accept()
+    try:
+        first = await asyncio.wait_for(ws.receive_json(), timeout=10)
+    except Exception:
+        await ws.close(code=4401)
+        return
+    token = ""
+    if isinstance(first, dict) and first.get("type") == "auth":
+        token = str(first.get("token") or "")
+    if not token:
+        await ws.close(code=4401)
+        return
+    try:
+        from services.auth import _validate_token
+        from services import user_store as auth_store
+        emp_no, name = _validate_token(token)
+        auth_store.upsert_user(emp_no, name)  # 登录留痕（与原 WS 依赖同语义）
+    except Exception:
+        await ws.close(code=4401)
+        return
     await run_manager.subscribe(ws)
     try:
         while True:

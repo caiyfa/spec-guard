@@ -116,7 +116,6 @@ async def execute_plan(plan_id: str, workspace: str = "",
     from services import plan_store
     from specstd.workspace import (
         get_workspace, get_active_workspace, set_context_workspace,
-        specguard_dir,
     )
 
     # ── 设置工作区上下文 ──
@@ -158,18 +157,43 @@ async def execute_plan(plan_id: str, workspace: str = "",
         system, env_name, scenarios_root, strict_deps)
 
     # ── 3. 构建运行上下文 ──
-    run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    # T-116：任务编号与 runner 路径统一——EX- 前缀 + 随机 hex（同 runner._new_run_id）。
+    # 时间戳 run_id 两个问题：①同一秒两次定时触发目录互相覆盖 ②无 EX- 前缀无法按任务号排错。
+    from services.runner import _new_run_id
+    run_id = _new_run_id()
     started_at = datetime.now().isoformat(timespec="seconds")
 
-    # 报告目录：优先 {workspace}/.specguard/reports/（F-1-1 已 ✅），
-    # 降级 SG_ROOT/reports/
+    # 报告目录：{workspace}/.specguard/reports/{plan_id}/{run_id}/
+    # T-116：与 plan_store.list_plan_history / get_plan_report_dir 对齐（plan 前缀归档，
+    # 此前落 reports/{时间戳}/，计划历史页读不到引擎直跑的报告）
+    from specstd.workspace import reports_dir as _reports_dir
     try:
-        sg_dir = specguard_dir(workspace_root=ws_root)
-        run_dir = sg_dir / "reports" / run_id
+        reports_root = _reports_dir()
     except Exception:
-        run_dir = SG_ROOT / "reports" / run_id
-
+        reports_root = SG_ROOT / "reports"
+    run_dir = reports_root / plan_id / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # T-116：执行现场产物与 runner 路径对齐——output.log + trigger.json
+    # （定时执行同样可报任务号拿到完整现场，排障不再靠回忆）
+    log_path = run_dir / "output.log"
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"> {run_id} | plan={plan_id} | env={env_name} | "
+                    f"triggered_by={triggered_by} | engine-direct\n")
+    except Exception:
+        pass
+    import json as _json
+    try:
+        with open(run_dir / "trigger.json", "w", encoding="utf-8") as f:
+            _json.dump({
+                "run_id": run_id, "scope": "plan", "plan_id": plan_id,
+                "workspace": workspace or "", "env": env_name,
+                "triggered_by": triggered_by, "scenario_ids": scenario_ids,
+                "started_at": started_at,
+            }, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
     rctx = RunContext(
         registry=registry,
@@ -227,9 +251,22 @@ async def execute_plan(plan_id: str, workspace: str = "",
                     "verdict": "ERROR",
                     "error": str(e),
                 })
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"[ERROR] {sid} {type(e).__name__}: {e}\n")
+                except Exception:
+                    pass
                 await _notify_failure(
                     plan_id, plan_name, sid, {"error": str(e)},
                     run_id, notify_config_id)
+            else:
+                # T-116：每场景 verdict 行落 output.log（排障按任务号取日志）
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"[{record.verdict}] {sid} {record.title} "
+                                f"{record.duration_ms}ms\n")
+                except Exception:
+                    pass
 
         # ── 5. teardown（LIFO 清理） ──
         run_teardowns(rctx)
@@ -257,6 +294,16 @@ async def execute_plan(plan_id: str, workspace: str = "",
     report_writer.dump_json(rctx.records, str(run_dir), meta)
     report_writer.render_md(rctx.records, str(run_dir), meta)
     print(f"[plan_executor] 报告已生成: {run_dir / 'report.md'}")
+
+    # T-116：失败索引（与 runner 侧 _record_failures 对齐）——
+    # 定时/引擎直跑执行的失败同样进 failures/index.jsonl 台账
+    try:
+        from services import failure_index
+        n = failure_index.append_failures(reports_root, f"{plan_id}/{run_id}")
+        if n:
+            print(f"[plan_executor] {n} 条失败已记入 failures/index.jsonl")
+    except Exception as e:
+        print(f"[SpecGuard WARN] 失败索引写入失败（不影响执行结论）: {type(e).__name__}: {e}")
 
     # ── 7. 汇总状态 ──
     has_fail = any(r["status"] in ("fail", "error") for r in results)

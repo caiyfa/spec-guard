@@ -10,6 +10,7 @@ export interface StreamEvent {
   run_id?: string;
   status?: string;
   returncode?: number;
+  aborted?: boolean;  // T-111: 断点暂停中被 abort 的 finished 消息标记
   cmd?: string;
   started_at?: string;
   finished_at?: string;
@@ -23,12 +24,14 @@ export function useRunStream() {
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(
-      `${protocol}//${window.location.host}/api/runs/stream?token=${encodeURIComponent(session.getToken())}`
-    );
+    // T-123：token 不再走 query 参数（URL 明文会留在访问日志/代理记录）——连接后首帧认证
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/runs/stream`);
     wsRef.current = ws;
 
-    ws.onopen = () => setConnected(true);
+    ws.onopen = () => {
+      setConnected(true);
+      ws.send(JSON.stringify({ type: 'auth', token: session.getToken() }));
+    };
     ws.onclose = () => {
       setConnected(false);
       // 自动重连

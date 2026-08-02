@@ -4,7 +4,7 @@
  * 触发上下文（trigger.json）+ 单元测试清单（cases）+ 执行日志（output.log）。
  */
 import { useEffect, useMemo, useState } from 'react';
-import { runsApi, type RunSummary } from '../api';
+import { runsApi, type RunSummary, type FailureEntry } from '../api';
 
 interface CaseBrief {
   id: string;
@@ -107,12 +107,17 @@ export default function History() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selected, setSelected] = useState<string>('');
   const [copiedId, setCopiedId] = useState('');
+  // T-121：失败索引台账（K-052）——「场景 × 任务号 × 原因」查询 + 一键重试
+  const [failures, setFailures] = useState<FailureEntry[]>([]);
+  const [failureFilter, setFailureFilter] = useState('');
+  const [showFailures, setShowFailures] = useState(false);
 
   useEffect(() => {
     runsApi.history(50).then((r) => {
       const sorted = [...r].sort((x, y) => String(y.started_at).localeCompare(String(x.started_at)));
       setRuns(sorted);
     });
+    runsApi.failures('', 30).then(setFailures).catch(() => {});
   }, []);
 
   const copyRunId = async (id: string) => {
@@ -120,10 +125,58 @@ export default function History() {
     setCopiedId(id); setTimeout(() => setCopiedId(''), 1500);
   };
 
+  const queryFailures = async (scenarioId: string) => {
+    setFailureFilter(scenarioId);
+    setFailures(await runsApi.failures(scenarioId, 30).catch(() => []));
+  };
+
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <h2 className="text-lg font-semibold">🗂 执行记录</h2>
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-semibold">🗂 执行记录</h2>
+        <button
+          onClick={() => setShowFailures(!showFailures)}
+          className={`text-xs px-2.5 py-1 rounded border ${
+            showFailures ? 'bg-fail/15 border-fail/40 text-fail' : 'bg-surface-2 border-border text-gray-400 hover:text-fail'}`}
+          title="按场景查最近失败原因（K-052 失败索引台账）">
+          ✗ 失败台账（{failures.length}）
+        </button>
+      </div>
       <p className="text-xs text-gray-500 -mt-2">按时间倒序；点击任务编号展开执行上下文 / 单元测试 / 执行日志。</p>
+
+      {/* T-121：失败索引台账——场景 × 任务号 × 失败原因 + 一键重试 */}
+      {showFailures && (
+        <div className="border border-fail/25 bg-fail/5 rounded-lg px-3 py-2.5 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-fail">失败台账（场景 × 任务号 × 原因）</span>
+            <input
+              value={failureFilter}
+              onChange={(e) => queryFailures(e.target.value.trim())}
+              placeholder="🔍 按场景 ID 过滤…"
+              className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]"
+            />
+            <button onClick={() => queryFailures('')}
+              className="text-[10px] text-gray-500 hover:text-info">清除</button>
+            <span className="ml-auto text-[10px] text-gray-500">{failures.length} 条（最近 30）</span>
+          </div>
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {failures.length === 0 && <div className="text-xs text-gray-600">暂无失败记录</div>}
+            {failures.map((f, i) => (
+              <div key={i} className="flex items-center gap-2 text-[11px] bg-surface-2/60 rounded px-2 py-1">
+                <span className="text-fail font-medium w-14">{f.verdict}</span>
+                <span className="font-mono text-gray-300">{f.scenario_id}</span>
+                <span className="text-gray-500 font-mono text-[10px]">{f.run_id}</span>
+                <span className="text-gray-600 truncate flex-1" title={f.message}>{f.category || '—'} · {f.message.slice(0, 60)}</span>
+                <span className="text-gray-600 text-[10px] font-mono">{f.finished_at}</span>
+                <button
+                  onClick={() => window.location.href = `/run?ids=${f.scenario_id}`}
+                  className="text-info hover:underline flex-shrink-0"
+                  title={`重试 ${f.scenario_id}（跳执行控制预选）`}>↻ 重试</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
         {runs.length === 0 && <div className="text-center text-gray-600 text-sm py-10">暂无执行记录</div>}

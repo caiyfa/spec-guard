@@ -299,14 +299,18 @@ class TestWorkspaceGrants:
 
 class TestWebSocketAuth:
     def test_runs_stream_requires_token(self, client):
-        with pytest.raises(Exception):
-            with client.websocket_connect("/api/runs/stream"):
-                pass
+        """T-123：首帧非 auth → 服务端关闭连接（token 不再经 query 明文）。"""
+        with client.websocket_connect("/api/runs/stream") as ws:
+            ws.send_json({"type": "ping"})  # 非认证首帧
+            with pytest.raises(Exception):
+                ws.receive_json()
 
     def test_runs_stream_connects_with_token(self, client):
+        """T-123：首帧 auth 认证通过后正常订阅（status 消息）。"""
         h = _login(client, "90000001")
         token = h["Authorization"].split(" ", 1)[1]
-        with client.websocket_connect(f"/api/runs/stream?token={token}") as ws:
+        with client.websocket_connect("/api/runs/stream") as ws:
+            ws.send_json({"type": "auth", "token": token})
             msg = ws.receive_json()
             assert msg["type"] == "status"
 

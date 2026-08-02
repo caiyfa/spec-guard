@@ -180,14 +180,14 @@ export const scenariosApi = {
   list: () => request<Scenario[]>('/scenarios'),
   dag: () => request<DagData>('/scenarios/dag'),
   validate: () => request<{ ok: boolean; cycles: string[][] }>('/scenarios/validate'),
-  drift: () => request<{ items: DriftItem[]; orphans: Record<string, string[]> }>('/scenarios/drift'),
+  drift: () => request<{ items: DriftItem[]; orphans: Record<string, string[]>; cycles: string[][] }>('/scenarios/drift'),
   get: (id: string) => request<{ id: string; content: string }>(`/scenarios/${id}`),
   save: (id: string, content: string) =>
     request<{ ok: boolean }>(`/scenarios/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
     }),
-  editDep: (id: string, body: { action: 'add' | 'remove'; dep_id: string; mode?: 'shared' | 'exclusive' }) =>
+  editDep: (id: string, body: { action: 'add' | 'remove'; dep_id: string; mode?: 'shared' | 'exclusive'; note?: string }) =>
     request<{ ok: boolean }>(`/scenarios/${id}/deps`, {
       method: 'POST',
       body: JSON.stringify(body),
@@ -239,8 +239,22 @@ export const runsApi = {
   cancelQueued: (itemId: number) =>
     request<{ ok: boolean }>(`/runs/queue/${itemId}`, { method: 'DELETE' }),
   history: (limit = 20) => request<RunSummary[]>(`/runs/history?limit=${limit}`),
+  // T-121：失败索引台账（K-052）——History 页「场景 × 任务号 × 原因」查询
+  failures: (scenarioId = '', limit = 10) =>
+    request<FailureEntry[]>(`/runs/failures?scenario_id=${encodeURIComponent(scenarioId)}&limit=${limit}`),
   get: (runId: string) => request<Record<string, unknown>>(`/runs/${runId}`),
 };
+
+export interface FailureEntry {
+  run_id: string;
+  scenario_id: string;
+  verdict: string;
+  category: string;
+  message: string;
+  env: string;
+  finished_at: string;
+  log: string;
+}
 
 // ── 测试计划 ──
 export interface ImportPreviewFile {
@@ -585,6 +599,7 @@ export interface DepSuggestResult {
   ok: boolean;
   suggestions: DepSuggestion[];
   unresolved: Record<string, string[]>;
+  graph_error?: string;  // T-104：建图失败（环预检失效）显式提示
 }
 
 export interface TrialRunRecord {

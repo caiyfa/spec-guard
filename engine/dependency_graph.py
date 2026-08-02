@@ -18,6 +18,37 @@ class UnknownDependencyError(Exception):
     pass
 
 
+def detect_cycles(edges: dict) -> list:
+    """三色 DFS 收集依赖图中的全部环（T-102：环检测单一事实源）。
+
+    供 scenario_store.validate_dag 等需要「全部环清单」的调用方使用；
+    构造路径保持抛 CycleError（第一个环）语义不变。
+    """
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {node: WHITE for node in edges}
+    stack = []
+    cycles = []
+
+    def dfs(node):
+        color[node] = GRAY
+        stack.append(node)
+        for dep in edges.get(node, ()):
+            if dep not in color:
+                continue  # 孤儿依赖（上游不存在）不参与环检测
+            if color[dep] == GRAY:
+                cycle = stack[stack.index(dep):] + [dep]
+                cycles.append(cycle)
+            if color[dep] == WHITE:
+                dfs(dep)
+        stack.pop()
+        color[node] = BLACK
+
+    for node in edges:
+        if color[node] == WHITE:
+            dfs(node)
+    return cycles
+
+
 class DependencyGraph:
     def __init__(self, scenarios):
         """scenarios: list[Scenario]（全场景库，依赖解析需要跨模块可见）"""
@@ -72,26 +103,10 @@ class DependencyGraph:
         return sorted(items, key=lambda x: (x["status"] != ORPHAN, x["consumer"]))
 
     def _detect_cycles(self):
-        """三色 DFS 循环检测，发现环时抛出完整环路径"""
-        WHITE, GRAY, BLACK = 0, 1, 2
-        color = {sid: WHITE for sid in self.edges}
-        stack = []
-
-        def dfs(node):
-            color[node] = GRAY
-            stack.append(node)
-            for dep in self.edges.get(node, ()):
-                if color[dep] == GRAY:
-                    cycle = stack[stack.index(dep):] + [dep]
-                    raise CycleError(f"场景依赖存在循环: {' -> '.join(cycle)}")
-                if color[dep] == WHITE:
-                    dfs(dep)
-            stack.pop()
-            color[node] = BLACK
-
-        for sid in self.edges:
-            if color[sid] == WHITE:
-                dfs(sid)
+        """循环检测：发现环时抛出完整环路径（T-102：算法本体收口到 detect_cycles）。"""
+        cycles = detect_cycles(self.edges)
+        if cycles:
+            raise CycleError(f"场景依赖存在循环: {' -> '.join(cycles[0])}")
 
     def closure(self, target_id):
         """目标场景的依赖闭包（含自身），按拓扑序返回（上游在前）"""

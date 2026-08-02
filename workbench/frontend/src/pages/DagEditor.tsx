@@ -72,6 +72,7 @@ export default function DagEditor() {
   const [searchQuery, setSearchQuery] = useState('');        // K-027: 场景搜索定位
   const [error, setError] = useState('');
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
+  const [cycleItems, setCycleItems] = useState<string[][]>([]);  // T-101: 库存在环时降级显示
   const [showDrift, setShowDrift] = useState(false);
   // K-046：流程衔接——focus 聚焦 / 依赖建议 / 多选执行
   const navigate = useNavigate();
@@ -80,6 +81,7 @@ export default function DagEditor() {
   const focusAppliedRef = useRef(false);
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
   const [suggestions, setSuggestions] = useState<DepSuggestion[]>([]);
+  const [suggestError, setSuggestError] = useState('');  // T-104：建图失败显式提示（环预检失效）
 
   // 加载参考数据
   useEffect(() => {
@@ -88,7 +90,7 @@ export default function DagEditor() {
     referenceApi.oracles().then(setOracles);
     referenceApi.envVars().then(setEnvVars);
     plansApi.list().then(setPlans);
-    scenariosApi.drift().then((r) => setDriftItems(r.items)).catch(() => {});
+    scenariosApi.drift().then((r) => { setDriftItems(r.items); setCycleItems(r.cycles || []); }).catch(() => {});
   }, []);
 
   // 加载最近一次运行 verdicts
@@ -126,9 +128,13 @@ export default function DagEditor() {
     }));
     const flowEdges: Edge[] = dag.edges.map((e) => {
       const st = EDGE_STATUS_STYLE[e.status || 'match'] || EDGE_STATUS_STYLE.match;
+      // T-103：边信息可视化——exclusive 标 excl；漂移边标期望/实际版本（此前只上色不给数值）
+      let label: string | undefined;
+      if (e.label === 'exclusive') label = 'excl';
+      else if (e.status && e.status !== 'match' && e.expected) label = `v${e.expected}→${e.actual ?? '缺失'}`;
       return {
         id: e.id, source: e.source, target: e.target, animated: e.animated,
-        label: e.label || undefined,
+        label,
         style: { stroke: (e.status && e.status !== 'match') ? st.stroke : tokens.edgeStroke, strokeDasharray: st.dash },
       };
     });
@@ -214,10 +220,20 @@ export default function DagEditor() {
       layoutDag(dag);
     });
     scenariosApi.validate().then((r) => setDagValid(r.ok));
-    scenariosApi.drift().then((r) => setDriftItems(r.items)).catch(() => {});
+    scenariosApi.drift().then((r) => { setDriftItems(r.items); setCycleItems(r.cycles || []); }).catch(() => {});
   }, [layoutDag]);
 
   // ─── 连线建依赖（Dify handleNodeConnect 模式：守卫 → 建边 → 同步）───
+  // T-103：Shift 拖拽 = 独占依赖（exclusive，动画边 + 多实例重跑语义）
+  const shiftPressed = useRef(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = true; };
+    const up = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftPressed.current = false; };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, []);
+
   const onConnect = useCallback(async (conn: Connection) => {
     setError('');
     if (!conn.source || !conn.target) return;
@@ -234,7 +250,8 @@ export default function DagEditor() {
     }
     try {
       // depends_on 写在下游（target）身上，依赖上游（source）
-      await scenariosApi.editDep(conn.target, { action: 'add', dep_id: conn.source, mode: 'shared' });
+      const mode = shiftPressed.current ? 'exclusive' : 'shared';
+      await scenariosApi.editDep(conn.target, { action: 'add', dep_id: conn.source, mode });
       refreshDag();
     } catch (e) {
       setError(`依赖创建失败: ${e instanceof Error ? e.message : e}`);
@@ -260,25 +277,52 @@ export default function DagEditor() {
     scenariosApi.get(node.id).then((r) => setYamlContent(r.content)).catch(() => setYamlContent(''));
     referenceApi.upstreamVars(node.id).then(setUpstreamVars).catch(() => setUpstreamVars([]));
     scenariosApi.suggestDeps(node.id)
-      .then((r) => setSuggestions(r.suggestions || []))
-      .catch(() => setSuggestions([]));
+      .then((r) => { setSuggestions(r.suggestions || []); setSuggestError(r.graph_error || ''); })
+      .catch(() => { setSuggestions([]); setSuggestError(''); });
   }, []);
 
   // 点空白处收起抽屉
   const onPaneClick = useCallback(() => { setSelected(null); setSuggestions([]); }, []);
 
   // K-046：采纳依赖建议（走现有 /deps 端点，服务端环校验兜底）
+  // T-104：采纳时标注来源（confidence/kind → YAML 尾注释留痕，可追溯）
   const handleAcceptSuggestion = useCallback(async (sug: DepSuggestion) => {
     if (!selected) return;
     setError('');
     try {
-      await scenariosApi.editDep(selected, { action: 'add', dep_id: sug.dep_id, mode: 'shared' });
+      await scenariosApi.editDep(selected, {
+        action: 'add', dep_id: sug.dep_id, mode: 'shared',
+        note: `${sug.confidence} ${sug.kind}`,
+      });
       setSuggestions((prev) => prev.filter((s) => s.dep_id !== sug.dep_id));
       refreshDag();
     } catch (e) {
       setError(`连线失败: ${e instanceof Error ? e.message : e}`);
     }
   }, [selected, refreshDag]);
+
+  // T-105：批量采纳选中场景的依赖建议（逐个扫描 + 添加，服务端环校验兜底单条失败）
+  const handleBatchAcceptSuggestions = useCallback(async () => {
+    const targets = [...selectedIds];
+    if (!targets.length) return;
+    setError('');
+    let added = 0;
+    for (const sid of targets) {
+      try {
+        const r = await scenariosApi.suggestDeps(sid);
+        for (const sug of r.suggestions || []) {
+          try {
+            await scenariosApi.editDep(sid, { action: 'add', dep_id: sug.dep_id, mode: 'shared' });
+            added++;
+          } catch { /* 环校验等拒绝单条，继续 */ }
+        }
+      } catch { /* 单个场景失败不阻断批量 */ }
+    }
+    setError(added
+      ? `批量采纳完成：${added} 条依赖已添加`
+      : '所选场景没有可采纳的依赖建议');
+    if (added) refreshDag();
+  }, [selectedIds, refreshDag]);
 
   // 保存回调
   const handleSave = useCallback(async (yaml: string) => {
@@ -301,6 +345,15 @@ export default function DagEditor() {
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">🔀 DAG 编排</h2>
         {!dagValid && <span className="text-xs text-fail bg-fail/10 px-2 py-1 rounded">⚠️ 循环依赖</span>}
+        {cycleItems.length > 0 && (
+          <button
+            onClick={() => setShowDrift(!showDrift)}
+            className="text-xs px-2 py-1 rounded hover:opacity-80"
+            style={{ color: '#f85149', background: '#f8514915' }}
+            title="点击展开环清单">
+            ⛔ {cycleItems.length} 条依赖环（已降级显示）{showDrift ? '▲' : '▼'}
+          </button>
+        )}
         {driftCount > 0 && (
           <button
             onClick={() => setShowDrift(!showDrift)}
@@ -334,15 +387,31 @@ export default function DagEditor() {
         <span className="text-[10px] text-gray-600">
           {filteredDag && dagData ? `${filteredDag.nodes.length}/${dagData.nodes.length} 节点` : ''}
         </span>
-        {/* K-046：多选执行（Shift 框选 / Ctrl 点选后一键跳 RunControl 预选） */}
+        {/* K-046：多选执行（Shift 框选 / Ctrl 点选后一键跳 RunControl 预选）；T-105：批量断点/批量采纳 */}
         {selectedIds.length > 0 && (
-          <button
-            onClick={() => navigate(`/run?ids=${selectedIds.join(',')}`)}
-            className="px-2.5 py-1 bg-info text-white rounded text-xs hover:bg-info/90"
-            title={`执行选中场景：${selectedIds.join('、')}`}
-          >
-            ▶ 执行选中（{selectedIds.length}）
-          </button>
+          <>
+            <button
+              onClick={() => navigate(`/run?ids=${selectedIds.join(',')}`)}
+              className="px-2.5 py-1 bg-info text-white rounded text-xs hover:bg-info/90"
+              title={`执行选中场景：${selectedIds.join('、')}`}
+            >
+              ▶ 执行选中（{selectedIds.length}）
+            </button>
+            <button
+              onClick={() => navigate(`/run?ids=${selectedIds.join(',')}&bps=${selectedIds.join(',')}`)}
+              className="px-2.5 py-1 bg-warn/90 text-black rounded text-xs hover:opacity-85"
+              title="全部选中场景设为断点（执行到每个断点前暂停），跳 RunControl 确认"
+            >
+              🔴 批量设断点
+            </button>
+            <button
+              onClick={handleBatchAcceptSuggestions}
+              className="px-2.5 py-1 bg-surface-3 border border-border rounded text-xs text-info hover:border-info/40"
+              title="对选中场景批量扫描并采纳依赖建议（服务端环校验兜底）"
+            >
+              💡 批量采纳建议
+            </button>
+          </>
         )}
         {/* 类型图例 */}
         <div className="flex gap-2 ml-auto">
@@ -364,24 +433,39 @@ export default function DagEditor() {
         </div>
       )}
 
-      {/* 漂移报告面板（DRIFT/ORPHANED 清单 + 处理建议） */}
-      {showDrift && driftCount > 0 && (
+      {/* 漂移报告面板（DRIFT/ORPHANED 清单 + T-101 依赖环清单） */}
+      {showDrift && (driftCount > 0 || cycleItems.length > 0) && (
         <div className="border rounded-lg px-4 py-3 space-y-1.5" style={{ borderColor: '#d2992240', background: '#d2992208' }}>
-          <div className="text-xs font-medium" style={{ color: '#d29922' }}>版本漂移报告（归档前必须清零）</div>
-          {driftItems.filter((i) => i.status === 'major_drift' || i.status === 'orphan').map((i, idx) => (
-            <div key={idx} className="flex items-start gap-2 text-[11px]">
-              <span style={{ color: i.status === 'orphan' ? '#f85149' : '#d29922' }}>
-                {i.status === 'orphan' ? '✗' : '⚠'}
-              </span>
-              <span className="font-mono">{i.consumer} → {i.id}</span>
-              <span className="text-gray-500">
-                期望 {i.expected || '(未声明)'} / 实际 {i.actual || '缺失'}
-              </span>
-              <span className="text-gray-600 ml-auto">
-                {i.status === 'orphan' ? '上游已删除/改名，请修正 depends_on' : '请核对上游契约后 bump 期望版本'}
-              </span>
-            </div>
-          ))}
+          {cycleItems.length > 0 && (
+            <>
+              <div className="text-xs font-medium" style={{ color: '#f85149' }}>依赖环（DAG 仲裁已降级，请修正后重载）</div>
+              {cycleItems.map((c, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-[11px] font-mono">
+                  <span style={{ color: '#f85149' }}>⛔</span>
+                  <span>{c.join(' → ')}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {driftCount > 0 && (
+            <>
+              <div className="text-xs font-medium" style={{ color: '#d29922' }}>版本漂移报告（归档前必须清零）</div>
+              {driftItems.filter((i) => i.status === 'major_drift' || i.status === 'orphan').map((i, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-[11px]">
+                  <span style={{ color: i.status === 'orphan' ? '#f85149' : '#d29922' }}>
+                    {i.status === 'orphan' ? '✗' : '⚠'}
+                  </span>
+                  <span className="font-mono">{i.consumer} → {i.id}</span>
+                  <span className="text-gray-500">
+                    期望 {i.expected || '(未声明)'} / 实际 {i.actual || '缺失'}
+                  </span>
+                  <span className="text-gray-600 ml-auto">
+                    {i.status === 'orphan' ? '上游已删除/改名，请修正 depends_on' : '请核对上游契约后 bump 期望版本'}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -418,6 +502,11 @@ export default function DagEditor() {
                 <div className="text-info text-[11px] font-medium mb-1">
                   💡 {suggestions.length} 条依赖建议（扫描 {'{{...}}'} 插值匹配生产者）
                 </div>
+                {suggestError && (
+                  <div className="text-fail text-[10px] mb-1" title={suggestError}>
+                    ⚠️ 建图失败，环预检已失效：{suggestError.slice(0, 80)}
+                  </div>
+                )}
                 <ul className="space-y-1">
                   {suggestions.map((s, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs">

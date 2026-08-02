@@ -214,3 +214,24 @@ class TestDrafts:
         out = dep_suggest.suggest_deps(root, drafts)
         # 不出现任何异常，且无自引用建议
         assert all(s["consumer"] != s["dep_id"] for s in out["suggestions"])
+
+
+class TestGraphErrorExplicit:
+    """T-104：建图失败（依赖环）必须显式返回 graph_error，不再静默跳过环预检。"""
+
+    def test_cycle_library_reports_graph_error(self, tmp_path):
+        root = _mk_library(tmp_path, {
+            "A.yaml": _scenario("A", deps=["B"]),
+            "B.yaml": _scenario("B", deps=["A"]),
+        })
+        out = dep_suggest.suggest_deps(root, target_id="A")
+        assert out["graph_error"], "依赖环场景库必须显式返回建图失败原因"
+        assert "循环" in out["graph_error"] or "CycleError" in out["graph_error"]
+
+    def test_healthy_library_no_graph_error(self, tmp_path):
+        root = _mk_library(tmp_path, {
+            "A.yaml": _scenario("A", deps=[]),
+            "B.yaml": _scenario("B", deps=["A"]),
+        })
+        out = dep_suggest.suggest_deps(root, target_id="B")
+        assert out["graph_error"] == ""

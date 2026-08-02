@@ -163,6 +163,23 @@ async def _execute_job(job_id: str):
     workspace = row["workspace"]
     notify_config_id = row["notify_config_id"]
 
+    # T-117：调度与手动执行互斥——已有执行进行中（runner 队列占用）时跳过本次触发。
+    # 引擎直跑与 pytest 子进程并发打同一 SIT 环境会互相干扰数据；定时任务周期触发，
+    # 忙时跳过记录 skipped_busy，等下次 cron 即可。
+    from services.runner import run_manager
+    if run_manager.is_running:
+        with _LOCK, _connect() as conn:
+            conn.execute(
+                """UPDATE scheduled_jobs
+                   SET last_run_at = ?, last_run_status = 'skipped_busy', last_run_id = ''
+                   WHERE id = ?""",
+                (_now(), job_id),
+            )
+            conn.commit()
+        print(f"[scheduler WARN] 任务 {row['name']} 跳过："
+              f"已有执行进行中（run_id={run_manager.run_id}）")
+        return
+
     print(f"[scheduler] 执行定时任务: {row['name']} (plan={plan_id}, ws={workspace})")
 
     try:
@@ -392,12 +409,19 @@ def delete_job(job_id: str, db_path: Path | None = None) -> bool:
 async def trigger_job_now(job_id: str) -> dict:
     """手动触发一次定时任务执行（不等 cron 到点）。
 
+    T-117：与手动执行互斥——已有执行进行中时拒绝并发触发。
+
     Returns:
         执行结果（来自 plan_executor.execute_plan）
     """
     job = get_job(job_id)
     if not job:
         return {"run_id": "", "status": "failed", "error": "任务不存在", "results": []}
+
+    from services.runner import run_manager
+    if run_manager.is_running:
+        return {"run_id": "", "status": "skipped_busy",
+                "error": f"已有执行进行中（{run_manager.run_id}），拒绝并发触发", "results": []}
 
     from services.plan_executor import execute_plan
     result = await execute_plan(

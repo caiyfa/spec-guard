@@ -114,8 +114,12 @@ def scan_nodes(scenarios_root: Path, drafts_root: "Path | None" = None) -> "list
     return nodes
 
 
-def _build_graph(scenarios_root: Path, drafts_root: "Path | None") -> "DependencyGraph | None":
-    """库内场景 + 草稿并入建图（与 check_dag 同一语义）；建图失败返回 None。"""
+def _build_graph(scenarios_root: Path, drafts_root: "Path | None") -> "tuple":
+    """库内场景 + 草稿并入建图（与 check_dag 同一语义）。
+
+    T-104：建图失败返回 (None, 错误信息)——环预检失效必须显式提示，
+    不再静默降级（此前返回 None 后所有成环检查被跳过，建议可能引入环）。
+    """
     try:
         scenarios = load_scenarios(str(scenarios_root))
         if drafts_root and Path(drafts_root).is_dir():
@@ -128,9 +132,9 @@ def _build_graph(scenarios_root: Path, drafts_root: "Path | None") -> "Dependenc
                 if sc.id not in known:
                     known.add(sc.id)
                     scenarios.append(sc)
-        return DependencyGraph(scenarios)
-    except Exception:
-        return None
+        return DependencyGraph(scenarios), ""
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
 
 
 def suggest_deps(scenarios_root: Path, drafts_root: "Path | None" = None,
@@ -145,7 +149,7 @@ def suggest_deps(scenarios_root: Path, drafts_root: "Path | None" = None,
     """
     nodes = scan_nodes(scenarios_root, drafts_root)
     by_id = {n.id: n for n in nodes}
-    graph = _build_graph(scenarios_root, drafts_root)
+    graph, graph_error = _build_graph(scenarios_root, drafts_root)
 
     # 变量 → 生产者索引（同名 save 可能多生产者，全列出让呈现层选择）
     var_producers: "dict[str, list[_Node]]" = {}
@@ -227,4 +231,6 @@ def suggest_deps(scenarios_root: Path, drafts_root: "Path | None" = None,
 
     # 高置信在前，同消费者内按 dep_id 排序
     suggestions.sort(key=lambda s: (s["consumer"], 0 if s["confidence"] == "high" else 1, s["dep_id"]))
-    return {"ok": True, "suggestions": suggestions, "unresolved": unresolved}
+    # T-104：建图失败时显式返回 graph_error（环预检失效，前端必须提示不可静默）
+    return {"ok": True, "suggestions": suggestions, "unresolved": unresolved,
+            "graph_error": graph_error}

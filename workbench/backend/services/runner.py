@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,17 @@ def _new_run_id() -> str:
     不再靠「大概几点跑的」回忆。collision 空间 32bit，单用户串行+队列场景足够。
     """
     return "EX-" + secrets.token_hex(4)
+
+
+def _run_timeout_sec() -> float:
+    """T-118：看门狗超时配置——SG_RUN_TIMEOUT 秒（0/缺省 = 禁用）。
+
+    进程挂死（网络黑洞/poll 死循环）时自动终止并标 timeout，不再永久占用队列。
+    """
+    try:
+        return float(os.environ.get("SG_RUN_TIMEOUT", "0") or 0)
+    except ValueError:
+        return 0.0
 
 
 def _get_reports_root() -> Path:
@@ -59,6 +71,11 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
     if account_override:
         # K-056：执行时账号选择（确认弹窗选定）→ 子进程 conftest 重映射 default 别名
         child_env["SG_ACCOUNT_OVERRIDE"] = account_override
+    # T-118：Windows 下独立进程组——terminate/kill 不殃及父进程树，
+    # 避免 uvicorn reloader 僵尸占端口类事故（docs 67d69c0 运维教训）
+    kwargs = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     return subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -66,6 +83,7 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
         cwd=str(SG_ROOT),
         env=child_env,
         text=True, encoding="utf-8", errors="replace", bufsize=1,
+        **kwargs,
     )
 
 
@@ -93,6 +111,9 @@ class RunManager:
         self.paused_at: str = ""                  # 暂停在哪个场景前
         self._resume_event: Optional[asyncio.Event] = None
         self._run_dir: Optional[Path] = None      # K-050：报告目录（output.log 落盘处）
+        # T-118：看门狗——run 级超时（SG_RUN_TIMEOUT 秒，0=禁用）与起始时刻
+        self._run_timeout: float = 0.0
+        self._started_monotonic: float = 0.0
 
     @property
     def is_running(self) -> bool:
@@ -103,12 +124,13 @@ class RunManager:
         return self.status == "paused"
 
     async def subscribe(self, ws: WebSocket):
-        await ws.accept()
+        """订阅实时流（T-123：accept 由调用方负责——首帧认证需先 accept 才能收消息）。"""
         self.subscribers.append(ws)
         # 发送当前状态
         await ws.send_json({"type": "status", "status": self.status, "run_id": self.run_id})
-        # 回放已有输出
-        for line in self._output_lines[-100:]:
+        # T-122：回放行数与前端 events 上限（500）对齐——此前只回放 100 行，
+        # 前端重连清空 events 后收到不连续日志（中间段丢失）
+        for line in self._output_lines[-500:]:
             await ws.send_json({"type": "output", "line": line})
 
     def unsubscribe(self, ws: WebSocket):
@@ -138,8 +160,8 @@ class RunManager:
         strict_deps: 严格依赖模式（SG_STRICT_DEPS=1 注入子进程，DRIFT/ORPHANED → BLOCKED）
         emp_no/workspace: 触发人与工作区（多用户归属，M8）
         queue_id: 来自队列的消费（内部用；为 None 时新建队表记录）
-        prep_only / skip_upstream_verify: K-046 轻量执行选项（conftest 已支持，此处透传）。
-            注意：run_queue 表无对应字段，进入队列等待的执行不保留这两个选项。
+        prep_only / skip_upstream_verify / account_override: K-046/K-056 轻量执行与账号选项。
+            T-114：run_queue 表已持久化这三项，排队后重放不丢（此前静默丢失）。
 
         已有执行时进入 FIFO 队列（run_queue 表持久化），返回 queued + position。
         """
@@ -147,7 +169,9 @@ class RunManager:
             from services import user_store
             qid = user_store.enqueue_run(
                 emp_no=emp_no, scope=scope, target=target, env=env, plan_id=plan_id,
-                breakpoints=[], strict_deps=strict_deps, workspace=workspace)
+                breakpoints=[], strict_deps=strict_deps, workspace=workspace,
+                prep_only=prep_only, skip_upstream_verify=skip_upstream_verify,
+                account_override=account_override)
             user_store.audit(emp_no, "enqueue_run", scope, f"queue_id={qid}")
             queued = [r for r in user_store.list_run_queue() if r["status"] == "queued"]
             position = next((i + 1 for i, r in enumerate(queued) if r["id"] == qid), len(queued))
@@ -163,7 +187,9 @@ class RunManager:
         else:
             self._queue_id = user_store.enqueue_run(
                 emp_no=emp_no, scope=scope, target=target, env=env, plan_id=plan_id,
-                breakpoints=[], strict_deps=strict_deps, workspace=workspace, status="running")
+                breakpoints=[], strict_deps=strict_deps, workspace=workspace, status="running",
+                prep_only=prep_only, skip_upstream_verify=skip_upstream_verify,
+                account_override=account_override)
         self.current_emp_no = emp_no
         self.current_workspace = workspace
 
@@ -190,6 +216,9 @@ class RunManager:
         self.started_at = datetime.now().isoformat(timespec="seconds")
         self.status = "running"
         self._output_lines = []
+        # T-118：看门狗计时起点（SG_RUN_TIMEOUT 秒，0=禁用）
+        self._run_timeout = _run_timeout_sec()
+        self._started_monotonic = time.monotonic()
         # K-050：执行日志落盘——与引擎报告同目录（{reports}/{run_id}/output.log）
         self._run_dir = _get_reports_root() / self.run_id
         self._run_dir.mkdir(parents=True, exist_ok=True)
@@ -197,14 +226,6 @@ class RunManager:
         if queue_id is None:
             user_store.audit(emp_no, "trigger_run", scope, f"queue_id={self._queue_id}")
 
-        await self.broadcast({
-            "type": "started",
-            "run_id": self.run_id,
-            "plan_id": self.plan_id,
-            "cmd": " ".join(cmd),
-            "started_at": self.started_at,
-        })
-        self._write_output_log(f"> {self.run_id} | env={env} | {' '.join(cmd)}")
         # K-053：触发上下文结构化落盘（Agent 按任务号可查到选了哪些场景/什么环境）
         self._write_trigger_context({
             "run_id": self.run_id, "scope": scope, "target": target,
@@ -219,6 +240,16 @@ class RunManager:
         try:
             self.process = _spawn_pytest(cmd, env, self.run_id, account_override)
         except Exception as e:
+            # T-115：spawn 失败补发终态广播（此前 started 先广播且无 finished →
+            # 前端永久卡「执行中」显示一个不存在的任务号）
+            await self.broadcast({
+                "type": "finished",
+                "run_id": self.run_id,
+                "returncode": None,
+                "status": "failed",
+                "error": f"启动失败: {type(e).__name__}: {e}",
+                "finished_at": datetime.now().isoformat(timespec="seconds"),
+            })
             self.status = "idle"
             if self._queue_id:
                 user_store.update_run_queue(self._queue_id, "failed", finished=True)
@@ -227,6 +258,17 @@ class RunManager:
             self.current_workspace = ""
             # K-047：异常带类型名——空 str(e) 的异常（如 NotImplementedError）不再无法排查
             return {"ok": False, "error": f"启动失败: {type(e).__name__}: {e}"}
+
+        # T-115：started 在 spawn 成功后广播（此前先广播 started 再 Popen，
+        # spawn 抛异常时前端已置 running 且永无终态）
+        await self.broadcast({
+            "type": "started",
+            "run_id": self.run_id,
+            "plan_id": self.plan_id,
+            "cmd": " ".join(cmd),
+            "started_at": self.started_at,
+        })
+        self._write_output_log(f"> {self.run_id} | env={env} | {' '.join(cmd)}")
 
         # 后台读取输出
         asyncio.create_task(self._stream_output())
@@ -239,11 +281,20 @@ class RunManager:
         if not proc:
             return
         await self._drain_output(proc)
-        self.status = "completed" if proc.returncode == 0 else "completed"
+        # T-112/T-118：终态修正——abort/timeout 保持原状态；非零退出置 failed
+        # （此前两分支相同恒为 completed，pytest 崩溃/超时被误报为成功）
+        if self.status == "aborted":
+            final_status = "aborted"
+        elif self.status == "timeout":
+            final_status = "timeout"
+        else:
+            final_status = "completed" if proc.returncode == 0 else "failed"
+        self.status = final_status
         await self.broadcast({
             "type": "finished",
             "run_id": self.run_id,
             "returncode": proc.returncode,
+            "status": final_status,
             "finished_at": datetime.now().isoformat(timespec="seconds"),
         })
         self.process = None
@@ -306,8 +357,19 @@ class RunManager:
 
         threading.Thread(target=_reader, daemon=True).start()
 
+        # T-118：看门狗——总超时截止（从触发时刻起算，0=禁用）
+        deadline = None
+        if getattr(self, "_run_timeout", 0) and getattr(self, "_started_monotonic", 0):
+            deadline = self._started_monotonic + self._run_timeout
+
         while True:
-            text = await q.get()
+            try:
+                remaining = None if deadline is None else max(deadline - time.monotonic(), 0)
+                text = await asyncio.wait_for(q.get(), timeout=remaining)
+            except asyncio.TimeoutError:
+                # T-118：进程挂死超时——终止并标记 timeout（此前无超时，队列永久占用）
+                await self._timeout_abort()
+                break
             if text is None:
                 break
             self._output_lines.append(text)
@@ -316,6 +378,31 @@ class RunManager:
             await self.broadcast({"type": "output", "line": text, **event})
 
         await asyncio.to_thread(proc.wait)
+
+    async def _timeout_abort(self):
+        """T-118：看门狗超时——终止进程、标 timeout、广播终态并留痕。
+
+        超时是执行失败（不是用户主动中止），队表收尾走 failed。
+        """
+        try:
+            if self.process:
+                self.process.terminate()
+                await asyncio.sleep(0.5)
+                if self.process.returncode is None:
+                    self.process.kill()
+        except Exception:
+            pass
+        self.status = "timeout"
+        self._write_output_log(
+            f"> {self.run_id} | TIMEOUT 超过 {self._run_timeout}s，已强制终止")
+        await self.broadcast({
+            "type": "finished",
+            "run_id": self.run_id,
+            "returncode": self.process.returncode if self.process else None,
+            "status": "timeout",
+            "error": f"执行超过 {self._run_timeout}s 超时（SG_RUN_TIMEOUT 可调），已强制终止",
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+        })
 
     def _parse_line(self, line: str) -> dict:
         """解析 pytest 输出行，提取场景 verdict"""
@@ -331,17 +418,23 @@ class RunManager:
         return {}
 
     async def abort(self) -> dict:
-        """终止执行"""
-        if not self.is_running or not self.process:
+        """终止执行（T-111：断点暂停中 abort 置位 resume 事件，收尾不再卡死队列）"""
+        if not self.is_running:
             return {"ok": False, "error": "当前无执行中的任务"}
-        try:
-            self.process.terminate()
-            await asyncio.sleep(1)
-            if self.process.returncode is None:
-                self.process.kill()
-        except Exception:
-            pass
+        # 断点暂停（批次间隙）可能没有存活子进程——abort 语义同样成立
+        if self.process:
+            try:
+                self.process.terminate()
+                await asyncio.sleep(1)
+                if self.process.returncode is None:
+                    self.process.kill()
+            except Exception:
+                pass
         self.status = "aborted"
+        # T-111：暂停等待 resume 信号时置位事件，让 _run_batches 醒来走 abort 收尾
+        # （此前仅 terminate+置状态，_run_batches 永卡 wait()，队表项永远 running）
+        if self._resume_event:
+            self._resume_event.set()
         await self.broadcast({"type": "aborted", "run_id": self.run_id})
         return {"ok": True}
 
@@ -389,6 +482,9 @@ class RunManager:
         self.completed_scenarios = []
         self.started_at = datetime.now().isoformat(timespec="seconds")
         self._output_lines = []
+        # T-118：看门狗计时起点（跨批次的总超时）
+        self._run_timeout = _run_timeout_sec()
+        self._started_monotonic = time.monotonic()
         # K-050：执行日志落盘目录（与引擎报告同目录）
         self._run_dir = _get_reports_root() / self.run_id
         self._run_dir.mkdir(parents=True, exist_ok=True)
@@ -469,6 +565,8 @@ class RunManager:
                 self._resume_event = None
 
                 if self.status == "aborted":
+                    # T-111：暂停中被 abort → 收尾（队表结束+失败索引+队列消费），不死锁
+                    await self._abort_finish()
                     return
                 self.status = "running"
                 self.paused_at = ""
@@ -491,10 +589,19 @@ class RunManager:
                 self.process = _spawn_pytest(cmd, env, f"{self.run_id}-b{batch_idx}")
             except Exception as e:
                 await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {type(e).__name__}: {e}"})
+                # T-112：abort 后不再尝试下一批
+                if self.status == "aborted":
+                    await self._abort_finish()
+                    return
                 continue
 
             # 读取输出（K-047：与 _stream_output 同一读线程模式）
             await self._drain_output(self.process)
+
+            # T-112/T-118：批次执行中被 abort / 超时 → 短路退出（此前 drain 返回后仍继续下一批）
+            if self.status in ("aborted", "timeout"):
+                await self._abort_finish()
+                return
 
             self.completed_scenarios.extend(batch)
             self.pending_scenarios = [s for s in self.pending_scenarios if s not in batch]
@@ -518,6 +625,27 @@ class RunManager:
         # M8：收尾并消费队列下一个
         await self._finish_current_run()
 
+    async def _abort_finish(self):
+        """T-111/T-112/T-118：abort / timeout 后统一收尾——失败索引 + 队表结束 + 队列消费。
+
+        此前 abort 路径只置状态，_finish_current_run 永不执行，队表项永远 running
+        （只能靠重启 fail_stale_running 清理）；abort 是用户主动行为，不推失败通知；
+        timeout 是执行失败，队表标 failed。
+        """
+        self.process = None
+        self._record_failures()  # K-052：已执行批次的失败收录
+        final_status = self.status or "aborted"
+        await self.broadcast({
+            "type": "finished",
+            "run_id": self.run_id,
+            "completed": self.completed_scenarios,
+            "aborted": final_status == "aborted",
+            "status": final_status,
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        await self._finish_current_run(
+            status="cancelled" if final_status == "aborted" else "failed")
+
     def _build_breakpoint_context(self) -> dict:
         """构建断点处的上下文信息（供前端展示数据状态）"""
         # 读取最近输出中的 verdict 信息
@@ -536,11 +664,15 @@ class RunManager:
             "output_tail": self._output_lines[-20:],
         }
 
-    async def _finish_current_run(self):
-        """M8：当前执行收尾（队表标记完成）并自动启动队列下一个。"""
+    async def _finish_current_run(self, status: str = "done"):
+        """M8：当前执行收尾（队表标记完成）并自动启动队列下一个。
+
+        T-111：abort 路径传 status="cancelled"——队表状态诚实反映用户终止，
+        不再以 done 掩盖中止。
+        """
         from services import user_store
         if self._queue_id:
-            user_store.update_run_queue(self._queue_id, "done", finished=True)
+            user_store.update_run_queue(self._queue_id, status, finished=True)
         self._queue_id = None
         self.current_emp_no = ""
         self.current_workspace = ""
@@ -571,25 +703,31 @@ class RunManager:
                 strict_deps=bool(row["strict_deps"]), emp_no=row["emp_no"],
                 workspace=row.get("workspace", ""), queue_id=row["id"])
         else:
+            # T-114：重放时透传持久化的轻量选项（此前排队后静默丢失用户选择）
             await self.trigger(scope=row["scope"], target=row["target"], env=row["env"],
                                plan_id=row["plan_id"], strict_deps=bool(row["strict_deps"]),
                                emp_no=row["emp_no"], workspace=row.get("workspace", ""),
-                               queue_id=row["id"])
+                               queue_id=row["id"],
+                               prep_only=bool(row.get("prep_only")),
+                               skip_upstream_verify=bool(row.get("skip_upstream_verify")),
+                               account_override=row.get("account_override", ""))
 
     async def _push_run_notifications(self):
         """D2：运行结束后读取 case verdicts，按反馈路径注册表自动推送通知。
 
         事件映射：FAIL→fail，DRIFT/ORPHANED→drift，SKIP/BLOCKED→skip；
         engine_modes 自测不推送；任何异常只记 WARN，不影响执行收尾。
+        T-113：断点分批执行的 case 在 {run_id}-bN 目录，与 _record_failures 对齐一并扫描
+        （此前只扫主目录，批次失败不推通知）。
         """
         try:
             if getattr(self, "_scope", "") == "engine_modes" or not self.run_id:
                 return
             import json as _json
 
-            cases_dir = _get_reports_root() / self.run_id / "cases"
-            if not cases_dir.is_dir():
-                return
+            root = _get_reports_root()
+            case_dirs = [root / self.run_id / "cases"]
+            case_dirs += [d / "cases" for d in sorted(root.glob(f"{self.run_id}-b*"))]
 
             from feedback.notify import NotifyRegistry
             registry = NotifyRegistry(SG_ROOT / "feedback" / "registry.json")
@@ -599,23 +737,26 @@ class RunManager:
             system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
             event_map = {"FAIL": "fail", "DRIFT": "drift", "ORPHANED": "drift",
                          "SKIP": "skip", "BLOCKED": "skip"}
-            for case_file in sorted(cases_dir.glob("*.json")):
-                try:
-                    case = _json.loads(case_file.read_text(encoding="utf-8"))
-                except Exception:
+            for cases_dir in case_dirs:
+                if not cases_dir.is_dir():
                     continue
-                verdict = case.get("verdict", "")
-                event = event_map.get(verdict)
-                if not event:
-                    continue
-                scenario_id = case.get("scenario_id", case_file.stem)
-                failure = case.get("failure") or {}
-                conclusion = failure.get("category") or case.get("skip_reason") or f"判定 {verdict}"
-                await asyncio.to_thread(
-                    registry.send_notification,
-                    system, scenario_id, event, verdict,
-                    str(conclusion)[:200], f"reports/{self.run_id}/report.md",
-                )
+                for case_file in sorted(cases_dir.glob("*.json")):
+                    try:
+                        case = _json.loads(case_file.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    verdict = case.get("verdict", "")
+                    event = event_map.get(verdict)
+                    if not event:
+                        continue
+                    scenario_id = case.get("scenario_id", case_file.stem)
+                    failure = case.get("failure") or {}
+                    conclusion = failure.get("category") or case.get("skip_reason") or f"判定 {verdict}"
+                    await asyncio.to_thread(
+                        registry.send_notification,
+                        system, scenario_id, event, verdict,
+                        str(conclusion)[:200], f"reports/{cases_dir.parent.name}/report.md",
+                    )
         except Exception as e:
             print(f"[SpecGuard WARN] 通知自动推送失败（不影响执行结果）: {type(e).__name__}: {e}")
 

@@ -204,10 +204,24 @@ def api_save_scenario(scenario_id: str, body: SaveScenarioBody):
 # 依赖编辑（画布连线 → depends_on 文本外科手术）
 # ══════════════════════════════════════════════════════════
 
+def _append_trace_note(path, note: str):
+    """T-104：文件尾追加注释行（依赖采纳来源留痕）——安全外科手术，不触碰 YAML 结构。"""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            has_nl = f.read().endswith("\n")
+        with open(path, "a", encoding="utf-8") as f:
+            if not has_nl:
+                f.write("\n")
+            f.write(f"# {note}\n")
+    except Exception:
+        pass  # 留痕失败不影响依赖编辑本身
+
+
 class DepEditBody(BaseModel):
     action: str          # add | remove
     dep_id: str
     mode: str = "shared"  # shared | exclusive（add 时生效）
+    note: str = ""        # T-104：采纳来源标注（如 "high cross_ref"）→ 文件尾追加注释留痕
 
 
 @router.post("/{scenario_id}/deps", dependencies=[Depends(require_role("admin", "tester"))])
@@ -240,6 +254,13 @@ def api_edit_dep(scenario_id: str, body: DepEditBody):
             deps_editor.add_dep(
                 scenarios[scenario_id]["abs_path"], body.dep_id, body.mode,
                 scenarios[body.dep_id]["version"])
+            # T-104：采纳来源标注——文件尾追加注释（安全外科手术，不触碰 YAML 结构）。
+            # 之后「这条依赖为什么加」可追溯（dep_suggest 建议 vs 手动连线）。
+            if body.note:
+                from datetime import datetime
+                _append_trace_note(
+                    scenarios[scenario_id]["abs_path"],
+                    f"依赖 {body.dep_id} 由 dep_suggest 建议采纳添加（{body.note}，{datetime.now():%Y-%m-%d}）")
         except deps_editor.DepsEditError as e:
             raise HTTPException(status_code=409, detail=str(e))
     else:

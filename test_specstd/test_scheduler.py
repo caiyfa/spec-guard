@@ -42,8 +42,80 @@ def tmp_db(tmp_path):
 
 
 # ══════════════════════════════════════════════════════════
-# 建表
+# T-117 调度互斥：定时/手动触发与手动执行并发互斥
 # ══════════════════════════════════════════════════════════
+
+class TestMutualExclusion:
+    @pytest.fixture()
+    def busy(self, monkeypatch):
+        """模拟已有执行进行中：run_manager.is_running = True。"""
+        from services import runner as runner_mod
+        mgr = runner_mod.RunManager()
+        mgr.status = "running"
+        mgr.run_id = "EX-busy0001"
+        monkeypatch.setattr(runner_mod, "run_manager", mgr)
+        return mgr
+
+    def test_execute_job_skips_when_busy(self, busy, tmp_db, monkeypatch):
+        """定时任务忙时跳过：不调 execute_plan，状态记 skipped_busy。"""
+        from services import scheduler as sched_mod
+        monkeypatch.setattr(sched_mod, "DB_PATH", tmp_db)
+        sched_mod.init_db(tmp_db)
+        job_id = sched_mod.create_job(
+            "回归", "p1", "ws1", "0 9 * * *")["id"]
+
+        executed = []
+        async def fake_execute(**kw):
+            executed.append(kw)
+            return {"run_id": "EX-x", "status": "success", "results": []}
+        import services.plan_executor as pe_mod
+        monkeypatch.setattr(pe_mod, "execute_plan", fake_execute)
+
+        asyncio.run(sched_mod._execute_job(job_id))
+        assert not executed, "忙时不得执行计划"
+        job = sched_mod.get_job(job_id, db_path=tmp_db)
+        assert job["last_run_status"] == "skipped_busy"
+
+    def test_trigger_job_now_rejects_when_busy(self, busy, monkeypatch):
+        """手动触发忙时拒绝：返回 skipped_busy。"""
+        from services import scheduler as sched_mod
+        monkeypatch.setattr(sched_mod, "get_job", lambda jid: {
+            "id": jid, "plan_id": "p1", "workspace": "ws1",
+            "notify_config_id": "", "name": "回归"})
+        executed = []
+        async def fake_execute(**kw):
+            executed.append(kw)
+            return {"run_id": "EX-x", "status": "success", "results": []}
+        import services.plan_executor as pe_mod
+        monkeypatch.setattr(pe_mod, "execute_plan", fake_execute)
+
+        result = asyncio.run(sched_mod.trigger_job_now("j1"))
+        assert result["status"] == "skipped_busy"
+        assert "已有执行进行中" in result["error"]
+        assert not executed
+
+    def test_execute_job_runs_when_idle(self, tmp_db, monkeypatch):
+        """空闲时正常执行（互斥只挡忙时）。"""
+        from services import runner as runner_mod
+        from services import scheduler as sched_mod
+        mgr = runner_mod.RunManager()  # status=idle
+        monkeypatch.setattr(runner_mod, "run_manager", mgr)
+        monkeypatch.setattr(sched_mod, "DB_PATH", tmp_db)
+        sched_mod.init_db(tmp_db)
+        job_id = sched_mod.create_job(
+            "回归", "p1", "ws1", "0 9 * * *")["id"]
+
+        executed = []
+        async def fake_execute(**kw):
+            executed.append(kw)
+            return {"run_id": "EX-ok0001", "status": "success", "results": []}
+        import services.plan_executor as pe_mod
+        monkeypatch.setattr(pe_mod, "execute_plan", fake_execute)
+
+        asyncio.run(sched_mod._execute_job(job_id))
+        assert len(executed) == 1
+        job = sched_mod.get_job(job_id, db_path=tmp_db)
+        assert job["last_run_status"] == "success"
 
 class TestInitDB:
     def test_creates_table(self, tmp_db):

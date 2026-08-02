@@ -84,11 +84,17 @@ def init_db(db_path: Path | None = None):
             finished_at TEXT NOT NULL DEFAULT ''
         );
         """)
-        # 迁移：老库补 workspace 列（幂等）
-        try:
-            conn.execute("ALTER TABLE run_queue ADD COLUMN workspace TEXT NOT NULL DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass  # 列已存在
+        # 迁移：老库补列（幂等）
+        for col, ddl in (
+            ("workspace", "ALTER TABLE run_queue ADD COLUMN workspace TEXT NOT NULL DEFAULT ''"),
+            ("prep_only", "ALTER TABLE run_queue ADD COLUMN prep_only INTEGER NOT NULL DEFAULT 0"),
+            ("skip_upstream_verify", "ALTER TABLE run_queue ADD COLUMN skip_upstream_verify INTEGER NOT NULL DEFAULT 0"),
+            ("account_override", "ALTER TABLE run_queue ADD COLUMN account_override TEXT NOT NULL DEFAULT ''"),
+        ):
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass  # 列已存在
 
 
 # ══════════════════════════════════════════════════════════
@@ -295,16 +301,25 @@ def list_audit(limit: int = 100, db_path: Path | None = None) -> list[dict]:
 
 def enqueue_run(emp_no: str, scope: str, target: str, env: str, plan_id: str,
                 breakpoints: list[str], strict_deps: bool, workspace: str = "",
-                status: str = "queued", db_path: Path | None = None) -> int:
-    """入队，返回队列项 id（status 可为 queued/running）。"""
+                status: str = "queued", db_path: Path | None = None,
+                prep_only: bool = False, skip_upstream_verify: bool = False,
+                account_override: str = "") -> int:
+    """入队，返回队列项 id（status 可为 queued/running）。
+
+    T-114：轻量选项持久化——此前只存 strict_deps/breakpoints，排队后重放
+    静默丢失 prep_only/skip_upstream_verify/account_override（用户选择）。
+    """
     import json as _json
     init_db(db_path)
     with _LOCK, _connect(db_path) as conn:
         cur = conn.execute(
             "INSERT INTO run_queue (emp_no, scope, target, env, plan_id, breakpoints,"
-            " strict_deps, workspace, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " strict_deps, workspace, status, created_at,"
+            " prep_only, skip_upstream_verify, account_override)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (emp_no, scope, target, env, plan_id, _json.dumps(breakpoints),
-             1 if strict_deps else 0, workspace, status, _now()),
+             1 if strict_deps else 0, workspace, status, _now(),
+             1 if prep_only else 0, 1 if skip_upstream_verify else 0, account_override),
         )
         return int(cur.lastrowid)
 

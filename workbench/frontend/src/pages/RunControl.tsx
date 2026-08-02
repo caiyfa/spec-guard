@@ -38,7 +38,10 @@ export default function RunControl() {
   const [error, setError] = useState('');
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [showLog, setShowLog] = useState(true);
-  const [breakpoints] = useState<Set<string>>(new Set());
+  // T-119：断点集合有写入路径（确认弹窗设置；此前恒空，断点功能只能手改计划 YAML）。
+  // T-105：DAG 页「批量设断点」经 ?bps= 预置
+  const [breakpoints, setBreakpoints] = useState<Set<string>>(() =>
+    new Set((searchParams.get('bps') || '').split(',').map(s => s.trim()).filter(Boolean)));
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
   const [myEmpNo, setMyEmpNo] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
@@ -127,6 +130,15 @@ export default function RunControl() {
 
   const toggleId = useCallback((id: string) => {
     setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // T-119：断点切换——断点场景=执行顺序中「在该场景前暂停」
+  const toggleBreakpoint = useCallback((id: string) => {
+    setBreakpoints(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -482,7 +494,7 @@ export default function RunControl() {
                   className={`flex items-center gap-2 px-3 py-1.5 text-xs border-b border-border/30 cursor-pointer hover:bg-surface-3/50 ${checked ? 'bg-info/5' : ''}`}>
                   <input type="checkbox" checked={checked} onChange={() => toggleId(s.id)} />
                   <span className={`${vColor[v] || 'text-gray-700'} w-4 text-center`}>{vIcon[v] || '○'}</span>
-                  <span className="font-mono text-gray-400 w-28 truncate">{s.id}</span>
+                  <span className="font-mono text-gray-400 w-28 truncate">{breakpoints.has(s.id) ? '🔴 ' : ''}{s.id}</span>
                   <span className="text-gray-500 truncate flex-1">{s.title}</span>
                 </label>
               );
@@ -524,7 +536,9 @@ export default function RunControl() {
             ) : (
               events.map((e, i) => {
                 if (e.type === 'started') return <div key={i} className="text-info mt-2">▶ {e.cmd}</div>;
-                if (e.type === 'finished') return <div key={i} className="text-pass mt-2">■ 完成 (exit={e.returncode})</div>;
+                if (e.type === 'finished') return e.aborted
+                  ? <div key={i} className="text-skip mt-2">■ 已终止（断点暂停中取消）</div>
+                  : <div key={i} className="text-pass mt-2">■ 完成 (exit={e.returncode})</div>;
                 if (e.type === 'aborted') return <div key={i} className="text-skip mt-2">■ 已终止</div>;
                 if (e.type !== 'output') return null;
                 const line = e.line || '';
@@ -584,6 +598,27 @@ export default function RunControl() {
                 </>
               ) : '按范围执行时的全部命中场景'}
             </span>
+            {/* T-119：断点设置——按选中顺序列出，勾选=在该场景前暂停（后端已支持分批执行） */}
+            {selectedIds.size > 0 && (
+              <span className="text-gray-500">断点</span>
+            )}
+            {selectedIds.size > 0 && (
+              <div className="space-y-1">
+                {[...selectedIds].map((sid, idx) => (
+                  <label key={sid} className="flex items-center gap-2 text-xs cursor-pointer hover:opacity-80">
+                    <input type="checkbox" checked={breakpoints.has(sid)}
+                      onChange={() => toggleBreakpoint(sid)} />
+                    <span className="text-gray-600 font-mono text-[10px]">#{idx + 1}</span>
+                    <span className="font-mono">{sid}</span>
+                    {breakpoints.has(sid) && <span className="text-info text-[10px]">🔴 在此前暂停</span>}
+                  </label>
+                ))}
+                {breakpoints.size > 0 && (
+                  <button onClick={() => setBreakpoints(new Set())}
+                    className="text-[10px] text-gray-500 hover:text-fail">清除全部断点</button>
+                )}
+              </div>
+            )}
             {(prepOnly || skipUpstreamVerify) && (
               <>
                 <span className="text-gray-500">轻量选项</span>
