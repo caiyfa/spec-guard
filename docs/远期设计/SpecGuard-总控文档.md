@@ -120,8 +120,15 @@ flowchart LR
 
 ### 4.1 当前打磨期（P0，进行中）
 
+> **第一轮（T-101~T-131）已于 2026-08-02 全部完成**（提交 3b01996/ed90c40）。以下为第二轮任务（T-201 起），延续 DAG 编排 + 测试执行打磨。
+
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
+| T-201 | 打磨-DAG | 孤节点补全建议 | DagEditor/dep_suggest | DAG 页「补全孤节点」批量按钮——对无依赖场景批量扫描采纳建议（T-105 验收点补全） | — | 已完成 | sess-master | P1 ✅ 2026-08-02（🟢 补全孤节点按钮，复用 suggestDeps/editDep，采纳带来源标注） |
+| T-202 | 打磨-DAG | 画布断点节点可视化 | DagEditor | 断点场景画布节点 🔴 标记（RunControl ?bps 与计划 breakpoints 同源展示） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（计划 breakpoints → 节点 isBreakpoint 徽章，选中计划时生效） |
+| T-203 | 打磨-执行 | History 批次详情展开 | History/scenario_store | 主任务详情展示 -bN 批次 case（T-120 归组后批次结果可读） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（get_report 归并 batches 字段 + History 批次区块，test_scenario_store 1 测试） |
+| T-204 | 打磨-执行 | 看门狗超时配置可视化 | settings/runner | SG_RUN_TIMEOUT 入设置页 KV 管理，执行确认弹窗可调 | — | 已完成 | sess-master | P2 ✅ 2026-08-02（设置页「执行」Tab + /settings/run-timeout 端点 + 确认弹窗展示；修改入口在设置页） |
+| T-205 | 打磨-质量 | 前端完整构建验证 | 前端 | npm run build（tsc + vite）产物构建通过 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（tsc -b 暴露并修复 3 处此前 --noEmit 漏检的类型错误：flowNodes 断言/elkLayout 签名/settingsApi import） |
 | T-101 | 打磨-DAG | 场景保存环预检 | scenario_store | 表单/YAML 双路径保存前环预检（环→422 而非建图 500）；建图 CycleError 降级不崩执行链路 | — | 已完成 | sess-master | P0 ✅ 2026-08-02（后端环预检+降级图+前端环清单，test_scenario_store 7 测试） |
 | T-102 | 打磨-DAG | 环检测实现收口 | dependency_graph/scenario_store | 删除 scenario_store 重复 DFS，统一走引擎返回环清单 | T-101 | 已完成 | sess-master | P2 ✅ 2026-08-02（engine.detect_cycles 单一事实源，test_cycle_detect 5 测试） |
 | T-103 | 打磨-DAG | 画布边版本展示+exclusive 连线 | DagEditor | 边 label/tooltip 显示期望/实际版本；画布可连 exclusive 边 | — | 已完成 | sess-master | P2 ✅ 2026-08-02（漂移边标 v期望→v实际；Shift 拖拽=exclusive） |
@@ -214,7 +221,7 @@ flowchart LR
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| docs/远期设计/SpecGuard-总控文档.md | 总控人 | 2026-08-02 | 7cd4a9b7e515 | 15ae345f277f | 已完成 | 自身登记：v1.1 打磨期决策（§2.0/§4.1 新增、远期后置、T-001 阻塞）；T-101~105/111~123 完成；T-131 完成（用户决策：TL 系 agent 测试产物不入库，基线回退） |
+| docs/远期设计/SpecGuard-总控文档.md | 总控人 | 2026-08-02 | 919a6ce47700 | a26108d42a09 | 已完成 | 自身登记：v1.1 打磨期决策（§2.0/§4.1 新增、远期后置、T-001 阻塞）；T-101~105/111~123 完成；T-131 完成（用户决策：TL 系 agent 测试产物不入库，基线回退）；第二轮 T-201~205 追加并完成 |
 | | | | | | | |
 
 ---
