@@ -128,6 +128,7 @@ flowchart LR
 | T-302 | 打磨-执行 | 调度 skipped_busy 前端展示 | Schedules | 定时任务 last_run_status=skipped_busy 语义化显示（「跳过：执行忙」） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（STATUS_LABELS 补 skipped_busy ⏭️） |
 | T-303 | 打磨-执行 | _parse_line 解析加固 | runner | 场景 ID 提取正则化（参数化 [id] 形态容错），非参数化行不误判；补单元测试 | — | 已完成 | sess-master | P2 ✅ 2026-08-02（verdict/参数 id 正则；修复 "[id] PASSED [ 50%]" 误取；test_runner 5 测试） |
 | T-304 | 打磨-执行 | 执行通知路径统一评估 | plan_executor/runner | 两套通知（plan_failure/plan_success vs D2 fail/drift/skip）语义梳理 + 对齐文档 + 最小实现 | — | 已完成 | sess-master | P2 ✅ 2026-08-02 评估结论：两套语义（计划级即时 vs 场景级批量）并存合理，缺口=定时执行不触发 D2 事件；最小实现=提取 push_run_notifications 共享函数，plan_executor 收尾补场景级通知（即时 plan_failure 保留） |
+| T-305 | 打磨-基线 | 写型场景 precheck 补全 | scenarios/inventory-session | IS-PREP-002/003、IS-RVT-001~003 首步补 precheck_permission（K-055 R5 约定落地）——无权限诚实 SKIP 而非运行期 FAIL | — | 已完成 | sess-master | P1 ✅ 2026-08-02 来源：EX-8200eada 排障（TDM_INV_ACTIVITY 无绑定账号→500000→变量未定义）；5 场景 flow 首步插 precheck（account default + TDM_INV_ACTIVITY + corp 1002）；契约指纹不变（无 save），release_check PASS；环境侧仍待 SIT 授权（升级建议第二批方案） |
 | T-201 | 打磨-DAG | 孤节点补全建议 | DagEditor/dep_suggest | DAG 页「补全孤节点」批量按钮——对无依赖场景批量扫描采纳建议（T-105 验收点补全） | — | 已完成 | sess-master | P1 ✅ 2026-08-02（🟢 补全孤节点按钮，复用 suggestDeps/editDep，采纳带来源标注） |
 | T-202 | 打磨-DAG | 画布断点节点可视化 | DagEditor | 断点场景画布节点 🔴 标记（RunControl ?bps 与计划 breakpoints 同源展示） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（计划 breakpoints → 节点 isBreakpoint 徽章，选中计划时生效） |
 | T-203 | 打磨-执行 | History 批次详情展开 | History/scenario_store | 主任务详情展示 -bN 批次 case（T-120 归组后批次结果可读） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（get_report 归并 batches 字段 + History 批次区块，test_scenario_store 1 测试） |
@@ -225,7 +226,7 @@ flowchart LR
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| docs/远期设计/SpecGuard-总控文档.md | 总控人 | 2026-08-02 | 5a5174d0c3bd | ddaeeebb95d5 | 已完成 | 自身登记：v1.1 打磨期决策（§2.0/§4.1 新增、远期后置、T-001 阻塞）；T-101~105/111~123 完成；T-131 完成（用户决策：TL 系 agent 测试产物不入库，基线回退）；第二轮 T-201~205 追加并完成；第三轮 T-301~304 追加并完成 |
+| docs/远期设计/SpecGuard-总控文档.md | 总控人 | 2026-08-02 | c92575da4656 | be985408043d | 已完成 | 自身登记：v1.1 打磨期决策（§2.0/§4.1 新增、远期后置、T-001 阻塞）；T-101~105/111~123 完成；T-131 完成（用户决策：TL 系 agent 测试产物不入库，基线回退）；第二轮 T-201~205 追加并完成；第三轮 T-301~304 追加并完成；T-305 追加并完成（EX-8200eada 排障产出） |
 | | | | | | | |
 
 ---

@@ -16,6 +16,10 @@ doc:
 depends_on:
   - {id: IS-PREP-002, mode: exclusive, version: ^0}
 flow:
+  - precheck_permission:
+      account: default
+      resource_code: TDM_INV_ACTIVITY
+      corp_code: "1002"
   - call:
       method: PUT
       path: "/api/inventory/sessions/{{IS-PREP-002.session.json.data.id}}/revert"

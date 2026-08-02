@@ -17,6 +17,10 @@ doc:
 depends_on:
   - {id: IS-PREP-003, mode: exclusive, version: ^0}
 flow:
+  - precheck_permission:
+      account: default
+      resource_code: TDM_INV_ACTIVITY
+      corp_code: "1002"
   - call:
       method: PUT
       path: "/api/system/activities/{{IS-PREP-003.activity.json.data.id}}/close"

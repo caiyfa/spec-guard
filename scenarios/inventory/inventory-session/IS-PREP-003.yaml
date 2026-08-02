@@ -18,6 +18,10 @@ doc:
 # ─────────── 机器读层 ───────────
 depends_on: []
 flow:
+  - precheck_permission:
+      account: default
+      resource_code: TDM_INV_ACTIVITY
+      corp_code: "1002"
   - tool:
       use: set_var
       with:
