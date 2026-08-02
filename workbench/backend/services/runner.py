@@ -11,6 +11,7 @@ asyncio 子进程直接 NotImplementedError；Popen 不依赖事件循环 flavor
 import asyncio
 import json
 import os
+import re
 import secrets
 import signal
 import subprocess
@@ -94,6 +95,52 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
         text=True, encoding="utf-8", errors="replace", bufsize=1,
         **kwargs,
     )
+
+
+async def push_run_notifications(reports_root: Path, run_id: str) -> None:
+    """T-304：D2 场景级通知推送（runner 与 plan_executor 共用单一实现）。
+
+    读 {reports_root}/{run_id}/cases 的 verdicts，按反馈路径注册表推送：
+    FAIL→fail，DRIFT/ORPHANED→drift，SKIP/BLOCKED→skip；
+    任何异常只记 WARN，不影响执行收尾。
+    """
+    try:
+        import json as _json
+
+        root = Path(reports_root)
+        case_dirs = [root / run_id / "cases"]
+        case_dirs += [d / "cases" for d in sorted(root.glob(f"{run_id}-b*"))]
+
+        from feedback.notify import NotifyRegistry
+        registry = NotifyRegistry(SG_ROOT / "feedback" / "registry.json")
+        if not registry.list():  # 未注册 webhook 时零成本退出
+            return
+
+        system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+        event_map = {"FAIL": "fail", "DRIFT": "drift", "ORPHANED": "drift",
+                     "SKIP": "skip", "BLOCKED": "skip"}
+        for cases_dir in case_dirs:
+            if not cases_dir.is_dir():
+                continue
+            for case_file in sorted(cases_dir.glob("*.json")):
+                try:
+                    case = _json.loads(case_file.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                verdict = case.get("verdict", "")
+                event = event_map.get(verdict)
+                if not event:
+                    continue
+                scenario_id = case.get("scenario_id", case_file.stem)
+                failure = case.get("failure") or {}
+                conclusion = failure.get("category") or case.get("skip_reason") or f"判定 {verdict}"
+                await asyncio.to_thread(
+                    registry.send_notification,
+                    system, scenario_id, event, verdict,
+                    str(conclusion)[:200], f"reports/{cases_dir.parent.name}/report.md",
+                )
+    except Exception as e:
+        print(f"[SpecGuard WARN] 通知自动推送失败（不影响执行结果）: {type(e).__name__}: {e}")
 
 
 class RunManager:
@@ -413,18 +460,26 @@ class RunManager:
             "finished_at": datetime.now().isoformat(timespec="seconds"),
         })
 
+    # T-303：verdict 与参数化场景 ID 的正则（替代字符串切片——行内含额外 [..] 时
+    # 原 split("[")[-1] 会取错段，如 "[PP-RC-001] PASSED [ 50%]" 会误取 " 50%"）
+    _VERDICT_RE = re.compile(r"\b(PASSED|FAILED|SKIPPED|ERROR)\b")
+    _PARAM_ID_RE = re.compile(r"\[([A-Z][A-Z0-9_-]*)\]")  # 场景 ID 形态：XX-XXX-NNN（大写字母数字连字符）
+
     def _parse_line(self, line: str) -> dict:
-        """解析 pytest 输出行，提取场景 verdict"""
-        # 匹配: test_suites\test_person_profile.py::test_scenario[PP-RC-001] PASSED
-        if " PASSED" in line or " FAILED" in line or " SKIPPED" in line or " ERROR" in line:
-            for verdict in ("PASSED", "FAILED", "SKIPPED", "ERROR"):
-                if f" {verdict}" in line:
-                    # 提取场景 ID
-                    scenario_id = ""
-                    if "[" in line and "]" in line:
-                        scenario_id = line.split("[")[-1].split("]")[0]
-                    return {"verdict": verdict, "scenario_id": scenario_id}
-        return {}
+        """解析 pytest 输出行，提取场景 verdict 与参数化场景 ID。
+
+        T-303：正则提取——仅匹配场景 ID 形态的 [XX-XXX-NNN]；
+        非参数化行（如 engine_modes 的 test_shared）verdict 有值但 scenario_id 为空。
+        """
+        m = self._VERDICT_RE.search(line)
+        if not m:
+            return {}
+        verdict = m.group(1)
+        # 取行内最后一个场景 ID 形态的参数化段（pytest -k "A or B" 逐行输出）
+        scenario_id = ""
+        for pm in self._PARAM_ID_RE.finditer(line):
+            scenario_id = pm.group(1)
+        return {"verdict": verdict, "scenario_id": scenario_id}
 
     async def abort(self) -> dict:
         """终止执行（T-111：断点暂停中 abort 置位 resume 事件，收尾不再卡死队列）"""
@@ -722,52 +777,13 @@ class RunManager:
                                account_override=row.get("account_override", ""))
 
     async def _push_run_notifications(self):
-        """D2：运行结束后读取 case verdicts，按反馈路径注册表自动推送通知。
+        """D2：运行结束后推送场景级通知（T-304：实现收口到模块级 push_run_notifications）。
 
-        事件映射：FAIL→fail，DRIFT/ORPHANED→drift，SKIP/BLOCKED→skip；
-        engine_modes 自测不推送；任何异常只记 WARN，不影响执行收尾。
-        T-113：断点分批执行的 case 在 {run_id}-bN 目录，与 _record_failures 对齐一并扫描
-        （此前只扫主目录，批次失败不推通知）。
+        engine_modes 自测不推送；T-113：断点分批执行的 case 在 {run_id}-bN 目录一并扫描。
         """
-        try:
-            if getattr(self, "_scope", "") == "engine_modes" or not self.run_id:
-                return
-            import json as _json
-
-            root = _get_reports_root()
-            case_dirs = [root / self.run_id / "cases"]
-            case_dirs += [d / "cases" for d in sorted(root.glob(f"{self.run_id}-b*"))]
-
-            from feedback.notify import NotifyRegistry
-            registry = NotifyRegistry(SG_ROOT / "feedback" / "registry.json")
-            if not registry.list():  # 未注册 webhook 时零成本退出
-                return
-
-            system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
-            event_map = {"FAIL": "fail", "DRIFT": "drift", "ORPHANED": "drift",
-                         "SKIP": "skip", "BLOCKED": "skip"}
-            for cases_dir in case_dirs:
-                if not cases_dir.is_dir():
-                    continue
-                for case_file in sorted(cases_dir.glob("*.json")):
-                    try:
-                        case = _json.loads(case_file.read_text(encoding="utf-8"))
-                    except Exception:
-                        continue
-                    verdict = case.get("verdict", "")
-                    event = event_map.get(verdict)
-                    if not event:
-                        continue
-                    scenario_id = case.get("scenario_id", case_file.stem)
-                    failure = case.get("failure") or {}
-                    conclusion = failure.get("category") or case.get("skip_reason") or f"判定 {verdict}"
-                    await asyncio.to_thread(
-                        registry.send_notification,
-                        system, scenario_id, event, verdict,
-                        str(conclusion)[:200], f"reports/{cases_dir.parent.name}/report.md",
-                    )
-        except Exception as e:
-            print(f"[SpecGuard WARN] 通知自动推送失败（不影响执行结果）: {type(e).__name__}: {e}")
+        if getattr(self, "_scope", "") == "engine_modes" or not self.run_id:
+            return
+        await push_run_notifications(_get_reports_root(), self.run_id)
 
     async def resume(self) -> dict:
         """断点放行：继续执行下一批场景"""

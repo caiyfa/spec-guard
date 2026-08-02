@@ -18,6 +18,7 @@ const STATUS_LABELS: Record<string, { text: string; color: string }> = {
   failed: { text: '❌ 失败', color: 'text-red-400' },
   partial: { text: '⚠️ 部分成功', color: 'text-yellow-400' },
   error: { text: '❌ 错误', color: 'text-red-400' },
+  skipped_busy: { text: '⏭️ 跳过（执行忙）', color: 'text-gray-500' },  // T-302：T-117 互斥跳过状态
   '': { text: '—', color: 'text-gray-600' },
 };
 

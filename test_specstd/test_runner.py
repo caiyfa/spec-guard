@@ -302,3 +302,33 @@ class TestStreamOutputStatus:
 
         asyncio.run(mgr._stream_output())
         assert mgr.status == "aborted"
+
+
+class TestParseLine:
+    """T-303：pytest 输出行解析（verdict + 参数化场景 ID 正则提取）。"""
+
+    def _parse(self, line):
+        return runner_mod.RunManager()._parse_line(line)
+
+    def test_standard_param_id(self):
+        ev = self._parse(r"test_suites\test_scenarios.py::test_scenario[PP-RC-001] PASSED")
+        assert ev == {"verdict": "PASSED", "scenario_id": "PP-RC-001"}
+
+    def test_error_verdict(self):
+        ev = self._parse("test_scenarios.py::test_scenario[TL-001] ERROR")
+        assert ev["verdict"] == "ERROR"
+        assert ev["scenario_id"] == "TL-001"
+
+    def test_extra_brackets_no_misparse(self):
+        """行内含进度/其他方括号段时不误取（原 split 实现会取到 "[ 50%]"）。"""
+        ev = self._parse("[PP-RC-001] PASSED [ 50%]")
+        assert ev["scenario_id"] == "PP-RC-001", ev
+
+    def test_non_param_line_no_id(self):
+        """非参数化行（engine_modes 测试）verdict 有值但场景 ID 为空。"""
+        ev = self._parse("test_engine_modes.py::test_shared PASSED")
+        assert ev["verdict"] == "PASSED"
+        assert ev["scenario_id"] == ""
+
+    def test_plain_output_no_verdict(self):
+        assert self._parse("[SpecGuard] POST /api/x -> 200") == {}

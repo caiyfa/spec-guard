@@ -305,6 +305,15 @@ async def execute_plan(plan_id: str, workspace: str = "",
     except Exception as e:
         print(f"[SpecGuard WARN] 失败索引写入失败（不影响执行结论）: {type(e).__name__}: {e}")
 
+    # T-304：D2 场景级通知（fail/drift/skip 事件）与 runner 路径对齐——
+    # 此前定时执行只触发 plan_failure/plan_success（计划粒度），配置了场景级
+    # 事件的用户收不到定时执行的通知；即时 plan_failure 通知保留（调度路径价值）
+    try:
+        from services.runner import push_run_notifications
+        await push_run_notifications(reports_root, f"{plan_id}/{run_id}")
+    except Exception as e:
+        print(f"[SpecGuard WARN] 场景级通知推送失败（不影响执行结论）: {type(e).__name__}: {e}")
+
     # ── 7. 汇总状态 ──
     has_fail = any(r["status"] in ("fail", "error") for r in results)
     has_skip = any(r["status"] in ("skip", "blocked", "drift", "orphaned")

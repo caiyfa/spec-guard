@@ -163,6 +163,12 @@ export default function PlanManager({ selectedPlan, onSelect, onPlansChange }: P
               {p.source_delta && (
                 <span className="text-[9px] px-1 py-0.5 rounded bg-info/10 text-info/60">📄 {p.source_delta}</span>
               )}
+              {(p.breakpoints || []).length > 0 && (
+                <span className="text-[9px] px-1 py-0.5 rounded bg-fail/10 text-fail/70"
+                  title={`断点：${(p.breakpoints || []).join('、')}`}>
+                  🔴 {(p.breakpoints || []).length}
+                </span>
+              )}
               <span className="flex-1" />
               <button onClick={(e) => { e.stopPropagation(); run(p.id); }}
                 className="text-[9px] text-pass hover:underline">▶ 执行</button>

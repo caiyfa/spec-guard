@@ -411,7 +411,7 @@ export default function DagEditor() {
           className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
           title="按测试计划筛选场景">
           <option value="">全部场景</option>
-          {plans.map((p) => <option key={p.id} value={p.id}>📋 {p.name}</option>)}
+          {plans.map((p) => <option key={p.id} value={p.id}>📋 {p.name}{(p.breakpoints || []).length > 0 ? ` 🔴${(p.breakpoints || []).length}` : ''}</option>)}
         </select>
         {/* K-027：模块分组筛选（含直接上下游，保持依赖边可见） */}
         <select value={selectedModule} onChange={(e) => setSelectedModule(e.target.value)}
