@@ -16,6 +16,7 @@ import Schedules from './pages/Schedules';
 import Drafts from './pages/Drafts';
 import Login from './pages/Login';
 import AdminUsers from './pages/AdminUsers';
+import EnvironmentConfig from './pages/EnvironmentConfig';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import { authApi, session } from './api';
@@ -51,6 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       // K-009：原「工作区管理」+「文档中心」合并为工作区中心，全角色可见（页内按角色显隐操作）
       { to: '/workspace', label: '工作区中心', roles: ALL },
+      { to: '/env-config', label: '环境配置', roles: ADMIN_ONLY },  // T-306：环境信息独立维护
       { to: '/settings', label: '系统设置', roles: ADMIN_ONLY },
       { to: '/admin-users', label: '用户管理', roles: ADMIN_ONLY },
     ],
@@ -361,6 +363,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/notify" element={<NotifyConfigs />} />
                         <Route path="/schedules" element={<Schedules />} />
             <Route path="/admin-users" element={<AdminUsers />} />
+            <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

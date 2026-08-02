@@ -382,16 +382,27 @@ export const referenceApi = {
       `/reference/next-id?prefix=${prefix}&type=${type}`),
   validateId: (id: string) =>
     request<{ id: string; unique: boolean; conflicts: string[] }>(`/reference/validate-id/${id}`),
-  envConfig: () => request<{ raw: string; parsed: Record<string, unknown> }>('/reference/env-config'),
-  saveEnvConfig: (raw: string) =>
-    request<{ ok: boolean }>('/reference/env-config', {
+  // T-306：环境配置独立菜单——环境列表 + 按环境读写
+  envs: () =>
+    request<{ system: string; envs: EnvEntry[]; current: string }>('/reference/envs'),
+  envConfig: (env = 'sit') =>
+    request<{ raw: string; parsed: Record<string, unknown>; env: string; exists: boolean }>(
+      `/reference/env-config?env=${encodeURIComponent(env)}`),
+  saveEnvConfig: (raw: string, env = 'sit') =>
+    request<{ ok: boolean; env: string }>(`/reference/env-config?env=${encodeURIComponent(env)}`, {
       method: 'PUT',
       body: JSON.stringify({ raw }),
     }),
-  testDb: () => request<{ ok: boolean; message?: string; error?: string }>('/reference/test-db', { method: 'POST' }),
+  testDb: (env = 'sit') =>
+    request<{ ok: boolean; message?: string; error?: string }>(`/reference/test-db?env=${encodeURIComponent(env)}`, { method: 'POST' }),
 };
 
 // ── 工作区管理 ──
+export interface EnvEntry {
+  name: string;
+  path: string;
+}
+
 export interface WorkspaceInfo {
   name: string;
   system: string;

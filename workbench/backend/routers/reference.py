@@ -1,10 +1,11 @@
 """参考信息 API：步骤类型 / 断言器 / 工号池角色 / 环境变量 / 上游变量 — 编辑器快速引用数据源"""
 
 import os
+import re
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.auth import require_role
@@ -205,18 +206,39 @@ def ref_env_vars():
 
 # ── 环境配置读写 ──────────────────────────────────────────
 
-_ENV_FILE = SYSTEMS_TDM / "config" / "env.sit.yaml"
+_ENV_GLOB = "env.*.yaml"
+
+
+def _env_file(env: str) -> Path:
+    """按环境名定位配置：systems/{system}/config/env.{env}.yaml（默认 sit）。"""
+    name = (env or "sit").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        raise HTTPException(status_code=400, detail=f"环境名非法: {env}")
+    return SYSTEMS_TDM / "config" / f"env.{name}.yaml"
+
+
+@router.get("/envs")
+def list_envs():
+    """T-306：可用环境列表（扫描 systems/{system}/config/env.*.yaml）。
+
+    独立环境配置菜单的数据源——环境信息不再只有 sit 一份。
+    """
+    files = sorted((SYSTEMS_TDM / "config").glob(_ENV_GLOB))
+    envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in files]
+    return {"system": "tdm", "envs": envs,
+            "current": envs[0]["name"] if envs else "sit"}
 
 
 @router.get("/env-config")
-def get_env_config():
-    """读取环境配置（返回 YAML 原文 + 解析后的结构化数据）"""
-    if not _ENV_FILE.is_file():
-        return {"raw": "", "parsed": {}}
-    with open(_ENV_FILE, "r", encoding="utf-8") as f:
+def get_env_config(env: str = "sit"):
+    """读取环境配置（返回 YAML 原文 + 解析后的结构化数据；env 默认 sit 向后兼容）"""
+    env_file = _env_file(env)
+    if not env_file.is_file():
+        return {"raw": "", "parsed": {}, "env": env, "exists": False}
+    with open(env_file, "r", encoding="utf-8") as f:
         raw = f.read()
     parsed = yaml.safe_load(raw) or {}
-    return {"raw": raw, "parsed": parsed}
+    return {"raw": raw, "parsed": parsed, "env": env, "exists": True}
 
 
 class EnvConfigBody(BaseModel):
@@ -224,25 +246,28 @@ class EnvConfigBody(BaseModel):
 
 
 @router.put("/env-config", dependencies=[Depends(require_role("admin"))])
-def save_env_config(body: EnvConfigBody):
-    """保存环境配置（校验 YAML 语法后写入）"""
+def save_env_config(body: EnvConfigBody, env: str = "sit"):
+    """保存环境配置（校验 YAML 语法后写入；env 默认 sit 向后兼容）"""
     try:
         parsed = yaml.safe_load(body.raw)
     except yaml.YAMLError as e:
         return {"ok": False, "error": f"YAML 语法错误: {e}"}
     if not isinstance(parsed, dict):
         return {"ok": False, "error": "配置必须是 YAML 对象"}
-    with open(_ENV_FILE, "w", encoding="utf-8") as f:
+    env_file = _env_file(env)
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(env_file, "w", encoding="utf-8") as f:
         f.write(body.raw)
-    return {"ok": True}
+    return {"ok": True, "env": env}
 
 
 @router.post("/test-db", dependencies=[Depends(require_role("admin"))])
-def test_db_connection():
-    """测试数据库连接（读取 env.sit.yaml + devops 凭据回退）"""
-    if not _ENV_FILE.is_file():
-        return {"ok": False, "error": "env.sit.yaml 不存在"}
-    with open(_ENV_FILE, "r", encoding="utf-8") as f:
+def test_db_connection(env: str = "sit"):
+    """测试数据库连接（读取 env.{env}.yaml + devops 凭据回退）"""
+    env_file = _env_file(env)
+    if not env_file.is_file():
+        return {"ok": False, "error": f"env.{env}.yaml 不存在"}
+    with open(env_file, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
     db = cfg.get("db") or {}
     if not db.get("host") or not db.get("user"):
