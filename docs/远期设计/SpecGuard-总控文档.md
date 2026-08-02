@@ -133,6 +133,7 @@ flowchart LR
 | T-307 | 打磨-治理 | 问题修复经验包体系 | docs/经验包 | AGENTS.md 加入口章节；经验包独立文件五段式（现象/证据链/根因/修复/预防）；首个案例 EX-8200eada 入库 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（README 协议+索引 + 首个经验包；AGENTS.md「问题修复经验包」入口章节） |
 | T-308 | 打磨-工作台 | 环境设置与系统设置职责拆分 | Settings/EnvironmentConfig | 环境设置=测试执行基础信息（网关/账号/资源码/SSO）；系统设置=SpecGuard 运行基础（DB 连接/模型/审计/看门狗）；消除 YAML/SSO/DB 双入口 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（Settings 移除 YAML/SSO Tab 并更名「系统设置」；DbTab 按环境维护+归属文案；EnvironmentConfig 去 DB 区块与连通测试；边界注释明文化） |
 | T-309 | 打磨-工作台 | 环境配置通用/系统分层 | systems/_shared/EnvironmentConfig | 通用配置（systems/_shared/config/env.{env}.yaml 跨系统复用）与系统专属配置分层；load_env 合并（共享打底+系统覆盖）；前端配置层切换 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（systems/_shared 共享层+merge_env；tdm load_env 合并；sso 段迁移共享层；envs/env-config 支持 scope=shared；前端「本系统/通用」切换；test_reference_envs +4） |
+| T-310 | 打磨-执行 | 执行日志信息量补齐（上下文+跳过/失败原因） | runner/scenario_store/History/test_scenarios | EX-fc04ec0c 类日志只有 pytest 短路输出：① 上游 SKIP 原因不入日志（K-051 只打 FAIL）；② 自身 SKIP 原因被 -v 截断；③ History 清单只有 verdict+id；④ 日志头行无触发上下文 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（K-051 扩展上游 SKIP 打印+自身 SKIP 完整原因行；get_report 聚合 cases/*.json 的 skip_reason/failure 与批次 case；日志头行带触发人/账号/工作区/选中场景/计划；History 清单与批次行显示原因；test_scenario_store +2、test_runner +1） |
 | T-201 | 打磨-DAG | 孤节点补全建议 | DagEditor/dep_suggest | DAG 页「补全孤节点」批量按钮——对无依赖场景批量扫描采纳建议（T-105 验收点补全） | — | 已完成 | sess-master | P1 ✅ 2026-08-02（🟢 补全孤节点按钮，复用 suggestDeps/editDep，采纳带来源标注） |
 | T-202 | 打磨-DAG | 画布断点节点可视化 | DagEditor | 断点场景画布节点 🔴 标记（RunControl ?bps 与计划 breakpoints 同源展示） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（计划 breakpoints → 节点 isBreakpoint 徽章，选中计划时生效） |
 | T-203 | 打磨-执行 | History 批次详情展开 | History/scenario_store | 主任务详情展示 -bN 批次 case（T-120 归组后批次结果可读） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（get_report 归并 batches 字段 + History 批次区块，test_scenario_store 1 测试） |
@@ -231,6 +232,7 @@ flowchart LR
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
 | docs/远期设计/SpecGuard-总控文档.md | 总控人 | 2026-08-02 | bf2f7c519f2a | caced5cf6323 | 已完成 | 自身登记：v1.1 打磨期决策（§2.0/§4.1 新增、远期后置、T-001 阻塞）；T-101~105/111~123 完成；T-131 完成（用户决策：TL 系 agent 测试产物不入库，基线回退）；第二轮 T-201~205 追加并完成；第三轮 T-301~304 追加并完成；T-305 追加并完成（EX-8200eada 排障产出）；T-306/T-307 追加并完成（环境配置独立菜单 + 经验包体系）；T-308 追加并完成（环境/系统设置职责拆分）；T-309 追加并完成（环境配置通用/系统分层） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-02 | 7cc4d56b60a6 | 843bce26c130 | 已完成 | 自身登记：T-310 追加并完成（EX-fc04ec0c 执行日志信息量补齐：上游/自身 SKIP 原因进日志、get_report 聚合 case 原因、日志头行触发上下文、History 清单显示原因） |
 | | | | | | | |
 
 ---
