@@ -10,6 +10,16 @@ interface CaseBrief {
   id: string;
   verdict: string;
   duration_ms?: number;
+  // T-310：后端 get_report 从 cases/*.json 聚合的「为什么」（skip_reason / failure.message）
+  skip_reason?: string;
+  failure?: { category?: string; message?: string };
+}
+
+/** T-310：case 行的原因文案（SKIP→skip_reason；FAIL/BLOCKED/ERROR→failure.message） */
+function caseReason(c: CaseBrief): string {
+  if (c.verdict === 'SKIP' && c.skip_reason) return c.skip_reason;
+  if (c.failure?.message) return `${c.failure.category || ''} ${c.failure.message}`.trim();
+  return '';
 }
 
 const VERDICT_STYLE: Record<string, string> = {
@@ -76,10 +86,17 @@ function RunDetail({ runId }: { runId: string }) {
         <div className="text-xs font-medium text-gray-400 mb-2">单元测试（{cases.length}）</div>
         <div className="space-y-0.5 max-h-48 overflow-y-auto">
           {cases.map((c, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
-              <span className="font-mono text-gray-300">{c.id}</span>
-              {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
+            <div key={i} className="py-0.5">
+              <div className="flex items-center gap-2 text-xs">
+                <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
+                <span className="font-mono text-gray-300">{c.id}</span>
+                {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
+              </div>
+              {caseReason(c) && (
+                <div className="pl-[4.5rem] text-[10px] text-gray-500 truncate" title={caseReason(c)}>
+                  {caseReason(c)}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -91,10 +108,17 @@ function RunDetail({ runId }: { runId: string }) {
           <div className="text-xs font-medium text-gray-400 mb-2">批次 {b.dir.replace(/^.*-b/, '#')}（{b.cases.length}）</div>
           <div className="space-y-0.5 max-h-40 overflow-y-auto">
             {b.cases.map((c, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
-                <span className="font-mono text-gray-300">{c.id}</span>
-                {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
+              <div key={i} className="py-0.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
+                  <span className="font-mono text-gray-300">{c.id}</span>
+                  {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
+                </div>
+                {caseReason(c) && (
+                  <div className="pl-[4.5rem] text-[10px] text-gray-500 truncate" title={caseReason(c)}>
+                    {caseReason(c)}
+                  </div>
+                )}
               </div>
             ))}
           </div>

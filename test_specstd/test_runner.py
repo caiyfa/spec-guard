@@ -233,6 +233,42 @@ class TestBatchNotifications:
         assert "reports/EX-batch001-b0/report.md" in links
 
 
+class TestLogHeaderContext:
+    """T-310：日志头行带触发上下文（触发人/账号/工作区/选中场景）。
+
+    EX-fc04ec0c 类日志头行只有「> EX-xxx | env=sit | pytest 命令」——
+    看不出是谁触发、用的什么账号、选了哪些场景，排错要先翻 trigger.json。
+    """
+
+    def test_log_header_includes_trigger_context(self, mgr, monkeypatch, tmp_path):
+        from services import user_store
+        monkeypatch.setattr(user_store, "enqueue_run", lambda *a, **k: 1)
+        monkeypatch.setattr(user_store, "audit", lambda *a, **k: None)
+        monkeypatch.setattr(user_store, "update_run_queue", lambda *a, **k: True)
+        monkeypatch.setattr(mgr, "broadcast", _recorder([]))
+        monkeypatch.setattr(mgr, "_record_failures", lambda: None)
+
+        async def _noop(*a, **k):
+            pass
+
+        monkeypatch.setattr(mgr, "_push_run_notifications", _noop)
+        monkeypatch.setattr(mgr, "_finish_current_run", _noop)
+
+        async def run():
+            return await mgr.trigger(scope="scenario", target="EV-IMP-001",
+                                     env="sit", emp_no="90024166", workspace="tdm",
+                                     account_override="ad2")
+
+        result = asyncio.run(run())
+        log_path = tmp_path / result["run_id"] / "output.log"
+        assert log_path.is_file()
+        head = log_path.read_text(encoding="utf-8").splitlines()[0]
+        assert "EV-IMP-001" in head, "头行应含选中场景"
+        assert "90024166" in head, "头行应含触发人工号"
+        assert "ad2" in head, "头行应含执行账号"
+        assert "tdm" in head, "头行应含工作区"
+
+
 class TestSpawnFailureBroadcast:
     """T-115：spawn 失败必须补发终态（此前 started 先广播，前端永久卡「执行中」）。"""
 

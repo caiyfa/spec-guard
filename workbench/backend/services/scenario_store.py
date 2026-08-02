@@ -371,11 +371,41 @@ def list_reports(limit: int = 20) -> list[dict]:
     return runs
 
 
+def _enrich_case_reason(case: dict, root: Path) -> dict:
+    """T-310：从 case 文件补充 skip_reason/failure（History 页直接显示「为什么跳过/失败」）。
+
+    run.json 的 case 摘要只有 verdict+id+duration；原因在 cases/*.json（如
+    IS-PREP-002_upstream.json 的 skip_reason、failure.message）。摘要已有字段不覆盖。
+    """
+    f = case.get("file", "")
+    if not isinstance(f, str) or not f.endswith(".json"):
+        return case
+    p = (root / f).resolve()
+    try:
+        p.relative_to(root.resolve())
+    except ValueError:
+        return case
+    if not p.is_file():
+        return case
+    try:
+        import json
+        with open(p, "r", encoding="utf-8") as fh:
+            detail = json.load(fh)
+    except Exception:
+        return case
+    out = dict(case)
+    for k in ("skip_reason", "skip_category", "failure"):
+        if k in detail and k not in out:
+            out[k] = detail[k]
+    return out
+
+
 def get_report(run_id: str) -> Optional[dict]:
     """读取单次运行的 run.json
 
     T-203：断点分批执行的 case 在 {run_id}-bN 目录——主报告归并 batches 字段
     （T-120 历史归组后的详情可读面，History 主任务下展开批次）。
+    T-310：cases 摘要聚合 case 文件里的 skip_reason/failure。
     """
     import json
     root = _reports_root()
@@ -384,6 +414,8 @@ def get_report(run_id: str) -> Optional[dict]:
         return None
     with open(run_json, "r", encoding="utf-8") as f:
         data = json.load(f)
+    if isinstance(data.get("cases"), list):
+        data["cases"] = [_enrich_case_reason(c, root / run_id) for c in data["cases"]]
     batches = []
     for d in sorted(root.glob(f"{run_id}-b*")):
         bjson = d / "run.json"
@@ -391,7 +423,10 @@ def get_report(run_id: str) -> Optional[dict]:
             try:
                 with open(bjson, "r", encoding="utf-8") as f:
                     bdata = json.load(f)
-                batches.append({"dir": d.name, "cases": bdata.get("cases", [])})
+                bcases = bdata.get("cases", [])
+                if isinstance(bcases, list):
+                    bcases = [_enrich_case_reason(c, d) for c in bcases]
+                batches.append({"dir": d.name, "cases": bcases})
             except Exception:
                 continue
     if batches:

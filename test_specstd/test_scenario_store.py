@@ -170,3 +170,53 @@ class TestListReportsBatchGrouping:
         assert data["cases"][0]["id"] == "A"
         assert data["batches"][0]["dir"] == "EX-main0001-b0"
         assert data["batches"][0]["cases"][0]["verdict"] == "FAIL"
+
+    def test_get_report_enriches_case_reasons(self, tmp_path, monkeypatch):
+        """T-310：case 摘要聚合 skip_reason/failure（History 页直接显示「为什么跳过/失败」，
+        此前原因只在 cases/*.json 里，页面清单只有 verdict+id）。"""
+        import json
+        reports = tmp_path / "reports"
+        main = reports / "EX-main0002"
+        main.mkdir(parents=True)
+        (main / "run.json").write_text(json.dumps({
+            "run_id": "EX-main0002", "env": "sit",
+            "cases": [
+                {"id": "A", "verdict": "SKIP", "file": "cases/A.json"},
+                {"id": "B", "verdict": "FAIL", "file": "cases/B.json"},
+            ]}), encoding="utf-8")
+        (main / "cases").mkdir()
+        (main / "cases" / "A.json").write_text(json.dumps({
+            "scenario_id": "A", "verdict": "SKIP",
+            "skip_reason": "账号无权限", "skip_category": "permission"}), encoding="utf-8")
+        (main / "cases" / "B.json").write_text(json.dumps({
+            "scenario_id": "B", "verdict": "FAIL",
+            "failure": {"category": "assert", "message": "断言差异 1 != 2"}}), encoding="utf-8")
+        monkeypatch.setattr(ss, "_reports_root", lambda: reports)
+        data = ss.get_report("EX-main0002")
+        assert data["cases"][0]["skip_reason"] == "账号无权限"
+        assert data["cases"][0]["skip_category"] == "permission"
+        assert data["cases"][1]["failure"]["message"] == "断言差异 1 != 2"
+        assert data["cases"][1]["failure"]["category"] == "assert"
+        # 摘要已有字段不被覆盖
+        assert data["cases"][0]["verdict"] == "SKIP"
+
+    def test_get_report_enriches_batch_case_reasons(self, tmp_path, monkeypatch):
+        """T-310：批次（{run_id}-bN）case 的原因同样聚合（file 相对批次目录）。"""
+        import json
+        reports = tmp_path / "reports"
+        main = reports / "EX-main0003"
+        main.mkdir(parents=True)
+        (main / "run.json").write_text(json.dumps({
+            "run_id": "EX-main0003", "cases": []}), encoding="utf-8")
+        b0 = reports / "EX-main0003-b0"
+        b0.mkdir()
+        (b0 / "run.json").write_text(json.dumps({
+            "run_id": "EX-main0003-b0",
+            "cases": [{"id": "C", "verdict": "FAIL", "file": "cases/C.json"}]}), encoding="utf-8")
+        (b0 / "cases").mkdir()
+        (b0 / "cases" / "C.json").write_text(json.dumps({
+            "scenario_id": "C", "verdict": "FAIL",
+            "failure": {"category": "http", "message": "500 网关错误"}}), encoding="utf-8")
+        monkeypatch.setattr(ss, "_reports_root", lambda: reports)
+        data = ss.get_report("EX-main0003")
+        assert data["batches"][0]["cases"][0]["failure"]["message"] == "500 网关错误"

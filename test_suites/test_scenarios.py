@@ -45,16 +45,27 @@ def test_scenario(scenario, rctx):
 
     # K-051：闭包内失败上游的原因打进 stdout（-s 实时流入执行日志）——
     # 否则日志只有「本场景未执行」一句，排错要翻 run.json 才能看到上游为何 FAIL
+    # T-310：上游 SKIP 同样打进原因（EX-fc04ec0c：根因是上游「账号无 TDM_INV_ACTIVITY
+    # 权限」SKIP，但日志只有一句「上游未通过」，看不到为什么）
     if record.verdict == VERDICT_BLOCKED:
         try:
             upstream_ids = rctx.graph.closure(scenario.id)
         except Exception:
             upstream_ids = []
         for r in rctx.records:
-            if (r.scenario_id in upstream_ids and r.scenario_id != scenario.id
-                    and r.verdict == VERDICT_FAIL and getattr(r, "failure", None)):
+            if r.scenario_id not in upstream_ids or r.scenario_id == scenario.id:
+                continue
+            if r.verdict == VERDICT_FAIL and getattr(r, "failure", None):
                 print(f"[SpecGuard] 上游 {r.scenario_id} FAIL: "
                       f"{r.failure.get('message', '')[:300]}", flush=True)
+            elif r.verdict == VERDICT_SKIP and getattr(r, "skip_reason", None):
+                print(f"[SpecGuard] 上游 {r.scenario_id} SKIP: "
+                      f"{r.skip_reason[:300]}", flush=True)
+
+    # T-310：自身 SKIP 的原因先打完整行（pytest -v 实时流的 SKIPPED 行会截断原因，
+    # summary 只在日志末尾一行）——「为什么跳过」在日志流中直接可见
+    if record.verdict == VERDICT_SKIP and getattr(record, "skip_reason", None):
+        print(f"[SpecGuard] {scenario.id} SKIP: {record.skip_reason[:300]}", flush=True)
 
     if record.verdict == VERDICT_SKIP:
         pytest.skip(record.skip_reason or "场景跳过")

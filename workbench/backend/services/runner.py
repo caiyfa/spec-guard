@@ -324,7 +324,20 @@ class RunManager:
             "cmd": " ".join(cmd),
             "started_at": self.started_at,
         })
-        self._write_output_log(f"> {self.run_id} | env={env} | {' '.join(cmd)}")
+        # T-310：日志头行带触发上下文（触发人/账号/工作区/选中场景）——
+        # 此前只有 env + 命令，排错要另翻 trigger.json 才知道谁触发、什么账号
+        ctx_parts = [f"env={env}"]
+        if scope == "scenario" and target:
+            ctx_parts.append(f"选中={target}")
+        if emp_no:
+            ctx_parts.append(f"触发人={emp_no}")
+        if account_override:
+            ctx_parts.append(f"账号={account_override}")
+        if workspace:
+            ctx_parts.append(f"工作区={workspace}")
+        if plan_id:
+            ctx_parts.append(f"计划={plan_id}")
+        self._write_output_log(f"> {self.run_id} | {' | '.join(ctx_parts)} | {' '.join(cmd)}")
 
         # 后台读取输出
         asyncio.create_task(self._stream_output())
