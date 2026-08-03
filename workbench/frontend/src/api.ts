@@ -221,6 +221,7 @@ export interface PreflightGap {
   key?: string;        // missing_env
   account?: string;    // missing_accounts
   ref?: string;        // unresolved_upstream
+  tpl?: string;        // unresolved_templates_gaps（T-318）
   scenarios: string[];
 }
 export interface PreflightScenario {
@@ -228,6 +229,7 @@ export interface PreflightScenario {
   accounts: string[];
   env_keys: string[];
   upstream_refs: string[];
+  unresolved_templates: string[];
   missing_accounts: string[];
   missing_env: string[];
   unresolved_upstream: string[];
@@ -242,9 +244,11 @@ export interface PreflightResult {
   accounts: string[];
   env_keys: string[];
   upstream_refs: string[];
+  unresolved_templates: string[];
   missing_accounts: PreflightGap[];
   missing_env: PreflightGap[];
   unresolved_upstream: PreflightGap[];
+  unresolved_templates_gaps: PreflightGap[];
   has_gaps: boolean;
   error?: string;
 }

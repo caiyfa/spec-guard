@@ -299,3 +299,59 @@ class TestScanCompliance:
             depends="[]"))
         r = preflight.scan_compliance(scenarios_root=str(lib))
         assert r["gaps"][0]["t8_violations"] == ["IS-PREP-001"]
+
+
+# ══════════════════════════════════════════════════════════
+# unresolved_templates 未知插值检测（T-318）
+# ══════════════════════════════════════════════════════════
+
+class TestUnresolvedTemplates:
+    """T-318：EX-5c6f4c98 类——{{random:6}} 非法插值应在执行前预警（不是跑完 KeyError）。"""
+
+    def test_random_template_flagged(self, lib):
+        """{{random:6}}（非 fn/env/上游/save）→ unresolved_templates 预警。"""
+        _write(lib, "TL-RC-014", _scenario_yaml(
+            "TL-RC-014",
+            flow='  - call:\n      method: POST\n      path: /api/system/tags\n'
+                 '      json:\n        tagName: "RC014_缺corpCode_{{random:6}}"\n'))
+        r = preflight.scan_dependencies(["TL-RC-014"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert "random:6" in r["unresolved_templates"], \
+            f"未知插值应预警: {r['unresolved_templates']}"
+        assert r["has_gaps"] is True
+        # 逐场景字段
+        assert r["scenarios"][0]["unresolved_templates"] == ["random:6"]
+
+    def test_save_variable_ok(self, lib):
+        """flow save: resp + {{resp.json.data.id}} → 不预警。"""
+        _write(lib, "SAVE-001", _scenario_yaml(
+            "SAVE-001",
+            flow='  - call:\n      method: POST\n      path: /x\n      save: resp\n'
+                 '  - call:\n      method: GET\n      path: /y\n'
+                 '      params:\n        id: "{{resp.json.data.id}}"\n'))
+        r = preflight.scan_dependencies(["SAVE-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert r["unresolved_templates"] == [], f"save 变量不应预警: {r['unresolved_templates']}"
+        assert r["has_gaps"] is False
+
+    def test_set_var_ok(self, lib):
+        """tool set_var 的 vars 注入顶层命名空间 → {{activity_name}} 不预警。"""
+        _write(lib, "SV-001", _scenario_yaml(
+            "SV-001",
+            flow='  - tool:\n      use: set_var\n      with:\n'
+                 '        vars: {activity_name: "SG_ACT_{{fn.timestamp}}", cnt: 3}\n'
+                 '  - call:\n      method: POST\n      path: /x\n'
+                 '      json:\n        name: "{{activity_name}}"\n'
+                 '        n: "{{cnt}}"\n'))
+        r = preflight.scan_dependencies(["SV-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert r["unresolved_templates"] == [], f"set_var 变量不应预警: {r['unresolved_templates']}"
+
+    def test_compliance_includes_unresolved(self, lib):
+        """scan_compliance 同样报告未知插值（格式缺口）。"""
+        _write(lib, "CPL-001", _scenario_yaml(
+            "CPL-001",
+            flow='  - call:\n      method: POST\n      path: /x\n'
+                 '      json:\n        name: "A_{{random:6}}"\n'))
+        r = preflight.scan_compliance(scenarios_root=str(lib))
+        assert r["gaps"][0]["unresolved_templates"] == ["random:6"]

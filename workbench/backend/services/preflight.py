@@ -66,6 +66,53 @@ def _static_upstream_refs(text):
     return set(_UPSTREAM_RE.findall(text or ""))
 
 
+# 通用插值提取（未知插值检测用）
+_TPL_RE = re.compile(r"\{\{([^{}]+)\}\}")
+
+
+def _static_save_names(raw) -> set:
+    """场景内顶层变量集合：flow/teardown 步骤的 save 名 + set_var vars 键。
+
+    {{save名.字段}} / {{裸名}} 引用这些名字时视为已定义（T-318）。
+    """
+    names = set()
+    for section in ("flow", "teardown"):
+        for step in raw.get(section) or []:
+            if not isinstance(step, dict) or len(step) != 1:
+                continue
+            step_type, body = next(iter(step.items()))
+            if not isinstance(body, dict):
+                continue
+            sv = body.get("save")
+            if isinstance(sv, str) and sv:
+                names.add(sv)
+            # tool: {use: set_var, with: {vars: {...}}}——vars 注入顶层命名空间（K-051）
+            if step_type == "tool" and body.get("use") == "set_var":
+                vars_ = (body.get("with") or {}).get("vars") or {}
+                names.update(k for k in vars_ if isinstance(k, str))
+    return names
+
+
+def _static_unresolved_templates(raw, text) -> list:
+    """T-318：未知插值检测——{{expr}} 既非 fn.*/env.*/上游引用/场景内 save 变量
+    → 运行期「变量未定义」（EX-5c6f4c98：{{random:6}} 是 Apifox 语法，SpecGuard
+    不支持，执行前应预警而非跑完 KeyError）。"""
+    save_names = _static_save_names(raw)
+    out = []
+    for expr in _TPL_RE.findall(text or ""):
+        expr = expr.strip()
+        if expr.startswith("fn.") or expr.startswith("env."):
+            continue
+        if re.match(r"^[A-Z][A-Z0-9][A-Z0-9_-]*\.", expr):  # 上游场景 ID 引用
+            continue
+        root = expr.split(".", 1)[0]
+        if root in save_names:
+            continue
+        if expr not in out:
+            out.append(expr)
+    return out
+
+
 def _merge_deps(scenario_raw, text):
     """requires 声明 ∪ 静态提取（合并去重）。"""
     req = scenario_raw.get("requires") or {}
@@ -149,7 +196,7 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
     closure = _closure(scenarios, scenario_ids)
     env_accounts = (env or {}).get("accounts") or {}
 
-    items, all_accounts, all_env, all_up = [], set(), set(), set()
+    items, all_accounts, all_env, all_up, all_unresolved = [], set(), set(), set(), set()
     for sid, raw in sorted(closure.items()):
         # flow/verify/teardown 以 YAML 文本重排（dict repr 无法跑正则）
         text = ""
@@ -161,25 +208,28 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
         miss_acc = [a for a in accounts if a not in env_accounts]
         miss_env = [k for k in env_keys if not _env_has_key(env, k)]
         miss_up = [u for u in upstream if u not in closure]
+        # T-318：未知插值（{{random:6}} 类）——运行期变量未定义提前预警
+        unresolved = _static_unresolved_templates(raw, text)
         all_accounts |= set(accounts)
         all_env |= set(env_keys)
         all_up |= set(upstream)
+        all_unresolved |= set(unresolved)
         items.append({
             "id": sid,
             "accounts": accounts, "env_keys": env_keys, "upstream_refs": upstream,
+            "unresolved_templates": unresolved,
             "missing_accounts": miss_acc, "missing_env": miss_env,
             "unresolved_upstream": miss_up,
-            "has_gaps": bool(miss_acc or miss_env or miss_up),
+            "has_gaps": bool(miss_acc or miss_env or miss_up or unresolved),
         })
 
-    def _group(attr):
+    def _group(attr, key_name="key"):
         """缺失项按「键 → 涉及场景」归组。"""
         m: dict = {}
         for it in items:
             for v in it[attr]:
                 m.setdefault(v, []).append(it["id"])
-        return [{"key" if attr == "missing_env" else "account" if attr == "missing_accounts" else "ref": k,
-                 "scenarios": sorted(v)} for k, v in m.items()]
+        return [{key_name: k, "scenarios": sorted(v)} for k, v in m.items()]
 
     has_gaps = any(it["has_gaps"] for it in items)
     return {
@@ -191,9 +241,11 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
         "accounts": sorted(all_accounts),
         "env_keys": sorted(all_env),
         "upstream_refs": sorted(all_up),
-        "missing_accounts": _group("missing_accounts"),
-        "missing_env": _group("missing_env"),
-        "unresolved_upstream": _group("unresolved_upstream"),
+        "unresolved_templates": sorted(all_unresolved),
+        "missing_accounts": _group("missing_accounts", "account"),
+        "missing_env": _group("missing_env", "key"),
+        "unresolved_upstream": _group("unresolved_upstream", "ref"),
+        "unresolved_templates_gaps": _group("unresolved_templates", "tpl"),
         "has_gaps": has_gaps,
     }
 
@@ -249,7 +301,9 @@ def scan_compliance(scenarios_root=None) -> dict:
             (declared["accounts"] | declared["env"] | declared["upstream"]) - accounts - env_keys - upstream)
         deps = {d["id"] if isinstance(d, dict) else d for d in (raw.get("depends_on") or [])}
         t8 = sorted(declared["upstream"] - deps)
-        if missing_accounts or missing_env or missing_upstream or extra_requires or t8:
+        # T-318：未知插值（{{random:6}} 类）——非法语法，执行前预警
+        unresolved = _static_unresolved_templates(raw, text)
+        if missing_accounts or missing_env or missing_upstream or extra_requires or t8 or unresolved:
             gaps.append({
                 "scenario_id": sid,
                 "missing_accounts": missing_accounts,
@@ -257,10 +311,11 @@ def scan_compliance(scenarios_root=None) -> dict:
                 "missing_upstream": missing_upstream,
                 "extra_requires": extra_requires,
                 "t8_violations": t8,
+                "unresolved_templates": unresolved,
             })
 
     by_type = {"missing_accounts": 0, "missing_env": 0, "missing_upstream": 0,
-               "extra_requires": 0, "t8_violations": 0}
+               "extra_requires": 0, "t8_violations": 0, "unresolved_templates": 0}
     for g in gaps:
         for k in by_type:
             by_type[k] += len(g[k])

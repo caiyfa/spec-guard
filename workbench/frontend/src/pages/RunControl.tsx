@@ -637,7 +637,7 @@ export default function RunControl() {
                   {preflightLoading ? <span className="text-gray-500">扫描中…</span> : !preflight ? (
                     <span className="text-gray-500">未扫描</span>
                   ) : preflight.has_gaps ? (
-                    <span className="text-warn">⚠️ 有缺失（账号 {preflight.missing_accounts.length} · 环境键 {preflight.missing_env.length} · 跨场景引用 {preflight.unresolved_upstream.length}）</span>
+                    <span className="text-warn">⚠️ 有缺失（账号 {preflight.missing_accounts.length} · 环境键 {preflight.missing_env.length} · 跨场景引用 {preflight.unresolved_upstream.length} · 未知插值 {(preflight.unresolved_templates_gaps || []).length}）</span>
                   ) : (
                     <span className="text-pass">✅ 依赖就绪（账号 {preflight.accounts.length} · 环境键 {preflight.env_keys.length} · 上游引用 {preflight.upstream_refs.length}）</span>
                   )}
@@ -687,6 +687,12 @@ export default function RunControl() {
                 {preflight.unresolved_upstream.map((g) => (
                   <div key={g.ref} className="text-[11px] text-warn">
                     🔗 跨场景引用 <span className="font-mono">{g.ref}</span> 不在本次依赖闭包
+                    <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
+                  </div>
+                ))}
+                {(preflight.unresolved_templates_gaps || []).map((g) => (
+                  <div key={g.tpl} className="text-[11px] text-warn">
+                    ❓ 插值 <span className="font-mono">{`{{${g.tpl}}}`}</span> 无法解析（非 fn/env/上游/本场景变量）
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
                   </div>
                 ))}
