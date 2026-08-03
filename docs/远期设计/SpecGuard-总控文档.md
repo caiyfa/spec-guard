@@ -140,6 +140,7 @@ flowchart LR
 | T-314 | 打磨-执行 | 执行日志信息密度（与报告对齐） | http_client/scenario_runner/runner | EX-a78498c3 日志只有「METHOD path → status | trace」一行，请求/响应体/断言详情只在 run.json，日志与报告对不上 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（调用锚点带耗时+响应体摘要（truncate 与报告 body_excerpt 同源，数组转圆括号防解析误判）；verify 断言逐条打印 ✅PASS/❌FAIL+原因；非 call 步骤轨迹（tool use/db_query sql）；runner._parse_line 跳过 [SpecGuard] 锚点行（body 含 FAILED/ERROR 词不污染 verdictMap）；test_log_density 5 测试 + 解析加固 1 测试；MCP 工具数断言 23→24 同步） |
 | T-315 | 打磨-Agent | db_evidence 连接修复（DBClient 不存在） | attribution | Agent 归因时 db_evidence 报「cannot import name 'DBClient'」——引擎 db_oracle 只有 ReadOnlyDb，DB 校对断言（profile_matches_db 等）无法用 | — | 已完成 | sess-master | P1 ✅ 2026-08-02（db_evidence 改走 load_env（T-309 含 db 密码回退）→ normalize_db_config → ReadOnlyDb；env 未配 db 段时明确提示而非导入错；真实调用 SELECT 1 连通 SIT MySQL 验证；test_acceptance_fixes +2（成功路径 + 无 db 段提示）） |
 | T-316 | 打磨-执行 | 调用前信息打印（请求参数/体/账号） | http_client/scenario_runner | EX-a4360d1f：T-314 后日志有响应摘要，但「发了什么」不可见——账号/params/请求体/自定义头只在报告 request，且报告 request 也无 body | — | 已完成 | sess-master | P1 ✅ 2026-08-02（http_client 请求发起前打印调用前信息行：账号/method/path/params/body/data/自定义头（Authorization 绝对不进日志）；step_call 报告 request 补 body/data 摘要与日志对齐；数组方括号转圆括号防 _parse_line 误判；test_log_density +3） |
+| T-317 | 打磨-场景 | body: 键废弃兼容与存量迁移 | scenario_runner/validator/generate-scenario | 用户反馈日志仍无 body——根因：标签库 85 处场景用 2.1.0 前废弃 body: 键，引擎只认 json:，请求体静默丢失（500 之源，日志自然无 body） | — | 已完成 | sess-master | P1 ✅ 2026-08-02（引擎兼容：body: 且无 json: 时按 json 发送 + WARN 提示迁移（json: 存在时优先）；本地批量迁移 86 文件 body:→json:（文本外科手术，含内联 body: {} 形态，TL-RC 系列 + TL-DTL-001）；validator 新增 BODY_KEY WARN（防 Agent 再生产废弃键）；generate-scenario 技能明确「请求体一律 json:」；指纹不变 release_check PASS；smart-tag/system-settings 为待评审场景不入 git（17b8c5d），迁移仅本地生效；test_k055 +2、test_acceptance +2） |
 | T-201 | 打磨-DAG | 孤节点补全建议 | DagEditor/dep_suggest | DAG 页「补全孤节点」批量按钮——对无依赖场景批量扫描采纳建议（T-105 验收点补全） | — | 已完成 | sess-master | P1 ✅ 2026-08-02（🟢 补全孤节点按钮，复用 suggestDeps/editDep，采纳带来源标注） |
 | T-202 | 打磨-DAG | 画布断点节点可视化 | DagEditor | 断点场景画布节点 🔴 标记（RunControl ?bps 与计划 breakpoints 同源展示） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（计划 breakpoints → 节点 isBreakpoint 徽章，选中计划时生效） |
 | T-203 | 打磨-执行 | History 批次详情展开 | History/scenario_store | 主任务详情展示 -bN 批次 case（T-120 归组后批次结果可读） | — | 已完成 | sess-master | P2 ✅ 2026-08-02（get_report 归并 batches 字段 + History 批次区块，test_scenario_store 1 测试） |
@@ -245,6 +246,7 @@ flowchart LR
 | docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-02 | 7a7e07a05ce0 | 99eeb438c705 | 已完成 | 自身登记：T-314 追加并完成（EX-a78498c3 执行日志信息密度：调用锚点带耗时+响应体摘要、断言逐条打印、步骤轨迹、_parse_line 锚点行跳过） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-02 | ea3eb620936e | 464fb3cd4a73 | 已完成 | 自身登记：T-315 追加并完成（db_evidence DBClient 不存在修复：改走 load_env→ReadOnlyDb，真实连接验证） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-02 | fbd1084c51fc | e69f59d5e057 | 已完成 | 自身登记：T-316 追加并完成（EX-a4360d1f 调用前信息打印：账号/params/请求体/自定义头进日志，报告 request 补 body） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-02 | b0f4aa814066 | 76f060b0e33a | 已完成 | 自身登记：T-317 追加并完成（body: 废弃键兼容+存量迁移：引擎兼容+WARN、86 文件本地迁移、validator BODY_KEY、技能 json: 要点） |
 | | | | | | | |
 
 ---
