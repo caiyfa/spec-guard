@@ -250,6 +250,14 @@ def validate_scenario_content(content: str) -> dict:
                     findings.append({"level": "ERROR", "rule": "REGISTRY", "scenario": sid,
                                      "message": f"未注册的 tool: {tool_name}",
                                      **({"hint": hint} if hint else {})})
+        # T-317：call 的 body: 键（2.1.0 前旧语法）→ WARN 提示迁移 json:
+        # （标签库存量场景静默丢请求体的根因，Agent 生成时不得再用 body:）
+        if isinstance(step, dict) and "call" in step:
+            call_body = step["call"]
+            if isinstance(call_body, dict) and "body" in call_body and "json" not in call_body:
+                findings.append({"level": "WARN", "rule": "BODY_KEY", "scenario": sid,
+                                 "message": "call 使用 body: 键（2.1.0 前旧语法，请求体可能未发送）——"
+                                            "请改为 json: {…}（见 format_spec §1.4 call 参数体系）"})
 
     # V9 修复：verify 段 oracle 引用校验（幻觉拦截——编造 oracle 必报 ERROR + hint）
     valid_oracles = oracle_names()

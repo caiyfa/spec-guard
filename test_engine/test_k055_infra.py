@@ -204,6 +204,57 @@ class TestServiceRouting:
         assert seen["service"] == "hr_center"
 
 
+class TestLegacyBodyKeyCompat:
+    """T-317：call 的 body: 键（2.1.0 前旧语法）兼容——按 json 发送 + WARN 提示。
+
+    背景：标签库 85 处场景用 body: 键，2.1.0 升级后引擎只认 json:，请求体静默
+    丢失（日志无 body 段、网关 500）。兼容后行为恢复 + 提示迁移。
+    """
+
+    def _rctx(self):
+        env = {
+            "tdm_base": "http://gw/femsp/hr-tdm",
+            "accounts": {"default": {"ad": "a", "emp_no": "1"}},
+        }
+        return RunContext(registry=Registry(), env_config=env, token_provider=None,
+                          graph=DependencyGraph([]), run_dir=".")
+
+    def _run(self, monkeypatch, call_body):
+        rctx = self._rctx()
+        seen = {}
+
+        class FakeClient:
+            def request(self, method, path, **kw):
+                seen.update(kw)
+                return SimpleNamespace(status_code=400, headers={},
+                                       json=lambda: {"code": 400}, text="{}")
+
+        fake = FakeClient()
+        fake.base_url = "http://gw/femsp/hr-tdm"
+        monkeypatch.setattr(RunContext, "http_client",
+                            lambda self, account, service="tdm": fake)
+        record = ExecutionRecord(scenario_id="T")
+        step_call({"method": "POST", "path": "/api/system/tags", **call_body},
+                  rctx, {}, record)
+        return seen, record
+
+    def test_body_key_sent_as_json(self, monkeypatch, capsys):
+        """body: 键 → json_body 实际发送（不再是 None）。"""
+        seen, record = self._run(monkeypatch, {"body": {"tagName": "RC014_x", "tagScope": "PLATFORM"}})
+        assert seen.get("json_body") == {"tagName": "RC014_x", "tagScope": "PLATFORM"}, \
+            f"body: 键应作为 json_body 发送: {seen.get('json_body')}"
+        out = capsys.readouterr().out
+        assert "body:" in out and "json:" in out, f"应提示迁移到 json:: {out}"
+        # 报告 request 也应含请求体
+        assert record.steps[0].request.get("body") == {"tagName": "RC014_x", "tagScope": "PLATFORM"}
+
+    def test_json_key_still_preferred(self, monkeypatch, capsys):
+        """json: 键仍为首选——body: 与 json: 并存时 json: 生效（无 WARN）。"""
+        seen, _ = self._run(monkeypatch, {"json": {"a": 1}, "body": {"b": 2}})
+        assert seen.get("json_body") == {"a": 1}
+        assert "WARN" not in capsys.readouterr().out
+
+
 # ══════════════════════════════════════════════════════════
 # R4/R5：resolve_account / precheck_permission
 # ══════════════════════════════════════════════════════════

@@ -203,6 +203,46 @@ verify:
         t8 = [f for f in report["findings"] if f["rule"] == "T8"]
         assert not t8, f"已在 depends_on 声明不应报 T8: {t8}"
 
+    def test_validator_warns_legacy_body_key(self):
+        """T-317：call 的 body: 键（2.1.0 前旧语法）→ WARN 提示迁移 json:。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-BODY
+version: "0.1"
+flow:
+  - call:
+      method: POST
+      path: /api/system/tags
+      body: {tagName: x}
+      save: resp
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        warns = [f for f in report["findings"] if f["rule"] == "BODY_KEY"]
+        assert warns, f"body: 键应报 WARN: {report['findings']}"
+        assert warns[0]["level"] == "WARN"
+        assert "json:" in warns[0]["message"]
+
+    def test_validator_accepts_json_key(self):
+        """json: 键 → 无 BODY_KEY 告警。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-JSON
+version: "0.1"
+flow:
+  - call:
+      method: POST
+      path: /api/system/tags
+      json: {tagName: x}
+      save: resp
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        warns = [f for f in report["findings"] if f["rule"] == "BODY_KEY"]
+        assert not warns, f"json: 键不应告警: {warns}"
+
     def test_query_registry_oracle_dynamic(self):
         import asyncio
         from mcp_server.tools import registry_query

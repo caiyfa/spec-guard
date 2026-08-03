@@ -250,6 +250,14 @@ def step_call(body, rctx, ns, record):
     params = render(body.get("params"), ns)
     headers = render(body.get("headers"), ns)
     cookies = render(body.get("cookies"), ns)
+    # T-317：body: 键兼容（2.1.0 前旧语法）——标签库 85 处存量场景仍用 body:，
+    # 引擎只认 json: 导致请求体静默丢失（日志无 body、网关 500）。
+    # 兼容：body: 且无 json: 时按 json 发送 + WARN 提示迁移；json: 存在时 json: 优先。
+    if "body" in body and "json" not in body and body.get("body") is not None:
+        print("[SpecGuard] WARN call 使用 body: 键（2.1.0 前旧语法，已按 json 发送）——"
+              "请迁移为 json:（见 format_spec §1.4 call 参数体系）", flush=True)
+        body = dict(body)
+        body["json"] = body.pop("body")
     body_type = body.get("body_type") or ("json" if body.get("json") is not None else None)
 
     json_body = None
