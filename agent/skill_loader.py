@@ -27,6 +27,7 @@ class SkillDef:
     name: str                         # 技能名称（文件名去掉 .md）
     description: str = ""             # 技能简述
     trigger: str = ""                 # 触发条件描述
+    keywords: list[str] = field(default_factory=list)  # K-xxx：确定性触发关键词
     content: str = ""                 # Markdown 正文（技能详细内容）
 
 
@@ -113,9 +114,40 @@ def _parse_skill_file(name: str, text: str) -> SkillDef:
                 frontmatter = {}
             body = parts[2].strip()
 
+    raw_kw = frontmatter.get("keywords", []) or []
+    keywords = []
+    if isinstance(raw_kw, list):
+        keywords = [str(k).strip() for k in raw_kw if str(k).strip()]
+    elif isinstance(raw_kw, str):
+        # 兼容逗号分隔字符串形式
+        keywords = [k.strip() for k in raw_kw.split(",") if k.strip()]
+
     return SkillDef(
         name=frontmatter.get("name", name),
         description=str(frontmatter.get("description", "")),
         trigger=str(frontmatter.get("trigger", "")),
+        keywords=keywords,
         content=body,
     )
+
+
+def match_skills_hint(text: str) -> str:
+    """K-xxx：确定性技能触发——关键词子串匹配（大小写不敏感）。
+
+    用户消息命中技能 frontmatter 的 keywords 时，返回注入提示（可多技能命中，
+    全部列出，由模型结合上下文最终采用）；未命中返回空串。
+    与 <skills> XML 全量注入互补：XML 是「技能存在性」，这里是「本任务优先用哪个」。
+    """
+    if not text:
+        return ""
+    low = text.lower()
+    hits = []
+    for s in list_skills():
+        if any(kw and kw.lower() in low for kw in s.keywords):
+            hits.append(s)
+    if not hits:
+        return ""
+    lines = ["[技能提示] 用户请求关键词匹配到以下技能，请优先遵循其流程："]
+    for s in hits:
+        lines.append(f"- {s.name}：{s.description}")
+    return "\n".join(lines)

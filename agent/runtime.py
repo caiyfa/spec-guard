@@ -18,7 +18,7 @@ from agent.session import SessionManager
 from agent.events import EventBus
 from agent.mode_loader import load_mode, ModeDef
 from agent.compactor import should_compact, compact
-from agent.skill_loader import build_skills_xml
+from agent.skill_loader import build_skills_xml, match_skills_hint
 
 # 默认使用 MCP server 的全部工具
 from mcp_server.tools import (
@@ -208,10 +208,15 @@ class AgentRuntime:
         user_msg: dict = {"role": "user", "content": user_message}
         if user_refs:
             user_msg["references"] = user_refs
+        # K-xxx：技能确定性触发——用户消息关键词命中技能 frontmatter keywords 时，
+        # 以 system 消息注入提示（前端 groupMessages 跳过 system 消息不显示，LLM 可见）
+        skill_hint = match_skills_hint(user_message)
         messages = [
             {"role": "system", "content": system_prompt},
             user_msg,
         ]
+        if skill_hint:
+            messages.insert(1, {"role": "system", "content": skill_hint})
 
         self._session = session
         self._session_id = session_id
@@ -223,6 +228,8 @@ class AgentRuntime:
                 messages = history
                 # 关键修复（K-013）：恢复历史后必须追加本轮 user 消息——
                 # 此前直接丢弃，导致续会话时 LLM 看不到用户新消息（生产会话导出文件佐证）
+                if skill_hint:
+                    messages.append({"role": "system", "content": skill_hint})
                 messages.append(user_msg)
                 # H-4: 恢复待办状态
                 todos = session.load_todos(session_id)

@@ -88,8 +88,10 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
             );
           })
         )}
-        {!hasStructured && planItems.length === 0 && !loading && (
-          <div className="text-xs text-gray-600 text-center py-2">暂无待办</div>
+        {!hasStructured && planItems.length === 0 && (
+          <div className="text-xs text-gray-600 text-center py-2">
+            {loading ? '模型正在分析任务…' : '暂无待办'}
+          </div>
         )}
       </div>
     </>

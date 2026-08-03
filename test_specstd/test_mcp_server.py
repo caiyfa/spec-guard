@@ -151,10 +151,14 @@ class TestSpecReader:
 class TestScenarioTools:
     def test_list_scenarios(self):
         result = _call(scenario_tools, "list_scenarios", {})
-        scenarios = json.loads(result[0].text)
-        assert len(scenarios) > 0
-        ids = [s["id"] for s in scenarios]
+        data = json.loads(result[0].text)
+        # K-xxx：返回 {total, summary, scenarios}——summary 为确定性分类摘要
+        assert data["total"] > 0
+        ids = [s["id"] for s in data["scenarios"]]
         assert "PP-RC-001" in ids
+        assert sum(data["summary"]["by_module"].values()) == data["total"]
+        assert sum(data["summary"]["by_type"].values()) == data["total"]
+        assert data["summary"]["by_tag"]
 
     def test_read_scenario(self):
         result = _call(scenario_tools, "read_scenario", {"id": "PP-RC-001"})

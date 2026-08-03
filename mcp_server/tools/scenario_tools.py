@@ -30,7 +30,10 @@ SCENARIOS_ROOT = SG_ROOT / "scenarios"
 TOOLS = [
     Tool(
         name="list_scenarios",
-        description="列出 SpecGuard 仓库的全部场景（扫描 scenarios/ 目录，返回 ID/标题/标签/模块）",
+        description=("列出 SpecGuard 仓库的全部场景，返回 {total, summary, scenarios}："
+                     "summary 含按模块（by_module）/类型（by_type：scenario|unit）/标签（by_tag）"
+                     "的分类计数——生成新场景前先看 summary 定位同模块同类参照；"
+                     "scenarios 为完整清单（id/title/tags/module/test_type/path）"),
         inputSchema={"type": "object", "properties": {}}
     ),
     Tool(
@@ -154,6 +157,7 @@ def _handle_list_scenarios(arguments: dict) -> list[TextContent]:
     import yaml
 
     scenarios = []
+    suite_cache: dict[str, str] = {}  # 目录 → _suite.yaml module 字段（与 scenario_store 一致）
     for yaml_file in sorted(SCENARIOS_ROOT.rglob("*.yaml")) + sorted(SCENARIOS_ROOT.rglob("*.yml")):
         if yaml_file.name.startswith("_"):
             continue
@@ -166,15 +170,85 @@ def _handle_list_scenarios(arguments: dict) -> list[TextContent]:
         if not sid:
             continue
         rel = str(yaml_file.relative_to(SCENARIOS_ROOT)).replace("\\", "/")
+        parts = rel.split("/")
+        mod = parts[0] if len(parts) > 1 else ""
+        # 模块按 _suite.yaml 的 module 字段归类（如 inventory/smart-tag/标签库维护），fallback 一级目录
+        dir_key = str(yaml_file.parent)
+        if dir_key not in suite_cache:
+            suite_mod = ""
+            try:
+                suite_mod = (yaml.safe_load((yaml_file.parent / "_suite.yaml").read_text(encoding="utf-8")) or {}).get("module", "")
+            except Exception:
+                pass
+            suite_cache[dir_key] = suite_mod or mod
+        mod = suite_cache[dir_key]
         scenarios.append({
             "id": sid,
             "title": raw.get("title", ""),
             "tags": raw.get("tags", []),
-            "module": rel.split("/")[0] if "/" in rel else "",
+            "module": mod,
+            "test_type": raw.get("test_type", "scenario"),
             "path": rel,
         })
 
-    return [TextContent(type="text", text=json.dumps(scenarios, ensure_ascii=False, indent=2))]
+    # K-xxx：确定性分类摘要——Agent 一次拿到全库分类图景（生成前定位同模块同类参照）
+    by_module: dict[str, int] = {}
+    by_type: dict[str, int] = {}
+    by_tag: dict[str, int] = {}
+    for s in scenarios:
+        m = s["module"] or "(未归类)"
+        by_module[m] = by_module.get(m, 0) + 1
+        t = s["test_type"] or "scenario"
+        by_type[t] = by_type.get(t, 0) + 1
+        for tag in s["tags"]:
+            by_tag[tag] = by_tag.get(tag, 0) + 1
+
+    result = {
+        "total": len(scenarios),
+        "summary": {"by_module": by_module, "by_type": by_type, "by_tag": by_tag},
+        "scenarios": scenarios,
+    }
+    # K-xxx：扫描结果落台账（自愈）——MCP 侧扫描后场景映射即为最新，
+    # 后续 read_scenario 按 ID 查表定位，无需再全量扫描
+    try:
+        from services import ledger_store
+        ledger_store.upsert_scenarios(scenarios)
+    except Exception:
+        pass
+    return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+
+
+def _lookup_scenario_path(scenario_id: str) -> Optional[Path]:
+    """K-xxx：台账映射——查 scenarios 台账取场景 ID 的当前文件路径（相对 SG_ROOT）。
+
+    文件随状态变更目录（草稿入库 drafts/ → scenarios/{module}/），ID 不变、
+    路径可迁移——由台账维护映射，工具查表定位。台账不可用返回 None（回退扫描）。
+    """
+    try:
+        from services import ledger_store
+        rows = ledger_store.query_scenarios()
+    except Exception:
+        return None
+    for r in rows:
+        if r.get("id") == scenario_id:
+            rel = r.get("file_path", "")
+            if rel:
+                p = (SG_ROOT / rel)
+                if p.is_file():
+                    return p
+    return None
+
+
+def _sync_scenario_ledger() -> None:
+    """K-xxx：扫描结果落台账（自愈）——工具扫描一次后，后续查表即可定位。"""
+    try:
+        import json as _json
+        raw = _handle_list_scenarios({})
+        data = _json.loads(raw[0].text)
+        from services import ledger_store
+        ledger_store.upsert_scenarios(data.get("scenarios", []))
+    except Exception:
+        pass  # 台账自愈失败不影响读取
 
 
 def _handle_read_scenario(arguments: dict) -> list[TextContent]:
@@ -184,6 +258,14 @@ def _handle_read_scenario(arguments: dict) -> list[TextContent]:
     if not sid:
         return [TextContent(type="text", text="错误：缺少 id 参数")]
 
+    # K-xxx：台账映射优先——场景 ID → 当前文件路径由 scenarios 台账维护
+    # （文件随状态变更目录：草稿入库后从 drafts/ 移到 scenarios/{module}/，
+    #  按 ID 查表定位当前路径，不再每次全量扫描文件系统）
+    file_path = _lookup_scenario_path(sid)
+    if file_path is not None:
+        return [TextContent(type="text", text=file_path.read_text(encoding="utf-8"))]
+
+    # 回退：台账未命中（表未建/未扫描过）→ 全量扫描 + 自愈落台账
     for yaml_file in SCENARIOS_ROOT.rglob("*.yaml"):
         if yaml_file.name.startswith("_"):
             continue
@@ -192,6 +274,7 @@ def _handle_read_scenario(arguments: dict) -> list[TextContent]:
                 raw = yaml.safe_load(f) or {}
             if raw.get("id") == sid:
                 content = yaml_file.read_text(encoding="utf-8")
+                _sync_scenario_ledger()  # 自愈：一次扫描后台账即最新，后续查表命中
                 return [TextContent(type="text", text=content)]
         except Exception:
             continue

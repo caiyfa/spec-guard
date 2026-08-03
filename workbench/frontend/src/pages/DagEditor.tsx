@@ -70,6 +70,20 @@ export default function DagEditor() {
   const [selectedPlan, setSelectedPlan] = useState('');
   const [selectedModule, setSelectedModule] = useState('');  // K-027: 模块分组筛选
   const [searchQuery, setSearchQuery] = useState('');        // K-027: 场景搜索定位
+  // K-xxx：子集编排——先勾选一组场景再进画布（默认不再铺全量）
+  const [subsetOpen, setSubsetOpen] = useState(false);
+  const [subset, setSubset] = useState<Set<string>>(() => {
+    const sel = searchParams.get('sel');
+    return new Set(sel ? sel.split(',').filter(Boolean) : []);
+  });
+  // 子集变化 → URL 同步（?sel=，可带参直达/分享）
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (subset.size > 0) params.set('sel', [...subset].join(','));
+    else params.delete('sel');
+    navigate(`/dag?${params.toString()}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subset]);
   const [error, setError] = useState('');
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
   const [cycleItems, setCycleItems] = useState<string[][]>([]);  // T-101: 库存在环时降级显示
@@ -174,6 +188,18 @@ export default function DagEditor() {
     if (!dagData) return dagData;
     let nodes = dagData.nodes;
     let edges = dagData.edges;
+    // ⓪ 子集过滤（K-xxx：勾选场景 + 直接依赖闭包，保持依赖边可见；
+    //    ?focus= 无 ?sel= 时以 focus 场景闭包为默认视图）
+    const selIds = subset.size > 0 ? subset : (focusId ? new Set([focusId]) : null);
+    if (selIds) {
+      const keep = new Set(selIds);
+      edges.forEach((e) => {
+        if (selIds.has(e.source) || selIds.has(e.target)) {
+          keep.add(e.source); keep.add(e.target);
+        }
+      });
+      nodes = nodes.filter((n) => keep.has(n.id));
+    }
     // ① 计划过滤
     if (selectedPlan) {
       const plan = plans.find((p) => p.id === selectedPlan);
@@ -200,9 +226,13 @@ export default function DagEditor() {
         n.id.toLowerCase().includes(q) ||
         ((n.data as { title?: string }).title || '').toLowerCase().includes(q));
     }
+    // K-xxx：纯默认态（无子集/计划/模块/搜索）→ 空画布引导，不铺全量
+    if (!selIds && !selectedPlan && !selectedModule && !q) {
+      return { nodes: [], edges: [] };
+    }
     const ids = new Set(nodes.map((n) => n.id));
     return { nodes, edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
-  }, [dagData, selectedPlan, selectedModule, searchQuery, plans]);
+  }, [dagData, selectedPlan, selectedModule, searchQuery, plans, subset, focusId]);
 
   // 计划变更时重新布局
   useEffect(() => {
@@ -406,6 +436,16 @@ export default function DagEditor() {
             ⚠️ {driftCount} 条版本漂移 {showDrift ? '▲' : '▼'}
           </button>
         )}
+        {/* K-xxx：子集编排入口——先勾选一组场景再进画布（含直接依赖闭包） */}
+        <button onClick={() => setSubsetOpen(true)}
+          className={`px-2.5 py-1 rounded text-xs border transition-colors ${
+            subset.size > 0
+              ? 'bg-info/15 text-info border-info/40 hover:bg-info/25'
+              : 'bg-surface-3 text-gray-300 border-border hover:border-info/40'
+          }`}
+          title="先勾选一组场景再编排依赖（自动包含直接依赖闭包），选择会同步到 URL ?sel=">
+          🧩 选择场景{subset.size > 0 ? `（${subset.size}）` : ''}
+        </button>
         {/* 计划选择器 */}
         <select value={selectedPlan} onChange={(e) => setSelectedPlan(e.target.value)}
           className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
@@ -484,6 +524,56 @@ export default function DagEditor() {
         </div>
       )}
 
+      {/* K-xxx：场景子集选择弹层（模块分组勾选，画布实时预览闭包） */}
+      {subsetOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+          onClick={() => setSubsetOpen(false)}>
+          <div className="bg-surface-2 border border-border rounded-xl p-4 w-[620px] max-w-[92vw] max-h-[80vh] flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium text-gray-200">
+                🧩 选择编排场景（自动包含直接依赖闭包）
+              </div>
+              <button onClick={() => setSubsetOpen(false)} className="text-gray-500 hover:text-gray-300">✕</button>
+            </div>
+            <div className="flex items-center gap-2 mb-2 text-[11px]">
+              <button onClick={() => setSubset(new Set(scenarios.map(s => s.id)))}
+                className="px-2 py-0.5 rounded bg-surface-3 text-gray-300 hover:bg-surface-1">全选</button>
+              <button onClick={() => setSubset(new Set())}
+                className="px-2 py-0.5 rounded bg-surface-3 text-gray-300 hover:bg-surface-1">清空</button>
+              <span className="text-gray-500">已选 {subset.size} / {scenarios.length}</span>
+              <button onClick={() => setSubsetOpen(false)}
+                className="ml-auto px-3 py-0.5 rounded bg-info text-white hover:bg-info/90">确定</button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {modules.map(mod => {
+                const modScs = scenarios.filter(s => s.module === mod);
+                return (
+                  <div key={mod}>
+                    <div className="text-[11px] text-gray-500 mb-1">📁 {mod}</div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {modScs.map(s => (
+                        <label key={s.id}
+                          className="flex items-center gap-1.5 text-[11px] text-gray-300 cursor-pointer hover:bg-surface-3 rounded px-1.5 py-0.5 truncate"
+                          title={s.title}>
+                          <input type="checkbox" className="flex-shrink-0" checked={subset.has(s.id)}
+                            onChange={(e) => {
+                              const next = new Set(subset);
+                              if (e.target.checked) next.add(s.id); else next.delete(s.id);
+                              setSubset(next);
+                            }} />
+                          <span className="font-mono truncate">{s.id}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 漂移报告面板（DRIFT/ORPHANED 清单 + T-101 依赖环清单） */}
       {showDrift && (driftCount > 0 || cycleItems.length > 0) && (
         <div className="border rounded-lg px-4 py-3 space-y-1.5" style={{ borderColor: '#d2992240', background: '#d2992208' }}>
@@ -522,7 +612,23 @@ export default function DagEditor() {
 
       <div className="flex-1 flex gap-3 min-h-0">
         {/* 全屏 DAG 画布（连线=建依赖，选边 Delete=移除） */}
-        <div className="flex-1 min-w-0 border border-border rounded-lg overflow-hidden">
+        <div className="flex-1 min-w-0 border border-border rounded-lg overflow-hidden relative">
+          {dagData && filteredDag && filteredDag.nodes.length === 0 && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+              <div className="bg-surface-2/95 border border-border rounded-xl p-8 text-center pointer-events-auto shadow-2xl">
+                <div className="text-4xl mb-3">🧩</div>
+                <div className="text-sm text-gray-200 mb-1 font-medium">先选择一组场景，再开始编排依赖</div>
+                <div className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                  90+ 测试全部上画布会找不到重点——勾选目标场景（自动包含<br />
+                  直接依赖闭包），或按计划 / 模块 / 搜索收敛视图
+                </div>
+                <button onClick={() => setSubsetOpen(true)}
+                  className="px-4 py-1.5 bg-info text-white rounded text-xs hover:bg-info/90">
+                  🧩 选择场景
+                </button>
+              </div>
+            </div>
+          )}
           <ReactFlow
             nodes={nodes} edges={edges}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}

@@ -238,10 +238,12 @@ class TestRuntime:
         messages = runtime.run("sys", "list scenarios")
         tool_msgs = [m for m in messages if m.get("role") == "tool"]
         assert len(tool_msgs) >= 1
-        # list_scenarios 返回 JSON
+        # list_scenarios 返回 JSON（K-xxx：{total, summary, scenarios}，summary 含分类计数）
         data = json.loads(tool_msgs[0]["content"])
-        assert isinstance(data, list)
-        assert len(data) > 0  # 至少有 PP-RC-001 等场景
+        assert isinstance(data, dict)
+        assert data["total"] > 0  # 至少有 PP-RC-001 等场景
+        assert len(data["scenarios"]) == data["total"]
+        assert data["summary"]["by_module"]
 
     def test_session_persistence(self, tmp_path):
         """会话持久化：run 后可从 JSONL 恢复。"""

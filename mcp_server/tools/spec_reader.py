@@ -133,6 +133,47 @@ def _read_text_guarded(resolved: Path, display_path: str) -> list[TextContent]:
     return [TextContent(type="text", text=content)]
 
 
+def _migration_hint(path: str) -> str:
+    """K-xxx：文件路径迁移指引——路径指向 drafts/ 但文件不存在时，查台账定位去向。
+
+    草稿入库后文件从 drafts/ 移到 scenarios/{module}/（ID 不变、路径迁移），
+    Agent 用旧路径读取会「文件不存在」——台账（drafts/scenarios 表）维护
+    ID → 当前路径映射，这里给出可执行指引而非裸报错。
+    """
+    if not path or "drafts/" not in path.replace("\\", "/"):
+        return ""
+    name = path.replace("\\", "/").split("/")[-1]
+    if not name.endswith((".yaml", ".yml")):
+        return ""
+    sid = name.rsplit(".", 1)[0]
+    try:
+        import sys as _sys
+        BACKEND_DIR = SG_ROOT / "workbench" / "backend"
+        if str(BACKEND_DIR) not in _sys.path:
+            _sys.path.insert(0, str(BACKEND_DIR))
+        from services import ledger_store
+        # 1) 场景台账：同 ID 已入库 → 指向库内当前路径（file_path 为相对仓库根路径）
+        for r in ledger_store.query_scenarios():
+            if r.get("id") == sid:
+                rel = str(r.get("file_path", "")).replace("\\", "/")
+                if rel:
+                    return (f"；该场景已入库于 {rel}（文件随入库从 drafts/ 迁移到场景库，"
+                            f"请用 read_scenario 按 ID {sid} 读取，或直接读该路径）")
+        # 2) 草稿台账：status=promoted/discarded → 说明去向
+        for d in ledger_store.query_drafts():
+            if d.get("filename") == name:
+                st = d.get("status", "")
+                if st == "promoted":
+                    mod = d.get("module", "")
+                    return (f"；草稿 {name} 已入库（module={mod or '未知'}），"
+                            f"请用 read_scenario 按 ID {sid} 读取库内场景")
+                if st == "discarded":
+                    return f"；草稿 {name} 已废弃（移入 drafts/_trash/）"
+    except Exception:
+        pass
+    return ""
+
+
 def _handle_read_spec(arguments: dict) -> list[TextContent]:
     path = arguments.get("path", "")
     if not path:
@@ -145,7 +186,8 @@ def _handle_read_spec(arguments: dict) -> list[TextContent]:
         if resolved is None:
             return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界或敏感目录: {path}")]
         if not resolved.is_file():
-            return [TextContent(type="text", text=f"错误：文件不存在: {path}")]
+            hint = _migration_hint(sg_path)
+            return [TextContent(type="text", text=f"错误：文件不存在: {path}{hint}")]
         return _read_text_guarded(resolved, path)
 
     # 第一根：工作区（原行为）
@@ -158,11 +200,12 @@ def _handle_read_spec(arguments: dict) -> list[TextContent]:
     if sg_resolved is not None and sg_resolved.is_file():
         return _read_text_guarded(sg_resolved, path)
 
+    hint = _migration_hint(path)
     if resolved is None and sg_resolved is None:
         return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界或工作区未激活: {path}")]
     return [TextContent(type="text", text=(
         f"错误：文件不存在: {path}（已查找工作区根与 SpecGuard 仓库根；"
-        f"仓库侧路径可用 sg:// 前缀明确指定）"))]
+        f"仓库侧路径可用 sg:// 前缀明确指定）{hint}"))]
 
 
 def _handle_list_spec_files(arguments: dict) -> list[TextContent]:

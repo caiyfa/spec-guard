@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { JSX } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi } from '../api';
-import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult } from '../api';
+import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi } from '../api';
+import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData } from '../api';
 import SessionTree from '../components/SessionTree';
 import TodoPanel from '../components/TodoPanel';
 import type { StructuredTodo } from '../components/TodoPanel';
@@ -223,7 +223,9 @@ function stripPlan(content: string): string {
   return content.replace(/<plan>[\s\S]*?<\/plan>/g, '').trim();
 }
 
-// ── 默认计划（K-023 去模式化：统一任务骨架） + 工具→步骤映射 ──
+// ── 默认计划（K-023 去模式化：统一任务骨架）+ 工具→步骤映射 ──
+// K-xxx：DEFAULT_PLANS 仅作「工具调用分组锚点」（groupMessages 把工具归到步骤展示），
+// 不再预填待办区——待办由模型 todo_write / <plan> 输出，避免「刚发消息就出写死待办」
 const DEFAULT_PLANS: string[] = [
   '读取基础信息包和需求文档',
   '查询注册表（tool / oracle）',
@@ -774,6 +776,8 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   const navigate = useNavigate();
   const [metaMap, setMetaMap] = useState<Record<string, DraftItem>>({});
   const [modules, setModules] = useState<string[]>([]);
+  // K-xxx：草稿依赖建议计数（suggest_deps 确定性引擎，草稿评审页可一键采纳）
+  const [suggCount, setSuggCount] = useState<Record<string, number>>({});
   const [state, setState] = useState<Record<string, DraftCardState>>({});
   // K-xxx：drafts 列表查不到的文件（入库/废弃/刷新后）——用 conflict 预检判定去向：
   // ID 命中场景库 = 已入库（本地 promotedTo 状态刷新后丢失），未命中 = 已废弃/删除
@@ -794,6 +798,12 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
       setMetaMap(m);
     }).catch(() => {});
     draftsApi.modules().then(r => setModules(r.modules || [])).catch(() => {});
+    // K-xxx：依赖建议计数（按 consumer 场景 ID 聚合）
+    draftsApi.suggestDeps().then(r => {
+      const c: Record<string, number> = {};
+      for (const s of r.suggestions || []) c[s.consumer] = (c[s.consumer] || 0) + 1;
+      setSuggCount(c);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -921,6 +931,11 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
               {meta?.stale && (
                 <span className="text-[9px] text-yellow-400 flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
               )}
+              {meta && suggCount[meta.scenario_id] > 0 && !st.promotedTo && (
+                <span className="text-[9px] text-info flex-shrink-0" title={`${suggCount[meta.scenario_id]} 条依赖建议——到草稿评审页可一键采纳`}>
+                  💡{suggCount[meta.scenario_id]}
+                </span>
+              )}
             </div>
             <div className="text-[10px] truncate" title={meta?.title || libHit?.path || ''}>
               {libHit ? (
@@ -1046,6 +1061,141 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   );
 }
 
+// ── 会话依赖图面板（K-xxx：Agent 对话内直接看依赖——草稿 + 直接上下游闭包） ──
+function DepGraphPanel({ draftFiles, onError }: {
+  draftFiles: string[];
+  onError: (msg: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [dag, setDag] = useState<DagData | null>(null);
+  const [draftMeta, setDraftMeta] = useState<Record<string, DraftItem>>({});
+  const [cycles, setCycles] = useState<string[][]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [d, dl, drift] = await Promise.all([
+          scenariosApi.dag(), draftsApi.list(), scenariosApi.drift(),
+        ]);
+        if (!alive) return;
+        setDag(d);
+        const m: Record<string, DraftItem> = {};
+        for (const x of dl.drafts || []) m[x.filename] = x;
+        setDraftMeta(m);
+        setCycles(drift.cycles || []);
+      } catch (e: any) {
+        if (alive) onError(`依赖图加载失败: ${e.message || ''}`);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftFiles.join('|')]);
+
+  // 会话相关场景 = 草稿 scenario_id ∪ 直接依赖邻居（保持边可见）
+  const scope = useMemo(() => {
+    if (!dag) return { seed: new Set<string>(), nodes: [] as { id: string; data: Record<string, unknown> }[], edges: [] as { source: string; target: string; label?: string; status?: string }[] };
+    const seed = new Set<string>();
+    draftFiles.forEach(f => {
+      const meta = draftMeta[f];
+      if (meta?.scenario_id) seed.add(meta.scenario_id);
+      else seed.add(f.replace(/\.ya?ml$/i, ''));  // 文件名兜底 = 场景 ID
+    });
+    const keep = new Set(seed);
+    dag.edges.forEach(e => {
+      if (seed.has(e.source) || seed.has(e.target)) { keep.add(e.source); keep.add(e.target); }
+    });
+    return {
+      seed,
+      nodes: dag.nodes.filter(n => keep.has(n.id)),
+      edges: dag.edges.filter(e => keep.has(e.source) && keep.has(e.target)),
+    };
+  }, [dag, draftMeta, draftFiles]);
+
+  const cycleSets = useMemo(() => cycles.map(c => new Set(c)), [cycles]);
+  const inCycle = (id: string) => cycleSets.some(s => s.has(id));
+
+  return (
+    <div className="px-2 py-2 space-y-2">
+      <div className="px-1 text-xs font-medium text-gray-300">🕸 依赖图（会话相关闭包）</div>
+      {loading ? (
+        <div className="text-[11px] text-gray-600 text-center py-8">加载中…</div>
+      ) : !dag || scope.nodes.length === 0 ? (
+        <div className="text-[11px] text-gray-600 text-center py-8 leading-relaxed">
+          会话还没有草稿 / 场景。<br />Agent 写完草稿后，这里自动显示<br />它与其他测试的依赖关系
+        </div>
+      ) : (
+        <>
+          <div className="px-1 text-[10px] text-gray-600">
+            {scope.nodes.length} 个场景 · {scope.edges.length} 条依赖边
+            {cycleSets.length > 0 && <span className="text-fail"> · ⛔ {cycleSets.length} 条环</span>}
+          </div>
+          {/* 节点 */}
+          <div className="space-y-1">
+            {scope.nodes.map(n => {
+              const id = n.id;
+              const isDraft = scope.seed.has(id) && draftFiles.some(f => (draftMeta[f]?.scenario_id || f.replace(/\.ya?ml$/i, '')) === id);
+              const up = scope.edges.filter(e => e.target === id).length;
+              const down = scope.edges.filter(e => e.source === id).length;
+              return (
+                <button key={id}
+                  onClick={() => navigate(`/dag?focus=${encodeURIComponent(id)}`)}
+                  title={`${(n.data as { title?: string }).title || ''}\n上游 ${up} · 下游 ${down}\n点击到 DAG 页查看闭包`}
+                  className={`w-full text-left px-2 py-1.5 rounded border text-[11px] transition-colors ${
+                    inCycle(id)
+                      ? 'border-fail/50 bg-fail/10 text-fail'
+                      : isDraft
+                        ? 'border-yellow-700/50 bg-yellow-900/20 text-yellow-300'
+                        : 'border-border bg-surface-2 text-gray-300 hover:bg-surface-3'
+                  }`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono">{id}</span>
+                    {isDraft && <span className="text-[9px] text-yellow-500">📝 草稿</span>}
+                    {inCycle(id) && <span className="text-[9px] text-fail">⛔ 环</span>}
+                    <span className="ml-auto text-[9px] text-gray-600">↑{up} ↓{down}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 truncate">
+                    {(n.data as { title?: string }).title || ''}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {/* 依赖边 */}
+          {scope.edges.length > 0 && (
+            <>
+              <div className="px-1 text-xs font-medium text-gray-300 pt-1">依赖边</div>
+              <div className="space-y-0.5">
+                {scope.edges.map((e, i) => (
+                  <div key={i} className="flex items-center gap-1 text-[10px] font-mono text-gray-500 px-1">
+                    <span className="truncate">{e.source}</span>
+                    <span className="text-gray-700 flex-shrink-0">→</span>
+                    <span className="truncate flex-1">{e.target}</span>
+                    {e.status === 'major_drift' || e.status === 'orphan' ? (
+                      <span className="text-fail flex-shrink-0" title={`版本期望 ${e.label || ''} 未满足`}>⚠️</span>
+                    ) : e.label ? (
+                      <span className="text-gray-600 flex-shrink-0">{e.label}</span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="px-1 pt-1">
+            <button onClick={() => navigate('/dag')}
+              className="w-full px-2 py-1.5 rounded border border-border text-[11px] text-info hover:border-info/40">
+              🕸 打开 DAG 编排（选择子集）
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── 右侧面板组件（引用 + 信息包 + 上下文 + 待办） ──
 // ── K-032：右侧页签面板（待办首页 + 信息包页签 + 文件各自页签） ──
 interface FileTab {
@@ -1112,6 +1262,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {tabBtn('todos', '📋 待办')}
         {scenarioMeta && tabBtn('pack', `📦 信息包(${scenarioMeta.info_pack.length})`)}
         {tabBtn('drafts', `📝 草稿产物(${draftFiles.length})`)}
+        {tabBtn('deps', '🕸 依赖图')}
         {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
         {onToggleMaximize && (
           <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
@@ -1147,6 +1298,9 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         )}
         {activeTab === 'drafts' && (
           <DraftArtifactsPanel draftFiles={draftFiles} onViewFile={onViewFile} onError={onError} />
+        )}
+        {activeTab === 'deps' && (
+          <DepGraphPanel draftFiles={draftFiles} onError={onError} />
         )}
         {activeFile && (
           <div className="h-full min-h-0 flex flex-col">
@@ -1521,7 +1675,7 @@ export default function AgentChat() {
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
         const msg = `请分析基础信息包中的文件，提取 FR/AC 锚点，生成测试场景 YAML 草稿。场景名称：${scenarioMeta.name}，模块：${scenarioMeta.module}`;
-        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS); setCtxUsage(null);
+        setLoading(true); setError(''); setPlanItems([]);  // K-xxx：待办不再预填固定模板——由模型 todo_write/<plan> 输出，避免「刚发消息就出写死待办」 setCtxUsage(null);
         setMessages(prev => [...prev, { role: 'user', content: msg }]);
         ws.send(JSON.stringify({
           message: msg, session_id: '', max_turns: 50,
@@ -1540,7 +1694,7 @@ export default function AgentChat() {
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
         const msg = `定时任务运行失败，请分析运行 ${debugRunId} 的失败原因。使用 read_run_report 工具读取运行报告，定位失败场景和错误根因，给出修复建议。`;
-        setLoading(true); setError(''); setPlanItems(DEFAULT_PLANS); setCtxUsage(null);
+        setLoading(true); setError(''); setPlanItems([]);  // K-xxx：待办不再预填固定模板——由模型 todo_write/<plan> 输出，避免「刚发消息就出写死待办」 setCtxUsage(null);
         setMessages(prev => [...prev, { role: 'user', content: msg }]);
         ws.send(JSON.stringify({
           message: msg, session_id: '', max_turns: 50,
@@ -1570,7 +1724,7 @@ export default function AgentChat() {
       return;
     }
     setInput(''); setSlashOpen(false); setAtOpen(false);
-    setLoading(true); setError(''); setTurnInfo(''); setPlanItems(DEFAULT_PLANS); setCtxUsage(null);
+    setLoading(true); setError(''); setTurnInfo(''); setPlanItems([]);  // K-xxx：待办不再预填固定模板——由模型 todo_write/<plan> 输出，避免「刚发消息就出写死待办」 setCtxUsage(null);
     const msgRefs = references.length ? [...references] : undefined;
     setReferences([]);
     // K-015：发送时才落实 info_pack 关联（右侧信息包面板随发送出现）

@@ -2,6 +2,7 @@
 name: generate-scenario
 description: 从需求文档生成 SpecGuard 测试场景 YAML
 trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、或使用场景创建向导时
+keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个, 用例生成, 生成测试, 场景 YAML, 场景草稿, 覆盖这个需求]
 ---
 ## 场景生成技能
 
@@ -10,10 +11,17 @@ trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、�
 1. **读取需求**：使用 `read_info_pack`（如有 scenario_id）或 `read_spec` 读取需求文档
 2. **获取 ID**：使用 `next_scenario_id` 获取下一个可用场景 ID
 3. **查询注册表**：使用 `query_registry` 确认可用的 tool 和 oracle
-4. **参考已有场景**：使用 `list_scenarios` 和 `read_scenario` 查看同类场景的结构
+4. **参考已有场景（分类定位）**：使用 `list_scenarios`（返回含 `summary` 分类摘要：按模块/
+   类型/标签聚合计数）——**先看 summary 定位同模块同类参照**（如生成 TL- 系列先看
+   by_module 里标签库维护模块的存量），再用 `read_scenario` 读 1-2 个同类场景的结构
 5. **生成 YAML**：按照格式规范生成场景 YAML
 6. **校验**：使用 `validate` 工具校验生成的 YAML
 7. **写入草稿**：校验通过后使用 `write_draft` 写入 drafts/ 目录
+8. **依赖建议（必做）**：写完草稿后**必须**调用 `suggest_deps`（drafts_only=true 或带
+   scenario_id）获取确定性依赖建议——草稿出现 `{{上游ID.*}}` 跨场景引用而未声明
+   depends_on、或与库内场景存在变量供需关系时，suggest_deps 会给出建议边与理由；
+   **把建议的 depends_on 写入草稿后重新 validate 复核**（草稿阶段带上依赖 = 入库即成图，
+   DAG 编排不需要再手工补边；拒绝建议时向用户说明原因，不静默丢弃）
 
 ### 格式要点
 

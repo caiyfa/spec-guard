@@ -2,6 +2,7 @@
 name: update-scenario
 description: 按最新格式要求更新已有测试场景 YAML（格式升级迁移、requires 声明补全、修复校验告警）
 trigger: 用户要求更新/迁移已有场景、格式规范升级后存量场景合规、scan_compliance 发现缺口、修改已入库场景
+keywords: [更新, 修改, 迁移, 升级, 改造, 存量场景, 格式升级, 补 requires, 修复校验, 场景合规, 更新草稿]
 ---
 ## 场景更新技能
 
@@ -18,9 +19,12 @@ trigger: 用户要求更新/迁移已有场景、格式规范升级后存量场�
 4. **写入草稿**：使用 `write_draft` 写入 drafts/（文件名与场景同名，如 TL-RC-014.yaml；
    已存在同名草稿时先删除旧草稿或用 patch 追加）
 5. **校验**：使用 `validate`（content=草稿内容）确认 PASS，无 T8/REGISTRY/COVERS ERROR
-6. **覆盖入库**：使用 `promote_draft`（filename, module, replace=true）——
+6. **依赖复核（必做）**：调用 `suggest_deps`（带 scenario_id）复核依赖边——更新引入
+   新上游引用（{{上游ID.*}}）或改动 save 变量后，依赖关系可能变化；采纳建议写入草稿
+   depends_on 后重新 validate；存量依赖边若已变化（如 save 改名），一并修正
+7. **覆盖入库**：使用 `promote_draft`（filename, module, replace=true）——
    replace=true 覆盖同名场景（原文件自动备份，校验/门禁失败自动回滚，成功即 git 可 diff）
-7. **确认结果**：核对返回的 scenario_id 与 target；发布门禁失败时按 gate_output 修正后重试
+8. **确认结果**：核对返回的 scenario_id 与 target；发布门禁失败时按 gate_output 修正后重试
 
 ### 格式要点（2.3.0 起）
 
