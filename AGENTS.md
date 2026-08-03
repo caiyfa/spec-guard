@@ -200,6 +200,17 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 **Agent 工具链**（对话中排查/优化失败场景）：`list_failures`（某场景最近在什么任务号失败）→ `read_run_log`（任务号取日志）→ `read_run_report`（断言差异）→ `db_evidence`（DB 校对）。断点分批执行的报告在 `{EX-xxx}-b{N}/` 批次目录。
 K-050 之前的旧报告只有时间戳目录 + run.json/report.md（无 output.log）。
 
+## Agent 会话排查（T-321，开发 SpecGuard 时用）
+
+Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `session.save()`，LLM 异常与熔断均兜底），文件为 append-only JSONL：
+
+| 产物 | 位置 | 内容 |
+|------|------|------|
+| 会话消息 | `agent/sessions/{emp}/{workspace}/{sid}.jsonl` | meta + system prompt + user/assistant/tool 消息链（tool 结果全文） |
+| LLM 指标 | 同目录 `{sid}_metrics.jsonl` | 调用次数/token 统计（最后一行最新） |
+
+**排查动线**：用户报 `sessionId` → 直接跑 `python -m agent.inspect <sid> [--workspace tdm]`——错误汇总优先（LLM 失败/工具执行异常/[ERROR] 行）+ 工具调用链 + 截断消息链（system prompt 只显示长度不刷屏）；`--full` 看全文、`--json` 机器可读。**不需要用户导出会话**。
+
 ---
 
 ## 问题修复经验包（排障闭环知识沉淀）
