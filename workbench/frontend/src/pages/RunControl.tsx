@@ -527,6 +527,12 @@ export default function RunControl() {
                   <span className={`${vColor[v] || 'text-gray-700'} w-4 text-center`}>{vIcon[v] || '○'}</span>
                   <span className="font-mono text-gray-400 w-28 truncate">{breakpoints.has(s.id) ? '🔴 ' : ''}{s.id}</span>
                   <span className="text-gray-500 truncate flex-1">{s.title}</span>
+                  {/* T-320：场景最后更新时间（YAML mtime） */}
+                  {s.updated_at && (
+                    <span className="text-gray-600 text-[10px] shrink-0" title={`最后更新 ${s.updated_at}`}>
+                      {s.updated_at.slice(5)}
+                    </span>
+                  )}
                 </label>
               );
             })}

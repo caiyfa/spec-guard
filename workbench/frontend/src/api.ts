@@ -157,6 +157,7 @@ export interface Scenario {
   covers: string[];
   module: string;
   path: string;
+  updated_at?: string;  // T-320：场景最后更新时间（YAML mtime，'YYYY-MM-DD HH:MM'）
 }
 
 export interface DagEdge {

@@ -114,8 +114,16 @@ def _scan_scenarios() -> list[dict]:
                 "module": suite_meta.get("module", ""),
                 "path": rel_path,
                 "abs_path": path,
+                # T-320：场景最后更新时间（YAML 文件 mtime，前端场景列表展示）
+                "updated_at": _fmt_mtime(os.stat(path).st_mtime),
             })
     return sorted(scenarios, key=lambda s: s["id"])
+
+
+def _fmt_mtime(mtime_ts: float) -> str:
+    """mtime → 'YYYY-MM-DD HH:MM'（执行控制场景列表展示用）。"""
+    from datetime import datetime
+    return datetime.fromtimestamp(mtime_ts).strftime("%Y-%m-%d %H:%M")
 
 
 # ══════════════════════════════════════════════════════════
