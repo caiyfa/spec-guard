@@ -145,6 +145,9 @@ def _dir_fingerprint(root: Path) -> tuple:
 
 
 _cache: dict = {"fingerprint": None, "scenarios": None, "graph": None}
+# K-xxx：台账投影目标（None=真实 workbench.db；测试重定向场景库时必须一并
+# 重定向到 tmp 库，否则扫描源（tmp 场景）与投影目标（真实库）错配造成污染）
+_LEDGER_DB_PATH = None
 
 
 class _DegradedGraph:
@@ -166,6 +169,13 @@ def _scenarios_cached() -> list[dict]:
         _cache["fingerprint"] = fp
         _cache["scenarios"] = _scan_scenarios()  # 唯一真实扫描点
         _cache["graph"] = None  # 场景变了，图一并失效
+        # K-xxx：扫描结果投影到 SQLite 台账（文件仍是权威；台账供统计/检索，
+        # 列表主链路继续走本缓存——文件变化天然被指纹捕获，不做查询层切换）
+        try:
+            from services import ledger_store
+            ledger_store.upsert_scenarios(_cache["scenarios"], db_path=_LEDGER_DB_PATH)
+        except Exception:
+            pass
     return _cache["scenarios"]
 
 

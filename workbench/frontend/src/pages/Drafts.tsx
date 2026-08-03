@@ -25,6 +25,9 @@ export default function Drafts() {
   const [report, setReport] = useState<ValidateReport | null>(null);
   const [targetModule, setTargetModule] = useState<string>('');
   const [customModule, setCustomModule] = useState('');  // K-017: 「新建模块…」手动输入
+  // K-xxx：覆盖入库（replace）+ 入库前 ID 冲突预检（选错模块/更新已有场景时提前提示）
+  const [replace, setReplace] = useState(false);
+  const [conflict, setConflict] = useState<{ existing: { id: string; path: string; module: string } | null; count: number } | null>(null);
   const [busy, setBusy] = useState<'validate' | 'promote' | 'discard' | 'save' | 'trial' | 'dep' | ''>('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState('');
@@ -89,6 +92,16 @@ export default function Drafts() {
     setMessage(null);
     setError('');
     setTrialResult(null);
+    setReplace(false);
+    setConflict(null);
+    // K-xxx：入库前 ID 冲突预检——草稿 ID 已存在于场景库时自动选中既有模块并勾选覆盖
+    draftsApi.conflict(filename).then(c => {
+      setConflict(c);
+      if (c.existing) {
+        setTargetModule(c.existing.module);
+        setReplace(true);
+      }
+    }).catch(() => {});
     try {
       const r = await draftsApi.read(filename);
       setContent(r.content);
@@ -170,11 +183,11 @@ export default function Drafts() {
       setMessage({ ok: false, text: '❌ 请选择入库模块，或选择「新建模块…」输入新模块路径' });
       return;
     }
-    if (!window.confirm(`确认将 ${selected} 入库到 scenarios/${effectiveModule}/？\n将依次执行：格式校验 → 更新契约基线 → 发布门禁（失败自动回滚）`)) return;
+    if (!window.confirm(`确认将 ${selected} 入库到 scenarios/${effectiveModule}/？\n将依次执行：格式校验 → 更新契约基线 → 发布门禁（失败自动回滚）${replace ? '\n（已勾选覆盖同名场景，原文件自动备份）' : ''}`)) return;
     setBusy('promote');
     setMessage(null);
     try {
-      const r = await draftsApi.promote(selected, effectiveModule);
+      const r = await draftsApi.promote(selected, effectiveModule, replace);
       const sid = r.scenario_id || selectedScenarioId;
       setMessage({ ok: true, text: `✅ 入库成功：${r.target}${r.gate?.skipped ? '（门禁已跳过）' : '（发布门禁 PASS）'}，即将跳转 DAG 编排…` });
       setSelected('');
@@ -322,6 +335,21 @@ export default function Drafts() {
                   placeholder="新模块路径（如 system-settings/tag-library）"
                   className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300 w-56"
                 />
+              )}
+              <label className="flex items-center gap-1.5 text-sm text-gray-400 cursor-pointer select-none"
+                title="覆盖同名场景：原文件自动备份，任一步失败自动回滚（T-313）">
+                <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} />
+                覆盖同名场景
+              </label>
+              {/* K-xxx：入库前冲突预检——草稿 ID 已存在于场景库时的可执行提示 */}
+              {conflict?.existing && (
+                <div className="w-full text-[11px] rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
+                  ⚠️ 场景 ID <span className="font-mono">{conflict.existing.id}</span> 已存在于
+                  <span className="font-mono"> {conflict.existing.path}</span>
+                  {conflict.existing.module === (targetModule === '__new__' ? customModule.trim() : targetModule)
+                    ? ' ——已自动选中该模块并勾选「覆盖」，可直接入库更新'
+                    : ' ——不在当前所选模块，请切换模块（更新）或改用 next_scenario_id 换新 ID（新增）'}
+                </div>
               )}
               <button
                 onClick={handlePromote}

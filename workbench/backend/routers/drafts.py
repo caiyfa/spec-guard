@@ -19,6 +19,7 @@
 - K-046：编辑/连线/试跑只作用于 drafts/ 沙箱，入库仍必须走 promote 三道闸
 """
 
+import json as _json
 import shutil
 import sys
 from datetime import datetime
@@ -233,6 +234,26 @@ def save_draft(filename: str, body: DraftSaveBody):
     path.write_text(body.content, encoding="utf-8")
     _update_meta(filename)
     user_store.audit(current_emp_no(), "edit_draft", f"编辑草稿 {filename}")
+    # K-xxx：草稿台账投影（scenario_id/title 从 YAML 解析；author 取 _meta.json）
+    try:
+        from services import ledger_store
+        raw = yaml.safe_load(body.content) or {}
+        meta_entry = {}
+        _meta_path = _drafts_root() / "_meta.json"
+        if _meta_path.is_file():
+            try:
+                meta_entry = (_json.loads(_meta_path.read_text(encoding="utf-8")) or {}).get(filename) or {}
+            except Exception:
+                meta_entry = {}
+        ledger_store.upsert_draft(
+            filename,
+            scenario_id=str(raw.get("id", "")),
+            title=str(raw.get("title", "")),
+            status="draft",
+            author=str(meta_entry.get("author", "")),
+        )
+    except Exception:
+        pass
     return {"ok": True, "filename": filename}
 
 
@@ -347,6 +368,21 @@ class PromoteBody(BaseModel):
     replace: bool = False    # T-313：覆盖同名场景（Agent 更新已有场景；原文件备份+失败回滚）
 
 
+@router.get("/{filename}/conflict", dependencies=[Depends(require_role("admin", "tester"))])
+def draft_conflict(filename: str):
+    """入库前 ID 冲突预检：草稿场景 ID 是否已存在于场景库（含既有位置/模块）。
+
+    K-xxx：把「场景 id 重复」类失败前置为可执行提示——UI 入库弹窗打开时调用，
+    冲突时自动选中既有模块并勾选覆盖。
+    """
+    from services import draft_promote
+    try:
+        return draft_promote.check_id_conflict(filename)
+    except draft_promote.PromoteError as e:
+        status = draft_promote.HTTP_STATUS.get(e.code, 500)
+        raise HTTPException(status_code=status, detail=str(e))
+
+
 @router.post("/{filename}/promote", dependencies=[Depends(require_role("admin", "tester"))])
 def promote_draft(filename: str, body: PromoteBody):
     """入库：格式校验 PASS → 移入 scenarios/{module}/ → 更新契约基线 → 发布门禁。
@@ -376,4 +412,10 @@ def discard_draft(filename: str):
     trash.mkdir(parents=True, exist_ok=True)
     target = trash / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
     shutil.move(str(path), str(target))
+    # K-xxx：草稿台账状态 → 已废弃
+    try:
+        from services import ledger_store
+        ledger_store.set_draft_status(filename, "discarded")
+    except Exception:
+        pass
     return {"ok": True, "trashed_to": str(target.relative_to(get_workspace_root() or SG_ROOT)).replace("\\", "/")}

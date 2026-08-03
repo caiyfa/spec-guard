@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 SG_ROOT = Path(__file__).resolve().parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
@@ -20,6 +22,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from services import failure_index
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ledger(tmp_path, monkeypatch):
+    """K-xxx：台账投影隔离到 tmp 库——append_failures 落库不得污染真实 workbench.db。"""
+    from services import ledger_store
+    monkeypatch.setattr(ledger_store, "DB_PATH", tmp_path / "ledger.db")
 
 
 def _mk_run(root: Path, run_id: str, cases: list, details: dict | None = None):

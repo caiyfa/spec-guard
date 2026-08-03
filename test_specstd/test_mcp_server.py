@@ -255,6 +255,8 @@ class TestScenarioTools:
         from services import scenario_store
         monkeypatch.setattr(scenario_store, "SCENARIOS_ROOT", lib)
         monkeypatch.setattr(scenario_tools, "SCENARIOS_ROOT", lib)
+        # K-xxx：场景库重定向时台账投影一并重定向，防污染真实 workbench.db
+        monkeypatch.setattr(scenario_store, "_LEDGER_DB_PATH", tmp_path / "ledger.db")
         scenario_store._cache["fingerprint"] = None
         scenario_store._cache["scenarios"] = None
         scenario_store._cache["graph"] = None

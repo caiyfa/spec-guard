@@ -60,6 +60,8 @@ def library(tmp_path, monkeypatch):
     monkeypatch.setattr(ss, "SCENARIOS_ROOT", root)
     monkeypatch.setattr(ss, "_cache", {"fingerprint": None, "scenarios": None,
                                        "graph": None})
+    # K-xxx：场景库重定向时台账投影一并重定向，防污染真实 workbench.db
+    monkeypatch.setattr(ss, "_LEDGER_DB_PATH", tmp_path / "ledger.db")
     return root
 
 

@@ -19,6 +19,13 @@ if str(BACKEND_DIR) not in sys.path:
 
 from services import draft_promote as dr  # noqa: E402
 
+
+@pytest.fixture(autouse=True)
+def _isolate_ledger(tmp_path, monkeypatch):
+    """K-xxx：台账投影隔离到 tmp 库——promote/discard 的草稿状态落库不得污染真实 workbench.db。"""
+    from services import ledger_store
+    monkeypatch.setattr(ledger_store, "DB_PATH", tmp_path / "ledger.db")
+
 SCENARIO = """
 id: TL-RC-014
 version: "0.1"
@@ -94,3 +101,81 @@ class TestPromoteReplace:
         (scenarios / "TL-RC-014.yaml").write_text("旧\n", encoding="utf-8")
         dr.promote("TL-RC-014.yaml", "mod/a", skip_gate=True, replace=True)
         assert not (scenarios / "TL-RC-014.yaml.bak").exists()
+
+
+class TestIdConflictPreCheck:
+    """K-xxx：ID 全局唯一预检——「场景 id 重复」类失败前置化（TL-RC-014 案例）。"""
+
+    def test_check_id_conflict_finds_existing(self, promote_env):
+        """check_id_conflict：草稿 ID 已存在于库内另一模块 → 返回既有位置与模块。"""
+        drafts, scenarios, _ = promote_env
+        (drafts / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+        (scenarios / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")  # 库内既有 TL-RC-014
+
+        r = dr.check_id_conflict("TL-RC-014.yaml")
+        assert r["ok"] is True and r["count"] == 1
+        assert r["existing"]["id"] == "TL-RC-014"
+        assert r["existing"]["module"] == "mod/a"
+        assert r["existing"]["path"].endswith("TL-RC-014.yaml")
+
+    def test_check_id_conflict_none_for_new(self, promote_env):
+        """check_id_conflict：库内无该 ID（新场景）→ existing=None。"""
+        drafts, scenarios, _ = promote_env
+        (drafts / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+        (scenarios / "OTHER.yaml").write_text(SCENARIO.replace("TL-RC-014", "OTHER-001"), encoding="utf-8")
+
+        r = dr.check_id_conflict("TL-RC-014.yaml")
+        assert r["ok"] is True and r["existing"] is None
+
+    def test_check_id_conflict_file_missing_hit_library(self, promote_env):
+        """草稿文件不存在（已入库）+ ID 命中库内 → existing 返回 + file_missing=True（刷新后去向判定）。"""
+        drafts, scenarios, _ = promote_env
+        (scenarios / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")  # 库内已有，草稿已移走
+
+        r = dr.check_id_conflict("TL-RC-014.yaml")
+        assert r["file_missing"] is True
+        assert r["existing"]["id"] == "TL-RC-014"
+        assert r["existing"]["module"] == "mod/a"
+
+    def test_check_id_conflict_file_missing_no_library(self, promote_env):
+        """草稿文件不存在（已删除）+ 库内无该 ID → existing=None + file_missing=True。"""
+        drafts, scenarios, _ = promote_env
+
+        r = dr.check_id_conflict("TL-RC-014.yaml")
+        assert r["file_missing"] is True
+        assert r["existing"] is None
+
+    def test_promote_wrong_module_raises_id_conflict(self, promote_env):
+        """选错模块入库：目标无同名文件但 ID 已在库内其他模块 → id_conflict 拦截，草稿不动。"""
+        drafts, scenarios, _ = promote_env
+        (drafts / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+        (scenarios / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+
+        with pytest.raises(dr.PromoteError) as ei:
+            dr.promote("TL-RC-014.yaml", "mod/b", skip_gate=True)
+        assert ei.value.code == "id_conflict"
+        assert "mod/a" in str(ei.value), "提示语应给出既有位置"
+        assert (drafts / "TL-RC-014.yaml").is_file(), "草稿不得被移动"
+        assert not (tmp := scenarios.parent / "mod" / "b").exists() or not (tmp / "TL-RC-014.yaml").exists()
+
+    def test_promote_right_module_replace_still_works(self, promote_env):
+        """同模块 + replace=True：ID 预检放行，覆盖更新照常（与 T-313 不冲突）。"""
+        drafts, scenarios, _ = promote_env
+        (drafts / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+        (scenarios / "TL-RC-014.yaml").write_text("旧版本内容\n", encoding="utf-8")
+
+        result = dr.promote("TL-RC-014.yaml", "mod/a", skip_gate=True, replace=True)
+        assert result["ok"] is True
+        assert "旧版本" not in (scenarios / "TL-RC-014.yaml").read_text(encoding="utf-8")
+
+    def test_batch_skips_id_conflict(self, promote_env):
+        """批量入库：ID 已存在于库内其他模块 → 该份跳过并注明原因（批量不支持覆盖）。"""
+        drafts, scenarios, _ = promote_env
+        (drafts / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+        (drafts / "OTHER-001.yaml").write_text(SCENARIO.replace("TL-RC-014", "OTHER-001"), encoding="utf-8")
+        (scenarios / "TL-RC-014.yaml").write_text(SCENARIO, encoding="utf-8")
+
+        r = dr.promote_batch(["TL-RC-014.yaml", "OTHER-001.yaml"], "mod/b", skip_gate=True)
+        assert r["promoted"] == ["OTHER-001.yaml"] or [m["file"] for m in r["promoted"]] == ["OTHER-001.yaml"]
+        skipped = {s["file"]: s["reason"] for s in r["skipped"]}
+        assert "TL-RC-014.yaml" in skipped and "已存在" in skipped["TL-RC-014.yaml"]

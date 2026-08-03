@@ -30,7 +30,7 @@ class PromoteError(Exception):
 HTTP_STATUS = {
     "invalid_filename": 400, "invalid_module": 400,
     "draft_not_found": 404, "module_not_found": 404,
-    "conflict": 409, "validation_failed": 422,
+    "conflict": 409, "id_conflict": 409, "validation_failed": 422,
     "baseline_failed": 500, "gate_failed": 502,
 }
 
@@ -91,6 +91,70 @@ def _rebuild_baseline():
     scenarios = load_scenarios(str(_scenarios_root()))
     baseline = build_baseline(scenarios)
     save_baseline(str(SG_ROOT), baseline)
+
+
+def _draft_id(path: Path) -> str:
+    """草稿的场景 ID（yaml 解析失败返回空串——格式校验闸会另行拦截）。"""
+    try:
+        import yaml
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return str((raw or {}).get("id", "") or "")
+    except Exception:
+        return ""
+
+
+def _find_id_locations(scenario_id: str) -> list[str]:
+    """扫描场景库，返回所有含该场景 ID 的文件路径。
+
+    容忍库内既有问题（逐文件容错，不因单文件解析失败中断）——
+    与 load_scenarios 的全库强校验区分：这里是入库前的预检，需要"还能扫出来"。
+    """
+    import os
+    from engine.scenario_loader import _parse_scenario, load_suite_meta
+
+    if not scenario_id:
+        return []
+    root = _scenarios_root()
+    found = []
+    for dirpath, _dirnames, filenames in os.walk(str(root)):
+        suite_meta = load_suite_meta(dirpath)
+        for fn in sorted(filenames):
+            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+                continue
+            try:
+                sc = _parse_scenario(os.path.join(dirpath, fn), suite_meta)
+            except Exception:
+                continue
+            if sc.id == scenario_id:
+                found.append(os.path.join(dirpath, fn))
+    return found
+
+
+def check_id_conflict(filename: str) -> dict:
+    """入库前 ID 冲突预检（UI 弹窗提示用）：草稿场景 ID 是否已存在于场景库。
+
+    返回 {ok, existing: {id, path, module} | None, count, file_missing}。
+    K-xxx：把基线重建阶段的「场景 id 重复」前置为可执行提示——TL-RC-014 案例
+    （spec 模块与场景模块目录不一致，选错模块入库 → 全库 ID 撞车 → 报错回滚）。
+    file_missing=True（草稿文件不存在，可能已入库/已废弃）时不再 404，
+    改用文件名（{场景ID}.yaml 命名规范）推断 ID 查库——前端刷新后无本地
+    「已入库」状态，靠此区分「已入库」与「已删除」。
+    """
+    path = _guard_filename(filename)
+    missing = not path.is_file()
+    sid = _draft_id(path) if not missing else ""
+    if not sid and missing:
+        sid = path.stem
+    locations = _find_id_locations(sid) if sid else []
+    existing = None
+    if locations:
+        root = Path(_scenarios_root())
+        try:
+            mod = str(Path(locations[0]).parent.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            mod = ""
+        existing = {"id": sid, "path": _display_target(Path(locations[0])), "module": mod}
+    return {"ok": True, "existing": existing, "count": len(locations), "file_missing": missing}
 
 
 def _run_release_gate() -> dict:
@@ -194,6 +258,19 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
         raise PromoteError("draft_not_found", f"草稿不存在: {filename}")
     module_dir = _guard_module(module)
     target = module_dir / filename
+    # K-xxx：ID 全局唯一预检——把基线重建阶段的「场景 id 重复」前置为可执行提示。
+    # 目标路径无同名文件 ≠ ID 全局唯一：草稿 ID 已存在于场景库其他模块时提前拦截，
+    # 避免移入后全库扫描撞车再回滚（TL-RC-014 案例：spec 模块与场景模块目录不一致）。
+    sid = _draft_id(path)
+    if sid:
+        locations = _find_id_locations(sid)
+        if locations and not target.exists():
+            rel = _display_target(Path(locations[0]))
+            raise PromoteError(
+                "id_conflict",
+                f"场景 ID {sid} 已存在于场景库（{rel}），不在所选模块 {module}/。"
+                "更新已有场景：请选择该模块目录后入库；新增场景：请改用 next_scenario_id 获取新 ID。",
+                detail={"existing": rel, "count": len(locations)})
     backup: Path | None = None
     if target.exists():
         if not replace:
@@ -251,6 +328,12 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
     # K-026：模块元信息 + 入库血缘（信息包 → 场景正向链路）
     _ensure_suite_yaml(module_dir, module)
     _record_lineage([filename], [report.get("scenario", "")], module)
+    # K-xxx：草稿台账状态 → 已入库
+    try:
+        from services import ledger_store
+        ledger_store.set_draft_status(filename, "promoted", module)
+    except Exception:
+        pass
 
     return {
         "ok": True,
@@ -293,6 +376,14 @@ def promote_batch(filenames: list[str] | None, module: str,
         if target.exists():
             skipped.append({"file": fn, "reason": f"目标已存在同名场景: {module}/{fn}"})
             continue
+        # K-xxx：ID 全局唯一预检（批量不支持覆盖，ID 已存在于场景库其他模块时整份跳过）
+        sid = _draft_id(path)
+        if sid:
+            locations = _find_id_locations(sid)
+            if locations:
+                skipped.append({"file": fn, "reason":
+                    f"场景 ID {sid} 已存在于场景库（{_display_target(Path(locations[0]))}），批量入库不支持覆盖，请单份入库"})
+                continue
         report = validate_scenario_content(path.read_text(encoding="utf-8"))
         if report["verdict"] != "PASS":
             skipped.append({"file": fn, "reason": "格式校验未通过",
@@ -347,6 +438,13 @@ def promote_batch(filenames: list[str] | None, module: str,
     # K-026：模块元信息 + 入库血缘（信息包 → 场景正向链路）
     _ensure_suite_yaml(module_dir, module)
     _record_lineage([m["file"] for m in moved], [m["scenario_id"] for m in moved], module)
+    # K-xxx：草稿台账状态 → 已入库
+    try:
+        from services import ledger_store
+        for m in moved:
+            ledger_store.set_draft_status(m["file"], "promoted", module)
+    except Exception:
+        pass
 
     return {
         "ok": True,

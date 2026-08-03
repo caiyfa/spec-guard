@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router';
 import Dashboard from './pages/Dashboard';
+import Lifecycle from './pages/Lifecycle';
 import Scenarios from './pages/Scenarios';
 import RunControl from './pages/RunControl';
 import DagEditor from './pages/DagEditor';
@@ -68,6 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: '场景',
     icon: '🧩',
     items: [
+      { to: '/lifecycle', label: '测试生命周期', roles: ALL },  // K-xxx：台账聚合的完整生命周期监控
       { to: '/plans', label: '场景管理', roles: TESTER_UP },
       { to: '/dag', label: 'DAG 编排', roles: ALL },
     ],
@@ -346,6 +348,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
             <Route path="/spec" element={<SpecValidation />} />
             <Route path="/plans" element={<Scenarios />} />
             <Route path="/run" element={<RunControl />} />
