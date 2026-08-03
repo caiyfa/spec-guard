@@ -164,6 +164,29 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
     if scenario_context:
         prompt += f"\n\n## 基础信息包\n\n{scenario_context}"
 
+    # 工作区同步状态（远程新鲜度提示——远程有新提交时读到的文件可能过时，
+    # 覆盖 AGENTS.md 规则与文档的过期风险；ls-remote 经 60s TTL 缓存控频）
+    try:
+        from specstd.workspace import check_remote_sync, get_active_workspace
+        ws = get_active_workspace()
+        if ws:
+            sync = check_remote_sync()
+            if sync.get("remote_known") and not sync.get("synced"):
+                sync_note = (
+                    f"⚠ 工作区同步状态：远程仓库（{ws.name}@{ws.branch}）有新提交"
+                    f"（本地 HEAD {sync.get('local_head') or '?'}，远程 {sync.get('remote_head') or '?'}），"
+                    f"你读到的文件可能不是最新版。如用户要求基于最新内容工作，"
+                    f"请先提示用户在工作区中心「同步」，同步后再读取。")
+            elif sync.get("remote_known"):
+                sync_note = f"工作区同步状态：{ws.name} 与远程同步（HEAD {sync.get('local_head') or '?'}）。"
+            else:
+                sync_note = (f"工作区同步状态：{ws.name} 远程状态不可达（网络/认证失败），"
+                             f"仅能基于本地内容工作。")
+            prompt += f"\n\n## 工作区同步状态\n\n{sync_note}"
+
+    except Exception:
+        pass
+
     return prompt
 
 

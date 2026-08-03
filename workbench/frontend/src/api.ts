@@ -480,7 +480,39 @@ export const workspaceApi = {
     request<{ path: string; sha: string }>(`/workspace/file-hash?path=${encodeURIComponent(path)}`),
   search: (q: string) =>
     request<{ results: { path: string; match_type: string; line?: number; preview: string; size: number }[]; query: string }>(`/workspace/search?q=${encodeURIComponent(q)}`),
+  gitLog: (limit = 100) =>
+    request<GitLogResponse>(`/workspace/git-log?limit=${limit}`),
 };
+
+// ── git log（SourceTree 风格提交历史页）──
+export interface GitFileChange {
+  status: string; // A|M|D|R
+  path: string;
+}
+
+export interface GitCommit {
+  sha: string;
+  short_sha: string;
+  author: string;
+  email: string;
+  date: string;
+  parents: string[];
+  message: string;
+  files: GitFileChange[];
+}
+
+export interface GitLogResponse {
+  ok: boolean;
+  workspace: string;
+  branch: string;
+  url?: string;
+  commits: GitCommit[];
+  local_head: string;
+  remote_known: boolean;
+  remote_head: string;
+  synced: boolean;
+  error?: string;
+}
 
 // ── Agent 对话 ──
 export interface AgentMode {

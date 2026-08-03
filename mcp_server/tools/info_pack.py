@@ -183,7 +183,14 @@ def _handle_read_info_pack(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"基础信息包为空（场景 {scenario_id}）。请先在向导中添加文件。")]
 
     # 逐个读取文件（K-013：附新鲜度标记，Agent 可感知文件是否在引用后被修改/删除）
-    from specstd.workspace import safe_resolve
+    from specstd.workspace import safe_resolve, remote_file_marks
+    # 远程新鲜度批量检查（一次网络探测 + 离线文件级比较；非 git/远程不可达时无标记）
+    try:
+        remote_marks = remote_file_marks(
+            [e.get("path", "") if isinstance(e, dict) else str(e) for e in files]
+        )
+    except Exception:
+        remote_marks = {}
     parts = []
     for entry in files:
         file_path = entry.get("path", "") if isinstance(entry, dict) else str(entry)
@@ -211,6 +218,7 @@ def _handle_read_info_pack(arguments: dict) -> list[TextContent]:
                         mark = " [已变更]"
                 except Exception:
                     pass
+            mark += remote_marks.get(file_path, "")
             parts.append(f"--- {file_path}{mark} ---\n{content}\n")
         except Exception as e:
             parts.append(f"--- {file_path} ---\n[读取失败: {e}]\n")

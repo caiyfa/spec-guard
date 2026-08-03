@@ -60,10 +60,14 @@ def _build_scenario_context(scenario_id: str) -> str:
     if not files:
         return f"当前场景：{scenario_id}（{meta.get('name', '')}）。基础信息包为空，请用 read_spec 工具读取工作区文件。"
     # K-013：信息包清单附新鲜度标记（每条消息重建 context，天然实时感知变更）
-    from specstd.workspace import safe_resolve
+    from specstd.workspace import safe_resolve, remote_file_marks
+    paths = [e.get("path", "") if isinstance(e, dict) else str(e) for e in files]
+    try:
+        remote_marks = remote_file_marks(paths)
+    except Exception:
+        remote_marks = {}
     lines = []
-    for e in files:
-        path = e.get("path", "") if isinstance(e, dict) else str(e)
+    for e, path in zip(files, paths):
         stored = e.get("sha", "") if isinstance(e, dict) else ""
         mark = ""
         try:
@@ -74,10 +78,17 @@ def _build_scenario_context(scenario_id: str) -> str:
                 mark = "（已变更）"
         except Exception:
             pass
+        rm = remote_marks.get(path, "")
+        if rm == "[远程已更新]":
+            mark += "（远程已更新）"
+        elif rm == "[远程不存在]":
+            mark += "（远程不存在）"
         lines.append(f"  - {path}{mark}")
     file_list = "\n".join(lines)
     stale_hint = ("\n注意：标记（已变更）/（已删除）的文件与信息包记录时不一致，"
-                  "请以当前内容为准，并提醒用户信息包需要更新。") if any("（" in ln for ln in lines) else ""
+                  "请以当前内容为准，并提醒用户信息包需要更新；"
+                  "标记（远程已更新）/（远程不存在）表示远程仓库与本地不同步，"
+                  "建议用户先在工作区中心「同步」后重新读取。") if any("（" in ln for ln in lines) else ""
     return (
         f"当前场景：{scenario_id}（{meta.get('name', '')}）\n"
         f"模块：{meta.get('module', '')}\n"
@@ -164,6 +175,19 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
             structured.append({"type": rtype, "path": rid, "sha": "", "missing": True})
             continue
 
+        # 远程新鲜度检查（只对工作区文件：远程有更新/远程不存在时标注入引用标头）
+        remote_mark = ""
+        if rtype == "file":
+            try:
+                from specstd.workspace import remote_file_marks
+                rm = remote_file_marks([rid]).get(rid, "")
+                if rm == "[远程已更新]":
+                    remote_mark = " [远程已更新]"
+                elif rm == "[远程不存在]":
+                    remote_mark = " [远程不存在]"
+            except Exception:
+                pass
+
         truncated = False
         if len(content) > _REF_MAX_FILE:
             content = content[:_REF_MAX_FILE]
@@ -172,7 +196,7 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
             content = content[:max(0, _REF_MAX_TOTAL - total)]
             truncated = True
         total += len(content)
-        blocks.append(f"--- {rid} (sha:{sha}) ---\n{content}" + ("\n[截断]" if truncated else ""))
+        blocks.append(f"--- {rid} (sha:{sha}){remote_mark} ---\n{content}" + ("\n[截断]" if truncated else ""))
         structured.append({"type": rtype, "path": rid, "sha": sha})
 
     block_text = ""

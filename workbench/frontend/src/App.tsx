@@ -11,6 +11,7 @@ import SpecValidation from './pages/SpecValidation';
 import AgentChat from './pages/AgentChat';
 import Attribution from './pages/Attribution';
 import WorkspaceCenter from './pages/WorkspaceCenter';
+import GitLog from './pages/GitLog';
 import Feedback from './pages/Feedback';
 import NotifyConfigs from './pages/NotifyConfigs';
 import Schedules from './pages/Schedules';
@@ -362,6 +363,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/spec-center" element={<RedirectToWorkspace />} />
             <Route path="/attribution" element={<Attribution />} />
             <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />
+            <Route path="/workspace/git-log" element={<GitLog />} />  {/* git 提交历史（SourceTree 风格） */}
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/notify" element={<NotifyConfigs />} />
                         <Route path="/schedules" element={<Schedules />} />

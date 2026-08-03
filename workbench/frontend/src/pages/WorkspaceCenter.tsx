@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router';
 import { workspaceApi, session, WORKSPACE_CHANGED_EVENT, type WorkspaceInfo } from '../api';
 import FileTree from '../components/FileTree';
 import FileViewer from '../components/FileViewer';
@@ -17,6 +18,7 @@ import type { FlatFile } from '../components/FileTree';
 export default function WorkspaceCenter({ role }: { role: string }) {
   const isAdmin = role === 'admin';
   const canSync = isAdmin || role === 'tester';
+  const navigate = useNavigate();
 
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [active, setActive] = useState('');
@@ -250,6 +252,15 @@ export default function WorkspaceCenter({ role }: { role: string }) {
                   {ws.last_commit && <span className="text-xs text-gray-600 ml-2">commit: {ws.last_commit}</span>}
                 </div>
                 <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                  {ws.source.type === 'git' && (
+                    <button
+                      onClick={() => { handleSelect(ws.name); navigate('/workspace/git-log'); }}
+                      className="px-2 py-1 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2"
+                      title="查看 git 提交历史（SourceTree 风格）"
+                    >
+                      📜 记录
+                    </button>
+                  )}
                   {ws.source.type === 'git' && canSync && (
                     <button
                       onClick={() => handleSync(ws.name)}

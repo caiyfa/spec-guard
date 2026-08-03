@@ -31,6 +31,7 @@ from specstd.workspace import (
     list_workspaces, get_workspace, get_active_workspace,
     register_local, register_git, set_active, unregister,
     pull, run_conformance, safe_resolve,
+    git_log, remote_head_status,
 )
 from services.auth import (  # noqa: E402
     CurrentUser, get_current_user, require_role, resolve_workspace,
@@ -197,6 +198,21 @@ def api_pull(body: PullBody):
     K-009：权限放宽至 tester——文档中心使用者需要自助同步最新 Spec（pull 为只读性质操作）。
     """
     return pull(body.name)
+
+
+@router.get("/git-log")
+def api_git_log(limit: int = 50, ws_name: str = Depends(resolve_workspace)):
+    """获取 git 工作区的提交历史（SourceTree 风格页面的数据源）。
+
+    只读展示：提交时间线 + 每 commit 变更文件 + 本地 HEAD + 远程 HEAD 状态
+    （远程状态经 ls-remote 实时探测，失败时 remote_known=false 静默降级）。
+    授权校验由 resolve_workspace 完成（与 /spec-files 一致）。
+    """
+    result = git_log(ws_name, limit=limit)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "git log 失败"))
+    result.update(remote_head_status(ws_name))
+    return result
 
 
 # ══════════════════════════════════════════════════════════

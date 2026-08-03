@@ -174,6 +174,29 @@ def _migration_hint(path: str) -> str:
     return ""
 
 
+def _read_with_remote_status(resolved: Path, display_path: str) -> list[TextContent]:
+    """读工作区文件，并在输出前注入远程仓库新鲜度提示。
+
+    Agent 使用工作区文档前先判断远程仓库中该文件是否存在/是否有更新——
+    非 git 工作区 / 远程不可达时静默无标记，不阻塞读取。
+    """
+    from specstd.workspace import remote_file_marks
+    try:
+        mark = remote_file_marks([display_path]).get(display_path, "")
+    except Exception:
+        mark = ""
+    note = ""
+    if mark == "[远程已更新]":
+        note = ("[远程状态] 远程仓库中该文件有更新版本，本地内容可能过时——"
+                "如需基于最新内容工作，请先同步工作区。\n\n")
+    elif mark == "[远程不存在]":
+        note = "[远程状态] 远程仓库中不存在该文件（本地新增未推送，或远程已删除该文件）。\n\n"
+    result = _read_text_guarded(resolved, display_path)
+    if note and result:
+        result = [TextContent(type="text", text=note + result[0].text)]
+    return result
+
+
 def _handle_read_spec(arguments: dict) -> list[TextContent]:
     path = arguments.get("path", "")
     if not path:
@@ -193,7 +216,7 @@ def _handle_read_spec(arguments: dict) -> list[TextContent]:
     # 第一根：工作区（原行为）
     resolved = safe_resolve(path)
     if resolved is not None and resolved.is_file():
-        return _read_text_guarded(resolved, path)
+        return _read_with_remote_status(resolved, path)
 
     # 第二根：SpecGuard 仓库（K-021 回退——scenarios/docs/contracts 等仓库侧内容）
     sg_resolved = _resolve_sg_root(path)
