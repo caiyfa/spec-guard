@@ -317,6 +317,44 @@ class TestV12SqlGuard:
         assert "仅允许" not in out
 
 
+class TestDbEvidenceConnector:
+    """T-315：db_evidence 成功路径——修复 DBClient 不存在（引擎只有 ReadOnlyDb）。"""
+
+    def _call(self, sql, monkeypatch, rows=None):
+        import asyncio
+        from mcp_server.tools import attribution
+
+        class FakeDb:
+            def __init__(self, *a, **k):
+                pass
+
+            def query(self, _sql):
+                return rows if rows is not None else [{"emp_no": "90024166", "name": "测试"}]
+
+        monkeypatch.setattr("engine.db_oracle.ReadOnlyDb", FakeDb)
+        monkeypatch.setattr(
+            "systems.tdm.load_env",  # 包属性（db_evidence 经 import_module("systems.tdm") 取）
+            lambda env: {"db": {"host": "h", "port": 3306, "user": "u",
+                                "password": "p", "name": "hr_center"}})
+        return asyncio.run(attribution.handle("db_evidence", {"sql": sql}))[0].text
+
+    def test_returns_rows(self, monkeypatch):
+        """成功路径：经 env db 段建 ReadOnlyDb 并返回行。"""
+        out = self._call("SELECT * FROM tdm_emp_employee LIMIT 2", monkeypatch)
+        data = json.loads(out)
+        assert data.get("row_count") == 1
+        assert data["rows"][0]["emp_no"] == "90024166"
+
+    def test_no_db_section_hint(self, monkeypatch):
+        """env 未配置 db 段 → 明确提示（不再是 DBClient 导入错）。"""
+        import asyncio
+        from mcp_server.tools import attribution
+        monkeypatch.setattr("systems.tdm.load_env", lambda env: {})
+        out = asyncio.run(attribution.handle("db_evidence", {"sql": "SELECT 1"}))[0].text
+        assert "DBClient" not in out, f"不应再出现 DBClient 导入错误: {out}"
+        assert "db 段" in out, f"应提示环境未配置 db 段: {out}"
+
+
 # ══════════════════════════════════════════════════════════
 # V14 webhook SSRF / V15 状态机 / D2 回执
 # ══════════════════════════════════════════════════════════
