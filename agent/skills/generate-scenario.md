@@ -21,10 +21,21 @@ trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、�
 - `flow` 中的 tool 名称必须已注册
 - `verify` 中的 oracle 名称必须已注册
 - 字段命名：集合字段用 `List` 结尾，字段一律驼峰
-- 插值：`{{a.b.c}}` 点号路径，类型保留
+- **插值只允许四种形态**（{{random:6}} 等 Apifox 语法 SpecGuard 不支持，运行期必
+  「变量未定义」——validate 会报 UNKNOWN_TPL ERROR）：
+  ```yaml
+  {{fn.uuid_short}}            # ① fn.* 内置函数：fn.timestamp / fn.date / fn.uuid_short
+  {{env.resource_code}}        # ② env.* 环境键（或 env.vars.* 子键）
+  {{IS-PREP-001.session.json.data.id}}  # ③ {{上游场景ID.*}}（须已在 depends_on）
+  {{resp.json.data.id}}        # ④ 本场景 save 变量 / set_var vars 裸名
+  ```
+  需要随机唯一后缀用 `{{fn.uuid_short}}`；需要随机数先 `random` 步骤
+  （`- random: {type: number, min: 1, max: 100, save: n}`）再 `{{n}}` 引用
 - **call 请求体一律用 `json:` 键**（2.1.0 起）：`json: {tagName: x}`；`body:` 是 2.1.0 前
   废弃键，引擎只认 `json:/form:/urlencoded:/raw:/file:`（body_type 推断），写 `body:` 会
   静默丢请求体（validate 会报 BODY_KEY WARN——生成后务必 validate 确认无此告警）
+- 生成后必须 `validate` 自检：UNKNOWN_TPL（未知插值）与 BODY_KEY（body: 键）均为
+  ERROR/WARN 级硬伤，有则修正后再入库
 - **声明执行依赖（格式 2.3.0 起，预检扫描数据源）**：在机器读层加 `requires` 段，声明
   flow/verify 用到的账号别名、环境键与跨场景变量引用（缺失 → 执行前预检弹窗预警）：
   ```yaml

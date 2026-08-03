@@ -35,12 +35,16 @@ trigger: 用户要求更新/迁移已有场景、格式规范升级后存量场�
 - requires 不进契约指纹——补声明无需 bump version；但改了 produces/save/covers 必须
   bump version（T6 校验会拦）
 - 更新后契约指纹变化的场景，scan_compliance 不会提醒 version——用 validate 的 T6 检查
+- **插值只允许四种形态**（T-318/T-319）：`{{fn.*}}` / `{{env.*}}` / `{{上游ID.*}}` /
+  本场景 save 与 set_var vars 裸名。存量场景里的 `{{random:N}}`（Apifox 语法）必须改为
+  `{{fn.uuid_short}}`——validate 报 UNKNOWN_TPL ERROR 即为此类
+- 存量场景的 `body:` 键（2.1.0 前废弃）改为 `json:`——validate 报 BODY_KEY WARN 即为此类
 
 ### 批量更新
 
 - 缺口清单可能很大（如 2.3.0 升级后全库 90 场景缺 requires）——**逐场景更新**，
   每批 5-10 个场景走完「读→改→写→校验→promote」再继续，避免一次性大改引入错误
-- 更新过程中 validate 报 T4/T8/COVERS 时停下修正，不要跳过
+- 更新过程中 validate 报 T4/T8/COVERS/UNKNOWN_TPL/BODY_KEY 时停下修正，不要跳过
 
 ### 信息不足时
 

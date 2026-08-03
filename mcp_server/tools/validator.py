@@ -259,6 +259,25 @@ def validate_scenario_content(content: str) -> dict:
                                  "message": "call 使用 body: 键（2.1.0 前旧语法，请求体可能未发送）——"
                                             "请改为 json: {…}（见 format_spec §1.4 call 参数体系）"})
 
+    # T-319：未知插值校验（复用 preflight 检测，生成时拦截而非等执行）——
+    # {{random:6}} 类（Apifox 语法）不在 fn.*/env.*/上游引用/场景内 save 与
+    # set_var vars 集合 → 运行期必 KeyError「变量未定义」（EX-5c6f4c98），ERROR 禁止入库
+    try:
+        from services.preflight import _static_unresolved_templates
+        tpl_text = ""
+        for section in ("flow", "verify", "teardown"):
+            val = raw.get(section)
+            if val:
+                tpl_text += yaml.safe_dump(val, allow_unicode=True) + "\n"
+        for expr in _static_unresolved_templates(raw, tpl_text):
+            findings.append({"level": "ERROR", "rule": "UNKNOWN_TPL", "scenario": sid,
+                             "message": f"未知插值 {{{{{expr}}}}}——仅支持 fn.*（内置函数）/ env.*（环境键）/ "
+                                        f"{{{{上游ID.*}}}} / 本场景 save 与 set_var 变量；"
+                                        f"{{{{random:N}}}} 等 Apifox 语法运行期会「变量未定义」，请改用 "
+                                        f"{{{{fn.uuid_short}}}} / {{{{fn.timestamp}}}}"})
+    except Exception:
+        pass  # 检测服务不可用时跳过（不阻断主校验）
+
     # V9 修复：verify 段 oracle 引用校验（幻觉拦截——编造 oracle 必报 ERROR + hint）
     valid_oracles = oracle_names()
     for item in verify:

@@ -243,6 +243,51 @@ verify:
         warns = [f for f in report["findings"] if f["rule"] == "BODY_KEY"]
         assert not warns, f"json: 键不应告警: {warns}"
 
+    def test_validator_rejects_unknown_template(self):
+        """T-319：{{random:6}} 未知插值 → ERROR（生成时拦截，运行期必 KeyError）。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-TPL
+version: "0.1"
+flow:
+  - call:
+      method: POST
+      path: /api/system/tags
+      json: {tagName: "RC_{{random:6}}"}
+      save: resp
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        tpl = [f for f in report["findings"] if f["rule"] == "UNKNOWN_TPL"]
+        assert tpl, f"未知插值应报 ERROR: {report['findings']}"
+        assert tpl[0]["level"] == "ERROR"
+        assert "random:6" in tpl[0]["message"]
+        assert "fn.uuid_short" in tpl[0]["message"], "应提示替代写法"
+
+    def test_validator_accepts_save_and_fn_templates(self):
+        """save 变量与 fn.* 插值 → 无 UNKNOWN_TPL。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-TPL2
+version: "0.1"
+flow:
+  - call:
+      method: POST
+      path: /api/system/tags
+      json: {tagName: "A_{{fn.uuid_short}}"}
+      save: resp
+  - call:
+      method: GET
+      path: /x
+      params: {id: "{{resp.json.data.id}}"}
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        tpl = [f for f in report["findings"] if f["rule"] == "UNKNOWN_TPL"]
+        assert not tpl, f"合法插值不应报 UNKNOWN_TPL: {tpl}"
+
     def test_query_registry_oracle_dynamic(self):
         import asyncio
         from mcp_server.tools import registry_query
