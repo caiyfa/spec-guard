@@ -70,6 +70,44 @@ class TestHttpAnchorDensity:
         assert "trace=" not in out
 
 
+class TestCallRequestLine:
+    """T-316：调用前信息打印——账号/method/path/params/请求体/自定义头全部可见。"""
+
+    def test_request_line_includes_body_and_account(self, monkeypatch, capsys):
+        client = _http(monkeypatch, _fake_resp(200, {"ok": True}))
+        client.request("POST", "/api/system/tags",
+                       params={"corpCode": "1002"},
+                       json_body={"tagName": "RC014_缺corpCode_abc123", "tagScope": "PLATFORM"},
+                       headers={"X-Custom": "h1"},
+                       raise_on_error=False)
+        out = capsys.readouterr().out
+        assert "调用 POST /api/system/tags" in out, f"应有调用前信息行: {out}"
+        assert "corpCode" in out, f"params 应可见: {out}"
+        assert "RC014_缺corpCode_abc123" in out, f"请求体应可见: {out}"
+        assert "X-Custom" in out, f"自定义头应可见: {out}"
+
+    def test_request_line_excludes_authorization(self, monkeypatch, capsys):
+        """Authorization（token）绝不进日志——含显式覆盖的负向测试。"""
+        client = _http(monkeypatch, _fake_resp(200, {"ok": True}))
+        client.request("GET", "/api/x",
+                       headers={"Authorization": "Bearer SECRET_TOKEN_XYZ", "X-A": "1"},
+                       raise_on_error=False)
+        out = capsys.readouterr().out
+        assert "SECRET_TOKEN_XYZ" not in out, f"token 不得进日志: {out}"
+        assert "X-A" in out, f"其他自定义头应保留: {out}"
+
+    def test_request_line_escapes_brackets(self, monkeypatch, capsys):
+        """请求体数组方括号转圆括号（_parse_line 场景 ID 误判防御）。"""
+        client = _http(monkeypatch, _fake_resp(200, {"ok": True}))
+        client.request("POST", "/api/x", json_body={"ids": ["IS-PREP-001"]},
+                       raise_on_error=False)
+        out = capsys.readouterr().out
+        req_line = out.strip().splitlines()[0]  # 第一行 = 调用前信息行
+        excerpt = req_line.split("body=", 1)[1]
+        assert "[" not in excerpt, f"请求体摘要不应含方括号: {excerpt}"
+        assert "(\"IS-PREP-001\"" in excerpt
+
+
 class TestAssertionLogFormat:
     """断言结果日志行格式（纯函数，_run_verifies 逐条调用）。"""
 

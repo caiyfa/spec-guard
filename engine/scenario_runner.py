@@ -301,6 +301,8 @@ def step_call(body, rctx, ns, record):
         resp_json = None
     record.steps.append(StepTrace(
         type="call",
+        # T-316：请求体进报告（与执行日志调用前信息对齐）——此前 request 只有
+        # as/method/path/params，发了什么 body 查不到；文件流 data 不落盘
         request={"as": account or "(匿名)", "method": method, "path": path,
                  "params": params, **({"body_type": body_type} if body_type else {}),
                  **({"headers": list(headers)} if headers else {})},
@@ -308,6 +310,10 @@ def step_call(body, rctx, ns, record):
         duration_ms=elapsed,
         body_excerpt=truncate(resp_json),
     ))
+    record.steps[-1].request.update(  # 请求体/表单数据摘要并入 request（与日志调用前信息一致）
+        **({"body": truncate(json_body)} if json_body is not None else {}),
+        **({"data": truncate(data)} if isinstance(data, (str, dict, list)) else {}),
+    )
     return {"status": resp.status_code, "json": resp_json,
             "headers": {k: v for k, v in resp.headers.items()}}
 

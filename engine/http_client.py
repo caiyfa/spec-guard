@@ -38,6 +38,14 @@ def _trace_id_of(resp):
     return ""
 
 
+def _excerpt(obj) -> str:
+    """T-316：日志摘要（与报告 body_excerpt 同源 truncate）——数组方括号转圆括号。"""
+    try:
+        return json.dumps(truncate(obj), ensure_ascii=False).replace("[", "(").replace("]", ")")
+    except Exception:
+        return str(obj)[:200]
+
+
 class ApiError(Exception):
     def __init__(self, status_code, body):
         self.status_code = status_code
@@ -66,6 +74,23 @@ class HttpClient:
         合并顺序：Authorization 先置，自定义 headers 后合并——允许负向测试显式覆盖认证头。
         """
         _t0 = time.time()
+        # T-316：调用前信息打印——账号/method/path/params/请求体/自定义头（不含 Authorization）。
+        # 此前请求参数只在报告，执行日志看不到「发了什么」（EX-a4360d1f）。
+        # 方括号转圆括号——防 runner._parse_line 把 [XX-XXX] 误判为场景 ID。
+        req_parts = [f"调用 {method} {path}"]
+        if self.account:
+            req_parts.append(f"账号={self.account}")
+        if params:
+            req_parts.append(f"params={_excerpt(params)}")
+        if json_body is not None:
+            req_parts.append(f"body={_excerpt(json_body)}")
+        if data is not None:
+            req_parts.append(f"data={_excerpt(data) if isinstance(data, (str, dict, list)) else '(文件流)'}")
+        custom_hdrs = {str(k): str(v) for k, v in (headers or {}).items()
+                       if str(k).lower() != "authorization"}
+        if custom_hdrs:
+            req_parts.append(f"headers={_excerpt(custom_hdrs)}")
+        print(f"[SpecGuard] {' | '.join(req_parts)}", flush=True)
         resp = self._do(method, path, params, json_body, files, data, timeout,
                         headers=headers, cookies=cookies)
         # 401 自动失效缓存并重取重试一次（仅带账号的客户端）
