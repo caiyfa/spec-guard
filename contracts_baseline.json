@@ -95,6 +95,10 @@
     "fingerprint": "3512305e6c4b",
     "version": "0.1"
   },
+  "ST01-IMP-001": {
+    "fingerprint": "8791337d6d1e",
+    "version": "0.1"
+  },
   "TL-DTL-001": {
     "fingerprint": "1a7b13bbf8c0",
     "version": "0.1"
@@ -358,5 +362,9 @@
   "TL-RC-065": {
     "fingerprint": "397811e906ed",
     "version": "0.1"
+  },
+  "UT01-PREP-001": {
+    "fingerprint": "5a1a4d6693ba",
+    "version": "1.0"
   }
 }
