@@ -352,7 +352,6 @@ def ref_yaml_format_spec():
                 "flow": "执行步骤列表（至少一个 flow 或 verify）",
             },
             "optional_fields": {
-                "test_type": "unit | scenario（缺省为 scenario）",
                 "priority": "P0 | P1 | P2",
                 "tags": "[resolver, permission, snapshot, security, prep]",
                 "depends_on": "[场景ID 或 {id, mode: shared|exclusive}]",
@@ -408,10 +407,8 @@ def ref_yaml_format_spec():
         },
         "validation_rules": {
             "T1": "YAML 可解析，有 id + flow/verify",
-            "T2": "test_type 必须为 unit/scenario",
-            "T3": "unit 类型必须有 output/produces 或 save 声明",
             "T4": "depends_on 引用必须指向已存在的场景 ID",
-            "T5": "scenario 类型无 depends_on 且非 prep 标签 → 疑似孤例（WARN）",
+            "T5": "无 depends_on 且非 prep 标签 → 疑似孤例（WARN）",
         },
     }
 

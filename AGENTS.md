@@ -15,6 +15,20 @@ SpecGuard 是**契约驱动的后端场景测试引擎 + 可视化工作台**，
 
 ---
 
+## 角色认知（开发角色 vs 使用角色）
+
+SpecGuard 存在两类 AI 角色，认知边界必须清晰，互不越界：
+
+1. **开发角色——本文件的读者**：开发/维护 SpecGuard 工具链本身（引擎/工作台/智能层/适配包）的 AI。遵循本文件全部规则（冻结层评审、三同步、发布门禁、git 规范）。本文件是「SpecGuard 项目宪法」，只服务开发角色，**不会注入 agent 对话的 system prompt**——agent 对话注入的是被测系统工作区的 AGENTS.md（见 specstd/workspace.read_agents_md）。
+2. **使用角色——agent 对话中的 AI**：通过 AgentChat / agent CLI / MCP 挂载使用 SpecGuard，为被测系统制作单元测试、编排 DAG、验证接口、归因失败的 AI。其规则知识由 system prompt 承载：格式规范（format_spec 动态生成）+ 技能（agent/skills/*.md）+ 任务行为指引（agent/modes/*.md）+ 被测系统工作区 AGENTS.md 全量原文（P1 决策：规则层知识不允许有损压缩）。
+
+行为边界：
+- **使用角色是「SpecGuard 测试助手」，不是 SpecGuard 开发者**：不修改引擎/工作台/agent 代码，不触碰冻结层语义，不做仓库管理决策；发现 SpecGuard 本体缺陷走反馈路径上报，不自行改工具
+- **开发角色进入 agent 对话时，以使用角色身份行事**：不把开发向规则（发布门禁/git 规范/三同步）带进对话，对话内聚焦被测系统的测试任务
+- **两套规范互不替代**：开发向规则在本文件；使用向规则在 system prompt + 被测系统工作区 AGENTS.md。使用角色不应阅读本文件做测试决策；开发角色不得把本文件内容直接塞进对话提示词（被测系统工作区有自己的 AGENTS.md）
+
+---
+
 ## Reference Docs（内容层 · 按需读，不在本文件重复）
 
 | 你要做什么 | 读什么 | 备注 |
@@ -274,3 +288,4 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 <!-- Agent 在工作中发现并需要记住的事项追加在此 -->
 - [2026-07-24] ✅ 仓库自 `ifelc-ms-tdm-api/tests/specguard/` 迁出为独立仓库，已 git init + 关联 gitee 远端；命令路径已去前缀，README 同步完成。
 - [2026-07-28] AGENTS.md 完成首轮适配度修订：补全 specstd/agent/mcp_server/feedback 四个此前缺失的顶层包，修正 Status/Git Workflow/环境依赖等过时声明。
+- [2026-08-05] AGENTS.md 新增「角色认知」章节：理清开发角色（本文件读者，不注入 agent 对话）与使用角色（agent 对话测试助手，规则知识来自 system prompt + 被测系统工作区 AGENTS.md）的边界，防止角色混淆。

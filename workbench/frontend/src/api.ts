@@ -301,7 +301,7 @@ export interface FailureEntry {
 
 // ── 测试计划 ──
 export interface ImportPreviewFile {
-  path: string; module: string; test_type: string;
+  path: string; module: string;
   valid: boolean; errors: string[]; frs: string[]; size: number;
 }
 export interface ImportPreview {
@@ -312,7 +312,7 @@ export interface ImportPreview {
   matched_scenarios: { id: string; title: string; covers: string[] }[];
   unmatched_frs: string[];
   summary: {
-    total_files: number; unit_count: number; scenario_count: number;
+    total_files: number;
     valid_count: number; error_count: number;
     total_frs: number; matched_scenarios: number;
   };
@@ -630,6 +630,7 @@ export interface DraftItem {
   author?: string;
   source_meta?: string;  // K-013: 来源场景元数据 ID（SG-META-xxxx）
   stale?: boolean;       // K-013: 其信息包存在已变更/已删除文件
+  source_files: string[]; // A+B: 生成时依赖的文件清单
 }
 
 export interface ValidateFinding {
@@ -659,7 +660,7 @@ export const draftsApi = {
   list: () => request<{ drafts: DraftItem[] }>('/drafts'),
   modules: () => request<{ modules: string[] }>('/drafts/modules'),
   read: (filename: string) =>
-    request<{ filename: string; content: string }>(`/drafts/${encodeURIComponent(filename)}`),
+    request<{ filename: string; content: string; depends_on: string[] }>(`/drafts/${encodeURIComponent(filename)}`),
   update: (filename: string, content: string) =>
     request<{ ok: boolean }>(`/drafts/${encodeURIComponent(filename)}`, {
       method: 'PUT',
@@ -854,7 +855,6 @@ export interface LifecycleItem {
   draft_filename: string;
   module: string;
   version: string;
-  test_type: string;
   tags: string[];
   covers: string[];
   file_path: string;

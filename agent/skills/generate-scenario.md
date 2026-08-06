@@ -12,7 +12,7 @@ keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个
 2. **获取 ID**：使用 `next_scenario_id` 获取下一个可用场景 ID
 3. **查询注册表**：使用 `query_registry` 确认可用的 tool 和 oracle
 4. **参考已有场景（分类定位）**：使用 `list_scenarios`（返回含 `summary` 分类摘要：按模块/
-   类型/标签聚合计数）——**先看 summary 定位同模块同类参照**（如生成 TL- 系列先看
+   标签聚合计数）——**先看 summary 定位同模块同类参照**（如生成 TL- 系列先看
    by_module 里标签库维护模块的存量），再用 `read_scenario` 读 1-2 个同类场景的结构
 5. **生成 YAML**：按照格式规范生成场景 YAML
 6. **校验**：使用 `validate` 工具校验生成的 YAML

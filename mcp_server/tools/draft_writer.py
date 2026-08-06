@@ -18,6 +18,24 @@ if str(SG_ROOT) not in sys.path:
 from specstd.workspace import drafts_dir, get_workspace_root  # noqa: E402
 
 
+# 模块级：暂存待写入的 source files（由 agent/runtime 在 write_draft 前设置）
+_PENDING_SOURCE_FILES: list[str] = []
+
+
+def set_pending_source_files(files: list[str]):
+    """设置待写入的 source files（供 _handle_write_draft 消费）。"""
+    global _PENDING_SOURCE_FILES
+    _PENDING_SOURCE_FILES = list(files)
+
+
+def pop_pending_source_files() -> list[str]:
+    """消费并清空 pending source files。"""
+    global _PENDING_SOURCE_FILES
+    files = _PENDING_SOURCE_FILES
+    _PENDING_SOURCE_FILES = []
+    return files
+
+
 def _drafts_root() -> Path:
     """获取草稿目录（动态解析当前工作区 .specguard/drafts/）。"""
     d = drafts_dir()
@@ -36,8 +54,8 @@ def _rel_path(path: Path) -> str:
     return str(path)
 
 
-def _record_meta(filename: str, scenario_id: str = ""):
-    """记录草稿元数据到 drafts/_meta.json（M7 作者归属 + K-013 场景关联/信息包基准 commit）。"""
+def _record_meta(filename: str, scenario_id: str = "", source_files: list[str] = None):
+    """记录草稿元数据到 drafts/_meta.json（M7 作者归属 + K-013 场景关联/信息包基准 commit + K-xxx 文件依赖）。"""
     try:
         from services.auth import current_emp_no  # 延迟导入（MCP stdio 无此上下文）
         emp_no = current_emp_no()
@@ -68,6 +86,8 @@ def _record_meta(filename: str, scenario_id: str = ""):
                     entry["pack_commit"] = commits[0]
         except Exception:
             pass
+    if source_files:
+        entry["source_files"] = source_files
     meta[filename] = entry
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
                          encoding="utf-8")
@@ -252,8 +272,13 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
     if mode == "create":
         if draft_path.exists():
             return [TextContent(type="text", text=f"OVERWRITE_DENIED: 文件已存在: {filename}（使用 mode=patch 追加）")]
+        # 获取并消费 pending source files（A+B：注入头部注释 + 记录到 _meta.json）
+        source_files = pop_pending_source_files()
+        if source_files:
+            header = "# 生成依据：\n" + "".join(f"#   - {f}\n" for f in source_files) + "\n"
+            content = header + content
         draft_path.write_text(content, encoding="utf-8")
-        _record_meta(filename, scenario_id)
+        _record_meta(filename, scenario_id, source_files=source_files)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
             "path": _rel_path(draft_path), "size": len(content),

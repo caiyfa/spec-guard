@@ -828,3 +828,45 @@ def remote_file_marks(paths: list, name: Optional[str] = None) -> dict:
         if lout.strip() != rout.strip():
             marks[p] = "[远程已更新]"
     return marks
+
+
+# ══════════════════════════════════════════════════════════
+# 会话级同步决策状态（Agent 工具链 sync_workspace 配套）
+# ══════════════════════════════════════════════════════════
+
+# 用户拒绝同步某工作区后，本次会话内 read_spec 不再注入远程更新提示。
+# 进程级状态——MCP server / Agent runtime 常驻进程期间有效，会话结束即消亡。
+_sync_dismissed: set = set()
+_dismiss_lock = threading.Lock()
+
+
+def mark_sync_dismissed(name: Optional[str] = None) -> str:
+    """标记某工作区为「用户已拒绝同步」，本次会话不再提醒远端更新。
+
+    返回被标记的工作区名（无激活工作区时返回空串）。
+    """
+    if not name:
+        info = get_active_workspace()
+        if not info:
+            return ""
+        name = info.name
+    with _dismiss_lock:
+        _sync_dismissed.add(name)
+    return name
+
+
+def is_sync_dismissed(name: Optional[str] = None) -> bool:
+    """某工作区是否已被标记为拒绝同步（read_spec 据此静默远程提示）。"""
+    if not name:
+        info = get_active_workspace()
+        if not info:
+            return False
+        name = info.name
+    with _dismiss_lock:
+        return name in _sync_dismissed
+
+
+def reset_sync_dismissed() -> None:
+    """清空会话级同步决策状态（测试用，生产不需调用）。"""
+    with _dismiss_lock:
+        _sync_dismissed.clear()

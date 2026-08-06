@@ -1,7 +1,10 @@
 /** AgentChat — 左侧会话树 + 中间对话区 + 右侧面板（K-012 简洁化：底部仅模式/模型下拉 + 输入框） */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 import { useSearchParams, useNavigate } from 'react-router';
 import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi } from '../api';
 import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData } from '../api';
@@ -75,12 +78,14 @@ interface SlashCommand {
   label: string;
   desc: string;
   type: 'skill' | 'mode' | 'action';
+  skillName?: string;   // 技能名（cmd 与技能名不一致时指定，如 /dag → dag-orchestration）
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
   { cmd: '/generate-scenario', label: '场景生成技能', desc: '使用场景生成技能分析需求', type: 'skill' },
   { cmd: '/validate-conformance', label: '合规校验技能', desc: '校验场景 YAML 格式合规性', type: 'skill' },
   { cmd: '/debug-failure', label: '失败分析技能', desc: '分析运行报告中的失败场景', type: 'skill' },
+  { cmd: '/dag', label: 'DAG 编排', desc: '对话中编排场景依赖（建议/加边/删边/复核）', type: 'skill', skillName: 'dag-orchestration' },
   { cmd: '/new', label: '新会话', desc: '开始新的对话会话', type: 'action' },
   { cmd: '/clear', label: '清空对话', desc: '清空当前消息列表', type: 'action' },
   { cmd: '/undo', label: '撤销写入', desc: '撤销最后一次草稿写入（从 .bak 恢复）', type: 'action' },
@@ -103,112 +108,51 @@ interface GroupedItem {
   references?: ChatReference[];  // K-013: user 消息携带的 @引用
 }
 
-// ── 简易 Markdown 渲染 ──
+// ── Markdown 渲染（react-markdown + remark-gfm：标题/列表/表格/任务列表/引用/删除线全支持，
+//    替代自研简易渲染器——LLM 输出的结构化排版此前大量丢失，长文本挤成一段）──
+const MD_COMPONENTS: Components = {
+  h1: ({ children }: { children?: ReactNode }) => <h1 className="text-base font-semibold text-gray-100 mt-2 mb-1">{children}</h1>,
+  h2: ({ children }: { children?: ReactNode }) => <h2 className="text-sm font-semibold text-gray-200 mt-2 mb-1">{children}</h2>,
+  h3: ({ children }: { children?: ReactNode }) => <h3 className="text-xs font-semibold text-gray-300 mt-1.5 mb-0.5">{children}</h3>,
+  h4: ({ children }: { children?: ReactNode }) => <h4 className="text-xs font-semibold text-gray-400 mt-1 mb-0.5">{children}</h4>,
+  p: ({ children }: { children?: ReactNode }) => <p className="text-gray-200 leading-relaxed my-1">{children}</p>,
+  ul: ({ children }: { children?: ReactNode }) => <ul className="list-disc pl-4 my-1 space-y-0.5">{children}</ul>,
+  ol: ({ children }: { children?: ReactNode }) => <ol className="list-decimal pl-4 my-1 space-y-0.5">{children}</ol>,
+  li: ({ children }: { children?: ReactNode }) => <li className="text-gray-300">{children}</li>,
+  strong: ({ children }: { children?: ReactNode }) => <strong className="font-semibold text-gray-100">{children}</strong>,
+  a: ({ href, children }: { href?: string; children?: ReactNode }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-info underline hover:opacity-80">{children}</a>
+  ),
+  // 表格：LLM 常用表格做对比/清单（版本仲裁、边变更、步骤清单）
+  table: ({ children }: { children?: ReactNode }) => (
+    <div className="overflow-x-auto my-1"><table className="w-full text-[11px] border-collapse">{children}</table></div>
+  ),
+  th: ({ children }: { children?: ReactNode }) => <th className="border border-border px-1.5 py-0.5 text-left text-gray-300">{children}</th>,
+  td: ({ children }: { children?: ReactNode }) => <td className="border border-border px-1.5 py-0.5 text-gray-400">{children}</td>,
+  // 代码块：块级由 pre 接管（黑底滚动），行内黄字
+  pre: ({ children }: { children?: ReactNode }) => (
+    <pre className="text-[11px] bg-black/30 rounded p-2 overflow-x-auto max-h-80 my-1 text-gray-400 whitespace-pre-wrap">{children}</pre>
+  ),
+  code: ({ className, children }: { className?: string; children?: ReactNode }) => {
+    const inline = !className && !String(children).includes('\n');
+    return inline
+      ? <code className="text-[11px] text-yellow-400/80 bg-black/30 rounded px-0.5">{children}</code>
+      : <code className="block">{children}</code>;
+  },
+  blockquote: ({ children }: { children?: ReactNode }) => (
+    <blockquote className="border-l-2 border-info/30 pl-2 my-1 text-gray-400">{children}</blockquote>
+  ),
+  hr: () => <hr className="border-border my-1" />,
+  // remark-gfm 任务列表 checkbox（LLM 输出「- [ ] 待办」时可用）
+  input: (props) => <input {...props} className="accent-info mr-1" />,
+};
+
 function MarkdownText({ content }: { content: string }) {
-  // 分割代码块
-  const parts = content.split(/(```[\s\S]*?```)/g);
   return (
     <div className="text-sm text-gray-200">
-      {parts.map((part, i) => {
-        if (part.startsWith('```')) {
-          const lines = part.replace(/^```\w*\n?/, '').replace(/```$/, '').split('\n');
-          return <pre key={i} className="text-[11px] bg-black/30 rounded p-2 overflow-x-auto max-h-80 my-1 text-gray-400">{lines.join('\n')}</pre>;
-        }
-        // 渲染行级 markdown
-        const lines = part.split('\n');
-        const elements: JSX.Element[] = [];
-          let inTable = false;
-          let tableRows: string[][] = [];
-          let listItems: string[] = [];
-
-          const flushTable = () => {
-            if (tableRows.length > 0) {
-              elements.push(
-                <table key={`t${elements.length}`} className="w-full text-[11px] my-1 border-collapse">
-                  <thead>
-                    <tr>{tableRows[0].map((h, hi) => <th key={hi} className="border border-border px-1.5 py-0.5 text-left text-gray-300">{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {tableRows.slice(2).map((row, ri) => (
-                      <tr key={ri}>{row.map((c, ci) => <td key={ci} className="border border-border px-1.5 py-0.5 text-gray-400">{c}</td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              );
-              tableRows = [];
-            }
-          };
-          const flushList = () => {
-            if (listItems.length > 0) {
-              elements.push(
-                <ul key={`l${elements.length}`} className="list-disc pl-4 my-0.5">
-                  {listItems.map((li, li2) => <li key={li2} className="text-gray-300">{renderInlineMd(li)}</li>)}
-                </ul>
-              );
-              listItems = [];
-            }
-          };
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            // 表格行
-            if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-              flushList();
-              inTable = true;
-              tableRows.push(trimmed.split('|').slice(1, -1).map(c => c.trim()));
-              continue;
-            } else if (inTable) {
-              flushTable();
-              inTable = false;
-            }
-            // 分隔线
-            if (/^---+$/.test(trimmed)) { flushList(); elements.push(<hr key={`h${elements.length}`} className="border-border my-1" />); continue; }
-            // 标题
-            const h2 = trimmed.match(/^##\s+(.*)/); if (h2) { flushList(); elements.push(<h3 key={`h${elements.length}`} className="text-sm font-semibold text-gray-200 mt-1.5 mb-0.5">{renderInlineMd(h2[1])}</h3>); continue; }
-            const h3 = trimmed.match(/^###\s+(.*)/); if (h3) { flushList(); elements.push(<h4 key={`h${elements.length}`} className="text-xs font-semibold text-gray-300 mt-1 mb-0.5">{renderInlineMd(h3[1])}</h4>); continue; }
-            // 列表项
-            const li = trimmed.match(/^[-*]\s+(.*)/); if (li) { listItems.push(li[1]); continue; }
-            const ol = trimmed.match(/^\d+\.\s+(.*)/); if (ol) { listItems.push(ol[1]); continue; }
-            // 空行
-            if (!trimmed) { flushList(); continue; }
-            // 普通段落
-            flushList();
-            elements.push(<p key={`p${elements.length}`} className="text-gray-200 leading-relaxed">{renderInlineMd(trimmed)}</p>);
-          }
-          flushTable();
-          flushList();
-        return <div key={i}>{elements}</div>;
-      })}
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{content}</ReactMarkdown>
     </div>
   );
-}
-
-// 渲染行内 Markdown（粗体、代码、链接）
-function renderInlineMd(text: string): JSX.Element {
-  const parts: JSX.Element[] = [];
-  let remaining = text;
-  let key = 0;
-  while (remaining) {
-    // 粗体 **text**
-    const bold = remaining.match(/^(.*?)\*\*(.+?)\*\*/s);
-    if (bold) {
-      if (bold[1]) parts.push(<span key={key++}>{bold[1]}</span>);
-      parts.push(<strong key={key++} className="font-semibold text-gray-100">{bold[2]}</strong>);
-      remaining = remaining.slice(bold[0].length);
-      continue;
-    }
-    // 行内代码 `code`
-    const code = remaining.match(/^(.*?)`(.+?)`/s);
-    if (code) {
-      if (code[1]) parts.push(<span key={key++}>{code[1]}</span>);
-      parts.push(<code key={key++} className="text-[11px] text-yellow-400/80 bg-black/30 rounded px-0.5">{code[2]}</code>);
-      remaining = remaining.slice(code[0].length);
-      continue;
-    }
-    parts.push(<span key={key++}>{remaining}</span>);
-    break;
-  }
-  return <>{parts}</>;
 }
 
 // ── 提取 <plan> 标签 ──
@@ -226,6 +170,7 @@ function stripPlan(content: string): string {
 // ── 默认计划（K-023 去模式化：统一任务骨架）+ 工具→步骤映射 ──
 // K-xxx：DEFAULT_PLANS 仅作「工具调用分组锚点」（groupMessages 把工具归到步骤展示），
 // 不再预填待办区——待办由模型 todo_write / <plan> 输出，避免「刚发消息就出写死待办」
+// 后半段为编排/验证类工具的分组锚点（dag-orchestration 技能链路）
 const DEFAULT_PLANS: string[] = [
   '读取基础信息包和需求文档',
   '查询注册表（tool / oracle）',
@@ -234,6 +179,10 @@ const DEFAULT_PLANS: string[] = [
   '生成场景 YAML',
   '校验场景',
   '写入草稿',
+  '分析依赖建议',
+  '落地依赖边',
+  'DAG 复核',
+  '试执行验证',
 ];
 
 // 工具名 → 待办步骤序号映射（供 groupMessages 把工具调用归到对应步骤展示）
@@ -248,6 +197,11 @@ const TOOL_TO_STEP: Record<string, number> = {
   undo_draft: 6,
   read_run_report: 0,
   db_evidence: 3,
+  // K-xxx：DAG 编排链路分组锚点
+  suggest_deps: 7,
+  edit_dependency: 8,
+  check_dag: 9,
+  run_scenario: 10,
 };
 
 // ── 将扁平消息列表分组（按待办步骤关联 + 完成提示） ──
@@ -420,19 +374,23 @@ function ResultView({ result }: { result: string }) {
   return <KeyValueView text={result} />;
 }
 
-// ── 单个工具调用块（可折叠） ──
+// ── 单个工具调用块（可折叠，一行式） ──
 function ToolCallBlock({ tool }: { tool: ToolItem }) {
   const [expanded, setExpanded] = useState(false);
   const hasResult = tool.result !== undefined;
-  const resultPreview = hasResult ? tool.result!.substring(0, 100) : '';
   const isError = hasResult && (tool.result!.includes('"error"') || tool.result!.includes('ERROR') || tool.result!.includes('❌'));
+  // 结果摘要：取首个非空行（截断），内联在头部行——工具点固定一行，不再独占两行
+  const resultPreview = hasResult
+    ? (tool.result!.split('\n').map(l => l.trim()).find(l => l && !l.startsWith('{') && !l.startsWith('[')) || tool.result!).substring(0, 60)
+    : '';
 
   return (
     <div className="border border-border rounded text-xs">
-      {/* 工具头部 - 始终可见 */}
+      {/* 工具头部 - 始终可见（状态 + 名称 + 结果摘要同一行） */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-3 transition-colors text-left"
+        title={hasResult ? (isError ? '执行失败，点击查看详情' : '执行成功，点击查看详情') : '执行中…'}
       >
         <span className="text-gray-600 text-[10px]">{expanded ? '▼' : '▶'}</span>
         <span className="text-yellow-500/80 font-mono">🔧</span>
@@ -443,6 +401,10 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
           </span>
         )}
         {!hasResult && <span className="text-yellow-500/50 animate-pulse">⏳</span>}
+        {/* 结果摘要内联（代替原第二行预览） */}
+        {hasResult && resultPreview && (
+          <span className={`flex-1 truncate text-[10px] ${isError ? 'text-red-400/80' : 'text-gray-500'}`}>{resultPreview}</span>
+        )}
       </button>
       {/* 展开内容（K-024：键值化友好渲染，不再直接甩原始 JSON） */}
       {expanded && (
@@ -462,10 +424,6 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
             </div>
           )}
         </div>
-      )}
-      {/* 折叠时的简要结果预览 */}
-      {!expanded && hasResult && resultPreview && (
-        <div className="px-2 pb-1 text-gray-600 text-[10px] truncate">{resultPreview}</div>
       )}
     </div>
   );
@@ -1346,7 +1304,10 @@ export default function AgentChat() {
 
   // 从模块存储恢复状态（跨导航保持会话）
   const [messages, setMessages] = useState<ChatMessage[]>(_store.messages);
-  const [input, setInput] = useState('');
+  // K-xxx：hint 参数预填——从 DAG 页「对话编排」跳转时（/agent?hint=dag-orchestration），
+  // 输入框预填技能提示词（含「编排/依赖」关键词，直接发送也能命中技能确定性触发）
+  const hint = searchParams.get('hint') || '';
+  const [input, setInput] = useState(hint ? `请使用 ${hint} 技能编排场景依赖：` : '');
   const [loading, setLoading] = useState(_store.loading);
   const [sessionId, setSessionId] = useState(_store.sessionId);
   const [sessionTitle, setSessionTitle] = useState(_store.sessionTitle);
@@ -1805,8 +1766,8 @@ export default function AgentChat() {
         handleExportSession();
       }
     } else if (cmd.type === 'skill') {
-      const skillName = cmd.cmd.replace('/', '');
-      setInput(`请使用 ${skillName} 技能：`);
+      const skillName = cmd.skillName || cmd.cmd.replace('/', '');
+      setInput(`请使用 ${skillName} 技能${skillName === 'dag-orchestration' ? '编排场景依赖' : ''}：`);
       inputRef.current?.focus();
     }
   };

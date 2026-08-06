@@ -25,6 +25,8 @@ export default function Drafts() {
   const [report, setReport] = useState<ValidateReport | null>(null);
   const [targetModule, setTargetModule] = useState<string>('');
   const [customModule, setCustomModule] = useState('');  // K-017: 「新建模块…」手动输入
+  // A+B: 当前选中草稿的依赖关系（从 read_draft 响应解析）
+  const [dependsOn, setDependsOn] = useState<string[]>([]);
   // K-xxx：覆盖入库（replace）+ 入库前 ID 冲突预检（选错模块/更新已有场景时提前提示）
   const [replace, setReplace] = useState(false);
   const [conflict, setConflict] = useState<{ existing: { id: string; path: string; module: string } | null; count: number } | null>(null);
@@ -105,6 +107,7 @@ export default function Drafts() {
     try {
       const r = await draftsApi.read(filename);
       setContent(r.content);
+      setDependsOn(r.depends_on || []);
     } catch (e: any) {
       setError(e.message || '读取草稿失败');
       setContent('');
@@ -267,6 +270,21 @@ export default function Drafts() {
                 <div className="text-[10px] text-gray-600 mt-0.5">
                   {d.modified}{d.author ? ` · ${d.author}` : ''}
                 </div>
+                {/* A+B：文件依赖展示 */}
+                {d.source_files && d.source_files.length > 0 && (
+                  <div className="mt-1">
+                    <details className="text-[10px]">
+                      <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
+                        📄 {d.source_files.length} 个文件依赖
+                      </summary>
+                      <div className="mt-1 pl-3 space-y-0.5">
+                        {d.source_files.map((f, i) => (
+                          <div key={i} className="text-gray-600 truncate" title={f}>{f}</div>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                )}
                 {/* K-026：信息包关联可见化——此前仅 stale 时 tooltip 提及，用户看不到草稿来自哪个信息包 */}
                 {d.source_meta && (
                   <div className="text-[10px] mt-0.5">
@@ -367,6 +385,25 @@ export default function Drafts() {
                 废弃
               </button>
             </div>
+
+            {/* A+B：依赖关系展示 */}
+            {dependsOn.length > 0 && (
+              <div className="mb-3 px-3 py-2 rounded-lg border border-yellow-700/30 bg-yellow-900/10 text-sm">
+                <div className="text-yellow-400 text-xs font-medium mb-1.5">
+                  🕸 依赖关系（已声明 depends_on）
+                </div>
+                <ul className="space-y-1">
+                  {dependsOn.map((dep, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      <span className="px-1.5 py-0.5 rounded bg-info/20 text-info font-mono text-[10px]">
+                        {dep}
+                      </span>
+                      <span className="text-gray-500">上游依赖</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* K-046：依赖建议面板 */}
             {(suggestions.length > 0 || selectedUnresolved.length > 0) && (

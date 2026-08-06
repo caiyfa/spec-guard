@@ -54,6 +54,11 @@ function isReachable(from: string, to: string, edges: Edge[]): boolean {
 
 export default function DagEditor() {
   const tokens = useJsTokens();  // K-043
+  // K-046：流程衔接——focus 聚焦 / 依赖建议 / 多选执行
+  // 注意：navigate/searchParams 必须在 useState 初始化器（subset）之前声明，
+  // 否则触发 const TDZ 报错（Cannot access 'searchParams' before initialization）
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -89,8 +94,6 @@ export default function DagEditor() {
   const [cycleItems, setCycleItems] = useState<string[][]>([]);  // T-101: 库存在环时降级显示
   const [showDrift, setShowDrift] = useState(false);
   // K-046：流程衔接——focus 聚焦 / 依赖建议 / 多选执行
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const focusId = searchParams.get('focus') || '';
   const focusAppliedRef = useRef(false);
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
@@ -514,6 +517,14 @@ export default function DagEditor() {
           title="扫描无依赖上游的场景，批量采纳依赖建议（跨场景变量引用补全）"
         >
           🟢 补全孤节点
+        </button>
+        {/* K-xxx：对话编排主入口——Agent 会话承担编排，画布保留编辑作复核视图 */}
+        <button
+          onClick={() => navigate(`/agent?hint=dag-orchestration`)}
+          className="text-[10px] text-info hover:opacity-80 px-2 py-1 rounded border border-info/40 hover:border-info/60 bg-info/10"
+          title="在对话中编排依赖（建议/加边/删边/复核）——Agent 会话是 DAG 编排主入口，本画布为可视化复核视图"
+        >
+          🤖 对话编排
         </button>
       </div>
 

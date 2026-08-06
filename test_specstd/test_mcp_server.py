@@ -46,7 +46,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 24  # T-313: 新增 scan_compliance 后 23→24
+        assert len(ALL_TOOLS) == 25  # 新增 sync_workspace 后 24→25
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -62,7 +62,8 @@ class TestToolRegistration:
                      "edit_dependency",  # K-027: DAG 依赖边编排
                      "suggest_deps",  # K-046: 依赖建议（确定性引擎）
                      "list_failures", "read_run_log",  # K-052: 失败索引 + 按任务号读日志
-                     "scan_compliance"}  # T-313: 全库格式合规缺口扫描
+                     "scan_compliance",  # T-313: 全库格式合规缺口扫描
+                     "sync_workspace"}  # 远端更新同步 + 会话级 dismiss
         assert names == expected
 
 
@@ -157,7 +158,6 @@ class TestScenarioTools:
         ids = [s["id"] for s in data["scenarios"]]
         assert "PP-RC-001" in ids
         assert sum(data["summary"]["by_module"].values()) == data["total"]
-        assert sum(data["summary"]["by_type"].values()) == data["total"]
         assert data["summary"]["by_tag"]
 
     def test_read_scenario(self):
@@ -547,3 +547,50 @@ verify:
         data = json.loads(result[0].text)
         t5 = [f for f in data["findings"] if f["rule"] == "T5" and f["level"] == "WARN"]
         assert t5, "无依赖 scenario 应报 T5 WARN"
+
+
+# ══════════════════════════════════════════════════════════
+# sync_workspace（远端更新同步 + 会话级 dismiss）
+# ══════════════════════════════════════════════════════════
+
+class TestSyncWorkspace:
+    """远端更新提示 → sync_workspace 闭环（read_spec 注入决策提示 → 征询用户 → 同步/dismiss）。"""
+
+    def test_sync_local_workspace_not_git(self, workspace):
+        """local 工作区调 sync → ok=False（不是 git 型，不支持拉取）。"""
+        from specstd.workspace import reset_sync_dismissed
+        reset_sync_dismissed()
+        r = _call(spec_reader, "sync_workspace", {"action": "sync"})
+        data = json.loads(r[0].text)
+        assert data["ok"] is False
+        assert "不是 git 型" in data["error"]
+        reset_sync_dismissed()
+
+    def test_dismiss_then_read_spec_silent(self, workspace, monkeypatch):
+        """dismiss 后 read_spec 不再注入远程提示（即便 remote_file_marks 报告有更新）。"""
+        import specstd.workspace as ws_mod
+        from specstd.workspace import reset_sync_dismissed
+        reset_sync_dismissed()
+        # 强制 remote_file_marks 报告远端有更新（模拟 git 工作区远端领先场景）
+        monkeypatch.setattr(ws_mod, "remote_file_marks",
+                            lambda paths, name=None: {paths[0]: "[远程已更新]"})
+        # dismiss 前：read_spec 应含远程状态决策提示 + sync_workspace 引导
+        r1 = _call(spec_reader, "read_spec", {"path": "AGENTS.md"})
+        assert "[远程状态]" in r1[0].text
+        assert "sync_workspace" in r1[0].text
+        # 用户拒绝同步 → dismiss
+        r_d = _call(spec_reader, "sync_workspace", {"action": "dismiss"})
+        d = json.loads(r_d[0].text)
+        assert d["ok"] is True and d["action"] == "dismiss"
+        # dismiss 后：read_spec 不再含远程状态提示
+        r2 = _call(spec_reader, "read_spec", {"path": "AGENTS.md"})
+        assert "[远程状态]" not in r2[0].text
+        reset_sync_dismissed()
+
+    def test_sync_unknown_action_rejected(self, workspace):
+        """未知 action → 明确报错并列出合法值。"""
+        from specstd.workspace import reset_sync_dismissed
+        reset_sync_dismissed()
+        r = _call(spec_reader, "sync_workspace", {"action": "bogus"})
+        assert "sync" in r[0].text and "dismiss" in r[0].text
+        reset_sync_dismissed()

@@ -285,8 +285,8 @@ def import_preview(delta_code: str) -> dict:
     """导入预览：展示 delta 中的文件清单 + 格式校验 + unit/scenario 分类
 
     返回：
-      files: [{path, module, type: unit/scenario, valid, errors, frs}]
-      summary: {total, unit_count, scenario_count, valid_count, error_count}
+      files: [{path, module, valid, errors, frs}]
+      summary: {total, valid_count, error_count}
       frs: 全部 FR ID
       proposal: {name, description}
     """
@@ -359,9 +359,7 @@ def import_preview(delta_code: str) -> dict:
             matched_scenarios.append({"id": sc["id"], "title": sc["title"], "covers": sorted(covers & all_frs)})
             unmatched_frs -= covers
 
-    # 分类统计
-    unit_files = [f for f in files if f.get("test_type") == "unit"]
-    scenario_files = [f for f in files if f.get("test_type") != "unit"]
+    # 统计
     valid_count = sum(1 for f in files if f.get("valid", True))
     error_count = sum(1 for f in files if not f.get("valid", True))
 
@@ -375,8 +373,6 @@ def import_preview(delta_code: str) -> dict:
         "unmatched_frs": sorted(unmatched_frs),
         "summary": {
             "total_files": len(files),
-            "unit_count": len(unit_files),
-            "scenario_count": len(scenario_files),
             "valid_count": valid_count,
             "error_count": error_count,
             "total_frs": len(all_frs),
@@ -394,7 +390,7 @@ def _preview_file(path: Path, module: str, delta_dir: Path) -> dict:
     try:
         text = path.read_text(encoding="utf-8")
     except Exception as e:
-        return {"path": rel, "module": module, "test_type": "scenario", "valid": False,
+        return {"path": rel, "module": module, "valid": False,
                 "errors": [f"读取失败: {e}"], "frs": []}
 
     # 提取 FR
@@ -409,14 +405,9 @@ def _preview_file(path: Path, module: str, delta_dir: Path) -> dict:
     if "基线文件" not in text and "关联基线" not in text:
         errors.append("缺「基线文件」或「关联基线」头部声明")
 
-    # 推断类型：有 VERIFY/验证步骤 → scenario；纯 FR 定义 → unit
-    has_verify = bool(re.search(r"验证|verify|VERIFY", text))
-    test_type = "scenario" if has_verify else "unit"
-
     return {
         "path": rel,
         "module": module,
-        "test_type": test_type,
         "valid": len(errors) == 0,
         "errors": errors,
         "frs": frs,
@@ -433,11 +424,10 @@ def _preview_test_case(path: Path, delta_dir: Path) -> dict:
         with open(path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
     except yaml.YAMLError as e:
-        return {"path": rel, "module": "", "test_type": "scenario", "valid": False,
+        return {"path": rel, "module": "", "valid": False,
                 "errors": [f"YAML 解析失败: {e}"], "frs": []}
 
     sid = raw.get("id", path.stem)
-    test_type = raw.get("test_type", "scenario")
     flow = raw.get("flow") or []
     verify = raw.get("verify") or []
     deps = raw.get("depends_on") or []
@@ -445,14 +435,13 @@ def _preview_test_case(path: Path, delta_dir: Path) -> dict:
 
     if not flow and not verify:
         errors.append("flow/verify 均为空")
-    if test_type == "scenario" and not deps and "prep" not in (raw.get("tags") or []):
-        errors.append("scenario 类型无 depends_on（疑似孤立场景）")
+    if not deps and "prep" not in (raw.get("tags") or []):
+        errors.append("无 depends_on（疑似孤立场景）")
 
     return {
         "path": rel,
         "module": "",
         "id": sid,
-        "test_type": test_type,
         "valid": len(errors) == 0,
         "errors": errors,
         "frs": covers,
@@ -502,7 +491,6 @@ def import_confirm(delta_code: str, selected_files: list[str]) -> dict:
             "path": f["path"],
             "copy": str(dst.relative_to(get_workspace_root())),
             "module": f.get("module", ""),
-            "test_type": f.get("test_type", "scenario"),
             "frs": f.get("frs", []),
         })
 

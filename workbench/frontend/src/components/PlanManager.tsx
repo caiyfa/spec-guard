@@ -201,8 +201,6 @@ export default function PlanManager({ selectedPlan, onSelect, onPlansChange }: P
                     <div className="text-[11px] text-gray-500 mt-1">{preview.proposal.description}</div>
                     <div className="flex gap-4 mt-2 text-[11px] text-gray-400">
                       <span>📄 {preview.summary.total_files} 文件</span>
-                      <span>🧪 unit {preview.summary.unit_count}</span>
-                      <span>🔗 scenario {preview.summary.scenario_count}</span>
                       <span>✅ valid {preview.summary.valid_count}</span>
                       {preview.summary.error_count > 0 && <span className="text-fail">❌ error {preview.summary.error_count}</span>}
                     </div>
@@ -220,9 +218,6 @@ export default function PlanManager({ selectedPlan, onSelect, onPlansChange }: P
                         }`}>
                         <input type="checkbox" checked={selectedFiles.has(f.path)}
                           onChange={() => toggleFile(f.path)} disabled={!f.valid} />
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                          f.test_type === 'unit' ? 'bg-pass/10 text-pass' : 'bg-info/10 text-info'
-                        }`}>{f.test_type}</span>
                         <span className="text-xs text-gray-300 flex-1 truncate">{f.path}</span>
                         <span className="text-[10px] text-gray-500">{f.frs.length} FR</span>
                         {!f.valid && <span className="text-[10px] text-fail">{f.errors.join('; ')}</span>}

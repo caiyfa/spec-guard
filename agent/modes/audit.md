@@ -29,7 +29,7 @@ description: Spec 审计模式——发现 spec/接口漏洞并登记反馈
 |------|---------|------|---------|
 | V1 逻辑缺陷 | logic_defect | spec 文档自身的逻辑缺陷（FR/AC 描述模糊、自相矛盾、边界条件缺失） | 审读 spec |
 | V2 Spec 与实现不一致 | spec_impl_mismatch | spec 与实际接口行为不一致 | 调真实接口对比 spec |
-| V3 信息缺失 | missing_info | 生成单元测试时发现 spec 缺少必要信息（字段缺失、枚举值未定义、依赖未说明） | 生成时发现 |
+| V3 信息缺失 | missing_info | 生成测试场景时发现 spec 缺少必要信息（字段缺失、枚举值未定义、依赖未说明） | 生成时发现 |
 | V4 行为偏差 | behavior_deviation | 测试运行后发现的接口行为偏差 | 从运行报告分析 |
 
 ## 漏洞分级

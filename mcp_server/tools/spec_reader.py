@@ -17,7 +17,10 @@ from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
-from specstd.workspace import safe_resolve, get_active_workspace
+from specstd.workspace import (
+    safe_resolve, get_active_workspace,
+    is_sync_dismissed, mark_sync_dismissed, pull,
+)
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -68,6 +71,24 @@ TOOLS = [
             }
         }
     ),
+    Tool(
+        name="sync_workspace",
+        description="同步当前工作区（git pull）或本次会话不再提醒远端更新。"
+                    "当 read_spec 返回「[远程状态] 远端有更新」决策提示时，征询用户后调用："
+                    "用户同意同步→action=sync（拉取远端更新，同步成功后重新 read_spec 获取最新内容）；"
+                    "用户拒绝同步→action=dismiss（本次会话不再提醒该工作区远端更新）。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["sync", "dismiss"],
+                    "description": "sync=拉取远端更新（git pull）；dismiss=本次会话不再提醒远端更新",
+                }
+            },
+            "required": ["action"],
+        }
+    ),
 ]
 
 
@@ -76,6 +97,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_read_spec(arguments)
     elif name == "list_spec_files":
         return _handle_list_spec_files(arguments)
+    elif name == "sync_workspace":
+        return _handle_sync_workspace(arguments)
     return []
 
 
@@ -179,7 +202,11 @@ def _read_with_remote_status(resolved: Path, display_path: str) -> list[TextCont
 
     Agent 使用工作区文档前先判断远程仓库中该文件是否存在/是否有更新——
     非 git 工作区 / 远程不可达时静默无标记，不阻塞读取。
+    用户已拒绝同步（sync_workspace action=dismiss）时，本次会话不再注入提示。
     """
+    # 用户已拒绝同步 → 本次会话静默，不再提醒（避免反复打断）
+    if is_sync_dismissed():
+        return _read_text_guarded(resolved, display_path)
     from specstd.workspace import remote_file_marks
     try:
         mark = remote_file_marks([display_path]).get(display_path, "")
@@ -187,14 +214,46 @@ def _read_with_remote_status(resolved: Path, display_path: str) -> list[TextCont
         mark = ""
     note = ""
     if mark == "[远程已更新]":
-        note = ("[远程状态] 远程仓库中该文件有更新版本，本地内容可能过时——"
-                "如需基于最新内容工作，请先同步工作区。\n\n")
+        note = (
+            "[远程状态] 远程仓库中该文件有更新版本，本地内容可能过时。\n"
+            "请征询用户是否同步工作区：\n"
+            '- 用户同意 → 调用 sync_workspace(action="sync")，'
+            "同步成功后重新 read_spec 获取最新内容；\n"
+            '- 用户拒绝 → 调用 sync_workspace(action="dismiss")，'
+            "本次会话不再提醒。\n\n"
+            "（下方为本地当前内容，供用户拒绝同步时直接使用。）\n\n"
+        )
     elif mark == "[远程不存在]":
         note = "[远程状态] 远程仓库中不存在该文件（本地新增未推送，或远程已删除该文件）。\n\n"
     result = _read_text_guarded(resolved, display_path)
     if note and result:
         result = [TextContent(type="text", text=note + result[0].text)]
     return result
+
+
+def _handle_sync_workspace(arguments: dict) -> list[TextContent]:
+    """同步工作区（git pull）或标记本次会话不再提醒远端更新。
+
+    与 read_spec 的 [远程状态] 提示闭环：发现远端有更新时，Agent 征询用户，
+    按用户选择调用本工具——sync 拉取远端更新，dismiss 静默后续提示。
+    """
+    action = arguments.get("action", "")
+    if action == "dismiss":
+        marked = mark_sync_dismissed()
+        if not marked:
+            return [TextContent(type="text", text="错误：无激活的工作区，无法标记")]
+        return [TextContent(type="text", text=json.dumps({
+            "ok": True, "action": "dismiss", "workspace": marked,
+            "message": f"本次会话不再提醒 {marked} 工作区的远端更新提示",
+        }, ensure_ascii=False))]
+    if action == "sync":
+        ws = get_active_workspace()
+        if not ws:
+            return [TextContent(type="text", text="错误：无激活的工作区")]
+        result = pull(ws.name)
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+    return [TextContent(type="text",
+        text=f"错误：未知 action: {action}（合法值: sync / dismiss）")]
 
 
 def _handle_read_spec(arguments: dict) -> list[TextContent]:

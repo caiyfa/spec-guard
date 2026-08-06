@@ -131,12 +131,6 @@ def validate_scenario_content(content: str) -> dict:
         findings.append({"level": "ERROR", "rule": "T1", "scenario": sid,
                          "message": "flow/verify 均为空，场景不可执行"})
 
-    # T2: 类型声明
-    test_type = raw.get("test_type", "scenario")
-    if test_type not in ("unit", "scenario"):
-        findings.append({"level": "WARN", "rule": "T2", "scenario": sid,
-                         "message": f"test_type='{test_type}' 非法（应为 unit/scenario）"})
-
     # T6: 契约指纹
     try:
         from engine.versioning import fingerprint_from_raw, check_t6, load_baseline
@@ -226,11 +220,11 @@ def validate_scenario_content(content: str) -> dict:
                                             f"跨场景变量 {{{{{up}.*}}}} 运行期会「变量未定义」。"
                                             f"请在 depends_on 声明该依赖，或在 requires.upstream 移除"})
 
-    # T5 无孤例（scenario 类型无依赖且非 prep 标签 → 疑似孤立场景）
+    # T5 无孤例（无 depends_on 且非 prep 标签 → 疑似孤立场景）
     tags = raw.get("tags") or []
-    if test_type == "scenario" and not deps and "prep" not in tags:
+    if not deps and "prep" not in tags:
         findings.append({"level": "WARN", "rule": "T5", "scenario": sid,
-                         "message": "scenario 类型无 depends_on 且非 prep 标签——疑似孤立场景。"
+                         "message": "无 depends_on 且非 prep 标签——疑似孤立场景。"
                                     "自包含场景（flow 自建数据）可忽略；否则建议声明依赖或标记 prep"})
 
     # 注册表引用校验（tool 名称）

@@ -4,9 +4,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { authApi, session } from '../api';
+import { useBg } from '../theme';
 
 export default function Login() {
   const navigate = useNavigate();
+  const bg = useBg();  // K-044：已保存背景图时根容器透明，让 body 背景图层透出
   const [mode, setMode] = useState<'uac' | 'mock' | ''>('');
   const [uacBase, setUacBase] = useState('');
   const [empNo, setEmpNo] = useState('');
@@ -72,7 +74,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-1 relative overflow-hidden">
+    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${bg.image ? '' : 'bg-surface-1'}`}>
       {/* K-043：氛围光晕背景（主题色渐变，深主题可见/浅主题淡雅） */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background: `radial-gradient(600px 400px at 20% 15%, rgb(var(--info) / 0.12), transparent 60%),

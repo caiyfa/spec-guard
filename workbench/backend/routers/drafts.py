@@ -152,6 +152,7 @@ def list_drafts():
                 "author": meta_entry.get("author", ""),
                 "source_meta": source_meta,
                 "stale": _stale_of(source_meta),
+                "source_files": meta_entry.get("source_files", []),
             })
     return {"drafts": drafts}
 
@@ -181,11 +182,20 @@ def suggest_draft_deps():
 
 @router.get("/{filename}")
 def read_draft(filename: str):
-    """读取单个草稿内容。"""
+    """读取单个草稿内容（含解析出的场景 ID 与依赖关系）。"""
     path = _guard_filename(filename)
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
-    return {"filename": filename, "content": path.read_text(encoding="utf-8")}
+    content = path.read_text(encoding="utf-8")
+    depends_on = []
+    try:
+        raw = yaml.safe_load(content) or {}
+        deps = raw.get("depends_on", [])
+        if deps:
+            depends_on = [d["id"] if isinstance(d, dict) else str(d) for d in deps]
+    except Exception:
+        pass
+    return {"filename": filename, "content": content, "depends_on": depends_on}
 
 
 # ══════════════════════════════════════════════════════════

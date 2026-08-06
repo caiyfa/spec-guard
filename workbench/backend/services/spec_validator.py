@@ -131,10 +131,8 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
 
     检查项：
     T1 格式基本：YAML 可解析，有 id/flow 或 verify
-    T2 类型声明：test_type 必须为 unit/scenario（缺省推断为 scenario）
-    T3 产出声明：unit 类型必须有 output 或 save 声明
-    T4 连通性：scenario 类型的 depends_on 必须能解析到已存在的场景
-    T5 无孤例：scenario 类型若无 depends_on 且非 prep 标签，告警（疑似孤立场景）
+    T4 连通性：depends_on 必须能解析到已存在的场景
+    T5 无孤例：无 depends_on 且非 prep 标签，告警（疑似孤立场景）
     """
     root = scenarios_root or str(SG_ROOT / "scenarios")
     if not os.path.isdir(root):
@@ -177,27 +175,6 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
             findings.append({"level": "ERROR", "vid": "T1", "scenario": sid,
                              "message": "flow/verify 均为空，场景不可执行"})
 
-        # T2 类型声明
-        test_type = raw.get("test_type", "scenario")
-        if test_type not in ("unit", "scenario"):
-            findings.append({"level": "WARN", "vid": "T2", "scenario": sid,
-                             "message": f"test_type='{test_type}' 非法（应为 unit/scenario），按 scenario 处理"})
-            test_type = "scenario"
-
-        # T3 产出声明（unit 类型）
-        if test_type == "unit":
-            has_output = raw.get("output") or raw.get("produces")
-            has_save = any(
-                isinstance(step, dict) and any(
-                    isinstance(body, dict) and body.get("save")
-                    for body in step.values()
-                )
-                for step in flow
-            )
-            if not has_output and not has_save:
-                findings.append({"level": "WARN", "vid": "T3", "scenario": sid,
-                                 "message": "unit 类型无 output/produces 声明，也无 save 变量——下游无法引用产出"})
-
         # T4 连通性：depends_on 引用必须存在
         deps = raw.get("depends_on") or []
         for d in deps:
@@ -215,11 +192,11 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
                 findings.append({"level": "WARN", "vid": "T7", "scenario": sid,
                                  "message": f"依赖 {d['id']} 未声明版本期望（接受任意版本），建议补 version: ^X"})
 
-        # T5 无孤例（scenario 类型无依赖且非 prep 标签）
+        # T5 无孤例（无依赖且非 prep 标签）
         tags = raw.get("tags") or []
-        if test_type == "scenario" and not deps and "prep" not in tags:
+        if not deps and "prep" not in tags:
             findings.append({"level": "WARN", "vid": "T5", "scenario": sid,
-                             "message": "scenario 类型无 depends_on 且非 prep 标签——疑似孤立场景，建议声明依赖或标记 prep"})
+                             "message": "无 depends_on 且非 prep 标签——疑似孤立场景，建议声明依赖或标记 prep"})
 
     # T6 契约指纹与版本一致性（契约变更必须 bump version）
     baseline = load_baseline(str(SG_ROOT))

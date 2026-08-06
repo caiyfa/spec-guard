@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.3.0"
-SPEC_UPDATED = "2026-08-02"
+SPEC_VERSION = "2.4.0"
+SPEC_UPDATED = "2026-08-05"
 SPEC_CHANGELOG = [
+    ("2.4.0", "2026-08-05", "归一化场景类型：废弃 test_type 字段（unit/scenario 二分抹除，统一为场景），删除 T2/T3 校验，T5 孤例规则改通用（无 depends_on 且非 prep 标签 → 疑似孤例）"),
     ("2.3.0", "2026-08-02", "新增 2.6 requires 执行依赖声明（accounts/env/upstream）与 T8 校验——执行前预检扫描器静态读取，弹窗前预警缺失账号/环境键；requires 不进契约指纹"),
     ("2.2.0", "2026-08-01", "K-055 微服务体系适配：call 新增 service 服务前缀路由；db_query 新增 schema 多库连接；新增 resolve_account/precheck_permission 工具；internal token 服务凭证"),
     ("2.1.0", "2026-07-24", "call 升级 Apifox 参数体系（headers/cookies/body_type: json/form/urlencoded/raw/binary）；新增 python 原语（flow/verify/teardown 三段可用）"),
@@ -111,7 +112,6 @@ scenarios/{模块}/{功能}/{场景ID}.yaml
 id: PP-RC-005
 version: 0.1
 title: 切片模式查询历史盘点快照（快照冻结 + 结果时点过滤）
-test_type: scenario
 priority: P0
 tags: [snapshot]
 depends_on:
@@ -147,13 +147,12 @@ teardown:
       json: {sessionId: "{{resp.json.data.sessionId}}"}
 ```
 
-### 1.4 完整示例（单元测试 — 数据准备型）
+### 1.4 完整示例（数据准备型场景）
 
 ```yaml
 id: IS-PREP-001
 version: 0.1
 title: 创建盘点会话（Step1 数据准备）
-test_type: unit
 priority: P1
 tags: [prep]
 produces:
@@ -533,7 +532,7 @@ flow 参数插值支持数组下标：`{{resp.json.data.records[0].id}}`、`{{ro
 | `SNAP` | Snapshot | 快照相关场景 |
 | `PERM` | Permission | 权限过滤场景 |
 | `SEC` | Security | 安全 fail-secure 场景 |
-| `PREP` | Preparation | 数据准备场景（unit 类型） |
+| `PREP` | Preparation | 数据准备场景 |
 
 ### 4.3 序号分配
 
@@ -551,10 +550,8 @@ GET /api/reference/next-id?prefix=PP&type=RC
 | 规则 | 级别 | 说明 |
 |------|------|------|
 | T1 | ERROR | YAML 可解析，有 id + flow/verify（不可为空） |
-| T2 | WARN | test_type 必须为 unit/scenario（缺省为 scenario） |
-| T3 | WARN | unit 类型必须有 output/produces 或 save 声明 |
 | T4 | ERROR | depends_on 引用必须指向已存在的场景 ID |
-| T5 | WARN | scenario 类型无 depends_on 且非 prep 标签 → 疑似孤例 |
+| T5 | WARN | 无 depends_on 且非 prep 标签 → 疑似孤例 |
 | T6 | ERROR | 契约指纹已变更但 version 未 bump（比对 contracts_baseline.json） |
 | T7 | WARN | 依赖未声明版本期望（接受任意版本），建议补 version: ^X |
 

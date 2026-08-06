@@ -31,9 +31,9 @@ TOOLS = [
     Tool(
         name="list_scenarios",
         description=("列出 SpecGuard 仓库的全部场景，返回 {total, summary, scenarios}："
-                     "summary 含按模块（by_module）/类型（by_type：scenario|unit）/标签（by_tag）"
-                     "的分类计数——生成新场景前先看 summary 定位同模块同类参照；"
-                     "scenarios 为完整清单（id/title/tags/module/test_type/path）"),
+                     "summary 含按模块（by_module）/标签（by_tag）的分类计数——"
+                     "生成新场景前先看 summary 定位同模块同类参照；"
+                     "scenarios 为完整清单（id/title/tags/module/path）"),
         inputSchema={"type": "object", "properties": {}}
     ),
     Tool(
@@ -187,25 +187,21 @@ def _handle_list_scenarios(arguments: dict) -> list[TextContent]:
             "title": raw.get("title", ""),
             "tags": raw.get("tags", []),
             "module": mod,
-            "test_type": raw.get("test_type", "scenario"),
             "path": rel,
         })
 
     # K-xxx：确定性分类摘要——Agent 一次拿到全库分类图景（生成前定位同模块同类参照）
     by_module: dict[str, int] = {}
-    by_type: dict[str, int] = {}
     by_tag: dict[str, int] = {}
     for s in scenarios:
         m = s["module"] or "(未归类)"
         by_module[m] = by_module.get(m, 0) + 1
-        t = s["test_type"] or "scenario"
-        by_type[t] = by_type.get(t, 0) + 1
         for tag in s["tags"]:
             by_tag[tag] = by_tag.get(tag, 0) + 1
 
     result = {
         "total": len(scenarios),
-        "summary": {"by_module": by_module, "by_type": by_type, "by_tag": by_tag},
+        "summary": {"by_module": by_module, "by_tag": by_tag},
         "scenarios": scenarios,
     }
     # K-xxx：扫描结果落台账（自愈）——MCP 侧扫描后场景映射即为最新，

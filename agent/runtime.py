@@ -175,8 +175,8 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
                 sync_note = (
                     f"⚠ 工作区同步状态：远程仓库（{ws.name}@{ws.branch}）有新提交"
                     f"（本地 HEAD {sync.get('local_head') or '?'}，远程 {sync.get('remote_head') or '?'}），"
-                    f"你读到的文件可能不是最新版。如用户要求基于最新内容工作，"
-                    f"请先提示用户在工作区中心「同步」，同步后再读取。")
+                    f"你读到的文件可能不是最新版。read_spec 读到具体文件时若检测到远端更新，"
+                    f"会给出征询用户的决策提示——按提示用 sync_workspace 工具处理即可。")
             elif sync.get("remote_known"):
                 sync_note = f"工作区同步状态：{ws.name} 与远程同步（HEAD {sync.get('local_head') or '?'}）。"
             else:
@@ -207,6 +207,8 @@ class AgentRuntime:
 
         # H-4: 待办状态
         self._todos: list[dict] = []
+        # A+B: 文件依赖记录（本轮对话 read_spec/read_info_pack 读取的文件）
+        self._read_files: set[str] = set()
         # 会话引用（供 meta 工具持久化用）
         self._session: Optional[SessionManager] = None
         self._session_id: Optional[str] = None
@@ -261,6 +263,9 @@ class AgentRuntime:
                 self.events.emit("state", resumed=True, session_id=session_id)
 
         openai_tools = self._to_openai_tools()
+
+        # 重置本轮文件依赖记录
+        self._read_files = set()
 
         # K-019：LLM 工作副本——压缩只作用于它；messages 保留完整历史用于持久化与展示。
         # 此前直接压缩 messages 并全量落盘，会话文件被压缩态覆盖，
@@ -385,6 +390,19 @@ class AgentRuntime:
             # 附可用清单让 LLM 自我纠正（K-012 遗留自愈路径保留）
             available = "、".join(sorted(set(self._tool_map) | set(META_TOOLS)))
             return f"未知工具: {name}。当前可用工具: {available}"
+
+        # A+B：记录文件依赖（read_spec/read_info_pack 的 path → write_draft 时落盘）
+        if name == "read_spec":
+            path = arguments.get("path", "")
+            if path:
+                self._read_files.add(path)
+        elif name == "read_info_pack":
+            sid = arguments.get("scenario_id", "")
+            if sid:
+                self._read_files.add(f"info_pack:{sid}")
+        elif name == "write_draft" and self._read_files:
+            from mcp_server.tools.draft_writer import set_pending_source_files
+            set_pending_source_files(sorted(self._read_files))
 
         try:
             result = asyncio.run(mod.handle(name, arguments))
