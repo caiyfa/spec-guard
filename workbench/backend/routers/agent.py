@@ -488,18 +488,20 @@ async def agent_ws(websocket: WebSocket,
 
             await websocket.send_json({"type": "state", "status": "started", "session_id": sid})
 
-            # K-023 去模式化：统一 system prompt（全量工具 + 全量指引）
-            scenario_context = _build_scenario_context(scenario_id)
-            system_prompt = build_system_prompt(scenario_context=scenario_context)
-            runtime = AgentRuntime(llm, max_turns=max_turns)
-
-            # K-013: @引用处理（info_pack 关联场景 / file+draft 内容注入 user message）
+            # K-013: @引用处理（先处理，避免后续 system prompt 重建）
             scenario_id, ref_block, structured_refs = _process_references(references, scenario_id)
-            if ref_block or structured_refs:
-                # info_pack 关联可能改变了 scenario_id → 重建场景上下文与 system prompt
-                if scenario_id != data.get("scenario_id", ""):
-                    scenario_context = _build_scenario_context(scenario_id)
-                    system_prompt = build_system_prompt(scenario_context=scenario_context)
+
+            # 首字响应优化：发送 preparing 状态让前端即时反馈；
+            # system prompt 构建移入子线程——不阻塞事件循环
+            # （check_remote_sync 已非阻塞化，本地 IO 为毫秒级）
+            await websocket.send_json({"type": "state", "status": "preparing"})
+
+            def _build_prompt(sid_val: str) -> str:
+                ctx = _build_scenario_context(sid_val)
+                return build_system_prompt(scenario_context=ctx)
+
+            system_prompt = await asyncio.to_thread(_build_prompt, scenario_id)
+            runtime = AgentRuntime(llm, max_turns=max_turns)
             ws_message = f"{ref_block}{message}" if ref_block else message
 
             # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）
@@ -515,35 +517,50 @@ async def agent_ws(websocket: WebSocket,
             )
             _ACTIVE_RUNS[sid] = run_task  # K-015: 登记活跃 run（并发防护）
             try:
+                heartbeat_tick = 0
                 while True:
                     if run_task.done() and queue.empty():
                         break
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=0.2)
                         await websocket.send_json(event)
+                        heartbeat_tick = 0  # 有事件输出，重置心跳
                     except asyncio.TimeoutError:
+                        heartbeat_tick += 1
+                        if heartbeat_tick >= 50:  # 10 秒无事件（0.2s × 50）
+                            # TCP 半开连接防护：定期 heartbeat 保持代理/NAT 不超时断连，
+                            # 同时让前端知道后端仍活着；send_json 若失败说明连接已断，异常上抛退出循环
+                            await websocket.send_json({"type": "heartbeat"})
+                            heartbeat_tick = 0
                         continue
                 messages = await run_task  # 运行异常在此抛出，进外层 except
             finally:
                 _ACTIVE_RUNS.pop(sid, None)
 
-            # G4: 新会话首条回复后用 LLM 生成标题
-            session_title = ""
-            if is_new_session and messages:
-                try:
-                    session_title = _generate_session_title(llm, messages)
-                    sm.update_title(sid, session_title)
-                except Exception:
-                    pass
-
-            # 推送完成
+            # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送
             await websocket.send_json({
                 "type": "done",
                 "session_id": sid,
                 "messages": messages,
                 "stats": llm.get_stats(),
-                "title": session_title,
+                "title": "",
             })
+
+            # G4: 新会话标题异步生成（不阻塞 done 事件）
+            if is_new_session and messages:
+                async def _gen_title():
+                    try:
+                        title = await asyncio.to_thread(_generate_session_title, llm, messages)
+                        if title:
+                            sm.update_title(sid, title)
+                            await websocket.send_json({
+                                "type": "title_update",
+                                "session_id": sid,
+                                "title": title,
+                            })
+                    except Exception:
+                        pass
+                asyncio.create_task(_gen_title())
 
     except WebSocketDisconnect:
         pass

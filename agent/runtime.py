@@ -166,12 +166,18 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
 
     # 工作区同步状态（远程新鲜度提示——远程有新提交时读到的文件可能过时，
     # 覆盖 AGENTS.md 规则与文档的过期风险；ls-remote 经 60s TTL 缓存控频）
+    # 非阻塞：首次/缓存过期时用默认提示 + 后台异步刷新，不阻塞 system prompt 构建
     try:
-        from specstd.workspace import check_remote_sync, get_active_workspace
+        from specstd.workspace import get_cached_remote_sync, refresh_remote_sync_async, get_active_workspace
         ws = get_active_workspace()
         if ws:
-            sync = check_remote_sync()
-            if sync.get("remote_known") and not sync.get("synced"):
+            sync = get_cached_remote_sync()
+            if sync is None:
+                # 缓存未命中——用默认提示，后台异步刷新（下次即命中）
+                sync_note = (f"工作区同步状态：{ws.name} 远程状态检查中，"
+                             f"首次响应后自动更新。")
+                refresh_remote_sync_async()
+            elif sync.get("remote_known") and not sync.get("synced"):
                 sync_note = (
                     f"⚠ 工作区同步状态：远程仓库（{ws.name}@{ws.branch}）有新提交"
                     f"（本地 HEAD {sync.get('local_head') or '?'}，远程 {sync.get('remote_head') or '?'}），"

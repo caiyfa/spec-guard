@@ -784,6 +784,43 @@ def check_remote_sync(name: Optional[str] = None, force: bool = False) -> dict:
                 "remote_head", "local_head", "synced", "fetched")}
 
 
+def get_cached_remote_sync(name: Optional[str] = None) -> Optional[dict]:
+    """非阻塞读取远程同步缓存——不执行 git，缓存未命中返回 None。
+
+    用于 system prompt 构建等对延迟敏感的路径：首次或缓存过期时返回 None，
+    调用方应使用默认提示并通过 refresh_remote_sync_async() 后台刷新。
+    """
+    info, _ = _resolve_git_workspace(name)
+    if info is None:
+        return None
+    now = time.time()
+    with _remote_lock:
+        cached = _remote_cache.get(info.name)
+        if cached and now - cached["ts"] < _REMOTE_TTL:
+            return {k: cached[k] for k in ("git", "remote_known", "remote_head",
+                                           "local_head", "synced", "fetched")}
+    return None
+
+
+def refresh_remote_sync_async(name: Optional[str] = None):
+    """后台异步刷新远程同步缓存（不阻塞调用方）。
+
+    在 daemon 线程中执行 check_remote_sync(force=True)，结果写入 _remote_cache，
+    下次 get_cached_remote_sync() 即可命中。
+    """
+    info, _ = _resolve_git_workspace(name)
+    if info is None:
+        return
+
+    def _do_refresh():
+        try:
+            check_remote_sync(info.name, force=True)
+        except Exception:
+            pass
+
+    threading.Thread(target=_do_refresh, daemon=True).start()
+
+
 def remote_file_marks(paths: list, name: Optional[str] = None) -> dict:
     """检查工作区文件相对远程仓库的状态，返回 {path: 标记}。
 

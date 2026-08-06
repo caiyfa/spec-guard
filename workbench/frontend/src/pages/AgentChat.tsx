@@ -6,6 +6,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { useSearchParams, useNavigate } from 'react-router';
+import { ReactFlow, Background, type Node, type Edge } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import ScenarioNode from '../components/ScenarioNode';
+import { layoutDagByELK } from '../utils/elkLayout';
+import { useJsTokens } from '../theme';
 import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi } from '../api';
 import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData } from '../api';
 import SessionTree from '../components/SessionTree';
@@ -1019,16 +1024,31 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   );
 }
 
-// ── 会话依赖图面板（K-xxx：Agent 对话内直接看依赖——草稿 + 直接上下游闭包） ──
+// ── 会话依赖图面板（K-xxx：Agent 对话内直接看依赖——草稿 + 直接上下游闭包的图形化视图） ──
+const nodeTypes = { scenario: ScenarioNode };
+
+/** 边状态配色（与 DagEditor 一致：match 低调灰 / minor 蓝 / major 琥珀 / orphan 红虚线） */
+const EDGE_STATUS_STYLE: Record<string, { stroke: string; dash?: string }> = {
+  match: { stroke: '' },
+  minor_drift: { stroke: '#58a6ff' },
+  major_drift: { stroke: '#d29922' },
+  orphan: { stroke: '#f85149', dash: '6 4' },
+};
+
 function DepGraphPanel({ draftFiles, onError }: {
   draftFiles: string[];
   onError: (msg: string) => void;
 }) {
   const navigate = useNavigate();
+  const tokens = useJsTokens();
   const [dag, setDag] = useState<DagData | null>(null);
   const [draftMeta, setDraftMeta] = useState<Record<string, DraftItem>>({});
+  const [draftNodes, setDraftNodes] = useState<{ id: string; data: Record<string, unknown> }[]>([]);
+  const [draftEdges, setDraftEdges] = useState<{ source: string; target: string; label?: string; status?: string }[]>([]);
   const [cycles, setCycles] = useState<string[][]>([]);
   const [loading, setLoading] = useState(true);
+  const [rfNodes, setRfNodes] = useState<Node[]>([]);
+  const [rfEdges, setRfEdges] = useState<Edge[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -1043,6 +1063,21 @@ function DepGraphPanel({ draftFiles, onError }: {
         for (const x of dl.drafts || []) m[x.filename] = x;
         setDraftMeta(m);
         setCycles(drift.cycles || []);
+        // 会话相关草稿 → 独立节点 + 解析 depends_on 构建草稿边（草稿未入库，不在场景库 DAG 中）
+        const nodes: { id: string; data: Record<string, unknown> }[] = [];
+        const edges: { source: string; target: string; label?: string; status?: string }[] = [];
+        for (const f of draftFiles) {
+          const meta = m[f];
+          const sid = meta?.scenario_id || f.replace(/\.ya?ml$/i, '');
+          nodes.push({ id: sid, data: { title: meta?.title || '', draft: true } });
+          try {
+            const r = await draftsApi.read(f);
+            for (const dep of r.depends_on || []) {
+              edges.push({ source: dep, target: sid, label: '', status: 'match' });
+            }
+          } catch { /* 草稿已入库/废弃读不到时跳过，节点仍保留 */ }
+        }
+        if (alive) { setDraftNodes(nodes); setDraftEdges(edges); }
       } catch (e: any) {
         if (alive) onError(`依赖图加载失败: ${e.message || ''}`);
       } finally {
@@ -1055,7 +1090,7 @@ function DepGraphPanel({ draftFiles, onError }: {
 
   // 会话相关场景 = 草稿 scenario_id ∪ 直接依赖邻居（保持边可见）
   const scope = useMemo(() => {
-    if (!dag) return { seed: new Set<string>(), nodes: [] as { id: string; data: Record<string, unknown> }[], edges: [] as { source: string; target: string; label?: string; status?: string }[] };
+    if (!dag && draftNodes.length === 0) return { seed: new Set<string>(), nodes: [] as { id: string; data: Record<string, unknown> }[], edges: [] as { source: string; target: string; label?: string; status?: string }[] };
     const seed = new Set<string>();
     draftFiles.forEach(f => {
       const meta = draftMeta[f];
@@ -1063,25 +1098,58 @@ function DepGraphPanel({ draftFiles, onError }: {
       else seed.add(f.replace(/\.ya?ml$/i, ''));  // 文件名兜底 = 场景 ID
     });
     const keep = new Set(seed);
-    dag.edges.forEach(e => {
+    const allEdges = [...(dag?.edges || []), ...draftEdges];
+    allEdges.forEach(e => {
       if (seed.has(e.source) || seed.has(e.target)) { keep.add(e.source); keep.add(e.target); }
     });
+    const allNodes = [...(dag?.nodes || []), ...draftNodes];
     return {
       seed,
-      nodes: dag.nodes.filter(n => keep.has(n.id)),
-      edges: dag.edges.filter(e => keep.has(e.source) && keep.has(e.target)),
+      nodes: allNodes.filter(n => keep.has(n.id)),
+      edges: allEdges.filter(e => keep.has(e.source) && keep.has(e.target)),
     };
-  }, [dag, draftMeta, draftFiles]);
+  }, [dag, draftMeta, draftFiles, draftNodes, draftEdges]);
+
+  // ELK 布局 → React Flow 节点/边（会话闭包通常小图，懒加载 elkjs 成本可接受）
+  useEffect(() => {
+    if (scope.nodes.length === 0) { setRfNodes([]); setRfEdges([]); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const pos = await layoutDagByELK(scope.nodes.map(n => ({ id: n.id })), scope.edges as Edge[]);
+        if (!alive) return;
+        setRfNodes(scope.nodes.map(n => ({
+          id: n.id,
+          type: 'scenario',
+          position: { x: pos.get(n.id)?.x ?? 0, y: pos.get(n.id)?.y ?? 0 },
+          data: n.data,
+        })));
+        setRfEdges(scope.edges.map((e, i) => {
+          const st = EDGE_STATUS_STYLE[e.status || 'match'] || EDGE_STATUS_STYLE.match;
+          return {
+            id: `e${i}`,
+            source: e.source,
+            target: e.target,
+            label: e.label || undefined,
+            style: {
+              stroke: st.stroke || tokens.edgeStroke,
+              strokeDasharray: st.dash,
+            },
+          };
+        }));
+      } catch { /* ELK 布局失败：保持空画布，统计行仍可见 */ }
+    })();
+    return () => { alive = false; };
+  }, [scope, tokens]);
 
   const cycleSets = useMemo(() => cycles.map(c => new Set(c)), [cycles]);
-  const inCycle = (id: string) => cycleSets.some(s => s.has(id));
 
   return (
     <div className="px-2 py-2 space-y-2">
       <div className="px-1 text-xs font-medium text-gray-300">🕸 依赖图（会话相关闭包）</div>
       {loading ? (
         <div className="text-[11px] text-gray-600 text-center py-8">加载中…</div>
-      ) : !dag || scope.nodes.length === 0 ? (
+      ) : (!dag && draftNodes.length === 0) || scope.nodes.length === 0 ? (
         <div className="text-[11px] text-gray-600 text-center py-8 leading-relaxed">
           会话还没有草稿 / 场景。<br />Agent 写完草稿后，这里自动显示<br />它与其他测试的依赖关系
         </div>
@@ -1091,57 +1159,27 @@ function DepGraphPanel({ draftFiles, onError }: {
             {scope.nodes.length} 个场景 · {scope.edges.length} 条依赖边
             {cycleSets.length > 0 && <span className="text-fail"> · ⛔ {cycleSets.length} 条环</span>}
           </div>
-          {/* 节点 */}
-          <div className="space-y-1">
-            {scope.nodes.map(n => {
-              const id = n.id;
-              const isDraft = scope.seed.has(id) && draftFiles.some(f => (draftMeta[f]?.scenario_id || f.replace(/\.ya?ml$/i, '')) === id);
-              const up = scope.edges.filter(e => e.target === id).length;
-              const down = scope.edges.filter(e => e.source === id).length;
-              return (
-                <button key={id}
-                  onClick={() => navigate(`/dag?focus=${encodeURIComponent(id)}`)}
-                  title={`${(n.data as { title?: string }).title || ''}\n上游 ${up} · 下游 ${down}\n点击到 DAG 页查看闭包`}
-                  className={`w-full text-left px-2 py-1.5 rounded border text-[11px] transition-colors ${
-                    inCycle(id)
-                      ? 'border-fail/50 bg-fail/10 text-fail'
-                      : isDraft
-                        ? 'border-yellow-700/50 bg-yellow-900/20 text-yellow-300'
-                        : 'border-border bg-surface-2 text-gray-300 hover:bg-surface-3'
-                  }`}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono">{id}</span>
-                    {isDraft && <span className="text-[9px] text-yellow-500">📝 草稿</span>}
-                    {inCycle(id) && <span className="text-[9px] text-fail">⛔ 环</span>}
-                    <span className="ml-auto text-[9px] text-gray-600">↑{up} ↓{down}</span>
-                  </div>
-                  <div className="text-[10px] text-gray-500 truncate">
-                    {(n.data as { title?: string }).title || ''}
-                  </div>
-                </button>
-              );
-            })}
+          {/* 图形化画布（只读：点击节点跳转 DAG 编排） */}
+          <div className="h-72 border border-border rounded-lg overflow-hidden" style={{ background: tokens.rfBackground }}>
+            {rfNodes.length > 0 ? (
+              <ReactFlow
+                nodes={rfNodes}
+                edges={rfEdges}
+                nodeTypes={nodeTypes}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                fitView
+                minZoom={0.2}
+                maxZoom={1.5}
+                proOptions={{ hideAttribution: true }}
+                onNodeClick={(_, n) => navigate(`/dag?focus=${encodeURIComponent(n.id)}`)}
+              >
+                <Background color={tokens.rfBackground} gap={20} />
+              </ReactFlow>
+            ) : (
+              <div className="text-[11px] text-gray-600 text-center py-8">布局中…</div>
+            )}
           </div>
-          {/* 依赖边 */}
-          {scope.edges.length > 0 && (
-            <>
-              <div className="px-1 text-xs font-medium text-gray-300 pt-1">依赖边</div>
-              <div className="space-y-0.5">
-                {scope.edges.map((e, i) => (
-                  <div key={i} className="flex items-center gap-1 text-[10px] font-mono text-gray-500 px-1">
-                    <span className="truncate">{e.source}</span>
-                    <span className="text-gray-700 flex-shrink-0">→</span>
-                    <span className="truncate flex-1">{e.target}</span>
-                    {e.status === 'major_drift' || e.status === 'orphan' ? (
-                      <span className="text-fail flex-shrink-0" title={`版本期望 ${e.label || ''} 未满足`}>⚠️</span>
-                    ) : e.label ? (
-                      <span className="text-gray-600 flex-shrink-0">{e.label}</span>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
           <div className="px-1 pt-1">
             <button onClick={() => navigate('/dag')}
               className="w-full px-2 py-1.5 rounded border border-border text-[11px] text-info hover:border-info/40">
@@ -1431,6 +1469,7 @@ export default function AgentChat() {
   const reconnectAttemptsRef = useRef(0);  // K-018: WS 自动重连退避计数
   const autoSentRef = useRef(false);
   const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
+    const lastEventTimeRef = useRef(Date.now());  // TCP 半开连接防护：最后收到事件的时间
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const currentWorkspace = session.getWorkspace();
 
@@ -1498,6 +1537,8 @@ export default function AgentChat() {
           setSessionId(event.session_id);
           localStorage.setItem('sg_agent_session', event.session_id);  // K-012: 持久化供刷新/重启恢复
           setSessionsVersion(v => v + 1);
+        } else if (event.status === 'preparing') {
+          setTurnInfo('⚙ 正在初始化…');
         } else if (event.fused) {
           setTurnInfo(`⚠️ 熔断 ${event.max_turns}`);
         } else if (typeof event.turn === 'number') {
@@ -1553,6 +1594,15 @@ export default function AgentChat() {
             status: t.status || 'pending',
             mode: t.mode || '',
           })));
+        }
+        break;
+      case 'heartbeat':
+        // 后端心跳——连接正常（lastEventTimeRef 已在 onmessage 中更新）
+        break;
+      case 'title_update':
+        if (event.title) {
+          setSessionTitle(event.title);
+          setSessionsVersion(v => v + 1);
         }
         break;
       case 'error':
@@ -1611,6 +1661,7 @@ export default function AgentChat() {
       ws.onerror = () => { _store.wsState = 'closed'; if (_store.mounted) setWsState('closed'); };
       ws.onmessage = (e) => {
         const event = JSON.parse(e.data);
+        lastEventTimeRef.current = Date.now();  // 任何事件都更新——用于半开连接检测
         if (_store.mounted) {
           wsHandlerRef.current(event);
         } else {
@@ -1670,6 +1721,21 @@ export default function AgentChat() {
       }
     }
   }, [debugRunId, wsState, currentWorkspace, currentModelId]);
+
+  // TCP 半开连接防护：loading 期间定期检测，长时间无事件则判定连接断开并自动重连
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setInterval(() => {
+      const idle = Date.now() - lastEventTimeRef.current;
+      if (idle > 30000) {  // 30 秒无任何事件（3 个心跳周期）——判定连接断开
+        setLoading(false);
+        setStreamingText('');
+        setError('连接已断开，正在自动重连…');
+        setWsReconnect(v => v + 1);
+      }
+    }, 5000);  // 每 5 秒检查
+    return () => clearInterval(timer);
+  }, [loading]);
 
   // 发送消息
   const handleSend = useCallback(() => {
