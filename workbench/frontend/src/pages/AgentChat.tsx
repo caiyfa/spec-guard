@@ -1,7 +1,7 @@
 /** AgentChat — 左侧会话树 + 中间对话区 + 右侧面板（K-012 简洁化：底部仅模式/模型下拉 + 输入框） */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { JSX, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -1069,7 +1069,7 @@ function DepGraphPanel({ draftFiles, onError }: {
         for (const f of draftFiles) {
           const meta = m[f];
           const sid = meta?.scenario_id || f.replace(/\.ya?ml$/i, '');
-          nodes.push({ id: sid, data: { title: meta?.title || '', draft: true } });
+          nodes.push({ id: sid, data: { label: sid, title: meta?.title || '', isDraft: true } });
           try {
             const r = await draftsApi.read(f);
             for (const dep of r.depends_on || []) {
@@ -1102,7 +1102,10 @@ function DepGraphPanel({ draftFiles, onError }: {
     allEdges.forEach(e => {
       if (seed.has(e.source) || seed.has(e.target)) { keep.add(e.source); keep.add(e.target); }
     });
-    const allNodes = [...(dag?.nodes || []), ...draftNodes];
+    const dagNodes = dag?.nodes || [];
+    const dagIds = new Set(dagNodes.map(n => n.id));
+    // 草稿已入库时 DAG 已有同 ID 节点（含完整 label/title/category），不重复追加
+    const allNodes = [...dagNodes, ...draftNodes.filter(n => !dagIds.has(n.id))];
     return {
       seed,
       nodes: allNodes.filter(n => keep.has(n.id)),
@@ -1159,7 +1162,7 @@ function DepGraphPanel({ draftFiles, onError }: {
             {scope.nodes.length} 个场景 · {scope.edges.length} 条依赖边
             {cycleSets.length > 0 && <span className="text-fail"> · ⛔ {cycleSets.length} 条环</span>}
           </div>
-          {/* 图形化画布（只读：点击节点跳转 DAG 编排） */}
+          {/* 图形化画布（只读查看，不跳转 DAG 编排） */}
           <div className="h-72 border border-border rounded-lg overflow-hidden" style={{ background: tokens.rfBackground }}>
             {rfNodes.length > 0 ? (
               <ReactFlow
@@ -1172,7 +1175,6 @@ function DepGraphPanel({ draftFiles, onError }: {
                 minZoom={0.2}
                 maxZoom={1.5}
                 proOptions={{ hideAttribution: true }}
-                onNodeClick={(_, n) => navigate(`/dag?focus=${encodeURIComponent(n.id)}`)}
               >
                 <Background color={tokens.rfBackground} gap={20} />
               </ReactFlow>
@@ -1469,9 +1471,18 @@ export default function AgentChat() {
   const reconnectAttemptsRef = useRef(0);  // K-018: WS 自动重连退避计数
   const autoSentRef = useRef(false);
   const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
-    const lastEventTimeRef = useRef(Date.now());  // TCP 半开连接防护：最后收到事件的时间
+  const lastEventTimeRef = useRef(Date.now());  // TCP 半开连接防护：最后收到事件的时间
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const currentWorkspace = session.getWorkspace();
+
+  // ── 多轮会话导航（置顶栏 + 用户消息定位图标列）──
+  const msgBoxRef = useRef<HTMLDivElement>(null);            // 消息列表滚动容器
+  const [pinnedDismissed, setPinnedDismissed] = useState(false);  // 置顶栏手动收起
+  const [highlightIdx, setHighlightIdx] = useState<number | null>(null);  // 定位高亮的 user 消息 groupIdx
+  const [hoverUserIdx, setHoverUserIdx] = useState<number | null>(null);  // hover 悬浮的 user 消息 groupIdx
+  const [railPos, setRailPos] = useState<{ idx: number; top: number; inView: boolean }[]>([]);  // 图标列位置
+  const highlightTimerRef = useRef<number | null>(null);     // 高亮淡出定时器
+  const lastPinnedRef = useRef('');                          // 上一次置顶的用户消息内容（自动恢复判定）
 
   // H-2: 推导当前页面（从 URL path 提取，供路由上下文使用）
   const currentPage = useMemo(() => {
@@ -2030,6 +2041,23 @@ export default function AgentChat() {
   // 分组消息
   const grouped = useMemo(() => groupMessages(messages), [messages]);
 
+  // ── 多轮会话导航：置顶最近一条用户消息 + 左侧定位图标列 ──
+  const userMsgs = useMemo(() => {
+    const out: { groupIdx: number; content: string }[] = [];
+    grouped.forEach((g, i) => {
+      if (g.type === 'user') out.push({ groupIdx: i, content: stripRefBlock(g.content || '') });
+    });
+    return out;
+  }, [grouped]);
+
+  const lastUserMsg = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return messages[i];
+    }
+    return null;
+  }, [messages]);
+  const pinnedText = lastUserMsg ? stripRefBlock(lastUserMsg.content || '') : '';
+
   // K-013: 聚合会话中全部 @引用（右侧引用面板，按 type+path 去重）
   const allRefs = useMemo(() => {
     const seen = new Set<string>();
@@ -2047,11 +2075,86 @@ export default function AgentChat() {
   const currentModel = models.find(m => m.id === currentModelId);
   const ctxLimit = parseInt(currentModel?.max_context_tokens || '') || DEFAULT_CTX_LIMIT;
 
+  // 图标列比例映射：消息相对容器位置 → 图标 top（px），并标记是否在视口内
+  const computeRail = useCallback(() => {
+    const box = msgBoxRef.current;
+    if (!box || userMsgs.length === 0) { setRailPos([]); return; }
+    const boxTop = box.getBoundingClientRect().top;
+    const h = Math.max(box.clientHeight - 16, 1);
+    const positions = userMsgs.map((u) => {
+      const el = box.querySelector<HTMLElement>(`[data-user-idx="${u.groupIdx}"]`);
+      if (!el) return { idx: u.groupIdx, top: 0, inView: false };
+      const relTop = el.getBoundingClientRect().top - boxTop + box.scrollTop;
+      const top = Math.min(Math.max((relTop / Math.max(box.scrollHeight, 1)) * h, 0), h);
+      const inView = relTop >= box.scrollTop - 4 && relTop <= box.scrollTop + box.clientHeight + 4;
+      return { idx: u.groupIdx, top, inView };
+    });
+    // 最小间距 8px：从后往前贪心保留（保最近），再反转为从上到下
+    const kept: typeof positions = [];
+    for (let i = positions.length - 1; i >= 0; i--) {
+      const prev = kept[kept.length - 1];
+      if (!prev || prev.top - positions[i].top >= 8) kept.push(positions[i]);
+    }
+    kept.reverse();
+    setRailPos(kept);
+  }, [userMsgs]);
+
+  // 图标列：滚动/resize 时重算（rAF 节流）
+  useEffect(() => {
+    const box = msgBoxRef.current;
+    if (!box) return;
+    let raf = 0;
+    const onResizeScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; computeRail(); });
+    };
+    box.addEventListener('scroll', onResizeScroll, { passive: true });
+    window.addEventListener('resize', onResizeScroll);
+    computeRail();
+    return () => {
+      box.removeEventListener('scroll', onResizeScroll);
+      window.removeEventListener('resize', onResizeScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [computeRail]);
+
+  // 点击图标 → 滚动定位 + 1.5s 高亮闪烁后淡出
+  const handleJumpToUser = (groupIdx: number) => {
+    const box = msgBoxRef.current;
+    const el = box?.querySelector<HTMLElement>(`[data-user-idx="${groupIdx}"]`);
+    if (!box || !el) return;
+    const relTop = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    box.scrollTo({ top: Math.max(relTop - 8, 0), behavior: 'smooth' });
+    setHighlightIdx(groupIdx);
+    if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => setHighlightIdx(null), 1500);
+  };
+
+  // 组件卸载清理高亮定时器
+  useEffect(() => () => {
+    if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+  }, []);
+
+  // 置顶栏自动恢复：新用户消息到达时重新展开；会话清空/切换时重置高亮
+  useEffect(() => {
+    const cur = lastUserMsg?.content || '';
+    if (cur && cur !== lastPinnedRef.current) {
+      lastPinnedRef.current = cur;
+      setPinnedDismissed(false);
+    }
+    if (!cur && lastPinnedRef.current) {
+      lastPinnedRef.current = '';
+      setPinnedDismissed(false);
+    }
+    setHighlightIdx(null);
+  }, [lastUserMsg]);
+
   // 渲染分组消息
   const renderGrouped = (item: GroupedItem, idx: number) => {
     if (item.type === 'user') {
       return (
-        <div key={idx} className="mb-2 flex justify-end">
+        <div key={idx} data-user-idx={idx}
+          className={`mb-2 flex justify-end transition-all duration-500 ${highlightIdx === idx ? 'ring-1 ring-info bg-info/10 rounded-lg' : ''}`}>
           <div className="max-w-[80%] rounded-lg rounded-br-sm px-3 py-1.5 text-sm bg-info/10 text-info/90 border border-info/20">
             {item.references && item.references.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1">
@@ -2157,14 +2260,50 @@ export default function AgentChat() {
             </button>
           </div>
 
+          {/* 多轮会话导航：最近一条用户消息置顶（可收起，新消息到达自动恢复） */}
+          {lastUserMsg && !pinnedDismissed && (
+            <div className="flex-shrink-0 mx-4 mt-2 px-3 py-1.5 rounded-lg bg-info/5 border border-info/20 flex items-center gap-2 text-xs">
+              <span className="text-info flex-shrink-0">📌</span>
+              <span className="flex-1 truncate text-gray-300" title={pinnedText}>{pinnedText}</span>
+              <button onClick={() => setPinnedDismissed(true)} title="收起置顶"
+                className="text-gray-500 hover:text-info flex-shrink-0 px-1 rounded hover:bg-surface-3">✕</button>
+            </div>
+          )}
+
           {/* 消息列表 — 统一背景 */}
-          <div className="flex-1 overflow-y-auto px-4 py-3">
+          <div ref={msgBoxRef} className="relative flex-1 overflow-y-auto px-4 py-3">
             {grouped.length === 0 && !loading && (
               <div className="text-center text-gray-600 text-sm py-12">
                 输入消息开始对话，或输入 / 查看可用命令
               </div>
             )}
             {grouped.map(renderGrouped)}
+            {/* 多轮会话导航：用户消息快速定位图标列（≥2 条时显示；hover 放大+悬浮预览，点击定位） */}
+            {userMsgs.length >= 2 && (
+              <div className="absolute left-1 top-0 bottom-0 w-3 z-10">
+                {railPos.map(p => {
+                  const seq = userMsgs.findIndex(u => u.groupIdx === p.idx) + 1;
+                  const um = userMsgs.find(u => u.groupIdx === p.idx);
+                  return (
+                    <div key={p.idx} className="absolute left-0" style={{ top: p.top, transform: 'translateY(-50%)' }}>
+                      <button
+                        onClick={() => handleJumpToUser(p.idx)}
+                        onMouseEnter={() => setHoverUserIdx(p.idx)}
+                        onMouseLeave={() => setHoverUserIdx(null)}
+                        title="定位到该用户消息"
+                        className={`block h-1.5 w-1.5 rounded-full transition-all duration-150 ${p.inView ? 'bg-info' : 'bg-gray-600'} ${hoverUserIdx === p.idx ? 'scale-[2.2] bg-info shadow-[0_0_6px_rgba(59,130,246,0.8)]' : ''}`}
+                      />
+                      {hoverUserIdx === p.idx && um && (
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-64 bg-surface-2 border border-border rounded-lg shadow-xl p-2 pointer-events-none">
+                          <div className="text-[9px] text-gray-500 mb-1">用户消息 #{seq}</div>
+                          <div className="text-xs text-gray-300 line-clamp-2 break-all">{um.content}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {/* K-012: 流式生成中气泡（整块 assistant 到达时被正式消息替换） */}
             {streamingText && (
               <div className="mb-2 px-1 py-1">

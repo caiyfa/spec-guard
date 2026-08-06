@@ -26,11 +26,15 @@ export type ScenarioNodeType = Node<{
   category?: string;
   verdict?: string;
   isBreakpoint?: boolean;  // T-202：计划断点场景画布标记
+  isDraft?: boolean;       // 草稿节点（未入库，AgentChat 会话依赖图用）
 }>;
 
 export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeType>) {
   const cat = CATEGORY_META[data.category || 'validator'] || CATEGORY_META.validator;
-  const borderColor = (data.verdict && VERDICT_COLORS[data.verdict]) || cat.color + '66';
+  // 草稿节点固定黄框（区别于库内场景的类型色/verdict 色）
+  const borderColor = data.isDraft
+    ? '#d29922'
+    : ((data.verdict && VERDICT_COLORS[data.verdict]) || cat.color + '66');
   const tokens = useJsTokens();  // K-043：节点配色跟随主题
   return (
     <div
@@ -47,6 +51,9 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
     >
       <Handle type="target" position={Position.Left} style={{ width: 8, height: 8, background: cat.color }} />
       <div className="flex items-center gap-1.5">
+        {data.isDraft && (
+          <span className="text-[10px]" title="草稿（未入库）">📝</span>
+        )}
         <span>{cat.icon}</span>
         <span className="font-mono font-semibold truncate">{data.label}</span>
         {data.isBreakpoint && (
