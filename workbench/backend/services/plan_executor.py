@@ -305,6 +305,16 @@ async def execute_plan(plan_id: str, workspace: str = "",
     except Exception as e:
         print(f"[SpecGuard WARN] 失败索引写入失败（不影响执行结论）: {type(e).__name__}: {e}")
 
+    # 全量执行索引（与 runner 侧 _record_executions 对齐）——
+    # 定时/引擎直跑执行的全部结果同样进 executions/index.jsonl 台账
+    try:
+        from services import execution_index
+        n = execution_index.append_executions(reports_root, f"{plan_id}/{run_id}")
+        if n:
+            print(f"[plan_executor] {n} 条执行记录已记入 executions/index.jsonl")
+    except Exception as e:
+        print(f"[SpecGuard WARN] 执行索引写入失败（不影响执行结论）: {type(e).__name__}: {e}")
+
     # T-304：D2 场景级通知（fail/drift/skip 事件）与 runner 路径对齐——
     # 此前定时执行只触发 plan_failure/plan_success（计划粒度），配置了场景级
     # 事件的用户收不到定时执行的通知；即时 plan_failure 通知保留（调度路径价值）

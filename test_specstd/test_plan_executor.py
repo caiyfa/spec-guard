@@ -85,6 +85,10 @@ class TestExecutorUnifiedArtifacts:
         calls = []
         monkeypatch.setattr(failure_index, "append_failures",
                             lambda root, run_id: calls.append((root, run_id)) or 1)
+        import services.execution_index as execution_index
+        ecalls = []
+        monkeypatch.setattr(execution_index, "append_executions",
+                            lambda root, run_id: ecalls.append((root, run_id)) or 2)
 
         result = asyncio.run(pe.execute_plan("p1", workspace="ws1", triggered_by="schedule"))
         assert result["status"] == "failed"
@@ -98,6 +102,8 @@ class TestExecutorUnifiedArtifacts:
         assert calls, "失败索引必须被调用（此前引擎直跑不进失败台账）"
         root, idx_run = calls[0]
         assert str(idx_run) == f"p1/{run_id}"
+        assert ecalls, "执行索引必须被调用（全量结果台账）"
+        assert str(ecalls[0][1]) == f"p1/{run_id}"
 
     def test_output_log_has_verdicts(self, executor_mocks):
         """T-116：output.log 含每场景 verdict 行（排障按任务号取日志）。"""

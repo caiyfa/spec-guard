@@ -379,6 +379,7 @@ class RunManager:
         self.process = None
         # D2 修复：执行完成后按注册表自动推送飞书通知（fail/drift/skip 事件）
         self._record_failures()  # K-052：失败索引（场景×任务号×原因台账）
+        self._record_executions()  # 执行台账：全量结果（场景×任务号×verdict×saved_vars）
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()
@@ -417,6 +418,21 @@ class RunManager:
                 n += failure_index.append_failures(root, batch_dir.name)
             if n:
                 self._write_output_log(f"> {self.run_id} | {n} 条失败已记入 failures/index.jsonl")
+        except Exception:
+            pass  # 索引失败不影响执行结论
+
+    def _record_executions(self):
+        """执行完成后把全部场景结果写入执行索引（executions/index.jsonl）——
+        「场景 × 任务号 × 全量结果（含 PASS）」台账，Agent list_executions 与工作台 API 共用。"""
+        try:
+            from services import execution_index
+            root = _get_reports_root()
+            n = execution_index.append_executions(root, self.run_id)
+            # 断点分批执行的报告在 {run_id}-bN 目录，逐批收录
+            for batch_dir in sorted(root.glob(f"{self.run_id}-b*")):
+                n += execution_index.append_executions(root, batch_dir.name)
+            if n:
+                self._write_output_log(f"> {self.run_id} | {n} 条执行记录已记入 executions/index.jsonl")
         except Exception:
             pass  # 索引失败不影响执行结论
 
@@ -717,6 +733,7 @@ class RunManager:
         self.process = None
         # D2 修复：断点分段执行完成后同样自动推送通知
         self._record_failures()  # K-052：失败索引（场景×任务号×原因台账）
+        self._record_executions()  # 执行台账：全量结果（场景×任务号×verdict×saved_vars）
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()
@@ -730,6 +747,7 @@ class RunManager:
         """
         self.process = None
         self._record_failures()  # K-052：已执行批次的失败收录
+        self._record_executions()  # 执行台账：已执行批次的全量结果收录
         final_status = self.status or "aborted"
         await self.broadcast({
             "type": "finished",

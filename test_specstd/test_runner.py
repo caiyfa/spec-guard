@@ -251,6 +251,7 @@ class TestLogHeaderContext:
         monkeypatch.setattr(user_store, "update_run_queue", lambda *a, **k: True)
         monkeypatch.setattr(mgr, "broadcast", _recorder([]))
         monkeypatch.setattr(mgr, "_record_failures", lambda: None)
+        monkeypatch.setattr(mgr, "_record_executions", lambda: None)
 
         async def _noop(*a, **k):
             pass
@@ -283,6 +284,7 @@ class TestVariableOverrides:
         monkeypatch.setattr(user_store, "update_run_queue", lambda *a, **k: True)
         monkeypatch.setattr(m, "broadcast", _recorder([]))
         monkeypatch.setattr(m, "_record_failures", lambda: None)
+        monkeypatch.setattr(m, "_record_executions", lambda: None)
 
         async def _noop(*a, **k):
             pass
@@ -361,6 +363,7 @@ class TestSpawnFailureBroadcast:
 def _stub_finish(m, monkeypatch):
     """屏蔽收尾副作用：_record_failures 同步、其余异步（供终态类测试共用）。"""
     monkeypatch.setattr(m, "_record_failures", lambda: None)
+    monkeypatch.setattr(m, "_record_executions", lambda: None)
 
     async def _noop(*a, **k):
         pass
