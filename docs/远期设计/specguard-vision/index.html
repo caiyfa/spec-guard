@@ -134,7 +134,7 @@ body.show-tips .tip-bar{display:flex;gap:2px;align-items:baseline}
 .why-head .wk{font-family:var(--mono);font-size:10.5px;letter-spacing:2px;color:var(--faint)}
 .why-head h4{font-size:16px;color:var(--text-strong)}
 .why-head .wq{font-size:12px;color:var(--faint);margin-left:auto}
-.why-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.why-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .why-card{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:rgba(255,255,255,.02)}
 .why-card .wr{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:4px;margin-bottom:8px}
 .why-card p{font-size:12.5px;line-height:1.8;color:var(--text)}
@@ -142,6 +142,7 @@ body.show-tips .tip-bar{display:flex;gap:2px;align-items:baseline}
 .why-card.boss .wr{color:var(--warn);background:rgba(251,191,36,.12)} .why-card.boss{border-top:2px solid var(--warn)}
 .why-card.pm .wr{color:var(--req);background:rgba(167,139,250,.12)} .why-card.pm{border-top:2px solid var(--req)}
 .why-card.qa .wr{color:var(--test);background:rgba(94,200,242,.12)} .why-card.qa{border-top:2px solid var(--test)}
+.why-card.dev .wr{color:var(--pos);background:rgba(74,222,128,.12)} .why-card.dev{border-top:2px solid var(--pos)}
 /* 材料包 · 多源上传文档 */
 .doc-item{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:7px;background:var(--surface)}
 .doc-item .di{width:30px;height:30px;border-radius:7px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(167,139,250,.12)}
@@ -178,6 +179,31 @@ body.show-tips .tip-bar{display:flex;gap:2px;align-items:baseline}
 .chain-seg.dev{background:rgba(251,191,36,.06);box-shadow:inset 0 2px 0 var(--warn)}
 .chain-seg.dev .cs-t{color:var(--warn)}
 .chain-seg .cs-arrow{position:absolute;right:-7px;top:50%;transform:translateY(-50%);color:var(--faint);z-index:2;font-size:12px}
+/* ═══ S8 上下文生产线流转图 ═══ */
+.ctx-flow{margin:22px 0 30px;border:1px solid var(--line);border-radius:16px;background:var(--card);padding:22px 24px 20px}
+.ctx-head{text-align:center;margin-bottom:18px}
+.ctx-head .dk{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--faint);margin-bottom:10px}
+.ctx-head h3{font-size:24px;font-weight:800;color:var(--text-strong);letter-spacing:-.3px}
+.ctx-head h3 b{background:linear-gradient(90deg,var(--req),var(--test));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.ctx-nodes{display:grid;grid-template-columns:1fr 26px 1fr 26px 1fr 26px 1fr;align-items:stretch}
+.ctx-node{border:1px solid var(--line2);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.02);border-top-width:3px}
+.ctx-node .cr{font-family:var(--mono);font-size:10px;letter-spacing:1px;margin-bottom:6px}
+.ctx-node .ca{font-size:13px;font-weight:700;color:var(--text-strong);line-height:1.5}
+.ctx-node .cp{font-size:11px;color:var(--faint);margin-top:6px;line-height:1.6}
+.ctx-node.pm{border-top-color:var(--req)} .ctx-node.pm .cr{color:var(--req)}
+.ctx-node.dev{border-top-color:var(--pos)} .ctx-node.dev .cr{color:var(--pos)}
+.ctx-node.qa{border-top-color:var(--test)} .ctx-node.qa .cr{color:var(--test)}
+.ctx-node.back{border-top-color:var(--warn)} .ctx-node.back .cr{color:var(--warn)}
+.ctx-arr{display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:14px}
+.ctx-downs{display:grid;grid-template-columns:1fr 26px 1fr 26px 1fr 26px 1fr;color:var(--faint);font-size:13px;text-align:center;padding:2px 0}
+.ctx-sink{border:1.5px dashed var(--req-line);border-radius:12px;background:var(--req-soft);padding:13px 18px;text-align:center;font-size:13px;color:var(--text);line-height:1.7}
+.ctx-sink b{color:var(--strong)}
+.ctx-sink .cs2{display:block;font-size:11px;color:var(--faint2);margin-top:3px}
+.ctx-mid{text-align:center;color:var(--faint);font-size:14px;padding:4px 0}
+.ctx-term{border:1.5px solid var(--pos);border-radius:12px;background:rgba(74,222,128,.07);padding:14px 18px;text-align:center;font-size:14px;color:var(--text-strong);font-weight:700;line-height:1.7}
+.ctx-term span{display:block;font-size:11.5px;color:var(--faint2);font-weight:400;margin-top:3px}
+.ctx-thesis{margin-top:14px;text-align:center;font-size:13.5px;color:var(--faint2);line-height:1.8}
+.ctx-thesis b{font-size:16px;background:linear-gradient(90deg,var(--req),var(--test));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .s8-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:34px}
 .s8-card{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:var(--card)}
 .s8-card .sh{font-size:13px;font-weight:700;margin-bottom:10px}
@@ -563,7 +589,6 @@ g.node.dim:hover{opacity:.7}
     <div class="cover-desc">从「测试场景编排工具」到「覆盖 spec 生产 → 验证 → 反馈三环」的质量闭环——<br>需求面试 · 决策台账 · spec 冻结 · 场景生成 · 执行归因 · SPQ 反哺</div>
     <div class="cover-meta">
       <span>日期 <b>2026-07</b></span>
-      <span>汇报人 <b>平台架构组（占位）</b></span>
       <span>数据 <b>真实工作区快照</b></span>
     </div>
     <button class="cover-start" onclick="go('s1')">开始演示 <span style="font-size:17px">→</span></button>
@@ -573,12 +598,12 @@ g.node.dim:hover{opacity:.7}
 
 <!-- ═══ S1 · 价值总览（五环大循环） ═══ -->
 <div class="screen" id="s1">
-  <div class="tip-bar"><span class="tb-tag">汇报提示 · S1</span><span>这一屏回答一个问题：<b>为什么要从测试工具扩张成全链路平台</b>——因为上游 spec 质量不受控，下游全部带病工作。中间这个大循环是核心叙事：<b>执行反哺恰好是下一轮需求面试的输入</b>，引入需求侧之后，这个环才真正闭合。页面底部是三句「角色话术」——被问到<b>为什么不用 Codex / Claude Code</b>时，领导、产品、测试各有一句答案。</span></div>
+  <div class="tip-bar"><span class="tb-tag">汇报提示 · S1</span><span>这一屏回答一个问题：<b>为什么要从测试工具扩张成全链路平台</b>——因为需求没说清，下游全都白忙。中间这个大循环是核心叙事：<b>测试发现的问题，恰好是下一轮需求讨论的素材</b>，把需求讨论搬进来之后，这个环才真正闭合。页面底部是四句「角色话术」——被问到<b>为什么不用 Codex / Claude Code</b>时，领导、产品、测试、研发各有一句答案；研发那句的重点是：<b>我们给编码 Agent 供高质量上下文</b>。</span></div>
   <div class="s1-wrap">
     <div class="s1-head">
       <div class="s1-kicker">VALUE OVERVIEW · 为什么做</div>
       <div class="s1-title">一个之前<b>闭不上</b>的环，<br><span class="grad">现在闭上了</span></div>
-      <div class="s1-sub">SpecGuard 原本覆盖「验证 + 反馈」两环，建立在「上游 spec 已冻结且规范」的外部假设上——<br>这个假设不受控。引入需求面试后，spec 生产 → 验证 → 反馈三环接入，价值链闭合成大循环。</div>
+      <div class="s1-sub">过去 SpecGuard 只管「测」这一环，前提是上游需求已经写清定稿——但这个前提没人保证。<br>现在把需求讨论也搬进来：需求先谈清 → 再开发 → 再测试 → 问题自动回到下次需求讨论，环闭上了。</div>
     </div>
     <div class="loop-layout">
       <div class="loop-stage">
@@ -588,31 +613,31 @@ g.node.dim:hover{opacity:.7}
       <div class="s1-points">
         <div class="pt-card p1">
           <div class="pt-no">PAIN POINT · 现状痛点</div>
-          <h4>上游 spec 质量不受控</h4>
-          <p>场景 covers 锚点、覆盖矩阵、delta 导入计划、契约指纹门禁——所有测试能力都建立在「上游已经交付了冻结、规范的 spec」这一外部假设上。spec 质量参差时，下游场景生成、覆盖缺口分析全部带病工作。</p>
+          <h4>需求没说清，下游全白忙</h4>
+          <p>每个用例都能追到需求条目、覆盖缺口有矩阵、需求一变测试计划自动跟进——这些能力有个共同前提：需求写得清楚、定了稿。需求一含糊，用例生成、缺口分析全都跟着错。</p>
         </div>
         <div class="pt-card p2">
-          <div class="pt-no">ARCHITECTURE · 双体系分离</div>
-          <h4>.specflow 需求侧 / .specguard 测试侧</h4>
-          <p>两个体系各自闭环、过程产物零混放。唯一耦合点是两个「界面产物」：冻结的 spec 基线（需求侧写 → 测试侧读）与 delta 变更（需求侧生产 → 测试侧导入生成计划）。specstd 规范层双方共用。</p>
+          <div class="pt-no">ARCHITECTURE · 各管各的</div>
+          <h4>需求侧、测试侧，两套体系不混放</h4>
+          <p>两边各自成体系、过程产物互不混放。只交接两样定稿产物：需求基线（需求侧写、测试侧读）和变更清单（需求侧出、测试侧一键生成测试计划）。规范标准两边共用。</p>
         </div>
         <div class="pt-card p3">
-          <div class="pt-no">CORE VALUE · 反哺闭环</div>
-          <h4>引入需求侧后才真正闭合的大循环</h4>
-          <p>现有双反馈循环（执行结果反哺 spec）恰好成为下一轮需求面试的输入：未闭环 SPQ + 执行报告摘要自动进入面试 info_pack，直接成为下轮提问素材——这是本体系的核心价值叙事。</p>
+          <div class="pt-no">CORE VALUE · 问题回桌</div>
+          <h4>测试发现的问题，自动回到需求桌上</h4>
+          <p>没闭环的需求疑问和执行报告摘要，自动装进下轮需求讨论的材料包，直接成为提问素材——环就是这样闭上的，这是整个体系的核心价值。</p>
         </div>
       </div>
     </div>
     <div class="num-strip">
       <div class="num-cell"><div class="nv">28</div><div class="nl">功能点（真实工作区）</div></div>
       <div class="num-cell"><div class="nv">298</div><div class="nl">FR 锚点（真实工作区）</div></div>
-      <div class="num-cell"><div class="nv">25</div><div class="nl">场景 covers</div></div>
+      <div class="num-cell"><div class="nv">99</div><div class="nl">场景（场景库 · 2026-08 实测）</div></div>
       <div class="num-cell"><div class="nv">4<i>+3</i></div><div class="nl">阶段路线 F1-F4 · G1-G3</div></div>
     </div>
     <div class="why-block">
       <div class="why-head">
         <span class="wk">WHY SPECGUARD</span>
-        <h4>为什么不是 Codex / Claude Code？——三个角色，各一句话</h4>
+        <h4>为什么不是 Codex / Claude Code？——四个角色，各一句话</h4>
         <span class="wq">通用 AI 编程工具 ≠ 工程质量资产平台</span>
       </div>
       <div class="why-row">
@@ -626,7 +651,11 @@ g.node.dim:hover{opacity:.7}
         </div>
         <div class="why-card qa">
           <span class="wr">对测试</span>
-          <p>Codex / Claude Code 也能生成用例，但它不认识你的 spec 锚点、不记得上轮执行发现的 spec 质疑；SpecGuard 的场景从冻结 spec <b>派生</b>、covers 锚点不断链、执行结果反哺下轮需求——用例不是"生成"出来的，是<b>从契约里"长"出来的</b>。</p>
+          <p>Codex / Claude Code 也能生成用例，但它不认识你的需求条目、不记得上轮执行发现的疑问；SpecGuard 的用例从定稿需求里<b>长出来</b>、来源不断链、执行结果回到下轮需求讨论——不是"生成"出来的，是<b>从契约里"长"出来的</b>。</p>
+        </div>
+        <div class="why-card dev">
+          <span class="wr">对研发</span>
+          <p>Codex / Claude Code 写得快，但它不知道你的需求最终怎么定的——接需求、修 BUG 时，SpecGuard 给出带版本号的<b>「需求上下文包」</b>：需求定论、接口约定、验收标准、相关测试场景，<b>你和你的编码 Agent 读到的是同一份</b>——高质量上下文，是高质量代码的前提。</p>
         </div>
       </div>
     </div>
@@ -635,12 +664,16 @@ g.node.dim:hover{opacity:.7}
 
 <!-- ═══ S2 · 路线图（F1-F4 主线 + G1-G3 支线） ═══ -->
 <div class="screen" id="s2">
-  <div class="tip-bar"><span class="tb-tag">汇报提示 · S2</span><span>落地分四步走，<b>F1 面试最小闭环就是价值拐点</b>——只做 F1，产品经理就能完成结构化面试、产出 P0 清零的决策清单和可追溯归档。知识图谱支线 G1 不依赖主路线，<b>可以与 F1 并行先行</b>；F2 触及规范层要先评审，这是纪律。</span></div>
+  <div class="tip-bar"><span class="tb-tag">汇报提示 · S2</span><span>落地分四步走，<b>F1 面试最小闭环就是价值拐点</b>——只做 F1，产品经理就能完成结构化面试、产出 P0 清零的决策清单和可追溯归档。知识图谱支线 G1 不依赖主路线，<b>可以与 F1 并行先行</b>；F2 触及规范层要先评审，这是纪律。<b>当前位置（2026-08-07 总控）</b>：打磨期四轮已收口、S0 单测前置完成，S1-S8 已恢复认领；另新增两条支线——引擎补点（§4.3）与知识体系（§4.4），见本屏底部车道。</span></div>
   <div class="s2-wrap">
     <div class="s1-head">
       <div class="s1-kicker">ROADMAP · 分几步做</div>
       <div class="s1-title" style="font-size:36px">分阶段路线图 <span class="grad">F1-F4 · G1-G3</span></div>
       <div class="s1-sub">主线 specflow 四阶段 + 知识图谱支线（嵌入 F 阶段，不另起炉灶）· 内容取自设计方案第五章（已拍板）</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+      <div class="sp-chip"><b>✅ 打磨期结束（2026-08-07 总控宣布）</b>——四轮 T-101~T-404：DAG 编排 / 测试执行 / 基线收口 + Agent 内核（S0 单测前置 · abort 真打断 · 工具结果截断 · 429 退避），回归 674/674 全绿</div>
+      <div class="sp-chip"><b>✅ S0 会话编排单测</b>——前置打磨期 T-401 完成、T-001 核销，<b>S1 依赖已就绪</b>；S1-S8 自 2026-08-07 起恢复认领</div>
     </div>
     <div class="rm-lane">
       <div class="rm-lane-h"><span class="lh-t" style="color:var(--req)">主线 · specflow</span><span class="lh-s">需求面试 → 评分卡 → 锚定归档 → V2 扩展</span></div>
@@ -735,7 +768,35 @@ g.node.dim:hover{opacity:.7}
         </div>
       </div>
     </div>
-    <div class="s2-foot"><b>节奏判断：</b>F1 是价值拐点——只做 F1 就已经能让产品经理在 AgentChat 里完成结构化面试、产出 P0 清零的决策清单和可追溯的面试归档；F2/F3 逐步把产出物规格化、闸门化。G1 与 F1 并行，G2 挂 F1 之后，G3/F4 视规模再立项。Skill/MCP 基座 P1-P2 跟随主线自然生长，P3 不提前投入。</div>
+    <div class="rm-lane">
+      <div class="rm-lane-h"><span class="lh-t" style="color:var(--pos)">支线 · 引擎补点 &amp; 知识体系</span><span class="lh-s">总控 v1.3/v1.4 新增（2026-08-07）· 与 S1+ 主线并行，内容层立即可认领</span></div>
+      <div class="rm-track g">
+        <div class="rm-card g-lane">
+          <span class="rm-badge">立即可认领</span>
+          <span class="rm-dot"></span>
+          <div class="rm-id">E1 · 引擎补点（§4.3 · T-501~T-504）</div>
+          <h4>对标开源引擎评估复核落地</h4>
+          <div class="rm-sec"><b>内容</b>schema 结构断言 fuzzy-match-lite（零依赖版，T-501）· fixtures 文件引用预检静态扫描（T-502）；储备触发制：DB 轮询 / 参数化 / 场景级超时（T-503/T-504）</div>
+          <div class="rm-gate">门禁：三同步 + TDD（test_engine 先写失败测试）</div>
+        </div>
+        <div class="rm-card g-lane">
+          <span class="rm-badge">立即可认领</span>
+          <span class="rm-dot"></span>
+          <div class="rm-id">K1 · 知识内容层（§4.4 · T-505/T-506）</div>
+          <h4>语义词典 + 环境叙事</h4>
+          <div class="rm-sec"><b>内容</b>glossary 语义词典（[token:] 锚点 · 词条↔FR 关联完整性进校验）· env.sit.md 环境叙事（定位/拓扑/账号池/已知坑，永不写凭据）；入口四管线：冷启动引导 / 自动积累 / 对话提炼 / 事件联动</div>
+          <div class="rm-gate">隔离：系统 / 工作区 / 运行态三层物理归属，语义不混杂</div>
+        </div>
+        <div class="rm-card g-lane">
+          <span class="rm-dot"></span>
+          <div class="rm-id" style="color:var(--faint2)">K2 · 知识机制层（T-507~T-510）</div>
+          <h4>触景出现，不堆提示词</h4>
+          <div class="rm-sec"><b>内容</b>提示词瘦身 75KB→~30KB（骨架+目录常驻，T-507∽S1）· 触景触发引擎（双通道匹配 · 每篇每会话一次 · 预算硬顶，T-508∽S3）· 知识维护页一页三区（T-509∽S3/S6）· 经验飞轮（T-510∽S6）</div>
+          <div class="rm-gate">依赖：随 S1/S3/S6 阶段解锁 · 详见《SpecGuard-知识体系设计》</div>
+        </div>
+      </div>
+    </div>
+    <div class="s2-foot"><b>节奏判断：</b>F1 是价值拐点——只做 F1 就已经能让产品经理在 AgentChat 里完成结构化面试、产出 P0 清零的决策清单和可追溯的面试归档；F2/F3 逐步把产出物规格化、闸门化。G1 与 F1 并行，G2 挂 F1 之后，G3/F4 视规模再立项。Skill/MCP 基座 P1-P2 跟随主线自然生长，P3 不提前投入。<b>新增支线（2026-08-07）</b>：引擎补点 E1 与知识内容层 K1 不依赖主线、可立即认领；知识机制层 K2 拆进 S1/S3/S6 随行。</div>
   </div>
 </div>
 
@@ -1122,7 +1183,7 @@ g.node.dim:hover{opacity:.7}
 
 <!-- ═══ S8 · 研发在链上的位置 & 多智能体策略 ═══ -->
 <div class="screen" id="s8">
-  <div class="tip-bar"><span class="tb-tag">汇报提示 · S8</span><span>三个必须当面说清的立场：<b>① 我们不是编码智能体</b>——研发在链上、但在边界外，Codex/Claude Code 是研发手里的编码工具，SpecGuard 是质量链治理平台，互补不竞争；<b>② 多智能体有必要，但路线是按阶段专业化 + 确定性闸门</b>——不做全能大 Agent，每个智能体的产出都过闸，Agent 只建议、人拍板；<b>③ Skill/MCP 要体系化，但剂量是治理不是平台</b>——格式对齐开放规范、外部导入过五级审查管线；对外 MCP 开放面读优先、写过闸，需求面试<b>过程不开放、产物全开放、入口半开放</b>。</span></div>
+  <div class="tip-bar"><span class="tb-tag">汇报提示 · S8</span><span>本屏主线是上半屏的<b>流转图</b>：产品把需求谈清 → 测试用例验证并反哺 → 研发两个时刻取包（接需求拿高质量需求描述、修 BUG 拿精准原始信息）→ 编码 Agent 经 MCP 消费同一份上下文——<b>spec 方法论把研发团队每个角色串进同一条质量链</b>。落点一句话：<b>上下文是 AI 时代的第一生产资料</b>，我们不做编码，我们做的是给研发的 Agent 供上下文的 MCP 服务。另外三个必须当面说清的立场：<b>① 我们不是编码智能体</b>——研发在链上、但在边界外，互补不竞争；<b>② 多智能体按阶段专业化 + 确定性闸门</b>；<b>③ Skill/MCP 体系化，剂量是治理不是平台</b>。</span></div>
   <div class="s8-wrap">
     <div class="s8-decl">
       <div class="dk">BOUNDARY · 研发在链上的位置</div>
@@ -1135,6 +1196,22 @@ g.node.dim:hover{opacity:.7}
       <div class="chain-seg"><div class="cs-t">③ 验证 · 测试侧</div><div class="cs-s">场景 covers → DAG 计划 → 执行报告</div><span class="cs-arrow">→</span></div>
       <div class="chain-seg"><div class="cs-t">④ 反哺 · feedback</div><div class="cs-s">归因 → SPQ / 禅道 BUG → 下轮面试</div></div>
     </div>
+    <div class="s8-sec-t" style="margin-top:26px">流转图：对研发的价值——上下文怎么流到研发的 Agent 手里</div>
+    <div class="s8-sec-s">产品谈清需求 → 测试验证反哺 → 研发两个时刻取包 → 编码 Agent 经 MCP 消费——spec 方法论把研发团队<b>每个角色</b>串进同一条质量链。</div>
+    <div class="ctx-nodes">
+      <div class="ctx-node pm"><div class="cr">产品 · 需求面试</div><div class="ca">AI 面试把需求谈清</div><div class="cp">疑问清零才准定稿<br>产出：需求基线 + 变更清单</div></div>
+      <div class="ctx-arr">→</div>
+      <div class="ctx-node qa"><div class="cr">测试 · 用例与执行</div><div class="ca">用例从定稿需求里长出来</div><div class="cp">自动分批执行 · 失败如实归因<br>产出：用例 + 执行结果 + 需求疑问</div></div>
+      <div class="ctx-arr">→</div>
+      <div class="ctx-node dev"><div class="cr">研发 · 两个时刻取包</div><div class="ca">接需求 / 修 BUG，各取所需</div><div class="cp">接需求 = <b>高质量需求描述</b>（定论 + 接口约定 + 验收标准）<br>修 BUG = <b>精准原始信息</b>（执行记录 / 断言差异 / DB 证据）</div></div>
+      <div class="ctx-arr">→</div>
+      <div class="ctx-node back"><div class="cr">编码 Agent · MCP 消费</div><div class="ca">Codex / Claude Code / Qoder</div><div class="cp">开工前经 <b>MCP 服务</b>读到同一份上下文包——带版本指纹、可校验、草稿物理不可达</div></div>
+    </div>
+    <div class="ctx-mid">↓ 每一环都在同一个资产库里沉淀、也从同一个资产库里取用 ↓</div>
+    <div class="ctx-sink"><b>质量资产库</b>：需求定论 · 接口约定 · 验收标准 · 测试场景 · 执行记录 · 疑问台账——全部带版本指纹，可追溯、可审计<span class="cs2">产品写入需求定论，测试写入验证结果，研发与编码 Agent 按需取包——同一份事实，没有第二份</span></div>
+    <div class="ctx-mid">↓</div>
+    <div class="ctx-term">上下文，是 AI 时代的第一生产资料<span>归口不是做编码——而是给研发人员的 Agent 提供高质量上下文的 MCP 服务：让所有编码 Agent 站在同一份事实上写代码</span></div>
+    <div class="ctx-thesis">SpecGuard ＝ <b>所有编码 Agent 的上下文基础设施</b></div>
     <div class="s8-mini">
       <div class="mc no2"><div class="mh">✕ 不做</div>
         <div class="mi2"><i>🚫</i>代码生成 / 补全 / 重构</div>
@@ -1193,6 +1270,7 @@ g.node.dim:hover{opacity:.7}
         <div class="mi2"><i>🧭</i>需求面试：过程不开放 · 产物全开放 · 入口半开放</div></div>
     </div>
     <div class="sp-chip" style="display:block;margin-top:14px"><b>🏆 旗舰场景 · 编码 Agent 消费质量链</b>——Codex / Claude Code / Qoder 写代码前经对外 MCP 读 FR 锚点 + SHALL + delta 契约、提交前跑受影响场景子集：我们不写代码，但我们是<b>所有编码 Agent 的质量上下文基础设施</b>。</div>
+    <div class="sp-chip" style="display:block;margin-top:10px"><b>📚 知识体系（2026-08-07 v1.4 新增支线 §4.4）</b>——语义词典 / 环境叙事 / 经验飞轮 / 触景分发：知识按系统与工作区三层物理隔离、<b>只在使用点出现</b>（nudge 摘要 + 指针，每篇每会话一次，预算硬顶）；system prompt 静态部分 ~75KB 瘦身至 ~30KB（骨架 + 目录常驻，其余按需取）。Agent 只提议、人落锤入典。</div>
   </div>
 </div>
 
@@ -1227,11 +1305,11 @@ document.getElementById('tipSwitch').onclick=function(){
   const NS='http://www.w3.org/2000/svg',svg=document.getElementById('loopSvg');
   const cx=320,cy=252,R=178;
   const NODES=[
-    {t:'需求面试',s:'P0 清零',c:'#a78bfa',tip:'<b>需求面试 · P0 清零</b>：AI 面试官按 spec 11 章扫描提问，决策结构化入台账；P0 未清零，spec 一律不准冻结——质量在源头受控。'},
-    {t:'spec 冻结',s:'三闸',c:'#a78bfa',tip:'<b>spec 冻结 · 三闸</b>：产品确认 → specstd 合规校验 → P0 清零门禁；冻结产物 = 需求侧写给测试侧的唯一界面：spec 基线 + delta 变更。'},
-    {t:'场景生成',s:'covers 锚点',c:'#5ec8f2',tip:'<b>场景生成 · covers 锚点</b>：测试侧消费冻结 spec，场景 YAML 必带 covers [FR-xxx] 与 source_delta——生成即挂链，覆盖缺口一目了然。'},
-    {t:'执行归因',s:'DAG 批次',c:'#5ec8f2',tip:'<b>执行归因 · DAG 批次</b>：delta 导入生成计划，depends_on 拓扑分批执行；失败诚实归因：产品缺陷 / spec 质疑 / 环境问题，FAIL 不用 SKIP 掩盖。'},
-    {t:'SPQ 反哺',s:'入 info_pack',c:'#4ade80',tip:'<b>SPQ 反哺 · 入 info_pack</b>：未闭环 SPQ + 执行报告摘要自动进入下轮面试信息包，直接成为提问素材——闭环的最后一边，引入需求侧后才真正闭合。'}];
+    {t:'需求谈清',s:'疑问清零',c:'#a78bfa',tip:'<b>需求谈清 · 疑问清零</b>：AI 面试官照着需求模板逐项盘问，把含糊处逼成一份「必须先回答」的疑问清单；疑问没答完，需求一律不准定稿——质量在源头受控。'},
+    {t:'需求定稿',s:'三道确认',c:'#a78bfa',tip:'<b>需求定稿 · 三道确认</b>：产品点头 → 规范机器校验 → 疑问清零，三道都过才算定稿。定稿产物就是需求侧交给测试侧的唯一接口：需求基线 + 变更清单。'},
+    {t:'用例生成',s:'来源可追',c:'#5ec8f2',tip:'<b>用例生成 · 来源可追</b>：每个测试用例都必须标明测的是哪条需求——用例从定稿需求里长出来，哪些需求还没测，一眼看到。'},
+    {t:'执行归因',s:'自动分批',c:'#5ec8f2',tip:'<b>执行归因 · 自动分批</b>：变更清单一键生成测试计划，按依赖关系自动分批执行；失败如实归因：产品缺陷 / 需求疑问 / 环境问题——绝不拿「环境跳过」掩盖失败。'},
+    {t:'问题回桌',s:'进下轮材料',c:'#4ade80',tip:'<b>问题回桌 · 进下轮材料</b>：没闭环的需求疑问和执行报告摘要，自动装进下次需求讨论的材料包，直接成为提问素材——闭环的最后一边，引入需求侧后才真正闭合。'}];
   const pt=i=>{const a=(-90+i*72)*Math.PI/180;return[cx+Math.cos(a)*R,cy+Math.sin(a)*R];};
   const mk=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);(parent||svg).appendChild(e);return e;};
   // 环底
@@ -1249,8 +1327,8 @@ document.getElementById('tipSwitch').onclick=function(){
   }
   // 中心文案
   mk('text',{x:cx,y:cy-16,'text-anchor':'middle','font-size':21,'font-weight':800,fill:'#f2f5fa'}).textContent='全链路质量大循环';
-  mk('text',{x:cx,y:cy+6,'text-anchor':'middle','font-size':11.5,fill:'#8a93a5'}).textContent='spec 生产 → 验证 → 反馈 三环接入';
-  mk('text',{x:cx,y:cy+24,'text-anchor':'middle','font-size':10,fill:'#6b7484','font-family':'monospace'}).textContent='IV → D → delta → FR → 场景 → plan → run → SPQ → ⟳';
+  mk('text',{x:cx,y:cy+6,'text-anchor':'middle','font-size':11.5,fill:'#8a93a5'}).textContent='需求谈清 → 开发验证 → 问题回桌';
+  mk('text',{x:cx,y:cy+24,'text-anchor':'middle','font-size':10,fill:'#6b7484','font-family':'monospace'}).textContent='面试 → 决策 → 变更 → 需求条目 → 用例 → 计划 → 执行 → 疑问 → ⟳';
   // 节点
   const tip=document.getElementById('loopTip'),defaultTip=tip.innerHTML;
   NODES.forEach((n,i)=>{
