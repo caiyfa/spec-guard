@@ -20,7 +20,7 @@ from engine.execution_record import (
     CAT_ASSERT, CAT_ORACLE, CAT_ENV, CAT_UPSTREAM,
     truncate,
 )
-from engine.http_client import HttpClient
+from engine.http_client import HttpClient, _trace_id_of
 from engine.scenario_loader import MODE_SHARED, MODE_EXCLUSIVE
 
 
@@ -307,21 +307,26 @@ def step_call(body, rctx, ns, record):
         resp_json = resp.json()
     except Exception:
         resp_json = None
+    # 提取 trace_id（复用 http_client 的函数，与执行日志同源）
+    trace_id = _trace_id_of(resp)
     record.steps.append(StepTrace(
         type="call",
         # T-316：请求体进报告（与执行日志调用前信息对齐）——此前 request 只有
         # as/method/path/params，发了什么 body 查不到；文件流 data 不落盘
         request={"as": account or "(匿名)", "method": method, "path": path,
                  "params": params, **({"body_type": body_type} if body_type else {}),
-                 **({"headers": list(headers)} if headers else {})},
+                 **({"headers": dict(headers)} if headers else {})},
         response_status=resp.status_code,
         duration_ms=elapsed,
         body_excerpt=truncate(resp_json),
+        trace_id=trace_id,
+        response_headers={k: v for k, v in resp.headers.items()},
+        response_body=resp_json if resp_json is not None else resp.text,
     ))
-    record.steps[-1].request.update(  # 请求体/表单数据摘要并入 request（与日志调用前信息一致）
-        **({"body": truncate(json_body)} if json_body is not None else {}),
-        **({"data": truncate(data)} if isinstance(data, (str, dict, list)) else {}),
-    )
+    # 完整的请求体/表单数据并入 request（不截断），供详细查询
+    body_data = json_body if json_body is not None else (data if isinstance(data, (str, dict, list)) else None)
+    if body_data is not None:
+        record.steps[-1].request["body"] = body_data
     return {"status": resp.status_code, "json": resp_json,
             "headers": {k: v for k, v in resp.headers.items()}}
 

@@ -36,6 +36,9 @@ SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 #  用户真实会话导出文件取证：同 sid 的标签生成与草稿问答两段对话互相覆盖）
 _ACTIVE_RUNS: dict[str, "asyncio.Task"] = {}
 
+# T-402: 会话运行时追踪（供 cancel 端点查找并设置取消标志）
+_ACTIVE_RUNTIMES: dict[str, "AgentRuntime"] = {}
+
 
 def _run_in_progress(session_id: str) -> bool:
     task = _ACTIVE_RUNS.get(session_id)
@@ -405,6 +408,8 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
         lambda e: None if e.get("type") == "assistant_delta" else events.append(e)
     )
 
+    # T-402: 登记运行时供 cancel 端点查找
+    _ACTIVE_RUNTIMES[sid] = runtime
     run_task = asyncio.create_task(
         asyncio.to_thread(runtime.run, system_prompt, chat_message, sm, sid,
                           structured_refs or None)
@@ -414,6 +419,7 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
         messages = await run_task
     finally:
         _ACTIVE_RUNS.pop(sid, None)
+        _ACTIVE_RUNTIMES.pop(sid, None)
 
     # 恢复上下文
     reset_context_workspace(_ctx_token)
@@ -424,6 +430,27 @@ async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin",
         "events": events,
         "stats": llm.get_stats(),
     }
+
+
+@router.post("/cancel/{session_id}")
+async def cancel_agent(session_id: str,
+                       user: CurrentUser = Depends(require_role("admin", "tester"))):
+    """T-402：取消指定会话的当前运行（真打断）。
+
+    设置运行时 cancellation 标志 → 当前轮次 tool 执行完即停止，不再推进下一轮，
+    且不再写会话文件。
+    """
+    try:
+        _validate_session_id(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法 session_id")
+
+    runtime = _ACTIVE_RUNTIMES.get(session_id)
+    if not runtime:
+        raise HTTPException(status_code=404, detail="该会话没有活跃的运行")
+
+    runtime.cancel()
+    return {"ok": True, "session_id": session_id, "message": "已请求取消"}
 
 
 # ══════════════════════════════════════════════════════════
@@ -511,6 +538,8 @@ async def agent_ws(websocket: WebSocket,
                 lambda e: loop.call_soon_threadsafe(queue.put_nowait, e)
             )
 
+            # T-402: 登记运行时供 cancel 端点查找
+            _ACTIVE_RUNTIMES[sid] = runtime
             run_task = asyncio.create_task(
                 asyncio.to_thread(runtime.run, system_prompt, ws_message, sm, sid,
                                   structured_refs or None)
@@ -536,6 +565,7 @@ async def agent_ws(websocket: WebSocket,
                 messages = await run_task  # 运行异常在此抛出，进外层 except
             finally:
                 _ACTIVE_RUNS.pop(sid, None)
+                _ACTIVE_RUNTIMES.pop(sid, None)
 
             # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送
             await websocket.send_json({

@@ -400,3 +400,58 @@ class TestRunQueue:
         assert len(done) >= 2, f"两个执行都应完成: {rows}"
         owners = {r[0] for r in done}
         assert owners == {"90000001", "90000002"}
+
+
+# ══════════════════════════════════════════════════════════
+# T-402: Agent cancel 端点
+# ══════════════════════════════════════════════════════════
+
+class TestAgentCancel:
+    """T-402：Agent cancel 端点测试。"""
+
+    def test_cancel_no_active_run(self, client):
+        """无活跃运行返回 404。"""
+        h = _login(client, "90000001")
+        r = client.post("/api/agent/cancel/nonexistent_sid", headers=h)
+        assert r.status_code == 404
+        assert "没有活跃的运行" in r.json()["detail"]
+
+    def test_cancel_invalid_session_id(self, client):
+        """非法 session_id 返回 400。"""
+        h = _login(client, "90000001")
+        # @ 开头不符合 SESSION_ID_RE（^[A-Za-z0-9]...），是单一路径段
+        r = client.post("/api/agent/cancel/%40invalid", headers=h)
+        assert r.status_code == 400
+        assert "非法 session_id" in r.json()["detail"]
+
+    def test_cancel_requires_auth(self, client):
+        """未经认证返回 401。"""
+        r = client.post("/api/agent/cancel/test_sid")
+        assert r.status_code == 401
+
+    def test_cancel_requires_tester_role(self, client):
+        """viewer 角色无权调用 cancel。"""
+        _login(client, "90000001")  # admin（首用户）
+        h_viewer = _login(client, "90000002")  # viewer
+        r = client.post("/api/agent/cancel/test_sid", headers=h_viewer)
+        assert r.status_code == 403
+
+    def test_cancel_active_run(self, client):
+        """有活跃运行时 cancel 返回 200。"""
+        from routers.agent import _ACTIVE_RUNTIMES
+        from agent.runtime import AgentRuntime
+        from agent.llm_client import LLMClient
+        h = _login(client, "90000001")
+        sid = "test_active_sid"
+        # 模拟活跃运行
+        runtime = AgentRuntime(LLMClient(base_url=""), max_turns=3)
+        _ACTIVE_RUNTIMES[sid] = runtime
+        try:
+            r = client.post(f"/api/agent/cancel/{sid}", headers=h)
+            assert r.status_code == 200
+            data = r.json()
+            assert data["ok"] is True
+            assert data["session_id"] == sid
+            assert "已请求取消" in data["message"]
+        finally:
+            _ACTIVE_RUNTIMES.pop(sid, None)

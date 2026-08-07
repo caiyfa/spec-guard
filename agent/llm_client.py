@@ -171,8 +171,18 @@ class LLMClient:
                 return message, usage
             except httpx.HTTPStatusError as e:
                 last_err = e
-                if e.response.status_code >= 500 and attempt < 3:
-                    time.sleep(2 ** attempt)
+                # T-404: 429（限流）纳入可重试名单，与 5xx 同通道
+                if e.response.status_code in (429, *range(500, 600)) and attempt < 3:
+                    delay = 2 ** attempt
+                    # T-404: 解析 Retry-After 头（优先使用服务器指定等待时间）
+                    retry_after = e.response.headers.get("retry-after", "")
+                    if retry_after:
+                        try:
+                            delay = int(retry_after)
+                        except ValueError:
+                            # Retry-After 可能是 HTTP-date，跳过复杂解析，用指数退避
+                            pass
+                    time.sleep(delay)
                     continue
                 raise
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.ReadError) as e:

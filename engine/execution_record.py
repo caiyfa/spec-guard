@@ -48,10 +48,13 @@ def truncate(obj, _depth=0):
 class StepTrace:
     """单步执行轨迹"""
     type: str                              # 步骤类型（call / set_var / db_query / select_emp / ...）
-    request: dict = field(default_factory=dict)   # method/path/params（不含 Authorization）
+    request: dict = field(default_factory=dict)   # method/path/params/body（不含 Authorization）
     response_status: int = None
     duration_ms: int = 0
-    body_excerpt: object = None
+    body_excerpt: object = None            # 响应体摘要（截断，用于快速展示）
+    trace_id: str = ""                     # 请求跟踪 ID（ifelc-trace_id，网关全链追踪）
+    response_headers: dict = field(default_factory=dict)  # 完整响应头
+    response_body: object = None           # 完整响应体（未截断，用于详细查询）
     note: str = ""
 
     def to_dict(self):

@@ -6,6 +6,7 @@ max_turns=12 熔断；kill 后重跑可从 JSONL 续会话。
 import asyncio
 import json
 import sys
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -43,6 +44,9 @@ TOOL_NAME_TO_MODULE = {}
 for mod in TOOL_MODULES:
     for tool in mod.TOOLS:
         TOOL_NAME_TO_MODULE[tool.name] = mod
+
+# T-403: 工具结果最大字符数（超限时截断 + 落盘引用）
+_TOOL_RESULT_MAX_CHARS = 50000
 
 
 # ══════════════════════════════════════════════════════════
@@ -201,7 +205,10 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
 # ══════════════════════════════════════════════════════════
 
 class AgentRuntime:
-    """核心循环：LLM → tools → LLM → ... → stop。"""
+    """核心循环：LLM → tools → LLM → ... → stop。
+
+    T-402：支持 cancellation 检查点——用户打断后不再推进轮次且不再写会话。
+    """
 
     def __init__(self, llm: LLMClient, tools: list = None, max_turns: int = 12,
                  mode_name: str = ""):
@@ -210,6 +217,9 @@ class AgentRuntime:
         self.events = EventBus()
         # K-023：mode_name 仅作遗留标签（todos 的 mode 字段兼容），不再有工具门禁
         self.mode_name = mode_name
+
+        # T-402: 取消事件（线程安全，跨 asyncio.to_thread 边界）
+        self._cancel_event = threading.Event()
 
         # H-4: 待办状态
         self._todos: list[dict] = []
@@ -279,6 +289,14 @@ class AgentRuntime:
         llm_messages = list(messages)
 
         for turn in range(self.max_turns):
+            # T-402: 检查 cancellation 检查点——用户打断后停止推进轮次且不再写会话
+            if self._cancel_event.is_set():
+                messages.append({"role": "system",
+                                 "content": "[CANCEL] 用户已打断当前会话。"})
+                self.events.emit("state", cancelled=True, turn=turn,
+                                 max_turns=self.max_turns)
+                break
+
             # G3-1: 超阈值时触发压缩（只压 LLM 工作副本，完整历史不丢）
             if should_compact(llm_messages, self.llm.max_context_tokens):
                 llm_messages = compact(llm_messages, self.llm, self.llm.max_context_tokens)
@@ -353,11 +371,40 @@ class AgentRuntime:
             messages.append({"role": "system", "content": f"[FUSE] 已达到 max_turns={self.max_turns}，自动停止。"})
             self.events.emit("state", fused=True, max_turns=self.max_turns)
 
-        # 最终保存
-        if session and session_id:
+        # 最终保存（T-402：cancelled 时不写会话——打断后不保留不完整产物）
+        if session and session_id and not self._cancel_event.is_set():
             session.save(session_id, messages, metrics=self.llm.get_stats(), todos=self._todos)
 
         return messages
+
+    def cancel(self):
+        """T-402：线程安全地请求取消当前运行。
+
+        检查点在每轮 LLM 调用前，设置后当前轮次 tool 执行完即停止（不推进下一轮），
+        且不再写会话文件。
+        """
+        self._cancel_event.set()
+
+    def _truncate_tool_result(self, result: str, tool_name: str) -> str:
+        """T-403：工具结果统一截断——超限落盘 + 回喂引用。"""
+        if len(result) <= _TOOL_RESULT_MAX_CHARS:
+            return result
+        truncated = result[:_TOOL_RESULT_MAX_CHARS]
+        note = (
+            f"\n\n[截断] 工具 {tool_name} 返回 {len(result)} 字符，"
+            f"超过 {_TOOL_RESULT_MAX_CHARS} 限制。"
+            f"完整结果已保存至会话目录。")
+        if self._session and self._session_id:
+            try:
+                trunc_dir = self._session.sessions_dir / "_truncated"
+                trunc_dir.mkdir(parents=True, exist_ok=True)
+                import datetime as _dt
+                ts = _dt.datetime.now().strftime("%H%M%S%f")[:10]
+                ref_path = trunc_dir / f"{tool_name}_{ts}.txt"
+                ref_path.write_text(result, encoding="utf-8")
+            except Exception:
+                pass
+        return truncated + note
 
     def _to_openai_tools(self) -> list[dict]:
         """将 MCP Tool 转换为 OpenAI function calling 格式。"""
@@ -412,7 +459,8 @@ class AgentRuntime:
 
         try:
             result = asyncio.run(mod.handle(name, arguments))
-            return result[0].text if result else "（无输出）"
+            raw = result[0].text if result else "（无输出）"
+            return self._truncate_tool_result(raw, name)
         except Exception as e:
             return f"工具执行异常: {e}"
 

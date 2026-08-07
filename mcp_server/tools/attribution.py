@@ -111,6 +111,21 @@ TOOLS = [
             }
         }
     ),
+    Tool(
+        name="read_case_detail",
+        description="读取单场景的完整执行详情：含 trace_id（网关全链追踪 ID）、完整响应头、"
+                    "完整响应体（未截断）、完整请求体。用于排查接口调用细节——"
+                    "拿到 run_id 后查某场景每一步 HTTP 调用的完整上下文。"
+                    "read_run_report 只返回失败场景摘要，本工具返回任意场景的完整 JSON。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "任务号（EX-xxxxxxxx）"},
+                "scenario_id": {"type": "string", "description": "场景 ID（如 PP-RC-008）"},
+            },
+            "required": ["run_id", "scenario_id"],
+        }
+    ),
 ]
 
 
@@ -125,6 +140,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_read_run_log(arguments)
     elif name == "list_executions":
         return _handle_list_executions(arguments)
+    elif name == "read_case_detail":
+        return _handle_read_case_detail(arguments)
     return []
 
 
@@ -169,6 +186,36 @@ def _handle_list_executions(arguments: dict) -> list[TextContent]:
         out["hint"] = ("索引为空或该场景近期无执行记录；索引由执行控制在每次运行完成后写入 "
                        "executions/index.jsonl（本功能上线后的执行才有）")
     return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False, indent=2))]
+
+
+def _handle_read_case_detail(arguments: dict) -> list[TextContent]:
+    """读取单场景完整执行详情：case JSON 的全部内容（含 trace_id、响应头、完整响应体）。"""
+    run_id = str(arguments.get("run_id", "") or "")
+    scenario_id = str(arguments.get("scenario_id", "") or "")
+    if not run_id or not scenario_id:
+        return [TextContent(type="text", text="错误：缺少 run_id 或 scenario_id 参数")]
+    if not RUN_ID_RE.match(run_id):
+        return [TextContent(type="text", text=f"OUT_OF_SCOPE: 非法 run_id: {run_id}")]
+    reports_root = _get_reports_root()
+    run_dir = (reports_root / run_id).resolve()
+    try:
+        run_dir.relative_to(reports_root.resolve())
+    except ValueError:
+        return [TextContent(type="text", text=f"OUT_OF_SCOPE: 路径越界: {run_id}")]
+    cases_dir = run_dir / "cases"
+    if not cases_dir.is_dir():
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error": f"运行报告不存在: {run_id}/cases/"}, ensure_ascii=False, indent=2))]
+    for case_file in sorted(cases_dir.glob("*.json")):
+        try:
+            with open(case_file, "r", encoding="utf-8") as f:
+                case = json.load(f)
+            if case.get("scenario_id") == scenario_id:
+                return [TextContent(type="text", text=json.dumps(case, ensure_ascii=False, indent=2, default=str))]
+        except Exception:
+            continue
+    return [TextContent(type="text", text=json.dumps({
+        "ok": False, "error": f"场景 {scenario_id} 在运行 {run_id} 中未找到"}, ensure_ascii=False, indent=2))]
 
 
 def _handle_read_run_log(arguments: dict) -> list[TextContent]:

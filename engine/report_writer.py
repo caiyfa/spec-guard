@@ -109,7 +109,8 @@ def _render_case_md(r):
         params = f" params={_fmt_val(req['params'], 120)}" if req.get("params") else ""
         who = f"[{req['as']}] " if req.get("as") else ""
         status = f" → {s['response_status']}" if s.get("response_status") is not None else ""
-        lines.append(f"{i}. **{s['type']}** {who}{desc}{params}{status}（{s.get('duration_ms', 0)}ms）")
+        trace = f" | trace={s['trace_id']}" if s.get('trace_id') else ""
+        lines.append(f"{i}. **{s['type']}** {who}{desc}{params}{status}{trace}（{s.get('duration_ms', 0)}ms）")
     for t in r.get("oracle_traces", []):
         lines.append(f"- 权限预言: {_fmt_val(t, 300)}")
     for t in r.get("db_traces", []):
