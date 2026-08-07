@@ -43,7 +43,10 @@ TOOLS = [
                     "默认相对当前激活工作区根（AGENTS.md、specs/**、changes/**、.specguard/** 等）；"
                     "工作区未命中时自动回退 SpecGuard 仓库根（scenarios/**、docs/**、"
                     "contracts_baseline.json、release 报告等）；"
-                    "sg:// 前缀强制 SpecGuard 仓库根（消除双根同名歧义）。",
+                    "sg:// 前缀强制 SpecGuard 仓库根（消除双根同名歧义）。"
+                    "可选 anchor/section 参数只取关键章节（T-512，省 token）："
+                    "anchor=FR-xxx/AC-xxx 按锚点提取（支持 ### FR-xxx: 标题式与 - **FR-xxx**： 列表式），"
+                    "section=章节编号或标题文字按 md 标题树提取；两者互斥，缺省读全文。",
         inputSchema={
             "type": "object",
             "properties": {
@@ -51,6 +54,16 @@ TOOLS = [
                     "type": "string",
                     "description": "相对工作区根的路径（如 specs/module1/feature1/spec.md），"
                                    "或 sg:// 前缀的 SpecGuard 仓库路径（如 sg://scenarios/employee/person-profile/PP-RC-001.yaml）"
+                },
+                "anchor": {
+                    "type": "string",
+                    "description": "可选：FR/AC 锚点（如 FR-009、AC-003）——只返回该锚点章节（带行区间标头），"
+                                   "与 section 互斥"
+                },
+                "section": {
+                    "type": "string",
+                    "description": "可选：md 章节编号（如 4）或标题文字子串（如 Functional Requirements）——"
+                                   "只返回该章节（带行区间标头），与 anchor 互斥"
                 }
             },
             "required": ["path"]
@@ -256,10 +269,44 @@ def _handle_sync_workspace(arguments: dict) -> list[TextContent]:
         text=f"错误：未知 action: {action}（合法值: sync / dismiss）")]
 
 
+def _read_section(resolved: Path, display_path: str, anchor: str, section: str) -> list[TextContent]:
+    """T-512 章节提取分支：anchor/section 定位参数——只返回命中章节（带行区间标头）。
+
+    读全文后确定性提取（不受 _MAX_READ 200KB 截断影响，提取结果天然小）；
+    未命中返回含可用锚点清单的自愈提示。
+    """
+    from mcp_server.tools import sections as _sections
+    try:
+        text = resolved.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return [TextContent(type="text", text=f"错误：读取失败: {display_path}: {e}")]
+    if anchor:
+        hit = _sections.extract_fr_section(text, anchor)
+        if hit is None:
+            anchors = _sections.list_fr_anchors(text)
+            hint = (f"可用锚点：{'、'.join(anchors[:20])}" if anchors
+                    else "该文件无 FR/AC 锚点（支持 ### FR-xxx: 标题式与 - **FR-xxx**： 列表式）")
+            return [TextContent(type="text", text=f"错误：锚点未命中: {anchor}（{hint}）")]
+    else:
+        hit = _sections.extract_heading_section(text, section)
+        if hit is None:
+            return [TextContent(type="text", text=(
+                f"错误：章节未命中: {section}（按 md 标题树匹配，"
+                "支持章节编号如「4」或标题文字子串）"))]
+    header = f"--- {display_path} · {hit['title']} · 行{hit['start']}-{hit['end']} ---\n"
+    return [TextContent(type="text", text=header + hit["chunk"])]
+
+
 def _handle_read_spec(arguments: dict) -> list[TextContent]:
     path = arguments.get("path", "")
     if not path:
         return [TextContent(type="text", text="错误：缺少 path 参数")]
+    # T-512：可选 anchor/section 定位参数（互斥），只取关键章节
+    anchor = str(arguments.get("anchor", "") or "").strip()
+    section = str(arguments.get("section", "") or "").strip()
+    if anchor and section:
+        return [TextContent(type="text", text="错误：anchor 与 section 参数互斥，请只传一个")]
+    locate = bool(anchor or section)
 
     # K-021：sg:// 前缀强制 SpecGuard 仓库根
     if path.startswith("sg://"):
@@ -270,16 +317,22 @@ def _handle_read_spec(arguments: dict) -> list[TextContent]:
         if not resolved.is_file():
             hint = _migration_hint(sg_path)
             return [TextContent(type="text", text=f"错误：文件不存在: {path}{hint}")]
+        if locate:
+            return _read_section(resolved, path, anchor, section)
         return _read_text_guarded(resolved, path)
 
     # 第一根：工作区（原行为）
     resolved = safe_resolve(path)
     if resolved is not None and resolved.is_file():
+        if locate:
+            return _read_section(resolved, path, anchor, section)
         return _read_with_remote_status(resolved, path)
 
     # 第二根：SpecGuard 仓库（K-021 回退——scenarios/docs/contracts 等仓库侧内容）
     sg_resolved = _resolve_sg_root(path)
     if sg_resolved is not None and sg_resolved.is_file():
+        if locate:
+            return _read_section(sg_resolved, path, anchor, section)
         return _read_text_guarded(sg_resolved, path)
 
     hint = _migration_hint(path)

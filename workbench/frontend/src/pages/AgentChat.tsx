@@ -1,6 +1,6 @@
 /** AgentChat — 左侧会话树 + 中间对话区 + 右侧面板（K-012 简洁化：底部仅模式/模型下拉 + 输入框） */
 
-import { useState, useRef, useEffect, useCallback, useMemo, createContext, useContext, isValidElement } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo, createContext, useContext, isValidElement } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,6 +17,9 @@ import SessionTree from '../components/SessionTree';
 import TodoPanel from '../components/TodoPanel';
 import type { StructuredTodo } from '../components/TodoPanel';
 import FileViewer from '../components/FileViewer';
+import type { DocHunk } from '../components/FileViewer';
+import ReadingPanel from '../components/ReadingPanel';
+import type { DocReadItem } from '../components/ReadingPanel';
 
 interface ChatReference {
   type: 'info_pack' | 'file' | 'draft';
@@ -244,7 +247,7 @@ const MD_COMPONENTS: Components = {
   input: (props) => <input {...props} className="accent-info mr-1" />,
 };
 
-const MarkdownText = React.memo(function MarkdownText({ content }: { content: string }) {
+const MarkdownText = memo(function MarkdownText({ content }: { content: string }) {
   return (
     <div className="text-sm text-gray-200">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{content}</ReactMarkdown>
@@ -1337,9 +1340,10 @@ interface FileTab {
   content: string;
   format?: 'raw' | 'markdown' | 'text';
   loading: boolean;
+  hunks?: DocHunk[];  // T-511：阅读足迹打开时携带的使用位置（行区间定位+高亮）
 }
 
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles }: {
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -1361,6 +1365,8 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
   maximized?: boolean;          // K-039：面板最大化（吃掉会话区）
   onToggleMaximize?: () => void;
   draftFiles: string[];         // K-xxx：会话内 Agent 写入的草稿（产物区）
+  readingFeed: DocReadItem[];   // T-511：阅读足迹（doc_read 事件汇聚，时间倒序）
+  onOpenDocRead: (item: DocReadItem, hunk?: DocHunk) => void;
 }) {
   const isFileTab = activeTab.startsWith('file:');
   const activeFile = isFileTab ? fileTabs.find(t => `file:${t.path}` === activeTab) : null;
@@ -1393,6 +1399,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
     >      {/* 页签条（K-032：参考编辑器页签样式） */}
       <div className="flex items-center border-b border-border overflow-x-auto flex-shrink-0">
         {tabBtn('todos', '📋 待办')}
+        {tabBtn('reading', readingFeed.length > 0 ? `📖 阅读(${readingFeed.length})` : '📖 阅读')}
         {scenarioMeta && tabBtn('pack', `📦 信息包(${scenarioMeta.info_pack.length})`)}
         {tabBtn('drafts', `📝 草稿产物(${draftFiles.length})`)}
         {tabBtn('deps', '🕸 依赖图')}
@@ -1425,6 +1432,9 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
             )}
           </>
         )}
+        {activeTab === 'reading' && (
+          <ReadingPanel items={readingFeed} onOpen={onOpenDocRead} />
+        )}
         {activeTab === 'pack' && scenarioMeta && (
           <InfoPackPanel meta={scenarioMeta} onUpdate={onUpdateMeta} onError={onError}
             onViewFile={(p) => onViewFile(p)} defaultOpen />
@@ -1443,7 +1453,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
             </div>
             <div className="flex-1 min-h-0">
               <FileViewer path={activeFile.path} content={activeFile.content}
-                loading={activeFile.loading} format={activeFile.format} />
+                loading={activeFile.loading} format={activeFile.format} hunks={activeFile.hunks} />
             </div>
           </div>
         )}
@@ -1468,6 +1478,7 @@ const _store = {
   planItems: [] as string[],
   ctxUsage: null as CtxUsage | null,
   wsState: 'connecting' as 'connecting' | 'open' | 'closed',
+  readingFeed: [] as DocReadItem[],  // T-511：阅读足迹（跨导航保持，与 messages 同生命周期）
 };
 
 // ── 复制按钮（独立组件，自管理反馈状态） ──
@@ -1831,9 +1842,6 @@ export default function AgentChat() {
 
   // 从模块存储恢复状态（跨导航保持会话）
   const [messages, setMessages] = useState<ChatMessage[]>(_store.messages);
-  // K-xxx：hint 参数预填——从 DAG 页「对话编排」跳转时（/agent?hint=dag-orchestration），
-  // 输入框预填技能提示词（含「编排/依赖」关键词，直接发送也能命中技能确定性触发）
-  const hint = searchParams.get('hint') || '';
   const [loading, setLoading] = useState(_store.loading);
   const [sessionId, setSessionId] = useState(_store.sessionId);
   const [sessionTitle, setSessionTitle] = useState(_store.sessionTitle);
@@ -1843,6 +1851,7 @@ export default function AgentChat() {
   const [error, setError] = useState(_store.error);
   const [planItems, setPlanItems] = useState<string[]>(_store.planItems);
   const [ctxUsage, setCtxUsage] = useState<CtxUsage | null>(_store.ctxUsage);
+  const [readingFeed, setReadingFeed] = useState<DocReadItem[]>(_store.readingFeed);  // T-511
 
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsVersion, setSessionsVersion] = useState(0);
@@ -2007,6 +2016,7 @@ export default function AgentChat() {
   useEffect(() => { _store.error = error; }, [error]);
   useEffect(() => { _store.planItems = planItems; }, [planItems]);
   useEffect(() => { _store.ctxUsage = ctxUsage; }, [ctxUsage]);
+  useEffect(() => { _store.readingFeed = readingFeed; }, [readingFeed]);
 
   // WebSocket（跨导航保持，不随组件卸载关闭）
   // 使用 ref 存储最新的事件处理函数，避免闭包过期
@@ -2054,6 +2064,40 @@ export default function AgentChat() {
         setTurnInfo('');
         setMessages(prev => [...prev, { role: 'tool', content: String(event.result ?? '') }]);
         break;
+      case 'doc_read': {
+        // T-511 依据透明：阅读足迹——同文件去重合并 hunks，时间倒序（新卡 prepend）
+        const key = event.path || event.ref || `${event.tool}:unknown`;
+        setReadingFeed(prev => {
+          const hunks: DocHunk[] = (event.hunks || []).map((h: any) => ({
+            title: h.title || '', start: h.start || 1, end: h.end || 1,
+            note: h.note, thinking: event.thinking || undefined,
+          }));
+          const idx = prev.findIndex(i => i.key === key);
+          if (idx === -1) {
+            return [{
+              key, tool: event.tool || '', ref: event.ref || '', path: event.path || null,
+              turn: event.turn ?? 0, size: event.size ?? 0, excerpt: event.excerpt || '',
+              label: event.label || event.tool || '', thinking: event.thinking || '',
+              hunks, reads: 1,
+            }, ...prev];
+          }
+          const old = prev[idx];
+          const mergedHunks = [...old.hunks];
+          for (const h of hunks) {
+            if (!mergedHunks.some(o => o.start === h.start && o.end === h.end && o.title === h.title)) {
+              mergedHunks.push(h);
+            }
+          }
+          const next = [...prev];
+          next[idx] = {
+            ...old, turn: event.turn ?? old.turn, size: event.size ?? old.size,
+            excerpt: event.excerpt || old.excerpt, label: event.label || old.label,
+            thinking: event.thinking || old.thinking, hunks: mergedHunks, reads: old.reads + 1,
+          };
+          return next;
+        });
+        break;
+      }
       case 'done':
         setStats(event.stats || null);
         if (event.session_id) {
@@ -2268,17 +2312,23 @@ export default function AgentChat() {
   }, [sessionId]);
 
   // K-032: 打开引用文件——新增/激活右侧文件页签（取代 modal 弹窗）
-  const openFileViewer = useCallback(async (path: string, kind: 'file' | 'draft' = 'file') => {
+  // T-511：opts.hunks 携带阅读足迹使用位置（行区间定位+高亮）；opts.fallback
+  // 为 read-file 失败时的兜底内容（仓库根/sg:// 等 read-file 不可达路径 → 展示摘录）
+  const openFileViewer = useCallback(async (path: string, kind: 'file' | 'draft' = 'file',
+    opts?: { hunks?: DocHunk[]; fallback?: string }) => {
     const tabId = `file:${path}`;
     setActiveSideTab(tabId);
     setSideCollapsed(false);  // K-037：面板收起时打开文件自动展开
     localStorage.setItem('sg_side_collapsed', '0');
     setSideWidth(w => Math.max(w, 460));  // K-033：文件页签自动至少 460 宽（xlsx 表格）
-    // 已打开过 → 直接激活（保留已加载内容）
+    // 已打开过 → 直接激活（保留已加载内容，hunks 更新为最新足迹）
     let already = false;
     setFileTabs(prev => {
-      if (prev.some(t => t.path === path)) { already = true; return prev; }
-      return [...prev, { path, kind, content: '', loading: true }];
+      if (prev.some(t => t.path === path)) {
+        already = true;
+        return prev.map(t => t.path === path ? { ...t, hunks: opts?.hunks ?? t.hunks } : t);
+      }
+      return [...prev, { path, kind, content: '', loading: true, hunks: opts?.hunks }];
     });
     if (already) return;
     try {
@@ -2286,9 +2336,15 @@ export default function AgentChat() {
       setFileTabs(prev => prev.map(t =>
         t.path === path ? { ...t, content: r.content, loading: false, format: (r as any).format } : t));
     } catch {
-      setFileTabs(prev => prev.filter(t => t.path !== path));
-      setActiveSideTab('todos');
-      setError(`读取文件失败: ${path}`);
+      if (opts?.fallback) {
+        // T-511：read-file 不可达（越界/仓库根/已删除）→ 摘录兜底展示，不再移除页签
+        setFileTabs(prev => prev.map(t =>
+          t.path === path ? { ...t, content: opts.fallback!, loading: false, format: 'text' } : t));
+      } else {
+        setFileTabs(prev => prev.filter(t => t.path !== path));
+        setActiveSideTab('todos');
+        setError(`读取文件失败: ${path}`);
+      }
     }
   }, []);
 
@@ -2299,17 +2355,33 @@ export default function AgentChat() {
   }, []);
 
   // 未落盘内容预览（对话内大段 md 代码块 → 虚拟 memo: 页签，FileViewer 按 .md 渲染）
-  const openContentViewer = useCallback((title: string, content: string) => {
+  // T-511：opts.hunks 阅读足迹定位（memo 内容为摘录时 hunk 行区间按内容行数收敛）
+  const openContentViewer = useCallback((title: string, content: string, opts?: { hunks?: DocHunk[] }) => {
     const safe = title.replace(/[^\w一-龥-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'doc';
     const path = `memo:${safe}.md`;
+    const maxLine = content.split('\n').length;
+    const hunks = opts?.hunks?.map(h => ({
+      ...h, start: Math.min(h.start, maxLine), end: Math.min(h.end, maxLine),
+    }));
     setActiveSideTab(`file:${path}`);
     setSideCollapsed(false);
     localStorage.setItem('sg_side_collapsed', '0');
     setSideWidth(w => Math.max(w, 460));
     setFileTabs(prev => prev.some(t => t.path === path)
-      ? prev.map(t => (t.path === path ? { ...t, content, loading: false } : t))
-      : [...prev, { path, kind: 'file', content, loading: false }]);
+      ? prev.map(t => (t.path === path ? { ...t, content, loading: false, hunks } : t))
+      : [...prev, { path, kind: 'file', content, loading: false, hunks }]);
   }, []);
+
+  // T-511：阅读足迹点击——path 可打开 → file: 页签带 hunks 定位（read-file 失败摘录兜底）；
+  // path 为空（read_scenario/read_info_pack/sg://）→ memo 页签展示摘录
+  const openDocRead = useCallback((item: DocReadItem, hunk?: DocHunk) => {
+    const hunks = hunk ? [hunk] : item.hunks;
+    if (item.path) {
+      openFileViewer(item.path, 'file', { hunks, fallback: item.excerpt });
+    } else {
+      openContentViewer(item.label || item.ref, item.excerpt, { hunks });
+    }
+  }, [openFileViewer, openContentViewer]);
 
   // 会话内 write_draft 内容映射（大段 md 代码块 → 落盘文件匹配，产物卡片去重用）
   const draftContents = useMemo(() => {
@@ -2342,6 +2414,7 @@ export default function AgentChat() {
     setSessionId(id);
     setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
+    setReadingFeed([]);  // T-511：足迹=本轮运行依据，恢复历史会话时清空（不持久化）
     setStreamingText('');
     // 从历史消息中提取 plan
     for (const m of msgs) {
@@ -2383,6 +2456,7 @@ export default function AgentChat() {
   const handleNewSession = () => {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
+    setReadingFeed([]);  // T-511：足迹=本轮运行依据，新会话清空
     setStreamingText('');
     // K-032：新会话同步清理信息包关联与文件页签
     setScenarioId(''); setScenarioMeta(null);
@@ -2721,6 +2795,13 @@ export default function AgentChat() {
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
               📋
             </button>
+            <button onClick={() => expandSideTo('reading')} title={`阅读足迹（${readingFeed.length}）`}
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+              📖
+              {readingFeed.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{readingFeed.length}</span>
+              )}
+            </button>
             {scenarioMeta && (
               <button onClick={() => expandSideTo('pack')} title={`信息包（${scenarioMeta.info_pack.length}）`}
                 className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
@@ -2748,7 +2829,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} />
           </>
         )}
       </div>

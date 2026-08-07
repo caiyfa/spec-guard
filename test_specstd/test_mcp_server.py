@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 26  # 新增 list_executions 后 25→26
+        assert len(ALL_TOOLS) == 27  # 新增 read_case_detail 后 26→27（T-512 修正预存计数漂移）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -64,6 +64,7 @@ class TestToolRegistration:
                      "suggest_deps",  # K-046: 依赖建议（确定性引擎）
                      "list_failures", "list_executions", "read_run_log",  # K-052: 失败索引 + 全量执行台账
                      "scan_compliance",  # T-313: 全库格式合规缺口扫描
+                     "read_case_detail",  # 单场景完整 case 详情（trace_id/响应头体）
                      "sync_workspace"}  # 远端更新同步 + 会话级 dismiss
         assert names == expected
 
@@ -145,6 +146,44 @@ class TestSpecReader:
                        {"path": "specs/module1/feature1/data.zip"})
         assert "二进制" in result[0].text
 
+    # ── T-512：anchor/section 章节提取 ──
+
+    def test_read_spec_anchor_hit(self, workspace):
+        """anchor=FR-001 → 只返回该锚点章节（带行区间标头），不含 FR-002。"""
+        result = _call(spec_reader, "read_spec",
+                       {"path": "specs/module1/feature1/spec.md", "anchor": "FR-001"})
+        text = result[0].text
+        assert text.startswith("--- specs/module1/feature1/spec.md · FR-001")
+        assert "行" in text.split("\n", 1)[0]  # 标头带行区间
+        assert "查询返回 200" in text
+        assert "FR-002" not in text
+
+    def test_read_spec_anchor_miss_self_heal(self, workspace):
+        """锚点未命中 → 错误消息列可用锚点（自愈）。"""
+        result = _call(spec_reader, "read_spec",
+                       {"path": "specs/module1/feature1/spec.md", "anchor": "FR-999"})
+        text = result[0].text
+        assert "锚点未命中" in text
+        assert "FR-001" in text and "FR-002" in text  # 可用锚点清单
+
+    def test_read_spec_section_hit(self, workspace):
+        """section=标题文字子串 → 返回整个章节。"""
+        result = _call(spec_reader, "read_spec",
+                       {"path": "specs/module1/feature1/spec.md", "section": "功能描述"})
+        text = result[0].text
+        assert "FR-001" in text and "FR-002" in text
+
+    def test_read_spec_section_miss(self, workspace):
+        result = _call(spec_reader, "read_spec",
+                       {"path": "specs/module1/feature1/spec.md", "section": "不存在的章节"})
+        assert "章节未命中" in result[0].text
+
+    def test_read_spec_anchor_section_mutex(self, workspace):
+        result = _call(spec_reader, "read_spec",
+                       {"path": "specs/module1/feature1/spec.md",
+                        "anchor": "FR-001", "section": "功能描述"})
+        assert "互斥" in result[0].text
+
 
 # ══════════════════════════════════════════════════════════
 # scenario_tools
@@ -164,6 +203,21 @@ class TestScenarioTools:
     def test_read_scenario(self):
         result = _call(scenario_tools, "read_scenario", {"id": "PP-RC-001"})
         assert "PP-RC-001" in result[0].text
+
+    def test_read_scenario_part_flow(self):
+        """T-512：part=flow → 只返回 flow 段（带行区间标头）。"""
+        result = _call(scenario_tools, "read_scenario", {"id": "PP-RC-001", "part": "flow"})
+        text = result[0].text
+        assert text.startswith("--- PP-RC-001 · flow 段 · 行")
+        assert "verify:" not in text
+
+    def test_read_scenario_part_covers(self):
+        result = _call(scenario_tools, "read_scenario", {"id": "PP-RC-001", "part": "covers"})
+        assert "covers" in result[0].text or "FR-" in result[0].text
+
+    def test_read_scenario_part_invalid(self):
+        result = _call(scenario_tools, "read_scenario", {"id": "PP-RC-001", "part": "不存在"})
+        assert "错误" in result[0].text and "doc/flow/verify/covers" in result[0].text
 
     def test_read_scenario_not_found(self):
         result = _call(scenario_tools, "read_scenario", {"id": "NONEXISTENT-999"})

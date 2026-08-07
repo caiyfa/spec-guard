@@ -218,12 +218,6 @@ function hexToRgbTriplet(hex: string): string {
   return `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}`;
 }
 
-function rgbTripletToHex(rgb: string): string {
-  const p = rgb.trim().split(/\s+/);
-  if (p.length !== 3) return '';
-  return '#' + p.map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
-}
-
 /** 已保存的自定义颜色（RGB 三元组，空串=未自定义） */
 export function getRailDot(): string {
   return localStorage.getItem(RAIL_KEY) || '';

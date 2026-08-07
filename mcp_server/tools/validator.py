@@ -166,7 +166,8 @@ def validate_scenario_content(content: str) -> dict:
         findings.append({"level": "WARN", "rule": "COVERS", "scenario": sid,
                          "message": "缺少 doc.covers（FR 锚点）——covers 是场景↔Spec 的强制关联，"
                                     "缺失的场景无法参与覆盖分析与 DAG 编排。"
-                                    "请补充当前工作区 spec.md 中真实存在的 FR ID（用 read_spec 核实）"})
+                                    "请补充当前工作区 spec.md 中真实存在的 FR ID"
+                                    "（用 read_spec 核实，支持 anchor=FR-xxx 参数定位章节）"})
 
     # T4/T7 依赖连通性与版本期望（K-021②：此前 Agent 的 validate 不查 depends_on，
     # 悬空依赖/版本不可满足要到 promote 的发布门禁才炸——反馈晚一阶段，

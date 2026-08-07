@@ -38,11 +38,16 @@ TOOLS = [
     ),
     Tool(
         name="read_scenario",
-        description="读取单个场景的 YAML 内容（根据场景 ID 查找文件）",
+        description="读取单个场景的 YAML 内容（根据场景 ID 查找文件）。"
+                    "可选 part 参数只取关键段（T-512，省 token）："
+                    "doc（元信息+covers）/flow（执行步骤）/verify（断言）/covers（仅锚点清单），"
+                    "缺省读全文。",
         inputSchema={
             "type": "object",
             "properties": {
-                "id": {"type": "string", "description": "场景 ID（如 PP-RC-001）"}
+                "id": {"type": "string", "description": "场景 ID（如 PP-RC-001）"},
+                "part": {"type": "string", "enum": ["doc", "flow", "verify", "covers"],
+                         "description": "可选：只返回该段（带行区间标头，注释保留），缺省读全文"}
             },
             "required": ["id"]
         }
@@ -253,13 +258,26 @@ def _handle_read_scenario(arguments: dict) -> list[TextContent]:
     sid = arguments.get("id", "")
     if not sid:
         return [TextContent(type="text", text="错误：缺少 id 参数")]
+    # T-512：可选 part 参数（doc/flow/verify/covers）只取关键段
+    part = str(arguments.get("part", "") or "").strip().lower()
+
+    def _out(content: str) -> list[TextContent]:
+        if not part:
+            return [TextContent(type="text", text=content)]
+        from mcp_server.tools import sections as _sections
+        hit = _sections.extract_yaml_part(content, part)
+        if hit is None:
+            return [TextContent(type="text", text=(
+                f"错误：场景 {sid} 无 {part} 段（合法值: doc/flow/verify/covers）"))]
+        header = f"--- {sid} · {hit['title']} · 行{hit['start']}-{hit['end']} ---\n"
+        return [TextContent(type="text", text=header + hit["chunk"])]
 
     # K-xxx：台账映射优先——场景 ID → 当前文件路径由 scenarios 台账维护
     # （文件随状态变更目录：草稿入库后从 drafts/ 移到 scenarios/{module}/，
     #  按 ID 查表定位当前路径，不再每次全量扫描文件系统）
     file_path = _lookup_scenario_path(sid)
     if file_path is not None:
-        return [TextContent(type="text", text=file_path.read_text(encoding="utf-8"))]
+        return _out(file_path.read_text(encoding="utf-8"))
 
     # 回退：台账未命中（表未建/未扫描过）→ 全量扫描 + 自愈落台账
     for yaml_file in SCENARIOS_ROOT.rglob("*.yaml"):
@@ -271,7 +289,7 @@ def _handle_read_scenario(arguments: dict) -> list[TextContent]:
             if raw.get("id") == sid:
                 content = yaml_file.read_text(encoding="utf-8")
                 _sync_scenario_ledger()  # 自愈：一次扫描后台账即最新，后续查表命中
-                return [TextContent(type="text", text=content)]
+                return _out(content)
         except Exception:
             continue
 

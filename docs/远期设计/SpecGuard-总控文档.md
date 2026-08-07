@@ -202,8 +202,8 @@ flowchart LR
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
 | T-001 | S0 | 会话编排单测套件收口 | agent/ | 套件全绿+mock可复跑+关键用例覆盖 | — | 已完成 | sess-s0-dev | v1.2（2026-08-06）：已前置为打磨期 §4.1 T-401 先行施工；T-401 完成时本行按 已完成 核销，S1 依赖（§3.1）视为就绪。✅ 2026-08-07 核销（T-401 交付，S1 依赖就绪） |
-| T-511 | S0.5 | 阅读足迹面板（依据透明 V1） | runtime + AgentChat | runtime 读型工具调用后发 WS 事件 doc_read（path/tool/turn/摘要/大小）；右侧「📖 阅读」页签：时间倒序文件卡片、同文件去重；**点击打开 file: 页签即定位（locate 行区间参数 + 范围高亮，渲染带行号）**；只对读型文档工具（read_spec/read_scenario/read_run_report/read_run_log/read_info_pack），写型不上 | — | 未认领 | | P0 ｜ v1.5 S0.5 快车道，不阻塞 S1；零工具改动，底座复用面板页签/onViewFile；《知识体系设计》§4.5；v1.5 同日澄清（总控人指令）：打开即定位 |
-| T-512 | S0.5 | read_spec 章节提取 + 面板章节卡片（依据透明 V2） | spec_reader + AgentChat | read_spec 加可选 anchor/section 参数（md 标题树 + FR/AC 锚点走 specstd/anchors）；场景 YAML 提取 covers/关键步骤；报告类展示失败断言段；面板卡片升级为「命中章节+段落摘要」；**一卡多 hunk（多次读取同文件不同章节），file 页签顶部「▲ n/N 处 ▼」git-diff 式跳上处/下处并高亮；每 hunk 带意义标注条（工具名+关键参数+K-024 思考文本，确定性来源无 LLM 总结）** | T-511 | 未认领 | | P0 ｜ 顺带治 read_spec 整文件读取（200KB）的 token 浪费；validator 引用校验同步识别新参数；v1.5 同日澄清（总控人指令）：多处 hunk 导航 + 意义标注 |
+| T-511 | S0.5 | 阅读足迹面板（依据透明 V1） | runtime + AgentChat | runtime 读型工具调用后发 WS 事件 doc_read（path/tool/turn/摘要/大小）；右侧「📖 阅读」页签：时间倒序文件卡片、同文件去重；**点击打开 file: 页签即定位（locate 行区间参数 + 范围高亮，渲染带行号）**；只对读型文档工具（read_spec/read_scenario/read_run_report/read_run_log/read_info_pack），写型不上 | — | 已完成 | sess-s05-dev | P0 ✅ 2026-08-07（agent/doc_read.py 纯函数构建器（五读型工具白名单、错误结果跳过、excerpt≤2000、read_run_log tail 行区间换算）+ runtime tool_call 后补发 doc_read 捎带 K-024 thinking；前端 📖 阅读页签（时间倒序、同 key 去重合并 hunks、reads 计数、_store 跨导航保持）+ FileViewer LinedText 行号/区间高亮/▲ n/N 处 ▼ 导航 + read-file 失败摘录兜底 memo；顺带修复 master 预存构建红 3 处（memo import/hint/rgbTripletToHex 死代码）；test_doc_read 14 例 + test_agent 71 全绿 + npm run build PASS） |
+| T-512 | S0.5 | read_spec 章节提取 + 面板章节卡片（依据透明 V2） | spec_reader + AgentChat | read_spec 加可选 anchor/section 参数（md 标题树 + FR/AC 锚点走 specstd/anchors）；场景 YAML 提取 covers/关键步骤；报告类展示失败断言段；面板卡片升级为「命中章节+段落摘要」；**一卡多 hunk（多次读取同文件不同章节），file 页签顶部「▲ n/N 处 ▼」git-diff 式跳上处/下处并高亮；每 hunk 带意义标注条（工具名+关键参数+K-024 思考文本，确定性来源无 LLM 总结）** | T-511 | 已完成 | sess-s05-dev | P0 ✅ 2026-08-07（mcp_server/tools/sections.py 章节提取纯函数（FR 标题式/列表式双形态+AC 块+md 标题树编号或文字+yaml part 保注释，import specstd 正则常量零改动 specstd）；read_spec 加 anchor/section 互斥参数（不受 200KB 截断影响，未命中列可用锚点自愈）+ read_scenario 加 part 参数（doc/flow/verify/covers）；doc_read 章节标头→真实行区间 hunk，read_run_report 诚实降级 memo+失败断言段摘录；面板卡片=命中章节+段落摘要+hunk 清单（▲ n/N 处 ▼ 导航随 T-511 落地）；validator/技能/模式文案同步新参数；test_sections 15 + test_mcp_server +8（顺带修正 26→27 计数与 read_case_detail 名单预存红）；specstd 包零改动） |
 | T-010 | S1 | purpose 会话模型持久化+不可变 | M01 | 改purpose请求被拒测试 | T-001 | 未认领 | | |
 | T-011 | S1 | 三层交集白名单运行时强制 | M12 | 越权调用确定性拒绝+WARNING审计 | T-001 | 未认领 | | |
 | T-012 | S1 | agent/purposes/ 热加载注册表 | M01 | 30s可见不重启不改runtime | T-010 | 未认领 | | |
@@ -285,6 +285,7 @@ flowchart LR
 | sess-master | 总控文档 v1.3 编排（总控人指令） | T-501~T-504 追加（编排登记，非施工认领） | 2026-08-07 | 打磨期结束标注 + §4.2 恢复认领 + §4.3 引擎演进补点支线（第三批评估复核落地） |
 | sess-master | 总控文档 v1.4 编排（总控人指令） | T-505~T-510 追加（编排登记，非施工认领） | 2026-08-07 | §4.4 知识体系支线（知识体系设计落盘）；原型同步更新另行登记 |
 | sess-master | 总控文档 v1.5 编排（总控人指令） | T-511/T-512 追加（编排登记，非施工认领） | 2026-08-07 | S0.5 依据透明快车道（P0 不阻塞 S1）；T-508 备注同步前置口径 |
+| sess-s05-dev | S0.5 依据透明施工 | T-511 → T-512 | 2026-08-07 | 阅读足迹面板（V1）→ 章节提取+章节卡片（V2）；串行施工，specstd 零改动（sections 提取落 mcp_server 侧）；两项全部完成，顺带修复 master 预存构建红 3 处与 test_mcp_server 预存计数红 |
 | | | | | |
 
 ---
@@ -338,6 +339,24 @@ flowchart LR
 | docs/远期设计/SpecGuard-知识体系设计.md | sess-master | 2026-08-07 | cba09a346b8c | faa5074979ee | 已完成 | 补 §4.5 面板呈现（依据透明·阅读足迹 V1/V2/V3）+ §8 分期新增 S0.5 行 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-07 | 8f29f3f3fa06 | 6cc65dbee4f3 | 已完成 | v1.4 自身登记（第三次）：仅 §6 追加 S8 流转图修改与验收记录登记行（内容无其他变更） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-07 | dc81fd9b13d1 | 0a50d761c13b | 已完成 | v1.4 自身登记（第二次）：仅 §6 追加原型二轮修改与验收记录登记行（内容无其他变更） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s05-dev | 2026-08-07 | 850ef3c68385 | 4a1f1b714e0f | 已完成 | S0.5 施工自身登记（覆盖本会话全部总控文档编辑：§5 注册、T-511/T-512 认领与核销、§6 各行回填）；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| agent/doc_read.py | sess-s05-dev | 2026-08-07 | NEW | 7ddaf7f7f414 | 已完成 | T-511：doc_read 事件纯函数构建器（读型工具白名单/ref/path/label/excerpt/hunk 映射） |
+| agent/runtime.py | sess-s05-dev | 2026-08-07 | 719e72e5bdfc | 2cb57192e9a2 | 已完成 | T-511：run 循环 tool_call 事件后补发 doc_read（仅读型文档工具、错误结果跳过、捎带 thinking） |
+| workbench/frontend/src/components/ReadingPanel.tsx | sess-s05-dev | 2026-08-07 | NEW | 7181fd2ce1d2 | 已完成 | T-511：📖 阅读足迹面板（时间倒序卡片、同文件去重合并 hunks） |
+| workbench/frontend/src/pages/AgentChat.tsx | sess-s05-dev | 2026-08-07 | b9c44f504ab1 | a8899625b861 | 已完成 | T-511：WS doc_read case + readingFeed state（_store 跨导航保持）+ 阅读页签接线 + openFileViewer hunks/fallback 透传 + openDocRead；顺带修复预存构建红（React.memo UMD→memo import、删除 hint 死代码） |
+| workbench/frontend/src/components/FileViewer.tsx | sess-s05-dev | 2026-08-07 | efdc8aea6a7d | 0c53577cf2a9 | 已完成 | T-511：DocHunk 类型 + LinedText 行号渲染 + hunks 行区间高亮 + ▲ n/N 处 ▼ 导航条（打开即定位） |
+| test_specstd/test_doc_read.py | sess-s05-dev | 2026-08-07 | NEW | b1223be9ce32 | 已完成 | T-511：doc_read 事件单测 14 例（触发/不触发/错误跳过/tail hunk/thinking/excerpt 预算） |
+| workbench/frontend/src/theme.ts | sess-s05-dev | 2026-08-07 | 1dc0dc5093e4 | 7dc356ad123c | 已完成 | T-511 顺带：删除 rgbTripletToHex 死代码（master 预存构建红之一，npm run build 恢复全绿） |
+| mcp_server/tools/sections.py | sess-s05-dev | 2026-08-07 | NEW | 9e316168e0cf | 已完成 | T-512：章节提取纯函数（FR 标题式/列表式锚点、AC 定位、md 标题树、yaml part 行区间；import specstd 正则常量，specstd 零改动） |
+| mcp_server/tools/spec_reader.py | sess-s05-dev | 2026-08-07 | d20d1efc9ad7 | 81a7735818df | 已完成 | T-512：read_spec 加可选 anchor/section 参数（章节提取分支不受 200KB 截断影响 + 未命中自愈提示 + 互斥校验） |
+| mcp_server/tools/scenario_tools.py | sess-s05-dev | 2026-08-07 | c0b19d070d5f | 8705ccddc0f0 | 已完成 | T-512：read_scenario 加可选 part 参数（doc/flow/verify/covers，保注释文本边界） |
+| mcp_server/tools/validator.py | sess-s05-dev | 2026-08-07 | 5ed1089a3c9a | be02323a5a8c | 已完成 | T-512：COVERS WARN 指引文案同步 read_spec anchor 参数（文案级） |
+| agent/doc_read.py | sess-s05-dev | 2026-08-07 | 7ddaf7f7f414 | c766d64a688b | 已完成 | T-512：章节标头解析→真实行区间 hunk；read_run_report 改 memo+失败断言段摘录（聚合 JSON 无法映射 run.json 行区间，诚实降级） |
+| test_specstd/test_mcp_server.py | sess-s05-dev | 2026-08-07 | d6b619cdae43 | 2c6119e79d09 | 已完成 | T-512：read_spec anchor/section 5 用例 + read_scenario part 3 用例；顺带修正预存红（计数 26→27 + 补 read_case_detail） |
+| test_specstd/test_sections.py | sess-s05-dev | 2026-08-07 | NEW | 4f70e4fd4a48 | 已完成 | T-512：sections.py 提取单测 15 例（双形态 FR/AC/标题树/yaml part/未命中） |
+| agent/modes/generate.md | sess-s05-dev | 2026-08-07 | a65d4bd7b847 | ce90ab4d11eb | 已完成 | T-512：read_spec anchor 参数用法说明（一行级） |
+| agent/skills/generate-scenario.md | sess-s05-dev | 2026-08-07 | aba374b849b9 | 81efa43f5605 | 已完成 | T-512：read_spec anchor/section 参数用法说明（一行级） |
+| workbench/frontend/src/components/ReadingPanel.tsx | sess-s05-dev | 2026-08-07 | 7181fd2ce1d2 | 671db9bd6fa2 | 已完成 | T-512：卡片摘录跳过章节标头行直接展示段落摘要（hunk 清单/导航已随 T-511 落地） |
 | | | | | | | |
 
 ---

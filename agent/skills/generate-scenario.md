@@ -8,7 +8,7 @@ keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个
 
 ### 核心流程
 
-1. **读取需求**：使用 `read_info_pack`（如有 scenario_id）或 `read_spec` 读取需求文档
+1. **读取需求**：使用 `read_info_pack`（如有 scenario_id）或 `read_spec` 读取需求文档（read_spec 支持 `anchor=FR-xxx`/`section=章节` 参数只取关键章节，省 token）
 2. **获取 ID**：使用 `next_scenario_id` 获取下一个可用场景 ID
 3. **查询注册表**：使用 `query_registry` 确认可用的 tool 和 oracle
 4. **参考已有场景（分类定位）**：使用 `list_scenarios`（返回含 `summary` 分类摘要：按模块/

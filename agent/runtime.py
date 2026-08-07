@@ -20,6 +20,7 @@ from agent.events import EventBus
 from agent.mode_loader import load_mode, ModeDef
 from agent.compactor import should_compact, compact
 from agent.skill_loader import build_skills_xml, match_skills_hint
+from agent.doc_read import build_doc_read
 
 # 默认使用 MCP server 的全部工具
 from mcp_server.tools import (
@@ -47,6 +48,15 @@ for mod in TOOL_MODULES:
 
 # T-403: 工具结果最大字符数（超限时截断 + 落盘引用）
 _TOOL_RESULT_MAX_CHARS = 50000
+
+
+def _parse_tc_arguments(tool_call: dict) -> dict:
+    """解析 tool_call.function.arguments（容错：解析失败返回空 dict）。"""
+    raw_args = tool_call.get("function", {}).get("arguments", "{}")
+    try:
+        return json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+    except json.JSONDecodeError:
+        return {}
 
 
 # ══════════════════════════════════════════════════════════
@@ -361,6 +371,15 @@ class AgentRuntime:
                 messages.append(tool_msg)
                 llm_messages.append(tool_msg)
                 self.events.emit("tool_call", tool_call=tc, result=result, turn=turn)
+                # T-511 依据透明：读型文档工具补发 doc_read（path/摘要/大小/hunks/思考文本），
+                # 前端 📖 阅读页签汇聚阅读足迹；写型/查询型工具与失败结果不上足迹
+                doc_evt = build_doc_read(
+                    tc.get("function", {}).get("name", ""),
+                    _parse_tc_arguments(tc),
+                    result, turn,
+                    thinking=clean_message.get("content", ""))
+                if doc_evt is not None:
+                    self.events.emit("doc_read", **doc_evt)
 
             # 增量保存会话
             if session and session_id:

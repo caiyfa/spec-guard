@@ -109,7 +109,7 @@ validate 只查格式，真实行为必须 run：
 
 1. **禁止通过删除必需字段来消除报错**——尤其是 covers、verify 断言、flow 步骤。
    删除 covers 让 validate 从 REJECT 变 PASS，不等于场景变合规，等于切断溯源
-2. validate 报 ANCHOR 错误时：先用 read_spec 亲自核实该 FR 是否在 spec.md 中
+2. validate 报 ANCHOR 错误时：先用 read_spec 亲自核实该 FR 是否在 spec.md 中（可用 anchor=FR-xxx 参数只取该锚点章节，省 token）
    - 若 FR 确实不存在 → 改用一个真实存在的 FR（引用核实出处）
    - 若 FR 明明存在 → 属于校验器误报，**停止生成并向用户报告**，等待指示；
      支持的锚点格式：`### FR-xxx: 标题` 或 `- **FR-xxx**：` 列表定义
