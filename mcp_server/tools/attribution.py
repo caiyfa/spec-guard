@@ -94,6 +94,23 @@ TOOLS = [
             "required": ["run_id"],
         }
     ),
+    Tool(
+        name="list_executions",
+        description="查询全量执行索引（执行台账）：返回「场景 × 任务号（EX-xxx）× 全量结果"
+                    "（含 PASS）」，最新在前。每条含断言摘要与执行上下文变量 saved_vars"
+                    "（如动态生成的活动 ID/名称）。可按 scenario_id/run_id/verdict 过滤。"
+                    "查某测试最近执行结果（含成功）或执行用的参数用它；只查失败用 list_failures。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "scenario_id": {"type": "string", "description": "可选：只看该场景的执行记录"},
+                "run_id": {"type": "string", "description": "可选：只看某次执行的全部场景"},
+                "verdict": {"type": "string",
+                            "description": "可选：按结果过滤（PASS/FAIL/SKIP/BLOCKED/DRIFT/ORPHANED）"},
+                "limit": {"type": "integer", "description": "返回条数（默认 10）"},
+            }
+        }
+    ),
 ]
 
 
@@ -106,6 +123,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_list_failures(arguments)
     elif name == "read_run_log":
         return _handle_read_run_log(arguments)
+    elif name == "list_executions":
+        return _handle_list_executions(arguments)
     return []
 
 
@@ -126,6 +145,29 @@ def _handle_list_failures(arguments: dict) -> list[TextContent]:
     if not entries:
         out["hint"] = ("索引为空或该场景近期无失败记录；索引由执行控制在每次运行完成后写入 "
                        "failures/index.jsonl（K-052 之后的执行才有）")
+    return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False, indent=2))]
+
+
+def _handle_list_executions(arguments: dict) -> list[TextContent]:
+    """全量执行索引查询：services.execution_index 的 MCP 出口。"""
+    from services import execution_index
+
+    scenario_id = str(arguments.get("scenario_id", "") or "")
+    run_id = str(arguments.get("run_id", "") or "")
+    verdict = str(arguments.get("verdict", "") or "")
+    limit = int(arguments.get("limit", 10) or 10)
+    entries = execution_index.query_executions(_get_reports_root(), scenario_id, run_id,
+                                               verdict, limit)
+    out = {
+        "ok": True,
+        "count": len(entries),
+        "executions": entries,
+        "note": "拿到 run_id 后：read_run_log 看完整执行日志（含 trace_id），"
+                "read_run_report 看断言差异与步骤轨迹",
+    }
+    if not entries:
+        out["hint"] = ("索引为空或该场景近期无执行记录；索引由执行控制在每次运行完成后写入 "
+                       "executions/index.jsonl（本功能上线后的执行才有）")
     return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False, indent=2))]
 
 

@@ -23,6 +23,7 @@ if str(SG_ROOT) not in sys.path:
 from test_specstd.helpers import create_valid_workspace
 from specstd.workspace import register_local, unregister, drafts_dir
 from mcp_server.tools import spec_reader, scenario_tools, registry_query, draft_writer, validator
+from mcp_server.tools import attribution
 from mcp_server.server import ALL_TOOLS
 
 
@@ -46,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 25  # 新增 sync_workspace 后 24→25
+        assert len(ALL_TOOLS) == 26  # 新增 list_executions 后 25→26
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -61,7 +62,7 @@ class TestToolRegistration:
                      "promote_drafts",  # K-021⑥: 批量入库
                      "edit_dependency",  # K-027: DAG 依赖边编排
                      "suggest_deps",  # K-046: 依赖建议（确定性引擎）
-                     "list_failures", "read_run_log",  # K-052: 失败索引 + 按任务号读日志
+                     "list_failures", "list_executions", "read_run_log",  # K-052: 失败索引 + 全量执行台账
                      "scan_compliance",  # T-313: 全库格式合规缺口扫描
                      "sync_workspace"}  # 远端更新同步 + 会话级 dismiss
         assert names == expected
@@ -594,3 +595,35 @@ class TestSyncWorkspace:
         r = _call(spec_reader, "sync_workspace", {"action": "bogus"})
         assert "sync" in r[0].text and "dismiss" in r[0].text
         reset_sync_dismissed()
+
+
+# ══════════════════════════════════════════════════════════
+# list_executions（全量执行台账）
+# ══════════════════════════════════════════════════════════
+
+class TestListExecutions:
+    def test_list_executions_empty(self, workspace):
+        """无执行记录时返回空列表 + hint。"""
+        result = _call(attribution, "list_executions", {})
+        data = json.loads(result[0].text)
+        assert data["ok"] is True and data["count"] == 0
+        assert "hint" in data
+
+    def test_list_executions_filters(self, workspace, monkeypatch, tmp_path):
+        """按 scenario_id 过滤 + saved_vars 可见（台账不可用 → 文件降级）。"""
+        import services.ledger_store as ledger_store
+        monkeypatch.setattr(ledger_store, "query_executions_db", lambda *a, **k: [])
+        index = tmp_path / "reports" / "executions"
+        index.mkdir(parents=True)
+        (index / "index.jsonl").write_text(
+            json.dumps({"run_id": "EX-001", "scenario_id": "ST-01", "verdict": "PASS",
+                        "title": "t", "env": "sit", "finished_at": "2026-08-07T10:00:00",
+                        "duration_ms": 1, "covers": [], "category": "", "message": "",
+                        "assertion_summary": {"passed": 1, "total": 1},
+                        "saved_vars": {"activityName": "SG历史DAG-1"}}, ensure_ascii=False) + "\n",
+            encoding="utf-8")
+        monkeypatch.setattr(attribution, "_get_reports_root", lambda: tmp_path / "reports")
+        result = _call(attribution, "list_executions", {"scenario_id": "ST-01"})
+        data = json.loads(result[0].text)
+        assert data["count"] == 1
+        assert data["executions"][0]["saved_vars"]["activityName"] == "SG历史DAG-1"
