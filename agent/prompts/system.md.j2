@@ -36,6 +36,18 @@
 切换工作区后，AGENTS.md 内容随之变化——下次会话的 system prompt 自动包含新工作区的规则。
 新增测试 oracle 注册后，下次会话的 query_registry 自动包含新 oracle。
 
+## 执行记录查询
+
+引擎每次执行后会把全部场景结果写入执行台账（executions/index.jsonl + SQLite 投影）：
+- list_executions：查某场景/某次执行的执行记录（**全量含 PASS**，最新在前；每条含
+  执行上下文变量 saved_vars，如动态生成的活动 ID/名称）——查「某测试执行结果/执行
+  用的参数」用它
+- list_failures：只查失败子集（FAIL/ERROR/BLOCKED）——归因优化失败场景时用它
+- read_run_log / read_run_report：拿到 run_id（EX-xxx）后看完整日志与断言差异
+
+动线示例：查 ST01 最近执行用的活动名称 → list_executions(scenario_id=UT01-PREP-001)
+看 saved_vars.activity.json.data.activityName → 需要更多证据再 read_run_report(run_id)。
+
 ## 任务行为指引（按任务类型遵循对应流程）
 
 你面对的任务通常是多阶段的（读 spec → 审计/生成 → 校验 → 试执行 → 入库 → 调试），
