@@ -106,4 +106,5 @@ class ExecutionRecord:
     def to_dict(self):
         d = asdict(self)
         d["warning_count"] = self.warning_count   # @property 不被 asdict 收录，手动补充
+        d["saved_vars"] = truncate(getattr(self, "saved_vars", {}))
         return d

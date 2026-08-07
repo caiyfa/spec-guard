@@ -27,7 +27,6 @@ def dump_json(records, run_dir, meta):
     for r in records:
         stats[r.verdict] = stats.get(r.verdict, 0) + 1
         d = r.to_dict()
-        d.pop("saved_vars", None)
         # 索引中的相对路径统一用正斜杠（Web 端消费 run.json 时跨平台一致）；
         # exclusive 依赖会产生同场景多实例，文件名用实例号区分避免覆盖
         suffix = ""
