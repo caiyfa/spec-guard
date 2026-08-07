@@ -1,6 +1,6 @@
 /** AgentChat — 左侧会话树 + 中间对话区 + 右侧面板（K-012 简洁化：底部仅模式/模型下拉 + 输入框） */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, createContext, useContext, isValidElement } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -103,26 +103,120 @@ interface ToolItem {
   args: string;
   result?: string;
 }
+// ── 会话产物（write_draft 落盘文件 / 大段 markdown 文档），对话流内可点击预览 ──
+interface ArtifactInfo {
+  title: string;       // 卡片主标题（md 首标题；fallback 文件名）
+  fileName?: string;   // 已落盘文件名（yaml 点击开草稿预览；非 yaml 需带 content 走内容预览——draftsApi 仅支持 yaml）
+  size?: number;       // 字节数（write_draft 结果真实字节）
+  lines?: number;      // 行数（代码块卡片）
+  content?: string;    // 未落盘/非 yaml 内容（点击开 memo: 内容预览页签）
+  formatLabel?: string; // 无 fileName 时的格式标签（如 Markdown）
+}
 interface GroupedItem {
-  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete';
+  type: 'user' | 'assistant-text' | 'tool-group' | 'step-complete' | 'artifact';
   content?: string;
   tools?: ToolItem[];
   stepLabel?: string;   // 关联的待办步骤名称
   stepIdx?: number;    // 步骤索引
   thought?: boolean;    // K-024: 工具调用前的思考文本（轻量样式，常驻可见）
   references?: ChatReference[];  // K-013: user 消息携带的 @引用
+  artifacts?: ArtifactInfo[];    // 产物卡片（工具组之后，独立于折叠组常驻可见）
+}
+
+// ── 产物预览上下文（会话级：draft 内容匹配 + 预览回调，注入 MarkdownText 渲染树）──
+interface ArtifactCtxValue {
+  onPreviewDraft: (fileName: string) => void;
+  onPreviewContent: (title: string, content: string) => void;
+  matchDraft: (contentTrim: string) => string | undefined;
+}
+const ArtifactCtx = createContext<ArtifactCtxValue | null>(null);
+
+const fmtSize = (n?: number) => n === undefined ? '' : n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} B`;
+
+/** md 文本首个标题（产物卡片主标题用） */
+function firstMdTitle(text: string): string | null {
+  const m = /^#{1,3}\s+(.+)$/m.exec(text);
+  return m ? m[1].replace(/[#*`[\]]/g, '').trim() : null;
+}
+
+/** 扩展名 → 格式标签 */
+function extLabelOf(name?: string): string {
+  if (!name) return '';
+  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+  if (ext === '.yaml' || ext === '.yml') return 'YAML';
+  if (ext === '.md' || ext === '.markdown') return 'Markdown';
+  return ext.replace('.', '').toUpperCase();
+}
+
+// ── 产物卡片（对话流内统一的可点击文件/文档入口，点击在右侧页签预览）──
+function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
+  const ctx = useContext(ArtifactCtx);
+  const metaParts = [
+    artifact.fileName && artifact.fileName !== artifact.title ? artifact.fileName : '',
+    artifact.lines !== undefined ? `${artifact.lines} 行` : '',
+    fmtSize(artifact.size),
+    extLabelOf(artifact.fileName) || artifact.formatLabel || '',
+  ].filter(Boolean);
+  // draftsApi 仅支持 yaml 草稿：非 yaml 产物带 content 走 memo 内容预览
+  const isYamlDraft = !!artifact.fileName && /\.ya?ml$/i.test(artifact.fileName);
+  return (
+    <button
+      onClick={() => {
+        if (!ctx) return;
+        if (isYamlDraft) ctx.onPreviewDraft(artifact.fileName!);
+        else if (artifact.content) ctx.onPreviewContent(artifact.title, artifact.content);
+        else if (artifact.fileName) ctx.onPreviewDraft(artifact.fileName);
+      }}
+      title={artifact.fileName ? `预览草稿 ${artifact.fileName}` : '预览文档'}
+      className="w-full flex items-center gap-2.5 border border-border bg-surface-2/40 rounded-lg px-3 py-2 hover:border-info/40 hover:bg-surface-2/70 transition-colors text-left group"
+    >
+      <span className="text-base flex-shrink-0">📄</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm text-gray-200 truncate">{artifact.title}</span>
+        <span className="block text-[10px] text-gray-500 truncate">{metaParts.join(' · ')}</span>
+      </span>
+      <span className="text-xs text-info/70 flex-shrink-0 group-hover:text-info">预览 ›</span>
+    </button>
+  );
+}
+
+// ── pre 渲染：大段 markdown 代码块 → 产物卡片（language-markdown/md 且 ≥8 非空行）；其余保持源码框 ──
+function PreBlock({ children }: { children?: ReactNode }) {
+  const ctx = useContext(ArtifactCtx);
+  const codeEl = isValidElement(children) ? children as React.ReactElement<{ className?: string; children?: ReactNode }> : null;
+  const cls = codeEl?.props?.className || '';
+  const raw = codeEl ? codeEl.props.children : children;
+  const text = Array.isArray(raw) ? raw.join('') : String(raw ?? '');
+  if (ctx && /language-(markdown|md)(\s|$)/.test(cls)) {
+    const lines = text.split('\n').filter(l => l.trim()).length;
+    if (lines >= 8) {
+      const draftName = ctx.matchDraft(text.trim());
+      return (
+        <ArtifactCard artifact={{
+          title: firstMdTitle(text) || draftName || 'Markdown 文档',
+          fileName: draftName,
+          lines,
+          content: text,   // 始终携带：匹配到 .md 落盘文件时走内容预览（draftsApi 仅支持 yaml）
+          formatLabel: 'Markdown',
+        }} />
+      );
+    }
+  }
+  return (
+    <pre className="text-[11px] bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-gray-400 whitespace-pre-wrap">{children}</pre>
+  );
 }
 
 // ── Markdown 渲染（react-markdown + remark-gfm：标题/列表/表格/任务列表/引用/删除线全支持，
 //    替代自研简易渲染器——LLM 输出的结构化排版此前大量丢失，长文本挤成一段）──
 const MD_COMPONENTS: Components = {
-  h1: ({ children }: { children?: ReactNode }) => <h1 className="text-base font-semibold text-gray-100 mt-2 mb-1">{children}</h1>,
-  h2: ({ children }: { children?: ReactNode }) => <h2 className="text-sm font-semibold text-gray-200 mt-2 mb-1">{children}</h2>,
-  h3: ({ children }: { children?: ReactNode }) => <h3 className="text-xs font-semibold text-gray-300 mt-1.5 mb-0.5">{children}</h3>,
-  h4: ({ children }: { children?: ReactNode }) => <h4 className="text-xs font-semibold text-gray-400 mt-1 mb-0.5">{children}</h4>,
-  p: ({ children }: { children?: ReactNode }) => <p className="text-gray-200 leading-relaxed my-1">{children}</p>,
-  ul: ({ children }: { children?: ReactNode }) => <ul className="list-disc pl-4 my-1 space-y-0.5">{children}</ul>,
-  ol: ({ children }: { children?: ReactNode }) => <ol className="list-decimal pl-4 my-1 space-y-0.5">{children}</ol>,
+  h1: ({ children }: { children?: ReactNode }) => <h1 className="text-lg font-bold text-gray-100 mt-4 mb-2">{children}</h1>,
+  h2: ({ children }: { children?: ReactNode }) => <h2 className="text-base font-semibold text-gray-100 mt-3.5 mb-1.5 pb-1 border-b border-border/40">{children}</h2>,
+  h3: ({ children }: { children?: ReactNode }) => <h3 className="text-sm font-semibold text-gray-200 mt-3 mb-1">{children}</h3>,
+  h4: ({ children }: { children?: ReactNode }) => <h4 className="text-xs font-semibold text-gray-300 mt-2 mb-1">{children}</h4>,
+  p: ({ children }: { children?: ReactNode }) => <p className="text-gray-200 leading-7 my-2">{children}</p>,
+  ul: ({ children }: { children?: ReactNode }) => <ul className="list-disc pl-4 my-2 space-y-1">{children}</ul>,
+  ol: ({ children }: { children?: ReactNode }) => <ol className="list-decimal pl-4 my-2 space-y-1">{children}</ol>,
   li: ({ children }: { children?: ReactNode }) => <li className="text-gray-300">{children}</li>,
   strong: ({ children }: { children?: ReactNode }) => <strong className="font-semibold text-gray-100">{children}</strong>,
   a: ({ href, children }: { href?: string; children?: ReactNode }) => (
@@ -130,14 +224,12 @@ const MD_COMPONENTS: Components = {
   ),
   // 表格：LLM 常用表格做对比/清单（版本仲裁、边变更、步骤清单）
   table: ({ children }: { children?: ReactNode }) => (
-    <div className="overflow-x-auto my-1"><table className="w-full text-[11px] border-collapse">{children}</table></div>
+    <div className="overflow-x-auto my-2.5"><table className="w-full text-[11px] border-collapse">{children}</table></div>
   ),
-  th: ({ children }: { children?: ReactNode }) => <th className="border border-border px-1.5 py-0.5 text-left text-gray-300">{children}</th>,
-  td: ({ children }: { children?: ReactNode }) => <td className="border border-border px-1.5 py-0.5 text-gray-400">{children}</td>,
-  // 代码块：块级由 pre 接管（黑底滚动），行内黄字
-  pre: ({ children }: { children?: ReactNode }) => (
-    <pre className="text-[11px] bg-black/30 rounded p-2 overflow-x-auto max-h-80 my-1 text-gray-400 whitespace-pre-wrap">{children}</pre>
-  ),
+  th: ({ children }: { children?: ReactNode }) => <th className="border border-border px-2.5 py-1 text-left text-gray-300">{children}</th>,
+  td: ({ children }: { children?: ReactNode }) => <td className="border border-border px-2.5 py-1 text-gray-400">{children}</td>,
+  // 代码块：块级由 PreBlock 接管（大段 markdown → 产物卡片；其余黑底源码框），行内黄字
+  pre: ({ children }: { children?: ReactNode }) => <PreBlock>{children}</PreBlock>,
   code: ({ className, children }: { className?: string; children?: ReactNode }) => {
     const inline = !className && !String(children).includes('\n');
     return inline
@@ -145,20 +237,20 @@ const MD_COMPONENTS: Components = {
       : <code className="block">{children}</code>;
   },
   blockquote: ({ children }: { children?: ReactNode }) => (
-    <blockquote className="border-l-2 border-info/30 pl-2 my-1 text-gray-400">{children}</blockquote>
+    <blockquote className="border-l-2 border-info/30 pl-3 my-2.5 text-gray-400">{children}</blockquote>
   ),
-  hr: () => <hr className="border-border my-1" />,
+  hr: () => <hr className="border-border my-3" />,
   // remark-gfm 任务列表 checkbox（LLM 输出「- [ ] 待办」时可用）
   input: (props) => <input {...props} className="accent-info mr-1" />,
 };
 
-function MarkdownText({ content }: { content: string }) {
+const MarkdownText = React.memo(function MarkdownText({ content }: { content: string }) {
   return (
     <div className="text-sm text-gray-200">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{content}</ReactMarkdown>
     </div>
   );
-}
+});
 
 // ── 提取 <plan> 标签 ──
 function extractPlan(content: string): string[] | null {
@@ -188,6 +280,7 @@ const DEFAULT_PLANS: string[] = [
   '落地依赖边',
   'DAG 复核',
   '试执行验证',
+  'DB 证据查询',
 ];
 
 // 工具名 → 待办步骤序号映射（供 groupMessages 把工具调用归到对应步骤展示）
@@ -197,11 +290,12 @@ const TOOL_TO_STEP: Record<string, number> = {
   list_scenarios: 2, read_scenario: 2,
   next_scenario_id: 3,
   validate: 5,
-  write_draft: 6,
+  write_draft: 6, promote_draft: 6, promote_drafts: 6,
   add_to_info_pack: 0,
   undo_draft: 6,
-  read_run_report: 0,
-  db_evidence: 3,
+  // 归因/调试类工具 → DB 证据查询步骤
+  read_run_report: 11, db_evidence: 11, read_run_log: 11,
+  list_failures: 11, list_executions: 11,
   // K-xxx：DAG 编排链路分组锚点
   suggest_deps: 7,
   edit_dependency: 8,
@@ -215,6 +309,19 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
   let currentToolGroup: GroupedItem | null = null;
   let lastStepIdx = -1;  // 上一个工具组对应的步骤索引
 
+  // 产物卡片口径与右侧草稿产物区一致（sessionDrafts 同源）：undo_draft 后卡片不再出现
+  const liveDrafts = new Set<string>();
+  for (const m of messages) {
+    if (m.role !== 'assistant' || !m.tool_calls) continue;
+    for (const tc of m.tool_calls) {
+      try {
+        const args = JSON.parse(tc.function.arguments);
+        if (tc.function.name === 'write_draft' && args.filename) liveDrafts.add(args.filename);
+        else if (tc.function.name === 'undo_draft' && args.filename) liveDrafts.delete(args.filename);
+      } catch { /* 参数解析失败忽略 */ }
+    }
+  }
+
   const flushToolGroup = () => {
     if (currentToolGroup) {
       groups.push(currentToolGroup);
@@ -226,6 +333,24 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
           lastStepIdx = currentToolGroup.stepIdx;
         }
       }
+      // write_draft 产物卡片（独立于折叠工具组常驻可见，点击右侧页签预览）
+      const artifacts: ArtifactInfo[] = [];
+      for (const t of currentToolGroup.tools || []) {
+        if (t.name !== 'write_draft' || !t.result) continue;
+        const args = tryParseJson(t.args);
+        const res = tryParseJson(t.result);
+        const fn = args?.filename;
+        if (!fn || !liveDrafts.has(fn) || res?.ok === false) continue;
+        const content = typeof args?.content === 'string' ? args.content : '';
+        const isYaml = /\.ya?ml$/i.test(fn);
+        artifacts.push({
+          fileName: fn,
+          title: (content && firstMdTitle(content)) || fn,
+          size: typeof res?.size === 'number' ? res.size : undefined,
+          content: isYaml ? undefined : content || undefined,  // 非 yaml 产物走内容预览
+        });
+      }
+      if (artifacts.length) groups.push({ type: 'artifact', artifacts });
       currentToolGroup = null;
     }
   };
@@ -434,22 +559,32 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
   );
 }
 
-// ── 工具组块（按待办步骤分组，整体可折叠） ──
+// ── 工具组块（按工具名自描述分组，整体可折叠） ──
 function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLabel?: string }) {
   const [groupExpanded, setGroupExpanded] = useState(false);
   const allDone = tools.every(t => t.result !== undefined);
   const hasError = tools.some(t => t.result && (t.result.includes('"error"') || t.result.includes('ERROR') || t.result.includes('❌')));
   const successCount = tools.filter(t => t.result && !(t.result.includes('"error"') || t.result.includes('ERROR') || t.result.includes('❌'))).length;
+  // 工具名自描述：从组内工具自身取名称，不依赖外部映射表
+  const uniqueNames = [...new Set(tools.map(t => t.name))];
+  const toolLabel = uniqueNames.length === 1
+    ? uniqueNames[0]
+    : uniqueNames.length <= 3
+      ? uniqueNames.join(' · ')
+      : `${uniqueNames.slice(0, 2).join(' · ')} +${uniqueNames.length - 2}`;
 
   return (
-    <div className="mb-2">
-      {/* 步骤标题栏（可折叠整个组） */}
+    <div className="mb-3">
+      {/* 工具组标题栏（可折叠整个组） */}
       <button
         onClick={() => setGroupExpanded(!groupExpanded)}
         className="w-full flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
       >
         <span className="text-[10px]">{groupExpanded ? '▼' : '▶'}</span>
-        {stepLabel && <span className="text-gray-400">{stepLabel}</span>}
+        <span className="text-gray-400 font-mono">{toolLabel}</span>
+        {stepLabel && stepLabel !== toolLabel && (
+          <span className="text-[10px] text-gray-600">· {stepLabel}</span>
+        )}
         <span className="text-[10px] text-gray-600">
           {allDone ? `${successCount}/${tools.length} 工具` : `${tools.length} 工具 执行中…`}
         </span>
@@ -1335,6 +1470,358 @@ const _store = {
   wsState: 'connecting' as 'connecting' | 'open' | 'closed',
 };
 
+// ── 复制按钮（独立组件，自管理反馈状态） ──
+function CopyButton({ text, className }: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }).catch(() => {});
+      }}
+      title={copied ? '已复制' : '复制内容'}
+      className={className || 'text-gray-500 hover:text-info flex-shrink-0 px-1 rounded hover:bg-surface-3'}
+    >
+      {copied ? '✓' : '📋'}
+    </button>
+  );
+}
+
+// ── 多轮会话导航图标列（独立组件，与消息滚动容器平级） ──
+function ConversationRail({ userMsgs, railPos, activeUserGroupIdx, inViewSet, hoverUserIdx, onHover, onJump }: {
+  userMsgs: { groupIdx: number; content: string }[];
+  railPos: { idx: number; pct: number }[];
+  activeUserGroupIdx: number | null;
+  inViewSet: Set<number>;
+  hoverUserIdx: number | null;
+  onHover: (idx: number | null) => void;
+  onJump: (groupIdx: number) => void;
+}) {
+  if (userMsgs.length < 2) return null;
+  return (
+    <div className="flex-shrink-0 w-4 relative">
+      {/* 连接竖线 */}
+      {railPos.length >= 2 && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-[15%] bottom-[15%] w-px bg-border/30" />
+      )}
+      {railPos.map(p => {
+        const seq = userMsgs.findIndex(u => u.groupIdx === p.idx) + 1;
+        const um = userMsgs.find(u => u.groupIdx === p.idx);
+        const isActive = activeUserGroupIdx === p.idx;
+        const isInView = inViewSet.has(p.idx);
+        return (
+          <div key={p.idx} className="absolute left-1/2 -translate-x-1/2" style={{ top: `${p.pct}%`, transform: 'translateY(-50%)' }}>
+            <button
+              onClick={() => onJump(p.idx)}
+              onMouseEnter={() => onHover(p.idx)}
+              onMouseLeave={() => onHover(null)}
+              title={`第 ${seq} 轮对话`}
+              className="flex items-center justify-center h-5 w-5 group"
+            >
+              <span className={`block rounded-full transition-all duration-150 ${
+                isActive ? 'h-3 w-3 bg-pinnedBg ring-2 ring-pinnedBg/30' :
+                isInView ? 'h-2.5 w-2.5 bg-railDot/70' :
+                'h-2 w-2 bg-railDot group-hover:bg-railDot/80'
+              } ${hoverUserIdx === p.idx ? 'scale-125' : ''}`} />
+            </button>
+            {hoverUserIdx === p.idx && um && (
+              <div className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-72 bg-surface-2 border border-border rounded-lg shadow-xl p-2.5 pointer-events-none">
+                <div className="text-[10px] text-railDot mb-1 font-medium">第 {seq} 轮 · 用户消息</div>
+                <div className="text-xs text-gray-300 line-clamp-3 break-all">{um.content}</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── @候选类型（ChatInput 内部使用）──
+interface AtCandidate { type: 'info_pack' | 'file' | 'draft'; id: string; label: string; hint: string }
+
+// ── ChatInput 组件（独立子组件，打字不触发父组件重渲染）──
+interface ChatInputProps {
+  wsState: 'connecting' | 'open' | 'closed';
+  loading: boolean;
+  models: ModelConfig[];
+  currentModelId: string;
+  onSend: (text: string, references: ChatReference[]) => void;
+  onStop: () => void;
+  onNewSession: () => void;
+  onClearMessages: () => void;
+  onExportSession: () => void;
+  onModelChange: (id: string) => void;
+}
+
+function ChatInput({
+  wsState, loading, models, currentModelId,
+  onSend, onStop, onNewSession, onClearMessages, onExportSession, onModelChange,
+}: ChatInputProps) {
+  const [input, setInput] = useState('');
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [atOpen, setAtOpen] = useState(false);
+  const [atQuery, setAtQuery] = useState('');
+  const [atIndex, setAtIndex] = useState(0);
+  const [atMetas, setAtMetas] = useState<ScenarioMeta[]>([]);
+  const [atDrafts, setAtDrafts] = useState<DraftItem[]>([]);
+  const [atFileResults, setAtFileResults] = useState<{ path: string; preview: string }[]>([]);
+  const [references, setReferences] = useState<ChatReference[]>([]);
+  const [attaching, setAttaching] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 斜杠命令过滤
+  const filteredCommands = useMemo(() => {
+    if (!slashQuery) return SLASH_COMMANDS;
+    return SLASH_COMMANDS.filter(c => c.cmd.includes(slashQuery) || c.label.includes(slashQuery));
+  }, [slashQuery]);
+
+  // @候选
+  const atCandidates = useMemo<AtCandidate[]>(() => {
+    const q = atQuery.toLowerCase();
+    const list: AtCandidate[] = [];
+    for (const m of atMetas) {
+      if (!q || m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)) {
+        list.push({ type: 'info_pack', id: m.id, label: `📦 ${m.name || m.id}`, hint: `信息包 · ${m.info_pack?.length || 0} 文件` });
+      }
+    }
+    for (const d of atDrafts) {
+      if (!q || d.filename.toLowerCase().includes(q) || (d.title || '').toLowerCase().includes(q)) {
+        list.push({ type: 'draft', id: d.filename, label: `📝 ${d.title || d.filename}`, hint: `草稿 · ${d.filename}` });
+      }
+    }
+    for (const f of atFileResults) {
+      list.push({ type: 'file', id: f.path, label: `📄 ${f.path}`, hint: '工作区文件' });
+    }
+    return list.slice(0, 20);
+  }, [atMetas, atDrafts, atFileResults, atQuery]);
+
+  // 输入框高度自适应
+  useEffect(() => {
+    const ta = inputRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 128)}px`;
+  }, [input]);
+
+  // @候选懒加载
+  const atLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!atOpen || atLoadedRef.current) return;
+    atLoadedRef.current = true;
+    scenarioApi.listMeta().then(r => setAtMetas(r.metas || [])).catch(() => {});
+    draftsApi.list().then(r => setAtDrafts(r.drafts || [])).catch(() => {});
+  }, [atOpen]);
+
+  // @文件搜索（防抖，≥2 字符）
+  useEffect(() => {
+    if (!atOpen || atQuery.length < 2) { setAtFileResults([]); return; }
+    const timer = setTimeout(() => {
+      workspaceApi.search(atQuery)
+        .then(r => setAtFileResults((r.results || []).map(x => ({ path: x.path, preview: x.preview }))))
+        .catch(() => setAtFileResults([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [atOpen, atQuery]);
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (value.startsWith('/') && !value.includes(' ')) {
+      setSlashOpen(true); setSlashQuery(value); setSlashIndex(0);
+    } else {
+      setSlashOpen(false);
+    }
+    const atMatch = value.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setAtOpen(true); setAtQuery(atMatch[1]); setAtIndex(0);
+    } else {
+      setAtOpen(false);
+    }
+  };
+
+  const handleAtSelect = (c: { type: 'info_pack' | 'file' | 'draft'; id: string }) => {
+    setInput(prev => prev.replace(/@[^\s@]*$/, ''));
+    setAtOpen(false);
+    if (c.type === 'info_pack') {
+      const m = atMetas.find(x => x.id === c.id);
+      setReferences(prev => [
+        ...prev.filter(r => r.type !== 'info_pack'),
+        { type: 'info_pack', path: c.id, sha: '', label: m?.name || c.id },
+      ]);
+    } else {
+      setReferences(prev => prev.some(r => r.type === c.type && r.path === c.id)
+        ? prev : [...prev, { type: c.type, path: c.id, sha: '' }]);
+    }
+    inputRef.current?.focus();
+  };
+
+  const handleSlashSelect = (cmd: SlashCommand) => {
+    setSlashOpen(false); setInput('');
+    if (cmd.type === 'action') {
+      if (cmd.cmd === '/new') { onNewSession(); }
+      else if (cmd.cmd === '/clear') { onClearMessages(); }
+      else if (cmd.cmd === '/undo') {
+        onSend('请使用 undo_draft 工具撤销最后一次草稿写入。如果不知道文件名，请先查看 drafts 目录。', []);
+      } else if (cmd.cmd === '/export') { onExportSession(); }
+    } else if (cmd.type === 'skill') {
+      const skillName = cmd.skillName || cmd.cmd.replace('/', '');
+      setInput(`请使用 ${skillName} 技能${skillName === 'dag-orchestration' ? '编排场景依赖' : ''}：`);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (atOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setAtIndex(i => Math.min(i + 1, atCandidates.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setAtIndex(i => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (atCandidates[atIndex]) handleAtSelect(atCandidates[atIndex]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setAtOpen(false); return; }
+    }
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex(i => Math.min(i + 1, filteredCommands.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex(i => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (filteredCommands[slashIndex]) handleSlashSelect(filteredCommands[slashIndex]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(input.trim(), references); }
+  };
+
+  const handleAttachFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setAttaching(true);
+    try {
+      const meta = await scenarioApi.autoCreateInfoPack(Array.from(files));
+      setReferences(prev => [
+        ...prev.filter(r => r.type !== 'info_pack'),
+        { type: 'info_pack', path: meta.id, sha: '', label: `${meta.name}（${(meta.info_pack || []).length} 个文件）` },
+      ]);
+      setAtMetas(prev => [meta, ...prev.filter(m => m.id !== meta.id)]);
+    } catch {
+      // 附件上传失败静默处理
+    } finally {
+      setAttaching(false);
+      if (attachInputRef.current) attachInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="flex-shrink-0 border-t border-border p-3 relative">
+      {/* slash 命令弹出层 */}
+      {slashOpen && filteredCommands.length > 0 && (
+        <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface-2 border border-border rounded-lg shadow-xl max-h-60 overflow-y-auto z-10">
+          {filteredCommands.map((c, i) => (
+            <button key={c.cmd} onClick={() => handleSlashSelect(c)}
+              className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
+                i === slashIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
+              }`}>
+              <span className="font-mono text-xs text-info/70">{c.cmd}</span>
+              <span className="text-xs">{c.label}</span>
+              <span className="text-[10px] text-gray-600 ml-auto">{c.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* @引用候选层 */}
+      {atOpen && atCandidates.length > 0 && (
+        <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface-2 border border-border rounded-lg shadow-xl max-h-60 overflow-y-auto z-10">
+          {atCandidates.map((c, i) => (
+            <button key={`${c.type}:${c.id}`} onClick={() => handleAtSelect(c)}
+              className={`w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors ${
+                i === atIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
+              }`}>
+              <span className="text-xs truncate">{c.label}</span>
+              <span className="text-[10px] text-gray-600 ml-auto flex-shrink-0">{c.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 已选引用 chips */}
+      {references.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {references.map((r, i) => (
+            <span key={`${r.type}:${r.path}`}
+              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/30 font-mono">
+              {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'} {r.label || r.path}
+              <button onClick={() => setReferences(prev => prev.filter((_, j) => j !== i))}
+                className="text-info/60 hover:text-fail">✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 输入框 + 附件 + 发送/停止按钮 */}
+      <div className="flex gap-2 items-end">
+        <input
+          ref={attachInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={e => handleAttachFiles(e.target.files)}
+        />
+        <button
+          onClick={() => attachInputRef.current?.click()}
+          disabled={attaching || loading || wsState !== 'open'}
+          title="上传附件（自动创建信息包并关联到本轮对话）"
+          className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">📎</span>}
+        </button>
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={e => handleInputChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={wsState === 'open' ? '输入消息... (Enter 发送, / 命令, @ 引用)' : 'WebSocket 未连接'}
+          rows={1}
+          className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none resize-none max-h-32"
+          disabled={loading || wsState !== 'open'}
+        />
+        {loading ? (
+          <button
+            onClick={onStop}
+            title="打断会话"
+            className="w-10 h-10 flex-shrink-0 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors"
+          >
+            <span className="text-lg">■</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => onSend(input.trim(), references)}
+            disabled={!input.trim() || wsState !== 'open'}
+            className="w-10 h-10 flex-shrink-0 bg-info text-white rounded-full flex items-center justify-center hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            ↑
+          </button>
+        )}
+      </div>
+
+      {/* 底部模型选择器 */}
+      <div className="flex items-center gap-2 mt-2">
+        {models.length > 0 && (
+          <select
+            value={currentModelId}
+            onChange={e => onModelChange(e.target.value)}
+            className="bg-surface-2 border border-border rounded px-2 py-0.5 text-[10px] text-gray-400 font-mono"
+          >
+            {models.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.is_default ? '★ ' : ''}{m.name || m.model}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AgentChat() {
   const [searchParams] = useSearchParams();
   // K-013：scenarioId 状态化——@信息包 引用可在对话中关联场景（不再只能从场景管理页进入）
@@ -1347,7 +1834,6 @@ export default function AgentChat() {
   // K-xxx：hint 参数预填——从 DAG 页「对话编排」跳转时（/agent?hint=dag-orchestration），
   // 输入框预填技能提示词（含「编排/依赖」关键词，直接发送也能命中技能确定性触发）
   const hint = searchParams.get('hint') || '';
-  const [input, setInput] = useState(hint ? `请使用 ${hint} 技能编排场景依赖：` : '');
   const [loading, setLoading] = useState(_store.loading);
   const [sessionId, setSessionId] = useState(_store.sessionId);
   const [sessionTitle, setSessionTitle] = useState(_store.sessionTitle);
@@ -1364,15 +1850,6 @@ export default function AgentChat() {
   const [currentModelId, setCurrentModelId] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<ScenarioMeta | null>(null);
   const [streamingText, setStreamingText] = useState('');  // K-012: 流式生成中的文本
-  const [slashOpen, setSlashOpen] = useState(false);
-  // K-013: @引用（chips + 弹出层候选）
-  const [references, setReferences] = useState<ChatReference[]>([]);
-  const [atOpen, setAtOpen] = useState(false);
-  const [atQuery, setAtQuery] = useState('');
-  const [atIndex, setAtIndex] = useState(0);
-  const [atMetas, setAtMetas] = useState<ScenarioMeta[]>([]);
-  const [atDrafts, setAtDrafts] = useState<DraftItem[]>([]);
-  const [atFileResults, setAtFileResults] = useState<{ path: string; preview: string }[]>([]);
   // K-032：文件页签（取代 modal 弹窗）+ 活动页签（'todos' | 'pack' | `file:{path}`）
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeSideTab, setActiveSideTab] = useState('todos');
@@ -1460,8 +1937,6 @@ export default function AgentChat() {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   }, []);
-  const [slashIndex, setSlashIndex] = useState(0);
-  const [slashQuery, setSlashQuery] = useState('');
   const [wsReconnect, setWsReconnect] = useState(0);
   // H-FE: 结构化待办（来自 todo_update 事件）
   const [structuredTodos, setStructuredTodos] = useState<StructuredTodo[]>([]);
@@ -1472,7 +1947,6 @@ export default function AgentChat() {
   const autoSentRef = useRef(false);
   const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
   const lastEventTimeRef = useRef(Date.now());  // TCP 半开连接防护：最后收到事件的时间
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const currentWorkspace = session.getWorkspace();
 
   // ── 多轮会话导航（置顶栏 + 用户消息定位图标列）──
@@ -1480,7 +1954,8 @@ export default function AgentChat() {
   const [pinnedDismissed, setPinnedDismissed] = useState(false);  // 置顶栏手动收起
   const [highlightIdx, setHighlightIdx] = useState<number | null>(null);  // 定位高亮的 user 消息 groupIdx
   const [hoverUserIdx, setHoverUserIdx] = useState<number | null>(null);  // hover 悬浮的 user 消息 groupIdx
-  const [railPos, setRailPos] = useState<{ idx: number; top: number; inView: boolean }[]>([]);  // 图标列位置
+  const [inViewSet, setInViewSet] = useState<Set<number>>(new Set());  // 当前视口内的用户消息 groupIdx
+  const [activeUserGroupIdx, setActiveUserGroupIdx] = useState<number | null>(null);  // 当前视口活跃的用户消息 groupIdx（动态置顶）
   const highlightTimerRef = useRef<number | null>(null);     // 高亮淡出定时器
   const lastPinnedRef = useRef('');                          // 上一次置顶的用户消息内容（自动恢复判定）
 
@@ -1494,11 +1969,6 @@ export default function AgentChat() {
     if (path.includes('/agent')) return 'chat';
     return '';
   }, []);
-
-  const filteredCommands = useMemo(() => {
-    if (!slashQuery) return SLASH_COMMANDS;
-    return SLASH_COMMANDS.filter(c => c.cmd.includes(slashQuery) || c.label.includes(slashQuery));
-  }, [slashQuery]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -1749,22 +2219,18 @@ export default function AgentChat() {
   }, [loading]);
 
   // 发送消息
-  const handleSend = useCallback(() => {
-    const userMsg = input.trim();
+  const handleSend = useCallback((text: string, refs: ChatReference[]) => {
+    const userMsg = text.trim();
     const ws = wsRef.current;
     if (!userMsg || loading) return;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      // K-018：此前静默 return——消息被丢弃且无任何提示（「一直没响应」主因之一）。
-      // 现在显式报错并立即触发重连；input 不清空，重连后可直接重发
       setError('连接已断开，正在尝试重连…（消息未发送，重连后请重发）');
       reconnectAttemptsRef.current = 0;
       setWsReconnect(v => v + 1);
       return;
     }
-    setInput(''); setSlashOpen(false); setAtOpen(false);
-    setLoading(true); setError(''); setTurnInfo(''); setPlanItems([]);  // K-xxx：待办不再预填固定模板——由模型 todo_write/<plan> 输出，避免「刚发消息就出写死待办」 setCtxUsage(null);
-    const msgRefs = references.length ? [...references] : undefined;
-    setReferences([]);
+    setLoading(true); setError(''); setTurnInfo(''); setPlanItems([]);
+    const msgRefs = refs.length ? [...refs] : undefined;
     // K-015：发送时才落实 info_pack 关联（右侧信息包面板随发送出现）
     const packRef = msgRefs?.find(r => r.type === 'info_pack');
     if (packRef && packRef.path !== scenarioId) {
@@ -1781,31 +2247,15 @@ export default function AgentChat() {
       references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
       context: { current_page: currentPage, editing_scenario_id: scenarioId },
     }));
-  }, [input, loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, references, expandSideTo]);
+  }, [loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo]);
 
-  // K-034：聊天框上传附件 → 自动创建信息包并加 info_pack chip（发送时才关联，同 K-015 语义）
-  const attachInputRef = useRef<HTMLInputElement>(null);
-  const [attaching, setAttaching] = useState(false);
-  const handleAttachFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setAttaching(true); setError('');
-    try {
-      const meta = await scenarioApi.autoCreateInfoPack(Array.from(files));
-      setReferences(prev => [
-        ...prev.filter(r => r.type !== 'info_pack'),  // info_pack chip 唯一，新包替换旧包
-        { type: 'info_pack', path: meta.id, sha: '', label: `${meta.name}（${(meta.info_pack || []).length} 个文件）` },
-      ]);
-      setAtMetas(prev => [meta, ...prev.filter(m => m.id !== meta.id)]);
-    } catch (e: any) {
-      setError(`附件上传失败：${e?.message || e}`);
-    } finally {
-      setAttaching(false);
-      if (attachInputRef.current) attachInputRef.current.value = '';
-    }
-  };
-
-  // 打断会话
+  // T-402: 打断会话（真打断——先调用 cancel API，再关 WS）
   const handleStop = useCallback(() => {
+    // 先调用 cancel API 设置后端 cancellation 标志（不等待，静默失败）
+    const sid = sessionId || localStorage.getItem('sg_agent_session');
+    if (sid) {
+      agentApi.cancelSession(sid).catch(() => {});
+    }
     if (wsRef.current) {
       (wsRef.current as any)._intentional = true;  // K-018: 标记手动关闭，避免 onclose 重复调度重连
       wsRef.current.close();
@@ -1815,113 +2265,7 @@ export default function AgentChat() {
     setError('');
     setStreamingText('');
     setWsReconnect(v => v + 1);
-  }, []);
-
-  // 斜杠命令处理
-  const handleSlashSelect = (cmd: SlashCommand) => {
-    setSlashOpen(false); setInput('');
-    if (cmd.type === 'action') {
-      if (cmd.cmd === '/new') {
-        setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setPlanItems([]);
-        localStorage.removeItem('sg_agent_session');
-      } else if (cmd.cmd === '/clear') {
-        setMessages([]); setStats(null); setPlanItems([]);
-      } else if (cmd.cmd === '/undo') {
-        const ws = wsRef.current;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          const msg = '请使用 undo_draft 工具撤销最后一次草稿写入。如果不知道文件名，请先查看 drafts 目录。';
-          setLoading(true); setError('');
-          setMessages(prev => [...prev, { role: 'user', content: msg }]);
-          ws.send(JSON.stringify({
-            message: msg, session_id: sessionId, max_turns: 3,
-            workspace: currentWorkspace, scenario_id: scenarioId,
-            model_id: currentModelId,
-            context: { current_page: currentPage, editing_scenario_id: scenarioId },
-          }));
-        }
-      } else if (cmd.cmd === '/export') {
-        handleExportSession();
-      }
-    } else if (cmd.type === 'skill') {
-      const skillName = cmd.skillName || cmd.cmd.replace('/', '');
-      setInput(`请使用 ${skillName} 技能${skillName === 'dag-orchestration' ? '编排场景依赖' : ''}：`);
-      inputRef.current?.focus();
-    }
-  };
-
-  const handleInputChange = (value: string) => {
-    setInput(value);
-    if (value.startsWith('/') && !value.includes(' ')) {
-      setSlashOpen(true); setSlashQuery(value); setSlashIndex(0);
-    } else {
-      setSlashOpen(false);
-    }
-    // K-013: @引用（行尾 @ 开头的 token 触发候选层）
-    const atMatch = value.match(/@([^\s@]*)$/);
-    if (atMatch) {
-      setAtOpen(true); setAtQuery(atMatch[1]); setAtIndex(0);
-    } else {
-      setAtOpen(false);
-    }
-  };
-
-  // K-013: @候选（信息包 / 草稿 / 文件搜索）
-  interface AtCandidate { type: 'info_pack' | 'file' | 'draft'; id: string; label: string; hint: string }
-  const atCandidates = useMemo<AtCandidate[]>(() => {
-    const q = atQuery.toLowerCase();
-    const list: AtCandidate[] = [];
-    for (const m of atMetas) {
-      if (!q || m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)) {
-        list.push({ type: 'info_pack', id: m.id, label: `📦 ${m.name || m.id}`, hint: `信息包 · ${m.info_pack?.length || 0} 文件` });
-      }
-    }
-    for (const d of atDrafts) {
-      if (!q || d.filename.toLowerCase().includes(q) || (d.title || '').toLowerCase().includes(q)) {
-        list.push({ type: 'draft', id: d.filename, label: `📝 ${d.title || d.filename}`, hint: `草稿 · ${d.filename}` });
-      }
-    }
-    for (const f of atFileResults) {
-      list.push({ type: 'file', id: f.path, label: `📄 ${f.path}`, hint: '工作区文件' });
-    }
-    return list.slice(0, 20);
-  }, [atMetas, atDrafts, atFileResults, atQuery]);
-
-  // @候选懒加载（首次打开时拉信息包与草稿清单）
-  const atLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!atOpen || atLoadedRef.current) return;
-    atLoadedRef.current = true;
-    scenarioApi.listMeta().then(r => setAtMetas(r.metas || [])).catch(() => {});
-    draftsApi.list().then(r => setAtDrafts(r.drafts || [])).catch(() => {});
-  }, [atOpen]);
-
-  // @文件搜索（防抖，≥2 字符）
-  useEffect(() => {
-    if (!atOpen || atQuery.length < 2) { setAtFileResults([]); return; }
-    const timer = setTimeout(() => {
-      workspaceApi.search(atQuery)
-        .then(r => setAtFileResults((r.results || []).map(x => ({ path: x.path, preview: x.preview }))))
-        .catch(() => setAtFileResults([]));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [atOpen, atQuery]);
-
-  const handleAtSelect = (c: { type: 'info_pack' | 'file' | 'draft'; id: string }) => {
-    setInput(prev => prev.replace(/@[^\s@]*$/, ''));
-    setAtOpen(false);
-    if (c.type === 'info_pack') {
-      // K-015 chip 化：选中仅加 chip（不立即关联），发送时才关联场景并在右侧展示
-      const m = atMetas.find(x => x.id === c.id);
-      setReferences(prev => [
-        ...prev.filter(r => r.type !== 'info_pack'),  // info_pack chip 唯一，重复选择替换
-        { type: 'info_pack', path: c.id, sha: '', label: m?.name || c.id },
-      ]);
-    } else {
-      setReferences(prev => prev.some(r => r.type === c.type && r.path === c.id)
-        ? prev : [...prev, { type: c.type, path: c.id, sha: '' }]);
-    }
-    inputRef.current?.focus();
-  };
+  }, [sessionId]);
 
   // K-032: 打开引用文件——新增/激活右侧文件页签（取代 modal 弹窗）
   const openFileViewer = useCallback(async (path: string, kind: 'file' | 'draft' = 'file') => {
@@ -1954,21 +2298,41 @@ export default function AgentChat() {
     setActiveSideTab(prev => prev === `file:${path}` ? 'todos' : prev);
   }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (atOpen) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setAtIndex(i => Math.min(i + 1, atCandidates.length - 1)); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setAtIndex(i => Math.max(i - 1, 0)); return; }
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (atCandidates[atIndex]) handleAtSelect(atCandidates[atIndex]); return; }
-      if (e.key === 'Escape') { e.preventDefault(); setAtOpen(false); return; }
+  // 未落盘内容预览（对话内大段 md 代码块 → 虚拟 memo: 页签，FileViewer 按 .md 渲染）
+  const openContentViewer = useCallback((title: string, content: string) => {
+    const safe = title.replace(/[^\w一-龥-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'doc';
+    const path = `memo:${safe}.md`;
+    setActiveSideTab(`file:${path}`);
+    setSideCollapsed(false);
+    localStorage.setItem('sg_side_collapsed', '0');
+    setSideWidth(w => Math.max(w, 460));
+    setFileTabs(prev => prev.some(t => t.path === path)
+      ? prev.map(t => (t.path === path ? { ...t, content, loading: false } : t))
+      : [...prev, { path, kind: 'file', content, loading: false }]);
+  }, []);
+
+  // 会话内 write_draft 内容映射（大段 md 代码块 → 落盘文件匹配，产物卡片去重用）
+  const draftContents = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of messages) {
+      if (m.role !== 'assistant' || !m.tool_calls) continue;
+      for (const tc of m.tool_calls) {
+        if (tc.function.name !== 'write_draft') continue;
+        try {
+          const args = JSON.parse(tc.function.arguments);
+          if (args.filename && typeof args.content === 'string') map.set(args.content.trim(), args.filename);
+        } catch { /* 参数解析失败忽略 */ }
+      }
     }
-    if (slashOpen) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex(i => Math.min(i + 1, filteredCommands.length - 1)); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex(i => Math.max(i - 1, 0)); return; }
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (filteredCommands[slashIndex]) handleSlashSelect(filteredCommands[slashIndex]); return; }
-      if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
-    }
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  };
+    return map;
+  }, [messages]);
+
+  // 产物预览上下文（产物卡片 / 大段 md 代码块卡片共用）
+  const artifactCtxValue = useMemo<ArtifactCtxValue>(() => ({
+    onPreviewDraft: (fileName: string) => { openFileViewer(fileName, 'draft'); },
+    onPreviewContent: openContentViewer,
+    matchDraft: (contentTrim: string) => draftContents.get(contentTrim),
+  }), [openFileViewer, openContentViewer, draftContents]);
 
   // K-012: 恢复会话（会话项点击 / 页面刷新自动恢复共用）
   const restoreSession = useCallback(async (id: string, ws: string) => {
@@ -2056,7 +2420,14 @@ export default function AgentChat() {
     }
     return null;
   }, [messages]);
-  const pinnedText = lastUserMsg ? stripRefBlock(lastUserMsg.content || '') : '';
+  // 动态置顶：当前视口活跃阶段的用户消息（而非永远取最后一条）
+  const pinnedText = useMemo(() => {
+    if (activeUserGroupIdx !== null) {
+      const g = grouped[activeUserGroupIdx];
+      if (g && g.type === 'user') return stripRefBlock(g.content || '');
+    }
+    return lastUserMsg ? stripRefBlock(lastUserMsg.content || '') : '';
+  }, [activeUserGroupIdx, grouped, lastUserMsg]);
 
   // K-013: 聚合会话中全部 @引用（右侧引用面板，按 type+path 去重）
   const allRefs = useMemo(() => {
@@ -2075,48 +2446,57 @@ export default function AgentChat() {
   const currentModel = models.find(m => m.id === currentModelId);
   const ctxLimit = parseInt(currentModel?.max_context_tokens || '') || DEFAULT_CTX_LIMIT;
 
-  // 图标列比例映射：消息相对容器位置 → 图标 top（px），并标记是否在视口内
-  const computeRail = useCallback(() => {
-    const box = msgBoxRef.current;
-    if (!box || userMsgs.length === 0) { setRailPos([]); return; }
-    const boxTop = box.getBoundingClientRect().top;
-    const h = Math.max(box.clientHeight - 16, 1);
-    const positions = userMsgs.map((u) => {
-      const el = box.querySelector<HTMLElement>(`[data-user-idx="${u.groupIdx}"]`);
-      if (!el) return { idx: u.groupIdx, top: 0, inView: false };
-      const relTop = el.getBoundingClientRect().top - boxTop + box.scrollTop;
-      const top = Math.min(Math.max((relTop / Math.max(box.scrollHeight, 1)) * h, 0), h);
-      const inView = relTop >= box.scrollTop - 4 && relTop <= box.scrollTop + box.clientHeight + 4;
-      return { idx: u.groupIdx, top, inView };
-    });
-    // 最小间距 8px：从后往前贪心保留（保最近），再反转为从上到下
-    const kept: typeof positions = [];
-    for (let i = positions.length - 1; i >= 0; i--) {
-      const prev = kept[kept.length - 1];
-      if (!prev || prev.top - positions[i].top >= 8) kept.push(positions[i]);
-    }
-    kept.reverse();
-    setRailPos(kept);
+  // 图标列固定位置：以容器中线对称展开（15%~85% 均匀分布），不随滚动变化
+  const railPos = useMemo(() => {
+    const n = userMsgs.length;
+    if (n === 0) return [] as { idx: number; pct: number }[];
+    return userMsgs.map((u, i) => ({
+      idx: u.groupIdx,
+      pct: n === 1 ? 50 : 15 + (i / (n - 1)) * 70,
+    }));
   }, [userMsgs]);
 
-  // 图标列：滚动/resize 时重算（rAF 节流）
+  // 滚动时仅更新活跃阶段与可见状态（图标位置固定不变）
+  const computeRailState = useCallback(() => {
+    const box = msgBoxRef.current;
+    if (!box || userMsgs.length === 0) { setActiveUserGroupIdx(null); setInViewSet(new Set()); return; }
+    const boxTop = box.getBoundingClientRect().top;
+    let active: number | null = null;
+    const inView = new Set<number>();
+    if (box.scrollHeight <= box.clientHeight) {
+      active = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].groupIdx : null;
+      userMsgs.forEach(u => inView.add(u.groupIdx));
+    } else {
+      for (const u of userMsgs) {
+        const el = box.querySelector<HTMLElement>(`[data-user-idx="${u.groupIdx}"]`);
+        if (!el) continue;
+        const relTop = el.getBoundingClientRect().top - boxTop + box.scrollTop;
+        if (relTop <= box.scrollTop + 40) active = u.groupIdx;
+        if (relTop >= box.scrollTop - 4 && relTop <= box.scrollTop + box.clientHeight + 4) inView.add(u.groupIdx);
+      }
+    }
+    setActiveUserGroupIdx(active);
+    setInViewSet(inView);
+  }, [userMsgs]);
+
+  // 滚动/resize 时更新活跃阶段与可见状态（rAF 节流；图标位置固定不变）
   useEffect(() => {
     const box = msgBoxRef.current;
     if (!box) return;
     let raf = 0;
     const onResizeScroll = () => {
       if (raf) return;
-      raf = requestAnimationFrame(() => { raf = 0; computeRail(); });
+      raf = requestAnimationFrame(() => { raf = 0; computeRailState(); });
     };
     box.addEventListener('scroll', onResizeScroll, { passive: true });
     window.addEventListener('resize', onResizeScroll);
-    computeRail();
+    computeRailState();
     return () => {
       box.removeEventListener('scroll', onResizeScroll);
       window.removeEventListener('resize', onResizeScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [computeRail]);
+  }, [computeRailState]);
 
   // 点击图标 → 滚动定位 + 1.5s 高亮闪烁后淡出
   const handleJumpToUser = (groupIdx: number) => {
@@ -2135,9 +2515,9 @@ export default function AgentChat() {
     if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
   }, []);
 
-  // 置顶栏自动恢复：新用户消息到达时重新展开；会话清空/切换时重置高亮
+  // 置顶栏自动恢复：活跃阶段切换时重新展开；会话清空/切换时重置高亮
   useEffect(() => {
-    const cur = lastUserMsg?.content || '';
+    const cur = pinnedText;
     if (cur && cur !== lastPinnedRef.current) {
       lastPinnedRef.current = cur;
       setPinnedDismissed(false);
@@ -2147,14 +2527,14 @@ export default function AgentChat() {
       setPinnedDismissed(false);
     }
     setHighlightIdx(null);
-  }, [lastUserMsg]);
+  }, [activeUserGroupIdx, pinnedText]);
 
   // 渲染分组消息
   const renderGrouped = (item: GroupedItem, idx: number) => {
     if (item.type === 'user') {
       return (
         <div key={idx} data-user-idx={idx}
-          className={`mb-2 flex justify-end transition-all duration-500 ${highlightIdx === idx ? 'ring-1 ring-info bg-info/10 rounded-lg' : ''}`}>
+          className={`${idx > 0 ? 'mt-4' : ''} mb-2 flex justify-end transition-all duration-500 ${highlightIdx === idx ? 'ring-1 ring-info bg-info/10 rounded-lg' : ''}`}>
           <div className="max-w-[80%] rounded-lg rounded-br-sm px-3 py-1.5 text-sm bg-info/10 text-info/90 border border-info/20">
             {item.references && item.references.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1">
@@ -2166,6 +2546,7 @@ export default function AgentChat() {
               </div>
             )}
             {stripRefBlock(item.content || '')}
+            <CopyButton text={stripRefBlock(item.content || '')} className="text-[10px] text-info/40 hover:text-info mt-0.5" />
           </div>
         </div>
       );
@@ -2174,21 +2555,29 @@ export default function AgentChat() {
       // K-024：思考文本（工具调用前的意图说明）用轻量样式——常驻可见但视觉上轻于正式回复
       if (item.thought) {
         return (
-          <div key={idx} className="mb-1.5 px-2 py-1 border-l-2 border-info/30 text-xs text-gray-400 italic">
+          <div key={idx} className="mb-2 px-2 py-1 border-l-2 border-info/30 text-xs text-gray-400 italic">
             <MarkdownText content={item.content || ''} />
           </div>
         );
       }
       return (
-        <div key={idx} className="mb-2 px-1 py-1">
+        <div key={idx} className="mb-3 ml-1 border-l-2 border-border/50 pl-3 py-0.5">
           <MarkdownText content={item.content || ''} />
+        </div>
+      );
+    }
+    // artifact: 会话产物卡片（write_draft 落盘文件，点击右侧页签预览）
+    if (item.type === 'artifact' && item.artifacts) {
+      return (
+        <div key={idx} className="mb-3 ml-1 space-y-1.5">
+          {item.artifacts.map((a, ai) => <ArtifactCard key={ai} artifact={a} />)}
         </div>
       );
     }
     // step-complete: 步骤完成提示
     if (item.type === 'step-complete') {
       return (
-        <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
+        <div key={idx} className="mb-3 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
           <span className="text-green-500">✅</span>
           <span className="text-green-400/80">完成：{item.content}</span>
         </div>
@@ -2261,174 +2650,64 @@ export default function AgentChat() {
           </div>
 
           {/* 多轮会话导航：最近一条用户消息置顶（可收起，新消息到达自动恢复） */}
-          {lastUserMsg && !pinnedDismissed && (
-            <div className="flex-shrink-0 mx-4 mt-2 px-3 py-1.5 rounded-lg bg-info/5 border border-info/20 flex items-center gap-2 text-xs">
-              <span className="text-info flex-shrink-0">📌</span>
+          {pinnedText && !pinnedDismissed && (
+            <div className="flex-shrink-0 mx-4 mt-2 px-3 py-1.5 rounded-lg bg-pinnedBg/15 border border-pinnedBg/40 flex items-center gap-2 text-xs">
+              <span className="text-pinnedBg flex-shrink-0">📌</span>
               <span className="flex-1 truncate text-gray-300" title={pinnedText}>{pinnedText}</span>
+              <CopyButton text={pinnedText} className="text-gray-500 hover:text-info flex-shrink-0" />
               <button onClick={() => setPinnedDismissed(true)} title="收起置顶"
                 className="text-gray-500 hover:text-info flex-shrink-0 px-1 rounded hover:bg-surface-3">✕</button>
             </div>
           )}
 
-          {/* 消息列表 — 统一背景 */}
-          <div ref={msgBoxRef} className="relative flex-1 overflow-y-auto px-4 py-3">
-            {grouped.length === 0 && !loading && (
-              <div className="text-center text-gray-600 text-sm py-12">
-                输入消息开始对话，或输入 / 查看可用命令
-              </div>
-            )}
-            {grouped.map(renderGrouped)}
-            {/* 多轮会话导航：用户消息快速定位图标列（≥2 条时显示；hover 放大+悬浮预览，点击定位） */}
-            {userMsgs.length >= 2 && (
-              <div className="absolute left-1 top-0 bottom-0 w-3 z-10">
-                {railPos.map(p => {
-                  const seq = userMsgs.findIndex(u => u.groupIdx === p.idx) + 1;
-                  const um = userMsgs.find(u => u.groupIdx === p.idx);
-                  return (
-                    <div key={p.idx} className="absolute left-0" style={{ top: p.top, transform: 'translateY(-50%)' }}>
-                      <button
-                        onClick={() => handleJumpToUser(p.idx)}
-                        onMouseEnter={() => setHoverUserIdx(p.idx)}
-                        onMouseLeave={() => setHoverUserIdx(null)}
-                        title="定位到该用户消息"
-                        className={`block h-1.5 w-1.5 rounded-full transition-all duration-150 ${p.inView ? 'bg-info' : 'bg-gray-600'} ${hoverUserIdx === p.idx ? 'scale-[2.2] bg-info shadow-[0_0_6px_rgba(59,130,246,0.8)]' : ''}`}
-                      />
-                      {hoverUserIdx === p.idx && um && (
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-64 bg-surface-2 border border-border rounded-lg shadow-xl p-2 pointer-events-none">
-                          <div className="text-[9px] text-gray-500 mb-1">用户消息 #{seq}</div>
-                          <div className="text-xs text-gray-300 line-clamp-2 break-all">{um.content}</div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {/* K-012: 流式生成中气泡（整块 assistant 到达时被正式消息替换） */}
-            {streamingText && (
-              <div className="mb-2 px-1 py-1">
-                <MarkdownText content={streamingText} />
-                <span className="inline-block w-2 h-3.5 bg-info/70 animate-pulse rounded-sm" />
-              </div>
-            )}
-            {error && (
-              <div className="bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
-                <span className="text-red-400 text-sm">❌ {error}</span>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* 底部输入区 */}
-          <div className="flex-shrink-0 border-t border-border p-3 relative">
-            {slashOpen && filteredCommands.length > 0 && (
-              <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface-2 border border-border rounded-lg shadow-xl max-h-60 overflow-y-auto z-10">
-                {filteredCommands.map((c, i) => (
-                  <button key={c.cmd} onClick={() => handleSlashSelect(c)}
-                    className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-                      i === slashIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
-                    }`}>
-                    <span className="font-mono text-xs text-info/70">{c.cmd}</span>
-                    <span className="text-xs">{c.label}</span>
-                    <span className="text-[10px] text-gray-600 ml-auto">{c.desc}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* K-013: @引用候选层 */}
-            {atOpen && atCandidates.length > 0 && (
-              <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface-2 border border-border rounded-lg shadow-xl max-h-60 overflow-y-auto z-10">
-                {atCandidates.map((c, i) => (
-                  <button key={`${c.type}:${c.id}`} onClick={() => handleAtSelect(c)}
-                    className={`w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors ${
-                      i === atIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
-                    }`}>
-                    <span className="text-xs truncate">{c.label}</span>
-                    <span className="text-[10px] text-gray-600 ml-auto flex-shrink-0">{c.hint}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* K-013: 已选引用 chips */}
-            {references.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-2">
-                {references.map((r, i) => (
-                  <span key={`${r.type}:${r.path}`}
-                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/30 font-mono">
-                    {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'} {r.label || r.path}
-                    <button onClick={() => setReferences(prev => prev.filter((_, j) => j !== i))}
-                      className="text-info/60 hover:text-fail">✕</button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* 输入框 + 附件 + 发送/停止按钮 */}
-            <div className="flex gap-2 items-end">
-              {/* K-034: 附件上传（自动创建信息包） */}
-              <input
-                ref={attachInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={e => handleAttachFiles(e.target.files)}
-              />
-              <button
-                onClick={() => attachInputRef.current?.click()}
-                disabled={attaching || loading || wsState !== 'open'}
-                title="上传附件（自动创建信息包并关联到本轮对话）"
-                className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">📎</span>}
-              </button>
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={e => handleInputChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={wsState === 'open' ? '输入消息... (Enter 发送, / 命令, @ 引用)' : 'WebSocket 未连接'}
-                rows={1}
-                className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none resize-none max-h-32"
-                disabled={loading || wsState !== 'open'}
-              />
-              {/* 发送按钮 / 停止按钮 */}
-              {loading ? (
-                <button
-                  onClick={handleStop}
-                  title="打断会话"
-                  className="w-10 h-10 flex-shrink-0 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors"
-                >
-                  <span className="text-lg">■</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || wsState !== 'open'}
-                  className="w-10 h-10 flex-shrink-0 bg-info text-white rounded-full flex items-center justify-center hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  ↑
-                </button>
+          {/* 消息列表 + 导航图标列（flex 行：rail 独立于滚动容器） */}
+          <div className="flex flex-1 min-h-0">
+            <ConversationRail
+              userMsgs={userMsgs}
+              railPos={railPos}
+              activeUserGroupIdx={activeUserGroupIdx}
+              inViewSet={inViewSet}
+              hoverUserIdx={hoverUserIdx}
+              onHover={setHoverUserIdx}
+              onJump={handleJumpToUser}
+            />
+            <div ref={msgBoxRef} className="flex-1 overflow-y-auto px-4 py-3">
+              <ArtifactCtx.Provider value={artifactCtxValue}>
+              {grouped.length === 0 && !loading && (
+                <div className="text-center text-gray-600 text-sm py-12">
+                  输入消息开始对话，或输入 / 查看可用命令
+                </div>
               )}
-            </div>
-
-            {/* 底部选择器栏（K-012 收敛：仅模式下拉 + 模型下拉） */}
-            <div className="flex items-center gap-2 mt-2">              {models.length > 0 && (
-                <select
-                  value={currentModelId}
-                  onChange={e => setCurrentModelId(e.target.value)}
-                  className="bg-surface-2 border border-border rounded px-2 py-0.5 text-[10px] text-gray-400 font-mono"
-                >
-                  {models.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.is_default ? '★ ' : ''}{m.name || m.model}
-                    </option>
-                  ))}
-                </select>
+              {grouped.map(renderGrouped)}
+              {/* K-012: 流式生成中气泡（整块 assistant 到达时被正式消息替换） */}
+              {streamingText && (
+                <div className="mb-3 ml-1 border-l-2 border-border/50 pl-3 py-0.5">
+                  <MarkdownText content={streamingText} />
+                  <span className="inline-block w-2 h-3.5 bg-info/70 animate-pulse rounded-sm" />
+                </div>
               )}
+              {error && (
+                <div className="bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
+                  <span className="text-red-400 text-sm">❌ {error}</span>
+                </div>
+              )}
+              </ArtifactCtx.Provider>
+              <div ref={messagesEndRef} />
             </div>
           </div>
+
+          <ChatInput
+            wsState={wsState}
+            loading={loading}
+            models={models}
+            currentModelId={currentModelId}
+            onSend={handleSend}
+            onStop={handleStop}
+            onNewSession={handleNewSession}
+            onClearMessages={() => { setMessages([]); setStats(null); setPlanItems([]); }}
+            onExportSession={handleExportSession}
+            onModelChange={setCurrentModelId}
+          />
         </div>
 
         {/* K-037：右侧面板（可收起为细条；收起时拖拽柄隐藏） */}

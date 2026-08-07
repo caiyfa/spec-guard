@@ -542,6 +542,9 @@ export const agentApi = {
     request<{ modes: AgentMode[] }>('/agent/modes'),
   getSkills: () =>
     request<{ skills: AgentSkill[] }>('/agent/skills'),
+  // T-402: 取消会话当前运行（真打断）
+  cancelSession: (sessionId: string) =>
+    request<{ ok: boolean; session_id: string; message: string }>(`/agent/cancel/${sessionId}`, { method: 'POST' }),
 };
 
 // ── LLM 配置（G1-1）──

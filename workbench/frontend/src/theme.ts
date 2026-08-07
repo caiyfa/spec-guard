@@ -67,6 +67,12 @@ export function useTheme(): ThemeMeta {
 export function initTheme() {
   document.documentElement.dataset.theme = getThemeId();
   applyBackground();  // K-044：恢复背景图设置
+  // 恢复自定义导航点颜色
+  const savedRail = getRailDot();
+  if (savedRail) document.documentElement.style.setProperty('--rail-dot', savedRail);
+  // 恢复自定义置顶背景颜色
+  const savedPinned = getPinnedBg();
+  if (savedPinned) document.documentElement.style.setProperty('--pinned-bg', savedPinned);
 }
 
 // ── JS 侧主题常量表（无法走 CSS 变量的内联样式场景：React Flow/Monaco/高亮/mermaid）──
@@ -201,4 +207,76 @@ export function useBg(): BgSetting {
   useSyncExternalStore(subscribe, () =>
     `${localStorage.getItem(BG_KEYS.image) ? 1 : 0}|${localStorage.getItem(BG_KEYS.transparency)}|${localStorage.getItem(BG_KEYS.blurPct)}`);
   return getBg();
+}
+
+// ── 多轮对话导航点自定义颜色 ──
+const RAIL_KEY = 'sg_rail_dot';
+
+function hexToRgbTriplet(hex: string): string {
+  const m = hex.match(/^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (!m) return '';
+  return `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}`;
+}
+
+function rgbTripletToHex(rgb: string): string {
+  const p = rgb.trim().split(/\s+/);
+  if (p.length !== 3) return '';
+  return '#' + p.map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
+}
+
+/** 已保存的自定义颜色（RGB 三元组，空串=未自定义） */
+export function getRailDot(): string {
+  return localStorage.getItem(RAIL_KEY) || '';
+}
+
+/** 设置自定义导航点颜色（hex 输入，空串=重置为主题默认） */
+export function applyRailDot(hex: string): void {
+  const el = document.documentElement;
+  if (hex) {
+    const rgb = hexToRgbTriplet(hex);
+    if (rgb) {
+      el.style.setProperty('--rail-dot', rgb);
+      localStorage.setItem(RAIL_KEY, rgb);
+    }
+  } else {
+    el.style.removeProperty('--rail-dot');
+    localStorage.removeItem(RAIL_KEY);
+  }
+  window.dispatchEvent(new CustomEvent(THEME_CHANGED_EVENT, { detail: getThemeId() }));
+}
+
+/** 响应式：自定义导航点颜色变化时触发重渲 */
+export function useRailDot(): string {
+  useSyncExternalStore(subscribe, () => localStorage.getItem(RAIL_KEY) || '');
+  return getRailDot();
+}
+
+// ── 置顶消息背景自定义颜色 ──
+const PINNED_KEY = 'sg_pinned_bg';
+
+/** 已保存的自定义置顶背景颜色（RGB 三元组，空串=未自定义） */
+export function getPinnedBg(): string {
+  return localStorage.getItem(PINNED_KEY) || '';
+}
+
+/** 设置自定义置顶背景颜色（hex 输入，空串=重置为主题默认） */
+export function applyPinnedBg(hex: string): void {
+  const el = document.documentElement;
+  if (hex) {
+    const rgb = hexToRgbTriplet(hex);
+    if (rgb) {
+      el.style.setProperty('--pinned-bg', rgb);
+      localStorage.setItem(PINNED_KEY, rgb);
+    }
+  } else {
+    el.style.removeProperty('--pinned-bg');
+    localStorage.removeItem(PINNED_KEY);
+  }
+  window.dispatchEvent(new CustomEvent(THEME_CHANGED_EVENT, { detail: getThemeId() }));
+}
+
+/** 响应式：自定义置顶背景颜色变化时触发重渲 */
+export function usePinnedBg(): string {
+  useSyncExternalStore(subscribe, () => localStorage.getItem(PINNED_KEY) || '');
+  return getPinnedBg();
 }

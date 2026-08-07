@@ -6,8 +6,8 @@
  * header 的 backdrop-filter 劫持包含块，显示在顶部且被遮挡——portal 根治。
  */
 
-import { useRef, useState } from 'react';
-import { THEMES, applyTheme, useThemeId, applyBackground, useBg, BG_MAX_BYTES, compressImage } from '../theme';
+import { useRef, useState, useEffect } from 'react';
+import { THEMES, applyTheme, useThemeId, applyBackground, useBg, BG_MAX_BYTES, compressImage, applyRailDot, useRailDot, applyPinnedBg, usePinnedBg } from '../theme';
 import Modal from './Modal';
 
 export default function ThemeSwitcher() {
@@ -17,6 +17,22 @@ export default function ThemeSwitcher() {
   const [bgError, setBgError] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 多轮对话导航：图标颜色 + 置顶背景
+  const railDot = useRailDot();
+  const pinnedBg = usePinnedBg();
+  const [dotHex, setDotHex] = useState('#c8c8d2');
+  const [pinnedHex, setPinnedHex] = useState('#58a6ff');
+  useEffect(() => {
+    const toHex = (rgb: string): string => {
+      const p = rgb.trim().split(/\s+/);
+      if (p.length !== 3) return '';
+      return '#' + p.map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
+    };
+    const dotRgb = railDot || getComputedStyle(document.documentElement).getPropertyValue('--rail-dot').trim();
+    const dh = toHex(dotRgb); if (dh) setDotHex(dh);
+    const pinnedRgb = pinnedBg || getComputedStyle(document.documentElement).getPropertyValue('--pinned-bg').trim();
+    const ph = toHex(pinnedRgb); if (ph) setPinnedHex(ph);
+  }, [railDot, pinnedBg, current]);
 
   const meta = THEMES.find(t => t.id === current);
 
@@ -113,6 +129,39 @@ export default function ThemeSwitcher() {
           {!bg.image && !bgError && (
             <div className="text-[10px] text-gray-700 py-0.5">上传后建议搭配「🧊 磨砂」主题</div>
           )}
+        </div>
+
+        {/* 多轮对话导航 */}
+        <div className="mx-2 mb-2 pt-2 border-t border-border/60 px-1.5 pb-1">
+          <div className="px-1.5 py-1 text-[10px] text-gray-600">对话导航</div>
+          {/* 图标颜色 */}
+          <div className="flex items-center justify-between py-1 px-1.5">
+            <span className="text-[11px] text-gray-500">图标颜色</span>
+            <span className="flex items-center gap-2">
+              <input type="color" value={dotHex}
+                onChange={e => applyRailDot(e.target.value)}
+                className="w-5 h-5 rounded cursor-pointer bg-transparent border border-border/60"
+                title="多轮对话图标颜色" />
+              {railDot && (
+                <button onClick={() => applyRailDot('')}
+                  className="text-[11px] text-gray-500 hover:text-fail">重置</button>
+              )}
+            </span>
+          </div>
+          {/* 置顶背景 */}
+          <div className="flex items-center justify-between py-1 px-1.5">
+            <span className="text-[11px] text-gray-500">置顶背景</span>
+            <span className="flex items-center gap-2">
+              <input type="color" value={pinnedHex}
+                onChange={e => applyPinnedBg(e.target.value)}
+                className="w-5 h-5 rounded cursor-pointer bg-transparent border border-border/60"
+                title="置顶消息背景颜色" />
+              {pinnedBg && (
+                <button onClick={() => applyPinnedBg('')}
+                  className="text-[11px] text-gray-500 hover:text-fail">重置</button>
+              )}
+            </span>
+          </div>
         </div>
       </Modal>
     </>

@@ -17,6 +17,8 @@ export default {
         skip: v('--skip'),
         blocked: v('--blocked'),
         info: v('--info'),
+        railDot: v('--rail-dot'),
+        pinnedBg: v('--pinned-bg'),
         warn: v('--warn'),
         // gray 阶 = 文字层级变量（深主题浅文字、浅主题深文字，语义映射非真实灰）
         gray: {
