@@ -92,6 +92,24 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
 );
 """
 
+# run_cases 扩展列（执行台账：全量结果 + 断言摘要 + 上下文变量）——幂等 ALTER
+_RUN_CASES_EXTRA_COLS = {
+    "title": "TEXT NOT NULL DEFAULT ''",
+    "covers": "TEXT NOT NULL DEFAULT '[]'",
+    "assertion_passed": "INTEGER NOT NULL DEFAULT 0",
+    "assertion_total": "INTEGER NOT NULL DEFAULT 0",
+    "saved_vars": "TEXT NOT NULL DEFAULT '{}'",
+}
+
+
+def _ensure_run_cases_columns(db_path: Path | None = None):
+    """run_cases 扩展列（幂等：PRAGMA table_info 检查后 ALTER）。"""
+    with _LOCK, _connect(db_path) as conn:
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(run_cases)")}
+        for col, ddl in _RUN_CASES_EXTRA_COLS.items():
+            if col not in existing:
+                conn.execute(f"ALTER TABLE run_cases ADD COLUMN {col} {ddl}")
+
 
 def _root_key(reports_root: Path) -> str:
     """报告根目录的台账键（相对仓库根的 posix 路径；越界时用绝对路径）——多工作区隔离。"""
@@ -127,6 +145,7 @@ def ensure_tables(db_path: Path | None = None):
     """建表（幂等），应用启动时调用。"""
     with _LOCK, _connect(db_path) as conn:
         conn.executescript(SCHEMA)
+    _ensure_run_cases_columns(db_path)
 
 
 # ══════════════════════════════════════════════════════════
@@ -183,15 +202,25 @@ def upsert_run_from_json(reports_root: Path, run_id: str, source: str = "",
             if not sid:
                 continue
             category, message = _case_failure(reports_root, run_id, case)
+            detail = _case_detail(reports_root, run_id, case)
             conn.execute(
                 """INSERT INTO run_cases (run_id, scenario_id, verdict, duration_ms,
-                                          category, message)
-                   VALUES (?,?,?,?,?,?)
+                                          category, message, title, covers,
+                                          assertion_passed, assertion_total, saved_vars)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(run_id, scenario_id) DO UPDATE SET
                      verdict=excluded.verdict, duration_ms=excluded.duration_ms,
-                     category=excluded.category, message=excluded.message""",
+                     category=excluded.category, message=excluded.message,
+                     title=excluded.title, covers=excluded.covers,
+                     assertion_passed=excluded.assertion_passed,
+                     assertion_total=excluded.assertion_total,
+                     saved_vars=excluded.saved_vars""",
                 (run_id, sid, case.get("verdict", ""),
-                 case.get("duration_ms", 0) or 0, category, message))
+                 case.get("duration_ms", 0) or 0, category, message,
+                 case.get("title", ""),
+                 json.dumps(case.get("covers") or [], ensure_ascii=False),
+                 detail["assertion_passed"], detail["assertion_total"],
+                 json.dumps(detail["saved_vars"], ensure_ascii=False)))
             n += 1
     return n
 
@@ -213,6 +242,28 @@ def _case_failure(reports_root: Path, run_id: str, case: dict) -> tuple[str, str
         except Exception:
             pass
     return "", ""
+
+
+def _case_detail(reports_root: Path, run_id: str, case: dict) -> dict:
+    """从 cases/{id}.json 提取断言摘要与 saved_vars（与 failure_index 同源）。"""
+    case_file = case.get("file") or ""
+    case_path = None
+    if case_file:
+        case_path = reports_root / run_id / case_file
+        if not case_path.is_file():
+            case_path = reports_root / run_id / "cases" / Path(case_file).name
+    if case_path and case_path.is_file():
+        try:
+            detail = json.loads(case_path.read_text(encoding="utf-8"))
+            assertions = detail.get("assertions") or []
+            return {
+                "assertion_passed": sum(1 for a in assertions if a.get("passed")),
+                "assertion_total": len(assertions),
+                "saved_vars": detail.get("saved_vars") or {},
+            }
+        except Exception:
+            pass
+    return {"assertion_passed": 0, "assertion_total": 0, "saved_vars": {}}
 
 
 def sync_runs_from_reports(reports_root: Path, source: str = "",
@@ -307,6 +358,94 @@ def sync_from_index_file(reports_root: Path, db_path: Path | None = None) -> int
     except Exception:
         pass
     return n
+
+
+def sync_executions_from_index_file(reports_root: Path, db_path: Path | None = None) -> int:
+    """首次迁移：把 executions/index.jsonl 的 run_id 去重后逐次落库（幂等）。
+
+    run.json 才是完整真相源，索引只提供 run_id 清单；从 run.json 落库保证字段完整。
+    """
+    index_path = Path(reports_root) / "executions" / "index.jsonl"
+    if not index_path.is_file():
+        return 0
+    run_ids = set()
+    try:
+        for line in index_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except Exception:
+                continue
+            if e.get("run_id"):
+                run_ids.add(e["run_id"])
+    except Exception:
+        return 0
+    n = 0
+    for run_id in run_ids:
+        n += upsert_run_from_json(reports_root, run_id, db_path=db_path)
+    return n
+
+
+def query_executions_db(reports_root: Path, scenario_id: str = "", run_id: str = "",
+                        verdict: str = "", limit: int = 10,
+                        db_path: Path | None = None) -> list[dict]:
+    """全量执行台账查询（含 PASS；按时间倒序，可按场景/任务号/结果过滤）。
+
+    与 execution_index.query_executions 返回结构一致——查询方无需感知数据源。
+    DB 为空而 executions/index.jsonl 有数据时先全量导入（首次迁移）。
+    """
+    reports_root = Path(reports_root)
+    root_key = _root_key(reports_root)
+    try:
+        ensure_tables(db_path)
+        with _LOCK, _connect(db_path) as conn:
+            cnt = conn.execute("SELECT COUNT(*) FROM run_cases").fetchone()[0]
+        if cnt == 0:
+            sync_executions_from_index_file(reports_root, db_path)
+        sql = """SELECT c.run_id, c.scenario_id, c.verdict, c.duration_ms,
+                        c.category, c.message, c.title, c.covers,
+                        c.assertion_passed, c.assertion_total, c.saved_vars,
+                        r.env, r.finished_at
+                 FROM run_cases c JOIN runs r ON r.run_id = c.run_id
+                 WHERE r.reports_root = ?"""
+        params: list = [root_key]
+        if scenario_id:
+            sql += " AND c.scenario_id = ?"
+            params.append(scenario_id)
+        if run_id:
+            sql += " AND c.run_id = ?"
+            params.append(run_id)
+        if verdict:
+            sql += " AND c.verdict = ?"
+            params.append(verdict)
+        sql += " ORDER BY r.finished_at DESC, c.id DESC LIMIT ?"
+        params.append(limit)
+        with _LOCK, _connect(db_path) as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [{
+            "run_id": r["run_id"], "scenario_id": r["scenario_id"],
+            "verdict": r["verdict"], "title": r["title"] or "",
+            "env": r["env"] or "", "finished_at": r["finished_at"] or "",
+            "duration_ms": r["duration_ms"] or 0,
+            "covers": _json_loads(r["covers"]) or [],
+            "category": r["category"] or "", "message": r["message"] or "",
+            "assertion_summary": {
+                "passed": r["assertion_passed"] or 0,
+                "total": r["assertion_total"] or 0,
+            },
+            "saved_vars": _json_loads(r["saved_vars"]) or {},
+        } for r in rows]
+    except Exception:
+        return []
+
+
+def _json_loads(s: str):
+    try:
+        return json.loads(s)
+    except Exception:
+        return None
 
 
 # ══════════════════════════════════════════════════════════

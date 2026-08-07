@@ -26,8 +26,11 @@ RUN_JSON = {
     "started_at": "2026-08-03T10:00:00", "finished_at": "2026-08-03T10:01:00",
     "stats": {"pass": 1, "fail": 1, "skip": 0, "blocked": 0, "total": 2, "warnings": 0},
     "cases": [
-        {"id": "TL-RC-006", "verdict": "PASS", "duration_ms": 100},
-        {"id": "TL-RC-014", "verdict": "FAIL", "duration_ms": 200,
+        {"id": "TL-RC-006", "title": "通过场景", "verdict": "PASS",
+         "duration_ms": 100, "covers": ["FR-006"],
+         "file": "cases/TL-RC-006.json"},
+        {"id": "TL-RC-014", "title": "失败场景", "verdict": "FAIL",
+         "duration_ms": 200, "covers": ["FR-014"],
          "file": "cases/TL-RC-014.json"},
     ],
     "trigger": {"workspace": "tdm", "emp_no": "90024166"},
@@ -41,8 +44,16 @@ def env(tmp_path):
     (reports / "EX-test001" / "cases").mkdir(parents=True)
     (reports / "EX-test001" / "run.json").write_text(
         json.dumps(RUN_JSON, ensure_ascii=False), encoding="utf-8")
+    (reports / "EX-test001" / "cases" / "TL-RC-006.json").write_text(
+        json.dumps({"verdict": "PASS",
+                    "assertions": [{"passed": True}],
+                    "saved_vars": {"activityName": "SG历史DAG-1"}}),
+        encoding="utf-8")
     (reports / "EX-test001" / "cases" / "TL-RC-014.json").write_text(
-        json.dumps({"failure": {"category": "assert_failed", "message": "实际 200 ≠ 预期 400"}}),
+        json.dumps({"verdict": "FAIL",
+                    "failure": {"category": "assert_failed", "message": "实际 200 ≠ 预期 400"},
+                    "assertions": [{"passed": False}, {"passed": False}],
+                    "saved_vars": {"activityName": "SG历史DAG-1"}}),
         encoding="utf-8")
     db = tmp_path / "test.db"
     ls.ensure_tables(db)
@@ -99,6 +110,34 @@ class TestRunsLedger:
         assert len(rows) == 1 and rows[0]["scenario_id"] == "TL-RC-014"
         assert rows[0]["log"] == "reports/EX-test001/output.log"
         assert ls.query_failures(reports, "TL-RC-006", 10, db_path=db) == []
+
+    def test_upsert_run_cases_new_columns(self, env):
+        """run_cases 新列：title/covers/断言摘要/saved_vars 落库。"""
+        reports, db = env
+        ls.upsert_run_from_json(reports, "EX-test001", db_path=db)
+        with _conn(db) as conn:
+            rows = conn.execute(
+                "SELECT scenario_id, title, covers, assertion_passed, assertion_total, "
+                "saved_vars FROM run_cases").fetchall()
+        by_sid = {r["scenario_id"]: r for r in rows}
+        assert by_sid["TL-RC-006"]["title"] == "通过场景"
+        assert json.loads(by_sid["TL-RC-006"]["covers"]) == ["FR-006"]
+        assert by_sid["TL-RC-006"]["assertion_passed"] == 1
+        assert by_sid["TL-RC-006"]["assertion_total"] == 1
+        assert json.loads(by_sid["TL-RC-006"]["saved_vars"])["activityName"] == "SG历史DAG-1"
+        assert by_sid["TL-RC-014"]["assertion_total"] == 2
+        assert by_sid["TL-RC-014"]["assertion_passed"] == 0
+
+    def test_query_executions_db_filters(self, env):
+        """全量台账查询：scenario/run_id/verdict 过滤 + 含 PASS。"""
+        reports, db = env
+        ls.upsert_run_from_json(reports, "EX-test001", db_path=db)
+        rows = ls.query_executions_db(reports, verdict="PASS", db_path=db)
+        assert len(rows) == 1 and rows[0]["scenario_id"] == "TL-RC-006"
+        rows = ls.query_executions_db(reports, scenario_id="TL-RC-014", db_path=db)
+        assert len(rows) == 1 and rows[0]["verdict"] == "FAIL"
+        assert rows[0]["title"] == "失败场景"
+        assert rows[0]["saved_vars"]["activityName"] == "SG历史DAG-1"
 
     def test_query_failures_migrates_empty_db(self, env):
         """空 DB + 有 index.jsonl → 首次迁移后能查到（与文件读法一致）。"""
