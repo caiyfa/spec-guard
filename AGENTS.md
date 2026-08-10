@@ -11,7 +11,7 @@ SpecGuard 是**契约驱动的后端场景测试引擎 + 可视化工作台**，
 
 - **定位**：Harness 五关注点闭环（上下文→约束→验证→恢复→反馈）中「验证 + 反馈」两环的工程落地。
 - **被测系统解耦**：引擎与被测系统通过 `systems/{system}/` 适配包接入，当前已接入 `systems/tdm`（干部盘点），可按相同契约接入更多系统。
-- **Status**：Active。引擎格式 2.0 已冻结；智能层 M0-M5（薄 Harness + MCP 工具层 + Spec 标准层）与多用户 RBAC（M6-M8）已全量落地，当前进入验收期优化（G1-G4 分阶段交付，详见 §Reference Docs）。
+- **Status**：Active。引擎格式 2.0 已冻结；智能层 M0-M5（薄 Harness + MCP 工具层 + Spec 标准层）与多用户 RBAC（M6-M8）已全量落地；G1-G4 验收期优化已随打磨期结束（T-601~T-606 瘦身任务块进行中）。
 
 ---
 
@@ -37,7 +37,7 @@ SpecGuard 存在两类 AI 角色，认知边界必须清晰，互不越界：
 | 了解完全体能力与边界 | `docs/完全体SpecGuard能力边界与交互流程-测试人员指南.md` | 三层架构 + 双反馈循环 |
 | 落地 Agent 智能层 | `docs/SpecGuard-Agent架构设计-MCP工具层与薄Harness.md` | MCP 工具层 + 薄 Harness，含 6 项 ADR |
 | 智能层落地与阶段计划 | `docs/SpecGuard智能层开发简报.md`、`docs/SpecGuard智能层开发计划-M0至M5.md` | M0-M5 已完成，落地总结 + 阶段拆解 |
-| 验收期优化（当前活跃） | `docs/SpecGuard验收期优化点总表.md`、`docs/SpecGuard优化升级开发Spec.md` | 13 模块优化点索引 + G1-G4 分阶段开发 Spec |
+| 验收期优化（已归档） | `docs/历史区/SpecGuard验收期优化点总表.md`、`docs/SpecGuard优化升级开发Spec.md` | 13 模块优化点索引 + G1-G4 分阶段开发 Spec，T-604 已归档至 docs/历史区 |
 | 引擎语义与使用手册 | `README.md` | 详细操作手册（命令路径已去迁移前缀，与本文件 §Commands 一致） |
 | 引擎演进设计 | `docs/引擎升级建议-DB断言与异步轮询.md`、`docs/引擎升级建议-第二批-变量插值与资源命名.md` | DB 断言/异步轮询、变量插值/资源命名 |
 | 依赖状态管理设计 | `docs/依赖状态管理设计-V3待实施.md` | shared/exclusive 语义权威 |

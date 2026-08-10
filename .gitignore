@@ -51,3 +51,7 @@ feedback/receipts.jsonl
 scenarios/inventory/smart-tag/
 scenarios/system-settings/
 scenarios/tmp/
+
+# IDE 产物（T-605）
+.qoder/
+.smoke/

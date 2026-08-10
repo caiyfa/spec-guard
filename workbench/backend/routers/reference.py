@@ -340,77 +340,7 @@ def ref_validate_id(scenario_id: str):
     return validate_scenario_id(scenario_id)
 
 
-@router.get("/yaml-format-spec")
-def ref_yaml_format_spec():
-    """导出 SpecGuard 对各类 YAML 文件的格式要求"""
-    return {
-        "scenario_yaml": {
-            "description": "场景测试 YAML 格式（scenarios/**/*.yaml）",
-            "required_fields": {
-                "id": "场景唯一标识（如 PP-RC-001），全局唯一",
-                "title": "场景标题",
-                "flow": "执行步骤列表（至少一个 flow 或 verify）",
-            },
-            "optional_fields": {
-                "priority": "P0 | P1 | P2",
-                "tags": "[resolver, permission, snapshot, security, prep]",
-                "depends_on": "[场景ID 或 {id, mode: shared|exclusive}]",
-                "produces": "[{resource, state}] 产出资源声明",
-                "teardown": "清理步骤（与 flow 同语法）",
-                "verify": "断言列表",
-                "doc": "{given, when, then, covers: [FR-xxx]}",
-            },
-            "step_types": {
-                "select_emp": "{role, save, exclusive?} 工号池选号",
-                "fetch_permission": "{account, resource_code?, save} 权限预言",
-                "call": "{as, method, path, params?, json?, save} HTTP 调用",
-                "set_var": "{vars: {k: v}} 变量设置",
-                "db_query": "{sql, save, note?} 只读 SQL",
-            },
-            "verify_types": {
-                "status": "{of?, eq} HTTP 状态码断言",
-                "json": "{of?, path, eq|ne|not_null|contains|len_gt|absent} JSONPath 断言",
-                "oracle": "断言器名称（snapshot_frozen 等 8 个）",
-            },
-            "variable_syntax": "{{save名.字段}} 或 {{上游场景ID.save名.字段}}",
-        },
-        "plan_yaml": {
-            "description": "测试计划 YAML 格式（plans/*.yaml）",
-            "required_fields": {
-                "id": "计划唯一标识",
-                "name": "计划名称",
-            },
-            "optional_fields": {
-                "description": "计划描述",
-                "env": "sit | uat",
-                "filter": "{scenarios: [], tags: [], modules: []} 场景过滤",
-                "breakpoints": "[场景ID] 断点列表（执行到该场景前暂停）",
-                "source_delta": "来源 delta 代号",
-            },
-        },
-        "emp_pool_yaml": {
-            "description": "工号池 YAML 格式（systems/tdm/config/emp-pool.yaml）",
-            "structure": {
-                "roles": "{角色名: {description, candidates: [工号], check: {sql, min}}}",
-            },
-        },
-        "env_yaml": {
-            "description": "环境配置 YAML 格式（systems/tdm/config/env.sit.yaml）",
-            "structure": {
-                "tdm_base": "TDM 网关地址",
-                "hr_center_base": "权限中台地址",
-                "default_resource_code": "权限资源码",
-                "accounts": "{别名: {ad, emp_no}} 账号池",
-                "db": "{host, port, user, password, name} 数据库",
-                "sso": "{domain, app_id, password} SSO 配置",
-            },
-        },
-        "validation_rules": {
-            "T1": "YAML 可解析，有 id + flow/verify",
-            "T4": "depends_on 引用必须指向已存在的场景 ID",
-            "T5": "无 depends_on 且非 prep 标签 → 疑似孤例（WARN）",
-        },
-    }
+@router.get("/next-id")
 
 
 # ── 单场景产出详情（供依赖选择时展示） ──────────────────────

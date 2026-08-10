@@ -366,8 +366,6 @@ export const plansApi = {
       `/plans/import-confirm/${deltaCode}`,
       { method: 'POST', body: JSON.stringify({ selected_files: selectedFiles }) },
     ),
-  workingCopies: (planId: string) =>
-    request<{ filename: string; source: string; size: number }[]>(`/plans/${planId}/working-copies`),
   history: (id: string, limit = 20) =>
     request<RunSummary[]>(`/plans/${id}/history?limit=${limit}`),
 };
@@ -418,13 +416,7 @@ export const referenceApi = {
   envVars: () => request<EnvVar[]>('/reference/env-vars'),
   upstreamVars: (id: string) => request<UpstreamVar[]>(`/reference/upstream-vars/${id}`),
   scenarioDetail: (id: string) => request<ScenarioDetail>(`/reference/scenario-detail/${id}`),
-  yamlFormatSpec: () => request<Record<string, unknown>>('/reference/yaml-format-spec'),
   yamlFormatSpecMd: () => request<{ content: string }>('/reference/yaml-format-spec-md'),
-  nextId: (prefix: string, type: string) =>
-    request<{ next_id: string; next_num: number; existing: string[]; total: number }>(
-      `/reference/next-id?prefix=${prefix}&type=${type}`),
-  validateId: (id: string) =>
-    request<{ id: string; unique: boolean; conflicts: string[] }>(`/reference/validate-id/${id}`),
   // T-306/T-309：环境配置独立菜单——环境列表（系统层 + 共享通用层）+ 按环境/配置层读写
   envs: () =>
     request<{ system: string; envs: EnvEntry[]; shared_envs: EnvEntry[]; current: string }>('/reference/envs'),
@@ -455,7 +447,6 @@ export interface WorkspaceInfo {
 
 export const workspaceApi = {
   list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
-  getActive: () => request<{ active: WorkspaceInfo | null }>('/workspace/active'),
   registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
     request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),
   registerGit: (body: { name: string; url: string; system: string; branch?: string }) =>
@@ -543,18 +534,6 @@ export interface LLMConfig {
 }
 
 export const settingsApi = {
-  getLLMConfig: () =>
-    request<{ config: LLMConfig; db_config: Record<string, string>; env_controlled: Record<string, boolean> }>('/settings/llm-config'),
-  saveLLMConfig: (config: LLMConfig) =>
-    request<{ ok: boolean; config: LLMConfig; db_config: Record<string, string>; probe: { ok: boolean; message: string } | null }>('/settings/llm-config', {
-      method: 'POST',
-      body: JSON.stringify(config),
-    }),
-  probeLLM: (body: { base_url: string; api_key: string; model: string; timeout?: number }) =>
-    request<{ ok: boolean; message: string }>('/settings/llm-config/probe', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
   // K-007: spec 签名基线自动更新开关
   getAuditBaseline: () =>
     request<{ auto_update: boolean }>('/settings/audit-baseline'),
