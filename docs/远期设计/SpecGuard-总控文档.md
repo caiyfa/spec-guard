@@ -139,7 +139,7 @@ flowchart LR
 - **S8 内**：T-080 / T-081 / T-082 三者互相并行，均完成后才开 T-083 / T-085；T-085 另需 T-056 与 T-070（通常早于 S8 完成）
 - **跨阶段**：T-032（info_pack 补票）不依赖 S2，可提前至 S1 后任意时间
 - **S0.5 快车道**：T-511 / T-512 与 S1 并行，互不阻塞（依据《知识体系设计》§4.5，P0 优先）
-- **治理三件套前置（v1.6）**：T-081 / T-082 在 S1（T-011）完成后即可认领、T-080 在 S2 完成后即可认领——与 S3-S7 主线零耦合，摊入空窗削 S8 峰值
+- **治理三件套前置（v1.6）**：T-081 / T-082 在 S1（T-011）完成后即可认领（✅ 2026-08-10 已满足）、T-080 在 S2 完成后即可认领（✅ 2026-08-10 已满足）——与 S3-S7 主线零耦合，摊入空窗削 S8 峰值
 - **T-073 并行（v1.6）**：S5 完成 + T-070 就绪即可认领，与 S6 并行（血缘投影建在冻结产物 + 已有 run 报告上，数据制造/归因 Agent 产物是增量而非前提）
 - **引擎支线**：§4.3 T-501 / T-502 与 S1+ 主线互不依赖，认领即可开工
 - **知识支线**：§4.4 T-505 / T-506 无依赖可认领；T-507~T-510 随 S1/S3/S6 阶段解锁
@@ -236,15 +236,15 @@ flowchart LR
 | T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（decision_ledger.py：sf_decisions/sf_decision_links/sf_decision_amendments/sf_decision_draft_marks/sf_gate_evidence/sf_scores 六表 + pending→resolved→superseded + resolve仅REST+product + score confirm仅tester；resolve/amend不暴露MCP） |
 | T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 已完成 | sess-s2-dev | ✅ 2026-08-10（check_p0_clear 纯函数零LLM + gate_aggregate 三要素聚合 + validate_freeze_request 冻结校验 + GateResult 数据类；测试覆盖三种缺口组合） |
 
-> **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。
+> **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。**✅ 2026-08-10 S2 施工完成：topic.yaml source 已支持 7 种类型（含 feishu_doc/feishu_base/feishu_minutes/feishu_im/zentao_story 挂链），实际拉取通道（feishu_fetch / 禅道 story get/search）随飞书 CLI 支线（T-701~T-703）与 S5/M06 落地。**
 >
-> **S2 禅道只读通道（v1.1，2026-08-10 实测补充）**：禅道是产品给研发提供需求的平台，面试议题需**只读引用禅道需求**——`zentao_cli stories --product-id 251` 实测通过（ZT-STORY-56746「人才打标AI构建」，产品 tdm=251）；S2 需补 `story get`/`story search` 两个只读命令，完整禅道写通道（建故事/提单/回写）保持 S5/M06。设计见《[SpecGuard-禅道需求读取背景-S2面试材料来源](远期设计/SpecGuard-禅道需求读取背景-S2面试材料来源.md)》；T-020/T-021 施工时将 zentao_story 并入议题卡 source 与材料拉取，T-053（S5）完整封装时复用 S2 的只读实现。
-| T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 未认领 | | |
+> **S2 禅道只读通道（v1.1，2026-08-10 实测补充）**：禅道是产品给研发提供需求的平台，面试议题需**只读引用禅道需求**——`zentao_cli stories --product-id 251` 实测通过（ZT-STORY-56746「人才打标AI构建」，产品 tdm=251）；S2 需补 `story get`/`story search` 两个只读命令，完整禅道写通道（建故事/提单/回写）保持 S5/M06。设计见《[SpecGuard-禅道需求读取背景-S2面试材料来源](远期设计/SpecGuard-禅道需求读取背景-S2面试材料来源.md)》；T-020/T-021 施工时将 zentao_story 并入议题卡 source 与材料拉取，T-053（S5）完整封装时复用 S2 的只读实现。**✅ S2 已施工：zentao_story 类型已入 topic.yaml source 白名单；story get/search 只读命令本体保持 S5/M06（T-053 完整封装时复用）。**
+| T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 未认领 | | 依赖 T-020 ✅ 2026-08-10（S2 完成，可认领） |
 | T-031 | S3 | 议题候选提取+确认闸门 | M03 | 候选confirmed=0不进上下文 | T-030 | 未认领 | | |
 | T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 未认领 | | 可提前至S1后 |
 | T-033 | S3 | info_pack.yaml六分区装配器 | M03 | 面试会话可消费 | T-030 | 未认领 | | |
 | T-034 | S3 | coverage_map覆盖率机打依据 | M03 | 供T-041消费接口联调 | T-030 | 未认领 | | |
-| T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 未认领 | | |
+| T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 未认领 | | 依赖 T-020 ✅ 2026-08-10（S2 完成，可认领） |
 | T-041 | S4 | 五维评分卡（机打+QA确认） | M04 | 未确认不生效测试 | T-023/T-034 | 未认领 | | |
 | T-042 | S4 | 评分门禁入冻结链路 | M04/M05 | 未达标阻断冻结 | T-041/T-024 | 未认领 | | |
 | T-050 | S5 | delta manifest+verify-delta V1-V6 | M05 | 三段式+manifest一致 | T-040 | 未认领 | | |
@@ -264,7 +264,7 @@ flowchart LR
 | T-072 | P-A | 里程碑快照+演化diff | M11 | 三触发点；可凭指纹重建校验 | T-070 | 未认领 | | P-A支路 |
 | T-073 | S7 | 血缘链投影+Q1/Q2 trace API | M10 | 双向不断链；外部锚点虚线 | T-070/T-056/S5 | 未认领 | | v1.6：S5 完成 + T-070 就绪即可认领，与 S6 并行（S7 只剩 T-074 收尾） |
 | T-074 | S7 | 断链规则集BL（WARNING级） | M10 | 断链检测确定性校验 | T-073 | 未认领 | | |
-| T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 未认领 | | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值） |
+| T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 未认领 | | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值）；S2 ✅ 2026-08-10 前置已满足，可认领 |
 | T-081 | S8 | side_effect分级+纯读运行时强制 | M13/M12 | 写伪装读被硬拒测试 | T-011 | 未认领 | | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值） |
 | T-082 | S8 | 调用审计（工号/会话/工具/入参摘要） | M13 | sf_mcp_call_audit可查 | T-011 | 未认领 | | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值） |
 | T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 未认领 | | |
@@ -478,6 +478,29 @@ flowchart LR
 | test_specstd/test_workspace_emp.py | sess-s1-foundation | 2026-08-10 | NEW | 0bd56379098c | 已完成 | T-014：emp 维度路径 + 越权校验 + 迁移脚本 12 例 |
 | docs/远期设计/specguard-module-design/M01-使命卡片与会话路由.md | sess-master | 2026-08-10 | 1d06e04a6131 | 35a33af18275 | 已完成 | v1.8 同步：用途 roles 并集语义 + 多用途用户多卡（效率保护不变） |
 | docs/远期设计/specguard-module-design/M12-多智能体运行时与平台基建.md | sess-master | 2026-08-10 | 324857b1ea01 | 76b0f72ed233 | 已完成 | v1.8 同步：RBAC 角色枚举加 product + 单角色→多角色（require_role 包含任一） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s2-dev | 2026-08-10 | 837605abccd0 | 2377bb00273a | 已完成 | v1.10 自身登记（补全）：§6 补 S2 施工文件登记 + S2 背景知识施工完成说明（topic.yaml 7 种 source）+ T-030/T-040/T-080 依赖就绪备注 + §3.2 治理三件套前置已满足标注；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| specstd/workspace.py | sess-s2-dev | 2026-08-10 | 91f23c8efd9e | 91f23c8efd9e | 已完成 | S2：specflow_dir() 需求侧目录路径函数（emp 维度，随 f804048 提交） |
+| agent/purposes/requirement_interview.md | sess-s2-dev | 2026-08-10 | 372a60bf333d | 372a60bf333d | 已完成 | S2：工具白名单加 11 个 specflow 工具（iv_* 6 + sf_* 5） |
+| mcp_server/server.py | sess-s2-dev | 2026-08-10 | 58c2cd2da068 | 58c2cd2da068 | 已完成 | S2：TOOL_MODULES 注册 specflow_interview + specflow_ledger |
+| mcp_server/tools/specflow_interview.py | sess-s2-dev | 2026-08-10 | NEW | 3c2426b15df5 | 已完成 | T-020：面试 MCP 工具 6 个（iv_open_topic/iv_read_baseline/iv_next_question/iv_record_answer/iv_p0_clear_check/iv_append_transcript） |
+| mcp_server/tools/specflow_ledger.py | sess-s2-dev | 2026-08-10 | NEW | 2aeb0708317d | 已完成 | T-023：决策台账 MCP 工具 5 个（sf_list_decisions/sf_propose_decision/sf_check_p0_gate/sf_suggest_scores/sf_read_score_gate；resolve/amend 不暴露） |
+| specflow/__init__.py | sess-s2-dev | 2026-08-10 | NEW | 129654a7470b | 已完成 | T-020：specflow 顶层包 |
+| specflow/interview/__init__.py | sess-s2-dev | 2026-08-10 | NEW | d7a768a3d39d | 已完成 | T-020：interview 子包 |
+| specflow/interview/topic.py | sess-s2-dev | 2026-08-10 | NEW | b8d4c47f7097 | 已完成 | T-021：议题卡模型（7 种 source 类型 + topic.yaml 序列化 + 缺挂链校验） |
+| specflow/interview/iv_lifecycle.py | sess-s2-dev | 2026-08-10 | NEW | b9b40d3de507 | 已完成 | T-020：IV 生命周期状态机 + transcript 操作 + 目录结构 |
+| specflow/interview/question_bank.py | sess-s2-dev | 2026-08-10 | NEW | 11c266569e9d | 已完成 | T-020：11 章扫描提问维度库 + SPQ/评分缺口反哺模板 |
+| specflow/interview/gate.py | sess-s2-dev | 2026-08-10 | NEW | f12f52e2edf6 | 已完成 | T-024：P0 清零确定性纯函数 + 门禁聚合 + 冻结校验 |
+| specflow/interview/decision_ledger.py | sess-s2-dev | 2026-08-10 | NEW | 5bb0c8f53aab | 已完成 | T-023：决策台账 6 表 + pending→resolved→superseded + amendment + 评分 |
+| workbench/backend/main.py | sess-s2-dev | 2026-08-10 | b79e40c8d73b | b79e40c8d73b | 已完成 | S2：注册 2 路由 + startup 建 sf_* 表 |
+| workbench/backend/routers/specflow_interview.py | sess-s2-dev | 2026-08-10 | NEW | 0853bc85c2b7 | 已完成 | T-020：面试 REST API 8 端点 |
+| workbench/backend/routers/specflow_decisions.py | sess-s2-dev | 2026-08-10 | NEW | bf954cb605ec | 已完成 | T-023：决策台账 REST API 11 端点（resolve 仅 product / confirm 仅 tester） |
+| workbench/backend/services/specflow/__init__.py | sess-s2-dev | 2026-08-10 | NEW | 81f7e8abc976 | 已完成 | T-020：specflow 服务包 |
+| workbench/backend/services/specflow/sf_store.py | sess-s2-dev | 2026-08-10 | NEW | ff7182c74a4e | 已完成 | T-022：sf_interviews/sf_questions 建表/CRUD/索引 |
+| workbench/backend/services/specflow/interview_service.py | sess-s2-dev | 2026-08-10 | NEW | db22458e812f | 已完成 | T-020：面试业务编排（开标/门禁/影响面/流水/冻结） |
+| workbench/backend/services/specflow/decision_service.py | sess-s2-dev | 2026-08-10 | NEW | baff3358ab3e | 已完成 | T-023：决策台账业务编排（登记/落锤/增补/评分） |
+| test_specstd/test_mcp_server.py | sess-s2-dev | 2026-08-10 | b0f894498a0e | b0f894498a0e | 已完成 | S2：MCP 工具数 26→37 + 名称集加 11 个 specflow 工具 |
+| test_specstd/test_specflow_interview.py | sess-s2-dev | 2026-08-10 | NEW | 3ae2e9850672 | 已完成 | T-020/T-021/T-024：议题卡/生命周期/门禁/提问库单测 36 例 |
+| test_specstd/test_specflow_ledger.py | sess-s2-dev | 2026-08-10 | NEW | a23b942b247a | 已完成 | T-023/T-024：决策台账/amendment/评分/门禁联动单测 19 例 |
 | | | | | | | |
 
 ---
