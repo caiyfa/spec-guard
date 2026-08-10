@@ -507,8 +507,17 @@ export interface GitLogResponse {
 
 // ── Agent 对话 ──
 export const agentApi = {
-  listSessions: (workspace = '') =>
-    request<{ sessions: any[] }>(`/agent/sessions${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+  // T-012: 当前用户可见用途清单（角色集合并集过滤）
+  listPurposes: () =>
+    request<{ purposes: { id: string; title: string; icon: string; color: string; chips: string[]; description: string; panels: string[] }[] }>('/agent/purposes'),
+  // T-010: 创建会话（唯一可写 purpose 的入口，purpose 创建即锁定）
+  createSession: (body: { purpose: string; workspace?: string; title?: string }) =>
+    request<{ ok: boolean; session_id: string; session: any }>('/agent/sessions', { method: 'POST', body: JSON.stringify(body) }),
+  // T-010: 改标题/归档；请求体含 purpose 一律 409
+  patchSession: (id: string, body: { title?: string }, workspace = '') =>
+    request<{ ok: boolean; session_id: string }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  listSessions: (workspace = '', purpose = '') =>
+    request<{ sessions: any[] }>(`/agent/sessions${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}${purpose ? `${workspace ? '&' : '?'}purpose=${encodeURIComponent(purpose)}` : ''}`),
   getSession: (id: string, workspace = '') =>
     request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>

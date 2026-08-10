@@ -94,10 +94,10 @@ def _sanitize_upload(filename: str | None, data: bytes) -> str:
 
 
 def _save_to_uploads(filename: str, data: bytes):
-    """落盘 .specguard/uploads/（重名 -1/-2 去重不覆盖），返回工作区相对路径。"""
-    from specstd.workspace import specguard_dir
-    sg_dir = specguard_dir()
-    uploads = sg_dir / "uploads"
+    """落盘 .specguard/{emp}/uploads/（T-014 私有区；重名 -1/-2 去重不覆盖），
+    返回工作区相对路径（相对工作区根，safe_resolve 可解析）。"""
+    from specstd.workspace import uploads_dir, get_workspace_root
+    uploads = uploads_dir()
     uploads.mkdir(parents=True, exist_ok=True)
     target = uploads / filename
     stem, suffix = target.stem, target.suffix
@@ -106,7 +106,8 @@ def _save_to_uploads(filename: str, data: bytes):
         target = uploads / f"{stem}-{n}{suffix}"
         n += 1
     target.write_bytes(data)
-    return str(target.relative_to(sg_dir.parent)).replace("\\", "/")
+    base = get_workspace_root() or uploads.parent.parent
+    return str(target.relative_to(base)).replace("\\", "/")
 
 
 @router.post("/info-pack/auto-create", dependencies=[Depends(require_role("admin", "tester"))])

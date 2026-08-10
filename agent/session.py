@@ -1,8 +1,9 @@
-"""agent.session — JSONL 会话持久化（支持工作区隔离 + 元数据）。
+"""agent.session — JSONL 会话持久化（支持工作区隔离 + 元数据 + T-010 purpose）。
 
 kill 后重跑可从 JSONL 续会话：每条消息一行 JSON，append-only。
 会话路径：agent/sessions/{emp_no}/{workspace}/{session_id}.jsonl
 兼容旧格式：agent/sessions/{emp_no}/{session_id}.jsonl
+T-010：创建期写入 purpose（锁定），_meta.json 存会话元数据（含 tool_whitelist/panels 快照）。
 """
 
 import json
@@ -42,8 +43,12 @@ class SessionManager:
         self.workspace = workspace
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
-    def create(self, emp_no: str = "", workspace: str = "") -> str:
-        """创建新会话，返回 session_id。首行写入元数据。"""
+    def create(self, emp_no: str = "", workspace: str = "", purpose: str = "") -> str:
+        """创建新会话，返回 session_id。首行写入元数据。
+
+        T-010：purpose 创建期一次性写入（不可变）；tool_whitelist/panels
+        从用途定义快照（load_purpose），后续用途热更新不回流已建会话。
+        """
         sid = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
         # 写元数据首行
         meta = {
@@ -54,9 +59,27 @@ class SessionManager:
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "title": "",  # G4: LLM 自动生成的标题
         }
+        # T-010：purpose 创建期锁定 + 用途快照
+        if purpose:
+            meta["purpose"] = purpose
+            meta["purpose_locked"] = True
+            try:
+                from agent.purpose_loader import load_purpose
+                pdef = load_purpose(purpose)
+                if pdef:
+                    meta["tool_whitelist"] = list(pdef.tools)
+                    meta["panels"] = list(pdef.panels)
+            except Exception:
+                pass
         path = self.sessions_dir / f"{sid}.jsonl"
         with open(path, "w", encoding="utf-8") as f:
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
+        # T-010：_meta.json 会话元数据（独立文件，供列表/校验快速读取）
+        try:
+            meta_path = self.sessions_dir / f"{sid}_meta.json"
+            meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
         return sid
 
     def update_title(self, session_id: str, title: str):
@@ -86,15 +109,26 @@ class SessionManager:
         """
         _validate_session_id(session_id)
         path = self.sessions_dir / f"{session_id}.jsonl"
+        # T-010：保留既有 purpose（save 重写首行 meta 时从旧 meta 继承）
+        old_meta = self._read_meta(path) if path.is_file() else {}
         with open(path, "w", encoding="utf-8") as f:
             # 元数据首行
             meta = {
                 "_type": "session_meta",
                 "session_id": session_id,
-                "emp_no": emp_no or "",
-                "workspace": workspace or self.workspace or "",
-                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "emp_no": emp_no or old_meta.get("emp_no", "") or "",
+                "workspace": workspace or old_meta.get("workspace", "") or self.workspace or "",
+                "created_at": old_meta.get("created_at") or datetime.now().isoformat(timespec="seconds"),
             }
+            # T-010：purpose 不可变——save 不得改写/丢失
+            if old_meta.get("purpose"):
+                meta["purpose"] = old_meta["purpose"]
+                meta["purpose_locked"] = True
+            elif "purpose" in old_meta:
+                meta["purpose"] = old_meta["purpose"]
+            for k in ("tool_whitelist", "panels"):
+                if k in old_meta:
+                    meta[k] = old_meta[k]
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
             for msg in messages:
                 if msg.get("_type") in ("session_meta", "todo_list"):
@@ -189,7 +223,7 @@ class SessionManager:
         return messages
 
     def list_sessions(self) -> list[dict]:
-        """列出所有会话（含元数据 + 标题）。"""
+        """列出所有会话（含元数据 + 标题 + T-010 purpose）。"""
         sessions = []
         for f in sorted(self.sessions_dir.glob("*.jsonl"), reverse=True):
             stat = f.stat()
@@ -202,6 +236,10 @@ class SessionManager:
                 "emp_no": meta.get("emp_no", ""),
                 "created_at": meta.get("created_at", ""),
                 "title": meta.get("title", ""),
+                "purpose": meta.get("purpose", ""),       # T-010
+                "purpose_locked": meta.get("purpose_locked", False),
+                "tool_whitelist": meta.get("tool_whitelist", []),
+                "panels": meta.get("panels", []),
             })
         return sessions
 

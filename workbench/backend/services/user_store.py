@@ -22,7 +22,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
 DB_PATH = DATA_DIR / "workbench.db"
 
-VALID_ROLES = ("admin", "tester", "viewer")
+VALID_ROLES = ("admin", "tester", "viewer", "product")
 
 _LOCK = threading.RLock()
 
@@ -48,6 +48,7 @@ def init_db(db_path: Path | None = None):
             emp_no TEXT PRIMARY KEY,
             name TEXT NOT NULL DEFAULT '',
             role TEXT NOT NULL DEFAULT 'viewer',
+            roles TEXT NOT NULL DEFAULT '',
             default_workspace TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             last_login_at TEXT NOT NULL
@@ -91,6 +92,7 @@ def init_db(db_path: Path | None = None):
             ("skip_upstream_verify", "ALTER TABLE run_queue ADD COLUMN skip_upstream_verify INTEGER NOT NULL DEFAULT 0"),
             ("account_override", "ALTER TABLE run_queue ADD COLUMN account_override TEXT NOT NULL DEFAULT ''"),
             ("overrides", "ALTER TABLE run_queue ADD COLUMN overrides TEXT NOT NULL DEFAULT ''"),
+            ("roles", "ALTER TABLE users ADD COLUMN roles TEXT NOT NULL DEFAULT ''"),
         ):
             try:
                 conn.execute(ddl)
@@ -102,11 +104,22 @@ def init_db(db_path: Path | None = None):
 # 用户
 # ══════════════════════════════════════════════════════════
 
+def _parse_roles(raw_role: str, raw_roles: str = "") -> list[str]:
+    """解析角色集：roles 列（逗号分隔多值）优先，回退 role 列（单值存量）。"""
+    if raw_roles and raw_roles.strip():
+        return [r.strip() for r in raw_roles.split(",") if r.strip()]
+    if raw_role and raw_role.strip():
+        return [raw_role.strip()]
+    return ["viewer"]
+
+
 def _row_to_user(row: sqlite3.Row) -> dict:
+    roles = _parse_roles(row["role"], row["roles"] if "roles" in row.keys() else "")
     return {
         "emp_no": row["emp_no"],
         "name": row["name"],
-        "role": row["role"],
+        "role": roles[0],          # 主角色（兼容存量单值语义）
+        "roles": roles,            # 全量角色集（v1.8 多角色）
         "default_workspace": row["default_workspace"],
         "created_at": row["created_at"],
         "last_login_at": row["last_login_at"],
@@ -182,16 +195,28 @@ def list_users(db_path: Path | None = None) -> list[dict]:
 
 
 def set_role(emp_no: str, role: str, actor: str, db_path: Path | None = None) -> bool:
-    if role not in VALID_ROLES:
-        raise ValueError(f"非法角色: {role}（应为 {VALID_ROLES}）")
+    """设置单角色（兼容存量接口）：等价于 set_roles([role])。"""
+    return set_roles(emp_no, [role], actor, db_path)
+
+
+def set_roles(emp_no: str, roles: list[str], actor: str, db_path: Path | None = None) -> bool:
+    """设置角色集（v1.8 多角色）：逗号分隔写入 roles 列，主角色同步 role 列。"""
+    roles = [r.strip() for r in roles if r.strip()]
+    if not roles:
+        raise ValueError("角色集不能为空")
+    for r in roles:
+        if r not in VALID_ROLES:
+            raise ValueError(f"非法角色: {r}（应为 {VALID_ROLES}）")
     with _LOCK, _connect(db_path) as conn:
-        cur = conn.execute("UPDATE users SET role = ? WHERE emp_no = ?", (role, emp_no))
+        cur = conn.execute(
+            "UPDATE users SET roles = ?, role = ? WHERE emp_no = ?",
+            (",".join(roles), roles[0], emp_no))
         if cur.rowcount == 0:
             return False
         conn.execute(
             "INSERT INTO audit_log (emp_no, action, target, detail, created_at)"
             " VALUES (?, 'set_role', ?, ?, ?)",
-            (actor, emp_no, role, _now()),
+            (actor, emp_no, ",".join(roles), _now()),
         )
         return True
 

@@ -42,6 +42,78 @@ for mod in TOOL_MODULES:
 # T-403: 工具结果最大字符数（超限时截断 + 落盘引用）
 _TOOL_RESULT_MAX_CHARS = 50000
 
+# ══════════════════════════════════════════════════════════
+# T-011: 三层交集工具白名单（resolve_tools）
+# resolve_tools(session) = TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools
+# 全部为确定性过滤；LLM 请求越权工具 → 直接拒绝，不执行（铁律 2 运行时形态）
+# ══════════════════════════════════════════════════════════
+
+# RBAC 角色可见工具集（v1.8 角色集合并集语义）
+# - admin/tester：全量（无额外收窄）
+# - product：只读/校验/归因/台账查询工具（需求侧面试会话的可见面）
+# - 工具名为空集时角色不可用 Agent（viewer 无菜单，后端同样拦截）
+_RBAC_READONLY_TOOLS = frozenset({
+    # spec_reader
+    "read_spec", "list_spec_files", "sync_workspace",
+    # scenario_tools（只读部分）
+    "list_scenarios", "read_scenario", "next_scenario_id", "check_dag", "suggest_deps",
+    # registry_query
+    "query_registry",
+    # validator
+    "validate",
+    # attribution（归因只读）
+    "read_run_report", "read_run_log", "read_case_detail", "list_failures", "list_executions",
+    # compliance
+    "scan_compliance",
+    # meta
+    "todo_write",
+})
+
+_RBAC_TOOL_SETS = {
+    "admin": None,          # None = 全量
+    "tester": None,         # None = 全量
+    "product": _RBAC_READONLY_TOOLS,
+    "viewer": frozenset(),  # 空集 = 不可用 Agent
+}
+
+
+def rbac_visible_tools(user_roles: list) -> set[str]:
+    """角色可见工具集（v1.8 并集语义）：任一角色可见的工具并集。"""
+    if not user_roles:
+        return set()
+    visible: set[str] = set()
+    for role in user_roles:
+        rset = _RBAC_TOOL_SETS.get(role)
+        if rset is None:
+            return None  # admin/tester 之一 → 全量
+        visible |= rset
+    return visible
+
+
+def resolve_tools(purpose_tools: list, user_roles: list) -> list:
+    """T-011：三层交集过滤——TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools。
+
+    - purpose_tools 为空 = 用途不额外收窄（test_workbench 全量测试工具）
+    - rbac 全量（admin/tester）= 角色层不额外收窄
+    - 返回过滤后的 Tool 列表（保持 ALL_TOOLS 顺序）
+    """
+    rbac_set = rbac_visible_tools(user_roles)
+    if rbac_set is not None and not rbac_set:
+        return []  # 角色无任何可见工具（viewer）
+    purpose_set = set(purpose_tools or [])
+    result = []
+    for tool in ALL_TOOLS:
+        if rbac_set is not None and tool.name not in rbac_set:
+            continue
+        if purpose_set and tool.name not in purpose_set:
+            continue
+        result.append(tool)
+    # meta 工具常驻（todo_write 在 _execute_tool 拦截，不参与白名单过滤）
+    for name in META_TOOLS:
+        if all(t.name != name for t in result):
+            result.append(next((t for t in ALL_TOOLS if t.name == name), None))
+    return [t for t in result if t is not None]
+
 
 def _parse_tc_arguments(tool_call: dict) -> dict:
     """解析 tool_call.function.arguments（容错：解析失败返回空 dict）。"""
@@ -208,6 +280,9 @@ class AgentRuntime:
         # drafts 沙箱/promote 三道闸+回滚/OVERWRITE_DENIED。模式白名单在生产中
         # 防住的都是合法工作流：K-012 未知工具报错/K-018 模式落错/K-022「没有入库工具」）
         self.tools = list(tools) if tools is not None else ALL_TOOLS
+
+        # T-011：白名单工具集（resolve_tools 过滤结果；LLM 请求白名单外的工具 → 确定性拒绝）
+        self._tool_whitelist = {t.name for t in self.tools}
 
         # 重建 tool_map（meta 工具在 _execute_tool 中拦截，不映射到模块）
         self._tool_map = {}
@@ -419,6 +494,28 @@ class AgentRuntime:
             return self._handle_todo_write(arguments)
 
         # ── 常规工具 ──
+        # T-011：白名单强制——越权工具确定性拒绝（不执行，附可用清单自愈）
+        # 判断顺序：先查全局注册（真未知 vs 白名单外），再查白名单
+        if name not in META_TOOLS:
+            if name in TOOL_NAME_TO_MODULE and name not in self._tool_whitelist:
+                available = "、".join(sorted(self._tool_whitelist))
+                # T-011：越权留 WARNING 审计（emp 经 T-014 contextvar 注入；失败静默——
+                # agent 可脱离 workbench 独立跑，审计缺失不阻断拒绝本身）
+                try:
+                    from specstd.workspace import get_context_emp_no
+                    _bd = SG_ROOT / "workbench" / "backend"
+                    if str(_bd) not in sys.path:
+                        sys.path.insert(0, str(_bd))
+                    from services import user_store as _us
+                    _emp = get_context_emp_no() or ""
+                    _us.audit(_emp, "tool_denied", name,
+                              detail=f"session={self._session_id or ''}; purpose 白名单外工具被拒绝",
+                              db_path=_us.DB_PATH)
+                except Exception:
+                    pass
+                return (f"[越权拒绝] 工具 {name} 不在本会话用途白名单内。"
+                        f"当前会话可用工具: {available}")
+
         mod = self._tool_map.get(name)
         if not mod:
             # K-023：全量工具常驻后不存在「模式未挂载」——只剩真未知（LLM 编造的工具名），

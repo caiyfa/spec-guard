@@ -5,7 +5,7 @@
 - mock（开发/测试）：本地 mock-login 签发 `mock-{emp_no}` token，不调 UAC
 
 UAC 对接（集团 Authing 方案2，仅需配置地址）：
-- 登录跳转：{UAC}/api/authing/login?redirectURL={回跳地址}
+- 登录跳转（SSO）：{UACSSO}/login?app_id={APP_ID}&protocol=oidc&redirect_uri={回跳地址}
 - 验证：GET {UAC}/api/authing/check/authentication?serialize=false&accessToken={token}
 - 用户资料：GET {UAC}/api/user/current/get（Authorization: Bearer {token}）
 - 登出：{UAC}/logout
@@ -42,6 +42,11 @@ def current_emp_no() -> str:
 SG_AUTH_MODE = os.environ.get("SG_AUTH_MODE", "uac")  # uac / mock
 SG_UAC_BASE = os.environ.get(
     "SG_UAC_BASE", "http://sit-ha.fehorizon.com/femsp/uac").rstrip("/")
+# Authing SSO（登录页跳转）
+SG_UAC_SSO_BASE = os.environ.get(
+    "SG_UAC_SSO_BASE", "http://sso.sit-authing.fehorizon.com").rstrip("/")
+SG_UAC_APP_ID = os.environ.get(
+    "SG_UAC_APP_ID", "650d55be5fb1d2cc66d9a550")
 
 # token 验证缓存：{token: (emp_no, name, exp_ts)}
 _TOKEN_CACHE: dict[str, tuple[str, str, float]] = {}
@@ -52,15 +57,21 @@ CACHE_TTL_SECONDS = 300
 class CurrentUser:
     emp_no: str
     name: str
-    role: str
+    role: str          # 主角色（兼容存量单值语义）
+    roles: list = None  # 全量角色集（v1.8 多角色：一人可多用途）
+
+    def __post_init__(self):
+        if not self.roles:
+            self.roles = [self.role] if self.role else []
 
     @property
     def is_admin(self) -> bool:
-        return self.role == "admin"
+        return "admin" in self.roles
 
 
 def uac_login_url(redirect_url: str) -> str:
-    return f"{SG_UAC_BASE}/api/authing/login?redirectURL={redirect_url}"
+    """Authing SSO 登录 URL（OIDC 协议）。"""
+    return f"{SG_UAC_SSO_BASE}/login?app_id={SG_UAC_APP_ID}&protocol=oidc&redirect_uri={redirect_url}"
 
 
 def uac_logout_url() -> str:
@@ -130,14 +141,19 @@ def _uac_user_info(token: str) -> dict:
 
 
 def _validate_token(token: str) -> tuple[str, str]:
-    """验证 token → (emp_no, name)。带 5min TTL 缓存。"""
+    """验证 token → (emp_no, name)。带 5min TTL 缓存。
+
+    自动识别 token 类型：
+    - mock- 前缀 → mock token，本地解析工号查 SQLite
+    - 其他 → UAC token，调 UAC API 验证
+    """
     cached = _TOKEN_CACHE.get(token)
     if cached and cached[2] > time.time():
         return cached[0], cached[1]
 
-    if SG_AUTH_MODE == "mock":
+    if token.startswith("mock-"):
         # mock token 形式：mock-{emp_no}
-        if not token.startswith("mock-") or len(token) <= 5:
+        if len(token) <= 5:
             raise HTTPException(status_code=401, detail="mock token 非法")
         emp_no = token[5:]
         user = user_store.get_user(emp_no)
@@ -160,9 +176,7 @@ def _validate_token(token: str) -> tuple[str, str]:
 
 
 def issue_mock_token(emp_no: str, name: str = "") -> str:
-    """mock 模式登录签发 token（仅 SG_AUTH_MODE=mock 可用）。"""
-    if SG_AUTH_MODE != "mock":
-        raise HTTPException(status_code=403, detail="非 mock 模式，请走 UAC 登录")
+    """mock 模式登录签发 token（mock/UAC 模式均可使用）。"""
     # 工号将编进 token 放入 HTTP Authorization header（仅支持 ASCII），
     # 中文/空格/特殊字符必须在此拦截——否则签发成功但后续请求必然构造失败
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", emp_no or ""):
@@ -192,7 +206,14 @@ def _authenticate(headers, query_params) -> CurrentUser:
     emp_no, name = _validate_token(token)
     user = user_store.upsert_user(emp_no, name)
     _CTX_EMP_NO.set(user["emp_no"])
-    return CurrentUser(emp_no=user["emp_no"], name=user["name"], role=user["role"])
+    # T-014：注入 specstd 用户上下文——产物写读点据此定位私有区（.specguard/{emp}/）
+    try:
+        from specstd.workspace import set_context_emp_no as _sg_set_emp
+        _sg_set_emp(user["emp_no"])
+    except Exception:
+        pass
+    return CurrentUser(emp_no=user["emp_no"], name=user["name"],
+                       role=user.get("role", "viewer"), roles=user.get("roles") or None)
 
 
 async def get_current_user(request: Request) -> CurrentUser:
@@ -206,18 +227,23 @@ async def get_current_user_ws(websocket: WebSocket) -> CurrentUser:
 
 
 def require_role(*roles: str):
-    """角色门禁依赖工厂（HTTP）：require_role("admin") / require_role("admin", "tester")。"""
+    """角色门禁依赖工厂（HTTP）：require_role("admin") / require_role("admin", "tester")。
+
+    v1.8 多角色语义：用户角色集合与所需角色交集非空即通过（包含任一）。
+    """
+    required = set(roles)
     async def checker(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-        if user.role not in roles:
+        if not (set(user.roles) & required):
             raise HTTPException(status_code=403, detail=f"需要 {'/'.join(roles)} 角色")
         return user
     return checker
 
 
 def require_role_ws(*roles: str):
-    """角色门禁依赖工厂（WebSocket）。"""
+    """角色门禁依赖工厂（WebSocket）。v1.8：用户角色集与所需角色交集非空即通过。"""
+    required = set(roles)
     async def checker(user: CurrentUser = Depends(get_current_user_ws)) -> CurrentUser:
-        if user.role not in roles:
+        if not (set(user.roles) & required):
             raise HTTPException(status_code=403, detail=f"需要 {'/'.join(roles)} 角色")
         return user
     return checker

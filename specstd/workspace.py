@@ -48,6 +48,27 @@ _REGISTRY_LOCK = threading.RLock()
 _CTX_WORKSPACE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "sg_workspace_name", default=None)
 
+# ── 请求级用户上下文（T-014 多会话产物地基）──
+# 服务端：get_current_user 认证后注入；产物写读点据此定位私有区（.specguard/{emp}/）。
+# 与 workspace 同模式：MCP stdio POC（无用户概念）为空 → 产物落共享区（向后兼容）。
+_CTX_EMP_NO: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "sg_emp_no", default=None)
+
+
+def set_context_emp_no(emp_no: Optional[str]):
+    """设置请求级用户工号（认证依赖注入）。返回 reset token。"""
+    return _CTX_EMP_NO.set(emp_no or None)
+
+
+def reset_context_emp_no(token):
+    """恢复上一用户上下文（请求收尾调用）。"""
+    _CTX_EMP_NO.reset(token)
+
+
+def get_context_emp_no() -> Optional[str]:
+    """当前请求上下文中的用户工号（未设置返回 None）。"""
+    return _CTX_EMP_NO.get()
+
 
 def set_context_workspace(name: Optional[str]):
     """设置请求级工作区名（中间件/依赖注入调用）。返回 reset token。"""
@@ -577,15 +598,42 @@ def _ensure_specguard_meta(sg_dir: Path):
         )
 
 
-def specguard_dir(workspace_root: Path = None, custom_path: str = "") -> Path:
-    """获取工作区的 .specguard 目录（可配置位置）。
+def _emp_subdir(sg_dir: Path, emp: str) -> Path:
+    """计算用户私有区子目录（T-014）：{sg_dir}/{emp}/。
+
+    emp 含非法字符时净化（防路径穿越，含 .. 拒绝）；空 emp 返回 sg_dir 本身（共享区）。
+    """
+    if not emp:
+        return sg_dir
+    # 防路径穿越：.. 直接拒绝（不净化，避免语义歧义）
+    if ".." in emp or "/" in emp or "\\" in emp:
+        return sg_dir
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", emp).strip(".")
+    if not safe:
+        return sg_dir
+    private = sg_dir / safe
+    private.mkdir(parents=True, exist_ok=True)
+    _ensure_specguard_meta(private)
+    return private
+
+
+def _resolve_emp(emp: str = "") -> str:
+    """解析当前有效 emp：显式参数 > 请求上下文（T-014）。"""
+    return emp or (get_context_emp_no() or "")
+
+
+def specguard_dir(workspace_root: Path = None, custom_path: str = "", emp: str = "") -> Path:
+    """获取工作区的 .specguard 目录（可配置位置 + T-014 emp 维度）。
 
     custom_path 非空时用自定义位置，否则默认 {workspace}/.specguard/。
+    emp 非空（或请求上下文有 emp）时返回用户私有区 {sg}/{emp}/，
+    否则返回工作区级共享区（向后兼容）。
     首次创建时自动生成 README + .gitignore。
 
     Args:
         workspace_root: 工作区根路径（None 时使用当前激活工作区）
         custom_path: 自定义 .specguard 目录位置（空字符串用默认）
+        emp: 用户工号（空串时尝试请求上下文；均空 = 共享区）
 
     Returns:
         .specguard 目录路径
@@ -607,27 +655,47 @@ def specguard_dir(workspace_root: Path = None, custom_path: str = "") -> Path:
 
     sg_dir.mkdir(parents=True, exist_ok=True)
     _ensure_specguard_meta(sg_dir)
-    return sg_dir
+    return _emp_subdir(sg_dir, _resolve_emp(emp))
 
 
-def drafts_dir() -> Path:
-    """Agent 草稿目录：{.specguard}/drafts/。"""
-    return specguard_dir() / "drafts"
+def drafts_dir(emp: str = "") -> Path:
+    """Agent 草稿目录（T-014）：私有区 {.specguard}/{emp}/drafts/（未确认），
+    无 emp 时回退共享区 {.specguard}/drafts/（兼容存量）。"""
+    return specguard_dir(emp=emp) / "drafts"
 
 
-def plans_dir() -> Path:
-    """测试计划目录：{.specguard}/plans/。"""
-    return specguard_dir() / "plans"
+def plans_dir(emp: str = "") -> Path:
+    """测试计划目录（T-014）：未确认计划落私有区 {emp}/plans/，
+    无 emp 时回退共享区（确认后共享）。"""
+    return specguard_dir(emp=emp) / "plans"
 
 
 def reports_dir() -> Path:
-    """运行报告目录：{.specguard}/reports/。"""
+    """运行报告目录（天然共享产物，不进私有区）：{.specguard}/reports/。"""
     return specguard_dir() / "reports"
 
 
 def info_packs_dir() -> Path:
-    """基础信息包目录：{.specguard}/info_packs/。"""
+    """基础信息包目录（天然共享产物，不进私有区）：{.specguard}/info_packs/。"""
     return specguard_dir() / "info_packs"
+
+
+def uploads_dir(emp: str = "") -> Path:
+    """上传附件目录（T-014）：未确认上传落私有区 {emp}/uploads/。"""
+    return specguard_dir(emp=emp) / "uploads"
+
+
+def can_read_private(owner_emp: str, current_emp: str, is_admin: bool = False) -> bool:
+    """私有区越权读校验（T-014）：仅归属用户本人 + admin 可读，确定性拒绝。
+
+    owner_emp 为空（共享区产物）不适用私有校验——返回 False 表示
+    调用方不应走私有读取路径（应走共享区）。
+    """
+    if not owner_emp:
+        return False
+    if is_admin:
+        return True
+    return bool(current_emp) and owner_emp == current_emp
 
 
 # ══════════════════════════════════════════════════════════

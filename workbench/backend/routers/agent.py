@@ -24,7 +24,8 @@ if str(SG_ROOT) not in sys.path:
 
 from agent.llm_client import LLMClient
 from agent.session import SessionManager, _validate_session_id
-from agent.runtime import AgentRuntime, build_system_prompt
+from agent.runtime import AgentRuntime, build_system_prompt, resolve_tools
+from agent.purpose_loader import load_purpose, visible_purposes
 
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 
@@ -238,18 +239,95 @@ def _list_sessions_in_dir(base_dir: Path, workspace: str = "") -> list[dict]:
 # REST 端点
 # ══════════════════════════════════════════════════════════
 
+@router.get("/purposes")
+def list_purposes_api(user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """T-012/T-013：当前用户可见用途清单（角色集合并集过滤；多用途用户多卡）。"""
+    purposes = visible_purposes(user.roles)
+    return {"purposes": [{
+        "id": p.id,
+        "title": p.title,
+        "icon": p.icon,
+        "color": p.color,
+        "chips": p.chips,
+        "description": p.description,
+        "panels": p.panels,
+    } for p in purposes]}
+
+
+@router.post("/sessions")
+def create_session(body: dict, user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """T-010：创建会话——唯一可写 purpose 的入口（创建期锁定，不可中途变更）。
+
+    入参：{purpose, workspace, title?}
+    purpose 非法（未定义）或无权限（角色不可见）→ 403。
+    """
+    purpose = str(body.get("purpose", "") or "").strip()
+    workspace = str(body.get("workspace", "") or "").strip()
+    title = str(body.get("title", "") or "").strip()
+    if not purpose:
+        raise HTTPException(status_code=400, detail="purpose 必填")
+    # 用途合法性 + 角色可见性（二次鉴权）
+    pdef = load_purpose(purpose)
+    if pdef is None:
+        raise HTTPException(status_code=403, detail=f"用途不存在或不可见: {purpose}")
+    if not (set(user.roles) & set(pdef.roles)):
+        raise HTTPException(status_code=403, detail=f"当前角色无权限使用用途: {purpose}")
+    # 创建会话（emp 隔离 + workspace 子目录 + purpose 锁定）
+    sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
+    sid = sm.create(emp_no=user.emp_no, workspace=workspace, purpose=purpose)
+    # 索引投影（失败静默）
+    try:
+        from services import agent_session_store
+        agent_session_store.upsert_session(sid, user.emp_no, workspace, purpose, title)
+    except Exception:
+        pass
+    meta = sm.list_sessions()
+    created = next((s for s in meta if s["id"] == sid), {})
+    return {"ok": True, "session_id": sid, "session": created}
+
+
+@router.patch("/sessions/{session_id}")
+def patch_session(session_id: str, body: dict,
+                  workspace: str = "",
+                  user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """T-010：改标题/归档；请求体含 purpose → 409（用途创建即锁定）。"""
+    try:
+        _validate_session_id(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法 session_id")
+    if "purpose" in body:
+        raise HTTPException(status_code=409, detail="用途创建即锁定，不可中途变更（换用途 = 新建会话）")
+    sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
+    if not sm.load(session_id):
+        raise HTTPException(status_code=404, detail="会话不存在")
+    title = str(body.get("title", "") or "").strip()
+    if title:
+        sm.update_title(session_id, title)
+        try:
+            from services import agent_session_store
+            agent_session_store.update_title(session_id, title)
+        except Exception:
+            pass
+    return {"ok": True, "session_id": session_id}
+
+
 @router.get("/sessions")
-def list_sessions(workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester"))):
-    """列出会话：本人目录；admin 聚合全部用户目录。支持按工作区筛选。"""
+def list_sessions(workspace: str = "", purpose: str = "", user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """列出会话：本人目录；admin 聚合全部用户目录。支持按工作区/用途筛选。"""
     if user.is_admin:
         sessions = []
         for d in _iter_all_session_dirs():
             for s in _list_sessions_in_dir(d, workspace=workspace):
                 s["owner"] = d.name
                 sessions.append(s)
+        if purpose:
+            sessions = [s for s in sessions if s.get("purpose") == purpose]
         return {"sessions": sessions}
     sm_dir = _sessions_dir(user.emp_no)
-    return {"sessions": _list_sessions_in_dir(sm_dir, workspace=workspace)}
+    sessions = _list_sessions_in_dir(sm_dir, workspace=workspace)
+    if purpose:
+        sessions = [s for s in sessions if s.get("purpose") == purpose]
+    return {"sessions": sessions}
 
 
 @router.get("/sessions/{session_id}")
@@ -349,7 +427,7 @@ async def cancel_agent(session_id: str,
 
 @router.websocket("/ws")
 async def agent_ws(websocket: WebSocket,
-                   _user: CurrentUser = Depends(require_role_ws("admin", "tester"))):
+                   _user: CurrentUser = Depends(require_role_ws("admin", "tester", "product"))):
     """WebSocket 实时对话（WS 专用角色依赖；token 经 query 参数传入）。
 
     前端发送：{"message": "用户消息", "session_id": "可选会话ID"}
@@ -359,6 +437,8 @@ async def agent_ws(websocket: WebSocket,
     # 连接级用户身份（路由级 require_role 已完成认证，身份经 contextvar 传入）
     from services.auth import current_emp_no
     _ws_emp_no = current_emp_no()
+    # T-013: 连接级角色集（白名单装配用；require_role_ws 已认证）
+    _ws_roles = list(_user.roles or [])
 
     # 从查询参数读取工作区并设置上下文（浏览器 WebSocket 不支持自定义 header）
     from specstd.workspace import set_context_workspace, reset_context_workspace
@@ -374,6 +454,7 @@ async def agent_ws(websocket: WebSocket,
             workspace = data.get("workspace", "")
             scenario_id = data.get("scenario_id", "")
             model_id = data.get("model_id", "")
+            purpose = data.get("purpose", "")  # T-010: 新建会话时可选传入用途
             references = data.get("references", [])  # K-013: @引用
 
             if not message:
@@ -392,8 +473,31 @@ async def agent_ws(websocket: WebSocket,
             sessions_dir = _sessions_dir(emp_no)
             sm = SessionManager(sessions_dir, workspace=workspace)
             is_new_session = not session_id
-            sid = session_id or sm.create(emp_no=emp_no, workspace=workspace)
+            # T-010: 新建会话时校验并透传 purpose（非法/无权限 403 语义；已有会话读锁定值）
+            session_purpose = purpose or ""
+            if is_new_session and session_purpose:
+                pdef = load_purpose(session_purpose)
+                if pdef is None or not (set(_ws_roles) & set(pdef.roles)):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"用途不存在或无权限: {session_purpose}",
+                    })
+                    continue
+            elif not is_new_session:
+                try:
+                    session_purpose = sm.list_sessions()
+                    session_purpose = next((s.get("purpose", "") for s in session_purpose
+                                            if s["id"] == session_id), "")
+                except Exception:
+                    session_purpose = ""
+            sid = session_id or sm.create(emp_no=emp_no, workspace=workspace, purpose=session_purpose)
             llm.set_metrics_file(sessions_dir / (f"{workspace}/" if workspace else "") / f"{sid}_metrics.jsonl")
+            # T-010: 会话索引投影（失败静默）
+            try:
+                from services import agent_session_store
+                agent_session_store.upsert_session(sid, emp_no, workspace, session_purpose or "")
+            except Exception:
+                pass
 
             # K-015: 同会话并发写防护（另一连接/标签页正在执行同一会话时拒绝）
             if _run_in_progress(sid):
@@ -418,7 +522,14 @@ async def agent_ws(websocket: WebSocket,
                 return build_system_prompt(scenario_context=ctx)
 
             system_prompt = await asyncio.to_thread(_build_prompt, scenario_id)
-            runtime = AgentRuntime(llm, max_turns=max_turns)
+            # T-011: 三层交集白名单装配——TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools
+            # （meta 工具 todo_write 常驻；全量用户 admin/tester 角色层不额外收窄）
+            whitelist_tools = resolve_tools(
+                purpose_tools=list((load_purpose(session_purpose).tools if session_purpose
+                                    and load_purpose(session_purpose) else []) or []),
+                user_roles=list(_ws_roles or []),
+            )
+            runtime = AgentRuntime(llm, tools=whitelist_tools or None, max_turns=max_turns)
             ws_message = f"{ref_block}{message}" if ref_block else message
 
             # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）
