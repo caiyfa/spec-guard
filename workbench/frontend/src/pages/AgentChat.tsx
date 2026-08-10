@@ -1559,7 +1559,7 @@ interface ChatInputProps {
   loading: boolean;
   models: ModelConfig[];
   currentModelId: string;
-  onSend: (text: string, references: ChatReference[]) => void;
+  onSend: (text: string, references: ChatReference[]) => boolean;  // 返回是否真正发出（ true 时输入框清空）
   onStop: () => void;
   onNewSession: () => void;
   onClearMessages: () => void;
@@ -1699,7 +1699,12 @@ function ChatInput({
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (filteredCommands[slashIndex]) handleSlashSelect(filteredCommands[slashIndex]); return; }
       if (e.key === 'Escape') { e.preventDefault(); setSlashOpen(false); return; }
     }
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(input.trim(), references); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+  };
+
+  // 发送成功（onSend 返回 true）才清空输入框——发送被拒（断连/加载中）时保留草稿
+  const doSend = () => {
+    if (onSend(input.trim(), references)) setInput('');
   };
 
   const handleAttachFiles = async (files: FileList | null) => {
@@ -1804,7 +1809,7 @@ function ChatInput({
           </button>
         ) : (
           <button
-            onClick={() => onSend(input.trim(), references)}
+            onClick={doSend}
             disabled={!input.trim() || wsState !== 'open'}
             className="w-10 h-10 flex-shrink-0 bg-info text-white rounded-full flex items-center justify-center hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
@@ -2263,15 +2268,16 @@ export default function AgentChat() {
   }, [loading]);
 
   // 发送消息
-  const handleSend = useCallback((text: string, refs: ChatReference[]) => {
+  // 返回是否真正发出——ChatInput 据此决定清空输入框（发送被拒时保留草稿）
+  const handleSend = useCallback((text: string, refs: ChatReference[]): boolean => {
     const userMsg = text.trim();
     const ws = wsRef.current;
-    if (!userMsg || loading) return;
+    if (!userMsg || loading) return false;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setError('连接已断开，正在尝试重连…（消息未发送，重连后请重发）');
       reconnectAttemptsRef.current = 0;
       setWsReconnect(v => v + 1);
-      return;
+      return false;
     }
     setLoading(true); setError(''); setTurnInfo(''); setPlanItems([]);
     const msgRefs = refs.length ? [...refs] : undefined;
@@ -2291,6 +2297,7 @@ export default function AgentChat() {
       references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
       context: { current_page: currentPage, editing_scenario_id: scenarioId },
     }));
+    return true;
   }, [loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo]);
 
   // T-402: 打断会话（真打断——先调用 cancel API，再关 WS）
