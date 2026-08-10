@@ -685,6 +685,29 @@ def uploads_dir(emp: str = "") -> Path:
     return specguard_dir(emp=emp) / "uploads"
 
 
+def specflow_dir(emp: str = "") -> Path:
+    """获取工作区的 .specflow 目录（S2，需求侧产物，双系统分离）。
+
+    emp 非空（或请求上下文有 emp）时返回用户私有区 {ws}/.specflow/{emp}/，
+    否则返回工作区级共享区 {ws}/.specflow/（向后兼容）。
+    specflow_dir 不走 specguard_dir 路径——.specflow/ 是需求侧独立的目录树。
+    首次创建时自动生成 README + .gitignore。
+
+    Args:
+        emp: 用户工号（空串时尝试请求上下文；均空 = 共享区）
+
+    Returns:
+        .specflow 目录路径
+    """
+    ws = get_workspace_root()
+    if not ws:
+        raise RuntimeError("无激活工作区")
+    sf_dir = ws / ".specflow"
+    sf_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_specguard_meta(sf_dir)
+    return _emp_subdir(sf_dir, _resolve_emp(emp))
+
+
 def can_read_private(owner_emp: str, current_emp: str, is_admin: bool = False) -> bool:
     """私有区越权读校验（T-014）：仅归属用户本人 + admin 可读，确定性拒绝。
 
