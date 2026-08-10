@@ -4,6 +4,7 @@
   write_draft: 写入草稿（drafts/ 限定 + 禁覆盖 + patch 模式）
 """
 
+import contextvars
 import json
 import sys
 from datetime import datetime
@@ -18,21 +19,22 @@ if str(SG_ROOT) not in sys.path:
 from specstd.workspace import drafts_dir, get_workspace_root  # noqa: E402
 
 
-# 模块级：暂存待写入的 source files（由 agent/runtime 在 write_draft 前设置）
-_PENDING_SOURCE_FILES: list[str] = []
+# M6 修复：pending source files 改 contextvar——原模块级全局变量在多用户并发
+# 会话下会串户（用户 A read_spec 设置的依赖记录被并发的用户 B 覆盖）。
+# runtime 在 to_thread 线程内 set，asyncio.run 复制调用方 context 后 pop，同链透传。
+_PENDING_SOURCE_FILES: contextvars.ContextVar[list] = contextvars.ContextVar(
+    "sg_pending_source_files", default=[])
 
 
 def set_pending_source_files(files: list[str]):
     """设置待写入的 source files（供 _handle_write_draft 消费）。"""
-    global _PENDING_SOURCE_FILES
-    _PENDING_SOURCE_FILES = list(files)
+    _PENDING_SOURCE_FILES.set(list(files))
 
 
 def pop_pending_source_files() -> list[str]:
     """消费并清空 pending source files。"""
-    global _PENDING_SOURCE_FILES
-    files = _PENDING_SOURCE_FILES
-    _PENDING_SOURCE_FILES = []
+    files = _PENDING_SOURCE_FILES.get()
+    _PENDING_SOURCE_FILES.set([])
     return files
 
 

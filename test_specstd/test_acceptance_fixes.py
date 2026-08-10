@@ -541,9 +541,12 @@ class TestD1DraftsGate:
         from routers import drafts as drafts_router
         return drafts_router
 
-    def test_filename_guard(self):
+    def test_filename_guard(self, tmp_path, monkeypatch):
         from fastapi import HTTPException
         dr = self._import_drafts_router()
+        # M2 后 _drafts_root 无工作区即 400（不再回退全局目录）——
+        # 测试隔离：monkeypatch 草稿根，专注文件名守卫本身
+        monkeypatch.setattr(dr, "_drafts_root", lambda: tmp_path)
         with pytest.raises(HTTPException):
             dr._guard_filename("../../evil.yaml")
         with pytest.raises(HTTPException):

@@ -5,10 +5,13 @@ max_turns=12 熔断；kill 后重跑可从 JSONL 续会话。
 
 import asyncio
 import json
+import logging
 import sys
 import threading
 from pathlib import Path
 from typing import Optional
+
+_log = logging.getLogger("agent.runtime")
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 if str(SG_ROOT) not in sys.path:
@@ -69,23 +72,35 @@ _RBAC_READONLY_TOOLS = frozenset({
     "todo_write",
 })
 
+# 全量角色（语义 = 不额外收窄；与 _RBAC_TOOL_SETS 分离，避免 None 二义）
+_RBAC_FULL_ROLES = frozenset({"admin", "tester"})
+
+# 有限可见集角色；不在此表 = 未注册角色（H1：fail-closed 视为空集，绝不视为全量）
 _RBAC_TOOL_SETS = {
-    "admin": None,          # None = 全量
-    "tester": None,         # None = 全量
     "product": _RBAC_READONLY_TOOLS,
     "viewer": frozenset(),  # 空集 = 不可用 Agent
 }
 
 
-def rbac_visible_tools(user_roles: list) -> set[str]:
-    """角色可见工具集（v1.8 并集语义）：任一角色可见的工具并集。"""
+def rbac_visible_tools(user_roles: list) -> Optional[set[str]]:
+    """角色可见工具集（v1.8 并集语义）：任一角色可见的工具并集。
+
+    H1 修复：未注册角色 fail-closed——贡献空集并 WARNING，不再与 admin/tester
+    的全量语义混同。此前 _RBAC_TOOL_SETS.get(未知角色) 返回 None 即被当作全量，
+    用户角色集混入任意未注册角色（如用途定义引用的 dev）即可击穿 product 只读收窄。
+    """
     if not user_roles:
         return set()
     visible: set[str] = set()
     for role in user_roles:
+        if role in _RBAC_FULL_ROLES:
+            return None  # admin/tester 之一 → 全量
         rset = _RBAC_TOOL_SETS.get(role)
         if rset is None:
-            return None  # admin/tester 之一 → 全量
+            _log.warning(
+                "rbac: 未注册角色 %r 视为空集（fail-closed）——"
+                "请检查 VALID_ROLES 与 _RBAC_TOOL_SETS 配置是否一致", role)
+            continue
         visible |= rset
     return visible
 
@@ -512,7 +527,9 @@ class AgentRuntime:
                               detail=f"session={self._session_id or ''}; purpose 白名单外工具被拒绝",
                               db_path=_us.DB_PATH)
                 except Exception:
-                    pass
+                    # L5：审计写入失败不阻断拒绝，但留痕日志便于排查
+                    _log.warning("tool_denied 审计写入失败（tool=%s, session=%s）",
+                                 name, self._session_id or "")
                 return (f"[越权拒绝] 工具 {name} 不在本会话用途白名单内。"
                         f"当前会话可用工具: {available}")
 

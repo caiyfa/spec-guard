@@ -149,6 +149,24 @@ class TestResolveTools:
         from agent.runtime import resolve_tools
         assert resolve_tools(purpose_tools=[], user_roles=["viewer"]) == []
 
+    def test_unknown_role_fail_closed(self):
+        """H1：未注册角色（如用途定义引用的 dev）不再触发全量——fail-closed 空集。"""
+        from agent.runtime import resolve_tools
+        from agent.purpose_loader import load_purpose
+        # 仅未知角色：空集（此前误判为全量）
+        assert resolve_tools(purpose_tools=[], user_roles=["dev"]) == []
+        # product + 未知角色：未知角色不击穿只读收窄
+        pdef = load_purpose("requirement_interview")
+        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product", "dev"])
+        names = {t.name for t in tools}
+        assert "read_spec" in names
+        assert "write_draft" not in names
+        assert "promote_draft" not in names
+        # tester + 未知角色：tester 仍是全量（未知角色不拉低）
+        tools2 = resolve_tools(purpose_tools=[], user_roles=["tester", "dev"])
+        from agent.runtime import ALL_TOOLS
+        assert len(tools2) == len(ALL_TOOLS)
+
     def test_runtime_rejects_whitelist_violation(self, tmp_path, monkeypatch):
         """越权调用确定性拒绝（不执行）+ WARNING 审计留痕。"""
         from agent.runtime import AgentRuntime, resolve_tools
@@ -203,6 +221,23 @@ class TestRbacMultiRole:
         user_store.upsert_user("90024168", "王五", db)
         with pytest.raises(ValueError):
             user_store.set_roles("90024168", ["superuser"], "90000001", db)
+
+    def test_has_admin_detects_roles_column(self, tmp_path):
+        """H2：多角色 admin（role 列非 admin）仍被 _has_admin 识别，防 bootstrap 误提权。"""
+        import sqlite3
+        from services import user_store
+        db = tmp_path / "admin.db"
+        user_store.init_db(db)
+        user_store.upsert_user("90024180", "多角色管理员", db)
+        user_store.set_roles("90024180", ["tester", "admin"], "90000001", db)  # role 列=tester
+        conn = sqlite3.connect(str(db))
+        try:
+            assert user_store._has_admin(conn) is True
+        finally:
+            conn.close()
+        # 新用户登录不再被误提权为 admin
+        user_store.upsert_user("90024181", "新用户", db)
+        assert user_store.get_user("90024181", db)["role"] == "viewer"
 
     def test_legacy_role_column_fallback(self, tmp_path):
         """存量单值 role 列（无 roles 列数据）→ 解析为单元素角色集。"""

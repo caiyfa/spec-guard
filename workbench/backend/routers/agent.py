@@ -99,9 +99,13 @@ def _build_scenario_context(scenario_id: str) -> str:
 
 
 def _sessions_dir(emp_no: str) -> Path:
-    """按用户隔离的会话目录（M7）：agent/sessions/{emp_no}/。"""
-    safe = re.sub(r"[^A-Za-z0-9_-]", "_", emp_no or "_anonymous")
-    return SESSIONS_ROOT / safe
+    """按用户隔离的会话目录（M7）：agent/sessions/{emp_no}/。
+
+    L4 修复：净化规则与 specstd.workspace._emp_subdir 对齐（允许 . 与 -，
+    strip 前导点）——此前规则不一致导致含 . 工号的会话目录与产物私有区目录错位。
+    """
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", emp_no or "_anonymous").strip(".")
+    return SESSIONS_ROOT / (safe or "_anonymous")
 
 
 # ══════════════════════════════════════════════════════════
@@ -210,7 +214,8 @@ def _iter_all_session_dirs() -> list[Path]:
     """全部用户会话目录（admin 视图）。"""
     if not SESSIONS_ROOT.is_dir():
         return []
-    return [d for d in sorted(SESSIONS_ROOT.iterdir()) if d.is_dir() and not d.name.startswith("_")]
+    return [d for d in sorted(SESSIONS_ROOT.iterdir())
+            if d.is_dir() and not d.name.startswith((".", "_"))]
 
 
 def _list_sessions_in_dir(base_dir: Path, workspace: str = "") -> list[dict]:
@@ -233,6 +238,19 @@ def _list_sessions_in_dir(base_dir: Path, workspace: str = "") -> list[dict]:
                 for s in ws_sm.list_sessions():
                     sessions.append(s)
     return sessions
+
+
+def _find_session_owner(session_id: str) -> str:
+    """查找会话归属目录名（非 admin 取消/读取时的归属校验用；未找到返回空串）。"""
+    _validate_session_id(session_id)
+    for d in _iter_all_session_dirs():
+        if SessionManager(d).load(session_id) is not None:
+            return d.name
+        for sub in sorted(d.iterdir()):
+            if sub.is_dir() and not sub.name.startswith((".", "_")):
+                if SessionManager(d, workspace=sub.name).load(session_id) is not None:
+                    return d.name
+    return ""
 
 
 # ══════════════════════════════════════════════════════════
@@ -272,8 +290,17 @@ def create_session(body: dict, user: CurrentUser = Depends(require_role("admin",
         raise HTTPException(status_code=403, detail=f"用途不存在或不可见: {purpose}")
     if not (set(user.roles) & set(pdef.roles)):
         raise HTTPException(status_code=403, detail=f"当前角色无权限使用用途: {purpose}")
+    # L2 修复：workspace 非法（ValueError → 500）与未授权（绕过 resolve_workspace）
+    # 统一前置为 4xx
+    if workspace and not user.is_admin:
+        from services import user_store as _us
+        if not _us.has_grant(user.emp_no, workspace):
+            raise HTTPException(status_code=403, detail=f"未授权工作区: {workspace}")
+    try:
+        sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"非法 workspace: {e}")
     # 创建会话（emp 隔离 + workspace 子目录 + purpose 锁定）
-    sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
     sid = sm.create(emp_no=user.emp_no, workspace=workspace, purpose=purpose)
     # 索引投影（失败静默）
     try:
@@ -331,8 +358,12 @@ def list_sessions(workspace: str = "", purpose: str = "", user: CurrentUser = De
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester"))):
-    """获取会话详情（本人会话；admin 可查全部）。支持工作区子目录。"""
+def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """获取会话详情（本人会话；admin 可查全部）。支持工作区子目录。
+
+    M3 修复：product 加入读取权限（多角色扩展遗漏——product 能建会话却读不到自己历史）。
+    非 admin 目录限定本人（_sessions_dir(user.emp_no)），天然隔离他人会话。
+    """
     try:
         _validate_session_id(session_id)
     except ValueError:
@@ -380,8 +411,8 @@ def _generate_session_title(llm: LLMClient, messages: list[dict]) -> str:
 
 
 @router.get("/sessions/{session_id}/export")
-def export_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester"))):
-    """导出会话为 JSON（元数据 + 消息 + 指标），便于排查问题。"""
+def export_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """导出会话为 JSON（元数据 + 消息 + 指标），便于排查问题。M3：product 可导出本人会话。"""
     try:
         _validate_session_id(session_id)
     except ValueError:
@@ -402,11 +433,11 @@ def export_session(session_id: str, workspace: str = "", user: CurrentUser = Dep
 
 @router.post("/cancel/{session_id}")
 async def cancel_agent(session_id: str,
-                       user: CurrentUser = Depends(require_role("admin", "tester"))):
+                       user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
     """T-402：取消指定会话的当前运行（真打断）。
 
     设置运行时 cancellation 标志 → 当前轮次 tool 执行完即停止，不再推进下一轮，
-    且不再写会话文件。
+    且不再写会话文件。M3：product 新增可取消权；非 admin 归属校验——只能取消自己的会话。
     """
     try:
         _validate_session_id(session_id)
@@ -416,6 +447,12 @@ async def cancel_agent(session_id: str,
     runtime = _ACTIVE_RUNTIMES.get(session_id)
     if not runtime:
         raise HTTPException(status_code=404, detail="该会话没有活跃的运行")
+
+    # M3：归属校验（_ACTIVE_RUNTIMES 为全局表，不能只靠会话存在性放行）
+    if not user.is_admin:
+        owner = _find_session_owner(session_id)
+        if owner != _sessions_dir(user.emp_no).name:
+            raise HTTPException(status_code=403, detail="无权取消他人会话")
 
     runtime.cancel()
     return {"ok": True, "session_id": session_id, "message": "已请求取消"}
@@ -475,6 +512,7 @@ async def agent_ws(websocket: WebSocket,
             is_new_session = not session_id
             # T-010: 新建会话时校验并透传 purpose（非法/无权限 403 语义；已有会话读锁定值）
             session_purpose = purpose or ""
+            session_tools_snapshot = None  # M5：已建会话的创建期 tool_whitelist 快照
             if is_new_session and session_purpose:
                 pdef = load_purpose(session_purpose)
                 if pdef is None or not (set(_ws_roles) & set(pdef.roles)):
@@ -485,11 +523,15 @@ async def agent_ws(websocket: WebSocket,
                     continue
             elif not is_new_session:
                 try:
-                    session_purpose = sm.list_sessions()
-                    session_purpose = next((s.get("purpose", "") for s in session_purpose
-                                            if s["id"] == session_id), "")
+                    metas = sm.list_sessions()
+                    meta = next((s for s in metas if s["id"] == session_id), {})
+                    session_purpose = meta.get("purpose", "")
+                    # M5：优先取创建期快照（purpose 定义热更新/文件变更不回流已建会话）；
+                    # 旧会话无快照时才回退 load_purpose 现解
+                    session_tools_snapshot = meta.get("tool_whitelist") or None
                 except Exception:
                     session_purpose = ""
+                    session_tools_snapshot = None
             sid = session_id or sm.create(emp_no=emp_no, workspace=workspace, purpose=session_purpose)
             llm.set_metrics_file(sessions_dir / (f"{workspace}/" if workspace else "") / f"{sid}_metrics.jsonl")
             # T-010: 会话索引投影（失败静默）
@@ -524,12 +566,26 @@ async def agent_ws(websocket: WebSocket,
             system_prompt = await asyncio.to_thread(_build_prompt, scenario_id)
             # T-011: 三层交集白名单装配——TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools
             # （meta 工具 todo_write 常驻；全量用户 admin/tester 角色层不额外收窄）
+            # M5：已建会话用创建期 tool_whitelist 快照（定义热更新不回流）；
+            # 快照缺失（旧会话）才回退 load_purpose 现解
+            if session_tools_snapshot is not None:
+                purpose_tools = session_tools_snapshot
+            else:
+                pdef_now = load_purpose(session_purpose) if session_purpose else None
+                purpose_tools = list(pdef_now.tools if pdef_now else [])
             whitelist_tools = resolve_tools(
-                purpose_tools=list((load_purpose(session_purpose).tools if session_purpose
-                                    and load_purpose(session_purpose) else []) or []),
+                purpose_tools=purpose_tools,
                 user_roles=list(_ws_roles or []),
             )
-            runtime = AgentRuntime(llm, tools=whitelist_tools or None, max_turns=max_turns)
+            # M4：空白名单显式拒绝——绝不能回退全量（原 `or None` 会让空列表
+            # 静默变成 ALL_TOOLS，防御纵深被破坏）
+            if not whitelist_tools:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "当前角色无可用的工具白名单（不允许 Agent 运行）",
+                })
+                continue
+            runtime = AgentRuntime(llm, tools=whitelist_tools, max_turns=max_turns)
             ws_message = f"{ref_block}{message}" if ref_block else message
 
             # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）

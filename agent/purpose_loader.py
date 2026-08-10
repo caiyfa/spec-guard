@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,9 +18,10 @@ import yaml
 
 PURPOSES_DIR = Path(__file__).resolve().parent / "purposes"
 
-# 内存缓存
+# 内存缓存（L6：并发首载加锁，防多用户同时冷加载重复解析/写覆盖）
 _CACHE: dict[str, tuple[float, PurposeDef]] = {}
 _CACHE_TTL: float = 30  # 30 秒
+_LOCK = threading.Lock()
 
 
 @dataclass
@@ -42,21 +44,24 @@ def load_purpose(purpose_id: str) -> Optional[PurposeDef]:
     if not purpose_id:
         return None
 
-    # 缓存检查
+    # 缓存检查（无锁读，GIL 安全）
     now = time.time()
     cached = _CACHE.get(purpose_id)
     if cached and (now - cached[0]) < _CACHE_TTL:
         return cached[1]
 
-    purpose_file = PURPOSES_DIR / f"{purpose_id}.md"
-    if not purpose_file.is_file():
-        return None
-
-    text = purpose_file.read_text(encoding="utf-8")
-    purpose_def = _parse_purpose_file(purpose_id, text)
-
-    _CACHE[purpose_id] = (now, purpose_def)
-    return purpose_def
+    # 并发首载：双重检查 + 锁内解析（只解析一次）
+    with _LOCK:
+        cached = _CACHE.get(purpose_id)
+        if cached and (time.time() - cached[0]) < _CACHE_TTL:
+            return cached[1]
+        purpose_file = PURPOSES_DIR / f"{purpose_id}.md"
+        if not purpose_file.is_file():
+            return None
+        text = purpose_file.read_text(encoding="utf-8")
+        purpose_def = _parse_purpose_file(purpose_id, text)
+        _CACHE[purpose_id] = (time.time(), purpose_def)
+        return purpose_def
 
 
 def list_purposes() -> list[PurposeDef]:
@@ -80,7 +85,8 @@ def visible_purposes(roles: list) -> list[PurposeDef]:
 
 def clear_cache():
     """清空缓存（调试用）。"""
-    _CACHE.clear()
+    with _LOCK:
+        _CACHE.clear()
 
 
 def _parse_purpose_file(purpose_id: str, text: str) -> PurposeDef:

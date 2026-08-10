@@ -1,5 +1,7 @@
 """测试计划 API：CRUD + 按计划执行 + 计划历史"""
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -15,16 +17,32 @@ from services.covers_gate import check_covers_gate
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
 
+# 路径守卫（存量修复：plan_id/filename 未校验可路径穿越读写）
+_PLAN_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+_FILENAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
-@router.get("")
+
+def _guard_plan_id(plan_id: str):
+    if not plan_id or not _PLAN_ID_RE.match(plan_id):
+        raise HTTPException(status_code=400, detail=f"非法 plan_id: {plan_id!r}")
+
+
+def _guard_working_copy_name(filename: str):
+    if (not filename or "/" in filename or "\\" in filename or ".." in filename
+            or not _FILENAME_RE.match(filename)):
+        raise HTTPException(status_code=400, detail=f"非法文件名: {filename!r}")
+
+
+@router.get("", dependencies=[Depends(require_role("admin", "tester"))])
 def api_list_plans():
-    """计划列表"""
+    """计划列表（测试侧资产，viewer/product 不可读）。"""
     return list_plans()
 
 
-@router.get("/{plan_id}")
+@router.get("/{plan_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_get_plan(plan_id: str):
     """计划详情（含解析后的场景列表）"""
+    _guard_plan_id(plan_id)
     plan = get_plan(plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail=f"计划 {plan_id} 不存在")
@@ -42,12 +60,14 @@ class PlanBody(BaseModel):
 @router.put("/{plan_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_save_plan(plan_id: str, body: PlanBody):
     """创建/更新计划"""
+    _guard_plan_id(plan_id)
     return save_plan(plan_id, body.model_dump())
 
 
 @router.delete("/{plan_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_delete_plan(plan_id: str):
     """删除计划"""
+    _guard_plan_id(plan_id)
     if not delete_plan(plan_id):
         raise HTTPException(status_code=404, detail=f"计划 {plan_id} 不存在")
     return {"ok": True}
@@ -61,6 +81,7 @@ async def api_run_plan(plan_id: str,
 
     与 runs/trigger 同一 covers 前置闸（计划驱动是主执行路径，不能成为闸口漏洞）。
     """
+    _guard_plan_id(plan_id)
     plan = get_plan(plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail=f"计划 {plan_id} 不存在")
@@ -104,9 +125,10 @@ class ImportConfirmBody(BaseModel):
     selected_files: list[str] = []
 
 
-@router.get("/import-preview/{delta_code}")
+@router.get("/import-preview/{delta_code}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_import_preview(delta_code: str):
     """导入预览：展示 delta 文件清单 + 格式校验 + 分类"""
+    _guard_plan_id(delta_code)
     result = import_preview(delta_code)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -116,6 +138,7 @@ def api_import_preview(delta_code: str):
 @router.post("/import-confirm/{delta_code}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_import_confirm(delta_code: str, body: ImportConfirmBody):
     """确认导入：创建工作副本 + 生成计划"""
+    _guard_plan_id(delta_code)
     result = import_confirm(delta_code, body.selected_files)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -125,21 +148,25 @@ def api_import_confirm(delta_code: str, body: ImportConfirmBody):
 @router.post("/import/{delta_code}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_import_plan(delta_code: str):
     """从 spec delta 导入生成测试计划"""
+    _guard_plan_id(delta_code)
     result = import_from_delta(delta_code)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 
-@router.get("/{plan_id}/working-copies")
+@router.get("/{plan_id}/working-copies", dependencies=[Depends(require_role("admin", "tester"))])
 def api_list_working_copies(plan_id: str):
     """列出计划的工作副本"""
+    _guard_plan_id(plan_id)
     return list_plan_working_copies(plan_id)
 
 
-@router.get("/{plan_id}/working-copies/{filename}")
+@router.get("/{plan_id}/working-copies/{filename}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_get_working_copy(plan_id: str, filename: str):
-    """读取工作副本内容"""
+    """读取工作副本内容（存量修复：filename 路径穿越守卫）"""
+    _guard_plan_id(plan_id)
+    _guard_working_copy_name(filename)
     content = get_plan_working_copy(plan_id, filename)
     if content is None:
         raise HTTPException(status_code=404, detail=f"副本不存在: {filename}")
@@ -152,13 +179,16 @@ class WorkingCopyBody(BaseModel):
 
 @router.put("/{plan_id}/working-copies/{filename}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_save_working_copy(plan_id: str, filename: str, body: WorkingCopyBody):
-    """保存工作副本（不影响源文件）"""
+    """保存工作副本（不影响源文件；存量修复：filename 路径穿越守卫）"""
+    _guard_plan_id(plan_id)
+    _guard_working_copy_name(filename)
     if not save_plan_working_copy(plan_id, filename, body.content):
         raise HTTPException(status_code=404, detail=f"副本目录不存在")
     return {"ok": True}
 
 
-@router.get("/{plan_id}/history")
+@router.get("/{plan_id}/history", dependencies=[Depends(require_role("admin", "tester"))])
 def api_plan_history(plan_id: str, limit: int = 20):
     """计划的历史执行记录"""
+    _guard_plan_id(plan_id)
     return list_plan_history(plan_id, limit=limit)

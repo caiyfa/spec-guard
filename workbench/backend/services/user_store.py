@@ -138,8 +138,20 @@ def _admin_accounts() -> set[str]:
 
 
 def _has_admin(conn: sqlite3.Connection) -> bool:
-    row = conn.execute("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").fetchone()
-    return row is not None
+    """库中是否存在 admin 用户。
+
+    H2 修复：role 列（主角色）与 roles 列（v1.8 全量角色集）都要查。
+    set_roles 把 role 列写为 roles[0]——若 admin 不在首位（如 [tester, admin]），
+    仅查 role 列会漏检，导致 bootstrap 误判无 admin 并把新用户提权为 admin。
+    """
+    rows = conn.execute("SELECT role, roles FROM users").fetchall()
+    for r in rows:
+        # 位置索引兼容任意 row_factory（外部传入的连接可能无 sqlite3.Row）
+        if r[0] == "admin":
+            return True
+        if "admin" in [x.strip() for x in (r[1] or "").split(",") if x.strip()]:
+            return True
+    return False
 
 
 def upsert_user(emp_no: str, name: str = "", db_path: Path | None = None) -> dict:
@@ -175,6 +187,15 @@ def upsert_user(emp_no: str, name: str = "", db_path: Path | None = None) -> dic
             # 环境变量提升：已存在用户被加入 SG_ADMIN_ACCOUNTS 时同步提权
             if role != "admin" and emp_no in _admin_accounts():
                 role = "admin"
+                # H2 伴生：roles 列同步补 admin——否则按 roles 集判定的
+                # is_admin/require_role 仍不认其为管理员（提权不生效）
+                old_roles = _parse_roles(row["role"], row["roles"] if "roles" in row.keys() else "")
+                if "admin" not in old_roles:
+                    old_roles = old_roles + ["admin"]
+                    conn.execute(
+                        "UPDATE users SET roles = ? WHERE emp_no = ?",
+                        (",".join(old_roles), emp_no),
+                    )
                 conn.execute(
                     "INSERT INTO audit_log (emp_no, action, target, detail, created_at)"
                     " VALUES (?, 'bootstrap_admin', ?, 'env_promote', ?)",

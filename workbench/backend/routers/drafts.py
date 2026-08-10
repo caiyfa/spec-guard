@@ -37,19 +37,39 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-from specstd.workspace import drafts_dir, get_workspace_root  # noqa: E402
+from specstd.workspace import (  # noqa: E402
+    can_read_private,
+    drafts_dir,
+    get_context_emp_no,
+    get_workspace_root,
+)
 
 
 def _drafts_root() -> Path:
-    """获取草稿目录（动态解析当前工作区 .specguard/drafts/，无工作区回退 SG_ROOT/drafts/）。"""
+    """获取草稿目录（动态解析当前工作区 .specguard/drafts/，无工作区 → 400）。
+
+    M2 修复：移除 SG_ROOT/drafts 全局共享回退——无激活工作区时草稿目录不可解析，
+    此前任何用户回退同一全局目录会形成越权读（多用户迁移残留无归属隔离）。
+    """
     try:
         d = drafts_dir()
-        d.mkdir(parents=True, exist_ok=True)
-        return d
-    except Exception:
-        d = SG_ROOT / "drafts"
-        d.mkdir(parents=True, exist_ok=True)
-        return d
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=f"草稿目录不可用：{e}")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _ensure_private_draft_scope():
+    """M1：HTTP 路径草稿访问仅限本人私有区——无 emp 归属（共享区）确定性拒绝。
+
+    can_read_private(owner="", ...) 恒 False：未认证/共享区不适用私有读取路径。
+    正常认证请求 emp 恒非空（恒通过），此守卫为防御纵深：万一未来有绕过
+    _authenticate 的调用路径，也不会落到共享区草稿。
+    """
+    emp = get_context_emp_no() or ""
+    if not can_read_private(emp, emp, False):
+        raise HTTPException(status_code=403,
+                            detail="草稿私有区不可访问（无用户归属，请先选择工作区）")
 
 
 def _scenarios_root() -> Path:
@@ -102,10 +122,14 @@ def _guard_module(module: str) -> Path:
 # 草稿列表 / 读取
 # ══════════════════════════════════════════════════════════
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_role("admin", "tester", "product"))])
 def list_drafts():
-    """列出草稿区全部 YAML 草稿（按修改时间倒序，含作者归属）。"""
+    """列出草稿区全部 YAML 草稿（按修改时间倒序，含作者归属）。
+
+    M1/M2：viewer 不可读（无 Agent 能力）；草稿访问仅限本人私有区。
+    """
     # 作者元数据（draft_writer 写入）
+    _ensure_private_draft_scope()
     drafts_root = _drafts_root()
     meta_path = drafts_root / "_meta.json"
     meta = {}
@@ -157,7 +181,7 @@ def list_drafts():
     return {"drafts": drafts}
 
 
-@router.get("/modules")
+@router.get("/modules", dependencies=[Depends(require_role("admin", "tester", "product"))])
 def list_modules():
     """列出 scenarios/ 下的模块目录（promote 目标选择）。"""
     scenarios_root = _scenarios_root()
@@ -169,7 +193,7 @@ def list_modules():
     return {"modules": modules}
 
 
-@router.get("/suggest-deps")
+@router.get("/suggest-deps", dependencies=[Depends(require_role("admin", "tester", "product"))])
 def suggest_draft_deps():
     """全部草稿的依赖建议（K-046：dep_suggest 确定性引擎，纯读）。
 
@@ -180,9 +204,13 @@ def suggest_draft_deps():
     return dep_suggest.suggest_deps(_scenarios_root(), _drafts_root(), drafts_only=True)
 
 
-@router.get("/{filename}")
+@router.get("/{filename}", dependencies=[Depends(require_role("admin", "tester", "product"))])
 def read_draft(filename: str):
-    """读取单个草稿内容（含解析出的场景 ID 与依赖关系）。"""
+    """读取单个草稿内容（含解析出的场景 ID 与依赖关系）。
+
+    M1/M2：viewer 不可读；草稿访问仅限本人私有区。
+    """
+    _ensure_private_draft_scope()
     path = _guard_filename(filename)
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")

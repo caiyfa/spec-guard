@@ -51,6 +51,8 @@ SG_UAC_APP_ID = os.environ.get(
 # token 验证缓存：{token: (emp_no, name, exp_ts)}
 _TOKEN_CACHE: dict[str, tuple[str, str, float]] = {}
 CACHE_TTL_SECONDS = 300
+# L3：缓存条数阈值——超过后写入前惰性清理过期条目（防多用户长跑内存无限增长）
+_MAX_TOKEN_CACHE = 5000
 
 
 @dataclass
@@ -171,6 +173,12 @@ def _validate_token(token: str) -> tuple[str, str]:
         except Exception:
             pass
 
+    # L3：写入前惰性清理（超阈值时才扫一次，过期条目逐出）
+    if len(_TOKEN_CACHE) >= _MAX_TOKEN_CACHE:
+        _now_ts = time.time()
+        stale = [k for k, v in _TOKEN_CACHE.items() if v[2] <= _now_ts]
+        for k in stale:
+            del _TOKEN_CACHE[k]
     _TOKEN_CACHE[token] = (result[0], result[1], time.time() + CACHE_TTL_SECONDS)
     return result
 

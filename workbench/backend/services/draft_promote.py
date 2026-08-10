@@ -28,7 +28,7 @@ class PromoteError(Exception):
 
 # HTTP 状态码映射（routers/drafts.py 用）
 HTTP_STATUS = {
-    "invalid_filename": 400, "invalid_module": 400,
+    "invalid_filename": 400, "invalid_module": 400, "no_workspace": 400,
     "draft_not_found": 404, "module_not_found": 404,
     "conflict": 409, "id_conflict": 409, "validation_failed": 422,
     "baseline_failed": 500, "gate_failed": 502,
@@ -36,15 +36,17 @@ HTTP_STATUS = {
 
 
 def _drafts_root() -> Path:
-    """草稿目录（当前工作区 .specguard/drafts/，无工作区回退 SG_ROOT/drafts/）。"""
+    """草稿目录（当前工作区 .specguard/drafts/；无工作区 → PromoteError）。
+
+    M2 修复：移除 SG_ROOT/drafts 全局共享回退（越权读来源）——
+    无激活工作区时草稿目录不可解析，明确报错而非静默落全局共享目录。
+    """
     try:
         d = drafts_dir()
         d.mkdir(parents=True, exist_ok=True)
         return d
-    except Exception:
-        d = SG_ROOT / "drafts"
-        d.mkdir(parents=True, exist_ok=True)
-        return d
+    except RuntimeError as e:
+        raise PromoteError("no_workspace", f"无激活工作区，草稿目录不可用: {e}")
 
 
 def _scenarios_root() -> Path:
