@@ -1,7 +1,7 @@
-"""test_audit — H-1 audit 模式 + 审计工具 + ledger 扩展测试。
+"""test_audit — audit-spec 技能 + 审计工具 + ledger 扩展测试。
 
 覆盖验收标准：
-1. audit 模式出现在模式列表，工具白名单正确
+1. audit-spec 技能存在且内容完整（T-601：modes 退役后技能为单一事实源）
 2. report_vulnerability 登记的漏洞进入 feedback ledger（pending 状态）
 3. write_audit_report 落盘到 {workspace}/.specguard/audit/
 4. 漏洞条目含完整字段（vtype/severity/location/evidence/suggestion）
@@ -18,7 +18,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-from agent.mode_loader import load_mode, list_modes, clear_cache
+from agent.skill_loader import load_skill, list_skills, clear_cache
 from feedback.ledger import FeedbackLedger
 from mcp_server.tools import audit
 from specstd.workspace import register_local, unregister
@@ -40,48 +40,45 @@ def workspace(tmp_path):
 
 
 # ══════════════════════════════════════════════════════════
-# 验收 1: audit 模式出现在模式列表，工具白名单正确
+# 验收 1: audit-spec 技能存在，内容覆盖审计流程（T-601 迁移后断言技能）
 # ══════════════════════════════════════════════════════════
 
-class TestAuditMode:
-    def test_audit_mode_exists(self):
+class TestAuditSkill:
+    def test_audit_skill_exists(self):
         clear_cache()
-        mode = load_mode("audit")
-        assert mode is not None
-        assert mode.name == "audit"
+        skill = load_skill("audit-spec")
+        assert skill is not None
+        assert skill.name == "audit-spec"
 
-    def test_audit_mode_tools(self):
+    def test_audit_skill_content(self):
         clear_cache()
-        mode = load_mode("audit")
-        assert mode is not None
-        # 审计工具
-        assert "write_audit_report" in mode.tools
-        assert "report_vulnerability" in mode.tools
-        # 只读工具
-        assert "read_spec" in mode.tools
-        assert "list_spec_files" in mode.tools
-        assert "query_registry" in mode.tools
-        assert "read_scenario" in mode.tools
-        assert "read_run_report" in mode.tools
+        skill = load_skill("audit-spec")
+        assert skill is not None
+        # 审计流程与工具指引
+        assert "write_audit_report" in skill.content
+        assert "report_vulnerability" in skill.content
+        assert "read_spec" in skill.content
+        assert "list_spec_files" in skill.content
 
-    def test_audit_mode_in_list(self):
+    def test_audit_skill_in_list(self):
         clear_cache()
-        modes = list_modes()
-        names = [m.name for m in modes]
-        assert "audit" in names
+        skills = list_skills()
+        names = [s.name for s in skills]
+        assert "audit-spec" in names
 
-    def test_audit_mode_no_write_draft(self):
-        """audit 模式不应有 write_draft（审计只读 spec，不写草稿）"""
+    def test_audit_skill_no_write_draft_guidance(self):
+        """audit-spec 技能不指引写草稿（审计只读 spec，不写草稿）。"""
         clear_cache()
-        mode = load_mode("audit")
-        assert "write_draft" not in mode.tools
+        skill = load_skill("audit-spec")
+        assert skill is not None
+        assert "write_draft" not in skill.content
 
-    def test_audit_mode_prompt_fragment(self):
+    def test_audit_skill_prompt_fragment(self):
         clear_cache()
-        mode = load_mode("audit")
-        assert mode is not None
-        assert "审计" in mode.prompt_fragment
-        assert "漏洞" in mode.prompt_fragment
+        skill = load_skill("audit-spec")
+        assert skill is not None
+        assert "审计" in skill.content
+        assert "漏洞" in skill.content
 
 
 # ══════════════════════════════════════════════════════════

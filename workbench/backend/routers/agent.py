@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from services.auth import CurrentUser, get_current_user, require_role, require_role_ws
 
@@ -26,8 +25,6 @@ if str(SG_ROOT) not in sys.path:
 from agent.llm_client import LLMClient
 from agent.session import SessionManager, _validate_session_id
 from agent.runtime import AgentRuntime, build_system_prompt
-from agent.mode_loader import list_modes
-from agent.skill_loader import list_skills
 
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 
@@ -323,113 +320,6 @@ def export_session(session_id: str, workspace: str = "", user: CurrentUser = Dep
             if data is not None:
                 return data
     raise HTTPException(status_code=404, detail="会话不存在")
-
-
-class ChatBody(BaseModel):
-    message: str
-    session_id: str = ""
-    max_turns: int = 12
-    workspace: str = ""
-    scenario_id: str = ""
-    model_id: str = ""
-    references: list = []  # K-013: @引用（info_pack/file/draft）
-    context: dict = {}  # 前端路由上下文（K-023 后仅透传保留，不再驱动模式路由）
-
-
-@router.get("/modes")
-def get_modes(user: CurrentUser = Depends(require_role("admin", "tester"))):
-    """列出可用的工作模式。"""
-    modes = list_modes()
-    return {"modes": [
-        {
-            "name": m.name,
-            "tools": m.tools,
-            "description": m.description,
-            "prompt_fragment": m.prompt_fragment[:200] + "..." if len(m.prompt_fragment) > 200 else m.prompt_fragment,
-        }
-        for m in modes
-    ]}
-
-
-@router.get("/skills")
-def get_skills(user: CurrentUser = Depends(require_role("admin", "tester"))):
-    """列出可用的技能。"""
-    skills = list_skills()
-    return {"skills": [
-        {
-            "name": s.name,
-            "description": s.description,
-            "trigger": s.trigger,
-            "content": s.content[:300] + "..." if len(s.content) > 300 else s.content,
-        }
-        for s in skills
-    ]}
-
-
-@router.post("/chat")
-async def chat(body: ChatBody, user: CurrentUser = Depends(require_role("admin", "tester"))):
-    """同步对话（非 WebSocket，适合短交互）。"""
-    if body.session_id:
-        try:
-            _validate_session_id(body.session_id)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="非法 session_id")
-    llm = LLMClient(model_id=body.model_id) if body.model_id else LLMClient()
-    sessions_dir = _sessions_dir(user.emp_no)
-    workspace = body.workspace or ""
-    sm = SessionManager(sessions_dir, workspace=workspace)
-    sid = body.session_id or sm.create(emp_no=user.emp_no, workspace=workspace)
-    llm.set_metrics_file(sessions_dir / (f"{workspace}/" if workspace else "") / f"{sid}_metrics.jsonl")
-
-    # K-015: 同会话并发写防护
-    if _run_in_progress(sid):
-        raise HTTPException(status_code=409, detail="该会话正在执行中，请稍后重试")
-
-    # 设置工作区上下文（HTTP 请求可能由中间件设置，但 body.workspace 是显式传入的更可靠）
-    from specstd.workspace import set_context_workspace, reset_context_workspace
-    _ctx_token = set_context_workspace(workspace or None)
-
-    events = []
-
-    # K-023 去模式化：统一 system prompt（全量工具 + 全量指引，无路由无切换）
-    scenario_context = _build_scenario_context(body.scenario_id)
-    system_prompt = build_system_prompt(scenario_context=scenario_context)
-    runtime = AgentRuntime(llm, max_turns=body.max_turns)
-
-    # K-013: @引用处理（info_pack 关联场景 / file+draft 内容注入）
-    scenario_id, ref_block, structured_refs = _process_references(body.references, body.scenario_id)
-    if scenario_id != body.scenario_id:
-        scenario_context = _build_scenario_context(scenario_id)
-        system_prompt = build_system_prompt(scenario_context=scenario_context)
-    chat_message = f"{ref_block}{body.message}" if ref_block else body.message
-
-    # K-012：assistant_delta 流式增量事件对 HTTP 同步调用无意义，不收集（避免响应体膨胀）
-    runtime.events.subscribe(
-        lambda e: None if e.get("type") == "assistant_delta" else events.append(e)
-    )
-
-    # T-402: 登记运行时供 cancel 端点查找
-    _ACTIVE_RUNTIMES[sid] = runtime
-    run_task = asyncio.create_task(
-        asyncio.to_thread(runtime.run, system_prompt, chat_message, sm, sid,
-                          structured_refs or None)
-    )
-    _ACTIVE_RUNS[sid] = run_task  # K-015: 登记活跃 run（并发防护）
-    try:
-        messages = await run_task
-    finally:
-        _ACTIVE_RUNS.pop(sid, None)
-        _ACTIVE_RUNTIMES.pop(sid, None)
-
-    # 恢复上下文
-    reset_context_workspace(_ctx_token)
-
-    return {
-        "session_id": sid,
-        "messages": messages,
-        "events": events,
-        "stats": llm.get_stats(),
-    }
 
 
 @router.post("/cancel/{session_id}")

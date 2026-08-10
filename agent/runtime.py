@@ -17,27 +17,20 @@ if str(SG_ROOT) not in sys.path:
 from agent.llm_client import LLMClient
 from agent.session import SessionManager
 from agent.events import EventBus
-from agent.mode_loader import load_mode, ModeDef
 from agent.compactor import should_compact, compact
 from agent.skill_loader import build_skills_xml, match_skills_hint
 from agent.doc_read import build_doc_read
 
-# 默认使用 MCP server 的全部工具
-from mcp_server.tools import (
-    spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit, meta,
-)
+# T-602：工具模块单一注册（B1 修复——server 导出、runtime 复用，消除双写漂移；
+# runtime 侧 include_info_pack=True（workbench Agent 需要 info_pack），stdio server 刻意排除）
+from mcp_server.server import build_tool_modules
+from mcp_server.tools import meta
 
-TOOL_MODULES = [spec_reader, scenario_tools, registry_query, draft_writer, validator, attribution, audit, meta]
+TOOL_MODULES = build_tool_modules(include_info_pack=True)
 
 # Meta 工具常驻所有模式（H-3/H-4）
 META_TOOLS = meta.META_TOOL_NAMES
 
-# info_pack 工具（G2-1）：延迟导入，避免循环依赖
-try:
-    from mcp_server.tools import info_pack as _info_pack_mod
-    TOOL_MODULES.append(_info_pack_mod)
-except ImportError:
-    pass
 ALL_TOOLS = []
 for mod in TOOL_MODULES:
     ALL_TOOLS.extend(mod.TOOLS)
@@ -95,10 +88,6 @@ _FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 智能测试助手——契约�
 - 这是用户显式提供的上下文，优先采信，无需重复读取同一文件
 - @信息包 会把当前对话关联到对应场景，其文件清单见「基础信息包」段（如有）
 
-## 任务行为指引（按任务类型遵循对应流程）
-
-{{ mode_guidance }}
-
 ## 待办系统（H-4）
 
 你可以通过 todo_write 工具维护任务待办列表，待办会实时展示给用户。
@@ -115,37 +104,13 @@ def _load_prompt_template() -> str:
     return _FALLBACK_PROMPT_TEMPLATE
 
 
-# K-023：去模式化——模式片段合并为统一「任务行为指引」的条件章节。
-# 模式文件（agent/modes/*.md）仍是单一事实源（热加载保留），此处仅做章节组装。
-_MODE_GUIDANCE_ORDER = [
-    ("generate", "生成/修改场景 YAML 时（含 DAG 编排、试执行、入库）"),
-    ("debug", "分析运行失败 / 归因修复时"),
-    ("audit", "审计 spec 漏洞时"),
-    ("analyze", "只读查询 / 覆盖分析时"),
-    ("chat", "自由对话 / 使用咨询时"),
-]
-
-
-def _build_mode_guidance() -> str:
-    """把各模式文件的行为片段组装为条件式指引章节（去模式化：不再有工具门禁，
-    行为约束以「当…时遵循…」的条件指令呈现——LLM 对条件指令遵循度好，
-    且消除了模式切换 churn 与工具不可见事故，K-012/K-018/K-022 生产取证支持）。"""
-    sections = []
-    for mode_name, condition in _MODE_GUIDANCE_ORDER:
-        mode_def = load_mode(mode_name)
-        if mode_def and mode_def.prompt_fragment:
-            sections.append(f"### 当{condition}\n\n{mode_def.prompt_fragment.strip()}")
-    return "\n\n".join(sections) if sections else "（模式指引加载失败）"
-
-
 def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
                         scenario_context: str = "") -> str:
-    """构建统一 system prompt（K-023 去模式化）。
+    """构建统一 system prompt（K-023 去模式化 + T-601 技能单一事实源）。
 
     - format_spec 全量常驻（不再按模式条件注入——条件注入是路由复杂度的回潮；
       prompt cache 摊销重复成本）
-    - skills 全量注入（不再按模式过滤）
-    - 模式行为片段合并为「任务行为指引」条件章节（单一事实源仍是 modes/*.md）
+    - skills 全量注入（T-601：modes 正文并入 skills 后唯一事实源，不再有 mode_guidance 章节）
     - 静态大块在前、动态内容（场景上下文）在最后，保 prompt cache 前缀命中
     """
     if not format_spec_text:
@@ -165,14 +130,14 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
         except Exception:
             agents_md = "（工作区未激活）"
 
-    # G3-2：技能全量注入（K-023 不再按模式过滤）
+    # G3-2：技能全量注入（K-023 不再按模式过滤；T-601：modes 正文已并入 skills，
+    # 技能为任务行为指引的唯一事实源——不再组装 mode_guidance 条件章节）
     skills_xml = build_skills_xml() or "（无）"
 
     prompt = (_load_prompt_template()
               .replace("{{ format_spec }}", format_spec_text)
               .replace("{{ agents_md }}", agents_md)
-              .replace("{{ skills_xml }}", skills_xml)
-              .replace("{{ mode_guidance }}", _build_mode_guidance()))
+              .replace("{{ skills_xml }}", skills_xml))
 
     # 追加场景上下文（基础信息包）（最易变，放最后保前缀缓存）
     if scenario_context:
@@ -452,8 +417,6 @@ class AgentRuntime:
         # ── Meta 工具特殊处理（不通过 mod.handle）──
         if name == "todo_write":
             return self._handle_todo_write(arguments)
-        if name == "switch_mode":
-            return self._handle_switch_mode(arguments)
 
         # ── 常规工具 ──
         mod = self._tool_map.get(name)
@@ -527,14 +490,4 @@ class AgentRuntime:
                 pass  # 持久化失败不影响运行时
 
         return f"待办已更新（{len(self._todos)} 项）"
-
-    def _handle_switch_mode(self, arguments: dict) -> str:
-        """K-023：switch_mode 退化为无操作提示（模式机制已废弃）。
-
-        保留工具壳是为了平滑过渡——旧会话/旧提示词习惯里 LLM 仍可能调用它；
-        直接返回「所有工具已可用」的指引，比「未知工具」报错更能引导 LLM 继续任务。
-        """
-        return ("模式机制已废弃（K-023 简化设计）：所有工具对你直接可用，"
-                "无需切换模式。请按 system prompt 中「任务行为指引」的对应流程，"
-                "直接调用所需工具继续当前任务。")
 

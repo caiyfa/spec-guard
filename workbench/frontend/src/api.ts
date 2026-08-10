@@ -2,13 +2,13 @@
 
 const BASE = '/api';
 
-// ── 会话状态（token 存 sessionStorage，工作区选择存 localStorage）──
+// ── 会话状态（token 存 localStorage，工作区选择存 localStorage）──
 export const WORKSPACE_CHANGED_EVENT = 'sg-workspace-changed';
 
 export const session = {
-  getToken: () => sessionStorage.getItem('sg_token') || '',
-  setToken: (t: string) => sessionStorage.setItem('sg_token', t),
-  clearToken: () => sessionStorage.removeItem('sg_token'),
+  getToken: () => localStorage.getItem('sg_token') || '',
+  setToken: (t: string) => localStorage.setItem('sg_token', t),
+  clearToken: () => localStorage.removeItem('sg_token'),
   getWorkspace: () => localStorage.getItem('sg_workspace') || '',
   setWorkspace: (w: string) => {
     localStorage.setItem('sg_workspace', w);
@@ -90,7 +90,7 @@ export interface CurrentUser {
 }
 
 export const authApi = {
-  config: () => request<{ auth_mode: string; uac_base: string; uac_logout_url: string }>('/auth/config'),
+  config: () => request<{ auth_mode: string; uac_base: string; sso_base: string; sso_app_id: string; uac_logout_url: string }>('/auth/config'),
   me: () => request<CurrentUser>('/auth/me'),
   mockLogin: (emp_no: string, name = '') =>
     request<{ ok: boolean; token: string; user: any }>('/auth/mock-login', {
@@ -515,20 +515,6 @@ export interface GitLogResponse {
 }
 
 // ── Agent 对话 ──
-export interface AgentMode {
-  name: string;
-  tools: string[];
-  description: string;
-  prompt_fragment: string;
-}
-
-export interface AgentSkill {
-  name: string;
-  description: string;
-  trigger: string;
-  content: string;
-}
-
 export const agentApi = {
   listSessions: (workspace = '') =>
     request<{ sessions: any[] }>(`/agent/sessions${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
@@ -536,12 +522,6 @@ export const agentApi = {
     request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>
     request<any>(`/agent/sessions/${id}/export${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
-  chat: (body: { message: string; session_id?: string; max_turns?: number; workspace?: string; mode?: string; scenario_id?: string }) =>
-    request<any>('/agent/chat', { method: 'POST', body: JSON.stringify(body) }),
-  getModes: () =>
-    request<{ modes: AgentMode[] }>('/agent/modes'),
-  getSkills: () =>
-    request<{ skills: AgentSkill[] }>('/agent/skills'),
   // T-402: 取消会话当前运行（真打断）
   cancelSession: (sessionId: string) =>
     request<{ ok: boolean; session_id: string; message: string }>(`/agent/cancel/${sessionId}`, { method: 'POST' }),

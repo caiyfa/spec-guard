@@ -1,18 +1,15 @@
-"""test_meta_tools — H-3/H-4 meta 工具测试。
+"""test_meta_tools — H-4 meta 工具测试（T-601：switch_mode 已随 modes 体系退役）。
 
 覆盖验收标准：
 H-4:
 1. todo_write 后事件 emit（todo_update）
 2. 会话恢复后待办状态还原
 3. todo_write 持久化到 JSONL
-4. 模式切换时待办状态自动流转
+4. 全量工具常驻（mode_name 遗留标签不影响工具集）
 
-H-3:
-1. switch_mode 后工具白名单变化
-2. 首条 system prompt 不被修改
-3. 切换时注入新 system 消息
-4. mode_switch 事件正确 emit
-5. 5 个模式都能调用 switch_mode 和 todo_write
+T-601:
+1. switch_mode 不再是 meta 工具（未知工具报错）
+2. META_TOOL_NAMES 只剩 todo_write
 """
 
 import asyncio
@@ -28,7 +25,7 @@ if str(SG_ROOT) not in sys.path:
 
 from agent.runtime import AgentRuntime, META_TOOLS
 from agent.session import SessionManager
-from agent.mode_loader import clear_cache
+from agent.skill_loader import clear_cache
 from mcp_server.tools import meta
 from mcp_server.server import ALL_TOOLS as SERVER_ALL_TOOLS
 
@@ -243,25 +240,14 @@ class TestTodoPersistence:
 
 
 # ══════════════════════════════════════════════════════════
-# K-023: switch_mode 退化为无操作提示（去模式化）
+# T-601: switch_mode 已随 modes 体系退役（工具壳一并删除）
 # ══════════════════════════════════════════════════════════
 
-class TestSwitchModeDeprecated:
-    """K-023：模式机制废弃——switch_mode 变无操作提示，工具全量常驻。"""
+class TestMetaToolsDeprecated:
+    """T-601：switch_mode 删除后，meta 工具只剩 todo_write；全量工具常驻不变。"""
 
-    def test_switch_mode_noop_hint(self):
-        """switch_mode 返回废弃提示，不改变任何状态（平滑过渡旧习惯）。"""
-        runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name="generate")
-        tools_before = list(runtime.tools)
-        result = runtime._execute_tool(_make_tool_call("switch_mode", {
-            "mode": "audit", "reason": "test",
-        }))
-        assert "废弃" in result
-        assert runtime.mode_name == "generate"  # 未变
-        assert runtime.tools == tools_before    # 工具集未变
-
-    def test_all_tools_regardless_of_mode(self):
-        """K-023 核心：任何 mode_name（含空）都挂全量工具——不再有白名单门禁。
+    def test_all_tools_regardless_of_legacy_mode(self):
+        """K-023 核心：mode_name 遗留标签不影响工具集——不再有白名单门禁。
 
         生产取证：模式白名单防住的都是合法工作流（K-012 未知工具报错 /
         K-018 resume 模式落错 / K-022 audit 模式「没有入库工具」）。
@@ -275,19 +261,16 @@ class TestSwitchModeDeprecated:
                 assert t in tool_names, f"mode={mode_name!r} 应有 {t}"
 
     def test_meta_tools_in_openai_format(self):
-        """meta 工具出现在 OpenAI function calling 格式中。"""
+        """meta 工具出现在 OpenAI function calling 格式中（switch_mode 已删除）。"""
         runtime = AgentRuntime(MockLLM(), max_turns=1)
         openai_tools = runtime._to_openai_tools()
         names = {t["function"]["name"] for t in openai_tools}
-        assert "switch_mode" in names
+        assert "switch_mode" not in names
         assert "todo_write" in names
 
     def test_no_mode_switch_events(self):
         """run 中调用 switch_mode 不再产生 mode_switch 事件/通知注入。"""
         mock = MockLLM([
-            {"role": "assistant", "content": "", "tool_calls": [
-                _make_tool_call("switch_mode", {"mode": "audit", "reason": "test"}),
-            ]},
             {"role": "assistant", "content": "完成"},
         ])
         runtime = AgentRuntime(mock, max_turns=5)
@@ -297,6 +280,20 @@ class TestSwitchModeDeprecated:
         assert not [e for e in events if e["type"] == "mode_switch"]
         assert not [m for m in messages
                     if m.get("role") == "system" and "模式切换" in str(m.get("content", ""))]
+
+    def test_switch_mode_unknown_tool(self):
+        """T-601：switch_mode 不再是 meta 工具——按未知工具报错并列出可用工具。"""
+        mock = MockLLM([
+            {"role": "assistant", "content": "", "tool_calls": [
+                _make_tool_call("switch_mode", {"mode": "audit", "reason": "test"}),
+            ]},
+            {"role": "assistant", "content": "完成"},
+        ])
+        runtime = AgentRuntime(mock, max_turns=5)
+        messages = runtime.run("sys", "切换模式")
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        assert len(tool_msgs) >= 1
+        assert "未知工具" in tool_msgs[0]["content"]
 
 
 # ══════════════════════════════════════════════════════════
@@ -335,14 +332,14 @@ class TestIntegration:
 
 class TestMetaModule:
     def test_meta_tool_names(self):
-        """META_TOOL_NAMES 包含两个工具名。"""
-        assert "switch_mode" in meta.META_TOOL_NAMES
+        """T-601：META_TOOL_NAMES 只剩 todo_write（switch_mode 已退役）。"""
+        assert "switch_mode" not in meta.META_TOOL_NAMES
         assert "todo_write" in meta.META_TOOL_NAMES
-        assert len(meta.META_TOOL_NAMES) == 2
+        assert len(meta.META_TOOL_NAMES) == 1
 
     def test_meta_tools_count(self):
-        """meta 模块有 2 个工具。"""
-        assert len(meta.TOOLS) == 2
+        """T-601：meta 模块只剩 1 个工具（switch_mode 已删除）。"""
+        assert len(meta.TOOLS) == 1
 
     def test_meta_handle_standalone(self):
         """MCP server 独立模式返回提示信息。"""
@@ -350,7 +347,7 @@ class TestMetaModule:
         assert "仅在 Agent 运行时中可用" in result[0].text
 
     def test_meta_tools_in_server_all_tools(self):
-        """meta 工具出现在 server.py 的 ALL_TOOLS 中。"""
+        """meta 工具出现在 server.py 的 ALL_TOOLS 中（switch_mode 已删除）。"""
         names = {t.name for t in SERVER_ALL_TOOLS}
-        assert "switch_mode" in names
+        assert "switch_mode" not in names
         assert "todo_write" in names

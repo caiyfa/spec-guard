@@ -34,20 +34,38 @@ from mcp_server.tools import (  # noqa: E402
 )
 
 # ══════════════════════════════════════════════════════════
-# 工具注册
+# 工具注册（T-602：单一注册函数，runtime import 复用防双写漂移）
 # ══════════════════════════════════════════════════════════
 
-TOOL_MODULES = [
-    spec_reader,
-    scenario_tools,
-    registry_query,
-    draft_writer,
-    validator,
-    attribution,
-    audit,
-    meta,
-    compliance,
-]
+def build_tool_modules(include_info_pack: bool = False) -> list:
+    """工具模块单一注册函数（B1 修复）。
+
+    Args:
+        include_info_pack: runtime（workbench Agent）需要 info_pack（延迟导入避免
+            循环依赖）；stdio server 刻意排除——收窄对外工具面（刻意设计，非漂移，
+            见总控 §2.4 刻意保留清单）。
+    """
+    mods = [
+        spec_reader,
+        scenario_tools,
+        registry_query,
+        draft_writer,
+        validator,
+        attribution,
+        audit,
+        meta,
+        compliance,
+    ]
+    if include_info_pack:
+        try:
+            from mcp_server.tools import info_pack as _info_pack_mod
+            mods.append(_info_pack_mod)
+        except ImportError:
+            pass
+    return mods
+
+
+TOOL_MODULES = build_tool_modules()
 
 ALL_TOOLS: list[Tool] = []
 for mod in TOOL_MODULES:

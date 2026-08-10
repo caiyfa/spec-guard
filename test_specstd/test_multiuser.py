@@ -147,9 +147,10 @@ class TestSessionConcurrencyGuard:
     """
 
     def test_chat_409_when_session_active(self, client):
+        """K-015：_ACTIVE_RUNS 并发防护语义（POST /chat 端点已随 T-601 删除，
+        防护逻辑在 WS 端点仍生效，此处直接验证互斥判定）。"""
         import asyncio
         from routers.agent import _ACTIVE_RUNS, _run_in_progress
-        h = _login(client, "90000001", "并发测试")
         sid = "testsession001"
         # 预置一个未完成的活跃 run（dummy task，.done() 为 False）
         loop = asyncio.new_event_loop()
@@ -162,11 +163,6 @@ class TestSessionConcurrencyGuard:
         try:
             assert _run_in_progress(sid) is True
             assert _run_in_progress("other-sid") is False
-            r = client.post("/api/agent/chat",
-                            json={"message": "hi", "session_id": sid},
-                            headers=h)
-            assert r.status_code == 409
-            assert "执行中" in r.json()["detail"]
         finally:
             task.cancel()
             _ACTIVE_RUNS.clear()
@@ -213,8 +209,6 @@ class TestSessionConcurrencyGuard:
         assert client.get("/api/users", headers=h_viewer).status_code == 403
         assert client.post("/api/workspace/register-local",
                            json={"name": "x", "path": "/tmp", "system": "tdm"},
-                           headers=h_viewer).status_code == 403
-        assert client.post("/api/agent/chat", json={"message": "hi"},
                            headers=h_viewer).status_code == 403
 
     def test_tester_allowed_but_not_admin_ops(self, client):

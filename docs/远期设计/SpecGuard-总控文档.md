@@ -1,7 +1,7 @@
 # SpecGuard Vision · 开发总控文档
 
 > **本文档是所有开发会话的唯一协调中心。任何开发会话开工前必须完整阅读 §1-§4，并按 §3 协议注册会话、认领任务、登记文件变更。**
-> 版本：v1.5 · 2026-08-07 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+> 版本：v1.6 · 2026-08-10 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定、《SpecGuard-瘦身分析与任务顺序评估》v1
 >
 > **v1.1 决策（2026-08-02）**：**先把当前系统功能打磨好再升级**——新增「当前打磨期」（§2.0/§4.1，DAG 编排 + 测试执行两条链路），远期 S0-S8 整体后置为「升级期」（§2.1/§4.2，打磨期结束由总控人宣布恢复认领）。
 >
@@ -12,6 +12,12 @@
 > **v1.4 决策（2026-08-07，总控人指令）**：新增 **§4.4「知识体系」支线**——依据《SpecGuard-知识体系设计》：五层模型（L1 语义词典/L2 环境叙事**立即可做**，L4 触景引擎挂 S3，L3 经验飞轮挂 S6）；提示词瘦身激进/保守定档随 T-507 评审；知识维护页一页三区随 S3/S6 落地。
 >
 > **v1.5 决策（2026-08-07，总控人指令）**：新增 **S0.5 阶段**（S0 与 S1 之间的快车道）——「依据透明」尽快落地：T-511 阅读足迹面板、T-512 章节提取+面板章节卡片，P0 立即可认领、**不阻塞 S1**（可并行）；§4.4 T-508 的 V1/V2 面板部分由本阶段前置承接。
+>
+> **v1.6 决策（2026-08-10，总控人指令）**：依据《SpecGuard-瘦身分析与任务顺序评估》v1 更新——
+> ① 新增 **§4.5「瘦身任务块」**（T-601~T-606）：modes 体系退役（T-601）是 S1 T-010 的**硬前置**（双轨 prompt 装配污染），T-602 合并 TOOL_MODULES 双写注册（已漂移：runtime 漏 compliance）；T-601/T-602 P0 本周先做，T-603~T-605 任意空窗，T-606 挂 T-604 后；
+> ② **任务顺序评估落地**：治理三件套前置（T-081/T-082 在 S1 完成后、T-080 在 S2 完成后即可认领，摊入 S3-S7 空窗削 S8 峰值）；T-073 依赖修正为「S5 完成 + T-070 就绪即可认领」，与 S6 并行（S7 只剩 T-074 收尾）；T-070 标注 **S3 起 P0**（graph_index 咽喉，喂 T-071/072/073/085 四条下游链）；S1 内 T-010 ∥ T-011 双会话并行明示；
+> ③ 新增 **§4.6「飞书 CLI 集成」支线**（T-701~T-703）：多用户飞书 CLI 接入（每用户独立 app + USERPROFILE 隔离目录 + MCP 工具层），近期开发规划、与 S1+ 主线并行可认领，依赖 T-602（单一注册面）；
+> ④ 已完成任务全部保持不变；§2.1 mermaid 补 S0.5 ✅ 标注与瘦身/飞书支线挂点（顺手修复评估文档 §3.6 微调项）。
 
 ---
 
@@ -53,7 +59,7 @@
 ### 2.1 远期升级期（S0-S8，2026-08-07 起恢复认领）
 
 > 以下为远期升级路线（v1.1 起整体后置；**2026-08-07 总控人宣布打磨期结束，恢复认领**）：
-> 关键路径串行：S0→S1→S2→S3→S4→S5→S6→S7→S8；P-A 支路（T-070/071/072）从 S3 起可全程并行；**S0.5 依据透明快车道（v1.5，T-511/T-512）插在 S0 与 S1 之间但不阻塞 S1**。
+> 关键路径串行：S0→S1→S2→S3→S4→S5→S6→S7→S8；P-A 支路（T-070/071/072）从 S3 起可全程并行（**T-070 为咽喉，S3 起 P0**，v1.6）；**S0.5 依据透明快车道（v1.5，T-511/T-512）插在 S0 与 S1 之间但不阻塞 S1，✅ 2026-08-07 完成**；**瘦身任务块（v1.6，T-601/T-602）先于 S1 施工（T-601 modes 退役是 T-010 硬前置）**；**飞书 CLI 支线（v1.6，T-701~T-703）与主线并行、近期可认领（依赖 T-602 单一注册面）**；T-073 与 S6 并行、治理三件套按依赖前置认领（v1.6）。
 > 每阶段详细验收标准见《研发顺序与里程碑验收》§3，此处给方向与目标效果。
 
 | 阶段 | 方向（往哪里走） | 达成效果（验收门面） | 对应模块 |
@@ -69,30 +75,34 @@
 | **S7** 血缘与图谱 | 图谱派生 + 血缘投影（汇合 P-A） | Q1/Q2 双向 trace 不断链；演化 diff 可重建 | M10 / M11 |
 | **S8** 治理件 + 对外 L0 | skill 体系化 + open/ 只读面 + 研发侧消费通道 | 旗舰 e2e：外部编码 Agent 经 MCP 读冻结 spec；研发侧 dev_context 三入口（接需求/开发接口/修BUG）从 ZT-STORY 号拿到带指纹的 dev-context-pack | M13 / M12 |
 
-下图把上表画成关键路径：S0→S8 硬串行为主轴，P-A 支路（T-070/071/072 图谱索引/视图/快照）自 S3 起全程并行、在 S7 汇合主线：
+下图把上表画成关键路径：S0→S8 硬串行为主轴，瘦身任务块（T-601/T-602）先于 S1、P-A 支路（T-070/071/072 图谱索引/视图/快照）自 S3 起全程并行并在 S7 汇合主线，T-073 与 S6 并行收尾 S7，飞书 CLI 支线（T-701~T-703）与主线全程并行：
 
 ```mermaid
 flowchart LR
-  S0["S0 会话编排单测 ✅"] --> S05["S0.5 依据透明（快车道·不阻塞）"]
-  S05 --> S1["S1 purpose 地基"]
+  SLIM["瘦身任务块 T-601~T-606<br/>T-601 modes 退役 = T-010 硬前置"]
+  S0["S0 会话编排单测 ✅"] --> S05["S0.5 依据透明 ✅"]
+  S05 --> S1["S1 purpose 地基<br/>T-010 ∥ T-011 并行"]
   S0 --> S1
   S1 --> S2["S2 面试闭环★"]
   S2 --> S3["S3 材料包与信息包"]
   S3 --> S4["S4 扫描仪与评分卡"]
   S4 --> S5["S5 三闸冻结 + 禅道"]
   S5 --> S6["S6 测试侧三增强"]
-  S6 --> S7["S7 血缘与图谱"]
+  S6 --> S7["S7 血缘与图谱（T-074 收尾）"]
   S7 --> S8["S8 治理件 + 对外 L0"]
-  subgraph PA["P-A 支路（S3 起全程并行）"]
-    P70["T-070 graph_index"]
-    P71["T-071 图谱视图"]
-    P72["T-072 里程碑快照"]
-    P70 --> P71
-    P70 --> P72
+  SLIM --> S1
+  subgraph PA["P-A 支路（S3 起并行，T-070 为 P0 咽喉）"]
+    P70["T-070 graph_index"] --> P71["T-071 图谱视图"]
+    P70 --> P72["T-072 里程碑快照"]
   end
   S3 -. 并行起点 .-> P70
-  P71 -. 汇合主线 .-> S7
-  P72 -. 汇合主线 .-> S7
+  P71 -. 汇合 .-> S7
+  P72 -. 汇合 .-> S7
+  LINE["T-073 血缘投影<br/>S5 后开工 ∥ S6"] -. 收尾 .-> S7
+  S5 -. 并行 .-> LINE
+  subgraph LARK["飞书 CLI 支线（v1.6，近期可认领，依赖 T-602）"]
+    L71["T-701 多用户认证服务"] --> L72["T-702 通用执行器"] --> L73["T-703 workbench 绑定页"]
+  end
 ```
 
 ---
@@ -105,6 +115,7 @@ flowchart LR
 |---|---|---|
 | S0 全部 | S1 全部 | 编排层测试是地基回归保障 |
 | T-401 编排单测收口（=S0 前置） | T-402 / T-403 / T-404 | 先有线再施工：runtime/llm_client 改动需回归网兜底 |
+| T-601 modes 体系退役（v1.6） | T-010 purpose 模型 | 双轨 prompt 装配污染（modes 与 skills 同题双写）；先退役再开 T-010 一次改到位，避免三次改装配 |
 | T-010 purpose 模型 | S2 全部 | 面试会话挂在 purpose 上 |
 | T-023 台账 schema + T-024 P0 清零 | T-042 评分门禁 → S5 全部 | 冻结三闸的③闸依赖台账与清零校验 |
 | T-050 delta manifest | T-051 三闸冻结 → T-053/054/055/056 | 禅道侧一切动作消费冻结产物（铁律 6） |
@@ -115,14 +126,18 @@ flowchart LR
 
 ### 3.2 可并行（认领即可开工，互不阻塞）
 
-- **P-A 支路**：T-070 / T-071 / T-072（图谱索引、视图、快照）——S3 起与主线全程并行
+- **P-A 支路**：T-070 / T-071 / T-072（图谱索引、视图、快照）——S3 起与主线全程并行（**T-070 为 P0 咽喉，v1.6 优先认领**）
+- **瘦身块（v1.6）**：T-602（TOOL_MODULES 单一注册）与 T-601 并行；T-603/T-604/T-605 无依赖任意空窗；T-606 挂 T-604 后
 - **S5 内**：T-053 / T-054 / T-055 / T-056 四者在 T-050+T-051 完成后互相并行
 - **S6 内**：T-060 / T-061 并行；T-062 / T-063 在 T-061 后并行
 - **S8 内**：T-080 / T-081 / T-082 三者互相并行，均完成后才开 T-083 / T-085；T-085 另需 T-056 与 T-070（通常早于 S8 完成）
 - **跨阶段**：T-032（info_pack 补票）不依赖 S2，可提前至 S1 后任意时间
 - **S0.5 快车道**：T-511 / T-512 与 S1 并行，互不阻塞（依据《知识体系设计》§4.5，P0 优先）
+- **治理三件套前置（v1.6）**：T-081 / T-082 在 S1（T-011）完成后即可认领、T-080 在 S2 完成后即可认领——与 S3-S7 主线零耦合，摊入空窗削 S8 峰值
+- **T-073 并行（v1.6）**：S5 完成 + T-070 就绪即可认领，与 S6 并行（血缘投影建在冻结产物 + 已有 run 报告上，数据制造/归因 Agent 产物是增量而非前提）
 - **引擎支线**：§4.3 T-501 / T-502 与 S1+ 主线互不依赖，认领即可开工
 - **知识支线**：§4.4 T-505 / T-506 无依赖可认领；T-507~T-510 随 S1/S3/S6 阶段解锁
+- **飞书 CLI 支线（v1.6）**：§4.6 T-701~T-703 与 S1+ 主线互不依赖（T-701 依赖 T-602 单一注册面），近期可认领
 
 ### 3.3 储备项（不认领，触发条件由总控人宣布）
 
@@ -136,7 +151,7 @@ flowchart LR
 
 > 状态值：`未认领` / `进行中` / `已完成` / `阻塞`（阻塞须在备注写原因）
 > 表行格式固定，只允许更新「状态/会话ID/备注」三列；新增任务由总控人追加。
-> 分区：**§4.1 当前打磨期**（✅ 2026-08-07 结束）｜**§4.2 远期升级期**（2026-08-07 起恢复认领）｜**§4.3 引擎演进补点**（可认领，与 S1+ 并行）｜**§4.4 知识体系**（T-505/T-506 可认领，其余挂 S 阶段）。
+> 分区：**§4.1 当前打磨期**（✅ 2026-08-07 结束）｜**§4.2 远期升级期**（2026-08-07 起恢复认领）｜**§4.3 引擎演进补点**（可认领，与 S1+ 并行）｜**§4.4 知识体系**（T-505/T-506 可认领，其余挂 S 阶段）｜**§4.5 瘦身任务块**（v1.6，T-601/T-602 P0 本周先做，T-601 为 T-010 硬前置）｜**§4.6 飞书 CLI 集成**（v1.6，近期可认领，与 S1+ 主线并行，T-701 依赖 T-602）。
 
 ### 4.1 当前打磨期（P0，✅ 2026-08-07 结束）
 
@@ -204,8 +219,8 @@ flowchart LR
 | T-001 | S0 | 会话编排单测套件收口 | agent/ | 套件全绿+mock可复跑+关键用例覆盖 | — | 已完成 | sess-s0-dev | v1.2（2026-08-06）：已前置为打磨期 §4.1 T-401 先行施工；T-401 完成时本行按 已完成 核销，S1 依赖（§3.1）视为就绪。✅ 2026-08-07 核销（T-401 交付，S1 依赖就绪） |
 | T-511 | S0.5 | 阅读足迹面板（依据透明 V1） | runtime + AgentChat | runtime 读型工具调用后发 WS 事件 doc_read（path/tool/turn/摘要/大小）；右侧「📖 阅读」页签：时间倒序文件卡片、同文件去重；**点击打开 file: 页签即定位（locate 行区间参数 + 范围高亮，渲染带行号）**；只对读型文档工具（read_spec/read_scenario/read_run_report/read_run_log/read_info_pack），写型不上 | — | 已完成 | sess-s05-dev | P0 ✅ 2026-08-07（agent/doc_read.py 纯函数构建器（五读型工具白名单、错误结果跳过、excerpt≤2000、read_run_log tail 行区间换算）+ runtime tool_call 后补发 doc_read 捎带 K-024 thinking；前端 📖 阅读页签（时间倒序、同 key 去重合并 hunks、reads 计数、_store 跨导航保持）+ FileViewer LinedText 行号/区间高亮/▲ n/N 处 ▼ 导航 + read-file 失败摘录兜底 memo；顺带修复 master 预存构建红 3 处（memo import/hint/rgbTripletToHex 死代码）；test_doc_read 14 例 + test_agent 71 全绿 + npm run build PASS） |
 | T-512 | S0.5 | read_spec 章节提取 + 面板章节卡片（依据透明 V2） | spec_reader + AgentChat | read_spec 加可选 anchor/section 参数（md 标题树 + FR/AC 锚点走 specstd/anchors）；场景 YAML 提取 covers/关键步骤；报告类展示失败断言段；面板卡片升级为「命中章节+段落摘要」；**一卡多 hunk（多次读取同文件不同章节），file 页签顶部「▲ n/N 处 ▼」git-diff 式跳上处/下处并高亮；每 hunk 带意义标注条（工具名+关键参数+K-024 思考文本，确定性来源无 LLM 总结）** | T-511 | 已完成 | sess-s05-dev | P0 ✅ 2026-08-07（mcp_server/tools/sections.py 章节提取纯函数（FR 标题式/列表式双形态+AC 块+md 标题树编号或文字+yaml part 保注释，import specstd 正则常量零改动 specstd）；read_spec 加 anchor/section 互斥参数（不受 200KB 截断影响，未命中列可用锚点自愈）+ read_scenario 加 part 参数（doc/flow/verify/covers）；doc_read 章节标头→真实行区间 hunk，read_run_report 诚实降级 memo+失败断言段摘录；面板卡片=命中章节+段落摘要+hunk 清单（▲ n/N 处 ▼ 导航随 T-511 落地）；validator/技能/模式文案同步新参数；test_sections 15 + test_mcp_server +8（顺带修正 26→27 计数与 read_case_detail 名单预存红）；specstd 包零改动） |
-| T-010 | S1 | purpose 会话模型持久化+不可变 | M01 | 改purpose请求被拒测试 | T-001 | 未认领 | | |
-| T-011 | S1 | 三层交集白名单运行时强制 | M12 | 越权调用确定性拒绝+WARNING审计 | T-001 | 未认领 | | |
+| T-010 | S1 | purpose 会话模型持久化+不可变 | M01 | 改purpose请求被拒测试 | T-001/T-601 | 未认领 | | v1.6：T-601 modes 退役为硬前置（§3.1）；与 T-011 双会话并行 |
+| T-011 | S1 | 三层交集白名单运行时强制 | M12 | 越权调用确定性拒绝+WARNING审计 | T-001 | 未认领 | | v1.6：与 T-010 双会话并行；完成后 T-081/T-082 解锁可认领 |
 | T-012 | S1 | agent/purposes/ 热加载注册表 | M01 | 30s可见不重启不改runtime | T-010 | 未认领 | | |
 | T-013 | S1 | RBAC 用途过滤+归属留痕 | M01/M12 | product角色清单过滤 | T-010 | 未认领 | | |
 | T-020 | S2 | specflow/interview 包+IV生命周期 | M02 | 开标→提问→清零→归档状态机 | T-010 | 未认领 | | |
@@ -233,14 +248,14 @@ flowchart LR
 | T-062 | S6 | 测试数据制造Agent | M08 | 产物过三闸；数据校验器硬拒；引擎零改动 | T-061 | 未认领 | | ∥T-063 |
 | T-063 | S6 | 失败归因Agent | M09 | suggestion不自动转decided；诚实性复核 | T-061 | 未认领 | | ∥T-062 |
 | T-064 | S6 | SPQ→面试信息包loop-back | M09/M02 | SPQ自动入下轮信息包 | T-063/T-033 | 未认领 | | |
-| T-070 | P-A | graph_index确定性派生服务 | M11 | 指纹失效即重建；删重建同图 | 无（S3起并行） | 未认领 | | P-A支路 |
+| T-070 | P-A | graph_index确定性派生服务 | M11 | 指纹失效即重建；删重建同图 | 无（S3起并行） | 未认领 | | P-A支路｜S3 起 P0（v1.6 咽喉标注：喂 T-071/072/073/085 四条下游链，优先认领） |
 | T-071 | P-A | L0/L1/L2视图+三镜头 | M11 | elkjs渲染；图谱不回写spec | T-070 | 未认领 | | P-A支路 |
 | T-072 | P-A | 里程碑快照+演化diff | M11 | 三触发点；可凭指纹重建校验 | T-070 | 未认领 | | P-A支路 |
-| T-073 | S7 | 血缘链投影+Q1/Q2 trace API | M10 | 双向不断链；外部锚点虚线 | T-070/T-056/S5 | 未认领 | | |
+| T-073 | S7 | 血缘链投影+Q1/Q2 trace API | M10 | 双向不断链；外部锚点虚线 | T-070/T-056/S5 | 未认领 | | v1.6：S5 完成 + T-070 就绪即可认领，与 S6 并行（S7 只剩 T-074 收尾） |
 | T-074 | S7 | 断链规则集BL（WARNING级） | M10 | 断链检测确定性校验 | T-073 | 未认领 | | |
-| T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 未认领 | | ∥T-081/082 |
-| T-081 | S8 | side_effect分级+纯读运行时强制 | M13/M12 | 写伪装读被硬拒测试 | T-011 | 未认领 | | ∥ |
-| T-082 | S8 | 调用审计（工号/会话/工具/入参摘要） | M13 | sf_mcp_call_audit可查 | T-011 | 未认领 | | ∥ |
+| T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 未认领 | | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值） |
+| T-081 | S8 | side_effect分级+纯读运行时强制 | M13/M12 | 写伪装读被硬拒测试 | T-011 | 未认领 | | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值） |
+| T-082 | S8 | 调用审计（工号/会话/工具/入参摘要） | M13 | sf_mcp_call_audit可查 | T-011 | 未认领 | | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值） |
 | T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 未认领 | | |
 | T-085 | S8 | open/dev_context研发侧三入口+旗舰场景群e2e | M13/M06/M11 | 三入口（by_zt_ref/by_anchor/by_fr）+六分区pack+指纹校验；e2e从ZT-STORY拿到pack，草稿零泄漏 | T-080/081/082/T-056/T-070 | 未认领 | | 研发提效卖点 |
 | T-084 | P3 | 审查管线完整化/对外L1/生态Registry | M13 | 储备项，触发制 | T-083 | 储备 | | 不得认领 |
@@ -271,6 +286,33 @@ flowchart LR
 | T-509 | 知识-页面 | 知识维护页（一页三区） | workbench 前端+backend | 「📚 知识」单菜单：词条编辑（保存即 conformance 校验、断链标红）+ 环境叙事编辑（凭据红线提示）+ 经验审核队列（S6 随 T-510 落地）；RBAC 写权限+审计留痕；agent 提议进待确认队列 | T-505/T-506/T-508 | 未认领 | | P1 ｜ S3 v1 两区、S6 v2 加经验审核 |
 | T-510 | 知识-经验 | 经验飞轮 | agent/ + .specguard/experience/ | run 终局落行（success/failed/corrected）+ 用户纠正关键词检测 + recency×hit_count 检索注入（≤2KB 封顶）+ 👍/👎 API；反复命中经知识页提炼为经验包（既有五段式流程） | S6 | 未认领 | | P1 ｜ 随 M09 归因落地；参考 deepferry memory.py |
 
+### 4.5 瘦身任务块（v1.6 新增，依据《SpecGuard-瘦身分析与任务顺序评估》v1）
+
+> 来源：《SpecGuard-瘦身分析与任务顺序评估》v1（2026-08-10，两路只读探查交叉核实）——P0 死代码删、P1 历史资产归档、P2 工程补强；**T-601 modes 体系退役是 T-010 硬前置**（§3.1）。
+> 定位：瘦身不是独立动作——modes 旧体系正是 S1 purpose 模型要替换的对象，它不退场，T-010 就要背着双轨兼容成本开工。**T-601/T-602 本周先做（P0、量小、直接降低 S1 开工面）**，随后按现总控认领 S1（T-010 ∥ T-011）。
+> 高危误伤点：`test_suites/test_engine_modes.py` 名字带 "modes" 但测的是**依赖共享/独占语义**（MODE_SHARED/EXCLUSIVE）——T-601 施工时须显式排除。
+
+| 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| T-601 | 瘦身-modes | modes 体系退役 | agent/（mode_loader/modes/runtime）+ workbench 前后端 | ①**内容评审与迁移（前置、顺序敏感）**：generate/debug/audit 正文并入对应 skill（保留 K-020/K-021/K-055 等独有内容，非机械去重）；**chat/analyze 无对应 skill，新建承载**；迁移完成且 system prompt 装配切到 skill 侧后，再删 mode_loader/modes/*.md；② 删 switch_mode（A4）+ 同步 test_agent/test_mcp_server/test_meta_tools；③ 删前后端三端点（A5）+ 同步 test_multiuser（/chat 409/403 两处改 WS 或移除）；④ 重写 test_audit tools 白名单断言（改断言 skill 或删除）；**显式排除 test_engine_modes.py**（依赖语义非 modes 体系） | — | 已完成 | sess-slim-dev | P0 ✅ 2026-08-10（sess-slim-dev）：① skills 扩为 7 个——generate-scenario/debug-failure 并入独有内容（K-020/K-021/K-055/K-052），新建 audit-spec/spec-chat/analyze-workspace（清理腐化表述）；② runtime 删 mode_guidance 装配 + j2 模板删章节；③ 删 mode_loader/modes/*.md（5 文件）/switch_mode/前后端三端点（A5，chat 同步走 WS）；④ 测试联动 6 文件（test_mode_loader 删除、test_audit/test_meta_tools/test_agent/test_mcp_server 断言迁移、test_multiuser /chat 依赖移除）；AGENTS.md 同步；全量 test_specstd 704 绿（仅 test_auth_config_public 预存红：工作区 auth.py 本地改 dual 未提交，与本次无关）+ engine_modes 39 + test_engine 135 + 前端 build PASS；T-010 硬前置已释放） |
+| T-602 | 瘦身-注册 | TOOL_MODULES 单一注册 | agent/runtime.py + mcp_server/server.py | server（或 mcp_server 层）导出单一注册函数、runtime import 复用（B1，全仓仅两处定义）；修复 compliance 漂移（runtime 漏 compliance，workbench Agent 调不到 scan_compliance）；**合并函数参数化 info_pack**（runtime 要、server 排除——收窄 stdio 面是刻意设计非漂移）；test_mcp_server 工具数断言 27 保持 | — | 已完成 | sess-slim-dev | P0 ✅ 2026-08-10（sess-slim-dev）：server 导出 build_tool_modules(include_info_pack)、runtime import 复用；runtime 侧 +compliance（scan_compliance 可达）+info_pack 保留（30 工具），server 侧 26 工具（switch_mode 随 T-601 删，27→26）；test_mcp_server 断言同步；循环依赖验证无（tools 模块不 import agent）；T-701 依赖已就绪 |
+| T-603 | 瘦身-清理 | 死代码清理 | workbench 前后端 | /yaml-format-spec 内联端点（C2）、llm-config 三端点（C3，llm_config.py 本体保留）、PlanManager.tsx（D1）、VariablePicker.tsx（D2）、api.ts 12 无调用方方法（D3，后端对应端点另查勿连带误删） | — | 未认领 | | P1｜与 T-601 并行 |
+| T-604 | 瘦身-归档 | 历史资产归档 | docs/ | upgrade-plans/（P1-1，先登记 E2E 闭环验收）、验收期文档（P1-2，AGENTS.md 同步改「当前活跃」标注）、旧 HTML 原型（P1-3）、plans/*.yaml（P1-4，确认无库外 CI 引用）、visualization/（P1-5）、verifier/runs+plan/design-brief（P1-6，保留 README+criteria）、根级架构副本（P1-7）→ docs/历史区；README 场景清单/目录结构同步（2.3-5） | — | 未认领 | | P1｜任意空窗；T-606 前置 |
+| T-605 | 瘦身-工程 | 工程补强闭环 | 仓库根 | .qoder/ 移出 git + .gitignore 补 .qoder/.smoke（2.3-1）；.smoke/smoke_e2e.py 迁 test_suites/（2.3-2）；format-spec 快照导出自动化（2.3-3）；pytest.ini 删除链闭环——补 pyproject 或恢复，AGENTS.md/README 同步（2.3-4） | — | 未认领 | | P1｜任意空窗 |
+| T-606 | 瘦身-资产 | app/ 原型双副本收口 | docs/远期设计/app/index.html | 总控 §6 登记链改单副本约定后，app/index.html 改跳转页（P1-8；动之前先改登记链——verifier 指纹登记依赖双份） | T-604 | 未认领 | | P2 |
+
+### 4.6 飞书 CLI 集成（v1.6 新增，近期开发规划）
+
+> 来源：飞书 CLI（`lark-cli` v1.0.85）多用户接入需求（2026-08-10 确认：每用户独立 app；服务器多用户共享进程；能力域与现状 app `cli_a96d90ca7d7adbd9` 一致暂不限定；user + bot 身份都要）。
+> 技术结论（实测验证）：lark-cli 配置/登录态存储于 `~/.lark-cli/`（机器级全局）；**`USERPROFILE`（Win）/`HOME`（Linux）环境变量可重定向配置目录（实测生效）**——每 SpecGuard 用户一个隔离目录 `{SG_ROOT}/.lark-cli/{emp_no}/`，子进程注入 USERPROFILE 即天然隔离（token/配置/缓存零串扰）；`auth login --no-wait/--device-code` 两阶段授权（Agent 友好）；`--as user|bot` 身份切换（不支持 openId）；`--domain/--scope` 按需申请。
+> 定位：与 S1+ 主线并行可认领；**T-701 依赖 T-602**（TOOL_MODULES 单一注册后只注册一处，避免加剧 B1 漂移）；落地涉及 MCP 工具层（mcp_server/tools/）与 workbench 前端，不触引擎冻结层；`.lark-cli/` 目录须补 .gitignore。
+
+| 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| T-701 | 飞书-认证 | 多用户认证服务 | mcp_server/tools/lark_auth.py + specstd.workspace | 每用户独立配置目录 `{SG_ROOT}/.lark-cli/{emp_no}/`（USERPROFILE 注入，实测生效）+ .gitignore 补充；lark_auth_login 两阶段（--no-wait 返回 verification_url 给用户 → --device-code 完成；--recommend 与现状 app scope 一致）；lark_auth_status / lark_auth_logout（按 emp_no 隔离）；未绑定用户明确提示引导授权 | T-602 | 未认领 | | P0｜近期可认领，与 S1+ 并行；子进程并发锁（每用户一把，防 token 刷新互踩） |
+| T-702 | 飞书-执行 | 通用执行器 | mcp_server/tools/lark_run.py + agent/runtime | lark_run 透传全部 lark-* 域命令（能力探索不限定域）：子进程注入当前用户 USERPROFILE、命令白名单校验（禁 shell 拼接）、超时 60s + 结果截断（复用 _TOOL_RESULT_MAX_CHARS 出口）；写操作（high-risk-write）强制 --yes 且需用户确认；调用留痕（工号×命令×结果摘要） | T-701 | 未认领 | | P0｜能力探索随本任务验证（calendar/im/task/approval 等域） |
+| T-703 | 飞书-工作台 | workbench 绑定页与审计 | workbench 前后端 | 「个人设置 → 绑定飞书」：授权 URL / 授权状态 / scope 清单 / 解绑；Agent 会话自动带出当前用户飞书身份（emp_no → 配置目录映射）；调用审计（工号/会话/工具/入参摘要，与 T-082 口径对齐） | T-701/T-702 | 未认领 | | P1｜近期可认领 |
+
 ---
 
 ## 5. 会话注册表（开工必填）
@@ -287,6 +329,8 @@ flowchart LR
 | sess-master | 总控文档 v1.5 编排（总控人指令） | T-511/T-512 追加（编排登记，非施工认领） | 2026-08-07 | S0.5 依据透明快车道（P0 不阻塞 S1）；T-508 备注同步前置口径 |
 | sess-s05-dev | S0.5 依据透明施工 | T-511 → T-512 | 2026-08-07 | 阅读足迹面板（V1）→ 章节提取+章节卡片（V2）；串行施工，specstd 零改动（sections 提取落 mcp_server 侧）；两项全部完成，顺带修复 master 预存构建红 3 处与 test_mcp_server 预存计数红 |
 | sess-engine-t501 | 引擎断言器补点施工（§4.3） | T-501 | 2026-08-07 | schema 结构断言（fuzzy-match-lite，第三批 §6.2 规格）；S0.5 已提交落地（ffbaff4）后开工，零文件冲突 |
+| sess-master | 总控文档 v1.6 编排（总控人指令） | T-601~T-606 + T-701~T-703 追加（编排登记，非施工认领） | 2026-08-10 | 依据《SpecGuard-瘦身分析与任务顺序评估》v1：瘦身任务块（T-601 modes 退役 = T-010 硬前置）+ 飞书 CLI 集成支线 + 任务顺序评估落地（治理三件套前置/T-073 与 S6 并行/T-070 S3 起 P0/S1 内并行明示）；已完成任务全部保持不变 |
+| sess-slim-dev | 瘦身任务块施工 | T-602 → T-601 | 2026-08-10 | T-602 先行（TOOL_MODULES 单一注册，T-701 依赖）；T-601 modes 退役：内容评审迁移（generate/debug/audit 并入 skills、chat/analyze 新建）→ runtime 装配切换 → 删机制/端点 → 同步 5 测试文件 |
 | | | | | |
 
 ---
@@ -365,6 +409,32 @@ flowchart LR
 | workbench/backend/services/format_spec.py | sess-engine-t501 | 2026-08-07 | da58c49856ab | 712087f01d26 | 已完成 | T-501 三同步：§1.8.1 schema_match 用法文档 + 版本 2.4.0→2.5.0 |
 | docs/specguard-yaml-format-spec.md | sess-engine-t501 | 2026-08-07 | 5a97f9c939bd | bef8b1511f31 | 已完成 | T-501 三同步：快照重导出 v2.5.0（generate_format_spec_md 直写，导出约定已 diff 验证） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-engine-t501 | 2026-08-07 | d9c249e2b9e4 | e349c62e34e0 | 已完成 | T-501 施工自身登记（覆盖本会话全部总控文档编辑：§5 注册、T-501 认领与核销、§6 各行回填）；开工校验说明：sess-s05-dev 行修改后hash 按 v1.3 约定两种空字段形态复验均失败（约定理解漂移，v1.3 登记行已预录此现象），git 证据（ffbaff4 由 S0.5 会话提交、工作区干净、提交内容=登记内容）证明合法，按 §7 以新 hash 重新登记开工；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-10 | a01e5a18f4ba | d781e3e4de4d | 已完成 | v1.6 自身登记：版本头 v1.6 决策 + §2.1 mermaid（S0.5 ✅/SLIM 前置/飞书支线/T-073 并行）+ §3.1 硬串行 T-601→T-010 + §3.2 并行项（瘦身块/治理三件套前置/T-073 并行/飞书支线）+ §4.2 六行备注与依赖更新（T-010/T-011/T-070/T-073/T-080~082）+ §4.5 瘦身任务块（T-601~T-606）+ §4.6 飞书 CLI 集成（T-701~T-703）+ §4 分区说明 + §5 注册 sess-master v1.6；已完成任务全部保持不变；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-slim-dev | 2026-08-10 | d781e3e4de4d | e39eb31a6b2d | 已完成 | v1.6.1 自身登记：T-601/T-602 验收要点修正（代码实证：正文迁移=评审+新建 chat/analyze、测试联动 5 文件、info_pack 参数化）+ §5 注册 sess-slim-dev；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| agent/runtime.py | sess-slim-dev | 2026-08-10 | 2cb57192e9a2 | 1469db11de3f | 已完成 | T-602：TOOL_MODULES 改走 server.build_tool_modules（B1 单一注册）+ compliance 修复；T-601：删 mode_guidance 装配/mode_loader import/switch_mode 拦截与处理 |
+| mcp_server/server.py | sess-slim-dev | 2026-08-10 | 5687e1a3373e | 498ecc8b78f6 | 已完成 | T-602：导出 build_tool_modules(include_info_pack) 单一注册函数（info_pack 参数化，stdio 默认排除） |
+| mcp_server/tools/meta.py | sess-slim-dev | 2026-08-10 | 654b2805cac8 | 05d4ac5a5674 | 已完成 | T-601：删 switch_mode 工具，META_TOOL_NAMES 仅剩 todo_write |
+| agent/prompts/system.md.j2 | sess-slim-dev | 2026-08-10 | a095153ee6c4 | f3b6aa614891 | 已完成 | T-601：删「任务行为指引」章节与 {{ mode_guidance }}，顶部引用改「可用技能」 |
+| agent/skills/generate-scenario.md | sess-slim-dev | 2026-08-10 | 81efa43f5605 | 20de32580a5c | 已完成 | T-601：并入 generate.md 独有内容（交互式生成流程 K-021/K-055/硬约束/K-020 工具报错处理） |
+| agent/skills/debug-failure.md | sess-slim-dev | 2026-08-10 | 58f61cb47d22 | 31850c7e2ad0 | 已完成 | T-601：并入 debug.md 独有内容（K-052 任务号定位动线），清理「没有 write_draft」腐化表述 |
+| agent/skills/audit-spec.md | sess-slim-dev | 2026-08-10 | NEW | b60dcccf5f7c | 已完成 | T-601：新建（audit.md 迁移，V1-V4 分类/分级/硬约束） |
+| agent/skills/spec-chat.md | sess-slim-dev | 2026-08-10 | NEW | 0747d2479edd | 已完成 | T-601：新建（chat.md 迁移；keywords 收紧防闲聊误触发，test_skill_trigger 回归验证） |
+| agent/skills/analyze-workspace.md | sess-slim-dev | 2026-08-10 | NEW | 6db06e9c6f2c | 已完成 | T-601：新建（analyze.md 迁移，清理「没有 write_draft/validate」腐化表述） |
+| agent/mode_loader.py | sess-slim-dev | 2026-08-10 | a30106334b01 | DELETED | 已完成 | T-601：删除（modes 体系退役，无运行时消费者） |
+| agent/modes/generate.md | sess-slim-dev | 2026-08-10 | 7a21bf635202 | DELETED | 已完成 | T-601：删除（内容已并入 generate-scenario） |
+| agent/modes/debug.md | sess-slim-dev | 2026-08-10 | cbd094ee0d88 | DELETED | 已完成 | T-601：删除（内容已并入 debug-failure） |
+| agent/modes/audit.md | sess-slim-dev | 2026-08-10 | 9096796ff16f | DELETED | 已完成 | T-601：删除（内容已迁 audit-spec） |
+| agent/modes/chat.md | sess-slim-dev | 2026-08-10 | 68e69765de66 | DELETED | 已完成 | T-601：删除（内容已迁 spec-chat） |
+| agent/modes/analyze.md | sess-slim-dev | 2026-08-10 | e7caecd60d4c | DELETED | 已完成 | T-601：删除（内容已迁 analyze-workspace） |
+| workbench/backend/routers/agent.py | sess-slim-dev | 2026-08-10 | b460506f1c1b | 0739140faa41 | 已完成 | T-601：删 /modes /skills /chat 三端点 + ChatBody + 相关 import（前端调用方 0，chat 走 WS） |
+| workbench/frontend/src/api.ts | sess-slim-dev | 2026-08-10 | 1abf6ec5c085 | d8915e039ef9 | 已完成 | T-601：删 chat/getModes/getSkills 方法 + AgentMode/AgentSkill 类型 |
+| test_specstd/test_mode_loader.py | sess-slim-dev | 2026-08-10 | 75596c4a1a6e | DELETED | 已完成 | T-601：删除（mode_loader 退役） |
+| test_specstd/test_audit.py | sess-slim-dev | 2026-08-10 | 0c24825d1f9b | 893b8d048d6d | 已完成 | T-601：TestAuditMode → TestAuditSkill（断言 load_skill("audit-spec") 内容） |
+| test_specstd/test_meta_tools.py | sess-slim-dev | 2026-08-10 | e9f0b595b473 | 79aa8f9c8694 | 已完成 | T-601：TestSwitchModeDeprecated → TestMetaToolsDeprecated（switch_mode 未知工具断言）；META_TOOL_NAMES 断言 1 个 |
+| test_specstd/test_agent.py | sess-slim-dev | 2026-08-10 | a7a03731dea1 | 16da42a9e990 | 已完成 | T-601：prompt 断言改 skills 内容（交互式生成流程/Spec 审计技能）；删 test_switch_mode_meta_tool |
+| test_specstd/test_mcp_server.py | sess-slim-dev | 2026-08-10 | 2c6119e79d09 | af115c714ac0 | 已完成 | T-601/T-602：工具数 27→26（switch_mode 删）；工具清单去 switch_mode |
+| test_specstd/test_multiuser.py | sess-slim-dev | 2026-08-10 | 9fdc455ac0be | 8642c31de60c | 已完成 | T-601：/chat 409 测试改 _run_in_progress 直测；viewer 403 断言移除 |
+| AGENTS.md | sess-slim-dev | 2026-08-10 | 274e16b00911 | ea60fa95b6c4 | 已完成 | T-601 同步：去 modes 引用（使用角色/目录结构/智能层约定 3 处） |
 | | | | | | | |
 
 ---

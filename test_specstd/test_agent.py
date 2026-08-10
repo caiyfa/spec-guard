@@ -421,16 +421,16 @@ class TestPromptOptimization:
         assert "generate-scenario" in p and "debug-failure" in p  # 全量技能
 
     def test_mode_guidance_conditional_sections(self):
-        """模式片段合并为「任务行为指引」条件章节（单一事实源仍是 modes/*.md）。"""
+        """T-601：modes 退役后任务指引来自技能（skills XML 全量注入）。"""
         p = build_system_prompt()
-        assert "任务行为指引" in p
-        assert "当生成/修改场景" in p      # generate 流程
+        assert "可用技能" in p
+        assert "交互式生成流程" in p     # T-601：generate 流程并入 skill
         assert "DAG 拓扑设计" in p          # K-021 设计步并入
-        assert "当审计 spec 漏洞时" in p    # audit 职责
+        assert "Spec 审计技能" in p        # audit-spec skill（T-601 新建）
         assert "当前模式" not in p          # 不再有模式态
 
     def test_no_mode_switch_instruction(self):
-        """模板不再指导 switch_mode（机制已废弃，仅工具壳平滑过渡）。"""
+        """T-601：模板与技能均不再指导 switch_mode（工具已删除）。"""
         p = build_system_prompt()
         assert "切到 generate 模式" not in p
         assert "切换到「场景生成」模式" not in p
@@ -579,20 +579,6 @@ class TestToolDispatch:
         assert len(tool_msgs) >= 1
         assert "合法值" in tool_msgs[0]["content"]
         assert "pending" in tool_msgs[0]["content"]
-
-    def test_switch_mode_meta_tool(self):
-        """switch_mode meta 工具返回模式已废弃提示。"""
-        mock = MockLLM([
-            {"role": "assistant", "content": "", "tool_calls": [
-                {"id": "c1", "type": "function",
-                 "function": {"name": "switch_mode", "arguments": '{"mode": "generate"}'}}
-            ]},
-        ])
-        runtime = AgentRuntime(mock, max_turns=5)
-        messages = runtime.run("sys", "切换模式")
-        tool_msgs = [m for m in messages if m.get("role") == "tool"]
-        assert len(tool_msgs) >= 1
-        assert "模式机制已废弃" in tool_msgs[0]["content"]
 
     def test_tool_execution_exception_contains_tool_name(self):
         """工具执行异常时错误消息包含工具名。"""

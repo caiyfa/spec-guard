@@ -20,7 +20,7 @@ SpecGuard 是**契约驱动的后端场景测试引擎 + 可视化工作台**，
 SpecGuard 存在两类 AI 角色，认知边界必须清晰，互不越界：
 
 1. **开发角色——本文件的读者**：开发/维护 SpecGuard 工具链本身（引擎/工作台/智能层/适配包）的 AI。遵循本文件全部规则（冻结层评审、三同步、发布门禁、git 规范）。本文件是「SpecGuard 项目宪法」，只服务开发角色，**不会注入 agent 对话的 system prompt**——agent 对话注入的是被测系统工作区的 AGENTS.md（见 specstd/workspace.read_agents_md）。
-2. **使用角色——agent 对话中的 AI**：通过 AgentChat / agent CLI / MCP 挂载使用 SpecGuard，为被测系统制作单元测试、编排 DAG、验证接口、归因失败的 AI。其规则知识由 system prompt 承载：格式规范（format_spec 动态生成）+ 技能（agent/skills/*.md）+ 任务行为指引（agent/modes/*.md）+ 被测系统工作区 AGENTS.md 全量原文（P1 决策：规则层知识不允许有损压缩）。
+2. **使用角色——agent 对话中的 AI**：通过 AgentChat / agent CLI / MCP 挂载使用 SpecGuard，为被测系统制作单元测试、编排 DAG、验证接口、归因失败的 AI。其规则知识由 system prompt 承载：格式规范（format_spec 动态生成）+ 技能（agent/skills/*.md）+ 被测系统工作区 AGENTS.md 全量原文（P1 决策：规则层知识不允许有损压缩）。
 
 行为边界：
 - **使用角色是「SpecGuard 测试助手」，不是 SpecGuard 开发者**：不修改引擎/工作台/agent 代码，不触碰冻结层语义，不做仓库管理决策；发现 SpecGuard 本体缺陷走反馈路径上报，不自行改工具
@@ -90,9 +90,8 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   ├── session.py                #   会话管理（多用户按工号隔离，agent/sessions/{emp}/）
 │   ├── llm_client.py             #   LLM 客户端（配置热加载，DB 驱动）
 │   ├── compactor.py              #   长对话压缩（超限自动摘要早期轮次）
-│   ├── mode_loader.py + modes/   #   工作模式加载（generate/debug/analyze/audit/chat，热加载 30s TTL）
-│   ├── skill_loader.py + skills/ #   技能加载（generate-scenario/validate-conformance/debug-failure）
-│   ├── prompts/system.md.j2      #   system prompt Jinja 模板（注入 modes/skills）
+│   ├── skill_loader.py + skills/ #   技能加载（T-601：modes 退役后唯一事实源，7 技能 30s TTL）
+│   ├── prompts/system.md.j2      #   system prompt Jinja 模板（注入 skills/format_spec/AGENTS）
 │   ├── cli.py                    #   POC 独立验证入口
 │   └── sessions/                 #   会话产物（.jsonl，不入 git）
 │
@@ -187,7 +186,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - **oracle/step 注册**：新断言器加到 `systems/{system}/oracles.py` 并注册；新 tool 在 `systems/{system}/steps.py` 声明，`engine/tool_registry.py` 模块导入时注册——**语法层零变更**。
 - **SKIP 语义（诚实结果）**：测试数据缺失/账号未配置 → SKIP；上游失败 → BLOCKED；绝不把环境问题报成 FAIL。
 - **前端**：React 函数组件 + TS 严格模式；DAG 布局用 elkjs（懒加载）；YAML 编辑用 Monaco；禁止 js-yaml 往返写回（会丢中文注释，用 deps_editor 文本外科手术）。
-- **智能层 modes/skills 文件**：`agent/modes/*.md` 与 `agent/skills/*.md` 统一用 `---` YAML frontmatter（temperature/tools/description/trigger）+ Markdown 正文；loader 30s 内存缓存热加载，**新增文件无需重启**；skills 正文注入 system prompt 的 `<skills>` XML 块。
+- **智能层 skills 文件**：`agent/skills/*.md` 统一用 `---` YAML frontmatter（name/description/trigger/keywords）+ Markdown 正文；loader 30s 内存缓存热加载，**新增文件无需重启**；skills 正文注入 system prompt 的 `<skills>` XML 块，用户消息关键词命中 keywords 时附加技能提示（match_skills_hint）。
 
 ---
 

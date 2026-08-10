@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 27  # 新增 read_case_detail 后 26→27（T-512 修正预存计数漂移）
+        assert len(ALL_TOOLS) == 26  # T-601：switch_mode 随 modes 体系退役（27→26）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -56,7 +56,7 @@ class TestToolRegistration:
                      "query_registry", "write_draft", "undo_draft", "validate",
                      "read_run_report", "db_evidence",
                      "write_audit_report", "report_vulnerability",
-                     "todo_write", "switch_mode",
+                     "todo_write",
                      "promote_draft",  # H-3/H-4: meta 工具；K-015: promote_draft
                      "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
                      "promote_drafts",  # K-021⑥: 批量入库
