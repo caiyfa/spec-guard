@@ -23,6 +23,7 @@ import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import { authApi, session } from './api';
 import type { CurrentUser } from './api';
+import { removeCookie } from './utils/cookie';
 
 const ALL = ['admin', 'tester', 'viewer'];
 const TESTER_UP = ['admin', 'tester'];
@@ -149,6 +150,9 @@ export default function App() {
       uacLogoutUrl = r.uac_logout_url || '';
     } catch { /* 忽略，本地登出优先 */ }
     session.clearToken();
+    // 清除 fesso_access_token cookie（跨子域共享）
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    removeCookie('fesso_access_token', { path: '/', domain: isLocalhost ? undefined : '.fehorizon.com' });
     if (user?.auth_mode === 'uac' && uacLogoutUrl) {
       window.location.href = uacLogoutUrl;
     } else {
@@ -230,7 +234,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         {/* Logo 区 */}
         <div className="p-4 border-b border-border flex-shrink-0">
           <h1 className="text-sm font-bold brand-gradient whitespace-nowrap">🛡 SpecGuard</h1>
-          <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">测试流水线工作台</p>
+          <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">场景测试与AI智能编排平台</p>
         </div>
 
         {/* 菜单区 */}
