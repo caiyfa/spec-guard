@@ -50,3 +50,4 @@ feedback/receipts.jsonl
 # ── 对话产出的待评审场景（未过三道闸，不入库，本地保留）──
 scenarios/inventory/smart-tag/
 scenarios/system-settings/
+scenarios/tmp/
