@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions
 from services.auth import get_current_user
 from services import user_store
 
@@ -72,6 +72,18 @@ def _startup():
     ledger_store.ensure_tables()
     user_store.fail_stale_running()
     _migrate_legacy_sessions()
+    # S2: specflow sf_* 表初始化
+    from workbench.backend.services.specflow import sf_store
+    sf_store.init_tables()
+    from specflow.interview.decision_ledger import init_tables as dl_init
+    import sqlite3
+    from pathlib import Path
+    try:
+        conn = sqlite3.connect(str(Path(__file__).resolve().parent / "data" / "workbench.db"))
+        dl_init(conn)
+        conn.close()
+    except Exception:
+        pass
     # I-2: 启动定时任务调度器
     from services.scheduler import start_scheduler
     start_scheduler()
@@ -118,6 +130,8 @@ app.include_router(lifecycle.router, dependencies=[Depends(get_current_user)])
 app.include_router(settings.router, dependencies=[Depends(get_current_user)])
 app.include_router(notify.router, dependencies=[Depends(get_current_user)])
 app.include_router(schedules.router, dependencies=[Depends(get_current_user)])
+app.include_router(specflow_interview.router, dependencies=[Depends(get_current_user)])
+app.include_router(specflow_decisions.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/api/health")

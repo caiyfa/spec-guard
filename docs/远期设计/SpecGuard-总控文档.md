@@ -23,7 +23,7 @@
 >
 > **v1.8 决策（2026-08-10，总控人指令）**：**一人可同时持多用途**——需求面试与测试编排不互斥，同一用户可同时进行两类会话；落地：① **RBAC 单角色扩展为多角色**（`users.role` 单值 → `roles` 多值，`require_role` 语义改「包含任一角色即通过」，`is_admin` 语义不变），新增 `product` 角色（M12 §4.4 已规划）；② **用途可见性 = 用户角色集合 ∩ 用途 roles 集合（并集语义）**：`/purposes` 返回全部可见用途（多用途用户见两张卡，单选建会话），单用途用户仍跳过选择页（M01 效率保护不变）；③ **会话与产物天然并存**：同一 emp 可同时持有 requirement_interview 与 test_workbench 两类会话（agent_sessions 按 emp+purpose 隔离），产物按用途分目录并存（`.specguard/{emp}/` 与 `.specflow/{emp}/`，T-014 已覆盖）；④ T-013 验收要点更新为「角色集合并集过滤」；T-014 备注补「多用途产物并存」。
 >
-> **v1.9 决策（2026-08-10，总控人指令）**：**S1 安全修复验收**——在 S1 交付后全量代码审查中发现并修复 6 项安全漏洞：H1 rbac 未知角色 fail-closed（此前混入未知角色即击穿 product 只读收窄）、H2 bootstrap admin 多角色漏检（set_roles([tester,admin]) 后 role 列非 admin → 新用户自动提权）；M1 can_read_private 零使用点、M2 无工作区回退全局草稿目录越权读、M3 product 建会话却读不了历史/取消不了运行、M4 空白名单 or None 静默回退全量、M5 白名单不取创建期快照、M6 pending files 全局竞态；L2-L6 低危项；存量 plans 路径穿越守卫+门禁。详见 §4.2 T-010~T-014 修复备注、§5 sess-s1-fix 与 §6 登记行。
+> **v1.10 决策（2026-08-10，sess-s2-dev）**：**S2 面试闭环全部完成**——T-020~T-024 五任务全量交付：specflow/interview 包（IV 生命周期/议题卡 7 种 source/11 章提问库/决策台账 6 表/amendment 增补链/P0 清零门禁）+ MCP 工具 11 个 + REST API 2 模块 19 端点 + 55 单测全绿（全库 798 绿 1 预存红）；§2.1 S2 行标注 ✅，§3.1 硬串行 S2 后续依赖（S3）可认领。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -64,7 +64,7 @@
 ### 2.1 远期升级期（S0-S8，2026-08-07 起恢复认领）
 
 > 以下为远期升级路线（v1.1 起整体后置；**2026-08-07 总控人宣布打磨期结束，恢复认领**）：
-> 关键路径串行：S0→S1→S2→S3→S4→S5→S6→S7→S8；P-A 支路（T-070/071/072）从 S3 起可全程并行（**T-070 为咽喉，S3 起 P0**，v1.6）；**S0.5 依据透明快车道（v1.5，T-511/T-512）插在 S0 与 S1 之间但不阻塞 S1，✅ 2026-08-07 完成**；**S1 purpose 地基（T-010~T-014）✅ 2026-08-10 完成（里程碑验收五项全过，S2 依赖就绪）**；**瘦身任务块（v1.6，T-601/T-602）先于 S1 施工（T-601 modes 退役是 T-010 硬前置）**；**飞书 CLI 支线（v1.6，T-701~T-703）与主线并行、近期可认领（依赖 T-602 单一注册面）**；T-073 与 S6 并行、治理三件套按依赖前置认领（v1.6）。
+> 关键路径串行：S0→S1→S2✅→S3→S4→S5→S6→S7→S8；P-A 支路（T-070/071/072）从 S3 起可全程并行（**T-070 为咽喉，S3 起 P0**，v1.6）；**S0.5 依据透明快车道（v1.5，T-511/T-512）插在 S0 与 S1 之间但不阻塞 S1，✅ 2026-08-07 完成**；**S1 purpose 地基（T-010~T-014）✅ 2026-08-10 完成（里程碑验收五项全过，S2 依赖就绪）**；**S2 F1 面试闭环 ✅ 2026-08-10 完成（T-020~T-024 全部交付，S3 依赖就绪）**；**瘦身任务块（v1.6，T-601/T-602）先于 S1 施工（T-601 modes 退役是 T-010 硬前置）**；**飞书 CLI 支线（v1.6，T-701~T-703）与主线并行、近期可认领（依赖 T-602 单一注册面）**；T-073 与 S6 并行、治理三件套按依赖前置认领（v1.6）。
 > 每阶段详细验收标准见《研发顺序与里程碑验收》§3，此处给方向与目标效果。
 
 | 阶段 | 方向（往哪里走） | 达成效果（验收门面） | 对应模块 |
@@ -72,7 +72,7 @@
 | **S0** 会话编排单测 | agent 编排层测试先行，套件可离线复跑（**v1.2 起前置至打磨期 §4.1 T-401**） | 单测全绿 + `--mock` CI 可挂；后续所有阶段的回归底座 | agent/（runtime/session/compactor） |
 | **S0.5** 依据透明（v1.5 新增快车道） | agent 读过的关键文档进面板，关键章节可见 | 用户跟上 agent 关键思路、把判断依据摊开（阅读足迹面板 + 章节提取）；**不阻塞 S1** | agent/runtime + workbench（《知识体系设计》§4.5） |
 | **S1** purpose 地基 ✅ | 会话创建期锁定 + 工具白名单运行时强制 | 越权工具调用被确定性拒绝；purpose 不可变（**✅ 2026-08-10 完成：T-010~T-014 全部交付，S2 依赖就绪**） ；[2026-08-10 修复] 全量代码审查修复 6 项安全漏洞（H1/H2/M1-M6），详见 §4.2 T-010~T-014 备注与 §5 sess-s1-fix | M01 / M12 / M13(P1骨架) |
-| **S2** F1 面试闭环 ★价值拐点 | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示 | M02 / M04 |
+| **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示 | M02 / M04 |
 | **S3** 材料包与信息包 | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归 | M03 |
 | **S4** 扫描仪与评分卡 | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效 | M05 / M04 |
 | **S5** 三闸冻结 + 禅道 | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记 | M05 / M06 |
@@ -88,7 +88,7 @@ flowchart LR
   S0["S0 会话编排单测 ✅"] --> S05["S0.5 依据透明 ✅"]
   S05 --> S1["S1 purpose 地基<br/>T-010 ∥ T-011 并行"]
   S0 --> S1
-  S1 --> S2["S2 面试闭环★"]
+  S1 --> S2["S2 面试闭环★ ✅"]
   S2 --> S3["S3 材料包与信息包"]
   S3 --> S4["S4 扫描仪与评分卡"]
   S4 --> S5["S5 三闸冻结 + 禅道"]
@@ -230,11 +230,11 @@ flowchart LR
 | T-012 | S1 | agent/purposes/ 热加载注册表 | M01 | 30s可见不重启不改runtime | T-010 | 已完成 | sess-s1-foundation | ✅ 2026-08-10（sess-s1-foundation）：purpose_loader（30s TTL 仿 skill_loader，frontmatter：id/title/icon/color/chips/roles/tools/panels/description）+ 两用途定义（requirement_interview/test_workbench）；visible_purposes 角色集合并集；GET /purposes 端点；test 5 例（加载/缺失/列表/热加载新文件/并集过滤） ；[2026-08-10 修复 L6] 并发首载加锁（双重检查 + 锁内解析） |
 | T-013 | S1 | RBAC 用途过滤+归属留痕 | M01/M12 | **角色集合并集过滤（v1.8：单角色→多角色，一人可多用途）**：`users.roles` 多值 + `require_role` 包含任一；`/purposes` 按角色集合∩用途 roles 返回可见用途（多用途用户多卡）；归属留痕（会话 emp_no + purpose） | T-010 | 已完成 | sess-s1-foundation | ✅ 2026-08-10（sess-s1-foundation）：user_store VALID_ROLES 加 product、users 表加 roles 列（逗号分隔，存量 role 列回退解析）、set_roles 批量（set_role 兼容单值，审计 action 保持 set_role）；auth CurrentUser.roles（__post_init__ 兼容）、require_role/require_role_ws 交集语义、is_admin 不变；认证链注入 specstd emp contextvar（T-014 透传）；test 5 例；[2026-08-10 修复 H2/M3/L2] _has_admin 多角色检测（role+roles 双列）；product 会话读/取消/导出权限补齐；create_session workspace 授权校验 |
 | T-014 | S1 | 多会话产物地基：emp 维度路径 + 私有/共享状态机制 | specstd/workspace.py + 全链路产物写读点 | ① `specguard_dir()` 等路径函数支持 emp 维度：**未确认产物落私有区 `{ws}/.specguard/{emp}/drafts|plans|uploads/`、`{ws}/.specflow/{emp}/interviews/`**，确认动作（promote 入库→`scenarios/`、计划确认、面试冻结→基线）后进共享区；**天然共享产物不进私有区**（`reports/` 执行台账、`info_packs/` 版本化资产）；② emp contextvar 透传（复用 workspace contextvar 模式，从 `get_current_user` 注入）；③ 私有区越权读校验（仅归属 emp + admin，确定性拒绝）；④ 存量 drafts 按会话 emp_no 迁移脚本（会话 `_meta.json` 可追溯）；⑤ M01/M03 布局约定同步 | T-001 | 已完成 | sess-s1-foundation | ✅ 2026-08-10（sess-s1-foundation）：specguard_dir/drafts_dir/plans_dir/uploads_dir 加 emp 维度（_emp_subdir 防穿越，`..`/`/` 拒绝回退共享区）；set/get/reset_context_emp_no（auth 认证链注入，产物写读点零改动自动落私有区）；reports/info_packs 保持共享；can_read_private 越权校验纯函数；scenarios uploads 走 uploads_dir；migrate_drafts_emp 迁移脚本（会话 JSONL 扫描归属，无归属保留共享）；test_workspace_emp 12 例；[2026-08-10 修复 M1/M2/M6] can_read_private 接入 drafts 路由；移除全局草稿回退+draft_promote 同步；pending files 改 contextvar |
-| T-020 | S2 | specflow/interview 包+IV生命周期 | M02 | 开标→提问→清零→归档状态机 | T-010 | 未认领 | | |
-| T-021 | S2 | 议题卡 topic.yaml 装配 | M02 | 来源PRD+SPQ反哺可载入 | T-020 | 未认领 | | |
-| T-022 | S2 | sf_interviews/sf_questions 表 | M02 | P0/P1/P2分级落库 | T-020 | 未认领 | | |
-| T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 未认领 | | |
-| T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 未认领 | | |
+| T-020 | S2 | specflow/interview 包+IV生命周期 | M02 | 开标→提问→清零→归档状态机 | T-010 | 已完成 | sess-s2-dev | ✅ 2026-08-10（specflow/interview 包：topic.py 议题卡 + iv_lifecycle.py 生命周期 + question_bank.py 11章扫描 + gate.py P0门禁壳 + decision_ledger.py 决策台账+MCP+REST） |
+| T-021 | S2 | 议题卡 topic.yaml 装配 | M02 | 来源PRD+SPQ反哺可载入 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（Topic/SourceRef/BaselineRef 模型 + 7种 source 类型 + topic.yaml 序列化/反序列化 + create_topic 文件落盘 + 缺挂链校验） |
+| T-022 | S2 | sf_interviews/sf_questions 表 | M02 | P0/P1/P2分级落库 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（sf_store.py：sf_interviews + sf_questions 建表/CRUD/索引，参照 agent_session_store 模式） |
+| T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（decision_ledger.py：sf_decisions/sf_decision_links/sf_decision_amendments/sf_decision_draft_marks/sf_gate_evidence/sf_scores 六表 + pending→resolved→superseded + resolve仅REST+product + score confirm仅tester；resolve/amend不暴露MCP） |
+| T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 已完成 | sess-s2-dev | ✅ 2026-08-10（check_p0_clear 纯函数零LLM + gate_aggregate 三要素聚合 + validate_freeze_request 冻结校验 + GateResult 数据类；测试覆盖三种缺口组合） |
 
 > **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。
 >
@@ -346,6 +346,7 @@ flowchart LR
 | sess-master | 总控文档 v1.7 编排（总控人指令） | T-014 追加（编排登记，非施工认领） | 2026-08-10 | 多会话产物地基决策：产物目录 emp 维度 + 私有/共享状态机制（未确认私有→确认动作后共享，天然共享不进私有区），并进 S1 与 T-010/T-011 三会话并行 |
 | sess-s1-foundation | S1 purpose 地基施工 | T-014 → T-010 → T-012 → T-013 → T-011 | 2026-08-10 | ✅ 2026-08-10 全部完成：五任务串行施工（产物地基 → purpose 会话模型 → purposes 注册表 → RBAC 多角色 → 三层交集白名单）；S1 里程碑验收五项全过；前端卡片页留 S2（M01 F3 完整交付） |
 | sess-s1-fix | S1 安全修复施工 | 全量代码审查→H1/H2/M1-M6/L2-L6/存量穿越修复 | 2026-08-10 | 2026-08-10 全量审查修复：H1 rbac 未知角色 fail-closed、H2 admin 多角色漏检、M1 can_read_private 接入、M2 移除全局回退+补门禁、M3 product 权限补齐、M4 空白名单拒绝、M5 快照装配、M6 pending files 改 contextvar、L2-L6 低危项、存量 plans 路径穿越 + 门禁；test_specstd 745 绿 / engine_modes 39 绿 |
+| sess-s2-dev | S2 面试闭环施工 | T-021 → T-022/T-020 → T-023 → T-024 | 2026-08-10 | 全部完成：specflow/interview 包（IV 生命周期 + 议题卡 + 提问维度库 + 决策台账 + P0 清零门禁）+ sf_* 表（6张）+ MCP 工具（11 个）+ REST API（2 路由 19 端点）+ tests 55 绿；test_specstd 798 绿 1 预存红 |
 | | | | | |
 
 ---

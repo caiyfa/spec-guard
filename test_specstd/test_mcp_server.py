@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 26  # T-601：switch_mode 随 modes 体系退役（27→26）
+        assert len(ALL_TOOLS) == 37  # T-601: 26 + S2 specflow: 11 (interview 6 + ledger 5)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -65,7 +65,14 @@ class TestToolRegistration:
                      "list_failures", "list_executions", "read_run_log",  # K-052: 失败索引 + 全量执行台账
                      "scan_compliance",  # T-313: 全库格式合规缺口扫描
                      "read_case_detail",  # 单场景完整 case 详情（trace_id/响应头体）
-                     "sync_workspace"}  # 远端更新同步 + 会话级 dismiss
+                     "sync_workspace",  # 远端更新同步 + 会话级 dismiss
+                     # S2 specflow 面试工具（6）
+                     "iv_open_topic", "iv_read_baseline", "iv_next_question",
+                     "iv_record_answer", "iv_p0_clear_check", "iv_append_transcript",
+                     # S2 specflow 决策台账工具（5）
+                     "sf_list_decisions", "sf_propose_decision", "sf_check_p0_gate",
+                     "sf_suggest_scores", "sf_read_score_gate",
+                     }
         assert names == expected
 
 

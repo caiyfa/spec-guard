@@ -31,6 +31,8 @@ from mcp_server.tools import (  # noqa: E402
     audit,
     meta,
     compliance,
+    specflow_interview,
+    specflow_ledger,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -55,6 +57,8 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         audit,
         meta,
         compliance,
+        specflow_interview,
+        specflow_ledger,
     ]
     if include_info_pack:
         try:
