@@ -152,39 +152,45 @@ class TestSessionConcurrencyGuard:
         import asyncio
         from routers.agent import _ACTIVE_RUNS, _run_in_progress
         sid = "testsession001"
-        # 预置一个未完成的活跃 run（dummy task，.done() 为 False）
-        loop = asyncio.new_event_loop()
 
-        async def _dummy():
-            await asyncio.sleep(60)
+        async def scenario():
+            # 预置一个未完成的活跃 run（dummy task，.done() 为 False）
+            async def _dummy():
+                await asyncio.sleep(60)
 
-        task = loop.create_task(_dummy())
-        _ACTIVE_RUNS[sid] = task
-        try:
-            assert _run_in_progress(sid) is True
-            assert _run_in_progress("other-sid") is False
-        finally:
-            task.cancel()
-            _ACTIVE_RUNS.clear()
-            loop.close()
+            task = asyncio.create_task(_dummy())
+            _ACTIVE_RUNS[sid] = task
+            try:
+                assert _run_in_progress(sid) is True
+                assert _run_in_progress("other-sid") is False
+            finally:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                _ACTIVE_RUNS.clear()
+
+        asyncio.run(scenario())
 
     def test_chat_no_conflict_when_done(self, client):
         import asyncio
         from routers.agent import _ACTIVE_RUNS, _run_in_progress
         sid = "testsession002"
-        loop = asyncio.new_event_loop()
 
-        async def _done():
-            return 1
+        async def scenario():
+            async def _done():
+                return 1
 
-        task = loop.create_task(_done())
-        loop.run_until_complete(asyncio.sleep(0))  # 让 task 完成
-        _ACTIVE_RUNS[sid] = task
-        try:
-            assert _run_in_progress(sid) is False  # 已完成 → 不拦截
-        finally:
-            _ACTIVE_RUNS.clear()
-            loop.close()
+            task = asyncio.create_task(_done())
+            await asyncio.sleep(0)  # 让 task 完成
+            _ACTIVE_RUNS[sid] = task
+            try:
+                assert _run_in_progress(sid) is False  # 已完成 → 不拦截
+            finally:
+                _ACTIVE_RUNS.clear()
+
+        asyncio.run(scenario())
 
     def test_unauthenticated_401(self, client):
         assert client.get("/api/scenarios").status_code == 401

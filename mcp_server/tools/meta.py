@@ -18,8 +18,7 @@ if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
 
-# Meta 工具名称集合（常驻，不写入 modes/*.md 的 tools 白名单）
-# T-601：switch_mode 退役，仅剩 todo_write
+# Meta 工具名称集合（常驻；T-601：switch_mode 退役，仅剩 todo_write）
 META_TOOL_NAMES = frozenset({"todo_write"})
 
 TOOLS = [

@@ -37,11 +37,11 @@ SpecGuard 存在两类 AI 角色，认知边界必须清晰，互不越界：
 | 了解完全体能力与边界 | `docs/完全体SpecGuard能力边界与交互流程-测试人员指南.md` | 三层架构 + 双反馈循环 |
 | 落地 Agent 智能层 | `docs/SpecGuard-Agent架构设计-MCP工具层与薄Harness.md` | MCP 工具层 + 薄 Harness，含 6 项 ADR |
 | 智能层落地与阶段计划 | `docs/SpecGuard智能层开发简报.md`、`docs/SpecGuard智能层开发计划-M0至M5.md` | M0-M5 已完成，落地总结 + 阶段拆解 |
-| 验收期优化（已归档） | `docs/历史区/SpecGuard验收期优化点总表.md`、`docs/SpecGuard优化升级开发Spec.md` | 13 模块优化点索引 + G1-G4 分阶段开发 Spec，T-604 已归档至 docs/历史区 |
+| 验收期优化（已归档） | `docs/历史区/SpecGuard验收期优化点总表.md`、`docs/历史区/SpecGuard优化升级开发Spec.md` | 13 模块优化点索引 + G1-G4 分阶段开发 Spec，T-604 已归档至 docs/历史区 |
 | 引擎语义与使用手册 | `README.md` | 详细操作手册（命令路径已去迁移前缀，与本文件 §Commands 一致） |
 | 引擎演进设计 | `docs/引擎升级建议-DB断言与异步轮询.md`、`docs/引擎升级建议-第二批-变量插值与资源命名.md` | DB 断言/异步轮询、变量插值/资源命名 |
 | 依赖状态管理设计 | `docs/依赖状态管理设计-V3待实施.md` | shared/exclusive 语义权威 |
-| 产品演示/交互原型 | `docs/SpecGuard完全体*.html` | 对外宣讲材料 |
+| 产品演示/交互原型 | `docs/历史区/SpecGuard完全体*.html` | 对外宣讲材料 |
 
 ---
 
@@ -90,7 +90,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   ├── session.py                #   会话管理（多用户按工号隔离，agent/sessions/{emp}/）
 │   ├── llm_client.py             #   LLM 客户端（配置热加载，DB 驱动）
 │   ├── compactor.py              #   长对话压缩（超限自动摘要早期轮次）
-│   ├── skill_loader.py + skills/ #   技能加载（T-601：modes 退役后唯一事实源，7 技能 30s TTL）
+│   ├── skill_loader.py + skills/ #   技能加载（T-601：modes 退役后唯一事实源，8 技能 30s TTL）
 │   ├── prompts/system.md.j2      #   system prompt Jinja 模板（注入 skills/format_spec/AGENTS）
 │   ├── cli.py                    #   POC 独立验证入口
 │   └── sessions/                 #   会话产物（.jsonl，不入 git）

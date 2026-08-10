@@ -1,9 +1,6 @@
-"""设置 API：大模型配置读写 + 多模型管理 + 连通性探测。
+"""设置 API：多模型管理 + 连通性探测。
 
 端点：
-- GET  /api/settings/llm-config       — 读取当前生效配置（向后兼容，返回默认模型）
-- POST /api/settings/llm-config       — 保存配置（向后兼容）
-- POST /api/settings/llm-config/probe — 探测 LLM 连通性
 - GET  /api/settings/models           — 列出全部模型配置
 - POST /api/settings/models           — 创建模型配置
 - PUT  /api/settings/models/{id}      — 更新模型配置
@@ -21,21 +18,6 @@ from services.auth import require_role
 from services import llm_config, model_config
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
-
-
-class LLMConfigBody(BaseModel):
-    # 连接参数
-    base_url: str = ""
-    api_key: str = ""
-    model: str = ""
-    timeout: str = "120"
-    temperature: str = "0.7"
-    # 模型能力限制
-    max_context_tokens: str = ""
-    max_output_tokens: str = ""
-    # 思考/推理选项
-    thinking_enabled: str = "false"
-    reasoning_effort: str = ""
 
 
 class ProbeBody(BaseModel):
