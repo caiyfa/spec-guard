@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.4.0"
-SPEC_UPDATED = "2026-08-05"
+SPEC_VERSION = "2.5.0"
+SPEC_UPDATED = "2026-08-07"
 SPEC_CHANGELOG = [
+    ("2.5.0", "2026-08-07", "新增引擎内建断言器 schema_match（结构断言 fuzzy-match-lite，T-501）：#string/#number/#boolean/#null 类型标记、## 可选键、#[] 数组模式、键集严格嵌套递归；oracle 参数化形式调用，语法层零变更"),
     ("2.4.0", "2026-08-05", "归一化场景类型：废弃 test_type 字段（unit/scenario 二分抹除，统一为场景），删除 T2/T3 校验，T5 孤例规则改通用（无 depends_on 且非 prep 标签 → 疑似孤例）"),
     ("2.3.0", "2026-08-02", "新增 2.6 requires 执行依赖声明（accounts/env/upstream）与 T8 校验——执行前预检扫描器静态读取，弹窗前预警缺失账号/环境键；requires 不进契约指纹"),
     ("2.2.0", "2026-08-01", "K-055 微服务体系适配：call 新增 service 服务前缀路由；db_query 新增 schema 多库连接；新增 resolve_account/precheck_permission 工具；internal token 服务凭证"),
@@ -257,6 +258,35 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 | `vm_filtered` | verticalManager 维度过滤（FR-016/017） |
 | `inv_context_injected` | inv* 上下文注入（FR-006） |
 | `trend_sorted_desc` | trend 接口按 inventoryDate 降序 |
+
+### 1.8.1 引擎内建断言器：schema_match（结构断言）
+
+`schema_match` 按结构模板断言响应形状（fuzzy-match-lite，Karate 子集），适合「字段集合与类型稳定、具体值不固定」的接口：
+
+```yaml
+verify:
+  - oracle:
+      name: schema_match
+      params:
+        of: createResp            # save 引用，缺省 resp；call 产出取 json，其余裸值直通
+        spec:
+          code: 200
+          data:
+            id: "#number"
+            name: "#string"
+            tags: "#[] #string"   # 数组模式：每元素为 string，空数组通过
+            remark: "##string"    # 可选键：可缺席，出现则必须是 string
+```
+
+| 标记 | 语义 |
+|------|------|
+| `#string` / `#number` / `#boolean` / `#null` | 类型标记（`#number` 不匹配 true/false） |
+| `##key` | 可选键（缺席通过，出现按规则匹配） |
+| `#[] <rule>` | 数组模式，每元素匹配 rule，空数组通过 |
+| 其他字面值 | 精确相等（==，bool 与数字不混） |
+
+**键集严格**：对象多出未声明键即失败（结构漂移检测核心语义），嵌套递归全程生效；失败消息定位到字段级路径（如 `$.data.list[2].status: 期望 #string，实际 42`）。
+**明确不支持**：`#regex`、`#?` JS 表达式、`#(var)` 引用、`#present`——写出即断言失败并提示支持的标记集。
 
 ### 1.9 DB 断言（db_query 裸数组直通）
 

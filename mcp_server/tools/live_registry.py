@@ -27,6 +27,7 @@ def get_live_registry():
     try:
         from engine.registry import Registry
         from engine.scenario_runner import register_builtin_steps
+        from engine.schema_match import register_builtin_oracles
 
         system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
         mod = importlib.import_module(f"systems.{system}")
@@ -44,6 +45,7 @@ def get_live_registry():
 
         reg = Registry()
         register_builtin_steps(reg)
+        register_builtin_oracles(reg)
         if hasattr(mod, "register"):
             mod.register(reg, env_config, None)  # db=None：只注册元数据
         _CACHE["registry"] = reg

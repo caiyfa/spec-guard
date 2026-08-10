@@ -22,6 +22,7 @@ from engine.db_oracle import ReadOnlyDb                       # noqa: E402
 from engine.scenario_loader import load_scenarios             # noqa: E402
 from engine.dependency_graph import DependencyGraph           # noqa: E402
 from engine.scenario_runner import RunContext, register_builtin_steps, run_teardowns  # noqa: E402
+from engine.schema_match import register_builtin_oracles  # noqa: E402
 from engine import report_writer                              # noqa: E402
 
 SCENARIOS_ROOT = os.path.join(SG_ROOT, "scenarios")
@@ -114,6 +115,7 @@ def registry(sg_system, env_config, db):
     """引擎内置注册 + 系统适配包注册（传入 db 供系统包构建工号池/查询库）"""
     reg = Registry()
     register_builtin_steps(reg)
+    register_builtin_oracles(reg)
     mod = importlib.import_module(f"systems.{sg_system}")
     if hasattr(mod, "register"):
         mod.register(reg, env_config, db)
