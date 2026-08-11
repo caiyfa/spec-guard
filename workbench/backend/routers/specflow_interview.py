@@ -12,6 +12,17 @@ router = APIRouter(prefix="/api/specflow/interviews", tags=["specflow"],
                    dependencies=[Depends(get_current_user)])
 
 
+@router.get("")
+def list_interviews_api(
+    status: str = "",
+    user: CurrentUser = Depends(get_current_user),
+    workspace: str = Depends(resolve_workspace),
+):
+    """面试列表（工作区隔离；材料/评分页签下拉数据源，T-058/T-059）。"""
+    from workbench.backend.services.specflow.sf_store import list_interviews_db
+    return {"interviews": list_interviews_db(workspace=workspace, status=status)}
+
+
 @router.get("/{iv_id}")
 def get_interview(
     iv_id: str,

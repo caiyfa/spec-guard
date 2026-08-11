@@ -36,6 +36,8 @@
 > **v1.15 决策（2026-08-11，sess-s5-dev）**：**S5 三闸冻结 + 禅道集成全部完成**——T-050/T-051/T-052 由 S4 交付并完成漏洞修复闭环（闸门纯读化/路径净化/conformance fail-closed/归档冻结校验）；T-053~T-056 交付：`integrations/zentao/` 单包（story get/search/create/update + bug get/create，与 S2 禅道只读设计同包收敛，杜绝两套链接）+ `sf_external_refs`/`sf_zentao_jobs`/`sf_storypoint_estimates` 三表 + 幂等作业编排（idem_key UNIQUE 防重/指数退避/回滚不删禅道资产）+ 提 BUG 双入口（from-run 仅 FAIL 可提单，SKIP/BLOCKED 被拒）+ 故事点评估链路（恒 suggested → 产品确认 → 回写）+ MCP 3 工具（读写分层，写不暴露）+ 铁律 6 负向测试（手动新建计划 404）；测试 36 例全绿（test_specstd 985 全绿）、release_check PASS；§2.1 S5 行标注 ✅，S6 依赖就绪可认领。
 >
 > **v1.16 决策（2026-08-11，sess-s5-dev）**：**S5 前端补全（T-057）+ 前端缺口全景审视**——① 新增 T-057 并完成：禅道集成面板（四区：冻结 delta 交付/提 BUG 双入口/对话草案确认/锚点作业）+ 飞书文档/多维表格对话建故事链路（feishu_doc_read/feishu_base_query MCP 纯读拉取 + sf_suggest_story_draft 草案建议 + sf_story_drafts 表 + from-draft REST 人拍板，幂等优先）；前端 build 通过、test_specstd 1003 全绿、release_check PASS；② **前端缺口全景审视结论**：S2/S2.5 为对话式交付（AgentChat 承载，设计如此，无独立 UI）；S3 材料包（上传/候选确认/入包）与 S4 五维评分（QA 确认/冻结闸门）**存在前端缺口**（REST 已就绪、待 UI 页签，见 T-030~T-042 备注）；后续任务（S6/S7/S8/P-A）已在 §4.2 备注标注前端需求（三态泳道/promote 三闸/归因确认/血缘链/图谱三镜头/演化 diff/skill 管理页），认领时须将前端纳入交付范围。
+>
+> **v1.17 决策（2026-08-11，sess-s5-dev）**：**S3/S4 前端缺口补丁任务立项（T-058/T-059）**——依据 v1.16 缺口审视结论，新增 T-058（S3 补：材料管理页签——上传/解析状态/候选确认/入包/重装配，消费 specflow_materials 8 端点）与 T-059（S4 补：评分与冻结页签——五维评分 QA 确认/冻结三闸状态与闸①确认，消费 specflow_decisions + specflow_freeze 端点），REST 均已就绪、纯前端补齐；本会话开发，完成即标 ✅。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -274,6 +276,8 @@ flowchart LR
 | T-055 | S5 | 提BUG双入口 | M06 | SKIP/BLOCKED提单被拒 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（from-run 仅 verdict=FAIL 可提单（SKIP/BLOCKED 被拒，诚实结果铁律 7）+ manual 同作业/幂等/登记管线；repro_builder 场景 doc 层 + run 执行证据装配 steps；提单成功 SPQ → zentao_filed；测试 8 例） |
 | T-056 | S5 | sf_external_refs外部锚点表 | M06 | 建故事/提BUG均登记 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（sf_refs_store 三表：external_refs（UNIQUE 幂等）/zentao_jobs（idem_key 防重）/storypoint_estimates（状态机）；建故事登记 delta+fr_anchor、提单登记 spq+scenario+run；对账 reconcile 补登记；MCP 3 工具（list/register/get_job，写不暴露）；测试 8 例） |
 | T-057 | S5 | 禅道集成前端面板+飞书建故事链路 | M06/M03 | 页签四区可用；对话草案→人确认→建故事 | T-053~T-056 | 已完成 | sess-s5-dev | ✅ 2026-08-11（ZentaoPanel.tsx 四区面板（冻结 delta 一键建故事/评估回写、提 BUG 双入口、对话草案确认、锚点与作业）+ feishu_doc_read/feishu_base_query MCP 拉取（lark-cli 纯读，权限结构化提示）+ sf_suggest_story_draft 草案建议 + sf_story_drafts 表（draft→created/cancelled）+ from-draft REST（幂等优先、product 人拍板）+ jobs 列表端点；RBAC product +3 工具；MCP 注册 48→51；前端 build 通过；测试 18 例（test_specstd 1003 全绿）） |
+| T-058 | S3补 | 材料管理前端页签 | M03 | 上传/候选确认/入包闸门有 UI | T-030~T-032 | 已完成 | sess-s5-dev | ✅ 2026-08-11（MaterialsPanel.tsx：面试下拉 + 上传解析（≤20MB multipart）+ 材料列表（状态徽标/指纹/parse_error）+ 议题候选查看与确认/取消（product）+ 入包/移出 + 六分区重新装配 + info_pack 预览；specflow_api 扩展；配套新增 GET /specflow/interviews 列表端点；前端 build 通过） |
+| T-059 | S4补 | 评分与冻结前端页签 | M04/M05 | QA 确认/三闸状态有 UI | T-040~T-042/T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（ScoreFreezePanel.tsx：五维评分列表（机打采集 spec 文本输入/evaluate/QA 确认/驳回）+ 冻结三闸（状态卡片 ①②③ + 闸①产品确认 + 闸②合规校验 + 三闸全过才可冻结按钮）+ 冻结 delta 下拉；specflow_api 扩展；前端 build 通过） |
 | T-060 | S6 | 覆盖缺口三态聚合 | M07 | 与真实基线一致；草稿不计覆盖 | S5 | 未认领 | | ∥T-061｜**前端需求**：覆盖缺口三态泳道视图 |
 | T-061 | S6 | sg_draft_gates三闸状态机 | M07 | promote硬前置；只产草稿不产计划 | S5 | 未认领 | | ∥T-060｜**前端需求**：Drafts 页 promote 三闸扩展 |
 | T-062 | S6 | 测试数据制造Agent | M08 | 产物过三闸；数据校验器硬拒；引擎零改动 | T-061 | 未认领 | | ∥T-063 |
@@ -565,6 +569,7 @@ flowchart LR
 | test_specstd/test_s5_zentao.py | sess-s5-dev | 2026-08-11 | ab4e3476a6f7 | e0aa9829d071 | 已完成 | T-057：+18 例（草案链路/幂等/角色闸门/feishu handler） |
 | test_specstd/test_mcp_server.py | sess-s5-dev | 2026-08-11 | 0bffc45f2ee6 | 2baf73971d90 | 已完成 | T-057：工具注册数 48→51 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s5-dev | 2026-08-11 | 3d1a3ce97167 | afd4eed79992 | 已完成 | v1.16 自身登记：S5 前端补全（T-057）+ 前端缺口全景审视——v1.16 决策头 + T-057 行 + 历史任务前端缺口备注（T-030~T-042）+ 未来任务前端需求标注（T-060/061/063/071/072/073/080）+ §6 12 行；修改后hash = 登记中形态指纹 afd4eed79992 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s5-dev | 2026-08-11 | afd4eed79992 | c43c1ad56d2d | 已完成 | v1.17 自身登记：S3/S4 前端缺口补丁任务立项——v1.17 决策头 + T-058/T-059 行；修改后hash = 登记中形态指纹 c43c1ad56d2d（T-058/T-059 已完成回填同轮） |
 | workbench/backend/routers/specflow_materials.py | sess-s3-dev | 2026-08-11 | NEW | d55ff8e23fdc | 已完成 | T-030~T-032：上传/列表/预览/候选/confirm/include/pack/reassemble 8 端点（confirm/include 仅 product） |
 | mcp_server/server.py | sess-s3-dev | 2026-08-11 | d36cb4d3d68d | dd431ab9e597 | 已完成 | 注册 specflow_pack（info_pack 保持参数化 stdio 收窄） |
 | workbench/backend/main.py | sess-s3-dev | 2026-08-11 | b79e40c8d73b | 8e48ad8699f5 | 已完成 | include_router specflow_materials |

@@ -19,6 +19,8 @@ import Drafts from './pages/Drafts';
 import Login from './pages/Login';
 import AdminUsers from './pages/AdminUsers';
 import ZentaoPanel from './pages/ZentaoPanel';
+import MaterialsPanel from './pages/MaterialsPanel';
+import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
@@ -66,6 +68,8 @@ const NAV_GROUPS: NavGroup[] = [
     icon: '📋',
     items: [
       { to: '/spec', label: '合规校验', roles: ALL },
+      { to: '/materials', label: '材料管理', roles: ALL },
+      { to: '/scores', label: '评分与冻结', roles: ALL },
       { to: '/zentao', label: '禅道集成', roles: ALL },
     ],
   },
@@ -357,6 +361,8 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/" element={<Dashboard />} />
             <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
             <Route path="/spec" element={<SpecValidation />} />
+            <Route path="/materials" element={<MaterialsPanel />} />
+            <Route path="/scores" element={<ScoreFreezePanel />} />
             <Route path="/zentao" element={<ZentaoPanel />} />
             <Route path="/plans" element={<Scenarios />} />
             <Route path="/run" element={<RunControl />} />
