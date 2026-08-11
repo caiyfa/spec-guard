@@ -64,13 +64,21 @@ export default function Attribution() {
       const res = await apiRequest<Record<string, any>>(`/runs/${id}`);
       if (!res) throw new Error('运行报告不存在');
       const data = res;
-      // 也获取 cases 详情
-      const casesRes = await apiRequest<{ cases?: any[] }>(`/runs/${id}/cases/.json`).catch(() => null);
-      let failedCases: FailedCase[] = [];
-      if (casesRes && casesRes.cases) {
-        failedCases = casesRes.cases.filter((c: any) =>
-          ['FAIL', 'ERROR', 'BLOCKED'].includes(c.verdict)
-        );
+      // 失败场景：run.json 的 cases 数组（id/verdict/file）过滤，逐文件取断言详情
+      // （后端无 cases/.json 聚合端点——单场景详情是 /runs/{id}/cases/{file}）
+      const failedCases: FailedCase[] = [];
+      for (const c of (data.cases || [])) {
+        if (!['FAIL', 'ERROR', 'BLOCKED'].includes(c.verdict)) continue;
+        const file = c.file || `${c.id}.json`;
+        const detail = await apiRequest<any>(
+          `/runs/${id}/cases/${encodeURIComponent(file)}`).catch(() => null);
+        failedCases.push({
+          scenario_id: c.id || '',
+          verdict: c.verdict,
+          error: detail?.error || '',
+          assertions: detail?.assertions || [],
+          steps: detail?.steps || [],
+        });
       }
       setReport({
         run_id: id,

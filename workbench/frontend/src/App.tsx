@@ -23,6 +23,7 @@ import ZentaoPanel from './pages/ZentaoPanel';
 import MaterialsPanel from './pages/MaterialsPanel';
 import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
+import AuditLog from './pages/AuditLog';
 import GraphPanorama from './pages/GraphPanorama';
 import LineageStory from './pages/LineageStory';
 import WorkspaceSelector from './components/WorkspaceSelector';
@@ -68,6 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/env-config', label: '环境配置', roles: ADMIN_ONLY },  // T-306：环境信息独立维护
       { to: '/settings', label: '系统设置', roles: ADMIN_ONLY },
       { to: '/admin-users', label: '用户管理', roles: ADMIN_ONLY },
+      { to: '/audit', label: '审计日志', roles: ADMIN_ONLY },  // T-082：MCP 调用审计
     ],
   },
   {
@@ -393,6 +395,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
                         <Route path="/schedules" element={<Schedules />} />
             <Route path="/admin-users" element={<AdminUsers />} />
             <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
+            <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

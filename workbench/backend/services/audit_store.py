@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_sf_mcp_call_audit_created
 # 敏感字段正则（args/result 脱敏用）
 _SENSITIVE_RE = re.compile(
     r'(token|password|secret|authorization|api_key|apikey|credential)'
-    r'\s*[:=]\s*["\']?[^"\'&\\s,}]+',
+    r'\s*[:=]\s*["\']?[^"\'&,\s}]+',
     re.IGNORECASE,
 )
 
