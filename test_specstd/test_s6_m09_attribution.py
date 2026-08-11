@@ -178,6 +178,16 @@ class TestHonestyReview:
         review = build_honesty_review(verdict="FAIL", kind="product_defect")
         assert review["required"] is False
 
+    def test_honesty_review_substring_clues(self):
+        """线索子串匹配：'502' 单字即判应改判 SKIP（不依赖调用方传精确短语）。"""
+        from workbench.backend.services.attribution_service import build_honesty_review
+        review = build_honesty_review(verdict="FAIL", kind="environment",
+                                      clues=["HTTP 502 Bad Gateway"])
+        assert review["conclusion"] == "改判 SKIP"
+        review2 = build_honesty_review(verdict="FAIL", kind="environment",
+                                       clues=["业务规则未命中"])
+        assert review2["conclusion"] == "维持 FAIL 但附证据"
+
 
 # ══════════════════════════════════════════════════════════
 # T-064：SPQ → 面试信息包 loop-back（G-5）
@@ -202,6 +212,56 @@ class TestSpqInfoPackLoopback:
         # 台账回填 info_pack_synced
         got = ledger.get(entry["spq_id"])
         assert got["info_pack_synced"] == ["IV-007"]
+
+    def test_sync_spq_iv_id_traversal_rejected(self, ledger, tmp_path):
+        """iv_id 含 ../ 越界 → ValueError（路径穿越守卫，不产生任何文件）。"""
+        from workbench.backend.services.attribution_service import (
+            create_spq, sync_spq_to_info_pack)
+        entry = create_spq(ledger, title="x", decided_by="t1",
+                           decided_kind="product_defect")
+        pack_dir = tmp_path / "packs"
+        pack_dir.mkdir(parents=True)
+        with pytest.raises(ValueError):
+            sync_spq_to_info_pack(entry["spq_id"], iv_id="../evil",
+                                  pack_dir=pack_dir, ledger=ledger)
+        assert not (pack_dir.parent / "evil").exists()
+
+    def test_auto_sync_matches_fr_correlation(self, ledger, tmp_path, monkeypatch):
+        """自动装配按 FR 相关性匹配：FR-009 只进 baseline_refs 含 FR-009 的面试。"""
+        import yaml as _yaml
+        import routers.feedback as rf
+        from specstd import workspace as wmod
+
+        base = tmp_path / "specflow"
+        iv_a = base / "interviews" / "IV-001"
+        iv_b = base / "interviews" / "IV-002"
+        iv_a.mkdir(parents=True)
+        iv_b.mkdir(parents=True)
+        topic_a = {"iv_id": "IV-001", "title": "t",
+                   "initiator": {"emp": "e", "role": "product"},
+                   "opened_at": "2026-08-11T00:00:00",
+                   "source": [{"type": "meeting", "ref": "m1"}],
+                   "baseline_refs": [{"fr": "FR-001"}],
+                   "status": "interviewing"}
+        topic_b = dict(topic_a, iv_id="IV-002",
+                       baseline_refs=[{"fr": "FR-009"}])
+        (iv_a / "topic.yaml").write_text(_yaml.dump(topic_a, allow_unicode=True),
+                                          encoding="utf-8")
+        (iv_b / "topic.yaml").write_text(_yaml.dump(topic_b, allow_unicode=True),
+                                          encoding="utf-8")
+
+        monkeypatch.setattr(wmod, "get_workspace_root", lambda: tmp_path)
+        monkeypatch.setattr(wmod, "specflow_dir", lambda emp="": base)
+        monkeypatch.setattr(rf, "_get_ledger", lambda: ledger)  # 隔离台账（真实台账含历史 SPQ）
+
+        from workbench.backend.services.attribution_service import create_spq
+        entry = create_spq(ledger, title="名单刷新延迟", run_id="EX-1",
+                           scenario_id="IS-RVT-002", fr_refs=["FR-009"],
+                           decided_by="t1", decided_kind="product_defect")
+        rf._auto_sync_info_pack(entry, ["FR-009"])
+        # FR-009 命中 IV-002 → 装配；IV-001 无该 FR → 不装配
+        assert (base / "interviews" / "IV-002" / "spq_feedback.yaml").is_file()
+        assert not (base / "interviews" / "IV-001" / "spq_feedback.yaml").exists()
 
 
 # ══════════════════════════════════════════════════════════

@@ -23,13 +23,13 @@ if str(SG_ROOT) not in sys.path:
 ENGINE_TOUCH_BLACKLIST = ("engine/", "specstd/schema.py")
 
 
-def _next_prep_id(existing: set) -> str:
-    """取下一个 IS-PREP 序号（确定性，不撞库内/草稿既有 ID）。"""
+def _next_prep_id(existing: set, target: str = "IS-PREP") -> str:
+    """取下一个 {target} 序号（确定性，不撞库内/草稿既有 ID）。"""
     for i in range(1, 999):
-        sid = f"IS-PREP-{i:03d}"
+        sid = f"{target}-{i:03d}"
         if sid not in existing:
             return sid
-    return "IS-PREP-999"
+    return f"{target}-999"
 
 
 def _load_anchors() -> dict:
@@ -44,17 +44,28 @@ def _load_anchors() -> dict:
         return {}
 
 
-def _load_existing() -> tuple[list[dict], set]:
-    """场景库 + 草稿中的 IS-PREP 实例（id / covers / data_contract）。"""
+def _has_data_contract(path: str) -> bool:
+    """场景文件是否含 data_contract 声明块（复用判定的真实依据）。"""
+    try:
+        import yaml as _yaml
+        raw = _yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        return "data_contract" in raw
+    except Exception:
+        return False
+
+
+def _load_existing(target: str = "IS-PREP") -> tuple[list[dict], set]:
+    """场景库 + 草稿中的 {target} 实例（id / covers / data_contract）。"""
+    prefix = f"{target}-"
     scenarios, drafts = [], []
     root = _scenarios_root()
     if root.is_dir():
         try:
             from engine.scenario_loader import load_scenarios
             for s in load_scenarios(str(root)):
-                if s.id.startswith("IS-PREP-"):
+                if s.id.startswith(prefix):
                     scenarios.append({"id": s.id, "covers": list(s.covers),
-                                      "has_contract": bool(getattr(s, "requires", None)) or True})
+                                      "has_contract": _has_data_contract(s.path)})
         except Exception:
             pass
     try:
@@ -67,7 +78,7 @@ def _load_existing() -> tuple[list[dict], set]:
                     continue
                 try:
                     raw = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-                    if str(raw.get("id", "")).startswith("IS-PREP-"):
+                    if str(raw.get("id", "")).startswith(prefix):
                         drafts.append({
                             "id": str(raw.get("id", "")),
                             "covers": [(raw.get("doc") or {}).get("covers")
@@ -103,22 +114,27 @@ def fabricate(frs: list[str], source_delta: str = "",
     from workbench.backend.services.data_validator import validate_data_contract
 
     anchors = _load_anchors()
-    existing_preps, existing_ids = _load_existing()
+    existing_preps, existing_ids = _load_existing(target)
     drafts_out, rejected, reuse_hints = [], [], []
 
     for fr in frs:
         if fr not in anchors:
             rejected.append({"fr": fr, "reason": "锚点不存在（spec.md 无此 FR）"})
             continue
-        # 复用优先：既有 IS-PREP covers 命中 → 建议复用
+        # 复用优先：既有 {target} covers 命中 → 建议复用（区分实例是否含 data_contract）
         hits = [s for s in existing_preps if fr in s["covers"]]
         if hits:
-            reuse_hints.append(
-                f"{fr} 已有可复用数据实例 {hits[0]['id']}（covers 命中）——"
-                f"优先复用/参数化，不新造")
+            if hits[0].get("has_contract"):
+                reuse_hints.append(
+                    f"{fr} 已有可复用数据实例 {hits[0]['id']}（covers 命中，含 data_contract）——"
+                    f"优先复用/参数化，不新造")
+            else:
+                reuse_hints.append(
+                    f"{fr} 已有实例 {hits[0]['id']}（covers 命中但不含 data_contract）——"
+                    f"可参考其数据，仍建议新造数据准备实例")
             continue
         title = getattr(anchors[fr], "title", "") or fr
-        sid = _next_prep_id(existing_ids)
+        sid = _next_prep_id(existing_ids, target)
         contract = _default_contract()
         content = _prep_skeleton(sid, fr, title, source_delta, contract)
         # 数据校验器（硬拒不合格实例——校验不过不落盘）
@@ -132,9 +148,13 @@ def fabricate(frs: list[str], source_delta: str = "",
         # 走 write_draft（三闸通道：自动登记 sg_draft_gates + gate2 自动跑）
         from mcp_server.tools.draft_writer import _handle_write_draft
         filename = f"{sid}.yaml"
-        resp = _handle_write_draft({"filename": filename, "content": content,
-                                    "mode": "create"})
-        text = resp[0].text if resp else "{}"
+        try:
+            resp = _handle_write_draft({"filename": filename, "content": content,
+                                        "mode": "create"})
+            text = resp[0].text if resp else "{}"
+        except Exception as e:
+            rejected.append({"fr": fr, "reason": f"写入异常: {e}"})
+            continue
         import json as _json
         try:
             out = _json.loads(text)
@@ -175,7 +195,7 @@ def _default_contract() -> dict:
 
 def _prep_skeleton(sid: str, fr_id: str, title: str, source_delta: str,
                    contract: dict) -> str:
-    """IS-PREP 草稿骨架（格式 2.0 双层 YAML + data_contract 声明块 + 挂链）。"""
+    """数据准备草稿骨架（格式 2.0 双层 YAML + data_contract 声明块 + 挂链）。"""
     import yaml as _yaml
     contract_yaml = _yaml.dump(contract, allow_unicode=True,
                                default_flow_style=False, sort_keys=False)

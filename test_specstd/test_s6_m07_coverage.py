@@ -167,6 +167,42 @@ class TestCoverageGaps:
         order = rank_gaps(gaps)
         assert [g["fr"] for g in order] == ["FR-001", "FR-002", "FR-004", "FR-008"]
 
+    def test_non_p0_add_ranked_below_p0_add(self, ctx):
+        """P0 判定生效：delta 新增非 P0（90）位于 P0（100）与修改（80）之间。"""
+        from workbench.backend.services.coverage_gaps import (
+            rank_gaps, REASON_DELTA_NEW_P0, REASON_DELTA_NEW)
+        gaps = [
+            {"fr": "FR-003", "reason": "delta_modified"},
+            {"fr": "FR-001", "reason": REASON_DELTA_NEW_P0},
+            {"fr": "FR-002", "reason": REASON_DELTA_NEW},
+        ]
+        order = rank_gaps(gaps)
+        assert [g["fr"] for g in order] == ["FR-001", "FR-002", "FR-003"]
+
+    def test_gap_reason_distinguishes_p0(self, ctx):
+        """_gap_reason：delta add + P0 决策命中 → delta_new_p0；否则 delta_new。"""
+        from workbench.backend.services.coverage_gaps import (
+            _gap_reason, REASON_DELTA_NEW_P0, REASON_DELTA_NEW, REASON_DELTA_MODIFIED)
+        assert _gap_reason("FR-001", p0=set()) == REASON_DELTA_NEW
+        assert _gap_reason("FR-001", p0={"FR-001"}) == REASON_DELTA_NEW_P0
+        assert _gap_reason("FR-002", p0=set()) == REASON_DELTA_MODIFIED
+        assert _gap_reason("FR-003", p0=set()) == "history"
+
+    def test_module_filter_exact_segment(self, ctx):
+        """module 过滤精确段匹配：'inventory-activity' 命中，'inventory' 不误匹配。"""
+        from workbench.backend.services.coverage_gaps import compute_coverage
+        r = compute_coverage(module="system-settings/inventory-activity")
+        assert r["module"] == "system-settings/inventory-activity"
+        # 所有返回 FR 的 module 均精确命中该模块（子串误匹配为 0）
+        for lane in ("gap", "draft", "covered"):
+            for item in r["lanes"][lane]:
+                assert item["module"] == "system-settings/inventory-activity"
+        # 不存在模块 → 空泳道（fr_total 是全量锚点基线，不过滤）
+        r2 = compute_coverage(module="inventory-activity-not-exist")
+        assert not r2["lanes"]["gap"]
+        assert not r2["lanes"]["draft"]
+        assert not r2["lanes"]["covered"]
+
     def test_backlink_readonly(self, ctx):
         """backlink 只读：调用前后工作区/scenarios/drafts 哈希不变。"""
         import hashlib
@@ -289,6 +325,37 @@ class TestDraftGates:
         assert gates == []
         gates = list_gates(workspace="testws", db_path=ctx["db"])
         assert len(gates) == 1
+
+    def test_gate3_report_persisted(self, ctx):
+        """mark_gate3_fail 落库 gate3_report（发布门禁失败原因可查）。"""
+        from workbench.backend.services.draft_gates import (
+            ensure_tables, register_draft, mark_gate3_fail, get_gate,
+        )
+        ensure_tables(ctx["db"])
+        register_draft("d-118.yaml", "IA-VOID-001", ["FR-001"],
+                       source_delta="extend-void-scope", created_by="t1",
+                       db_path=ctx["db"])
+        mark_gate3_fail("d-118.yaml", report="release_check: DRIFT 未通过",
+                        db_path=ctx["db"])
+        g = get_gate("d-118.yaml", db_path=ctx["db"])
+        assert g["gate3_status"] == "fail"
+        assert "DRIFT" in g["gate3_report"]
+
+    def test_gate2_report_verdict_consistent(self, ctx):
+        """锚点核对失败时 gate2_report 的 verdict 与 gate2_status 同口径（FAIL）。"""
+        from workbench.backend.services.draft_gates import (
+            ensure_tables, register_draft,
+        )
+        ensure_tables(ctx["db"])
+        (ctx["draft_dir"] / "d-200.yaml").write_text(
+            "id: IA-X-001\ntitle: 坏 covers 草稿\n"
+            "doc: {given: x, when: y, then: z, covers: [FR-999]}\n"
+            "flow: [{call: {method: GET, path: /api/x}}]\nverify: []\n",
+            encoding="utf-8")
+        g = register_draft("d-200.yaml", "IA-X-001", ["FR-999"],
+                           source_delta="x", created_by="t1", db_path=ctx["db"])
+        assert g["gate2_status"] == "fail"
+        assert g["gate2_report"]["verdict"] == "FAIL"
 
 
 # ══════════════════════════════════════════════════════════

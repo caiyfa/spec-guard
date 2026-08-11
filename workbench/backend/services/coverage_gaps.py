@@ -22,14 +22,16 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 
 # 覆盖状态 reason 枚举（排序器输入，M07 §4.4）
-REASON_DELTA_NEW_P0 = "delta_new_p0"        # 权重 100
-REASON_DELTA_MODIFIED = "delta_modified"    # 权重 80
-REASON_HISTORY = "history"                  # 权重 50
-REASON_EDGE = "edge_conflict"               # 权重 30
+REASON_DELTA_NEW_P0 = "delta_new_p0"    # 权重 100（delta 新增且 P0 决策命中）
+REASON_DELTA_NEW = "delta_new"          # 权重 90（delta 新增但非 P0）
+REASON_DELTA_MODIFIED = "delta_modified"  # 权重 80
+REASON_HISTORY = "history"              # 权重 50
+REASON_EDGE = "edge_conflict"           # 权重 30
 
 # 排序权重（M07 §4.4 确定性规则）
 _RANK_WEIGHT = {
     REASON_DELTA_NEW_P0: 100,
+    REASON_DELTA_NEW: 90,
     REASON_DELTA_MODIFIED: 80,
     REASON_HISTORY: 50,
     REASON_EDGE: 30,
@@ -212,9 +214,10 @@ def compute_coverage(module: str = "") -> dict:
         fr_module[fr_id] = f"{m}/{feat}".strip("/")
 
     gaps, draft_lane, covered = [], [], []
+    p0 = _load_p0_decisions()
     for fr_id, info in sorted(anchors.items()):
         mod = fr_module.get(fr_id, "")
-        if module and module not in f"{mod}/{fr_id}":
+        if module and not (mod == module or mod.startswith(module.rstrip("/") + "/")):
             continue
         name = getattr(info, "title", "") or ""
         scs = fr_to_scenarios.get(fr_id, [])
@@ -236,7 +239,7 @@ def compute_coverage(module: str = "") -> dict:
         if not scs:
             gaps.append({
                 "fr": fr_id, "name": name, "module": mod,
-                "reason": _gap_reason(fr_id),
+                "reason": _gap_reason(fr_id, p0),
                 "source_delta": _gap_source_delta(fr_id, drafts),
             })
 
@@ -254,13 +257,15 @@ def compute_coverage(module: str = "") -> dict:
     return result
 
 
-def _gap_reason(fr_id: str) -> str:
-    """缺口原因（确定性）：delta 新增/修改 → 对应 reason；否则 history。"""
+def _gap_reason(fr_id: str, p0: set = None) -> str:
+    """缺口原因（确定性）：delta 新增 → P0 命中 delta_new_p0 / 否则 delta_new；
+    修改 → delta_modified；否则 history。"""
     delta_ops = _load_delta_manifest()
     op = delta_ops.get(fr_id, "")
     if op == "add":
-        # 决策台账 P0 命中 → delta_new_p0；否则按新增处理（权重同修改之上）
-        return REASON_DELTA_NEW_P0
+        if p0 is None:
+            p0 = _load_p0_decisions()
+        return REASON_DELTA_NEW_P0 if fr_id in p0 else REASON_DELTA_NEW
     if op == "modify":
         return REASON_DELTA_MODIFIED
     return REASON_HISTORY
@@ -303,17 +308,13 @@ def _draft_gates_brief(draft_id: str) -> dict:
 def rank_gaps(gaps: list[dict]) -> list[dict]:
     """缺口优先级确定性排序（M07 §4.4）。
 
-    规则：delta 新增 P0（100）> delta 修改触及（80）> 历史缺口（50）>
-    边界/冲突（30）；同权重按 FR 编号升序（稳定输出）。
+    规则：delta 新增 P0（100）> delta 新增非 P0（90）> delta 修改触及（80）>
+    历史缺口（50）> 边界/冲突（30）；同权重按 FR 编号升序（稳定输出）。
     """
-    p0 = _load_p0_decisions()
-
     def _key(g: dict):
         fr = g.get("fr", "")
         reason = g.get("reason", REASON_HISTORY)
         weight = _RANK_WEIGHT.get(reason, 50)
-        if reason == REASON_DELTA_NEW_P0 and fr in p0:
-            weight = 100
         # FR 编号数值化（FR-012 → 12），同权重升序
         num = 0
         try:
@@ -409,9 +410,13 @@ def build_next_batch(frs: list[str], source_delta: str = "") -> dict:
         sid = _next_scenario_id(fr, existing_ids)
         content = _draft_skeleton(fr, sid, title, source_delta)
         filename = f"{sid}.yaml"
-        resp = _handle_write_draft({
-            "filename": filename, "content": content, "mode": "create"})
-        text = resp[0].text if resp else "{}"
+        try:
+            resp = _handle_write_draft({
+                "filename": filename, "content": content, "mode": "create"})
+            text = resp[0].text if resp else "{}"
+        except Exception as e:
+            rejected.append({"fr": fr, "reason": f"写入异常: {e}"})
+            continue
         try:
             out = json.loads(text)
         except Exception:

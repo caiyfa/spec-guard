@@ -37,8 +37,6 @@ _KNOWN_WRITERS: dict[str, str] = {
     # graph_index（写派生物索引库/快照）
     "graph_rebuild": SIDE_DRAFT,
     "graph_snapshot": SIDE_DRAFT,
-    # audit
-    "file_vulnerability": SIDE_DRAFT,
     # meta
     "todo_write": SIDE_DRAFT,
     # specflow_interview（写面试/问题/外部锚点表）
@@ -46,25 +44,14 @@ _KNOWN_WRITERS: dict[str, str] = {
     "iv_record_answer": SIDE_DRAFT,
     "iv_append_transcript": SIDE_DRAFT,
     "iv_next_question": SIDE_DRAFT,
-    "iv_p0_clear_check": SIDE_DRAFT,
     # specflow_ledger（写决策台账/评分）
     "sf_propose_decision": SIDE_DRAFT,
-    "sf_check_p0_gate": SIDE_DRAFT,
     "sf_suggest_scores": SIDE_DRAFT,
-    "sf_read_score_gate": SIDE_DRAFT,
     # specflow_refs（写外部锚点）
     "sf_register_external_ref": SIDE_DRAFT,
-    # coverage（写草稿/计划）
-    "query_coverage_gaps": SIDE_DRAFT,
-    "query_coverage_backlink": SIDE_DRAFT,
-    "query_next_batch": SIDE_DRAFT,
-    "fabricate_data": SIDE_DRAFT,
     # specflow_pack（写信息包）
     "pack_assemble": SIDE_DRAFT,
     "add_to_info_pack": SIDE_DRAFT,
-    # draft_gates（写评审/闸门状态）
-    "draft_review": SIDE_DRAFT,
-    "draft_promote": SIDE_DRAFT,
     # zentao 相关（写外部系统放行前暂标 draft，确认 external-write 安全后再升）
     "sf_suggest_story_draft": SIDE_DRAFT,
 }

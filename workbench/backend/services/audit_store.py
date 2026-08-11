@@ -48,10 +48,13 @@ CREATE INDEX IF NOT EXISTS idx_sf_mcp_call_audit_created
   ON sf_mcp_call_audit(created_at);
 """
 
-# 敏感字段正则（args/result 脱敏用）
+# 敏感字段正则（args/result 脱敏用）——兼容三种形态：
+#   JSON 键值   "token": "abc" / "token":abc
+#   明文键值   token=abc / token: abc
+#   query 内嵌  ?token=abc
 _SENSITIVE_RE = re.compile(
-    r'(token|password|secret|authorization|api_key|apikey|credential)'
-    r'\s*[:=]\s*["\']?[^"\'&,\s}]+',
+    r'("?\s*(?:token|password|secret|authorization|api_key|apikey|credential)\s*"?\s*[:=]\s*)'
+    r'("[^"]*"|[^\s"\'&,;}]+)',
     re.IGNORECASE,
 )
 
@@ -65,8 +68,8 @@ def _now() -> str:
 
 
 def _mask_sensitive(text: str) -> str:
-    """脱敏敏感字段：token/password/secret 等替换为 ***。"""
-    return _SENSITIVE_RE.sub(r"\1=***", text)
+    """脱敏敏感字段：token/password/secret 等（保留键名，值替换为 ***）。"""
+    return _SENSITIVE_RE.sub(r"\1***", text)
 
 
 def _truncate_digest(text: str, max_len: int = 200) -> str:

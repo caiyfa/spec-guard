@@ -106,6 +106,17 @@ another_unknown: 也忽略
         assert s is not None
         assert s.name == "test-skill"
 
+    def test_name_underscore_mismatch_rejected(self):
+        """目录名=name 强校验：文件名用 - 而 name 用 _ → 拒载（不做 -/_ 等价）。"""
+        text = """---
+name: test_skill
+description: 测试描述
+---
+正文
+"""
+        with pytest.raises(ValueError, match="不匹配"):
+            skill_loader._parse_skill_file("test-skill", text)
+
     def test_version_author_parsed(self):
         """version/author/depends_tools 正确读取。"""
         text = """---
@@ -267,15 +278,10 @@ class TestSideEffectRegistry:
 # ══════════════════════════════════════════════════════════
 
 class TestPureReadEnforcement:
-    """注意：完整集成测试依赖 AgentRuntime，生产工具需 SG_ROOT 工作区。
-    此处通过 mock 验证纯读强制逻辑不被意外改动。"""
+    """纯读强制核心路径（执行后指纹变化 → 拒绝+审计）。"""
 
-    def test_pure_read_tool_write_rejected(self):
-        """none 工具执行后仓库变化 → 返回 SIDE_EFFECT_VIOLATION。"""
-        # 模拟一个 none 工具执行后文件被修改的场景
+    def _make_runtime(self):
         from agent.runtime import AgentRuntime
-
-        # 创建最小 mock llm
         llm = MagicMock()
         llm.is_mock = True
         llm.max_context_tokens = 0
@@ -283,22 +289,156 @@ class TestPureReadEnforcement:
             {"role": "assistant", "content": ""},
             {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
         )
+        return AgentRuntime(llm, max_turns=1)
 
-        rt = AgentRuntime(llm, max_turns=1)
+    def test_pure_read_tool_write_rejected(self):
+        """none 工具执行后仓库指纹变化 → SIDE_EFFECT_VIOLATION + denied 审计。"""
+        from agent.runtime import AgentRuntime
+        from mcp.types import TextContent
+        from unittest.mock import AsyncMock
 
-        # 直接测试指纹机制：没有实际仓库，指纹应稳定
+        rt = self._make_runtime()
+        # read_spec 是 none 级且真实注册；patch 白名单放行 + 指纹先后不同（模拟副作用）
+        with patch.object(rt, "_tool_whitelist", {"read_spec"}), \
+             patch.object(rt, "_tool_map", {"read_spec": MagicMock(
+                 handle=AsyncMock(return_value=[TextContent(type="text", text="ok")]))}), \
+             patch.object(rt, "_take_snapshot_fingerprint",
+                          side_effect=["fp-before", "fp-after"]), \
+             patch.object(rt, "_record_audit") as rec:
+            out = rt._execute_tool({"function": {"name": "read_spec",
+                                                 "arguments": "{}"}})
+        assert "[SIDE_EFFECT_VIOLATION]" in out
+        rec.assert_called_once()
+        assert rec.call_args.args[1] == "denied-side-effect"
+
+    def test_pure_read_tool_no_change_ok(self):
+        """none 工具执行后指纹不变 → 正常放行（verdict=ok）。"""
+        from mcp.types import TextContent
+        from unittest.mock import AsyncMock
+
+        rt = self._make_runtime()
+        with patch.object(rt, "_tool_whitelist", {"read_spec"}), \
+             patch.object(rt, "_tool_map", {"read_spec": MagicMock(
+                 handle=AsyncMock(return_value=[TextContent(type="text", text="ok")]))}), \
+             patch.object(rt, "_take_snapshot_fingerprint", return_value="fp-same"), \
+             patch.object(rt, "_record_audit") as rec:
+            out = rt._execute_tool({"function": {"name": "read_spec",
+                                                 "arguments": "{}"}})
+        assert "SIDE_EFFECT_VIOLATION" not in out
+        assert "ok" in out
+        rec.assert_called_once()
+        assert rec.call_args.args[1] == "ok"
+
+    def test_side_effect_external_write_rejected(self):
+        """external-write 级工具 → 执行前确定性拒绝（不触 handle）+ denied 审计。"""
+        from mcp.types import TextContent
+        from unittest.mock import AsyncMock
+
+        rt = self._make_runtime()
+        handler = MagicMock(
+            handle=AsyncMock(return_value=[TextContent(type="text", text="不应执行")]))
+        with patch.object(rt, "_tool_whitelist", {"read_spec"}), \
+             patch.object(rt, "_tool_map", {"read_spec": handler}), \
+             patch("mcp_server.tools.side_effect_registry.get_side_effect",
+                   return_value="external-write"), \
+             patch.object(rt, "_record_audit") as rec:
+            out = rt._execute_tool({"function": {"name": "read_spec",
+                                                 "arguments": "{}"}})
+        assert "[拒绝]" in out and "external-write" in out
+        handler.handle.assert_not_awaited()  # 执行前拒绝
+        rec.assert_called_once()
+        assert rec.call_args.args[1] == "denied-side-effect"
+
+    def test_todo_write_recorded_audit(self):
+        """T-082：todo_write（meta 工具）同样落审计（draft 级）。"""
+        rt = self._make_runtime()
+        with patch.object(rt, "_record_audit") as rec:
+            out = rt._execute_tool({"function": {"name": "todo_write", "arguments":
+                '{"todos": [{"id": "t1", "title": "x", "status": "pending"}]}'}})
+        assert "待办已更新" in out
+        rec.assert_called_once()
+        assert rec.call_args.args[1] == "ok"
+        assert rec.call_args.args[4] == "draft"  # side_effect=draft
+
+    def test_snapshot_fingerprint_covers_workspace(self):
+        """T-081：指纹目录含工作区产物与台账 DB（纯读工具写工作区草稿可检出）。"""
+        import inspect
+        from agent.runtime import AgentRuntime
+        src = inspect.getsource(AgentRuntime._take_snapshot_fingerprint)
+        assert "specguard_dir" in src
+        assert "workbench.db" in src
+
+    def test_fingerprint_stable_without_change(self):
+        """无变更时指纹稳定（旧断言保留）。"""
+        rt = self._make_runtime()
         fp1 = rt._take_snapshot_fingerprint()
         fp2 = rt._take_snapshot_fingerprint()
         assert fp1 == fp2
 
-    def test_side_effect_external_write_rejected(self):
-        """external-write 工具 → 确定性拒绝。"""
-        # 通过检查 runtime._execute_tool 逻辑确认
-        from mcp_server.tools import side_effect_registry
 
-        # 当前 external-write 集合应为空
-        external_tools = side_effect_registry.list_tools_by_side_effect("external-write")
-        assert len(external_tools) == 0
-        # 即使将来有，runtime 也应拒绝
-        se = side_effect_registry.get_side_effect("nonexistent_tool_xyz")
-        assert se == "none"  # 不存在工具默认 none
+# ══════════════════════════════════════════════════════════
+# T-081/T-082：注册表一致性 + 审计脱敏
+# ══════════════════════════════════════════════════════════
+
+class TestRegistryConsistency:
+    def test_no_dangling_writer_declarations(self):
+        """_KNOWN_WRITERS 无僵尸声明：声明的写工具必须真实注册（add_to_info_pack 为
+        runtime 模式特例——stdio 刻意排除，见 server.build_tool_modules）。"""
+        from mcp_server.server import ALL_TOOLS
+        reg_names = {t.name for t in ALL_TOOLS}
+        allowed_missing = {"add_to_info_pack"}
+        dangling = [k for k in side_effect_registry._KNOWN_WRITERS
+                    if k not in reg_names and k not in allowed_missing]
+        assert dangling == [], f"僵尸声明: {dangling}"
+
+    def test_no_duplicate_writer_declarations(self):
+        """_KNOWN_WRITERS 无重复键（dict 字面量重复声明会静默覆盖）。"""
+        src = Path(side_effect_registry.__file__).read_text(encoding="utf-8")
+        for key in side_effect_registry._KNOWN_WRITERS:
+            assert src.count(f'"{key}"') == 1, f"重复声明: {key}"
+
+    def test_pure_read_tools_classified_none(self):
+        """自证纯读的工具必须为 none（纯读强制覆盖，不缩小检测面）。"""
+        for name in ("query_coverage_gaps", "query_coverage_backlink",
+                     "sf_check_p0_gate", "sf_read_score_gate",
+                     "iv_p0_clear_check", "sf_list_decisions"):
+            assert side_effect_registry.get_side_effect(name) == "none", name
+
+
+class TestAuditMasking:
+    def test_json_token_masked(self):
+        """JSON 键值形态脱敏（此前漏网：Bearer/token 明文落库）。"""
+        from workbench.backend.services.audit_store import _mask_sensitive
+        assert _mask_sensitive('{"token": "abc123", "x": 1}') == '{"token": ***, "x": 1}'
+        assert _mask_sensitive('{"token":abc123}') == '{"token":***}'
+
+    def test_bearer_header_masked(self):
+        """Authorization Bearer 头脱敏。"""
+        from workbench.backend.services.audit_store import _mask_sensitive
+        out = _mask_sensitive('{"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9"}')
+        assert "eyJhbGci" not in out
+        assert "***" in out
+
+    def test_query_form_masked(self):
+        """query 形态 token/password 脱敏。"""
+        from workbench.backend.services.audit_store import _mask_sensitive
+        assert _mask_sensitive("password=secret123&a=1") == "password=***&a=1"
+        assert _mask_sensitive('{"url": "http://a.com?token=xyz&b=2"}') == \
+            '{"url": "http://a.com?token=***&b=2"}'
+
+    def test_record_call_persists_masked(self, tmp_path):
+        """record_call 落库即脱敏（DB 中无明文 token）。"""
+        import sqlite3
+        from workbench.backend.services import audit_store
+        db = tmp_path / "audit.db"
+        audit_store.record_call(
+            tool_name="read_spec", verdict="ok",
+            args_raw='{"token": "super-secret-token-xyz"}',
+            result_raw='{"Authorization": "Bearer abc.def"}',
+            db_path=db,
+        )
+        rows = audit_store.query_calls(db_path=db)
+        assert len(rows) == 1
+        assert "super-secret-token-xyz" not in rows[0]["args_digest"]
+        assert "abc.def" not in rows[0]["result_digest"]
+        assert "***" in rows[0]["args_digest"]

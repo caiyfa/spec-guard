@@ -6,12 +6,17 @@
 RBAC：tester+（数据制造是测试侧写操作）。
 """
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.auth import require_role
 
 router = APIRouter(prefix="/api/data-fab", tags=["data-fab"])
+
+# 产物 ID 前缀白名单（防止注入路径分隔符/非法字符进场景 id）
+_TARGET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,15}$")
 
 
 class FabricateBody(BaseModel):
@@ -31,6 +36,8 @@ def fabricate(body: FabricateBody):
 
     if not body.frs:
         raise HTTPException(status_code=400, detail="frs 不能为空")
+    if not _TARGET_RE.match(body.target or ""):
+        raise HTTPException(status_code=400, detail="target 非法（仅允许字母数字与连字符，≤16 字符）")
     try:
         result = data_fabrication.fabricate(
             frs=body.frs, source_delta=body.source_delta, target=body.target)

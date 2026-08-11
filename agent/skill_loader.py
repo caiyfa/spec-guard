@@ -96,7 +96,11 @@ def build_skills_xml(mode: str = "") -> str:
 
     parts = ["<skills>"]
     for s in skills:
-        parts.append(f'  <skill name="{s.name}" description="{s.description}">')
+        # 属性转义（防 description 含引号/& 破坏 XML 结构；<> 已由格式校验拒绝）
+        import html as _html
+        name_esc = _html.escape(s.name, quote=True)
+        desc_esc = _html.escape(s.description, quote=True)
+        parts.append(f'  <skill name="{name_esc}" description="{desc_esc}">')
         parts.append(s.content)
         parts.append("  </skill>")
     parts.append("</skills>")
@@ -192,9 +196,8 @@ def _validate_frontmatter(frontmatter: dict, expected_name: str) -> None:
         raise ValueError("skill frontmatter 'name' 缺失或为空")
     if len(name_str) > 64:
         raise ValueError(f"skill name 超长（{len(name_str)} 字符，上限 64）")
-    expected = expected_name.replace("-", "_").lower()
-    actual = name_str.replace("-", "_").lower()
-    if expected != actual:
+    # 目录名=name 强校验（M13 §4.1：与文件名精确一致，不做 -/_ 等价）
+    if name_str != expected_name:
         raise ValueError(f"skill name {name_str!r} 与文件名 {expected_name!r} 不匹配")
 
     desc = frontmatter.get("description", "")

@@ -201,12 +201,17 @@ def build_honesty_review(verdict: str, kind: str, clues: list = None) -> dict:
     """诚实性复核结论（铁律 7：绝不把环境问题报成 FAIL）。
 
     kind=environment 时强制附复核结论；否则不强制。
+    应改判 SKIP 的线索子串匹配（与 _ENV_CLUES 同口径，不依赖调用方传精确短语）。
     """
     clues = clues or []
     if kind != KIND_ENVIRONMENT:
         return {"required": False, "verdict": verdict, "conclusion": "维持原 verdict"}
-    # 环境定性成立：必须复核是否应改判 SKIP
-    if any(c in ("网关 502", "工号池耗尽", "账号未配置", "DB 不可用") for c in clues):
+    # 环境定性成立：必须复核是否应改判 SKIP（数据缺失/服务不可用类线索 → SKIP）
+    text = " ".join(str(c) for c in clues).lower()
+    skip_marks = ("502", "503", "504", "gateway", "网关", "超时", "timeout",
+                  "连接拒绝", "connection refused", "工号池", "pool",
+                  "账号未配置", "未配置", "db 不可用", "数据库连接")
+    if any(m in text for m in skip_marks):
         conclusion = "改判 SKIP"
     else:
         conclusion = "维持 FAIL 但附证据"
@@ -277,8 +282,11 @@ def sync_spq_to_info_pack(spq_id: str, iv_id: str, pack_dir: Path,
         return {"added": False, "spq_id": spq_id, "iv_id": iv_id,
                 "reason": "已装配（幂等）"}
 
-    iv_dir = pack_dir / iv_id
-    iv_dir.mkdir(parents=True, exist_ok=True)
+    # 路径守卫 + 布局对齐：{pack_dir}/interviews/{iv_id}/（与 db_assemble_pack 同布局，
+    # iv_dir 内置 validate_iv_id 防目录穿越）
+    from specflow.interview.iv_lifecycle import iv_dir as _iv_dir
+    iv_target = _iv_dir(pack_dir, iv_id)
+    iv_target.mkdir(parents=True, exist_ok=True)
     payload = {
         "spq_id": spq_id,
         "title": entry.get("title", ""),
@@ -289,7 +297,7 @@ def sync_spq_to_info_pack(spq_id: str, iv_id: str, pack_dir: Path,
         "decided_kind": entry.get("decided_kind", ""),
         "report_summary": _run_summary(entry.get("run_id", "")),
     }
-    target = iv_dir / "spq_feedback.yaml"
+    target = iv_target / "spq_feedback.yaml"
     try:
         import yaml as _yaml
         existing = []

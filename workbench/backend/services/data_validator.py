@@ -4,8 +4,8 @@
   ① 实例完整性：provides 必含 activity；session 必挂 activity；members 引用
      emp-pool 时角色必须存在于 systems/{system}/config/emp-pool.yaml
   ② 调度合法性：isolation ∈ {shared, exclusive}；cleanup 必须为 teardown 或显式回收
-  ③ 版本期望可仲裁：depends_on 的 version 期望必须可解析（versioning.parse_version）
-    且处于 ^0 兼容域内（活跃 delta 快照期语义）
+  ③ 版本期望可仲裁：depends_on 的 version 期望必须可解析（versioning.parse_version）；
+     兼容域（^0 等）仲裁由引擎 dependency_graph 在调度期执行
 
 纯函数（零副作用）；无 data_contract 块 = 普通场景 → WARN 不阻断。
 只读引用适配包资产（emp-pool.yaml），引擎零改动（铁律 5）。
@@ -100,6 +100,7 @@ def validate_data_contract(raw: dict, pool: dict | None = None) -> dict:
             "message": f"cleanup 非法: {cleanup!r}（允许: {VALID_CLEANUP}，独占实例必须 teardown 回收）"})
 
     # ③ 版本期望可仲裁（引擎 match_expectation 口径：^X caret 或 X.Y 精确）
+    #    只校验可解析性——兼容域仲裁由引擎 dependency_graph 在调度期执行
     for dep in raw.get("depends_on") or []:
         if not isinstance(dep, dict):
             continue

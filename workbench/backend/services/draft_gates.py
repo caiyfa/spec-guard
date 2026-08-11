@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS sg_draft_gates (
     gate2_status   TEXT NOT NULL DEFAULT 'pending',
     gate2_report   TEXT NOT NULL DEFAULT '',
     gate3_status   TEXT NOT NULL DEFAULT 'blocked',
+    gate3_report   TEXT NOT NULL DEFAULT '',
     promoted_at    TEXT NOT NULL DEFAULT '',
     created_by     TEXT NOT NULL DEFAULT '',
     created_at     TEXT NOT NULL DEFAULT ''
@@ -86,9 +87,14 @@ def _connect(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 def ensure_tables(db_path: Path | None = None):
-    """建表（幂等），应用启动时调用。"""
+    """建表（幂等），应用启动时调用；旧库补 gate3_report 列迁移。"""
     with _LOCK, _connect(db_path) as conn:
         conn.executescript(SCHEMA)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(sg_draft_gates)")]
+        if "gate3_report" not in cols:
+            conn.execute(
+                "ALTER TABLE sg_draft_gates "
+                "ADD COLUMN gate3_report TEXT NOT NULL DEFAULT ''")
 
 
 def _row_to_dict(row) -> dict:
@@ -165,6 +171,7 @@ def run_gate2(draft_id: str, db_path: Path | None = None) -> dict:
             if anchor_findings:
                 verdict = "fail"
                 report = dict(report)
+                report["verdict"] = "FAIL"  # 与 gate2_status 保持同口径
                 report["findings"] = list(report.get("findings") or []) + [
                     f.to_dict() for f in anchor_findings]
     except Exception:
@@ -293,11 +300,12 @@ def mark_promoted(draft_id: str, db_path: Path | None = None):
 
 
 def mark_gate3_fail(draft_id: str, report: str = "", db_path: Path | None = None):
-    """发布门禁失败：gate3=fail 滞留草稿（附门禁报告摘要）。"""
+    """发布门禁失败：gate3=fail 滞留草稿（附门禁报告摘要，排障可查）。"""
     with _LOCK, _connect(db_path) as conn:
         conn.execute(
-            "UPDATE sg_draft_gates SET gate3_status='fail' WHERE draft_id=?",
-            (draft_id,))
+            "UPDATE sg_draft_gates SET gate3_status='fail', gate3_report=? "
+            "WHERE draft_id=?",
+            (report or "", draft_id))
 
 
 def source_delta_of(draft_id: str, db_path: Path | None = None) -> str:

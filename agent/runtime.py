@@ -522,9 +522,12 @@ class AgentRuntime:
         except json.JSONDecodeError:
             return f"错误：参数 JSON 解析失败: {raw_args}"
 
-        # ── Meta 工具特殊处理（不通过 mod.handle）──
+        # ── Meta 工具特殊处理（不通过 mod.handle；T-082：同样落审计）──
         if name == "todo_write":
-            return self._handle_todo_write(arguments)
+            result = self._handle_todo_write(arguments)
+            from mcp_server.tools.side_effect_registry import get_side_effect as _gse
+            self._record_audit(name, "ok", raw_args, result, _gse(name))
+            return result
 
         verdict = "ok"
         side_effect = "none"
@@ -613,12 +616,34 @@ class AgentRuntime:
             return err_msg
 
     def _take_snapshot_fingerprint(self) -> str:
-        """T-081：取关键目录快照指纹（mtime+size 聚合），校验纯读工具无副作用。"""
+        """T-081：取关键目录快照指纹（mtime+size 聚合），校验纯读工具无副作用。
+
+        覆盖 SpecGuard 仓库关键目录 + 工作区产物（T-014 emp 私有区/共享区）+
+        台账 DB——纯读工具写工作区草稿/落库均会被检出。
+        """
         import hashlib as _hl
         parts = []
+        roots: list[tuple[str, Path]] = []
         for sub in ("specs", "scenarios", "agent/skills",
                     "mcp_server/tools", "drafts", "feedback"):
             d = SG_ROOT / sub
+            if d.is_dir():
+                roots.append((f"root:{sub}", d))
+        # 工作区产物（私有区 + 共享区）——纯读工具不得写草稿/计划
+        try:
+            from specstd.workspace import specguard_dir
+            roots.append(("ws:private", specguard_dir()))
+            roots.append(("ws:shared", specguard_dir(emp="")))
+        except Exception:
+            pass
+        # 台账/审计 DB（纯读工具不得落库）
+        for db_rel in ("workbench/backend/data/workbench.db",
+                       "feedback/ledger.json", "feedback/registry.json"):
+            f = SG_ROOT / db_rel
+            if f.is_file():
+                st = f.stat()
+                parts.append(f"db:{db_rel}:{st.st_size}:{int(st.st_mtime)}")
+        for label, d in roots:
             if not d.is_dir():
                 continue
             entries = []
@@ -626,11 +651,11 @@ class AgentRuntime:
                 for p in sorted(d.rglob("*")):
                     if p.is_file():
                         st = p.stat()
-                        entries.append(f"{p.relative_to(SG_ROOT)}:{st.st_size}:{int(st.st_mtime)}")
+                        entries.append(f"{p.relative_to(d)}:{st.st_size}:{int(st.st_mtime)}")
             except Exception:
                 pass
             if entries:
-                parts.append(sub + "=" + "|".join(entries))
+                parts.append(label + "=" + "|".join(entries))
         return _hl.sha256("||".join(parts).encode()).hexdigest()[:16]
 
     def _record_audit(self, tool_name: str, verdict: str,

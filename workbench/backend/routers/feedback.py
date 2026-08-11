@@ -128,7 +128,10 @@ def create_spq(body: CreateSpqBody):
 
 
 def _auto_sync_info_pack(entry: dict, fr_refs: list):
-    """自动装配：按 fr_refs/模块匹配进行中的面试 IV，注入 spq_feedback.yaml。"""
+    """自动装配：按 fr_refs 与面试 baseline_refs 相关性匹配进行中面试 IV，注入 spq_feedback.yaml。
+
+    fr_refs 为空时退化为第一个进行中面试（兼容无挂链建档）。
+    """
     from specstd.workspace import specflow_dir
     from specstd.workspace import get_workspace_root
     ws = get_workspace_root()
@@ -138,20 +141,29 @@ def _auto_sync_info_pack(entry: dict, fr_refs: list):
     iv_dir = base / "interviews"
     if not iv_dir.is_dir():
         return
-    # 进行中的面试（iv 生命周期 interviewing/p0_cleared）
-    from specflow.interview.iv_lifecycle import load_interview
-    matched = None
+    # 进行中的面试（iv 生命周期 interviewing/p0_cleared），读 topic.yaml 判定状态与 FR 集合
+    from specflow.interview.topic import Topic
+    want = set(fr_refs or [])
+    matched, best = None, -1
     for d in sorted(iv_dir.iterdir()):
         if not d.is_dir():
             continue
+        topic_path = d / "topic.yaml"
+        if not topic_path.is_file():
+            continue
         try:
-            iv = load_interview(d.name, base)
+            topic = Topic.from_yaml(topic_path.read_text(encoding="utf-8"))
         except Exception:
             continue
-        status = getattr(iv, "status", "")
-        if status in ("interviewing", "p0_cleared"):
+        if topic.status not in ("interviewing", "p0_cleared"):
+            continue
+        topic_frs = {r.fr for r in topic.baseline_refs}
+        score = len(want & topic_frs) if want else 0
+        if score > best:
+            best = score
             matched = d.name
-            break
+            if want and score == len(want):
+                break  # 全命中即最优
     if not matched:
         return
     from services import attribution_service
