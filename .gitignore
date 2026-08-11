@@ -55,3 +55,13 @@ scenarios/tmp/
 # IDE 产物（T-605）
 .qoder/
 .smoke/
+
+# ── AI 工具本地目录（多 IDE 共存，不入库）──
+.agents/
+.claude/
+.codebuddy/
+.lingma/
+.trae/
+
+# ── 认证辅助文件（二维码含授权信息，不入库）──
+*-auth-qr.png
