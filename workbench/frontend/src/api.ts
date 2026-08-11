@@ -602,6 +602,8 @@ export interface DraftItem {
   source_meta?: string;  // K-013: 来源场景元数据 ID（SG-META-xxxx）
   stale?: boolean;       // K-013: 其信息包存在已变更/已删除文件
   source_files: string[]; // A+B: 生成时依赖的文件清单
+  gates?: { g1: string; g2: string; g3: string };  // T-061: 三闸状态（pending/approved/rejected / pass/fail / blocked/pass/fail）
+  source_delta?: string;  // T-061: 挂链 delta
 }
 
 export interface ValidateFinding {
@@ -654,8 +656,117 @@ export const draftsApi = {
       method: 'POST',
       body: JSON.stringify({ module, replace }),
     }),
+  // T-061：第①闸人工评审（人拍板，留痕 reviewer+ts）
+  review: (filename: string, decision: 'approved' | 'rejected', comment = '') =>
+    request<any>(`/drafts/${encodeURIComponent(filename)}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, comment }),
+    }),
+  // T-061：重跑第②闸（格式校验自动先跑，修改后重新校验）
+  revalidate: (filename: string) =>
+    request<{ ok: boolean; gate2_status: string; gate2_report: ValidateReport }>(
+      `/drafts/${encodeURIComponent(filename)}/revalidate`, { method: 'POST' }),
   discard: (filename: string) =>
     request<{ ok: boolean; trashed_to: string }>(`/drafts/${encodeURIComponent(filename)}/discard`, { method: 'POST' }),
+};
+
+// ── T-060：覆盖缺口（三态聚合 / backlink / 生成下一批）──
+export interface CoverageLaneItem {
+  fr: string;
+  name: string;
+  module: string;
+  reason?: string;
+  source_delta?: string;
+  draft_id?: string;
+  scenario_id?: string;
+  gates?: { g1: string; g2: string; g3: string };
+  scenarios?: string[];
+}
+export interface CoverageGaps {
+  module: string;
+  fr_total: number;
+  lanes: {
+    gap: CoverageLaneItem[];
+    draft: CoverageLaneItem[];
+    covered: CoverageLaneItem[];
+  };
+  suggested_order: string[];
+  fingerprint: string;
+}
+export interface CoverageBacklink {
+  fr: string;
+  exists: boolean;
+  title?: string;
+  module?: string;
+  scenarios: { id: string; module: string }[];
+  drafts: { draft_id: string; scenario_id: string; source_delta: string }[];
+  recent_runs: { run_id: string; verdict: string; finished_at: string }[];
+  deltas: string[];
+}
+export const coverageApi = {
+  gaps: (module = '') =>
+    request<CoverageGaps>(`/coverage/gaps${module ? `?module=${encodeURIComponent(module)}` : ''}`),
+  backlink: (frId: string) =>
+    request<CoverageBacklink>(`/coverage/backlink/${encodeURIComponent(frId)}`),
+  nextBatch: (frs: string[], sourceDelta = '') =>
+    request<{ batch_id: string; produced: { fr: string; draft_id: string; scenario_id: string }[]; rejected: { fr: string; reason: string }[]; note: string }>(
+      '/coverage/next-batch', { method: 'POST', body: JSON.stringify({ frs, source_delta: sourceDelta }) }),
+};
+
+// ── T-063：失败归因（证据包 / 定性建议 / SPQ 台账）──
+export interface EvidencePack {
+  scenario_id: string;
+  run_id: string;
+  flow_digest: string;
+  response_snapshot: { status: number | null; body_excerpt: string; assertion_failed: string };
+  db_snapshots: any[];
+  env_fingerprint: { env: string; started_at: string; gateway: string };
+  collected_by: string;
+  note: string;
+}
+export interface AttributeResult {
+  run_id: string;
+  scenario_id: string;
+  evidence: EvidencePack;
+  suggestion: { kind: string; rationale: string };
+  honesty_review: { required: boolean; conclusion: string; rule?: string };
+  note: string;
+}
+export interface SpqEntry {
+  spq_id: string;
+  title: string;
+  status: string;
+  run_id?: string;
+  scenario_id?: string;
+  fr_refs?: string[];
+  suggestion_kind?: string;
+  decided_kind?: string;
+  decided_by?: string;
+  decided_at?: string;
+  linkage_warnings?: string[];
+  info_pack_synced?: string[];
+  created_at: string;
+}
+export const attributionApi = {
+  attribute: (runId: string, scenarioId: string) =>
+    request<AttributeResult>(`/runs/${encodeURIComponent(runId)}/attribute`, {
+      method: 'POST', body: JSON.stringify({ scenario_id: scenarioId }),
+    }),
+  evidence: (runId: string, scenarioId: string) =>
+    request<EvidencePack>(`/runs/${encodeURIComponent(runId)}/evidence/${encodeURIComponent(scenarioId)}`),
+  spqList: (status = '') =>
+    request<{ entries: SpqEntry[] }>(`/feedback/spq${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  spqCreate: (body: { title: string; run_id?: string; scenario_id?: string; fr_refs?: string[]; suggestion_kind?: string; decided_kind: string; comment?: string }) =>
+    request<SpqEntry>('/feedback/spq', { method: 'POST', body: JSON.stringify(body) }),
+  spqPatch: (spqId: string, status: string, note = '') =>
+    request<SpqEntry>(`/feedback/spq/${encodeURIComponent(spqId)}`, {
+      method: 'PATCH', body: JSON.stringify({ status, note }),
+    }),
+  spqSyncInfoPack: (spqId: string, ivId: string) =>
+    request<{ added: boolean; spq_id: string; iv_id: string }>(
+      `/feedback/spq/${encodeURIComponent(spqId)}/sync-info-pack`, {
+        method: 'POST', body: JSON.stringify({ iv_id: ivId }),
+      }),
 };
 
 // ── K-046：依赖建议 / 草稿试跑 ──
@@ -1047,4 +1158,171 @@ export const specflowApi = {
     request<{ freeze_allowed: boolean; gates: Record<string, GateState> }>(`/specflow/freeze/changes/${delta_id}/gates?interview_id=${encodeURIComponent(interview_id)}`),
   freezeDelta: (delta_id: string, interview_id = '') =>
     request<{ ok: boolean; error?: string; freeze?: any }>(`/specflow/freeze/changes/${delta_id}/freeze`, { method: 'POST', body: JSON.stringify({ interview_id }) }),
+};
+
+// ══════════════════════════════════════════════════════════
+// P-A 图谱（T-070/T-071，M11 §5.1）
+// ══════════════════════════════════════════════════════════
+
+export interface GraphStatus {
+  fingerprint: string;
+  source_fingerprint: string;
+  stale: boolean;
+  built_at: string | null;
+}
+
+export interface GraphNodeRef {
+  file: string;
+  line_range: number[];
+}
+
+export interface GraphNode {
+  id: string;
+  node_type: string;
+  stage: string;
+  title: string;
+  module: string;
+  feature: string;
+  attrs: Record<string, any>;
+  source_ref?: GraphNodeRef | null;
+}
+
+export interface GraphL0 {
+  l0mods: Record<string, { name: string; fr_count: number; counts: number[] }>;
+  l0edges: { a: string; b: string; w: number }[];
+  lens?: string;
+  era?: string;
+}
+
+export interface GraphL1Item {
+  health: number | null;
+  counts: number[];
+  era: number;
+  nCov: number;
+  nGap: number;
+}
+
+export interface GraphL2Fr {
+  id: string;
+  t: string;
+  era: number;
+  modAt: string | null;
+  goneAt: string | null;
+  cov: 'ok' | 'gap';
+  source_ref?: GraphNodeRef | null;
+}
+
+export interface GraphL2Scenario {
+  id: string;
+  title: string;
+  covers: string[];
+  source_ref?: GraphNodeRef | null;
+}
+
+export interface GraphL2 {
+  frs: GraphL2Fr[];
+  frEdges: string[][];
+  scenarios: GraphL2Scenario[];
+  era?: string;
+}
+
+export interface GraphBacklink {
+  covered_by: string[];
+  modified_by: string[];
+  decided_by: string[];
+  referenced_by: string[];
+}
+
+export interface GraphSourceFile {
+  path: string;
+  content: string;
+  format: string;
+  line: number;
+  total_lines: number;
+}
+
+export interface GraphSnapshot {
+  snapshot_id: string;
+  label: string;
+  trigger: string;
+  created_at: string;
+  source_fingerprint: string;
+  nodes: number;
+  edges: number;
+}
+
+export interface GraphDiff {
+  from: string;
+  to: string;
+  added: number;
+  removed: number;
+  modified: number;
+  edge_added: number;
+  edge_removed: number;
+  per_module: Record<string, { added: number; removed: number; modified: number }>;
+  fingerprint_from: string;
+  fingerprint_to: string;
+  added_ids: string[];
+  removed_ids: string[];
+  modified_ids: string[];
+}
+
+export const graphApi = {
+  status: () => request<GraphStatus>('/graph/status'),
+  panoramaL0: (lens = 'map') => request<GraphL0>(`/graph/panorama?level=L0&lens=${lens}`),
+  panoramaL1: (module: string, lens = 'map') =>
+    request<Record<string, GraphL1Item>>(`/graph/panorama/${encodeURIComponent(module)}?lens=${lens}`),
+  panoramaL2: (module: string, feature: string) =>
+    request<GraphL2>(`/graph/panorama/${encodeURIComponent(module)}/${encodeURIComponent(feature)}`),
+  backlink: (nodeId: string) =>
+    request<{ node: GraphNode; backlink: GraphBacklink }>(`/graph/backlink/${encodeURIComponent(nodeId)}`),
+  rebuild: () => request<{ nodes: number; edges: number; source_fingerprint: string; built_at: string }>('/graph/rebuild', { method: 'POST' }),
+  source: (file: string, line = 0) =>
+    request<GraphSourceFile>(`/graph/source?file=${encodeURIComponent(file)}&line=${line}`),
+  listSnapshots: () => request<{ snapshots: GraphSnapshot[] }>('/graph/snapshots'),
+  createSnapshot: (label = '', trigger = 'manual') =>
+    request<{ snapshot_id: string; nodes: number; edges: number; source_fingerprint: string }>(
+      `/graph/snapshots?label=${encodeURIComponent(label)}&trigger=${encodeURIComponent(trigger)}`,
+      { method: 'POST' }),
+  diff: (fromSnapshot: string, toSnapshot = 'current') =>
+    request<GraphDiff>(`/graph/diff?from_snapshot=${encodeURIComponent(fromSnapshot)}&to_snapshot=${encodeURIComponent(toSnapshot)}`),
+};
+
+// ══════════════════════════════════════════════════════════
+// 血缘链（T-073，M10 §5.1）
+// ══════════════════════════════════════════════════════════
+
+export interface LineageNode {
+  id: string;
+  type: string;
+  stage: string;
+  title: string;
+  status: string;
+  external: boolean;
+  url: string;
+}
+
+export interface LineageEdge {
+  from: string;
+  to: string;
+  type: string;
+}
+
+export interface LineageTrace {
+  path: LineageNode[];
+  edges: LineageEdge[];
+  truncated: boolean;
+  root: string;
+  direction: string;
+}
+
+export const lineageApi = {
+  trace: (node: string, dir: 'up' | 'down' | 'both' = 'up', maxDepth = 8) =>
+    request<LineageTrace>(`/lineage/trace?node=${encodeURIComponent(node)}&dir=${dir}&max_depth=${maxDepth}`),
+  node: (nodeId: string) =>
+    request<{ node: GraphNode; upstream: string[]; edges: { src: string; dst: string; edge_type: string; attrs: any }[] }>(
+      `/lineage/node/${encodeURIComponent(nodeId)}`),
+  check: (rebuild = false) =>
+    request<{ warnings: { rule: string; node: string; node_type: string; message: string }[]; checked_at: string; graph_fingerprint: string }>(
+      '/lineage/check', { method: rebuild ? 'POST' : 'GET' }),
 };
