@@ -85,26 +85,26 @@ class TestDecisionLedger:
         create_decision(conn, "tdm", "IV-001", "P0", "Q1")
         create_decision(conn, "tdm", "IV-001", "P0", "Q2")
         create_decision(conn, "tdm", "IV-001", "P1", "Q3")
-        assert count_pending_p0(conn, "IV-001") == 2
+        assert count_pending_p0(conn, "IV-001", "tdm") == 2
         # resolve 一个 P0
         decs = list_decisions(conn, interview_id="IV-001", priority="P0")
         resolve_decision(conn, decs[0]["id"], "RES", "pm.zhang")
-        assert count_pending_p0(conn, "IV-001") == 1
+        assert count_pending_p0(conn, "IV-001", "tdm") == 1
 
     def test_gate_evidence(self, conn):
         r = add_gate_evidence(conn, "tdm", "IV-001", "impact_confirm",
                               "pass", actor="pm.zhang")
         assert r["gate_item"] == "impact_confirm"
-        assert get_impact_confirmed(conn, "IV-001") is True
+        assert get_impact_confirmed(conn, "IV-001", "tdm") is True
 
     def test_gate_evidence_not_confirmed(self, conn):
-        assert get_impact_confirmed(conn, "IV-001") is False
+        assert get_impact_confirmed(conn, "IV-001", "tdm") is False
 
     def test_add_and_list_scores(self, conn):
         r = add_score(conn, "tdm", "IV-001", "logic", 78, "machine",
                       "11 章齐全")
         assert r["status"] == "suggested"
-        scores = list_scores(conn, "IV-001")
+        scores = list_scores(conn, "IV-001", "tdm")
         assert len(scores) == 1
 
     def test_confirm_score(self, conn):
@@ -122,21 +122,21 @@ class TestDecisionLedger:
         add_score(conn, "tdm", "IV-001", "logic", 78, "machine")
         add_score(conn, "tdm", "IV-001", "coverage", 85, "machine")
         # 尚未 confirmed，总分应为 0
-        assert calculate_total_score(conn, "IV-001") == 0.0
+        assert calculate_total_score(conn, "IV-001", "tdm") == 0.0
 
     def test_calculate_total_score_confirmed(self, conn):
         r1 = add_score(conn, "tdm", "IV-001", "logic", 78, "machine")
         r2 = add_score(conn, "tdm", "IV-001", "coverage", 85, "machine")
         confirm_score(conn, r1["id"], "confirm", "qa")
         confirm_score(conn, r2["id"], "confirm", "qa")
-        total = calculate_total_score(conn, "IV-001")
+        total = calculate_total_score(conn, "IV-001", "tdm")
         # (78 + 85) / 5 = 32.6（等权均分）
         assert total == pytest.approx(32.6, rel=0.1)
 
     def test_export_ledger(self, conn):
         create_decision(conn, "tdm", "IV-001", "P0", "Q1")
         create_decision(conn, "tdm", "IV-001", "P1", "Q2")
-        ledger = export_ledger(conn, "IV-001")
+        ledger = export_ledger(conn, "IV-001", "tdm")
         assert "decisions" in ledger
         assert "p0_gate" in ledger
         assert ledger["p0_gate"]["pending_p0"] == 1
@@ -151,18 +151,55 @@ class TestDecisionService:
     def test_gate_with_real_decisions(self, conn):
         create_decision(conn, "tdm", "IV-001", "P0", "Q1 pending")
         create_decision(conn, "tdm", "IV-001", "P0", "Q2 pending")
-        p0 = count_pending_p0(conn, "IV-001")
+        p0 = count_pending_p0(conn, "IV-001", "tdm")
         assert p0 == 2
         result = gate_aggregate(p0_pending_count=p0,
                                 impact_confirmed=False, total_score=68)
         assert result.freeze_allowed is False
         assert len(result.gaps) >= 2  # P0 + 影响面 + 评分（影响面未确认）
 
+    def test_workspace_isolation(self, conn):
+        """跨工作区 IV-xxx 重号隔离：P0 计数/影响面/评分互不污染。"""
+        create_decision(conn, "tdm", "IV-001", "P0", "A 工作区 pending")
+        create_decision(conn, "other", "IV-001", "P0", "B 工作区 pending")
+        # 各工作区只见自己的 pending P0
+        assert count_pending_p0(conn, "IV-001", "tdm") == 1
+        assert count_pending_p0(conn, "IV-001", "other") == 1
+        # fail-closed：空 workspace 匹配空串，不泄漏
+        assert count_pending_p0(conn, "IV-001", "") == 0
+
+        # 影响面确认隔离
+        add_gate_evidence(conn, "tdm", "IV-001", "impact_confirm", "pass",
+                          actor="pm")
+        assert get_impact_confirmed(conn, "IV-001", "tdm") is True
+        assert get_impact_confirmed(conn, "IV-001", "other") is False
+
+        # 评分隔离
+        r = add_score(conn, "tdm", "IV-001", "logic", 78, "machine")
+        confirm_score(conn, r["id"], "confirm", "qa")
+        assert calculate_total_score(conn, "IV-001", "tdm") == pytest.approx(15.6, rel=0.1)
+        assert calculate_total_score(conn, "IV-001", "other") == 0.0
+
+    def test_resolve_recomputes_sha_with_resolution(self, conn):
+        """落锤后 content_sha 重算（含 resolution，指纹审计覆盖落锤内容）。"""
+        dec = create_decision(conn, "tdm", "IV-001", "P0", "Q1")
+        before = dec["content_sha"]
+        resolved = resolve_decision(conn, dec["id"], "仅绩效域", "pm.zhang")
+        assert resolved["content_sha"] != before
+
+    def test_amend_cannot_cross_interview(self, conn):
+        """增补不能跨面试挂链。"""
+        dec = create_decision(conn, "tdm", "IV-001", "P0", "Q1")
+        resolve_decision(conn, dec["id"], "RES", "pm")
+        with pytest.raises(ValueError):
+            amend_decision(conn, dec["id"], "P0", "新问题", "新决策",
+                           "原因", "pm", "tdm", "IV-002")
+
     def test_full_flow(self, conn):
         """完整流程：创建 → resolve → gate 状态变化。"""
         d1 = create_decision(conn, "tdm", "IV-001", "P0", "Q1")
         resolve_decision(conn, d1["id"], "RES1", "pm")
-        assert count_pending_p0(conn, "IV-001") == 0
+        assert count_pending_p0(conn, "IV-001", "tdm") == 0
         # gate 应通过
         result = gate_aggregate(p0_pending_count=0,
                                 impact_confirmed=True, total_score=75)
