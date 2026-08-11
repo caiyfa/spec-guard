@@ -500,7 +500,7 @@ class TestV14V15D2:
         from feedback.notify import NotifyRegistry
         reg = NotifyRegistry(tmp_path / "registry.json", tmp_path / "receipts.jsonl")
         reg.register("tdm", "*", "https://open.feishu.cn/hook/secret-token-12345")
-        for wh in reg.list():
+        for wh in reg.list_webhooks():
             assert "url" not in wh
             assert "secret-token-12345" not in json.dumps(wh)
 

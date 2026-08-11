@@ -110,7 +110,7 @@ class NotifyRegistry:
         self._save()
         return entry
 
-    def list(self) -> list[dict]:
+    def list_webhooks(self) -> list[dict]:
         """列出全部 webhook（显示掩码 URL，不暴露完整 URL）。"""
         return [{k: v for k, v in w.items() if k != "url"} for w in self._webhooks]
 

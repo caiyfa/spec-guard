@@ -169,20 +169,16 @@ def create_question(iv_id: str, priority: str, question: str,
             "SELECT 1 FROM sf_interviews WHERE iv_id = ?", (iv_id,)).fetchone()
         if not row:
             raise ValueError(f"面试不存在: {iv_id}")
-        # 计算下一个问题序号
+        # 计算下一个问题序号（数值排序，防 Q10 < Q9 字典序问题）
         cursor = conn.execute(
-            "SELECT q_id FROM sf_questions WHERE iv_id = ? AND workspace = ? "
-            "ORDER BY q_id DESC LIMIT 1",
+            "SELECT CAST(SUBSTR(q_id, INSTR(q_id, '-Q') + 2) AS INTEGER) "
+            "FROM sf_questions WHERE iv_id = ? AND workspace = ? "
+            "ORDER BY 1 DESC LIMIT 1",
             (iv_id, workspace))
         row = cursor.fetchone()
         seq = 1
-        if row:
-            parts = row[0].rsplit("-Q", 1)
-            if len(parts) == 2:
-                try:
-                    seq = int(parts[1]) + 1
-                except ValueError:
-                    pass
+        if row and row[0] is not None:
+            seq = row[0] + 1
         q_id = f"{iv_id}-Q{seq}"
         now = _now()
         try:

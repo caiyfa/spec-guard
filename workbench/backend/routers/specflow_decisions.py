@@ -215,14 +215,11 @@ def confirm_score(
     if verdict not in ("confirm", "reject"):
         raise HTTPException(status_code=400, detail="verdict 必须为 confirm/reject")
     try:
-        updated = db_confirm_score(score_id, verdict, user.emp_no)
+        updated = db_confirm_score(score_id, verdict, user.emp_no, workspace=workspace)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    # 归属校验：评分必须属于当前工作区（防跨工作区操作）
-    if updated.get("workspace", "") != workspace:
-        raise HTTPException(status_code=404, detail=f"评分条目不存在: {score_id}")
     return {"score": updated}
 
 

@@ -83,7 +83,7 @@ def record_answer(
     from workbench.backend.services.specflow.interview_service import record_transcript
 
     q = get_question(q_id)
-    if not q or q["iv_id"] != iv_id:
+    if not q or q["iv_id"] != iv_id or q.get("workspace", "") != workspace:
         raise HTTPException(status_code=404, detail=f"问题不存在: {q_id}")
 
     answer = body.get("answer", "")

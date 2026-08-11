@@ -70,6 +70,18 @@ _RBAC_READONLY_TOOLS = frozenset({
     "scan_compliance",
     # meta
     "todo_write",
+    # specflow 面试工具集（product 需求面试用，只读+登记+门禁纯函数）
+    "iv_open_topic", "iv_read_baseline", "iv_ask_question",
+    "iv_next_question", "iv_record_answer", "iv_p0_clear_check", "iv_append_transcript",
+    "sf_list_decisions", "sf_propose_decision", "sf_check_p0_gate",
+    "sf_suggest_scores", "sf_read_score_gate",
+    # 材料包工具
+    "pack_assemble", "pack_read_section", "material_parse_status",
+    "material_extract_topics", "pack_freshness_check",
+    # info_pack 工具
+    "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
+    # 飞书日程/会议纪要（需求面试场景材料收集用）
+    "feishu_calendar_agenda", "feishu_meeting_notes",
 })
 
 # 全量角色（语义 = 不额外收窄；与 _RBAC_TOOL_SETS 分离，避免 None 二义）

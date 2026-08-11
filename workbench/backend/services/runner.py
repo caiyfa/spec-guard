@@ -117,7 +117,7 @@ async def push_run_notifications(reports_root: Path, run_id: str) -> None:
 
         from feedback.notify import NotifyRegistry
         registry = NotifyRegistry(SG_ROOT / "feedback" / "registry.json")
-        if not registry.list():  # 未注册 webhook 时零成本退出
+        if not registry.list_webhooks():  # 未注册 webhook 时零成本退出
             return
 
         system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")

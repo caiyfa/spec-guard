@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from services.auth import (
-    SG_UAC_BASE, SG_UAC_SSO_BASE, SG_UAC_APP_ID, CurrentUser,
+    SG_AUTH_MODE, SG_UAC_BASE, SG_UAC_SSO_BASE, SG_UAC_APP_ID, CurrentUser,
     get_current_user, issue_mock_token, uac_login_url, uac_logout_url,
 )
 from services import user_store
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 def auth_config():
     """前端登录页配置（无需登录）。"""
     return {
-        "auth_mode": "dual",
+        "auth_mode": SG_AUTH_MODE,
         "uac_base": SG_UAC_BASE,
         "sso_base": SG_UAC_SSO_BASE,
         "sso_app_id": SG_UAC_APP_ID,

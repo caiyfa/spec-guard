@@ -155,6 +155,9 @@ def _validate_token(token: str) -> tuple[str, str]:
 
     if token.startswith("mock-"):
         # mock token 形式：mock-{emp_no}
+        # 仅 SG_AUTH_MODE=mock 时接受 mock token（生产环境拒绝，准入由 /mock-login 端点+前端确定）
+        if os.environ.get("SG_AUTH_MODE", "uac") != "mock":
+            raise HTTPException(status_code=401, detail="mock token 仅允许开发环境（SG_AUTH_MODE=mock）")
         if len(token) <= 5:
             raise HTTPException(status_code=401, detail="mock token 非法")
         emp_no = token[5:]

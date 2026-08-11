@@ -13,6 +13,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+import threading
 from typing import Optional
 
 
@@ -32,6 +33,9 @@ ALLOWED_TRANSITIONS = {
 # 链接类型
 LINK_TYPES = frozenset({"fr_anchor", "delta", "spq", "question", "decision"})
 
+# D-xxx 编号生成锁（防并发 SELECT-then-INSERT 撞号）
+_D_ID_LOCK = threading.Lock()
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -46,18 +50,20 @@ def _next_d_id(conn, workspace: str) -> str:
 
     sf_decisions.id 是全局主键，编号必须全局递增——
     若按 workspace 各自递增，两工作区会生成相同 D-xxx 触发主键冲突。
+    使用模块级锁保护 SELECT-then-INSERT 窗口。
     """
-    cursor = conn.execute(
-        "SELECT id FROM sf_decisions ORDER BY id DESC LIMIT 1")
-    row = cursor.fetchone()
-    if row:
-        try:
-            num = int(row[0].split("-")[1])
-        except (ValueError, IndexError):
+    with _D_ID_LOCK:
+        cursor = conn.execute(
+            "SELECT id FROM sf_decisions ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        if row:
+            try:
+                num = int(row[0].split("-")[1])
+            except (ValueError, IndexError):
+                num = 0
+        else:
             num = 0
-    else:
-        num = 0
-    return f"D-{num + 1:03d}"
+        return f"D-{num + 1:03d}"
 
 
 def init_tables(conn):

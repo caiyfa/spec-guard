@@ -126,7 +126,7 @@ class SessionManager:
                 meta["purpose_locked"] = True
             elif "purpose" in old_meta:
                 meta["purpose"] = old_meta["purpose"]
-            for k in ("tool_whitelist", "panels"):
+            for k in ("tool_whitelist", "panels", "title"):
                 if k in old_meta:
                     meta[k] = old_meta[k]
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")

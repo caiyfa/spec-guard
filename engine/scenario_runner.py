@@ -485,7 +485,8 @@ def _eval_json_condition(body, actual):
     if "len_eq" in body:
         return actual is not None and len(actual) == body["len_eq"]
     if body.get("absent"):
-        return False  # absent 在 jsonpath_find 中已处理（有匹配=不满足）
+        # absent 语义：字段不存在（actual is None）时条件满足
+        return actual is None
     return actual is not None
 
 

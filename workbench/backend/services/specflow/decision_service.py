@@ -132,11 +132,23 @@ def db_add_score(workspace: str, interview_id: str,
         conn.close()
 
 
-def db_confirm_score(score_id: int, verdict: str, confirmed_by: str) -> dict:
-    """QA 确认/驳回评分。"""
+def db_confirm_score(score_id: int, verdict: str, confirmed_by: str,
+                     workspace: str = "") -> dict:
+    """QA 确认/驳回评分。
+
+    先校验 workspace 归属再 commit（防跨工作区误操作）。
+    """
     conn = _connect()
     init_tables(conn)
     try:
+        # 校验评分归属工作区（防跨工作区误操作）
+        if workspace:
+            row = conn.execute(
+                "SELECT workspace FROM sf_scores WHERE id = ?", (score_id,)).fetchone()
+            if not row:
+                raise KeyError(f"评分条目不存在: {score_id}")
+            if row[0] != workspace:
+                raise KeyError(f"评分条目不存在: {score_id}")
         result = confirm_score(conn, score_id, verdict, confirmed_by)
         conn.commit()
         return result

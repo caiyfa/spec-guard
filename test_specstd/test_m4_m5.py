@@ -150,7 +150,7 @@ class TestNotifyRegistry:
     def test_list_masks_url(self, tmp_path):
         reg = NotifyRegistry(tmp_path / "registry.json")
         reg.register("tdm", "PP-*", "https://open.feishu.cn/hook/secret")
-        items = reg.list()
+        items = reg.list_webhooks()
         assert "url" not in items[0]
         assert "masked_url" in items[0]
 
@@ -170,4 +170,4 @@ class TestNotifyRegistry:
         reg = NotifyRegistry(tmp_path / "registry.json")
         entry = reg.register("tdm", "PP-*", "https://open.feishu.cn/hook")
         assert reg.unregister(entry["id"]) is True
-        assert len(reg.list()) == 0
+        assert len(reg.list_webhooks()) == 0

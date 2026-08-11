@@ -220,7 +220,7 @@ class TestBatchNotifications:
             def __init__(self, path):
                 pass
 
-            def list(self):
+            def list_webhooks(self):
                 return [{"id": 1}]
 
             def send_notification(self, *a):

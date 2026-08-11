@@ -480,6 +480,12 @@ async def agent_ws(websocket: WebSocket,
     # 从查询参数读取工作区并设置上下文（浏览器 WebSocket 不支持自定义 header）
     from specstd.workspace import set_context_workspace, reset_context_workspace
     _ws_query_workspace = websocket.query_params.get("workspace", "")
+    # 授权检查：非 admin 用户必须已被授权该工作区
+    if _ws_query_workspace and not _user.is_admin:
+        from services import user_store as _auth_store
+        if not _auth_store.has_grant(_user.emp_no, _ws_query_workspace):
+            await websocket.close(code=4403)
+            return
     _ws_ctx_token = set_context_workspace(_ws_query_workspace or None)
 
     try:
@@ -650,6 +656,14 @@ async def agent_ws(websocket: WebSocket,
                 asyncio.create_task(_gen_title())
 
     except WebSocketDisconnect:
+        # T-xxx：WS 断连取消活跃运行（防 ghost run —— LLM/工具继续执行写同一 JSONL 致文件交织损坏）
+        if 'run_task' in dir() and run_task and not run_task.done():
+            run_task.cancel()
+        if 'runtime' in dir() and runtime:
+            try:
+                runtime.cancel()
+            except Exception:
+                pass
         pass
     except Exception as e:
         # 记录错误到会话 JSONL（用于导出和排查）

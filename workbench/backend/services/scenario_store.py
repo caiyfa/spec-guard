@@ -453,9 +453,14 @@ def get_report(run_id: str) -> Optional[dict]:
 
 
 def get_case(run_id: str, case_file: str) -> Optional[dict]:
-    """读取单场景详情 JSON"""
+    """读取单场景详情 JSON（含路径穿越守卫，与 api_get_run_log 同级别）。"""
     import json
-    case_path = _reports_root() / run_id / case_file
+    reports_root = _reports_root()
+    case_path = (reports_root / run_id / case_file).resolve()
+    try:
+        case_path.relative_to(reports_root.resolve())
+    except ValueError:
+        return None
     if not case_path.is_file():
         return None
     with open(case_path, "r", encoding="utf-8") as f:

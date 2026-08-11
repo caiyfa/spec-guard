@@ -113,7 +113,7 @@ class SendNotifyBody(BaseModel):
 def list_webhooks():
     """列出 webhook 配置（掩码 URL）。"""
     reg = _get_registry()
-    return {"webhooks": reg.list()}
+    return {"webhooks": reg.list_webhooks()}
 
 
 @router.post("/notify")

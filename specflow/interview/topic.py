@@ -103,7 +103,7 @@ _IV_ID_LOCK = threading.Lock()
 
 
 def _next_iv_id(interviews_root: Path) -> str:
-    """在 interviews 目录下生成下一个 IV-xxx 编号（并发安全）。"""
+    """在 interviews 目录下生成下一个 IV-xxx 编号并创建目录（并发安全，锁覆盖到 mkdir）。"""
     with _IV_ID_LOCK:
         max_num = 0
         if interviews_root.is_dir():
@@ -114,7 +114,12 @@ def _next_iv_id(interviews_root: Path) -> str:
                         max_num = max(max_num, num)
                     except ValueError:
                         pass
-        return f"IV-{max_num + 1:03d}"
+        iv_id = f"IV-{max_num + 1:03d}"
+        iv_dir = interviews_root / iv_id
+        iv_dir.mkdir(parents=True, exist_ok=True)
+        # 创建子目录
+        (iv_dir / "materials").mkdir(exist_ok=True)
+        return iv_id
 
 
 def create_topic(

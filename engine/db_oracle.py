@@ -16,6 +16,10 @@ import pymysql
 import pymysql.cursors
 
 _ALLOWED = re.compile(r"^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN)\b", re.IGNORECASE)
+# 禁止危险子句（即使 SELECT 前缀也拒绝）
+_FORBIDDEN_SELECT = re.compile(
+    r"\b(?:INTO\s+(OUTFILE|DATAFILE|DUMPFILE)|FOR\s+UPDATE|FOR\s+SHARE)",
+    re.IGNORECASE)
 
 
 class SqlGuardError(Exception):
@@ -36,6 +40,9 @@ class ReadOnlyDb:
     def _guard(sql):
         if not _ALLOWED.match(sql or ""):
             raise SqlGuardError(f"只读守卫拒绝非查询语句: {(sql or '')[:80]}")
+        # 禁止危险子句（INTO OUTFILE / FOR UPDATE）
+        if _FORBIDDEN_SELECT.search(sql or ""):
+            raise SqlGuardError(f"只读守卫拒绝危险子句: {(sql or '')[:80]}")
         # 去掉行尾分号后仍存在分号 → 多语句，拒绝
         body = sql.strip().rstrip(";")
         if ";" in body:
