@@ -1,0 +1,40 @@
+# 断链规则集（M10 §4.3，T-074）
+# 每条规则 = 「某类节点必须存在的边」+ WARNING 级（不阻断流水线，兜底复查）
+# 谱系纪律：产物落笔即挂链；断链由确定性校验器执行，不靠 LLM 目测
+
+rules:
+  - id: BL-01
+    node: scenario
+    require: covers
+    level: WARNING
+    message: 场景必须 covers 至少一个 FR（covers 门禁的谱系视角）
+
+  - id: BL-02
+    node: scenario
+    require: derives
+    level: WARNING
+    message: source_delta 缺失 = 落笔未挂链（场景必须溯源到 delta）
+
+  - id: BL-03
+    node: delta
+    require: produces
+    level: WARNING
+    message: delta 缺面试/决策来源（produces 入边缺失）
+
+  - id: BL-04
+    node: fr
+    require: any_of[covers, references]
+    level: WARNING
+    message: FR 既无场景覆盖也无外部锚点登记 = 双侧断链
+
+  - id: BL-05
+    node: spq
+    require: feedback
+    level: WARNING
+    message: SPQ 必须可回溯到 run 或 FR（feedback 边缺失）
+
+  - id: BL-06
+    node: external_ref
+    require: references
+    level: WARNING
+    message: 外部引用必须挂到 FR/delta（登记时强制）
