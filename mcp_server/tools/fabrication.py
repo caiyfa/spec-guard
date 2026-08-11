@@ -19,7 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 TOOLS = [
     Tool(
-        name="fabrication.fabricate_data",
+        name="fabricate_data",
         description="测试数据制造编排：按缺口 FR 生成 IS-PREP 数据准备草稿。"
                     "复用优先（既有 IS-PREP 场景 covers 命中时建议复用不新造）；"
                     "产物含 data_contract 声明块并过数据校验器（实例完整性/工号池/"
@@ -40,7 +40,7 @@ TOOLS = [
 
 
 async def handle(name: str, arguments: dict) -> list[TextContent]:
-    if name == "fabrication.fabricate_data":
+    if name == "fabricate_data":
         return _handle_fabricate(arguments)
     return []
 

@@ -84,12 +84,12 @@ class TestToolRegistration:
                      # S5 增补：飞书文档/多维表格拉取 + 故事草案建议（对话分析建故事链路）
                      "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
                      # S6 覆盖缺口查询（1，M07 §5.2）
-                     "coverage.query_gaps",
+                     "query_coverage_gaps",
                      # P-A 图谱查询（8，M11 §5.2 + M10 §5.2，T-070/T-072/T-073/T-074）
                      "graph_query", "graph_backlink", "graph_rebuild",
                      "graph_snapshot", "graph_diff", "lineage_trace", "lineage_check",
                      # S6 数据制造（1，M08 §5.2）+ 归因证据包（1，M09 §5.2）
-                     "fabrication.fabricate_data", "assemble_evidence",
+                     "fabricate_data", "assemble_evidence",
                      }
         assert names == expected
 

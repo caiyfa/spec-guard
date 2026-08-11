@@ -19,7 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 TOOLS = [
     Tool(
-        name="coverage.query_gaps",
+        name="query_coverage_gaps",
         description="查询覆盖缺口三态聚合（🔴 无覆盖 / 🟡 草稿待审 / 🟢 已覆盖）与建议补齐顺序。"
                     "用于生成场景前了解哪些 FR 还是缺口、哪些只有草稿（草稿不计覆盖）、"
                     "建议顺序按 delta 新增 P0 > 修改触及 > 历史缺口确定性排序。"
@@ -36,7 +36,7 @@ TOOLS = [
 
 
 async def handle(name: str, arguments: dict) -> list[TextContent]:
-    if name == "coverage.query_gaps":
+    if name == "query_coverage_gaps":
         return _handle_query_gaps(arguments)
     return []
 

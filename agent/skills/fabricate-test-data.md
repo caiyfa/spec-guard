@@ -11,7 +11,7 @@ keywords: [数据制造, 数据准备, IS-PREP, 测试数据, 造数据, 准备�
 
 ### 核心流程
 
-1. **查缺口**：`coverage.query_gaps` 确认目标 FR 是否为缺口（草稿不计覆盖）
+1. **查缺口**：`query_coverage_gaps` 确认目标 FR 是否为缺口（草稿不计覆盖）
 2. **读锚点**：`read_spec` 带 `anchor=FR-xxx` 只取目标锚点章节——提取数据前置条件
    （如「作废需 COMPLETED 会话」「名单需 3 名快照人员」）
 3. **复用优先**：`list_scenarios` 按 IS-PREP 前缀检索既有数据实例——covers 命中
@@ -19,7 +19,7 @@ keywords: [数据制造, 数据准备, IS-PREP, 测试数据, 造数据, 准备�
 4. **查适配包**：`query_registry` 确认可用 tool/oracle；数据来源只允许
    `systems/{system}/` 适配包资产（emp-pool 工号池 / oracles.py 注册断言器），
    **引擎零改动**（铁律 5）
-5. **生成草稿**：`fabrication.fabricate_data` 编排入口（确定性骨架：data_contract
+5. **生成草稿**：`fabricate_data` 编排入口（确定性骨架：data_contract
    声明块 + source_delta 挂链）——之后按 spec 锚点补全 flow/verify：
    - `data_contract.provides` 必须含 activity（实例完整性）
    - members 引用 emp-pool 角色必须存在于 `emp-pool.yaml`

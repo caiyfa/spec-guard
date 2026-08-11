@@ -41,6 +41,8 @@
 >
 > **v1.18 决策（2026-08-11，sess-s6-dev）**：**S6 测试侧三增强开工认领**——T-060/T-061 并行、T-062/T-063 挂 T-061、T-064 挂 T-063/T-033；前端三需求（三态泳道/promote 三闸/归因确认）纳入交付范围；开工前置校验：工作区干净（438d078 后无未提交变更），§6 无他人登记中行，按 §7 以新 hash 重新登记开工。
 >
+> **v1.20 决策（2026-08-11，sess-s6-dev）**：**S6 测试侧三增强全部完成**——T-060~T-064 全量交付：覆盖缺口三态聚合（coverage_gaps + 排序器 + backlink + next-batch 只产草稿）+ sg_draft_gates 三闸状态机（write 自动② → 人评审① → promote 前置硬校验 fail-closed）+ 数据校验器（实例完整性/工号池/隔离/版本仲裁）+ 数据制造编排（复用优先 + fabricate-test-data skill）+ 失败归因（证据包四要素 + 确定性定性建议 + 诚实性复核 + SPQ 挂链字段）+ SPQ→信息包 loop-back（幂等装配）；MCP +5 工具（query_coverage_gaps/fabricate_data/assemble_evidence + graph 支路 lineage 2）、REST +3 路由（coverage/data_fab/feedback spq + runs attribute/evidence）；前端 CoveragePanel 三态泳道 + Drafts 三闸扩展 + Attribution 归因确认；test_specstd 1076 全绿 / engine_modes 39 + test_engine 135 / release_check PASS / 前端 build PASS；P-A 支路（T-070~T-074）并行会话联合提交（2832e05）已含 S6 施工中代码，本次收尾提交修复其预存红 4 例（点号工具名改合法 + 旧测试三闸适配）并恢复被污染 contracts_baseline.json（398→2 场景的误重建回退至 438d078 完整基线，release_check 恢复 PASS）。
+>
 > **v1.19 决策（2026-08-11，sess-pa-dev）**：**P-A 图谱支路开工 + 图谱源头定位缺口补强**——① 图谱纠错动线缺口分析结论登记：graph_index 节点表原无 source_ref（文件+行号），「发现错→回源改→重建」的动线断在回源一步（fr/scenario 两类高发节点无文件跳转）；**T-070 验收要点补充「节点可定位到源头文件（source_ref: file + line_range）」，builder 派生时一次到位，前端一键打开复用 S0.5 locate 行区间基建（FileViewer 高亮），红线不变（跳转只读、修改永远回源系统）**；② P-A 任务顺序认领施工：T-070 → T-071 → T-072（本会话），T-073/T-074（S7 并行段，S6 产物是增量非前提）顺延；完成即标 ✅。
 >
 > **v1.20 决策（2026-08-11，sess-pa-dev）**：**P-A 图谱支路全部完成（T-070~T-074）**——graph_index 包（builder 确定性派生 + SQLite 存储 + 指纹失效重建 + source_ref 源头定位）、三层图谱视图（L0/L1/L2 + 三镜头 + backlink 面板 + 里程碑时间轴/演化 diff）、血缘链（Q1/Q2 trace 谱系投影 + 四阶段分带 + 外部锚点虚线）、断链规则集（BL-01~BL-06 WARNING 级）；MCP 工具 8 个（graph_query/backlink/rebuild/snapshot/diff + lineage_trace/check）、REST 2 路由 15 端点；测试 29 例全绿（test_specstd 1014 绿，S6 并发预存红除外）、前端 build PASS；与 S6 会话并发共存（追加式修改，零覆盖）；release_check 唯一阻塞 IS-RVT-001 系 S6 contracts_baseline.json 中间态，非本支路引起。
@@ -97,7 +99,7 @@
 | **S3** 材料包与信息包 ✅ | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归（**✅ 2026-08-11 完成：材料管线/候选闸门/六分区装配 + 5 MCP 工具 + 8 REST 端点，详见 §4.2 T-030~T-032 与 §5 sess-s3-dev**） | M03 |
 | **S4** 扫描仪与评分卡 ✅ | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效（**✅ 2026-08-11 完成：specflow/anchor + delta 包 + 三闸冻结，详见 §4.2 T-040~T-042/T-050~T-052 与 §5 sess-s5-dev；漏洞修复闭环（纯读化/路径净化/fail-closed）同日完成**） | M05 / M04 |
 | **S5** 三闸冻结 + 禅道 ✅ | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记（**✅ 2026-08-11 完成：integrations/zentao 单包 + 幂等作业 + 双入口提单 + 故事点评估 + 三表，详见 §4.2 T-053~T-056 与 §5 sess-s5-dev**） | M05 / M06 |
-| **S6** 测试侧三增强 | 闸门保护下启用 Agent | 缺口泳道真实一致；数据制造/归因产物全过闸 | M07 / M08 / M09 |
+| **S6** 测试侧三增强 ✅ | 闸门保护下启用 Agent | 缺口泳道真实一致；数据制造/归因产物全过闸（**✅ 2026-08-11 完成：覆盖缺口三态聚合 + sg_draft_gates 三闸状态机 + 数据校验器/制造编排 + 归因证据包/SPQ 挂链 + loop-back，详见 §4.2 T-060~T-064 与 §5 sess-s6-dev；测试 1076 全绿 / release_check PASS / 前端 build PASS**） | M07 / M08 / M09 |
 | **S7** 血缘与图谱 | 图谱派生 + 血缘投影（汇合 P-A） | Q1/Q2 双向 trace 不断链；演化 diff 可重建 | M10 / M11 |
 | **S8** 治理件 + 对外 L0 | skill 体系化 + open/ 只读面 + 研发侧消费通道 | 旗舰 e2e：外部编码 Agent 经 MCP 读冻结 spec；研发侧 dev_context 三入口（接需求/开发接口/修BUG）从 ZT-STORY 号拿到带指纹的 dev-context-pack | M13 / M12 |
 
@@ -284,11 +286,11 @@ flowchart LR
 | T-057 | S5 | 禅道集成前端面板+飞书建故事链路 | M06/M03 | 页签四区可用；对话草案→人确认→建故事 | T-053~T-056 | 已完成 | sess-s5-dev | ✅ 2026-08-11（ZentaoPanel.tsx 四区面板（冻结 delta 一键建故事/评估回写、提 BUG 双入口、对话草案确认、锚点与作业）+ feishu_doc_read/feishu_base_query MCP 拉取（lark-cli 纯读，权限结构化提示）+ sf_suggest_story_draft 草案建议 + sf_story_drafts 表（draft→created/cancelled）+ from-draft REST（幂等优先、product 人拍板）+ jobs 列表端点；RBAC product +3 工具；MCP 注册 48→51；前端 build 通过；测试 18 例（test_specstd 1003 全绿）） |
 | T-058 | S3补 | 材料管理前端页签 | M03 | 上传/候选确认/入包闸门有 UI | T-030~T-032 | 已完成 | sess-s5-dev | ✅ 2026-08-11（MaterialsPanel.tsx：面试下拉 + 上传解析（≤20MB multipart）+ 材料列表（状态徽标/指纹/parse_error）+ 议题候选查看与确认/取消（product）+ 入包/移出 + 六分区重新装配 + info_pack 预览；specflow_api 扩展；配套新增 GET /specflow/interviews 列表端点；前端 build 通过） |
 | T-059 | S4补 | 评分与冻结前端页签 | M04/M05 | QA 确认/三闸状态有 UI | T-040~T-042/T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（ScoreFreezePanel.tsx：五维评分列表（机打采集 spec 文本输入/evaluate/QA 确认/驳回）+ 冻结三闸（状态卡片 ①②③ + 闸①产品确认 + 闸②合规校验 + 三闸全过才可冻结按钮）+ 冻结 delta 下拉；specflow_api 扩展；前端 build 通过） |
-| T-060 | S6 | 覆盖缺口三态聚合 | M07 | 与真实基线一致；草稿不计覆盖 | S5 | 进行中 | sess-s6-dev | ∥T-061｜**前端需求**：覆盖缺口三态泳道视图 |
-| T-061 | S6 | sg_draft_gates三闸状态机 | M07 | promote硬前置；只产草稿不产计划 | S5 | 进行中 | sess-s6-dev | ∥T-060｜**前端需求**：Drafts 页 promote 三闸扩展 |
-| T-062 | S6 | 测试数据制造Agent | M08 | 产物过三闸；数据校验器硬拒；引擎零改动 | T-061 | 进行中 | sess-s6-dev | ∥T-063 |
-| T-063 | S6 | 失败归因Agent | M09 | suggestion不自动转decided；诚实性复核 | T-061 | 进行中 | sess-s6-dev | ∥T-062｜**前端需求**：Attribution 页归因建议确认扩展 |
-| T-064 | S6 | SPQ→面试信息包loop-back | M09/M02 | SPQ自动入下轮信息包 | T-063/T-033 | 进行中 | sess-s6-dev | |
+| T-060 | S6 | 覆盖缺口三态聚合 | M07 | 与真实基线一致；草稿不计覆盖 | S5 | 已完成 | sess-s6-dev | ✅ 2026-08-11（coverage_gaps 三态聚合（anchors×covers×drafts 确定性派生）+ 优先级排序器（delta 新增 P0>修改>历史>边界）+ backlink 只读派生 + next-batch 只产草稿不产计划（铁律 6）+ GET /api/coverage/gaps·backlink·next-batch + MCP query_coverage_gaps + 前端 CoveragePanel 三态泳道；测试 10 例） |
+| T-061 | S6 | sg_draft_gates三闸状态机 | M07 | promote硬前置；只产草稿不产计划 | S5 | 已完成 | sess-s6-dev | ✅ 2026-08-11（sg_draft_gates 表 + write 自动② + 人评审①留痕 + promote 前置硬校验 fail-closed + gate3 回填；draft_writer/draft_promote 挂钩；POST /drafts/{fn}/review·revalidate；前端 Drafts 三闸徽章/评审按钮；存量测试三闸适配 3 文件；测试 10 例） |
+| T-062 | S6 | 测试数据制造Agent | M08 | 产物过三闸；数据校验器硬拒；引擎零改动 | T-061 | 已完成 | sess-s6-dev | ✅ 2026-08-11（data_validator 三要素硬拒（实例完整性/工号池/隔离/版本仲裁）+ data_fabrication 编排（复用优先 + data_contract 骨架 + 产物一律草稿态）+ POST /api/data-fab/fabricate + MCP fabricate_data + skill fabricate-test-data；引擎零改动（engine_modes 39 + test_engine 135 回归）；测试 10 例） |
+| T-063 | S6 | 失败归因Agent | M09 | suggestion不自动转decided；诚实性复核 | T-061 | 已完成 | sess-s6-dev | ✅ 2026-08-11（attribution_service 证据包四要素（flow_digest/响应快照/DB 快照/环境指纹）+ 确定性定性建议（suggestion 永不自动转 decided）+ 诚实性复核（环境定性强制）+ SPQ 挂链字段（run_id/scenario_id/fr_refs/decided_by 留痕）+ POST /runs/{run}/attribute + GET evidence + POST /api/feedback/spq·PATCH·sync-info-pack + MCP assemble_evidence + 前端 Attribution 归因确认；测试 14 例） |
+| T-064 | S6 | SPQ→面试信息包loop-back | M09/M02 | SPQ自动入下轮信息包 | T-063/T-033 | 已完成 | sess-s6-dev | ✅ 2026-08-11（sync_spq_to_info_pack 幂等装配（spq_feedback.yaml 落 specflow interviews）+ SPQ 建档自动匹配进行中面试 IV 钩子 + info_pack_synced 回填；测试 2 例（含幂等）） |
 | T-070 | P-A | graph_index确定性派生服务 | M11 | 指纹失效即重建；删重建同图；**节点可定位到源头文件（source_ref: file + line_range，前端一键打开，复用 S0.5 locate 基建，跳转只读）** | 无（S3起并行） | 已完成 | sess-pa-dev | P-A支路｜S3 起 P0（v1.6 咽喉标注：喂 T-071/072/073/085 四条下游链）；[v1.19] 2026-08-11 认领；✅ 2026-08-11 完成（graph_index 包：builder 两遍扫描确定性派生 + SQLite 存储 + 指纹失效重建 + source_ref 行号定位；source 只读端点受控前缀；测试 29 例） |
 | T-071 | P-A | L0/L1/L2视图+三镜头 | M11 | elkjs渲染；图谱不回写spec | T-070 | 已完成 | sess-pa-dev | P-A支路｜✅ 2026-08-11 完成（GraphPanorama.tsx：三层下钻 + 三镜头（面试选题/测试债/系统概览）+ backlink 面板 + 📍 源头文件定位行高亮；前端 build PASS） |
 | T-072 | P-A | 里程碑快照+演化diff | M11 | 三触发点；可凭指纹重建校验 | T-070 | 已完成 | sess-pa-dev | P-A支路｜✅ 2026-08-11 完成（graph_index/snapshot.py：快照导出 + 列表 + 两档 diff（+/-/~ + per_module + 指纹）；graph_snapshot/graph_diff MCP 工具；时间轴/diff 面板前端；手动+三触发点语义） |
@@ -380,7 +382,7 @@ flowchart LR
 | sess-s2-fix | S2 审查验收修复施工 | 全量代码审查→H1-H3/M1-M8/低危 6 项 | 2026-08-11 | 审查验收修复 12 项：H1 require_role 传 list 500、H2 iv_ask_question 登记通道、H3 评分 confirm 端点 + evaluate 幂等、M1 freeze/impact-confirm product 闸门、M2 workspace 隔离 + D-xxx 全局唯一 + sf_questions workspace 列、M3 resolve_workspace 授权、M4 emp 留痕、M5 真实基线摘录、M6 冻结状态机、M7 跨面试归属校验、M8 sf_store 事务；新增 REST/MCP 测试 27 例；test_specstd 826 绿 1 预存红 / release_check PASS |
 | sess-s2.5-dev | S2.5 日程/纪要施工 | T-025 → T-026 | 2026-08-11 | 全部完成：feishu_fetch MCP 模块 2 工具（feishu_calendar_agenda + feishu_meeting_notes）+ 无权限结构化引导 + Windows subprocess 封装；真实链路冒烟打通（08-07 纪要正文）；测试 19 例；test_specstd 845 绿 1 预存红 / release_check PASS |
 | sess-s3-dev | S3 材料包与信息包施工 | T-030 → T-031 → T-032 | 2026-08-11 | 全部完成：specflow/materials 包（store 两表 + pipeline + pack_assembler）+ specflow_pack MCP 5 工具 + REST 8 端点 + info_pack 挂载（runtime 侧）；F3 验收主路径走通（上传→indexed→候选确认→入包→六分区装配）；测试 33 例；test_specstd 878 绿 1 预存红 / release_check PASS |
-| sess-s6-dev | S6 测试侧三增强施工 | T-060/T-061 → T-062/T-063 → T-064 | 2026-08-11 | 覆盖缺口三态聚合 + sg_draft_gates 三闸状态机（先行，并行）；测试数据制造 Agent + 失败归因 Agent（挂 T-061）；SPQ→信息包 loop-back（收尾）；前端三需求（三态泳道/promote 三闸/归因确认）随任务交付 |
+| sess-s6-dev | S6 测试侧三增强施工 | T-060/T-061 → T-062/T-063 → T-064 | 2026-08-11 | ✅ 2026-08-11 全部完成：覆盖缺口三态聚合 + sg_draft_gates 三闸状态机 + 测试数据制造 Agent + 失败归因 Agent + SPQ→信息包 loop-back；前端三需求（三态泳道/promote 三闸/归因确认）随任务交付；test_specstd 1076 全绿 / engine_modes 39 / test_engine 135 / release_check PASS / 前端 build PASS；P-A 并行会话联合提交（2832e05）后收尾：修复点号工具名（LLM 400）+ 旧测试三闸适配 + 恢复被污染 contracts_baseline.json |
 | sess-pa-dev | P-A 图谱支路施工 | T-070 → T-071 → T-072 → T-073 → T-074 | 2026-08-11 | ✅ 2026-08-11 全部完成：图谱索引（source_ref 源头定位补强随 builder 派生一次到位）→ 图谱视图（三镜头+backlink+源头跳转）→ 里程碑快照/演化 diff → 血缘链 Q1/Q2 → 断链规则集；与 S6 会话并发共存（追加式修改零覆盖）；测试 29 例 + 前端 build PASS |
 | | | | | |
 
@@ -585,7 +587,7 @@ flowchart LR
 | test_specstd/test_specflow_materials.py | sess-s3-dev | 2026-08-11 | NEW | 2fa75bffb15f | 已完成 | T-030~T-034 测试 38 例（store/pipeline/coverage/装配器/MCP/REST） |
 | test_specstd/test_mcp_server.py | sess-s3-dev | 2026-08-11 | d90916955a40 | 405b31675f74 | 已完成 | 工具注册数 40→45（specflow_pack 5） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s3-dev | 2026-08-11 | 8b917ca11b58 | da7251139a9d | 已完成 | v1.14 自身登记：S3 完成——v1.14 决策头 + §2.1 S3 行 ✅ + §4.2 T-030~T-034 已完成备注 + §5 sess-s3-dev + §6 14 行；修改后hash = 登记中形态指纹 da7251139a9d |
-| docs/远期设计/SpecGuard-总控文档.md | sess-s6-dev | 2026-08-11 | 1df9158bb162 | | 登记中 | v1.18 自身登记：S6 开工认领（T-060~T-064 进行中）+ §5 注册 sess-s6-dev；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s6-dev | 2026-08-11 | 1df9158bb162 | 98774d8a13b8 | 已完成 | v1.18~v1.20 自身登记：S6 开工认领（T-060~T-064 进行中）→ S6 全部完成（✅ 状态回填 + §2.1 S6 行 ✅ + §5 备注）；修改后hash = 登记中形态指纹 98774d8a13b8 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-pa-dev | 2026-08-11 | e30f1d855c88 | 49510cd8a647 | 已完成 | v1.19 自身登记：P-A 开工——版本头 v1.19 决策（图谱 source_ref 缺口补强 + 任务顺序）+ §4.2 T-070 认领与验收要点补充 + §5 注册 sess-pa-dev；修改后hash = 登记中形态指纹 49510cd8a647（sess-s6-dev 行保持登记中不动） |
 | graph_index/__init__.py | sess-pa-dev | 2026-08-11 | NEW | 56aaf37d6421 | 已完成 | T-070：graph_index 包（确定性派生服务入口） |
 | graph_index/store.py | sess-pa-dev | 2026-08-11 | NEW | b9dce4a2f1ab | 已完成 | T-070：SQLite 存储（nodes/edges/index_meta + 类型枚举 + 谱系阶段映射） |
