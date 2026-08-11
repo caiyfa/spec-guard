@@ -5,7 +5,7 @@ icon: 🧭
 color: req
 chips: [specflow 工具集, 台账/评分明板, 影响面图谱]
 roles: [admin, product, dev]
-tools: [read_spec, list_spec_files, sync_workspace, query_registry, validate, list_failures, read_run_report, read_run_log, read_case_detail, list_executions, todo_write, iv_open_topic, iv_read_baseline, iv_ask_question, iv_next_question, iv_record_answer, iv_p0_clear_check, iv_append_transcript, sf_list_decisions, sf_propose_decision, sf_check_p0_gate, sf_suggest_scores, sf_read_score_gate]
+tools: [read_spec, list_spec_files, sync_workspace, query_registry, validate, list_failures, read_run_report, read_run_log, read_case_detail, list_executions, todo_write, iv_open_topic, iv_read_baseline, iv_ask_question, iv_next_question, iv_record_answer, iv_p0_clear_check, iv_append_transcript, sf_list_decisions, sf_propose_decision, sf_check_p0_gate, sf_suggest_scores, sf_read_score_gate, feishu_calendar_agenda, feishu_meeting_notes]
 panels: [pack, ledger, score, draft, graph, deliver]
 description: AI 面试官按 spec 11 章多轮盘问需求，P0/P1/P2 决策台账，五维评分卡，P0 清零后冻结规格进基线。
 ---
