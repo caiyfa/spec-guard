@@ -87,7 +87,7 @@ export async function uploadFiles<T>(path: string, files: File[], fields?: Recor
 export interface CurrentUser {
   emp_no: string;
   name: string;
-  role: 'admin' | 'tester' | 'viewer';
+  role: 'admin' | 'tester' | 'viewer' | 'product';
   default_workspace: string;
   auth_mode: 'uac' | 'mock';
 }

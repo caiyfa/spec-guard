@@ -33,8 +33,9 @@ import { authApi, session } from './api';
 import type { CurrentUser } from './api';
 import { removeCookie } from './utils/cookie';
 
-const ALL = ['admin', 'tester', 'viewer'];
+const ALL = ['admin', 'tester', 'viewer', 'product'];
 const TESTER_UP = ['admin', 'tester'];
+const PRODUCT_UP = ['admin', 'tester', 'product'];
 const ADMIN_ONLY = ['admin'];
 
 // ── 菜单结构：一级分组 > 二级菜单项，按工作流排序 ──
@@ -98,7 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Agent',
     icon: '🤖',
     items: [
-      { to: '/agent', label: '对话', roles: TESTER_UP },
+      { to: '/agent', label: '对话', roles: PRODUCT_UP },
       { to: '/drafts', label: '草稿评审', roles: TESTER_UP },
     ],
   },
@@ -126,6 +127,7 @@ const ROLE_LABEL: Record<string, string> = {
   admin: '管理员',
   tester: '测试',
   viewer: '只读',
+  product: '产品',
 };
 
 // 过滤掉当前角色无权限的分组/菜单项
@@ -356,6 +358,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               user.role === 'admin' ? 'bg-purple-900/50 text-purple-300'
               : user.role === 'tester' ? 'bg-info/15 text-info'
+              : user.role === 'product' ? 'bg-amber-900/50 text-amber-300'
               : 'bg-gray-700 text-gray-400'
             }`}>{ROLE_LABEL[user.role] || user.role}</span>
             <button

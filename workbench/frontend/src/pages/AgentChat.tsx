@@ -151,6 +151,53 @@ function extLabelOf(name?: string): string {
   return ext.replace('.', '').toUpperCase();
 }
 
+// ── 用途选择卡片（T-010：使命卡片——单击直达，身份色体系）──
+interface PurposeCardDef {
+  id: string;
+  title: string;
+  icon: string;
+  color: string;
+  chips: string[];
+  description: string;
+}
+
+const PURPOSE_COLORS: Record<string, { border: string; bg: string; text: string; badge: string }> = {
+  test: { border: 'border-info/40', bg: 'bg-info/5', text: 'text-info', badge: 'bg-info/15 text-info' },
+  req: { border: 'border-purple-500/40', bg: 'bg-purple-900/10', text: 'text-purple-300', badge: 'bg-purple-900/30 text-purple-300' },
+};
+
+function getPurposeStyle(colorKey: string) {
+  return PURPOSE_COLORS[colorKey] || { border: 'border-border', bg: 'bg-surface-2/40', text: 'text-gray-300', badge: 'bg-surface-3 text-gray-400' };
+}
+
+function PurposeCards({ purposes, onPick }: { purposes: PurposeCardDef[]; onPick: (id: string) => void }) {
+  return (
+    <div className="flex items-center justify-center min-h-[320px] px-4">
+      <div className="flex gap-6 max-w-2xl w-full">
+        {purposes.map(p => {
+          const style = getPurposeStyle(p.color);
+          return (
+            <button key={p.id} onClick={() => onPick(p.id)}
+              className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-xl border-2 ${style.border} ${style.bg} hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer text-center`}>
+              <span className="text-3xl">{p.icon}</span>
+              <span className={`text-base font-bold ${style.text}`}>{p.title}</span>
+              <p className="text-[11px] text-gray-400 leading-relaxed">{p.description}</p>
+              {p.chips && p.chips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 justify-center mt-1">
+                  {p.chips.map((chip, ci) => (
+                    <span key={ci} className={`text-[10px] px-2 py-0.5 rounded-full ${style.badge}`}>{chip}</span>
+                  ))}
+                </div>
+              )}
+              <span className="text-xs text-gray-500 mt-2 border-t border-border/50 pt-2 w-full text-center">点击卡片直接开启会话</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── 产物卡片（对话流内统一的可点击文件/文档入口，点击在右侧页签预览）──
 function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
   const ctx = useContext(ArtifactCtx);
@@ -1860,6 +1907,10 @@ export default function AgentChat() {
 
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsVersion, setSessionsVersion] = useState(0);
+  // T-010: 用途选择（使命卡片）
+  const [purposes, setPurposes] = useState<{ id: string; title: string; icon: string; color: string; chips: string[]; description: string }[]>([]);
+  const [showPurposePicker, setShowPurposePicker] = useState(false);
+  const [pickedPurpose, setPickedPurpose] = useState(() => localStorage.getItem('sg_picked_purpose') || '');
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [currentModelId, setCurrentModelId] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<ScenarioMeta | null>(null);
@@ -2294,11 +2345,12 @@ export default function AgentChat() {
       message: userMsg, session_id: sessionId, max_turns: 50,
       workspace: currentWorkspace, scenario_id: scenarioId,
       model_id: currentModelId,
+      purpose: pickedPurpose,
       references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
       context: { current_page: currentPage, editing_scenario_id: scenarioId },
     }));
     return true;
-  }, [loading, sessionId, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo]);
+  }, [loading, sessionId, pickedPurpose, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo]);
 
   // T-402: 打断会话（真打断——先调用 cancel API，再关 WS）
   const handleStop = useCallback(() => {
@@ -2460,7 +2512,7 @@ export default function AgentChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleNewSession = () => {
+  const handleNewSession = async () => {
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setReadingFeed([]);  // T-511：足迹=本轮运行依据，新会话清空
@@ -2469,6 +2521,25 @@ export default function AgentChat() {
     setScenarioId(''); setScenarioMeta(null);
     setFileTabs([]); setActiveSideTab('todos');
     localStorage.removeItem('sg_agent_session');
+    // T-010: 获取用途列表并决定是否显示选择卡片
+    try {
+      const r = await agentApi.listPurposes();
+      const list = r.purposes || [];
+      if (list.length === 1) {
+        // 单用途：跳过选择直接锁定
+        setPickedPurpose(list[0].id);
+        localStorage.setItem('sg_picked_purpose', list[0].id);
+        setShowPurposePicker(false);
+      } else if (list.length > 1) {
+        // 多用途：展示使命卡片
+        setPurposes(list);
+        setShowPurposePicker(true);
+        setPickedPurpose('');
+        localStorage.removeItem('sg_picked_purpose');
+      }
+    } catch {
+      setShowPurposePicker(false);
+    }
   };
 
   const handleExportSession = async () => {
@@ -2702,12 +2773,20 @@ export default function AgentChat() {
             <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>
               {wsState === 'open' ? '●' : '○'}
             </span>
+            {pickedPurpose && (pickedPurpose === 'requirement_interview' || pickedPurpose === '需求面试') && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-300">需求面试</span>
+            )}
+            {pickedPurpose && pickedPurpose === 'test_workbench' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-info/15 text-info">测试工作台</span>
+            )}
             {sessionTitle && <span className="text-gray-300 font-medium">{sessionTitle}</span>}
-            {sessionId && <span className="font-mono text-gray-600">{sessionId}</span>}
             {sessionId && (
+              <>
+              <span className="font-mono text-gray-600">{sessionId}</span>
               <button onClick={handleExportSession} className="text-gray-500 hover:text-info transition-colors" title="导出会话 JSON">
                 📥 导出
               </button>
+              </>
             )}
             {stats && (
               <>
@@ -2755,9 +2834,17 @@ export default function AgentChat() {
             <div ref={msgBoxRef} className="flex-1 overflow-y-auto px-4 py-3">
               <ArtifactCtx.Provider value={artifactCtxValue}>
               {grouped.length === 0 && !loading && (
-                <div className="text-center text-gray-600 text-sm py-12">
-                  输入消息开始对话，或输入 / 查看可用命令
-                </div>
+                showPurposePicker && purposes.length > 0 ? (
+                  <PurposeCards purposes={purposes} onPick={(id) => {
+                    setPickedPurpose(id);
+                    localStorage.setItem('sg_picked_purpose', id);
+                    setShowPurposePicker(false);
+                  }} />
+                ) : (
+                  <div className="text-center text-gray-600 text-sm py-12">
+                    输入消息开始对话，或输入 / 查看可用命令
+                  </div>
+                )
               )}
               {grouped.map(renderGrouped)}
               {/* K-012: 流式生成中气泡（整块 assistant 到达时被正式消息替换） */}
