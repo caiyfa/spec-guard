@@ -28,6 +28,8 @@
 > **v1.11 决策（2026-08-11，sess-s2.5）**：**新增 S2.5 阶段**——日程获取与文档权限处理。飞书日程 `+agenda` → `+meeting` → `vc +detail` → `note +detail` → `docs +fetch` 链路已验证通（§2.3 08-07「应用交付组AI Coding分享」纪要正文成功读取）；日历 `calendar:calendar.event:read` scope 已授权。面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时结构化提示+申请引导（`+apply-permission`）。S2.5 不阻塞 S3，随 S2 完成后可认领。
 >
 > **v1.12 决策（2026-08-11，sess-s2-fix）**：**S2 审查验收修复闭环**——S2 交付后全量代码审查发现并修复 12 项问题：H1 resolve/amend `require_role` 传 list 致 500、H2 问题登记链路缺失（新增 MCP 工具 `iv_ask_question`）、H3 评分确认无入口冻结恒 409（补 `POST /scores/{id}/confirm` + evaluate 幂等）、M1 freeze/impact-confirm 无角色闸门、M2 跨工作区数据串扰（gate 读路径 workspace 隔离 fail-closed + D-xxx 编号全局唯一 + sf_questions 补 workspace 列）、M3 specflow 路由缺 workspace_grants 授权、M4 MCP 开标无 emp 留痕、M5 `iv_read_baseline` stub 假数据改真实 specstd.anchors 摘录、M6 冻结状态机越级/500（p0_cleared 全链推进 + 404/409 语义）、M7 record_answer 跨面试篡改、M8 sf_store 事务返回 None；低危 6 项（iv_id 路径穿越校验/amend 跨面试拒绝/content_sha 落锤重算/静默异常改日志/编号锁/DB 路径收口）；新增 REST/MCP 层测试 27 例，test_specstd 826 绿 1 预存红（auth dual）、release_check PASS。详见 §4.2 T-020~T-024 修复备注、§5 sess-s2-fix、§6 登记行。
+>
+> **v1.13 决策（2026-08-11，sess-s2.5-dev）**：**S2.5 阶段全部完成**——T-025/T-026 交付：`feishu_fetch` MCP 模块 2 工具（`feishu_calendar_agenda` 日程列表 / `feishu_meeting_notes` 纪要全链路），真实链路冒烟打通（08-07「应用交付组AI Coding分享」纪要正文成功拉取：event_id→+meeting→vc +detail→note +detail→docs +fetch）；T-026 无权限结构化信息块（`permission_denied` + apply_command，docs/note 域暂无 apply 命令走链接引导，不静默降级）；测试 19 例全绿（test_specstd 845 绿 1 预存红）；§2.1 S2.5 行标注 ✅，§3.1 虚线依赖说明维持（S3 可并行）。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -77,7 +79,7 @@
 | **S0.5** 依据透明（v1.5 新增快车道） | agent 读过的关键文档进面板，关键章节可见 | 用户跟上 agent 关键思路、把判断依据摊开（阅读足迹面板 + 章节提取）；**不阻塞 S1** | agent/runtime + workbench（《知识体系设计》§4.5） |
 | **S1** purpose 地基 ✅ | 会话创建期锁定 + 工具白名单运行时强制 | 越权工具调用被确定性拒绝；purpose 不可变（**✅ 2026-08-10 完成：T-010~T-014 全部交付，S2 依赖就绪**） ；[2026-08-10 修复] 全量代码审查修复 6 项安全漏洞（H1/H2/M1-M6），详见 §4.2 T-010~T-014 备注与 §5 sess-s1-fix | M01 / M12 / M13(P1骨架) |
 | **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示（**[2026-08-11 修复] 审查验收修复 12 项（H1-H3/M1-M8/低危），详见 §4.2 T-020~T-024 备注与 §5 sess-s2-fix**） | M02 / M04 |
-| **S2.5** 日程获取与文档权限 | 日历+会议纪要链路封装 + 无权限文档结构化引导 | 面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时展示提示+申请链接（`+apply-permission`），不静默降级 | 飞书 CLI（calendar/vc/note/docs） |
+| **S2.5** 日程获取与文档权限 ✅ | 日历+会议纪要链路封装 + 无权限文档结构化引导 | 面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时展示提示+申请链接（`+apply-permission`），不静默降级（**✅ 2026-08-11 完成：feishu_fetch 模块 2 工具 + 真实链路冒烟打通，详见 §4.2 T-025/T-026 与 §5 sess-s2.5-dev**） | 飞书 CLI（calendar/vc/note/docs） |
 | **S3** 材料包与信息包 | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归 | M03 |
 | **S4** 扫描仪与评分卡 | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效 | M05 / M04 |
 | **S5** 三闸冻结 + 禅道 | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记 | M05 / M06 |
@@ -152,7 +154,7 @@ flowchart LR
 - **引擎支线**：§4.3 T-501 / T-502 与 S1+ 主线互不依赖，认领即可开工
 - **知识支线**：§4.4 T-505 / T-506 无依赖可认领；T-507~T-510 随 S1/S3/S6 阶段解锁
 - **飞书 CLI 支线（v1.6）**：§4.6 T-701~T-703 与 S1+ 主线互不依赖（T-701 依赖 T-602 单一注册面），近期可认领
-- **S2.5（v1.11）**：T-025/T-026 随 S2 完成后可认领（S2 ✅ 2026-08-10 满足），与 S3 并行不阻塞（§3.1 虚线依赖）
+- **S2.5（v1.11）**：T-025/T-026 随 S2 完成后可认领（S2 ✅ 2026-08-10 满足），与 S3 并行不阻塞（§3.1 虚线依赖）；**✅ 2026-08-11 完成（feishu_fetch 模块 2 工具，真实链路冒烟打通）**
 
 ### 3.3 储备项（不认领，触发条件由总控人宣布）
 
@@ -244,8 +246,8 @@ flowchart LR
 | T-022 | S2 | sf_interviews/sf_questions 表 | M02 | P0/P1/P2分级落库 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（sf_store.py：sf_interviews + sf_questions 建表/CRUD/索引，参照 agent_session_store 模式） ；[2026-08-11 sess-s2-fix] M2 sf_questions 补 workspace 列（旧表 ALTER 迁移）+ 面试存在性校验 + M7 record_answer 跨面试归属校验 |
 | T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（decision_ledger.py：sf_decisions/sf_decision_links/sf_decision_amendments/sf_decision_draft_marks/sf_gate_evidence/sf_scores 六表 + pending→resolved→superseded + resolve仅REST+product + score confirm仅tester；resolve/amend不暴露MCP） ；[2026-08-11 sess-s2-fix] H1 require_role 传 list 致 500 修正（Depends 注入）、H3 补评分 confirm 端点 + evaluate 幂等、M2 跨工作区隔离（gate 函数 workspace 过滤）+ D-xxx 编号全局唯一（原跨工作区撞主键）、amend 跨面试拒绝、content_sha 落锤重算（含 resolution） |
 | T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 已完成 | sess-s2-dev | ✅ 2026-08-10（check_p0_clear 纯函数零LLM + gate_aggregate 三要素聚合 + validate_freeze_request 冻结校验 + GateResult 数据类；测试覆盖三种缺口组合） ；[2026-08-11 sess-s2-fix] M6 冻结状态机 interviewing→p0_cleared→frozen 全链推进（中间态不可达修复）+ 404 优先于 409 + 非法流转 409 不再 500 |
-| T-025 | S2.5 | 日程获取与会议纪要链路封装 | 飞书 CLI（calendar/vc/note/docs） | MCP 工具封装：`feishu_calendar_agenda`（日程列表，`+agenda`）→ `feishu_meeting_notes`（从 event_id 经 `+meeting`→`vc +detail`→`note +detail`→`docs +fetch` 全链路取纪要正文）；面试官可从日程获取会议上下文/纪要素材入信息包；支持 `--start/--end` 时间范围 | T-020 | 未认领 | | 不阻塞 S3（§3.1 虚线依赖）；`calendar:calendar.event:read` scope 已授权 ✅ 2026-08-11 |
-| T-026 | S2.5 | 外部文档权限处理与申请引导 | 飞书 CLI（docs/minutes/note） | 面试官拉取飞书文档/妙记/纪要时遇到权限不足（无查看权限），**不静默降级、不报内部错误**——返回结构化信息块：`{resource_type, title?, url/app_link, hint: "无权限，请点击链接申请权限", apply_command: "minutes +apply-permission --minute-token xxx"}`；面试官据此向用户展示无权限提示+可点击链接；用户可自行点链接申请权限后重试 | T-020 | 未认领 | | 链路已验证：calendar→meeting→vc→note 全线走通，妙记 `minutes +detail` 遇无权限返回友好错误 |
+| T-025 | S2.5 | 日程获取与会议纪要链路封装 | 飞书 CLI（calendar/vc/note/docs） | MCP 工具封装：`feishu_calendar_agenda`（日程列表，`+agenda`）→ `feishu_meeting_notes`（从 event_id 经 `+meeting`→`vc +detail`→`note +detail`→`docs +fetch` 全链路取纪要正文）；面试官可从日程获取会议上下文/纪要素材入信息包；支持 `--start/--end` 时间范围 | T-020 | 已完成 | sess-s2.5-dev | ✅ 2026-08-11（mcp_server/tools/feishu_fetch.py：feishu_calendar_agenda（默认今天/ISO8601 范围/max_results 截断）+ feishu_meeting_notes（event_id→+meeting→vc +detail→note +detail→docs +fetch 主链路，vc 仅给 minute_token 时 minutes +detail 兜底；无产物返回 not_available 友好提示）；真实链路冒烟：08-07「应用交付组AI Coding分享」纪要正文成功拉取；Windows 下 cmd /c 调 lark-cli.cmd（subprocess 封装）；19 测试全绿；工具注册 40 个；requirement_interview 白名单接入 2 工具） |
+| T-026 | S2.5 | 外部文档权限处理与申请引导 | 飞书 CLI（docs/minutes/note） | 面试官拉取飞书文档/妙记/纪要时遇到权限不足（无查看权限），**不静默降级、不报内部错误**——返回结构化信息块：`{resource_type, title?, url/app_link, hint: "无权限，请点击链接申请权限", apply_command: "minutes +apply-permission --minute-token xxx"}`；面试官据此向用户展示无权限提示+可点击链接；用户可自行点链接申请权限后重试 | T-020 | 已完成 | sess-s2.5-dev | ✅ 2026-08-11（feishu_fetch 权限错误分类：minutes 域无权限返回 permission_denied 结构化块 + apply_command（`minutes +apply-permission`）；docs/note 域实测无 apply 命令 → 给 app_link + hint 走链接申请；错误关键词匹配（无权限/forbidden/denied 等），不静默降级、不伪造数据；认证未就绪/超时/非 JSON 均确定性报错） |
 
 > **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。**✅ 2026-08-10 S2 施工完成：topic.yaml source 已支持 7 种类型（含 feishu_doc/feishu_base/feishu_minutes/feishu_im/zentao_story 挂链），实际拉取通道（feishu_fetch / 禅道 story get/search）随飞书 CLI 支线（T-701~T-703）与 S5/M06 落地。**
 >
@@ -359,6 +361,7 @@ flowchart LR
 | sess-s1-fix | S1 安全修复施工 | 全量代码审查→H1/H2/M1-M6/L2-L6/存量穿越修复 | 2026-08-10 | 2026-08-10 全量审查修复：H1 rbac 未知角色 fail-closed、H2 admin 多角色漏检、M1 can_read_private 接入、M2 移除全局回退+补门禁、M3 product 权限补齐、M4 空白名单拒绝、M5 快照装配、M6 pending files 改 contextvar、L2-L6 低危项、存量 plans 路径穿越 + 门禁；test_specstd 745 绿 / engine_modes 39 绿 |
 | sess-s2-dev | S2 面试闭环施工 | T-021 → T-022/T-020 → T-023 → T-024 | 2026-08-10 | 全部完成：specflow/interview 包（IV 生命周期 + 议题卡 + 提问维度库 + 决策台账 + P0 清零门禁）+ sf_* 表（6张）+ MCP 工具（11 个）+ REST API（2 路由 19 端点）+ tests 55 绿；test_specstd 798 绿 1 预存红 |
 | sess-s2-fix | S2 审查验收修复施工 | 全量代码审查→H1-H3/M1-M8/低危 6 项 | 2026-08-11 | 审查验收修复 12 项：H1 require_role 传 list 500、H2 iv_ask_question 登记通道、H3 评分 confirm 端点 + evaluate 幂等、M1 freeze/impact-confirm product 闸门、M2 workspace 隔离 + D-xxx 全局唯一 + sf_questions workspace 列、M3 resolve_workspace 授权、M4 emp 留痕、M5 真实基线摘录、M6 冻结状态机、M7 跨面试归属校验、M8 sf_store 事务；新增 REST/MCP 测试 27 例；test_specstd 826 绿 1 预存红 / release_check PASS |
+| sess-s2.5-dev | S2.5 日程/纪要施工 | T-025 → T-026 | 2026-08-11 | 全部完成：feishu_fetch MCP 模块 2 工具（feishu_calendar_agenda + feishu_meeting_notes）+ 无权限结构化引导 + Windows subprocess 封装；真实链路冒烟打通（08-07 纪要正文）；测试 19 例；test_specstd 845 绿 1 预存红 / release_check PASS |
 | | | | | |
 
 ---
@@ -529,6 +532,12 @@ flowchart LR
 | test_specstd/test_specflow_mcp.py | sess-s2-fix | 2026-08-11 | NEW | 6278cc15404a | 已完成 | MCP 层测试 10 例（iv_ask_question/read_baseline 真实摘录/emp 留痕/workspace 隔离） |
 | test_specstd/test_specflow_rest.py | sess-s2-fix | 2026-08-11 | NEW | f41e2a113756 | 已完成 | REST 层测试 13 例（角色闸门/409 缺口/评分 confirm/幂等/跨面试 404/授权 403） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s2-fix | 2026-08-11 | 268b7d532a6a | 3d9ae4bec01f | 已完成 | v1.12 自身登记：S2 审查验收修复闭环——v1.12 决策头 + §2.1 S2 行修复摘要 + §4.2 T-020~T-024 备注 + §5 sess-s2-fix + §6 15 行；修改后hash = 登记中形态指纹 3d9ae4bec01f |
+| mcp_server/tools/feishu_fetch.py | sess-s2.5-dev | 2026-08-11 | NEW | 1bf33f8e2189 | 已完成 | T-025/T-026：feishu_fetch 模块 2 工具（feishu_calendar_agenda + feishu_meeting_notes）+ 权限结构化块 + Windows cmd /c subprocess 封装 |
+| mcp_server/server.py | sess-s2.5-dev | 2026-08-11 | 58c2cd2da068 | d36cb4d3d68d | 已完成 | TOOL_MODULES 注册 feishu_fetch |
+| agent/purposes/requirement_interview.md | sess-s2.5-dev | 2026-08-11 | 9221f8b544b2 | 47b8bc180367 | 已完成 | 白名单加 feishu_calendar_agenda/feishu_meeting_notes（12→14 工具） |
+| test_specstd/test_feishu_fetch.py | sess-s2.5-dev | 2026-08-11 | NEW | 6717fdf9231c | 已完成 | T-025/T-026 测试 19 例（agenda/链路分支/权限块/subprocess 封装） |
+| test_specstd/test_mcp_server.py | sess-s2.5-dev | 2026-08-11 | cb17c991f3b6 | d90916955a40 | 已完成 | 工具注册数 38→40（feishu 2 工具） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s2.5-dev | 2026-08-11 | 3d9ae4bec01f | 8b917ca11b58 | 已完成 | v1.13 自身登记：S2.5 完成——v1.13 决策头 + §2.1 S2.5 行 ✅ + §3.2 完成标注 + §4.2 T-025/T-026 已完成备注 + §5 sess-s2.5-dev + §6 6 行；修改后hash = 登记中形态指纹 8b917ca11b58 |
 | | | | | | | |
 
 ---
