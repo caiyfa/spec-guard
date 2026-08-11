@@ -30,6 +30,8 @@
 > **v1.12 决策（2026-08-11，sess-s2-fix）**：**S2 审查验收修复闭环**——S2 交付后全量代码审查发现并修复 12 项问题：H1 resolve/amend `require_role` 传 list 致 500、H2 问题登记链路缺失（新增 MCP 工具 `iv_ask_question`）、H3 评分确认无入口冻结恒 409（补 `POST /scores/{id}/confirm` + evaluate 幂等）、M1 freeze/impact-confirm 无角色闸门、M2 跨工作区数据串扰（gate 读路径 workspace 隔离 fail-closed + D-xxx 编号全局唯一 + sf_questions 补 workspace 列）、M3 specflow 路由缺 workspace_grants 授权、M4 MCP 开标无 emp 留痕、M5 `iv_read_baseline` stub 假数据改真实 specstd.anchors 摘录、M6 冻结状态机越级/500（p0_cleared 全链推进 + 404/409 语义）、M7 record_answer 跨面试篡改、M8 sf_store 事务返回 None；低危 6 项（iv_id 路径穿越校验/amend 跨面试拒绝/content_sha 落锤重算/静默异常改日志/编号锁/DB 路径收口）；新增 REST/MCP 层测试 27 例，test_specstd 826 绿 1 预存红（auth dual）、release_check PASS。详见 §4.2 T-020~T-024 修复备注、§5 sess-s2-fix、§6 登记行。
 >
 > **v1.13 决策（2026-08-11，sess-s2.5-dev）**：**S2.5 阶段全部完成**——T-025/T-026 交付：`feishu_fetch` MCP 模块 2 工具（`feishu_calendar_agenda` 日程列表 / `feishu_meeting_notes` 纪要全链路），真实链路冒烟打通（08-07「应用交付组AI Coding分享」纪要正文成功拉取：event_id→+meeting→vc +detail→note +detail→docs +fetch）；T-026 无权限结构化信息块（`permission_denied` + apply_command，docs/note 域暂无 apply 命令走链接引导，不静默降级）；测试 19 例全绿（test_specstd 845 绿 1 预存红）；§2.1 S2.5 行标注 ✅，§3.1 虚线依赖说明维持（S3 可并行）。
+>
+> **v1.14 决策（2026-08-11，sess-s3-dev）**：**S3 材料包与信息包全部完成**——T-030/T-031/T-032 交付：`specflow/materials/` 包（store 两表 + pipeline 解析管线 + pack_assembler 六分区装配器）+ MCP 工具 5 个（pack_assemble/pack_read_section/material_parse_status/material_extract_topics/pack_freshness_check）+ REST 路由（上传/列表/预览/候选确认/入包/装配 8 端点）+ info_pack.py 挂载（runtime 侧，stdio 保持 T-602 收窄设计）；F3 验收主路径走通（上传 md→indexed→候选 confirm→入包→六分区装配→分区读取含候选挂链）；测试 33 例全绿（test_specstd 878 绿 1 预存红）、release_check PASS；§2.1 S3 行标注 ✅。飞书/禅道 fetcher（G7/G8）按规划留 T-701 支线与 S5/M06。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -80,7 +82,7 @@
 | **S1** purpose 地基 ✅ | 会话创建期锁定 + 工具白名单运行时强制 | 越权工具调用被确定性拒绝；purpose 不可变（**✅ 2026-08-10 完成：T-010~T-014 全部交付，S2 依赖就绪**） ；[2026-08-10 修复] 全量代码审查修复 6 项安全漏洞（H1/H2/M1-M6），详见 §4.2 T-010~T-014 备注与 §5 sess-s1-fix | M01 / M12 / M13(P1骨架) |
 | **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示（**[2026-08-11 修复] 审查验收修复 12 项（H1-H3/M1-M8/低危），详见 §4.2 T-020~T-024 备注与 §5 sess-s2-fix**） | M02 / M04 |
 | **S2.5** 日程获取与文档权限 ✅ | 日历+会议纪要链路封装 + 无权限文档结构化引导 | 面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时展示提示+申请链接（`+apply-permission`），不静默降级（**✅ 2026-08-11 完成：feishu_fetch 模块 2 工具 + 真实链路冒烟打通，详见 §4.2 T-025/T-026 与 §5 sess-s2.5-dev**） | 飞书 CLI（calendar/vc/note/docs） |
-| **S3** 材料包与信息包 | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归 | M03 |
+| **S3** 材料包与信息包 ✅ | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归（**✅ 2026-08-11 完成：材料管线/候选闸门/六分区装配 + 5 MCP 工具 + 8 REST 端点，详见 §4.2 T-030~T-032 与 §5 sess-s3-dev**） | M03 |
 | **S4** 扫描仪与评分卡 | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效 | M05 / M04 |
 | **S5** 三闸冻结 + 禅道 | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记 | M05 / M06 |
 | **S6** 测试侧三增强 | 闸门保护下启用 Agent | 缺口泳道真实一致；数据制造/归因产物全过闸 | M07 / M08 / M09 |
@@ -252,11 +254,11 @@ flowchart LR
 > **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。**✅ 2026-08-10 S2 施工完成：topic.yaml source 已支持 7 种类型（含 feishu_doc/feishu_base/feishu_minutes/feishu_im/zentao_story 挂链），实际拉取通道（feishu_fetch / 禅道 story get/search）随飞书 CLI 支线（T-701~T-703）与 S5/M06 落地。**
 >
 > **S2.5 背景知识（v1.11，2026-08-11 实测补充）**：日程获取与文档权限处理——calender `+agenda` → `+meeting` → `vc +detail` → `note +detail` → `docs +fetch` 全链路已验证通（08-07「应用交付组AI Coding分享」纪要正文成功读取）；`calendar:calendar.event:read` scope 已授权 ✅。无权限文档场景下 `minutes +detail` 返回友好错误（不静默降级），用户可点击链接经 `+apply-permission` 申请权限。T-025/T-026 施工见上。
-| T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 未认领 | | 依赖 T-020 ✅ 2026-08-10（S2 完成，可认领） |
-| T-031 | S3 | 议题候选提取+确认闸门 | M03 | 候选confirmed=0不进上下文 | T-030 | 未认领 | | |
-| T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 未认领 | | 可提前至S1后 |
-| T-033 | S3 | info_pack.yaml六分区装配器 | M03 | 面试会话可消费 | T-030 | 未认领 | | |
-| T-034 | S3 | coverage_map覆盖率机打依据 | M03 | 供T-041消费接口联调 | T-030 | 未认领 | | |
+| T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 已完成 | sess-s3-dev | ✅ 2026-08-11（specflow/materials/pipeline.py：magic bytes 格式识别（不信任扩展名 + 控制字符比例防二进制误判）/md 直读/docx zip+xml 抽取（XXE 载荷确定性拒绝）/pdf 文本层（扫描件无文本层→failed 提示人工转录，不做 OCR）/chunk 按 md 标题、PRD § 锚点、PDF 页标切分；store.py sf_materials 表（MAT-xxx 全局唯一编号 + sha256_12 指纹 + 状态机 uploaded→parsing→parsed→indexed→packed|failed + workspace 隔离 fail-closed）；上传落盘 materials/ 原文不动 + _parsed/ 派生物可重建） |
+| T-031 | S3 | 议题候选提取+确认闸门 | M03 | 候选confirmed=0不进上下文 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（store.py sf_material_topics 表 + material_extract_topics MCP 工具（LLM 在 Agent 侧，候选 confirmed=0 出生）+ REST POST /materials/{mid}/topics/{tid}/confirm 人拍板闸门（仅 product）；confirmed_only 查询隔离未拍板候选；端到端验证：候选确认后随材料入包挂链） |
+| T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配（议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml，零 LLM，回调注入只读数据源）+ specflow_pack MCP 5 工具 + REST 8 端点（上传/列表/预览/候选/confirm/include/pack/reassemble）+ info_pack.py 挂载（runtime 侧 include_info_pack=True；stdio 保持 T-602 收窄设计）+ 人拍板入包闸门（pack_included=1 才纳入装配）；工具注册 45（stdio）/48（runtime）） |
+| T-033 | S3 | info_pack.yaml六分区装配器 | M03 | 面试会话可消费 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配器：议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml；回调注入只读数据源（anchors/ledger/execution_index/M04 台账）；pack_included 与 confirmed 双闸门控制入包；面试会话经 pack_read_section 消费） |
+| T-034 | S3 | coverage_map覆盖率机打依据 | M03 | 供T-041消费接口联调 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（coverage.py：PRD 类材料条目↔FR 锚点机打映射（FR 标题关键词片段+2-gram 词表，中文无分词器零新依赖；high 置信=词表确定命中，low=LLM 建议待确认）；解析管线对 pdf 含 § 锚点材料自动产出 _parsed/{stem}.coverage_map.yaml；未映射条目=覆盖率缺口（gap_summary 确定性计算）；测试 5 例） |
 | T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 未认领 | | 依赖 T-020 ✅ 2026-08-10（S2 完成，可认领） |
 | T-041 | S4 | 五维评分卡（机打+QA确认） | M04 | 未确认不生效测试 | T-023/T-034 | 未认领 | | |
 | T-042 | S4 | 评分门禁入冻结链路 | M04/M05 | 未达标阻断冻结 | T-041/T-024 | 未认领 | | |
@@ -362,6 +364,7 @@ flowchart LR
 | sess-s2-dev | S2 面试闭环施工 | T-021 → T-022/T-020 → T-023 → T-024 | 2026-08-10 | 全部完成：specflow/interview 包（IV 生命周期 + 议题卡 + 提问维度库 + 决策台账 + P0 清零门禁）+ sf_* 表（6张）+ MCP 工具（11 个）+ REST API（2 路由 19 端点）+ tests 55 绿；test_specstd 798 绿 1 预存红 |
 | sess-s2-fix | S2 审查验收修复施工 | 全量代码审查→H1-H3/M1-M8/低危 6 项 | 2026-08-11 | 审查验收修复 12 项：H1 require_role 传 list 500、H2 iv_ask_question 登记通道、H3 评分 confirm 端点 + evaluate 幂等、M1 freeze/impact-confirm product 闸门、M2 workspace 隔离 + D-xxx 全局唯一 + sf_questions workspace 列、M3 resolve_workspace 授权、M4 emp 留痕、M5 真实基线摘录、M6 冻结状态机、M7 跨面试归属校验、M8 sf_store 事务；新增 REST/MCP 测试 27 例；test_specstd 826 绿 1 预存红 / release_check PASS |
 | sess-s2.5-dev | S2.5 日程/纪要施工 | T-025 → T-026 | 2026-08-11 | 全部完成：feishu_fetch MCP 模块 2 工具（feishu_calendar_agenda + feishu_meeting_notes）+ 无权限结构化引导 + Windows subprocess 封装；真实链路冒烟打通（08-07 纪要正文）；测试 19 例；test_specstd 845 绿 1 预存红 / release_check PASS |
+| sess-s3-dev | S3 材料包与信息包施工 | T-030 → T-031 → T-032 | 2026-08-11 | 全部完成：specflow/materials 包（store 两表 + pipeline + pack_assembler）+ specflow_pack MCP 5 工具 + REST 8 端点 + info_pack 挂载（runtime 侧）；F3 验收主路径走通（上传→indexed→候选确认→入包→六分区装配）；测试 33 例；test_specstd 878 绿 1 预存红 / release_check PASS |
 | | | | | |
 
 ---
@@ -538,6 +541,20 @@ flowchart LR
 | test_specstd/test_feishu_fetch.py | sess-s2.5-dev | 2026-08-11 | NEW | 6717fdf9231c | 已完成 | T-025/T-026 测试 19 例（agenda/链路分支/权限块/subprocess 封装） |
 | test_specstd/test_mcp_server.py | sess-s2.5-dev | 2026-08-11 | cb17c991f3b6 | d90916955a40 | 已完成 | 工具注册数 38→40（feishu 2 工具） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s2.5-dev | 2026-08-11 | 3d9ae4bec01f | 8b917ca11b58 | 已完成 | v1.13 自身登记：S2.5 完成——v1.13 决策头 + §2.1 S2.5 行 ✅ + §3.2 完成标注 + §4.2 T-025/T-026 已完成备注 + §5 sess-s2.5-dev + §6 6 行；修改后hash = 登记中形态指纹 8b917ca11b58 |
+| specflow/materials/__init__.py | sess-s3-dev | 2026-08-11 | NEW | e8c9ae224ff2 | 已完成 | S3：materials 包（store/pipeline/coverage/pack_assembler） |
+| specflow/materials/store.py | sess-s3-dev | 2026-08-11 | NEW | ce823b89d454 | 已完成 | T-030/T-031：sf_materials/sf_material_topics 表 + CRUD（MAT-xxx 全局唯一 + sha256_12 + 状态机 + workspace 隔离 + 候选确认闸门） |
+| specflow/materials/pipeline.py | sess-s3-dev | 2026-08-11 | NEW | f2b699791432 | 已完成 | T-030：sniff（magic bytes + 控制字符比例防误判）/extract（md/docx 解包 XXE 拒绝/pdf 文本层无 OCR）/chunk（md 标题/PRD § 锚点/页标） |
+| specflow/materials/coverage.py | sess-s3-dev | 2026-08-11 | NEW | 295e805b9c64 | 已完成 | T-034：coverage_map 机打依据（FR 标题关键词片段+2-gram 词表，high/low 置信分层，缺口摘要） |
+| specflow/materials/pack_assembler.py | sess-s3-dev | 2026-08-11 | NEW | da9a70fed2a0 | 已完成 | T-032/T-033：六分区确定性装配 → info_pack.yaml（回调注入只读数据源 + 双闸门） |
+| workbench/backend/services/specflow/materials_service.py | sess-s3-dev | 2026-08-11 | NEW | c509b574a13b | 已完成 | T-030~T-034：上传/解析/候选/入包/装配/新鲜度服务编排（REST/MCP 共用） |
+| mcp_server/tools/specflow_pack.py | sess-s3-dev | 2026-08-11 | NEW | 72b3ae801ebc | 已完成 | T-032：pack_assemble/pack_read_section/material_parse_status/material_extract_topics/pack_freshness_check 5 工具 |
+| workbench/backend/routers/specflow_materials.py | sess-s3-dev | 2026-08-11 | NEW | d55ff8e23fdc | 已完成 | T-030~T-032：上传/列表/预览/候选/confirm/include/pack/reassemble 8 端点（confirm/include 仅 product） |
+| mcp_server/server.py | sess-s3-dev | 2026-08-11 | d36cb4d3d68d | dd431ab9e597 | 已完成 | 注册 specflow_pack（info_pack 保持参数化 stdio 收窄） |
+| workbench/backend/main.py | sess-s3-dev | 2026-08-11 | b79e40c8d73b | 8e48ad8699f5 | 已完成 | include_router specflow_materials |
+| agent/purposes/requirement_interview.md | sess-s3-dev | 2026-08-11 | 47b8bc180367 | d87717aa7964 | 已完成 | 白名单加 specflow_pack 5 工具 + info_pack 三件套（14→22 工具） |
+| test_specstd/test_specflow_materials.py | sess-s3-dev | 2026-08-11 | NEW | 2fa75bffb15f | 已完成 | T-030~T-034 测试 38 例（store/pipeline/coverage/装配器/MCP/REST） |
+| test_specstd/test_mcp_server.py | sess-s3-dev | 2026-08-11 | d90916955a40 | 405b31675f74 | 已完成 | 工具注册数 40→45（specflow_pack 5） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s3-dev | 2026-08-11 | 8b917ca11b58 | da7251139a9d | 已完成 | v1.14 自身登记：S3 完成——v1.14 决策头 + §2.1 S3 行 ✅ + §4.2 T-030~T-034 已完成备注 + §5 sess-s3-dev + §6 14 行；修改后hash = 登记中形态指纹 da7251139a9d |
 | | | | | | | |
 
 ---
