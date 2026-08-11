@@ -412,22 +412,24 @@ class TestSystemPrompt:
 
 
 class TestPromptOptimization:
-    """K-023：统一提示词（去模式化）——全量规范 + 全量技能 + 条件式任务指引。"""
+    """K-023 + T-507：统一提示词（去模式化）——骨架常驻 + 技能目录常驻 + 按需取正文。"""
 
     def test_unified_prompt_full_spec_and_skills(self):
-        """统一 prompt：全量 format_spec 常驻 + 全量技能注入（不再按模式裁剪）。"""
+        """统一 prompt：format_spec 骨架常驻（T-507 激进档）+ 技能目录注入。"""
         p = build_system_prompt()
-        assert "未注入全量格式规范" not in p  # 全量常驻
-        assert "generate-scenario" in p and "debug-failure" in p  # 全量技能
+        assert "未注入全量格式规范" not in p  # 有内容（骨架）
+        assert "章节索引" in p                # T-507：骨架含章节索引
+        assert "read_format_spec" in p        # T-507：骨架指引按需取细节
+        assert "generate-scenario" in p and "debug-failure" in p  # 技能目录含技能名
 
     def test_mode_guidance_conditional_sections(self):
-        """T-601：modes 退役后任务指引来自技能（skills XML 全量注入）。"""
+        """T-601 + T-507：任务指引来自技能目录，正文不常驻（按需 load_skill）。"""
         p = build_system_prompt()
         assert "可用技能" in p
-        assert "交互式生成流程" in p     # T-601：generate 流程并入 skill
-        assert "DAG 拓扑设计" in p          # K-021 设计步并入
-        assert "Spec 审计技能" in p        # audit-spec skill（T-601 新建）
-        assert "当前模式" not in p          # 不再有模式态
+        assert "load_skill" in p            # T-507：按需取正文指引注入
+        assert "交互式生成流程" not in p     # T-507：正文不再全量注入
+        assert "DAG 拓扑设计" not in p       # T-507：正文不再全量注入
+        assert "当前模式" not in p           # 不再有模式态
 
     def test_no_mode_switch_instruction(self):
         """T-601：模板与技能均不再指导 switch_mode（工具已删除）。"""

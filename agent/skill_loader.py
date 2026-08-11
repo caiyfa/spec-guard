@@ -77,16 +77,15 @@ def clear_cache():
 
 
 def build_skills_xml(mode: str = "") -> str:
-    """构建技能 XML 块，注入 system prompt。
+    """构建技能目录 XML 块，注入 system prompt（T-507 目录化）。
 
-    K-023 去模式化：全量注入（技能共 3 个 ~2.5k 字符，全量成本可忽略；
-    mode 参数保留仅为向后兼容，已无效）。
+    T-507 瘦身：目录常驻（name+description+trigger），正文由 load_skill
+    工具按需取（skill 正文 10 个约 15KB，全量注入是 prompt 静态部分主重之一）。
+    mode 参数保留仅为向后兼容，已无效。
 
     格式：
         <skills>
-          <skill name="generate-scenario" description="...">
-            ...技能内容...
-          </skill>
+          <skill name="generate-scenario" description="..." trigger="..." />
           ...
         </skills>
     """
@@ -94,15 +93,13 @@ def build_skills_xml(mode: str = "") -> str:
     if not skills:
         return ""
 
+    import html as _html
     parts = ["<skills>"]
     for s in skills:
-        # 属性转义（防 description 含引号/& 破坏 XML 结构；<> 已由格式校验拒绝）
-        import html as _html
         name_esc = _html.escape(s.name, quote=True)
         desc_esc = _html.escape(s.description, quote=True)
-        parts.append(f'  <skill name="{name_esc}" description="{desc_esc}">')
-        parts.append(s.content)
-        parts.append("  </skill>")
+        trig_esc = _html.escape(s.trigger, quote=True)
+        parts.append(f'  <skill name="{name_esc}" description="{desc_esc}" trigger="{trig_esc}" />')
     parts.append("</skills>")
     return "\n".join(parts)
 

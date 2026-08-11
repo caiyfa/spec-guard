@@ -288,6 +288,38 @@ verify:
         tpl = [f for f in report["findings"] if f["rule"] == "UNKNOWN_TPL"]
         assert not tpl, f"合法插值不应报 UNKNOWN_TPL: {tpl}"
 
+    def test_validator_warns_missing_file(self):
+        """T-502：with.file 引用不存在文件 → MISSING_FILE WARN（仓库缺陷，应随 git 提交）。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-FILE
+version: "0.1"
+flow:
+  - tool: {use: oss_upload, with: {file: "test-data/__sg_ghost__.xlsx"}, save: up}
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        mf = [f for f in report["findings"] if f["rule"] == "MISSING_FILE"]
+        assert mf, f"文件引用不存在应报 MISSING_FILE: {report['findings']}"
+        assert mf[0]["level"] == "WARN"
+        assert "__sg_ghost__.xlsx" in mf[0]["message"]
+
+    def test_validator_accepts_existing_file(self):
+        """with.file 引用仓库真实存在的文件 → 无 MISSING_FILE。"""
+        from mcp_server.tools.validator import validate_scenario_content
+        content = """
+id: XX-TEST-FILE2
+version: "0.1"
+flow:
+  - tool: {use: oss_upload, with: {file: "test-data/step4/grid-position-valid.xlsx"}, save: up}
+verify:
+  - status: {eq: 200}
+"""
+        report = validate_scenario_content(content)
+        mf = [f for f in report["findings"] if f["rule"] == "MISSING_FILE"]
+        assert not mf, f"已存在文件不应报 MISSING_FILE: {mf}"
+
     def test_query_registry_oracle_dynamic(self):
         import asyncio
         from mcp_server.tools import registry_query

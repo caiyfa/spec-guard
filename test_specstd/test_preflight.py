@@ -27,16 +27,17 @@ if str(BACKEND_DIR) not in sys.path:
 from services import preflight  # noqa: E402
 
 
-def _scenario_yaml(sid, flow="", requires=None, depends="[]"):
+def _scenario_yaml(sid, flow="", requires=None, depends="[]", teardown=""):
     """最小场景 YAML；requires 为 None 时不写该段（测静态兜底）。"""
     req = ""
     if requires is not None:
         import yaml as _y
         req = f"requires: {_y.safe_dump(requires, default_flow_style=True).strip()}\n"
+    td = f"teardown:\n{teardown}" if teardown else ""
     return (
         f"id: {sid}\ntitle: {sid} 标题\nversion: '0.1'\ndoc:\n  given: [g]\n"
         f"  when: [w]\n  then: [t]\n  covers: [FR-X]\ndepends_on: {depends}\n"
-        f"{req}flow:\n{flow}"
+        f"{req}flow:\n{flow}{td}"
     )
 
 
@@ -355,3 +356,96 @@ class TestUnresolvedTemplates:
                  '      json:\n        name: "A_{{random:6}}"\n'))
         r = preflight.scan_compliance(scenarios_root=str(lib))
         assert r["gaps"][0]["unresolved_templates"] == ["random:6"]
+
+
+# ══════════════════════════════════════════════════════════
+# fixtures 文件引用预检静态扫描（T-502）
+# ══════════════════════════════════════════════════════════
+
+class TestFileRefs:
+    """T-502：tool 步骤 with.file 引用静态扫描——已提交 fixtures 缺失 = 仓库缺陷
+    （预检阻断，区别于运行期 SKIP）；含插值路径静态不可判 → unknown_file_refs。"""
+
+    def test_file_ref_present_no_gap(self, lib, tmp_path):
+        """with.file 引用被提取；文件存在 → 无缺口。"""
+        (tmp_path / "test-data").mkdir()
+        (tmp_path / "test-data" / "valid.xlsx").write_bytes(b"x")
+        _write(lib, "GP-IMP-001", _scenario_yaml(
+            "GP-IMP-001",
+            flow='  - tool: {use: oss_upload, with: {file: "test-data/valid.xlsx"}, save: up}\n'))
+        r = preflight.scan_dependencies(["GP-IMP-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert r["file_refs"] == ["test-data/valid.xlsx"]
+        assert r["missing_files"] == []
+        assert r["unknown_file_refs"] == []
+        assert r["has_gaps"] is False
+
+    def test_missing_file_blocked(self, lib):
+        """引用不存在文件 → missing_files 分组 + 逐场景字段 + has_gaps=True。"""
+        _write(lib, "GP-IMP-001", _scenario_yaml(
+            "GP-IMP-001",
+            flow='  - tool: {use: oss_upload, with: {file: "test-data/ghost.xlsx"}, save: up}\n'))
+        r = preflight.scan_dependencies(["GP-IMP-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert any(m["file"] == "test-data/ghost.xlsx" for m in r["missing_files"])
+        assert r["has_gaps"] is True
+        it = r["scenarios"][0]
+        assert it["file_refs"] == ["test-data/ghost.xlsx"]
+        assert it["missing_files"] == ["test-data/ghost.xlsx"]
+
+    def test_template_file_ref_unknown(self, lib):
+        """含 {{...}} 的路径静态不可判 → unknown_file_refs 提示（不报假缺口）。"""
+        _write(lib, "GP-IMP-001", _scenario_yaml(
+            "GP-IMP-001",
+            flow='  - tool:\n      use: oss_upload\n      with:\n'
+                 '        file: "test-data/{{fn.uuid_short}}.xlsx"\n      save: up\n'))
+        r = preflight.scan_dependencies(["GP-IMP-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert r["missing_files"] == [], f"插值路径不应报缺失: {r['missing_files']}"
+        assert "test-data/{{fn.uuid_short}}.xlsx" in r["unknown_file_refs"]
+        assert any(u["file"] == "test-data/{{fn.uuid_short}}.xlsx"
+                   for u in r["unknown_file_refs_gaps"])
+        assert r["has_gaps"] is True, "未知文件引用属提示级缺口"
+
+    def test_teardown_scanned_too(self, lib):
+        """teardown 段 tool with.file 同样扫描（清理步骤也可能引用文件）。"""
+        _write(lib, "TD-001", _scenario_yaml(
+            "TD-001",
+            flow='  - call:\n      method: GET\n      path: /x\n',
+            teardown='  - tool: {use: oss_upload, with: {file: "test-data/td.xlsx"}, save: t}\n'))
+        r = preflight.scan_dependencies(["TD-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert "test-data/td.xlsx" in r["file_refs"]
+        assert any(m["file"] == "test-data/td.xlsx" for m in r["missing_files"])
+
+    def test_missing_file_grouped_by_scenarios(self, lib):
+        """同一缺失文件被多场景引用 → 归组列出涉及场景。"""
+        for sid in ("GP-IMP-001", "GP-IMP-002"):
+            _write(lib, sid, _scenario_yaml(
+                sid,
+                flow='  - tool: {use: oss_upload, with: {file: "test-data/ghost.xlsx"}, save: up}\n'))
+        r = preflight.scan_dependencies(["GP-IMP-001", "GP-IMP-002"],
+                                        scenarios_root=str(lib), env_config=_env_config())
+        m = [g for g in r["missing_files"] if g["file"] == "test-data/ghost.xlsx"][0]
+        assert set(m["scenarios"]) == {"GP-IMP-001", "GP-IMP-002"}
+
+    def test_absolute_path_checked_directly(self, lib, tmp_path):
+        """绝对路径直接判定存在性。"""
+        real = tmp_path / "abs.xlsx"
+        real.write_bytes(b"x")
+        _write(lib, "ABS-001", _scenario_yaml(
+            "ABS-001",
+            flow=f'  - tool: {{use: oss_upload, with: {{file: "{real.as_posix()}"}}, save: up}}\n'))
+        r = preflight.scan_dependencies(["ABS-001"], scenarios_root=str(lib),
+                                        env_config=_env_config())
+        assert r["missing_files"] == []
+
+    def test_compliance_includes_missing_files(self, lib):
+        """scan_compliance 同步收录 fixtures 缺口（summary 计数）。"""
+        _write(lib, "CPL-001", _scenario_yaml(
+            "CPL-001",
+            flow='  - tool: {use: oss_upload, with: {file: "test-data/ghost.xlsx"}, save: up}\n'))
+        r = preflight.scan_compliance(scenarios_root=str(lib))
+        g = r["gaps"][0]
+        assert g["missing_files"] == ["test-data/ghost.xlsx"]
+        assert r["summary"]["missing_files"] == 1

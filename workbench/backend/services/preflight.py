@@ -10,12 +10,16 @@ accounts 定义，跑完才 SKIP（output.log 只剩「账号别名未定义」�
    - `as: xxx` / `account: xxx` → 账号别名（保留字 none/anonymous 除外）
    - `{{env.xxx}}` → 环境键（点号路径，vars.* 子键）
    - `{{场景ID.xxx}}` → 跨场景变量引用（场景 ID 以大写字母开头）
+3. T-502 fixtures：tool 步骤 `with.file` 引用（oss_upload 等文件型工具）→
+   比对文件存在性——缺失 = 仓库缺陷（预检阻断），与账号/环境键同类预警
 
 比对目标（与引擎运行期一致）：
 - accounts 别名 → env 配置 accounts 段有无定义
 - env 键 → env 配置顶层键 / vars 子键
 - 跨场景引用 → 引用场景 ID 是否在本次执行闭包内（不在 = EX-8200eada 类
   「变量未定义」提前暴露）
+- with.file → 相对项目根（场景库根的上层）判文件存在；含 {{...}} 插值的
+  路径静态不可判 → 单列 unknown_file_refs（诚实语义，不报假缺口）
 """
 
 import os
@@ -64,6 +68,52 @@ def _static_env_keys(text):
 def _static_upstream_refs(text):
     """静态提取跨场景变量引用来源场景 ID。"""
     return set(_UPSTREAM_RE.findall(text or ""))
+
+
+# T-502：tool 步骤 with.file 文件引用（oss_upload 等文件型工具）
+def _static_file_refs(raw) -> list:
+    """静态提取 flow/teardown tool 步骤的 with.file 引用（原始字符串，含插值）。
+
+    形态：`- tool: {use: oss_upload, with: {file: "test-data/x.xlsx"}, save: up}`
+    （tool 信封的 with 段下 file 键；非 str 值如 dict 形态不在本扫描范围）。
+    """
+    out = []
+    for section in ("flow", "teardown"):
+        for step in raw.get(section) or []:
+            if not isinstance(step, dict):
+                continue
+            body = step.get("tool")
+            if not isinstance(body, dict):
+                continue
+            with_ = body.get("with") or {}
+            if not isinstance(with_, dict):
+                continue
+            f = with_.get("file")
+            if isinstance(f, str) and f.strip():
+                out.append(f.strip())
+    return out
+
+
+def _file_exists(file_path: str, project_root: Path) -> bool:
+    """T-502：文件存在性判定——绝对路径直判；相对路径相对项目根解析
+    （与 systems/tdm/steps.py oss_upload 的 cwd 相对口径一致——工作台从
+    仓库根启动时二者等价；纯读，不进任何写路径）。"""
+    p = Path(file_path)
+    if p.is_absolute():
+        return p.is_file()
+    return (project_root / file_path).is_file()
+
+
+def _split_file_refs(file_refs, project_root):
+    """T-502：文件引用二分——含 {{...}} 插值 → unknown（静态不可判）；
+    其余比对存在性 → missing（仓库缺陷，预检阻断）。"""
+    missing, unknown = [], []
+    for f in file_refs:
+        if "{{" in f:
+            unknown.append(f)
+        elif not _file_exists(f, project_root):
+            missing.append(f)
+    return missing, unknown
 
 
 # 通用插值提取（未知插值检测用）
@@ -195,8 +245,11 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
 
     closure = _closure(scenarios, scenario_ids)
     env_accounts = (env or {}).get("accounts") or {}
+    # T-502：场景库根的上层 = 项目根（scenarios/ 与 test-data/ 同级）
+    project_root = root.parent
 
     items, all_accounts, all_env, all_up, all_unresolved = [], set(), set(), set(), set()
+    all_files, all_unknown = set(), set()
     for sid, raw in sorted(closure.items()):
         # flow/verify/teardown 以 YAML 文本重排（dict repr 无法跑正则）
         text = ""
@@ -210,17 +263,25 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
         miss_up = [u for u in upstream if u not in closure]
         # T-318：未知插值（{{random:6}} 类）——运行期变量未定义提前预警
         unresolved = _static_unresolved_templates(raw, text)
+        # T-502：fixtures 文件引用——缺失 = 仓库缺陷（预检阻断）；插值路径不可判
+        file_refs = _static_file_refs(raw)
+        missing_files, unknown_file_refs = _split_file_refs(file_refs, project_root)
         all_accounts |= set(accounts)
         all_env |= set(env_keys)
         all_up |= set(upstream)
         all_unresolved |= set(unresolved)
+        all_files |= set(file_refs)
+        all_unknown |= set(unknown_file_refs)
         items.append({
             "id": sid,
             "accounts": accounts, "env_keys": env_keys, "upstream_refs": upstream,
             "unresolved_templates": unresolved,
+            "file_refs": file_refs,
+            "missing_files": missing_files, "unknown_file_refs": unknown_file_refs,
             "missing_accounts": miss_acc, "missing_env": miss_env,
             "unresolved_upstream": miss_up,
-            "has_gaps": bool(miss_acc or miss_env or miss_up or unresolved),
+            "has_gaps": bool(miss_acc or miss_env or miss_up or unresolved
+                             or missing_files or unknown_file_refs),
         })
 
     def _group(attr, key_name="key"):
@@ -242,10 +303,14 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
         "env_keys": sorted(all_env),
         "upstream_refs": sorted(all_up),
         "unresolved_templates": sorted(all_unresolved),
+        "file_refs": sorted(all_files),
         "missing_accounts": _group("missing_accounts", "account"),
         "missing_env": _group("missing_env", "key"),
         "unresolved_upstream": _group("unresolved_upstream", "ref"),
         "unresolved_templates_gaps": _group("unresolved_templates", "tpl"),
+        "missing_files": _group("missing_files", "file"),
+        "unknown_file_refs": sorted(all_unknown),
+        "unknown_file_refs_gaps": _group("unknown_file_refs", "file"),
         "has_gaps": has_gaps,
     }
 
@@ -290,6 +355,9 @@ def scan_compliance(scenarios_root=None) -> dict:
         accounts = set(_static_accounts(text))
         env_keys = set(_static_env_keys(text))
         upstream = set(_static_upstream_refs(text))
+        # T-502：fixtures 文件引用存在性（缺失 = 仓库缺陷）
+        file_refs = _static_file_refs(raw)
+        missing_files, unknown_file_refs = _split_file_refs(file_refs, root.parent)
         req = raw.get("requires") or {}
         declared = {"accounts": set(req.get("accounts") or []),
                     "env": set(req.get("env") or []),
@@ -303,7 +371,8 @@ def scan_compliance(scenarios_root=None) -> dict:
         t8 = sorted(declared["upstream"] - deps)
         # T-318：未知插值（{{random:6}} 类）——非法语法，执行前预警
         unresolved = _static_unresolved_templates(raw, text)
-        if missing_accounts or missing_env or missing_upstream or extra_requires or t8 or unresolved:
+        if (missing_accounts or missing_env or missing_upstream or extra_requires
+                or t8 or unresolved or missing_files or unknown_file_refs):
             gaps.append({
                 "scenario_id": sid,
                 "missing_accounts": missing_accounts,
@@ -312,10 +381,13 @@ def scan_compliance(scenarios_root=None) -> dict:
                 "extra_requires": extra_requires,
                 "t8_violations": t8,
                 "unresolved_templates": unresolved,
+                "missing_files": missing_files,
+                "unknown_file_refs": unknown_file_refs,
             })
 
     by_type = {"missing_accounts": 0, "missing_env": 0, "missing_upstream": 0,
-               "extra_requires": 0, "t8_violations": 0, "unresolved_templates": 0}
+               "extra_requires": 0, "t8_violations": 0, "unresolved_templates": 0,
+               "missing_files": 0, "unknown_file_refs": 0}
     for g in gaps:
         for k in by_type:
             by_type[k] += len(g[k])

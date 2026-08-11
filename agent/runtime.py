@@ -219,8 +219,9 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
             BACKEND_DIR = SG_ROOT / "workbench" / "backend"
             if str(BACKEND_DIR) not in sys.path:
                 sys.path.insert(0, str(BACKEND_DIR))
-            from services.format_spec import generate_format_spec_md
-            format_spec_text = generate_format_spec_md()
+            # T-507 激进档（定档 2026-08-11）：骨架常驻 + read_format_spec 按需取细节
+            from services.format_spec import generate_format_spec_skeleton
+            format_spec_text = generate_format_spec_skeleton()
         except Exception:
             format_spec_text = "（format_spec 加载失败，请用 query_registry 查询可用工具）"
 
@@ -305,6 +306,10 @@ class AgentRuntime:
         self._session: Optional[SessionManager] = None
         self._session_id: Optional[str] = None
 
+        # T-508：会话级知识 nudge（每篇每会话一次、总量 ≤4KB；懒初始化——
+        # 无激活工作区/词典缺失时静默降级为不投递）
+        self._nudger = None
+
         # K-023 去模式化：全量工具常驻（工具描述自带适用条件；写操作护栏在工具内部——
         # drafts 沙箱/promote 三道闸+回滚/OVERWRITE_DENIED。模式白名单在生产中
         # 防住的都是合法工作流：K-012 未知工具报错/K-018 模式落错/K-022「没有入库工具」）
@@ -337,6 +342,12 @@ class AgentRuntime:
         ]
         if skill_hint:
             messages.insert(1, {"role": "system", "content": skill_hint})
+
+        # T-508：用户消息入口知识 nudge（每篇每会话一次、总量 ≤4KB）
+        nudge = self._nudge_for_user(user_message)
+        if nudge:
+            # 追加到用户消息尾部（LLM 可见，前端展示无侵入）
+            user_msg["content"] = user_message + "\n\n" + nudge
 
         self._session = session
         self._session_id = session_id
@@ -449,6 +460,18 @@ class AgentRuntime:
                     thinking=clean_message.get("content", ""))
                 if doc_evt is not None:
                     self.events.emit("doc_read", **doc_evt)
+                
+                # T-508：工具结果尾部知识 nudge（挂 T-403 统一出口）
+                if not result.startswith("[SIDE_EFFECT_VIOLATION]"):
+                    nudge = self._nudge_for_tool(
+                        tc.get("function", {}).get("name", ""),
+                        _parse_tc_arguments(tc),
+                        result)
+                    if nudge:
+                        tool_msg["content"] = result + "\n\n" + nudge
+                        # 同步 LLM 工作副本（llm_messages 中的 tool_msg 需一致）
+                        if llm_messages and llm_messages[-1].get("role") == "tool":
+                            llm_messages[-1]["content"] = tool_msg["content"]
 
             # 增量保存会话
             if session and session_id:

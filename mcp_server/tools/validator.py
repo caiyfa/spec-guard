@@ -273,6 +273,24 @@ def validate_scenario_content(content: str) -> dict:
     except Exception:
         pass  # 检测服务不可用时跳过（不阻断主校验）
 
+    # T-502：fixtures 文件引用存在性（MISSING_FILE WARN——防 Agent 生成不存在的
+    # 文件引用，与 BODY_KEY/UNKNOWN_TPL 同族；缺失 = 仓库缺陷，应随 git 提交，
+    # 与运行期 SKIP（环境缺口）语义不同；含插值路径静态不可判，不在此报）
+    try:
+        from services.preflight import _static_file_refs, _file_exists
+        ws = get_active_workspace()
+        base = ws.root if ws else SG_ROOT
+        for f in _static_file_refs(raw):
+            if "{{" in f:
+                continue
+            if not _file_exists(f, base):
+                findings.append({"level": "WARN", "rule": "MISSING_FILE", "scenario": sid,
+                                 "message": f"with.file 引用的文件不存在: {f}"
+                                            f"（相对 {base}）——fixtures 应随 git 提交，"
+                                            f"缺失会导致执行前预检阻断（仓库缺陷 ≠ 环境缺口）"})
+    except Exception:
+        pass  # 检测服务不可用时跳过（不阻断主校验）
+
     # V9 修复：verify 段 oracle 引用校验（幻觉拦截——编造 oracle 必报 ERROR + hint）
     valid_oracles = oracle_names()
     for item in verify:

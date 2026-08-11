@@ -23,6 +23,12 @@
 
 {{ skills_xml }}
 
+技能目录常驻上方（T-507 瘦身：目录含 name/description/trigger，正文不常驻）。
+执行任务前若需要技能完整流程（生成/调试/审计等步骤指引），先调用 load_skill 取正文：
+- 目录中的 `<skill name="xxx">` 即技能名，load_skill(name="xxx") 返回元数据 + 完整正文
+- 不按目录流程执行任务 = 可能遗漏硬约束（如 generate-scenario 的 precheck 步骤、
+  debug-failure 的证据链动线）
+
 ## 用户引用（@）
 
 用户可在消息中用 @ 引用信息包 / 工作区文件 / 草稿。文件与草稿引用的内容会以

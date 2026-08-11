@@ -643,7 +643,7 @@ export default function RunControl() {
                   {preflightLoading ? <span className="text-gray-500">扫描中…</span> : !preflight ? (
                     <span className="text-gray-500">未扫描</span>
                   ) : preflight.has_gaps ? (
-                    <span className="text-warn">⚠️ 有缺失（账号 {preflight.missing_accounts.length} · 环境键 {preflight.missing_env.length} · 跨场景引用 {preflight.unresolved_upstream.length} · 未知插值 {(preflight.unresolved_templates_gaps || []).length}）</span>
+                    <span className="text-warn">⚠️ 有缺失（账号 {preflight.missing_accounts.length} · 环境键 {preflight.missing_env.length} · 跨场景引用 {preflight.unresolved_upstream.length} · 未知插值 {(preflight.unresolved_templates_gaps || []).length} · fixtures {(preflight.missing_files || []).length}）</span>
                   ) : (
                     <span className="text-pass">✅ 依赖就绪（账号 {preflight.accounts.length} · 环境键 {preflight.env_keys.length} · 上游引用 {preflight.upstream_refs.length}）</span>
                   )}
@@ -702,8 +702,23 @@ export default function RunControl() {
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
                   </div>
                 ))}
+                {/* T-502：fixtures 文件引用——缺失 = 仓库缺陷（预检阻断，无覆盖输入框） */}
+                {(preflight.missing_files || []).map((g) => (
+                  <div key={g.file} className="text-[11px]">
+                    <div className="text-fail">
+                      📎 fixtures 文件 <span className="font-mono">{g.file}</span> 不存在
+                      <span className="text-gray-500">（{g.scenarios.join('、')} → 仓库缺陷，预检阻断）</span>
+                    </div>
+                  </div>
+                ))}
+                {(preflight.unknown_file_refs_gaps || []).map((g) => (
+                  <div key={g.file} className="text-[11px] text-warn">
+                    ❓ 文件引用 <span className="font-mono">{g.file}</span> 含插值，静态不可判
+                    <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期按实际值判定）</span>
+                  </div>
+                ))}
                 <p className="text-[10px] text-gray-500 pt-0.5">
-                  缺失项执行时按诚实语义 SKIP 不报 FAIL；可直接在上方输入值覆盖执行（仅本次运行生效，不改配置文件），或确认执行，或先补齐环境配置。
+                  账号/环境键缺失执行时按诚实语义 SKIP 不报 FAIL，可直接在上方输入值覆盖执行（仅本次运行生效，不改配置文件）；📎 fixtures 缺失为仓库缺陷（文件应随 git 提交），不提供输入覆盖——请补齐文件后重试。
                 </p>
               </div>
             )}

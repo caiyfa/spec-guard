@@ -91,6 +91,63 @@ def get_tool_catalog() -> list:
     return catalog_dict()
 
 
+def generate_format_spec_skeleton() -> str:
+    """生成 format_spec 骨架（T-507 激进档：常驻骨架 + read_format_spec 按需取细节）。
+
+    骨架组成（目标 ~4KB）：
+    - 标题 + 版本 + 使用指引（read_format_spec 取细节章节）
+    - 章节索引（从 _BODY 标题行自动派生，防漂移）
+    - 硬约束核心：1.2 必填字段 / 1.6 步骤语法 / 1.7 断言类型 全文
+    - tool 目录（动态段，~0.5KB）
+
+    骨架是 _BODY 的派生投影（标题行 + 指定章节原文），不手抄正文，
+    语法层变更时骨架自动跟随——无第二事实源。
+    """
+    import re as _re
+    lines = _BODY.splitlines()
+
+    # 章节索引：从 _BODY 标题行派生（## 一、… / ### 1.x …）
+    index: list[str] = []
+    for line in lines:
+        m = _re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+        if not m:
+            continue
+        level = len(m.group(1))
+        title = m.group(2)
+        if level == 2:
+            index.append(f"- **{title}**")
+        elif level == 3 and _re.match(r"^\d+\.\d+", title):
+            index.append(f"  - {title}")
+    index_text = "\n".join(index)
+
+    # 硬约束核心：提取 1.2 / 1.6 / 1.7 三个关键章节原文（到下一同级标题）
+    def _chapter(chapter: str) -> str:
+        out: list[str] = []
+        capture = False
+        for line in lines:
+            m = _re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+            if m:
+                if capture and len(m.group(1)) <= 3:
+                    break
+                if not capture and m.group(2).startswith(chapter):
+                    capture = True
+            if capture:
+                out.append(line)
+        return "\n".join(out)
+
+    core = "\n\n".join(_chapter(c) for c in ("1.2 ", "1.6 ", "1.7 "))
+
+    return (
+        f"# SpecGuard YAML 格式规范（骨架）\n\n"
+        f"> **版本**：{SPEC_VERSION} | **更新时间**：{SPEC_UPDATED}\n"
+        f"> **用法**：本骨架为常驻摘要；写场景前用 `read_format_spec(section=…)` 取所需章节全文"
+        f"（章节号或标题子串，如 1.6/2.1/3.2/八）。\n\n"
+        f"## 章节索引\n\n{index_text}\n\n---\n\n"
+        f"## 硬约束核心\n\n{core}\n\n---\n\n"
+        f"{_tool_catalog_section()}\n"
+    )
+
+
 _BODY = """## 一、场景测试 YAML（scenario yaml）
 
 ### 1.1 文件位置与命名

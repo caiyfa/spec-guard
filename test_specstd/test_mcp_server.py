@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 61  # 基础 51 + S6 coverage: 1 + P-A graph/lineage: 8 + S6 fabrication: 1 + S6 assemble_evidence: 1 (stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 64  # 基础 51 + S6 coverage: 1 + P-A graph/lineage: 8 + S6 fabrication: 1 + S6 assemble_evidence: 1 + T-507 load_skill/read_format_spec: 2 + knowledge: 1 (stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -90,6 +90,10 @@ class TestToolRegistration:
                      "graph_snapshot", "graph_diff", "lineage_trace", "lineage_check",
                      # S6 数据制造（1，M08 §5.2）+ 归因证据包（1，M09 §5.2）
                      "fabricate_data", "assemble_evidence",
+                     # T-507 知识层：技能正文按需取 + 格式规范按章节取（2）
+                     "load_skill", "read_format_spec",
+                     # T-507 knowledge 知识触达（1）
+                     "read_knowledge",
                      }
         assert names == expected
 

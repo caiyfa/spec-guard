@@ -48,6 +48,8 @@
 > **v1.19 决策（2026-08-11，sess-pa-dev）**：**P-A 图谱支路开工 + 图谱源头定位缺口补强**——① 图谱纠错动线缺口分析结论登记：graph_index 节点表原无 source_ref（文件+行号），「发现错→回源改→重建」的动线断在回源一步（fr/scenario 两类高发节点无文件跳转）；**T-070 验收要点补充「节点可定位到源头文件（source_ref: file + line_range）」，builder 派生时一次到位，前端一键打开复用 S0.5 locate 行区间基建（FileViewer 高亮），红线不变（跳转只读、修改永远回源系统）**；② P-A 任务顺序认领施工：T-070 → T-071 → T-072（本会话），T-073/T-074（S7 并行段，S6 产物是增量非前提）顺延；完成即标 ✅。
 >
 > **v1.20 决策（2026-08-11，sess-pa-dev）**：**P-A 图谱支路全部完成（T-070~T-074）**——graph_index 包（builder 确定性派生 + SQLite 存储 + 指纹失效重建 + source_ref 源头定位）、三层图谱视图（L0/L1/L2 + 三镜头 + backlink 面板 + 里程碑时间轴/演化 diff）、血缘链（Q1/Q2 trace 谱系投影 + 四阶段分带 + 外部锚点虚线）、断链规则集（BL-01~BL-06 WARNING 级）；MCP 工具 8 个（graph_query/backlink/rebuild/snapshot/diff + lineage_trace/check）、REST 2 路由 15 端点；测试 29 例全绿（test_specstd 1014 绿，S6 并发预存红除外）、前端 build PASS；与 S6 会话并发共存（追加式修改，零覆盖）；release_check 唯一阻塞 IS-RVT-001 系 S6 contracts_baseline.json 中间态，非本支路引起。
+>
+> **v1.22 决策（2026-08-11，sess-master 编排登记）**：新增 **§4.7「规模化升级」支线**——依据《SpecGuard-多角色服务访问流转与规模化升级设计》（同目录，代码实证）：当前 35 人团队量级架构完全支持；100+ 人存在 4 大阻塞点（RunManager 单执行槽 / 全局 WS 广播 / SQLite 单文件单写 / 调度忙时跳过）；新增任务 T-801~T-806（**均不依赖 S 链主线，与主线并行**）：**T-801（WS 订阅隔离）与 T-805（服务守护）无依赖、35 人起步即可认领**（低成本高收益，覆盖过渡期 80% 可用性问题）；T-802（执行槽池化 RunManager→RunPool）触发制=排队成为常态（连续一周队列>3 或等待>15min），架构级开工前须冻结层评审；T-803（调度忙时排队）挂 T-802 后；T-804（SQLite 写路径）触发=写锁告警（database is locked 或写延迟>100ms），观测可提前；T-806（状态外迁/多机）储备，100+ 且 T-802/804 仍不足才启动；触发信号由总控人按 §4.7 时机列宣布认领。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -135,6 +137,12 @@ flowchart LR
   subgraph LARK["飞书 CLI 支线（v1.6，近期可认领，依赖 T-602）"]
     L71["T-701 多用户认证服务"] --> L72["T-702 通用执行器"] --> L73["T-703 workbench 绑定页"]
   end
+  subgraph SCALE["规模化升级支线（v1.22，与主线并行；T-801/T-805 随时可认领，T-802~T-806 触发制）"]
+    S81["T-801 WS 订阅隔离"] --> S82["T-802 执行槽池化"] --> S83["T-803 调度忙时排队"]
+    S85["T-805 服务守护"]
+    S84["T-804 SQLite 写路径"]
+    S86["T-806 状态外迁（储备）"]
+  end
 ```
 
 ---
@@ -173,12 +181,17 @@ flowchart LR
 - **知识支线**：§4.4 T-505 / T-506 无依赖可认领；T-507~T-510 随 S1/S3/S6 阶段解锁
 - **飞书 CLI 支线（v1.6）**：§4.6 T-701~T-703 与 S1+ 主线互不依赖（T-701 依赖 T-602 单一注册面），近期可认领
 - **S2.5（v1.11）**：T-025/T-026 随 S2 完成后可认领（S2 ✅ 2026-08-10 满足），与 S3 并行不阻塞（§3.1 虚线依赖）；**✅ 2026-08-11 完成（feishu_fetch 模块 2 工具，真实链路冒烟打通）**
+- **规模化升级支线（v1.22）**：§4.7 **T-801 / T-805 无依赖、35 人起步即可认领**（广播订阅隔离 / 服务守护）；T-802~T-804 触发制（时机列见 §4.7）；T-806 储备不得认领
 
 ### 3.3 储备项（不认领，触发条件由总控人宣布）
 
 - T-084 外部 skill 审查管线完整化 / 对外 L1 / MCP Registry 生态开放
 - T-503 DB 轮询 + 通用重试原语（触发：首个需要 DB 轮询或瞬时重试的真实场景出现）
 - T-504 数据驱动参数化 + 场景级超时（观察项；触发：参数化真实 ROI 成立，或 run 看门狗归因粒度不足）
+- T-802 执行槽池化（触发：排队成为常态——连续一周队列长度>3 或等待>15 分钟；架构级需冻结层评审）
+- T-803 调度忙时排队（挂 T-802 后；触发：定时任务 skipped_busy 用户反馈）
+- T-804 SQLite 写路径演进（触发：database is locked 或写延迟>100ms；观测布点可提前）
+- T-806 状态外迁/多机（触发：100+ 且 T-802/804 后仍不足，先评估报告再立项）
 
 ---
 
@@ -186,7 +199,7 @@ flowchart LR
 
 > 状态值：`未认领` / `进行中` / `已完成` / `阻塞`（阻塞须在备注写原因）
 > 表行格式固定，只允许更新「状态/会话ID/备注」三列；新增任务由总控人追加。
-> 分区：**§4.1 当前打磨期**（✅ 2026-08-07 结束）｜**§4.2 远期升级期**（2026-08-07 起恢复认领）｜**§4.3 引擎演进补点**（可认领，与 S1+ 并行）｜**§4.4 知识体系**（T-505/T-506 可认领，其余挂 S 阶段）｜**§4.5 瘦身任务块**（v1.6，T-601/T-602 P0 本周先做，T-601 为 T-010 硬前置）｜**§4.6 飞书 CLI 集成**（v1.6，近期可认领，与 S1+ 主线并行，T-701 依赖 T-602）。
+> 分区：**§4.1 当前打磨期**（✅ 2026-08-07 结束）｜**§4.2 远期升级期**（2026-08-07 起恢复认领）｜**§4.3 引擎演进补点**（可认领，与 S1+ 并行）｜**§4.4 知识体系**（T-505/T-506 可认领，其余挂 S 阶段）｜**§4.5 瘦身任务块**（v1.6，T-601/T-602 P0 本周先做，T-601 为 T-010 硬前置）｜**§4.6 飞书 CLI 集成**（v1.6，近期可认领，与 S1+ 主线并行，T-701 依赖 T-602）｜**§4.7 规模化升级**（v1.22，T-801/T-805 随时可认领，T-802~T-804 触发制，T-806 储备）。
 
 ### 4.1 当前打磨期（P0，✅ 2026-08-07 结束）
 
@@ -313,7 +326,7 @@ flowchart LR
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
 | T-501 | 引擎-断言 | schema 结构断言（fuzzy-match-lite 零依赖版） | engine/registry + format_spec | 新增 schema 断言器类型（断言器注册制，**语法零变更、零新增依赖**）：支持 `#string/#number/#bool/#null` 类型标记、`##` 可选前缀、`#[]` 数组模式与嵌套对象/数组递归匹配；不引 jsonschema（完整 JSON Schema 语义需要时另行 Ask First 评审）；test_engine 先写失败测试；三同步 | — | 已完成 | sess-engine-t501 | P1 ✅ 2026-08-07（engine/schema_match.py：fuzzy-match-lite 纯函数 match——#string/#number/#boolean/#null 类型标记（#number 拒 bool）、## 可选键、#[] 数组模式空数组通过、字面值精确相等 bool/number 不混、键集严格多键即失败、嵌套递归、不支持标记明确报错；oracle_schema_match（of 缺省 resp、U-1 取值、params 插值 render、字段级路径失败消息复用 T-314 日志通道）+ register_builtin_oracles 挂 conftest/live_registry 两处，冻结层零改动零新依赖；test_schema_match 31 例；三同步 format_spec 2.5.0（§1.8.1）+ 快照重导出，verify 不进指纹基线不变；门禁 test_engine 135 + engine_modes 39 + test_specstd 721 + release_check 全绿）；第三批 P1-2 复核修正版（2026-08-07）；∥T-502 |
-| T-502 | 引擎-预检 | fixtures 文件引用预检静态扫描 | preflight/validator | preflight 静态扫描 tool 步骤 `with.file` 引用（oss_upload 等）并比对文件存在性：已提交 fixtures 缺失 → 预检 FAIL（仓库缺陷 ≠ 环境缺口，区别于运行期 SKIP）；scan_dependencies/scan_compliance 同步收录；**不做 fixtures: 声明段**（语法零变更，声明式留待真实需求）；test_engine 先写失败测试 | — | 进行中 | sess-engine-t502 | P1 ｜ 第三批 P1-3 复核修正版（承接 U-4）；∥T-501 |
+| T-502 | 引擎-预检 | fixtures 文件引用预检静态扫描 | preflight/validator | preflight 静态扫描 tool 步骤 `with.file` 引用（oss_upload 等）并比对文件存在性：已提交 fixtures 缺失 → 预检 FAIL（仓库缺陷 ≠ 环境缺口，区别于运行期 SKIP）；scan_dependencies/scan_compliance 同步收录；**不做 fixtures: 声明段**（语法零变更，声明式留待真实需求）；test_engine 先写失败测试 | — | 已完成 | sess-engine-t502 | P1 ✅ 2026-08-11（_static_file_refs 提取 flow/teardown tool 信封 with.file（str 形态）→ _split_file_refs 二分：含 {{}} 插值→unknown_file_refs（静态不可判，诚实语义）；其余相对项目根（场景库根上层，与 oss_upload cwd 口径一致）判存在性，缺失→missing_files（仓库缺陷，预检阻断）；scan_dependencies items 级 + _group 聚合（missing_files/unknown_file_refs_gaps）+ has_gaps 收录；scan_compliance gaps + summary 同步；validator MISSING_FILE WARN（防 Agent 生成悬空引用，插值跳过）；前端 RunControl 📎 fixtures 分组（无覆盖输入框）+ ❓ 文件引用分组；TDD test_preflight +7、test_acceptance_fixes +2；真实库 4 个 oss_upload 场景零误报；语法零变更不做 fixtures 声明段，format_spec/contracts 不动；门禁 engine_modes 39 + test_engine 135 + test_specstd 相关 90 + release_check PASS + 前端 build PASS；与 sess-lark-dev（T-701~T-703）/sess-s8-dev（T-083~T-085）并行会话共存，文件零重叠）；第三批 P1-3 复核修正版（承接 U-4）；∥T-501 |
 | T-503 | 引擎-储备 | DB 轮询 + 通用重试原语 | engine/scenario_runner | poll 扩展 db_query 轮询体（改动集中 step_poll）或 verify retry 原语；触发制：**首个真实场景需要时启动**——当前 4 个 poll 场景全为 HTTP 且工作正常，零真实需求证据 | 触发 | 储备 | | 第三批 P1-1，2026-08-07 复核降级为储备 |
 | T-504 | 引擎-储备 | 数据驱动参数化 + 场景级超时 | engine | 观察项：参数化动语法层需冻结层评审（Agent 生成场景成本极低，ROI 不足）；场景级超时边际价值仅归因粒度（T-118 run 看门狗已兜底整轮拖死风险） | 触发 | 储备 | | 第三批 P2-1/P2-2，2026-08-07 复核降级为观察 |
 
@@ -358,6 +371,20 @@ flowchart LR
 | T-702 | 飞书-执行 | 通用执行器 | mcp_server/tools/lark_run.py + agent/runtime | lark_run 透传全部 lark-* 域命令（能力探索不限定域）：子进程注入当前用户 USERPROFILE、命令白名单校验（禁 shell 拼接）、超时 60s + 结果截断（复用 _TOOL_RESULT_MAX_CHARS 出口）；写操作（high-risk-write）强制 --yes 且需用户确认；调用留痕（工号×命令×结果摘要） | T-701 | 进行中 | sess-lark-dev | P0｜能力探索随本任务验证（calendar/im/task/approval 等域） |
 | T-703 | 飞书-工作台 | workbench 绑定页与审计 | workbench 前后端 | 「个人设置 → 绑定飞书」：授权 URL / 授权状态 / scope 清单 / 解绑；Agent 会话自动带出当前用户飞书身份（emp_no → 配置目录映射）；调用审计（工号/会话/工具/入参摘要，与 T-082 口径对齐） | T-701/T-702 | 进行中 | sess-lark-dev | P1｜近期可认领 |
 
+### 4.7 规模化升级（v1.22 新增，触发制，与主线并行）
+
+> 来源：《SpecGuard-多角色服务访问流转与规模化升级设计》（2026-08-11，代码实证）——当前 35 人量级架构完全支持；100+ 人 4 大阻塞点：① RunManager 单执行槽（runner.py:877 模块级单例）② 全局 WS 广播无过滤（runner.py:199-207）③ SQLite 单文件单写（user/audit/run_queue/draft_gates/scheduler/sf_*/audit_store 全写 workbench.db）④ 调度忙时跳过不入队（scheduler.py:166-181）。
+> 定位：不依赖 S 链主线，与 S8 及之后并行；**T-801/T-805 无依赖、35 人起步即可认领**；T-802~T-804 按「规模信号触发制」由总控人宣布认领；T-806 储备不得认领。触发信号：排队成为常态（连续一周队列>3 或等待>15min）/ 写锁告警（database is locked 或写延迟>100ms）/ 调度 skipped_busy 用户反馈。
+
+| 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| T-801 | 规模-广播 | WebSocket 订阅隔离 | runner + runs + useRunStream | 订阅按 run_id/workspace 过滤；broadcast 只发订阅该流的连接（scope=all 兼容存量）；执行流页按 run 订阅、全局页只收系统级事件；单次执行广播量=订阅该 run 的连接数（打点验证） | — | 未认领 | | P1｜35 人起步可认领（低风险独立）；在线 WS 连接>30 时优先 |
+| T-805 | 规模-守护 | 服务守护与自动拉起 | serve-prod.ps1 + scripts/watchdog.ps1 | Windows 服务化（NSSM/计划任务+Watchdog）：崩溃退出码非零自动重启+退避；复用 /api/health 探活；重启后 fail_stale_running 恢复队列项数 WARN 日志 | — | 未认领 | | P2｜35 人起步可认领（生产正式使用即做，第一位可用性保障） |
+| T-802 | 规模-执行 | 执行槽池化（RunManager→RunPool） | runner + user_store + runs + scheduler + RunControl | N 槽并发（默认 2，可配）；互斥维度全局→(workspace,env)（同工作区同环境不并发，不同可并行）；run_queue 加 slot 列；队列 ETA（历史均值）+ 优先级（manual>定时>批量）；abort/超时/断点语义池化下不回归（复用 T-111/T-112/T-118 测试） | T-801 | 未认领 | | P0｜触发制：连续一周队列>3 或等待>15min；架构级，开工前须冻结层评审 |
+| T-803 | 规模-调度 | 调度忙时排队（替代跳过） | scheduler + user_store | 忙时入队而非跳过（priority=定时 标记，T-802 多槽+优先级自然消化）；保留 skipped_busy 统计（调度被挤占比=执行槽不足观测指标）；可选错峰窗口 | T-802 | 未认领 | | P1｜挂 T-802 后；触发：定时任务 skipped_busy 用户反馈 |
+| T-804 | 规模-存储 | SQLite 写路径演进 | user_store/audit_store + 新增 services/db_metrics.py | 三步渐进：① 观测（写 TPS/锁等待 busy_timeout 命中打点，一周报告）→ ② 审计类批量/异步落盘（攒批 100ms 或 50 条）+ 高频读缓存 → ③ 必要时拆高频表分库或迁 PostgreSQL；验收：峰值写延迟<100ms 无 locked | — | 未认领 | | P1｜触发：database is locked 或写延迟>100ms；观测布点可提前 |
+| T-806 | 规模-储备 | 状态外迁与多机横向扩展 | runner/scheduler/存储层 | RunManager 状态 Redis 化或独立执行进程；SQLite→PostgreSQL（随 T-804 ③）；调度器独立进程化；Nginx 反代+多 worker+共享存储；验收：多 worker 队列不重复消费、滚动发布零停机 | T-802/T-804 | 储备 | | 触发制：100+ 且 T-802/804 后仍不足或 HA/多团队隔离硬需求；先评估报告再立项 |
+
 ---
 
 ## 5. 会话注册表（开工必填）
@@ -386,7 +413,8 @@ flowchart LR
 | sess-s3-dev | S3 材料包与信息包施工 | T-030 → T-031 → T-032 | 2026-08-11 | 全部完成：specflow/materials 包（store 两表 + pipeline + pack_assembler）+ specflow_pack MCP 5 工具 + REST 8 端点 + info_pack 挂载（runtime 侧）；F3 验收主路径走通（上传→indexed→候选确认→入包→六分区装配）；测试 33 例；test_specstd 878 绿 1 预存红 / release_check PASS |
 | sess-s6-dev | S6 测试侧三增强施工 | T-060/T-061 → T-062/T-063 → T-064 | 2026-08-11 | ✅ 2026-08-11 全部完成：覆盖缺口三态聚合 + sg_draft_gates 三闸状态机 + 测试数据制造 Agent + 失败归因 Agent + SPQ→信息包 loop-back；前端三需求（三态泳道/promote 三闸/归因确认）随任务交付；test_specstd 1076 全绿 / engine_modes 39 / test_engine 135 / release_check PASS / 前端 build PASS；P-A 并行会话联合提交（2832e05）后收尾：修复点号工具名（LLM 400）+ 旧测试三闸适配 + 恢复被污染 contracts_baseline.json |
 | sess-pa-dev | P-A 图谱支路施工 | T-070 → T-071 → T-072 → T-073 → T-074 | 2026-08-11 | ✅ 2026-08-11 全部完成：图谱索引（source_ref 源头定位补强随 builder 派生一次到位）→ 图谱视图（三镜头+backlink+源头跳转）→ 里程碑快照/演化 diff → 血缘链 Q1/Q2 → 断链规则集；与 S6 会话并发共存（追加式修改零覆盖）；测试 29 例 + 前端 build PASS |
-| sess-engine-t502 | 引擎演进补点施工（§4.3） | T-502 | 2026-08-11 | fixtures 文件引用预检静态扫描（第三批 §6.3 规格）：preflight with.file 扫描 + missing_files FAIL + scan_compliance 收录 + validator MISSING_FILE WARN；∥T-501 |
+| sess-master | 总控文档 v1.22 编排（总控人指令） | T-801~T-806 追加（编排登记，非施工认领） | 2026-08-11 | §4.7 规模化升级支线：多角色访问流转与升级设计落盘（T-801/T-805 随时可认领，T-802~T-804 触发制，T-806 储备）；已完成任务全部保持不变 |
+| sess-engine-t502 | 引擎演进补点施工（§4.3） | T-502 | 2026-08-11 | ✅ 2026-08-11 全部完成：preflight with.file 静态扫描 + missing_files 预检阻断 + scan_compliance 收录 + validator MISSING_FILE WARN + 前端 📎 分组；TDD 9 例全绿；与 sess-lark-dev（T-701~T-703）/sess-s8-dev（T-083~T-085）并行共存（stash 冲突对齐，文件零重叠） |
 | sess-s8-dev | S8 对外开放面施工 | T-083 → T-085 | 2026-08-11 | 对外 L0 五模块（open/ 命名空间）+ 研发侧 dev_context 三入口旗舰场景群；依赖就绪（治理三件套/T-052/T-056/T-070）；同会话串行施工 |
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | | | | | |
@@ -614,11 +642,12 @@ flowchart LR
 | workbench/frontend/src/pages/GraphPanorama.tsx | sess-pa-dev | 2026-08-11 | NEW | efdd4366e5ce | 已完成 | T-071/T-072：三层下钻 + 三镜头 + backlink + 里程碑时间轴/diff + 📍 源头定位行高亮 |
 | workbench/frontend/src/pages/LineageStory.tsx | sess-pa-dev | 2026-08-11 | NEW | 7c5500d0d9a8 | 已完成 | T-073/T-074：四阶段分带 + Q1/Q2 追溯 + 外部锚点虚线 + 断链 WARNING 面板 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-pa-dev | 2026-08-11 | 49510cd8a647 | d77e21e29e21 | 已完成 | v1.20 自身登记：P-A 完成——版本头 v1.20 决策 + §4.2 T-070~T-074 已完成 + §5 sess-pa-dev 收口 + §6 20 行；修改后hash = 登记中形态指纹 d77e21e29e21 |
-| workbench/backend/services/preflight.py | sess-engine-t502 | 2026-08-11 | 754a746b9fa1 | | 登记中 | T-502：_static_file_refs（with.file 提取）+ scan_dependencies/scan_compliance 收录 missing_files/unknown_file_refs |
-| mcp_server/tools/validator.py | sess-engine-t502 | 2026-08-11 | be02323a5a8c | | 登记中 | T-502：MISSING_FILE WARN（文件引用存在性，与 BODY_KEY/UNKNOWN_TPL 同族） |
-| test_specstd/test_preflight.py | sess-engine-t502 | 2026-08-11 | 489991496228 | | 登记中 | T-502：TDD 追加测试（文件存在无缺口/缺失报 missing_files/插值进 unknown_file_refs/teardown 扫描/scan_compliance 收录） |
-| workbench/frontend/src/api.ts | sess-engine-t502 | 2026-08-11 | 31f0f87cb42f | | 登记中 | T-502：PreflightResult 接口扩展 file_refs/missing_files/unknown_file_refs |
-| workbench/frontend/src/pages/RunControl.tsx | sess-engine-t502 | 2026-08-11 | 9bd6c6dee39c | | 登记中 | T-502：弹窗预警区 📎 fixtures 分组（复用 T-318 ❓ 插值展示通道） |
+| workbench/backend/services/preflight.py | sess-engine-t502 | 2026-08-11 | 754a746b9fa1 | f562b4d593a9 | 已完成 | T-502：_static_file_refs（with.file 提取）+ _split_file_refs（插值→unknown/缺失→missing）+ scan_dependencies/scan_compliance 收录 missing_files/unknown_file_refs（含 _group 聚合与 summary 计数），相对项目根（场景库根上层）判存在性，纯读零写路径 |
+| mcp_server/tools/validator.py | sess-engine-t502 | 2026-08-11 | be02323a5a8c | 79e241ef5561 | 已完成 | T-502：MISSING_FILE WARN（with.file 存在性校验，解析根=工作区根回退仓库根；插值路径跳过；与 BODY_KEY/UNKNOWN_TPL 同族） |
+| test_specstd/test_preflight.py | sess-engine-t502 | 2026-08-11 | 489991496228 | 08e3145023f9 | 已完成 | T-502：TDD 追加 7 例（文件存在无缺口/缺失报 missing_files/插值进 unknown_file_refs 与 gaps/teardown 扫描/多场景归组/绝对路径/scan_compliance 收录） |
+| test_specstd/test_acceptance_fixes.py | sess-engine-t502 | 2026-08-11 | 49f92b81e30e | e64a8bbbc7cd | 已完成 | T-502：validator MISSING_FILE 2 例（缺失 WARN/存在不报） |
+| workbench/frontend/src/api.ts | sess-engine-t502 | 2026-08-11 | 31f0f87cb42f | 34f217a4e478 | 已完成 | T-502：PreflightResult/PreflightScenario 扩展 file_refs/missing_files/unknown_file_refs(_gaps) |
+| workbench/frontend/src/pages/RunControl.tsx | sess-engine-t502 | 2026-08-11 | 9bd6c6dee39c | 5e7b55a3a413 | 已完成 | T-502：弹窗预警区 📎 fixtures 分组 + ❓ 文件引用分组（复用 T-318 通道，无覆盖输入框）+ 底部说明区分仓库缺陷语义 |
 | mcp_server/tools/lark_auth.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701：MCP 3 工具（lark_auth_status/login/logout）+ RPEST 共用底层函数 |
 | mcp_server/tools/lark_run.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-702：lark_execute 通用执行器（白名单/写保护/审计） |
 | mcp_server/server.py | sess-lark-dev | 2026-08-11 | 5176e99713cc | | 登记中 | T-701/T-702：TOOL_MODULES 注册 lark_auth + lark_run |
@@ -629,9 +658,11 @@ flowchart LR
 | workbench/frontend/src/App.tsx | sess-lark-dev | 2026-08-11 | b43a13ab3d15 | | 登记中 | T-703：菜单「绑定飞书」+ 路由 /lark-binding |
 | workbench/frontend/src/pages/LarkBinding.tsx | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-703：绑定页 UI（状态卡片/scope 清单/绑定引导） |
 | agent/purposes/requirement_interview.md | sess-lark-dev | 2026-08-11 | 1cb823842e19 | | 登记中 | T-702：白名单加 lark_auth_* 3 + lark_execute |
+| docs/远期设计/SpecGuard-多角色服务访问流转与规模化升级设计.md | sess-master | 2026-08-11 | NEW | f4d3b3ba01f3 | 已完成 | v1.22：规模化升级支线设计文档（角色服务访问流转图 + T-801~T-806 详细设计 + 开发时机总表） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-master | 2026-08-11 | df4c8289729e | 1c358976422f | 已完成 | v1.22 自身登记：版本头 v1.22 决策块 + §2.1 mermaid SCALE 支线 + §3.2 并行项 + §3.3 触发制储备项 + §4 分区说明 + §4.7 规模化升级支线（T-801~T-806）+ §5 注册 sess-master v1.22 + §6 两行；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 1c358976422f |
 | docs/远期设计/SpecGuard-飞书CLI集成设计-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 设计文档 |
 | docs/远期设计/SpecGuard-飞书CLI集成计划-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 实施计划 |
-| docs/远期设计/SpecGuard-总控文档.md | sess-engine-t502 | 2026-08-11 | 7f4052085d3d | | 登记中 | T-502 施工自身登记（覆盖本会话全部总控文档编辑：§5 注册、T-502 认领、§6 各行回填）；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-engine-t502 | 2026-08-11 | 7f4052085d3d | e009b8f1697f | 已完成 | T-502 施工自身登记（覆盖本会话全部总控文档编辑：§5 注册、T-502 认领与核销、§6 各行回填）；修改后hash = 登记中形态指纹 e009b8f1697f（v1.3 约定：本字段留空 + 状态=登记中、其余全文终态时的指纹；外部会话追加登记行后重算）；并行会话共存说明：sess-lark-dev（T-701~T-703）/sess-s8-dev（T-083~T-085）同时段施工，stash 对齐后文件零重叠，v1.22 编排内容未受影响 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 7f4052085d3d | | 登记中 | v1.22 自身登记：S8 对外开放面开工——§5 注册 sess-s8-dev + §4.2 T-083/T-085 认领（进行中）+ §6 文件登记行；与 sess-engine-t502 并发共存（追加式修改零覆盖）；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
 | mcp_server/tools/open/__init__.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：open/ 命名空间包（L0 只读面红线注释） |
 | mcp_server/tools/open/specflow_refs.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：get_frozen_spec/get_proposal/query_decisions/get_interview_status/get_delta_contract 五工具（M05/M04 数据源） |
