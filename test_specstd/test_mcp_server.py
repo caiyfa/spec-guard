@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 40  # T-601: 26 + S2 specflow: 12 + S2.5 feishu: 2
+        assert len(ALL_TOOLS) == 45  # T-601: 26 + S2 specflow: 12 + S2.5 feishu: 2 + S3 pack: 5 (stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -75,6 +75,9 @@ class TestToolRegistration:
                      "sf_suggest_scores", "sf_read_score_gate",
                      # S2.5 飞书日程/纪要工具（2）
                      "feishu_calendar_agenda", "feishu_meeting_notes",
+                     # S3 材料包/信息包工具（5）
+                     "pack_assemble", "pack_read_section", "material_parse_status",
+                     "material_extract_topics", "pack_freshness_check",
                      }
         assert names == expected
 
