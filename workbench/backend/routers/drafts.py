@@ -157,6 +157,12 @@ def list_drafts():
         return _freshness_cache[source_meta_id]
 
     if drafts_root.is_dir():
+        # T-061：三闸状态快照（一次查询全部草稿）
+        try:
+            from services import draft_gates
+            gates_map = {g["draft_id"]: g for g in draft_gates.list_gates()}
+        except Exception:
+            gates_map = {}
         for f in sorted(drafts_root.glob("*.yaml"), key=lambda p: p.stat().st_mtime, reverse=True):
             sid, title = "", ""
             try:
@@ -167,6 +173,7 @@ def list_drafts():
                 pass
             meta_entry = meta.get(f.name) or {}
             source_meta = meta_entry.get("scenario_id", "")  # K-013: SG-META 关联（注意与 YAML 的 id 字段区分）
+            gate = gates_map.get(f.name) or {}
             drafts.append({
                 "filename": f.name,
                 "scenario_id": sid,
@@ -177,6 +184,10 @@ def list_drafts():
                 "source_meta": source_meta,
                 "stale": _stale_of(source_meta),
                 "source_files": meta_entry.get("source_files", []),
+                "gates": {"g1": gate.get("gate1_status", "pending"),
+                           "g2": gate.get("gate2_status", "pending"),
+                           "g3": gate.get("gate3_status", "blocked")},
+                "source_delta": gate.get("source_delta", ""),
             })
     return {"drafts": drafts}
 
@@ -404,6 +415,65 @@ class PromoteBody(BaseModel):
     module: str          # 目标模块目录（相对 scenarios/，如 employee/person-profile）
     skip_gate: bool = False  # 仅调试用途跳过发布门禁（默认 False，正常入库必须过门禁）
     replace: bool = False    # T-313：覆盖同名场景（Agent 更新已有场景；原文件备份+失败回滚）
+
+
+class ReviewBody(BaseModel):
+    decision: str        # approved / rejected
+    comment: str = ""    # 评审意见（留痕）
+
+
+@router.post("/{filename}/review", dependencies=[Depends(require_role("admin", "tester"))])
+def review_draft(filename: str, body: ReviewBody):
+    """第①闸人工评审（T-061）：人拍板 approved/rejected，留痕 reviewer+ts。
+
+    gate2 未 pass 时 approved 被拒（②失败打回，①不生效）。
+    """
+    from services import draft_gates
+    from services.auth import current_emp_no
+    from services import user_store
+
+    try:
+        gate = draft_gates.review_draft(
+            filename, body.decision, reviewer=current_emp_no(),
+            comment=body.comment)
+    except draft_gates.GateError as e:
+        status = 400 if e.code in ("invalid_state", "missing_reviewer", "gate2_not_pass") else 404
+        raise HTTPException(status_code=status, detail=str(e))
+    try:
+        user_store.audit(current_emp_no(), "review_draft",
+                         f"草稿 {filename} 评审{body.decision}")
+    except Exception:
+        pass
+    return {"ok": True, "filename": filename, "gates": {
+        "g1": gate["gate1_status"], "g2": gate["gate2_status"],
+        "g3": gate["gate3_status"],
+        "gate1_reviewer": gate.get("gate1_reviewer", ""),
+        "gate1_ts": gate.get("gate1_ts", ""),
+    }}
+
+
+@router.post("/{filename}/revalidate", dependencies=[Depends(require_role("admin", "tester"))])
+def revalidate_draft(filename: str):
+    """重跑第②闸（T-061）：草稿修改后重新格式校验，报告逐项更新。"""
+    from services import draft_gates
+    from services.auth import current_emp_no
+    from services import user_store
+
+    path = _guard_filename(filename)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
+    try:
+        gate = draft_gates.run_gate2(filename)
+    except draft_gates.GateError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    try:
+        user_store.audit(current_emp_no(), "revalidate_draft",
+                         f"草稿 {filename} 重跑第②闸 → {gate['gate2_status']}")
+    except Exception:
+        pass
+    return {"ok": True, "filename": filename,
+            "gate2_status": gate["gate2_status"],
+            "gate2_report": gate.get("gate2_report", {})}
 
 
 @router.get("/{filename}/conflict", dependencies=[Depends(require_role("admin", "tester"))])

@@ -10,6 +10,7 @@ import Settings from './pages/Settings';
 import SpecValidation from './pages/SpecValidation';
 import AgentChat from './pages/AgentChat';
 import Attribution from './pages/Attribution';
+import CoveragePanel from './pages/CoveragePanel';
 import WorkspaceCenter from './pages/WorkspaceCenter';
 import GitLog from './pages/GitLog';
 import Feedback from './pages/Feedback';
@@ -22,6 +23,8 @@ import ZentaoPanel from './pages/ZentaoPanel';
 import MaterialsPanel from './pages/MaterialsPanel';
 import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
+import GraphPanorama from './pages/GraphPanorama';
+import LineageStory from './pages/LineageStory';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import { authApi, session } from './api';
@@ -50,7 +53,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: '总览',
     icon: '📊',
-    items: [{ to: '/', label: '仪表盘', end: true, roles: ALL }],
+    items: [
+      { to: '/', label: '仪表盘', end: true, roles: ALL },
+      { to: '/graph', label: '全景图谱', roles: ALL },  // T-071：P-A 图谱支路
+      { to: '/lineage', label: '血缘链', roles: ALL },  // T-073：审计追溯 Q1/Q2
+    ],
   },
   {
     label: '工作区',
@@ -78,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: '🧩',
     items: [
       { to: '/lifecycle', label: '测试生命周期', roles: ALL },  // K-xxx：台账聚合的完整生命周期监控
+      { to: '/coverage', label: '覆盖缺口', roles: ALL },       // T-060：三态泳道 + 生成下一批
       { to: '/plans', label: '场景管理', roles: TESTER_UP },
       { to: '/dag', label: 'DAG 编排', roles: ALL },
     ],
@@ -359,12 +367,15 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
+            <Route path="/lineage" element={<LineageStory />} />  {/* T-073：血缘链审计追溯 */}
             <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
             <Route path="/spec" element={<SpecValidation />} />
             <Route path="/materials" element={<MaterialsPanel />} />
             <Route path="/scores" element={<ScoreFreezePanel />} />
             <Route path="/zentao" element={<ZentaoPanel />} />
             <Route path="/plans" element={<Scenarios />} />
+                        <Route path="/coverage" element={<CoveragePanel />} />
             <Route path="/run" element={<RunControl />} />
             <Route path="/dag" element={<DagEditor />} />
             <Route path="/history" element={<History />} />

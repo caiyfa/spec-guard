@@ -31,7 +31,7 @@ HTTP_STATUS = {
     "invalid_filename": 400, "invalid_module": 400, "no_workspace": 400,
     "draft_not_found": 404, "module_not_found": 404,
     "conflict": 409, "id_conflict": 409, "validation_failed": 422,
-    "baseline_failed": 500, "gate_failed": 502,
+    "baseline_failed": 500, "gate_failed": 502, "gate_blocked": 409,
 }
 
 
@@ -258,6 +258,17 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
     path = _guard_filename(filename)
     if not path.is_file():
         raise PromoteError("draft_not_found", f"草稿不存在: {filename}")
+    # T-061：草稿三闸前置硬校验（gate1 approved + gate2 pass；无登记行 fail-closed）
+    try:
+        from services import draft_gates
+        ok_gate, gate_reason = draft_gates.check_promote_allowed(filename)
+        if not ok_gate:
+            raise PromoteError("gate_blocked", gate_reason)
+    except PromoteError:
+        raise
+    except Exception:
+        # 三闸服务异常时 fail-closed（铁律 3：每个产出必过闸，异常不得放行）
+        raise PromoteError("gate_blocked", "三闸前置校验异常，禁止 promote")
     module_dir = _guard_module(module)
     target = module_dir / filename
     # K-xxx：ID 全局唯一预检——把基线重建阶段的「场景 id 重复」前置为可执行提示。
@@ -310,6 +321,13 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
                 _rebuild_baseline()
             except Exception:
                 pass
+            # T-061：gate3=fail 滞留草稿（附门禁报告摘要）
+            try:
+                from services import draft_gates
+                draft_gates.mark_gate3_fail(
+                    filename, report=gate.get("output", "")[-500:])
+            except Exception:
+                pass
             raise PromoteError("gate_failed", "发布门禁未通过，已回滚",
                                detail={"gate_output": gate.get("output", "")})
 
@@ -334,6 +352,12 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
     try:
         from services import ledger_store
         ledger_store.set_draft_status(filename, "promoted", module)
+    except Exception:
+        pass
+    # T-061：三闸全过，gate3=pass + promoted_at 回填
+    try:
+        from services import draft_gates
+        draft_gates.mark_promoted(filename)
     except Exception:
         pass
 
@@ -361,6 +385,18 @@ def promote_batch(filenames: list[str] | None, module: str,
     if not filenames:
         d = _drafts_root()
         filenames = sorted(f.name for f in d.glob("*.yaml")) + sorted(f.name for f in d.glob("*.yml"))
+
+    # T-061：批量入库同样过三闸前置（无登记行/未 approved 的单份跳过并记录原因）
+    from services import draft_gates as _dg
+    _gate_skipped = []
+    for fn in list(filenames):
+        try:
+            ok_gate, reason = _dg.check_promote_allowed(fn)
+        except Exception:
+            ok_gate, reason = False, "三闸前置校验异常"
+        if not ok_gate:
+            filenames = [f for f in filenames if f != fn]
+            _gate_skipped.append({"file": fn, "reason": f"三闸未全过: {reason}"})
 
     # 闸 1：逐份校验 + 冲突检查（不合格单份跳过）
     qualified: list[tuple] = []
@@ -395,7 +431,7 @@ def promote_batch(filenames: list[str] | None, module: str,
         qualified.append((path, target, fn, report))
 
     if not qualified:
-        return {"ok": False, "promoted": [], "skipped": skipped,
+        return {"ok": False, "promoted": [], "skipped": _gate_skipped + skipped,
                 "error": "无合格草稿可入库（详见 skipped）"}
 
     # 入库：整批移动
@@ -451,7 +487,7 @@ def promote_batch(filenames: list[str] | None, module: str,
     return {
         "ok": True,
         "promoted": moved,
-        "skipped": skipped,
+        "skipped": _gate_skipped + skipped,
         "gate": gate,
-        "summary": f"入库 {len(moved)} 份，跳过 {len(skipped)} 份（module={module}）",
+        "summary": f"入库 {len(moved)} 份，跳过 {len(_gate_skipped) + len(skipped)} 份（module={module}）",
     }

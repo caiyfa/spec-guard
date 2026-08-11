@@ -43,7 +43,16 @@ verify:
 
 @pytest.fixture()
 def promote_env(tmp_path, monkeypatch):
-    """隔离 promote 环境：drafts/ + scenarios/{module}/ + 基线。"""
+    """隔离 promote 环境：drafts/ + scenarios/{module}/ + 基线。
+
+    T-061 适配：三闸前置（sg_draft_gates）语义由 test_s6_m07_coverage 专项覆盖，
+    此处 mock 通过——本文件专注 replace/conflict/回滚等既有行为。
+    """
+    from services import draft_gates
+    monkeypatch.setattr(draft_gates, "check_promote_allowed",
+                        lambda fn, db_path=None: (True, ""))
+    monkeypatch.setattr(draft_gates, "mark_promoted", lambda *a, **k: None)
+    monkeypatch.setattr(draft_gates, "mark_gate3_fail", lambda *a, **k: None)
     drafts = tmp_path / "drafts"
     scenarios = tmp_path / "scenarios" / "mod" / "a"
     drafts.mkdir(parents=True)

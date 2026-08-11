@@ -126,6 +126,20 @@ TOOLS = [
             "required": ["run_id", "scenario_id"],
         }
     ),
+    Tool(
+        name="assemble_evidence",
+        description="装配失败场景证据包（T-063）：flow_digest + 响应快照 + DB 快照 + 环境指纹"
+                    "四要素，确定性采集（DB 只读 SELECT-only）。用于失败归因前取证据——"
+                    "拿到 run_id 后对 FAIL 场景调用，产出证据包供定性分析。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "任务号（EX-xxxxxxxx）"},
+                "scenario_id": {"type": "string", "description": "失败场景 ID"},
+            },
+            "required": ["run_id", "scenario_id"],
+        }
+    ),
 ]
 
 
@@ -142,7 +156,28 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_list_executions(arguments)
     elif name == "read_case_detail":
         return _handle_read_case_detail(arguments)
+    elif name == "assemble_evidence":
+        return _handle_assemble_evidence(arguments)
     return []
+
+
+def _handle_assemble_evidence(arguments: dict) -> list[TextContent]:
+    """T-063：证据包装配（确定性采集，纯读）。"""
+    run_id = str(arguments.get("run_id", "") or "")
+    scenario_id = str(arguments.get("scenario_id", "") or "")
+    if not run_id or not scenario_id:
+        return [TextContent(type="text", text="错误：缺少 run_id 或 scenario_id 参数")]
+    try:
+        from services import attribution_service
+        evidence = attribution_service.assemble_evidence(run_id, scenario_id)
+        return [TextContent(type="text", text=json.dumps(
+            evidence, ensure_ascii=False, indent=2, default=str))]
+    except attribution_service.EvidenceError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error": str(e)}, ensure_ascii=False, indent=2))]
+    except Exception as e:
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error": f"证据装配失败: {e}"}, ensure_ascii=False, indent=2))]
 
 
 def _handle_list_failures(arguments: dict) -> list[TextContent]:

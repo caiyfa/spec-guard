@@ -216,6 +216,12 @@ class TestPromote:
     def _setup(self, ws, monkeypatch, verdict="PASS"):
         from services import draft_promote as dp
         monkeypatch.setattr(dp, "_rebuild_baseline", lambda: None)
+        # T-061 适配：三闸前置（sg_draft_gates）语义由 test_s6_m07_coverage 专项覆盖，此处 mock 通过
+        from services import draft_gates
+        monkeypatch.setattr(draft_gates, "check_promote_allowed",
+                            lambda fn, db_path=None: (True, ""))
+        monkeypatch.setattr(draft_gates, "mark_promoted", lambda *a, **k: None)
+        monkeypatch.setattr(draft_gates, "mark_gate3_fail", lambda *a, **k: None)
         # 关键隔离：ws(spec 仓库样例)无 scenarios/，K-016 回退会落到真实仓库根——
         # 必须钉到 tmp，防止测试产物写入真实 scenarios/（本测试类曾因此互相 conflict）
         monkeypatch.setattr(dp, "_scenarios_root", lambda: ws / "scenarios")
@@ -300,6 +306,12 @@ class TestPromote:
         """
         from services import draft_promote as dp
         monkeypatch.setattr(dp, "_rebuild_baseline", lambda: None)
+        # T-061 适配：三闸前置 mock 通过（专项覆盖在 test_s6_m07_coverage）
+        from services import draft_gates
+        monkeypatch.setattr(draft_gates, "check_promote_allowed",
+                            lambda fn, db_path=None: (True, ""))
+        monkeypatch.setattr(draft_gates, "mark_promoted", lambda *a, **k: None)
+        monkeypatch.setattr(draft_gates, "mark_gate3_fail", lambda *a, **k: None)
         # 模拟 K-016 回退：scenarios 根在工作区之外（SG_ROOT 侧）
         sg_repo = tmp_path / "sg_repo"
         monkeypatch.setattr(dp, "_scenarios_root", lambda: sg_repo / "scenarios")
@@ -411,6 +423,12 @@ class TestPromoteBatch:
         calls = {"rebuild": 0, "gate": 0}
         monkeypatch.setattr(dp, "_rebuild_baseline",
                             lambda: calls.__setitem__("rebuild", calls["rebuild"] + 1))
+        # T-061 适配：三闸前置 mock 通过（专项覆盖在 test_s6_m07_coverage）
+        from services import draft_gates
+        monkeypatch.setattr(draft_gates, "check_promote_allowed",
+                            lambda fn, db_path=None: (True, ""))
+        monkeypatch.setattr(draft_gates, "mark_promoted", lambda *a, **k: None)
+        monkeypatch.setattr(draft_gates, "mark_gate3_fail", lambda *a, **k: None)
         # 关键隔离：钉到 tmp，防测试产物写入真实 scenarios/（同 TestPromote 教训）
         monkeypatch.setattr(dp, "_scenarios_root", lambda: ws / "scenarios")
         import mcp_server.tools.validator as v

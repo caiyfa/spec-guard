@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 51  # T-601: 26 + S2 specflow: 12 + S2.5 feishu: 2 + S3 pack: 5 + S5 refs: 3 + S5 增补: 3 (stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 61  # 基础 51 + S6 coverage: 1 + P-A graph/lineage: 8 + S6 fabrication: 1 + S6 assemble_evidence: 1 (stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -83,6 +83,13 @@ class TestToolRegistration:
                      "sf_get_zentao_job",
                      # S5 增补：飞书文档/多维表格拉取 + 故事草案建议（对话分析建故事链路）
                      "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
+                     # S6 覆盖缺口查询（1，M07 §5.2）
+                     "coverage.query_gaps",
+                     # P-A 图谱查询（8，M11 §5.2 + M10 §5.2，T-070/T-072/T-073/T-074）
+                     "graph_query", "graph_backlink", "graph_rebuild",
+                     "graph_snapshot", "graph_diff", "lineage_trace", "lineage_check",
+                     # S6 数据制造（1，M08 §5.2）+ 归因证据包（1，M09 §5.2）
+                     "fabrication.fabricate_data", "assemble_evidence",
                      }
         assert names == expected
 

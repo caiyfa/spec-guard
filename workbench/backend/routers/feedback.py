@@ -66,6 +66,128 @@ def list_ledger(status: str = ""):
     return {"entries": ledger.list_entries(status or None)}
 
 
+# ══════════════════════════════════════════════════════════
+# M09 归因台账（T-063）：SPQ 建档/流转/查询/信息包装配
+# ══════════════════════════════════════════════════════════
+
+class CreateSpqBody(BaseModel):
+    title: str
+    run_id: str = ""
+    scenario_id: str = ""
+    fr_refs: list[str] = []
+    suggestion_kind: str = ""      # Agent 建议（仅存档，不生效）
+    decided_kind: str              # 人定性（生效值：product_defect/spec_question/environment）
+    comment: str = ""
+
+
+class SpqTransitionBody(BaseModel):
+    status: str
+    note: str = ""
+
+
+class SyncInfoPackBody(BaseModel):
+    iv_id: str                     # 目标面试 IV（如 IV-007）
+
+
+@router.get("/spq")
+def list_spq(status: str = "", fr: str = ""):
+    """归因台账查询（含挂链字段；可按状态/FR 过滤）。"""
+    ledger = _get_ledger()
+    entries = ledger.list_entries(status or None)
+    if fr:
+        entries = [e for e in entries if fr in (e.get("fr_refs") or [])]
+    return {"entries": entries}
+
+
+@router.post("/spq")
+def create_spq(body: CreateSpqBody):
+    """人定性建档 SPQ（T-063）：留痕 decided_by/decided_at（当前用户）；
+
+    suggestion_kind 仅存档（Agent 建议永不自动转 decided，铁律 1）；
+    缺 run_id/fr_refs → linkage_warnings（挂链完整性，不阻断建档）。
+    建档后自动尝试装配进匹配面试信息包（T-064 loop-back）。
+    """
+    from services import attribution_service
+    from services.auth import current_emp_no
+    ledger = _get_ledger()
+    try:
+        entry = attribution_service.create_spq(
+            ledger, title=body.title, run_id=body.run_id,
+            scenario_id=body.scenario_id, fr_refs=body.fr_refs,
+            suggestion_kind=body.suggestion_kind,
+            decided_kind=body.decided_kind, decided_by=current_emp_no(),
+            comment=body.comment)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # T-064：自动装配钩子（按 FR 相关性匹配进行中面试；无匹配静默）
+    try:
+        _auto_sync_info_pack(entry, body.fr_refs)
+    except Exception:
+        pass
+    return entry
+
+
+def _auto_sync_info_pack(entry: dict, fr_refs: list):
+    """自动装配：按 fr_refs/模块匹配进行中的面试 IV，注入 spq_feedback.yaml。"""
+    from specstd.workspace import specflow_dir
+    from specstd.workspace import get_workspace_root
+    ws = get_workspace_root()
+    if not ws:
+        return
+    base = specflow_dir()
+    iv_dir = base / "interviews"
+    if not iv_dir.is_dir():
+        return
+    # 进行中的面试（iv 生命周期 interviewing/p0_cleared）
+    from specflow.interview.iv_lifecycle import load_interview
+    matched = None
+    for d in sorted(iv_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        try:
+            iv = load_interview(d.name, base)
+        except Exception:
+            continue
+        status = getattr(iv, "status", "")
+        if status in ("interviewing", "p0_cleared"):
+            matched = d.name
+            break
+    if not matched:
+        return
+    from services import attribution_service
+    attribution_service.sync_spq_to_info_pack(
+        entry["spq_id"], matched, pack_dir=base, ledger=_get_ledger())
+
+
+@router.patch("/spq/{spq_id}")
+def patch_spq(spq_id: str, body: SpqTransitionBody):
+    """状态流转（非法迁移 → 409）。"""
+    from services import attribution_service
+    ledger = _get_ledger()
+    try:
+        return attribution_service.transition_spq(ledger, spq_id, body.status)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"台账条目不存在: {spq_id}")
+
+
+@router.post("/spq/{spq_id}/sync-info-pack")
+def sync_spq_info_pack(spq_id: str, body: SyncInfoPackBody):
+    """手动补偿：装配指定 SPQ 进指定面试信息包（幂等）。"""
+    from services import attribution_service
+    from specstd.workspace import specflow_dir
+    ledger = _get_ledger()
+    try:
+        result = attribution_service.sync_spq_to_info_pack(
+            spq_id, body.iv_id, pack_dir=specflow_dir(), ledger=ledger)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"台账条目不存在: {spq_id}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"装配失败: {e}")
+    return result
+
+
 @router.post("/ledger")
 def create_ledger(body: CreateLedgerBody):
     """创建台账条目。"""

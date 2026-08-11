@@ -30,7 +30,7 @@ export default function Drafts() {
   // K-xxx：覆盖入库（replace）+ 入库前 ID 冲突预检（选错模块/更新已有场景时提前提示）
   const [replace, setReplace] = useState(false);
   const [conflict, setConflict] = useState<{ existing: { id: string; path: string; module: string } | null; count: number } | null>(null);
-  const [busy, setBusy] = useState<'validate' | 'promote' | 'discard' | 'save' | 'trial' | 'dep' | ''>('');
+  const [busy, setBusy] = useState<'validate' | 'promote' | 'discard' | 'save' | 'trial' | 'dep' | 'review' | ''>('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState('');
   // K-046：依赖建议 + 试跑结果
@@ -225,6 +225,28 @@ export default function Drafts() {
     }
   };
 
+  // T-061：第①闸人工评审（人拍板，留痕 reviewer+ts）
+  const handleReview = async (decision: 'approved' | 'rejected') => {
+    if (!selected) return;
+    if (decision === 'rejected' && !window.confirm(`确认驳回 ${selected}？（第②闸校验通过前评审通过会被拒绝）`)) return;
+    setBusy('review');
+    setMessage(null);
+    try {
+      const r = await draftsApi.review(selected, decision);
+      setMessage({
+        ok: true,
+        text: decision === 'approved'
+          ? `✅ 第①闸评审通过（${r.gates.gate1_reviewer || ''}）——三闸齐备后可入库`
+          : `已驳回：${selected}`,
+      });
+      await refresh();
+    } catch (e: any) {
+      setMessage({ ok: false, text: `❌ 评审失败：${e.message}` });
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <div className="flex gap-4 h-full">
       {/* 左：草稿列表 */}
@@ -270,6 +292,25 @@ export default function Drafts() {
                 <div className="text-[10px] text-gray-600 mt-0.5">
                   {d.modified}{d.author ? ` · ${d.author}` : ''}
                 </div>
+                {/* T-061：三闸状态徽章 */}
+                {d.gates && (
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    <span className={`text-[9px] px-1 py-0.5 rounded ${d.gates.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : d.gates.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                      ① {d.gates.g1 === 'approved' ? '已评审' : d.gates.g1 === 'rejected' ? '已驳回' : '待评审'}
+                    </span>
+                    <span className={`text-[9px] px-1 py-0.5 rounded ${d.gates.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                      ② {d.gates.g2 === 'pass' ? '校验✓' : d.gates.g2 === 'fail' ? '校验✗' : '待校验'}
+                    </span>
+                    <span className={`text-[9px] px-1 py-0.5 rounded ${d.gates.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g3 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                      ③ {d.gates.g3 === 'pass' ? '门禁✓' : d.gates.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
+                    </span>
+                    {d.source_delta && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-info/15 text-info/90" title="血缘挂链：来源 delta">
+                        ← {d.source_delta}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {/* A+B：文件依赖展示 */}
                 {d.source_files && d.source_files.length > 0 && (
                   <div className="mt-1">
@@ -322,12 +363,40 @@ export default function Drafts() {
           <>
             {/* 操作栏 */}
             <div className="flex items-center gap-2 mb-3 flex-wrap">
+              {/* T-061：三闸状态卡（write 自动跑② → 人评审① → promote 跑③） */}
+              <div className="flex items-center gap-1 px-2 py-1 rounded bg-surface-2 border border-border text-[10px]">
+                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                  ① {selectedDraft?.gates?.g1 === 'approved' ? '已评审' : selectedDraft?.gates?.g1 === 'rejected' ? '已驳回' : '待评审'}
+                </span>
+                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                  ② {selectedDraft?.gates?.g2 === 'pass' ? '校验✓' : selectedDraft?.gates?.g2 === 'fail' ? '校验✗' : '待校验'}
+                </span>
+                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g3 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                  ③ {selectedDraft?.gates?.g3 === 'pass' ? '门禁✓' : selectedDraft?.gates?.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
+                </span>
+              </div>
               <button
                 onClick={handleValidate}
                 disabled={busy !== ''}
                 className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-sm hover:bg-surface-2 disabled:opacity-40"
               >
-                {busy === 'validate' ? '校验中…' : '① 格式校验'}
+                {busy === 'validate' ? '校验中…' : '② 格式校验'}
+              </button>
+              {/* T-061：第①闸人工评审（人拍板） */}
+              <button
+                onClick={() => handleReview('approved')}
+                disabled={busy !== ''}
+                title="第①闸人工评审通过（gate2 未过时会被拒绝）；三闸全过才可入库"
+                className="px-3 py-1.5 bg-green-900/40 text-green-400 rounded text-sm hover:bg-green-900/60 disabled:opacity-40"
+              >
+                {busy === 'review' ? '评审中…' : '① 评审通过'}
+              </button>
+              <button
+                onClick={() => handleReview('rejected')}
+                disabled={busy !== ''}
+                className="px-3 py-1.5 bg-red-900/30 text-red-400 rounded text-sm hover:bg-red-900/50 disabled:opacity-40"
+              >
+                驳回
               </button>
               <button
                 onClick={handleTrialRun}
@@ -375,7 +444,7 @@ export default function Drafts() {
                 title={report !== null && report.verdict !== 'PASS' ? '格式校验未通过，禁止入库' : ''}
                 className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40"
               >
-                {busy === 'promote' ? '入库中…' : '② 评审通过 · 入库'}
+                {busy === 'promote' ? '入库中…' : '③ 三闸全过 · 入库'}
               </button>
               <button
                 onClick={handleDiscard}

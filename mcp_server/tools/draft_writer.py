@@ -281,6 +281,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
             content = header + content
         draft_path.write_text(content, encoding="utf-8")
         _record_meta(filename, scenario_id, source_files=source_files)
+        _register_gates(filename, content)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
             "path": _rel_path(draft_path), "size": len(content),
@@ -295,6 +296,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         merged = existing + "\n" + content if existing else content
         draft_path.write_text(merged, encoding="utf-8")
         _record_meta(filename, scenario_id)
+        _register_gates(filename, merged)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
             "path": _rel_path(draft_path), "size": len(merged),
@@ -302,6 +304,32 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         }, ensure_ascii=False, indent=2))]
 
     return [TextContent(type="text", text=f"错误：未知模式: {mode}")]
+
+
+def _register_gates(filename: str, content: str):
+    """T-061：write 落盘后自动登记草稿三闸并跑第②闸（格式校验自动先跑）。
+
+    从 YAML 提取 scenario_id/covers/source_delta 登记 sg_draft_gates；
+    失败静默（三闸登记失败不阻断草稿写入主流程，promote 时 fail-closed 拦截）。
+    """
+    try:
+        import yaml as _yaml
+        from specstd.workspace import get_context_emp_no
+        from services import draft_gates
+
+        draft_gates.ensure_tables()
+        raw = _yaml.safe_load(content) or {}
+        covers = (raw.get("doc") or {}).get("covers") or raw.get("covers") or []
+        emp = get_context_emp_no() or ""
+        draft_gates.register_draft(
+            filename,
+            scenario_id=str(raw.get("id", "") or ""),
+            covers=[str(c) for c in covers],
+            source_delta=str(raw.get("source_delta", "") or ""),
+            created_by=emp,
+        )
+    except Exception:
+        pass
 
 
 def _handle_undo_draft(arguments: dict) -> list[TextContent]:

@@ -1,6 +1,9 @@
 // 失败归因页：读取运行报告，展示失败场景 + 断言差异 + 归因分类
+// T-063：归因 Agent——证据包装配 + 定性建议（suggestion 永不自动转 decided）→ 人确认建档 SPQ
 
 import { useState, useEffect } from 'react';
+import { attributionApi } from '../api';
+import type { AttributeResult, SpqEntry } from '../api';
 
 const BASE = '/api';
 
@@ -21,18 +24,38 @@ interface RunReport {
   report_md_preview: string;
 }
 
+const KIND_LABEL: Record<string, { label: string; cls: string }> = {
+  product_defect: { label: '疑似产品缺陷', cls: 'bg-red-900/40 text-red-400' },
+  spec_question: { label: 'spec 质疑', cls: 'bg-yellow-900/40 text-yellow-400' },
+  environment: { label: '环境问题', cls: 'bg-orange-900/40 text-orange-400' },
+};
+
+const SPQ_STATUS: Record<string, string> = {
+  pending: '待定性', in_progress: '处理中', zentao_filed: '已提禅道', closed: '已闭环',
+};
+
 export default function Attribution() {
   const [runId, setRunId] = useState('');
   const [report, setReport] = useState<RunReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [history, setHistory] = useState<any[]>([]);
+  // T-063：归因结果（per 失败场景）
+  const [attributions, setAttributions] = useState<Record<string, AttributeResult>>({});
+  const [attributing, setAttributing] = useState('');
+  const [spqList, setSpqList] = useState<SpqEntry[]>([]);
+  const [spqMessage, setSpqMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const refreshSpq = () => {
+    attributionApi.spqList().then(r => setSpqList(r.entries)).catch(() => {});
+  };
 
   useEffect(() => {
     fetch(`${BASE}/runs/history?limit=10`)
       .then(r => r.json())
       .then(data => setHistory(data.reports || data || []))
       .catch(() => {});
+    refreshSpq();
   }, []);
 
   const loadReport = async (id: string) => {
@@ -77,6 +100,55 @@ export default function Attribution() {
       BLOCKED: { label: '上游阻塞', color: 'text-orange-400' },
     };
     return categories[verdict] || { label: verdict, color: 'text-gray-400' };
+  };
+
+  // T-063：触发归因（证据包装配 + 确定性定性建议，仅建议不落台账）
+  const handleAttribute = async (scenarioId: string) => {
+    if (!report) return;
+    setAttributing(scenarioId);
+    setError('');
+    try {
+      const r = await attributionApi.attribute(report.run_id, scenarioId);
+      setAttributions(prev => ({ ...prev, [scenarioId]: r }));
+    } catch (e: any) {
+      setError(`归因失败：${e.message}`);
+    } finally {
+      setAttributing('');
+    }
+  };
+
+  // T-063：人拍板建档 SPQ（suggestion 确认后才生效，留痕 decided_by）
+  const handleConfirmSpq = async (scenarioId: string, kind: string) => {
+    const attr = attributions[scenarioId];
+    if (!attr) return;
+    if (!window.confirm(
+      `确认将 ${scenarioId} 定性为「${KIND_LABEL[kind]?.label || kind}」并建档 SPQ？\n` +
+      `留痕 decided_by（当前用户）；建议不自动转 decided——这是人拍板确认。`)) return;
+    try {
+      await attributionApi.spqCreate({
+        title: `${scenarioId} 失败归因：${attr.suggestion.rationale.slice(0, 40)}`,
+        run_id: report?.run_id,
+        scenario_id: scenarioId,
+        fr_refs: [],
+        suggestion_kind: attr.suggestion.kind,
+        decided_kind: kind,
+        comment: attr.evidence.response_snapshot.assertion_failed?.slice(0, 200) || '',
+      });
+      setSpqMessage({ ok: true, text: `✅ 已建档 SPQ（${scenarioId} → ${KIND_LABEL[kind]?.label}）——台账待讨论闭环` });
+      refreshSpq();
+    } catch (e: any) {
+      setSpqMessage({ ok: false, text: `❌ 建档失败：${e.message}` });
+    }
+  };
+
+  // T-063：SPQ 状态流转
+  const handleSpqTransition = async (spqId: string, status: string) => {
+    try {
+      await attributionApi.spqPatch(spqId, status);
+      refreshSpq();
+    } catch (e: any) {
+      setSpqMessage({ ok: false, text: `状态流转失败：${e.message}` });
+    }
   };
 
   return (
@@ -131,6 +203,12 @@ export default function Attribution() {
       {/* 归因报告 */}
       {report && (
         <div className="flex-1 overflow-y-auto space-y-3">
+          {/* T-063：建档消息 */}
+          {spqMessage && (
+            <div className={`px-3 py-2 rounded-lg text-sm ${spqMessage.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
+              {spqMessage.text}
+            </div>
+          )}
           {/* 概要 */}
           <div className="bg-surface-1 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between mb-2">
@@ -155,7 +233,17 @@ export default function Attribution() {
                 <div key={i} className="bg-surface-1 rounded-lg border border-border p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-mono text-info">{fc.scenario_id}</span>
-                    <span className={`text-xs ${cat.color}`}>{cat.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs ${cat.color}`}>{cat.label}</span>
+                      {/* T-063：触发归因 */}
+                      <button
+                        onClick={() => handleAttribute(fc.scenario_id)}
+                        disabled={attributing !== ''}
+                        className="px-2 py-0.5 bg-surface-3 text-gray-300 rounded text-[10px] hover:bg-surface-2 disabled:opacity-40"
+                        title="装配证据包 + 确定性定性建议（仅建议，人确认才建档）">
+                        {attributing === fc.scenario_id ? '归因中…' : '🔍 归因'}
+                      </button>
+                    </div>
                   </div>
                   {fc.error && (
                     <div className="bg-red-900/20 rounded p-2 mb-2 text-xs text-red-300 font-mono">
@@ -174,10 +262,104 @@ export default function Attribution() {
                       ))}
                     </div>
                   )}
+
+                  {/* T-063：归因建议 + 证据包 + 人拍板 */}
+                  {attributions[fc.scenario_id] && (() => {
+                    const attr = attributions[fc.scenario_id];
+                    const sug = KIND_LABEL[attr.suggestion.kind] || KIND_LABEL.product_defect;
+                    return (
+                      <div className="mt-2 space-y-2">
+                        <div className="bg-surface-2 rounded p-2 border border-border">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${sug.cls}`}>
+                              Agent 建议：{sug.label}
+                            </span>
+                            <span className="text-[10px] text-gray-500">仅建议——人确认才建档</span>
+                          </div>
+                          <div className="text-[11px] text-gray-400">{attr.suggestion.rationale}</div>
+                          {attr.honesty_review?.required && (
+                            <div className="mt-1 text-[10px] px-1.5 py-1 rounded bg-orange-900/30 text-orange-400">
+                              ⚠️ 诚实性复核：{attr.honesty_review.conclusion}
+                            </div>
+                          )}
+                          <details className="mt-1.5 text-[10px]">
+                            <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
+                              证据包（flow_digest {attr.evidence.flow_digest} · 断言现场）
+                            </summary>
+                            <div className="mt-1 pl-2 space-y-0.5 text-gray-500">
+                              <div>断言失败：{attr.evidence.response_snapshot.assertion_failed || '—'}</div>
+                              <div>响应摘录：{(attr.evidence.response_snapshot.body_excerpt || '—').slice(0, 120)}</div>
+                              <div>DB 快照：{attr.evidence.db_snapshots.length} 条 · 环境：{attr.evidence.env_fingerprint.env || '—'}</div>
+                            </div>
+                          </details>
+                          {/* 人拍板：确认建档 / 改判 */}
+                          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                            {Object.entries(KIND_LABEL).map(([k, v]) => (
+                              <button key={k}
+                                onClick={() => handleConfirmSpq(fc.scenario_id, k)}
+                                disabled={attributing !== ''}
+                                className={`px-2 py-0.5 rounded text-[10px] ${v.cls} border border-border hover:opacity-80 disabled:opacity-40`}
+                                title="人拍板建档 SPQ（留痕 decided_by）">
+                                定性：{v.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })
           )}
+
+          {/* T-063：SPQ 台账（挂链字段 + 状态流转） */}
+          <div className="bg-surface-1 rounded-lg border border-border p-3">
+            <div className="text-sm text-gray-300 font-medium mb-2">📒 SPQ 归因台账</div>
+            {spqList.length === 0 ? (
+              <div className="text-xs text-gray-600">暂无归因台账条目（归因建议经人拍板后在此建档）</div>
+            ) : (
+              <div className="space-y-1.5">
+                {spqList.map((s) => (
+                  <div key={s.spq_id} className="px-2 py-1.5 rounded bg-surface-2 border border-border">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-mono text-info">{s.spq_id}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
+                        {s.status === 'pending' && (
+                          <button onClick={() => handleSpqTransition(s.spq_id, 'in_progress')}
+                            className="text-[10px] px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded hover:bg-yellow-900/60">
+                            处理中
+                          </button>
+                        )}
+                        {s.status !== 'closed' && (
+                          <button onClick={() => handleSpqTransition(s.spq_id, 'closed')}
+                            className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60">
+                            闭环
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={s.title}>{s.title}</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5 flex gap-2 flex-wrap">
+                      {s.run_id && <span>← {s.run_id}</span>}
+                      {s.scenario_id && <span>{s.scenario_id}</span>}
+                      {(s.fr_refs || []).length > 0 && <span>FR: {(s.fr_refs || []).join(',')}</span>}
+                      {s.decided_kind && (
+                        <span className={KIND_LABEL[s.decided_kind]?.cls || ''}>
+                          {KIND_LABEL[s.decided_kind]?.label}
+                        </span>
+                      )}
+                      {s.decided_by && <span>拍板: {s.decided_by}</span>}
+                      {(s.info_pack_synced || []).length > 0 && (
+                        <span className="text-info/80">⟳ 已入包: {(s.info_pack_synced || []).join(',')}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* BUG 单草稿 */}
           {report.failed_cases.length > 0 && (

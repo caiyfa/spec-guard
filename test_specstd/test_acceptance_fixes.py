@@ -589,6 +589,12 @@ class TestD1DraftsGate:
         monkeypatch.setattr(draft_promote, "_drafts_root", lambda: drafts_dir)
         monkeypatch.setattr(draft_promote, "_scenarios_root", lambda: tmp_path / "scenarios")
         monkeypatch.setattr(draft_promote, "SG_ROOT", tmp_path)
+        # T-061 适配：三闸前置 mock 通过（专项覆盖在 test_s6_m07_coverage）
+        from services import draft_gates
+        monkeypatch.setattr(draft_gates, "check_promote_allowed",
+                            lambda fn, db_path=None: (True, ""))
+        monkeypatch.setattr(draft_gates, "mark_promoted", lambda *a, **k: None)
+        monkeypatch.setattr(draft_gates, "mark_gate3_fail", lambda *a, **k: None)
 
         draft = drafts_dir / "XX-TEST-100.yaml"
         draft.write_text("""

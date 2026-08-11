@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, zentao
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, zentao, coverage, data_fab, graph, lineage
 from services.auth import get_current_user
 from services import user_store
 
@@ -70,6 +70,9 @@ def _startup():
     # K-xxx：业务台账投影层建表（场景/草稿/运行/会话台账，文件仍是真相源）
     from services import ledger_store
     ledger_store.ensure_tables()
+    # T-061: sg_draft_gates 三闸状态机建表
+    from services import draft_gates
+    draft_gates.ensure_tables()
     user_store.fail_stale_running()
     _migrate_legacy_sessions()
     # S2: specflow sf_* 表初始化
@@ -135,6 +138,10 @@ app.include_router(specflow_decisions.router, dependencies=[Depends(get_current_
 app.include_router(specflow_materials.router, dependencies=[Depends(get_current_user)])
 app.include_router(specflow_freeze.router, dependencies=[Depends(get_current_user)])
 app.include_router(zentao.router, dependencies=[Depends(get_current_user)])
+app.include_router(coverage.router, dependencies=[Depends(get_current_user)])
+app.include_router(data_fab.router, dependencies=[Depends(get_current_user)])
+app.include_router(graph.router, dependencies=[Depends(get_current_user)])
+app.include_router(lineage.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/api/health")

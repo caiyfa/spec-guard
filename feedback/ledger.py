@@ -77,6 +77,83 @@ class FeedbackLedger:
         self._save()
         return entry
 
+    # ══════════════════════════════════════════════════════════
+    # M09 扩展：归因关联边（T-063）——SPQ ← run_id / FR-xxx 挂链
+    # ══════════════════════════════════════════════════════════
+
+    VALID_DECIDED_KINDS = ("product_defect", "spec_question", "environment")
+
+    def create_attributed(self, title: str, run_id: str = "", scenario_id: str = "",
+                          fr_refs: list = None, suggestion_kind: str = "",
+                          decided_kind: str = "", decided_by: str = "",
+                          comment: str = "") -> dict:
+        """创建带归因挂链的台账条目（M09 §4.4，T-063）。
+
+        decided_kind 非空时必须带 decided_by 留痕（铁律 1：人拍板才生效）。
+        """
+        if decided_kind and decided_kind not in self.VALID_DECIDED_KINDS:
+            raise ValueError(f"decided_kind 必须为 {self.VALID_DECIDED_KINDS}")
+        if decided_kind and not decided_by:
+            raise ValueError("人定性必须留痕 decided_by")
+        entry = self.create(title, source="loop_b", scenario_id=scenario_id)
+        if run_id:
+            entry["run_id"] = run_id
+        if fr_refs:
+            entry["fr_refs"] = list(fr_refs)
+        if suggestion_kind:
+            entry["suggestion_kind"] = suggestion_kind
+        if decided_kind:
+            entry["decided_kind"] = decided_kind
+            entry["decided_by"] = decided_by
+            entry["decided_at"] = datetime.now().isoformat(timespec="seconds")
+            if comment:
+                entry["decided_comment"] = comment
+            entry.setdefault("events", []).append({
+                "type": "decided", "kind": decided_kind, "by": decided_by,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+            })
+        self._save()
+        return entry
+
+    def update_decided(self, spq_id: str, decided_kind: str, decided_by: str,
+                       comment: str = "") -> dict:
+        """人改判/驳回（M09 归因状态机：suggested → decided_kind 改写）。
+
+        suggestion 永不自动转 decided——本方法只由人拍板路径调用，留痕 decided_by。
+        """
+        if decided_kind not in self.VALID_DECIDED_KINDS:
+            raise ValueError(f"decided_kind 必须为 {self.VALID_DECIDED_KINDS}")
+        if not decided_by:
+            raise ValueError("人定性必须留痕 decided_by")
+        for entry in self._entries:
+            if entry["spq_id"] == spq_id:
+                entry["decided_kind"] = decided_kind
+                entry["decided_by"] = decided_by
+                entry["decided_at"] = datetime.now().isoformat(timespec="seconds")
+                if comment:
+                    entry["decided_comment"] = comment
+                entry["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                entry.setdefault("events", []).append({
+                    "type": "decided", "kind": decided_kind, "by": decided_by,
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                })
+                self._save()
+                return entry
+        raise KeyError(f"台账条目不存在: {spq_id}")
+
+    def mark_info_pack_synced(self, spq_id: str, iv_id: str) -> dict:
+        """回填 info_pack_synced（T-064：已装配进的面试 IV 清单，幂等去重）。"""
+        for entry in self._entries:
+            if entry["spq_id"] == spq_id:
+                synced = entry.get("info_pack_synced") or []
+                if iv_id not in synced:
+                    synced.append(iv_id)
+                entry["info_pack_synced"] = synced
+                entry["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                self._save()
+                return entry
+        raise KeyError(f"台账条目不存在: {spq_id}")
+
     def transition(self, spq_id: str, new_status: str) -> dict:
         """状态流转（仅允许合法迁移，closed 为终态）。"""
         if new_status not in self.VALID_STATUSES:

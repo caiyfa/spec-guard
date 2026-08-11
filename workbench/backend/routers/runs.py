@@ -228,6 +228,49 @@ def api_get_run_context(run_id: str):
     return {"run_id": run_id, "context": _json.loads(ctx_path.read_text(encoding="utf-8"))}
 
 
+# ══════════════════════════════════════════════════════════
+# M09 失败归因（T-063）：证据包读取 + 归因触发
+# ══════════════════════════════════════════════════════════
+
+@router.get("/{run_id}/evidence/{scenario_id}", dependencies=[Depends(get_current_user)])
+def api_evidence(run_id: str, scenario_id: str):
+    """证据包读取（M09 §5.1，只读派生）。"""
+    from services import attribution_service
+    try:
+        return attribution_service.assemble_evidence(run_id, scenario_id)
+    except attribution_service.EvidenceError as e:
+        status = 400 if e.code == "invalid_run_id" else 404
+        raise HTTPException(status_code=status, detail=str(e))
+
+
+class AttributeBody(BaseModel):
+    scenario_id: str
+
+
+@router.post("/{run_id}/attribute", dependencies=[Depends(require_role("admin", "tester"))])
+def api_attribute(run_id: str, body: AttributeBody):
+    """触发归因：装配证据包 + 确定性定性建议（仅建议，不落台账）。"""
+    from services import attribution_service
+    try:
+        evidence = attribution_service.assemble_evidence(run_id, body.scenario_id)
+    except attribution_service.EvidenceError as e:
+        status = 400 if e.code == "invalid_run_id" else 404
+        raise HTTPException(status_code=status, detail=str(e))
+    case_msg = (evidence.get("response_snapshot") or {}).get("assertion_failed", "")
+    suggestion = attribution_service.suggest_kind(
+        verdict="FAIL", category="assertion", message=case_msg)
+    review = attribution_service.build_honesty_review(
+        verdict="FAIL", kind=suggestion["kind"], clues=[case_msg])
+    return {
+        "run_id": run_id,
+        "scenario_id": body.scenario_id,
+        "evidence": evidence,
+        "suggestion": suggestion,       # 仅建议——人确认才建档（suggestion 不自动转 decided）
+        "honesty_review": review,
+        "note": "建议不产生台账；确认后经 POST /api/feedback/spq 建档（留痕 decided_by）",
+    }
+
+
 @router.get("/{run_id}", dependencies=[Depends(get_current_user)])
 def api_get_run(run_id: str):
     """单次运行详情（run.json）"""
