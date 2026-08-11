@@ -155,26 +155,28 @@ async def _handle_sf_check_p0_gate(args: dict) -> list[TextContent]:
 async def _handle_sf_suggest_scores(args: dict) -> list[TextContent]:
     """建议五维评分（写库 status=suggested，不计入总分）。
 
-    TODO(F2/S4)：当前机打维度为占位常量，真实实现由 specstd/conformance
-    驱动（11 章齐全性/边界异常比对器），S4 扫描仪与评分卡落地时替换。
+    机打维度由 specflow.anchor.scoring 的真实采集器驱动
+    （11 章齐全性/边界异常比对器/覆盖率映射），替换了 S2 的占位常量。
     幂等：同面试同维度已有 suggested 记录时跳过，不重复插入。
     """
     from workbench.backend.services.specflow.decision_service import db_add_score
     from specstd.workspace import get_context_workspace
+    from specflow.anchor.scoring import collect_all_machine_dimensions
     ws = get_context_workspace() or ""
     iv_id = args["interview_id"]
     results = []
-    machine_dims = [
-        ("logic", 78, "11 章齐全, SHALL 语句完整"),
-        ("coverage", 85, "FR 覆盖率达 85%"),
-        ("boundary", 55, "缺「规则切换中落位」异常场景"),
-        ("precondition", 70, "前置条件完整"),
-    ]
+
+    # 获取 spec draft 文本用于机打分析
+    spec_text = args.get("spec_text", "")
+    spec_text = str(spec_text or "")
+
+    # 机打维度：真实采集器替换占位常量
+    machine_dims = collect_all_machine_dimensions(spec_text)
     for dim, score, evidence in machine_dims:
         r = db_add_score(ws, iv_id, dim, score, "machine", evidence,
                          skip_if_suggested=True)
         results.append(r)
-    r = db_add_score(ws, iv_id, "clarity", 62, "llm_suggested",
+    r = db_add_score(ws, iv_id, "clarity", 62.0, "llm_suggested",
                      "LLM 建议：预期清晰度待 QA 复核", skip_if_suggested=True)
     results.append(r)
     return [TextContent(type="text", text=str({

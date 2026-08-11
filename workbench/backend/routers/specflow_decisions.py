@@ -172,29 +172,25 @@ def evaluate_scores(
 ):
     """触发机打维度采集 + LLM 预打分，返回 suggested 集合（幂等）。
 
-    TODO(F2/S4)：当前机打维度为占位常量，真实实现由
-    specstd/conformance 驱动（11 章齐全性/边界异常比对器），
-    S4 扫描仪与评分卡落地时替换。
+    机打维度由 specflow.anchor.scoring 的真实采集器驱动
+    （11 章齐全性/边界异常比对器/覆盖率映射），替换了 S2 的占位常量。
     """
     from workbench.backend.services.specflow.decision_service import db_add_score
+    from specflow.anchor.scoring import collect_all_machine_dimensions
     interview_id = body["interview_id"]
     spec_sha = body.get("spec_sha", "")
+    spec_text = body.get("spec_text", "")
 
     results = []
-    # 机打维度占位（F2 起由 specstd/conformance 驱动；skip_if_suggested 幂等去重）
-    machine_dims = [
-        ("logic", 78, "11 章齐全, SHALL 语句完整"),
-        ("coverage", 85, "FR 覆盖率达 85%"),
-        ("boundary", 55, "缺「规则切换中落位」异常场景"),
-        ("precondition", 70, "前置条件完整"),
-    ]
+    # 机打维度：真实采集器替换占位常量
+    machine_dims = collect_all_machine_dimensions(str(spec_text or ""))
     for dim, score, evidence in machine_dims:
         r = db_add_score(workspace, interview_id, dim, score, "machine",
                          evidence, spec_sha, skip_if_suggested=True)
         results.append(r)
 
-    # LLM 建议维度占位（QA 确认后生效）
-    r = db_add_score(workspace, interview_id, "clarity", 62, "llm_suggested",
+    # LLM 建议维度（QA 确认后生效）
+    r = db_add_score(workspace, interview_id, "clarity", 62.0, "llm_suggested",
                      "LLM 建议：预期清晰度待 QA 复核", spec_sha,
                      skip_if_suggested=True)
     results.append(r)
