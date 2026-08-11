@@ -24,6 +24,8 @@
 > **v1.8 决策（2026-08-10，总控人指令）**：**一人可同时持多用途**——需求面试与测试编排不互斥，同一用户可同时进行两类会话；落地：① **RBAC 单角色扩展为多角色**（`users.role` 单值 → `roles` 多值，`require_role` 语义改「包含任一角色即通过」，`is_admin` 语义不变），新增 `product` 角色（M12 §4.4 已规划）；② **用途可见性 = 用户角色集合 ∩ 用途 roles 集合（并集语义）**：`/purposes` 返回全部可见用途（多用途用户见两张卡，单选建会话），单用途用户仍跳过选择页（M01 效率保护不变）；③ **会话与产物天然并存**：同一 emp 可同时持有 requirement_interview 与 test_workbench 两类会话（agent_sessions 按 emp+purpose 隔离），产物按用途分目录并存（`.specguard/{emp}/` 与 `.specflow/{emp}/`，T-014 已覆盖）；④ T-013 验收要点更新为「角色集合并集过滤」；T-014 备注补「多用途产物并存」。
 >
 > **v1.10 决策（2026-08-10，sess-s2-dev）**：**S2 面试闭环全部完成**——T-020~T-024 五任务全量交付：specflow/interview 包（IV 生命周期/议题卡 7 种 source/11 章提问库/决策台账 6 表/amendment 增补链/P0 清零门禁）+ MCP 工具 11 个 + REST API 2 模块 19 端点 + 55 单测全绿（全库 798 绿 1 预存红）；§2.1 S2 行标注 ✅，§3.1 硬串行 S2 后续依赖（S3）可认领。
+>
+> **v1.11 决策（2026-08-11，sess-s2.5）**：**新增 S2.5 阶段**——日程获取与文档权限处理。飞书日程 `+agenda` → `+meeting` → `vc +detail` → `note +detail` → `docs +fetch` 链路已验证通（§2.3 08-07「应用交付组AI Coding分享」纪要正文成功读取）；日历 `calendar:calendar.event:read` scope 已授权。面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时结构化提示+申请引导（`+apply-permission`）。S2.5 不阻塞 S3，随 S2 完成后可认领。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -73,6 +75,7 @@
 | **S0.5** 依据透明（v1.5 新增快车道） | agent 读过的关键文档进面板，关键章节可见 | 用户跟上 agent 关键思路、把判断依据摊开（阅读足迹面板 + 章节提取）；**不阻塞 S1** | agent/runtime + workbench（《知识体系设计》§4.5） |
 | **S1** purpose 地基 ✅ | 会话创建期锁定 + 工具白名单运行时强制 | 越权工具调用被确定性拒绝；purpose 不可变（**✅ 2026-08-10 完成：T-010~T-014 全部交付，S2 依赖就绪**） ；[2026-08-10 修复] 全量代码审查修复 6 项安全漏洞（H1/H2/M1-M6），详见 §4.2 T-010~T-014 备注与 §5 sess-s1-fix | M01 / M12 / M13(P1骨架) |
 | **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示 | M02 / M04 |
+| **S2.5** 日程获取与文档权限 | 日历+会议纪要链路封装 + 无权限文档结构化引导 | 面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时展示提示+申请链接（`+apply-permission`），不静默降级 | 飞书 CLI（calendar/vc/note/docs） |
 | **S3** 材料包与信息包 | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归 | M03 |
 | **S4** 扫描仪与评分卡 | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效 | M05 / M04 |
 | **S5** 三闸冻结 + 禅道 | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记 | M05 / M06 |
@@ -89,7 +92,9 @@ flowchart LR
   S05 --> S1["S1 purpose 地基<br/>T-010 ∥ T-011 并行"]
   S0 --> S1
   S1 --> S2["S2 面试闭环★ ✅"]
+  S2 --> S25["S2.5 日程获取与文档权限※"]
   S2 --> S3["S3 材料包与信息包"]
+  S25 -.-> S3
   S3 --> S4["S4 扫描仪与评分卡"]
   S4 --> S5["S5 三闸冻结 + 禅道"]
   S5 --> S6["S6 测试侧三增强"]
@@ -122,6 +127,7 @@ flowchart LR
 | T-401 编排单测收口（=S0 前置） | T-402 / T-403 / T-404 | 先有线再施工：runtime/llm_client 改动需回归网兜底 |
 | T-601 modes 体系退役（v1.6） | T-010 purpose 模型 | 双轨 prompt 装配污染（modes 与 skills 同题双写）；先退役再开 T-010 一次改到位，避免三次改装配 |
 | T-010 purpose 模型 | S2 全部 | 面试会话挂在 purpose 上 |
+| T-025/T-026 S2.5 链路工具 | S3 全部（S2.5 不阻塞 S3，虚线依赖） | 日程/纪要虽补充素材但非解析管线前提；原则上可并行 |
 | T-023 台账 schema + T-024 P0 清零 | T-042 评分门禁 → S5 全部 | 冻结三闸的③闸依赖台账与清零校验 |
 | T-050 delta manifest | T-051 三闸冻结 → T-053/054/055/056 | 禅道侧一切动作消费冻结产物（铁律 6） |
 | S5 全部 | S6 全部 | 数据制造/归因 Agent 需要三闸与 delta 通道在位 |
@@ -144,6 +150,7 @@ flowchart LR
 - **引擎支线**：§4.3 T-501 / T-502 与 S1+ 主线互不依赖，认领即可开工
 - **知识支线**：§4.4 T-505 / T-506 无依赖可认领；T-507~T-510 随 S1/S3/S6 阶段解锁
 - **飞书 CLI 支线（v1.6）**：§4.6 T-701~T-703 与 S1+ 主线互不依赖（T-701 依赖 T-602 单一注册面），近期可认领
+- **S2.5（v1.11）**：T-025/T-026 随 S2 完成后可认领（S2 ✅ 2026-08-10 满足），与 S3 并行不阻塞（§3.1 虚线依赖）
 
 ### 3.3 储备项（不认领，触发条件由总控人宣布）
 
@@ -235,10 +242,12 @@ flowchart LR
 | T-022 | S2 | sf_interviews/sf_questions 表 | M02 | P0/P1/P2分级落库 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（sf_store.py：sf_interviews + sf_questions 建表/CRUD/索引，参照 agent_session_store 模式） |
 | T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（decision_ledger.py：sf_decisions/sf_decision_links/sf_decision_amendments/sf_decision_draft_marks/sf_gate_evidence/sf_scores 六表 + pending→resolved→superseded + resolve仅REST+product + score confirm仅tester；resolve/amend不暴露MCP） |
 | T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 已完成 | sess-s2-dev | ✅ 2026-08-10（check_p0_clear 纯函数零LLM + gate_aggregate 三要素聚合 + validate_freeze_request 冻结校验 + GateResult 数据类；测试覆盖三种缺口组合） |
+| T-025 | S2.5 | 日程获取与会议纪要链路封装 | 飞书 CLI（calendar/vc/note/docs） | MCP 工具封装：`feishu_calendar_agenda`（日程列表，`+agenda`）→ `feishu_meeting_notes`（从 event_id 经 `+meeting`→`vc +detail`→`note +detail`→`docs +fetch` 全链路取纪要正文）；面试官可从日程获取会议上下文/纪要素材入信息包；支持 `--start/--end` 时间范围 | T-020 | 未认领 | | 不阻塞 S3（§3.1 虚线依赖）；`calendar:calendar.event:read` scope 已授权 ✅ 2026-08-11 |
+| T-026 | S2.5 | 外部文档权限处理与申请引导 | 飞书 CLI（docs/minutes/note） | 面试官拉取飞书文档/妙记/纪要时遇到权限不足（无查看权限），**不静默降级、不报内部错误**——返回结构化信息块：`{resource_type, title?, url/app_link, hint: "无权限，请点击链接申请权限", apply_command: "minutes +apply-permission --minute-token xxx"}`；面试官据此向用户展示无权限提示+可点击链接；用户可自行点链接申请权限后重试 | T-020 | 未认领 | | 链路已验证：calendar→meeting→vc→note 全线走通，妙记 `minutes +detail` 遇无权限返回友好错误 |
 
 > **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。**✅ 2026-08-10 S2 施工完成：topic.yaml source 已支持 7 种类型（含 feishu_doc/feishu_base/feishu_minutes/feishu_im/zentao_story 挂链），实际拉取通道（feishu_fetch / 禅道 story get/search）随飞书 CLI 支线（T-701~T-703）与 S5/M06 落地。**
 >
-> **S2 禅道只读通道（v1.1，2026-08-10 实测补充）**：禅道是产品给研发提供需求的平台，面试议题需**只读引用禅道需求**——`zentao_cli stories --product-id 251` 实测通过（ZT-STORY-56746「人才打标AI构建」，产品 tdm=251）；S2 需补 `story get`/`story search` 两个只读命令，完整禅道写通道（建故事/提单/回写）保持 S5/M06。设计见《[SpecGuard-禅道需求读取背景-S2面试材料来源](远期设计/SpecGuard-禅道需求读取背景-S2面试材料来源.md)》；T-020/T-021 施工时将 zentao_story 并入议题卡 source 与材料拉取，T-053（S5）完整封装时复用 S2 的只读实现。**✅ S2 已施工：zentao_story 类型已入 topic.yaml source 白名单；story get/search 只读命令本体保持 S5/M06（T-053 完整封装时复用）。**
+> **S2.5 背景知识（v1.11，2026-08-11 实测补充）**：日程获取与文档权限处理——calender `+agenda` → `+meeting` → `vc +detail` → `note +detail` → `docs +fetch` 全链路已验证通（08-07「应用交付组AI Coding分享」纪要正文成功读取）；`calendar:calendar.event:read` scope 已授权 ✅。无权限文档场景下 `minutes +detail` 返回友好错误（不静默降级），用户可点击链接经 `+apply-permission` 申请权限。T-025/T-026 施工见上。
 | T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 未认领 | | 依赖 T-020 ✅ 2026-08-10（S2 完成，可认领） |
 | T-031 | S3 | 议题候选提取+确认闸门 | M03 | 候选confirmed=0不进上下文 | T-030 | 未认领 | | |
 | T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 未认领 | | 可提前至S1后 |
