@@ -509,7 +509,11 @@ class AgentRuntime:
         ]
 
     def _execute_tool(self, tool_call: dict) -> str:
-        """执行单个工具调用，返回结果文本。"""
+        """执行单个工具调用，返回结果文本。
+
+        T-081：side_effect 检查——none 级工具执行后做指纹比对，变化即报错。
+        T-082：每次调用落审计日志。
+        """
         name = tool_call.get("function", {}).get("name", "")
         raw_args = tool_call.get("function", {}).get("arguments", "{}")
 
@@ -522,14 +526,17 @@ class AgentRuntime:
         if name == "todo_write":
             return self._handle_todo_write(arguments)
 
+        verdict = "ok"
+        side_effect = "none"
+
         # ── 常规工具 ──
         # T-011：白名单强制——越权工具确定性拒绝（不执行，附可用清单自愈）
         # 判断顺序：先查全局注册（真未知 vs 白名单外），再查白名单
         if name not in META_TOOLS:
             if name in TOOL_NAME_TO_MODULE and name not in self._tool_whitelist:
                 available = "、".join(sorted(self._tool_whitelist))
-                # T-011：越权留 WARNING 审计（emp 经 T-014 contextvar 注入；失败静默——
-                # agent 可脱离 workbench 独立跑，审计缺失不阻断拒绝本身）
+                verdict = "denied-whitelist"
+                # T-011：越权留 WARNING 审计
                 try:
                     from specstd.workspace import get_context_emp_no
                     _bd = SG_ROOT / "workbench" / "backend"
@@ -541,17 +548,18 @@ class AgentRuntime:
                               detail=f"session={self._session_id or ''}; purpose 白名单外工具被拒绝",
                               db_path=_us.DB_PATH)
                 except Exception:
-                    # L5：审计写入失败不阻断拒绝，但留痕日志便于排查
                     _log.warning("tool_denied 审计写入失败（tool=%s, session=%s）",
                                  name, self._session_id or "")
+                # T-082：越权审计记录
+                self._record_audit(name, verdict, raw_args, "", side_effect)
                 return (f"[越权拒绝] 工具 {name} 不在本会话用途白名单内。"
                         f"当前会话可用工具: {available}")
 
         mod = self._tool_map.get(name)
         if not mod:
-            # K-023：全量工具常驻后不存在「模式未挂载」——只剩真未知（LLM 编造的工具名），
-            # 附可用清单让 LLM 自我纠正（K-012 遗留自愈路径保留）
             available = "、".join(sorted(set(self._tool_map) | set(META_TOOLS)))
+            # T-082：未知工具审计
+            self._record_audit(name, "warn", raw_args, "", side_effect)
             return f"未知工具: {name}。当前可用工具: {available}"
 
         # A+B：记录文件依赖（read_spec/read_info_pack 的 path → write_draft 时落盘）
@@ -567,12 +575,88 @@ class AgentRuntime:
             from mcp_server.tools.draft_writer import set_pending_source_files
             set_pending_source_files(sorted(self._read_files))
 
+        # T-081：查询 side_effect 级别
+        from mcp_server.tools.side_effect_registry import (
+            get_side_effect, is_pure_read)
+        side_effect = get_side_effect(name)
+
+        # T-081：external-write 级确定性拒绝（外部写不进 MCP）
+        if side_effect == "external-write":
+            verdict = "denied-side-effect"
+            self._record_audit(name, verdict, raw_args, "", side_effect)
+            return (f"[拒绝] 工具 {name} 属于 external-write 级别，"
+                    f"当前不允许直接调用（外部写不进 MCP 通则）")
+
+        # T-081：none 级工具执行前记录初始指纹
+        pre_fp = ""
+        if is_pure_read(name):
+            pre_fp = self._take_snapshot_fingerprint()
+
         try:
             result = asyncio.run(mod.handle(name, arguments))
             raw = result[0].text if result else "（无输出）"
+
+            # T-081：none 级工具执行后比对指纹
+            if is_pure_read(name) and pre_fp:
+                post_fp = self._take_snapshot_fingerprint()
+                if pre_fp != post_fp:
+                    verdict = "denied-side-effect"
+                    self._record_audit(name, verdict, raw_args, raw, side_effect)
+                    return (f"[SIDE_EFFECT_VIOLATION] 纯读工具 {name} 产生了副作用，"
+                            f"调用已被拦截并记审计。结果摘要: {raw[:200]}")
+
+            self._record_audit(name, verdict, raw_args, raw, side_effect)
             return self._truncate_tool_result(raw, name)
         except Exception as e:
-            return f"工具执行异常: {e}"
+            err_msg = f"工具执行异常: {e}"
+            self._record_audit(name, "warn", raw_args, err_msg, side_effect)
+            return err_msg
+
+    def _take_snapshot_fingerprint(self) -> str:
+        """T-081：取关键目录快照指纹（mtime+size 聚合），校验纯读工具无副作用。"""
+        import hashlib as _hl
+        parts = []
+        for sub in ("specs", "scenarios", "agent/skills",
+                    "mcp_server/tools", "drafts", "feedback"):
+            d = SG_ROOT / sub
+            if not d.is_dir():
+                continue
+            entries = []
+            try:
+                for p in sorted(d.rglob("*")):
+                    if p.is_file():
+                        st = p.stat()
+                        entries.append(f"{p.relative_to(SG_ROOT)}:{st.st_size}:{int(st.st_mtime)}")
+            except Exception:
+                pass
+            if entries:
+                parts.append(sub + "=" + "|".join(entries))
+        return _hl.sha256("||".join(parts).encode()).hexdigest()[:16]
+
+    def _record_audit(self, tool_name: str, verdict: str,
+                      args_raw: str, result_raw: str,
+                      side_effect: str = "none"):
+        """T-082：记录 MCP 调用审计（失败静默，不阻断工具执行）。"""
+        try:
+            from specstd.workspace import get_context_emp_no, get_context_workspace
+            emp = get_context_emp_no() or ""
+            ws = get_context_workspace() or ""
+            purpose = getattr(getattr(self, '_session', None), 'purpose', '') or ''
+            from services.audit_store import record_call as _rc
+            _rc(
+                tool_name=tool_name,
+                verdict=verdict,
+                emp_no=emp,
+                session_id=self._session_id or "",
+                purpose=purpose,
+                workspace=ws,
+                side_effect=side_effect,
+                args_raw=args_raw,
+                result_raw=result_raw,
+            )
+        except Exception:
+            # 审计写入失败不阻断工具执行
+            pass
 
     # ══════════════════════════════════════════════════════════
     # H-3/H-4: Meta 工具处理 + 模式切换

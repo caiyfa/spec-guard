@@ -1,6 +1,9 @@
 ---
 name: update-scenario
 description: 按最新格式要求更新已有测试场景 YAML（格式升级迁移、requires 声明补全、修复校验告警）
+version: 1.0.0
+author: platform-team
+depends_tools: [read_scenario, list_scenarios, validate, scan_compliance, read_spec, suggest_deps, edit_dependency]
 trigger: 用户要求更新/迁移已有场景、格式规范升级后存量场景合规、scan_compliance 发现缺口、修改已入库场景
 keywords: [更新, 修改, 迁移, 升级, 改造, 存量场景, 格式升级, 补 requires, 修复校验, 场景合规, 更新草稿]
 ---

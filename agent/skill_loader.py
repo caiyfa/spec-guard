@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,9 +24,12 @@ _CACHE_TTL: float = 30  # 30 秒
 
 @dataclass
 class SkillDef:
-    """技能定义。"""
+    """技能定义（T-080：新增 version/author/depends_tools 字段）。"""
     name: str                         # 技能名称（文件名去掉 .md）
     description: str = ""             # 技能简述
+    version: str = ""                 # 自建 SemVer（T-080 新增）
+    author: str = ""                  # 维护方（T-080 新增）
+    depends_tools: list[str] = field(default_factory=list)  # 依赖 MCP 工具清单（T-080 新增）
     trigger: str = ""                 # 触发条件描述
     keywords: list[str] = field(default_factory=list)  # K-xxx：确定性触发关键词
     content: str = ""                 # Markdown 正文（技能详细内容）
@@ -100,7 +104,7 @@ def build_skills_xml(mode: str = "") -> str:
 
 
 def _parse_skill_file(name: str, text: str) -> SkillDef:
-    """解析技能文件：YAML frontmatter + Markdown 正文。"""
+    """解析技能文件：YAML frontmatter + Markdown 正文。T-080 新增格式校验。"""
     frontmatter = {}
     body = text
 
@@ -114,6 +118,9 @@ def _parse_skill_file(name: str, text: str) -> SkillDef:
                 frontmatter = {}
             body = parts[2].strip()
 
+    # T-080：格式校验（拒载）
+    _validate_frontmatter(frontmatter, name)
+
     raw_kw = frontmatter.get("keywords", []) or []
     keywords = []
     if isinstance(raw_kw, list):
@@ -122,9 +129,21 @@ def _parse_skill_file(name: str, text: str) -> SkillDef:
         # 兼容逗号分隔字符串形式
         keywords = [k.strip() for k in raw_kw.split(",") if k.strip()]
 
+    # T-080：depends_tools 解析
+    raw_deps = frontmatter.get("depends_tools", []) or []
+    if isinstance(raw_deps, list):
+        depends_tools = [str(d).strip() for d in raw_deps if str(d).strip()]
+    elif isinstance(raw_deps, str):
+        depends_tools = [d.strip() for d in raw_deps.split(",") if d.strip()]
+    else:
+        depends_tools = []
+
     return SkillDef(
         name=frontmatter.get("name", name),
         description=str(frontmatter.get("description", "")),
+        version=str(frontmatter.get("version", "")),
+        author=str(frontmatter.get("author", "")),
+        depends_tools=depends_tools,
         trigger=str(frontmatter.get("trigger", "")),
         keywords=keywords,
         content=body,
@@ -151,3 +170,74 @@ def match_skills_hint(text: str) -> str:
     for s in hits:
         lines.append(f"- {s.name}：{s.description}")
     return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════
+# T-080: 格式校验与元数据查询
+# ══════════════════════════════════════════════════════════
+
+
+def _validate_frontmatter(frontmatter: dict, expected_name: str) -> None:
+    """T-080：格式校验——不符合项直接抛 ValueError（拒载）。
+
+    检验项：
+    - name 缺失/空/超 64 字符/与文件名不匹配
+    - description 缺失/空/超 1024 字符
+    - frontmatter 字符串字段含 `<...>` 注入
+    - 未知字段静默忽略（宽容解析，不抛）
+    """
+    name = frontmatter.get("name", "")
+    name_str = str(name).strip() if name else ""
+    if not name_str:
+        raise ValueError("skill frontmatter 'name' 缺失或为空")
+    if len(name_str) > 64:
+        raise ValueError(f"skill name 超长（{len(name_str)} 字符，上限 64）")
+    expected = expected_name.replace("-", "_").lower()
+    actual = name_str.replace("-", "_").lower()
+    if expected != actual:
+        raise ValueError(f"skill name {name_str!r} 与文件名 {expected_name!r} 不匹配")
+
+    desc = frontmatter.get("description", "")
+    desc_str = str(desc).strip() if desc else ""
+    if not desc_str:
+        raise ValueError("skill frontmatter 'description' 缺失或为空")
+    if len(desc_str) > 1024:
+        raise ValueError(f"skill description 超长（{len(desc_str)} 字符，上限 1024）")
+
+    # 所有字符串字段的 <> 注入检测
+    _INJECTION_RE = re.compile(r"<[^>]+>")
+    for key, val in frontmatter.items():
+        if isinstance(val, str) and _INJECTION_RE.search(val):
+            raise ValueError(
+                f"skill frontmatter '{key}' 包含 '<>' 注入标记: {val!r}")
+        if isinstance(val, list):
+            for item in val:
+                if isinstance(item, str) and _INJECTION_RE.search(item):
+                    raise ValueError(
+                        f"skill frontmatter '{key}' 包含 '<>' 注入标记: {item!r}")
+
+
+def get_skill_metadata(name: str) -> Optional[dict]:
+    """T-080：返回技能元数据（不含 content 正文，节省序列化成本）。"""
+    skill = load_skill(name)
+    if not skill:
+        return None
+    return {
+        "name": skill.name,
+        "description": skill.description,
+        "version": skill.version,
+        "author": skill.author,
+        "depends_tools": skill.depends_tools,
+        "trigger": skill.trigger,
+        "keywords": skill.keywords,
+        "source": "internal",
+    }
+
+
+def list_skills_metadata() -> list[dict]:
+    """T-080：全部技能元数据列表。"""
+    return [
+        get_skill_metadata(s.name)
+        for s in list_skills()
+        if get_skill_metadata(s.name)
+    ]

@@ -1,6 +1,9 @@
 ---
 name: debug-failure
 description: 分析运行报告中的失败场景，定位根因并给出修复建议
+version: 1.0.0
+author: platform-team
+depends_tools: [read_run_report, read_run_log, read_case_detail, list_failures, read_spec, read_scenario, validate]
 trigger: 用户需要分析测试失败、排查断言差异、或调试场景运行错误时
 keywords: [失败, 调试, 排查, 归因, 为什么, 报错, 运行失败, 失败原因, 断言失败, 怎么挂了, debug, 挂了]
 ---

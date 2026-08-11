@@ -1,6 +1,9 @@
 ---
 name: audit-spec
 description: 系统性审计 spec 文档与接口实现的漏洞并登记反馈
+version: 1.0.0
+author: platform-team
+depends_tools: [read_spec, list_spec_files, scan_compliance, file_vulnerability, list_executions, list_failures]
 trigger: 用户需要审计需求文档、检查 spec 漏洞、或做接口与 spec 一致性核对时
 keywords: [审计, 漏洞, spec 检查, 一致性, 审读, 核对需求, 检查需求文档, 找问题, vulnerability]
 ---

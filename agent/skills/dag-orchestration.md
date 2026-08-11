@@ -1,6 +1,9 @@
 ---
 name: dag-orchestration
 description: 在对话中编排场景依赖 DAG（加边/删边/补孤节点/修漂移），Agent 会话是 DAG 编排的主入口
+version: 1.0.0
+author: platform-team
+depends_tools: [list_scenarios, read_scenario, check_dag, suggest_deps, edit_dependency, next_scenario_id]
 trigger: 用户要求编排场景依赖、调整 DAG 拓扑、补依赖边、修复漂移/孤节点、按计划组织场景依赖时
 keywords: [编排, DAG, 拓扑, 依赖, 加依赖, 删依赖, 补边, 补依赖, 依赖边, 连线, 挂到, 依赖关系, 孤节点, 依赖建议, 漂移, 上下游, 依赖闭包]
 ---

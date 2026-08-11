@@ -1,6 +1,9 @@
 ---
 name: generate-scenario
 description: 从需求文档生成 SpecGuard 测试场景 YAML
+version: 1.0.0
+author: platform-team
+depends_tools: [read_info_pack, read_spec, next_scenario_id, query_registry, list_scenarios, read_scenario, validate, write_draft, suggest_deps]
 trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、或使用场景创建向导时
 keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个, 用例生成, 生成测试, 场景 YAML, 场景草稿, 覆盖这个需求]
 ---

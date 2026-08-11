@@ -1,6 +1,9 @@
 ---
 name: zentao-story-point
 description: 禅道故事点评估（冻结 spec FR 拆解 → 故事点 + 置信度）
+version: 1.0.0
+author: platform-team
+depends_tools: [read_spec, list_spec_files, query_registry]
 trigger: 冻结 spec 创建禅道故事后 / 手动请求评估
 tools: [sf_list_external_refs, sf_read_draft, sf_check_p0_gate]
 keywords: [故事点, 评估, 禅道, story point, estimate]

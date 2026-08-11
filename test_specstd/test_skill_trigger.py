@@ -25,6 +25,7 @@ class TestKeywordsParsing:
         """兼容逗号分隔字符串形式（_parse_skill_file 直接测）。"""
         text = """---
 name: demo
+description: 测试用描述
 keywords: 甲, 乙,丙
 ---
 正文

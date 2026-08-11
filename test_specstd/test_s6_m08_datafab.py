@@ -37,11 +37,16 @@ def pool():
 
 
 @pytest.fixture()
-def ctx_fab(tmp_path):
-    """激活工作区（含 FR-001 锚点）+ 既有 IS-PREP 场景（复用判定用）。"""
+def ctx_fab(tmp_path, monkeypatch):
+    """激活工作区（含 FR-001 锚点）+ 既有 IS-PREP 场景（复用判定用）。
+
+    注册表隔离到 tmp（防污染真实 specstd/workspaces/registry.yaml 影响后续测试）。
+    """
     from test_specstd.conftest import create_valid_workspace
     import specstd.workspace as wsm
 
+    monkeypatch.setattr(wsm, "REGISTRY_PATH", tmp_path / "registry.yaml")
+    monkeypatch.setattr(wsm, "CLONES_DIR", tmp_path / "_clones")
     ws = create_valid_workspace(tmp_path / "ws")
     token = wsm.set_context_workspace("fabws")
     try:
@@ -65,6 +70,10 @@ def ctx_fab(tmp_path):
 
     yield {"ws": ws}
     wsm.reset_context_workspace(token)
+    try:
+        wsm.unregister("fabws")
+    except Exception:
+        pass
 
 
 VALID_DRAFT = """

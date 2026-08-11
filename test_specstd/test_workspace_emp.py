@@ -90,6 +90,24 @@ class TestProductDirsEmp:
         assert reports_dir() == tmp_path / ".specguard" / "reports"
         assert info_packs_dir() == tmp_path / ".specguard" / "info_packs"
 
+    def test_reports_shared_even_with_emp_context(self, tmp_path, monkeypatch):
+        """T-014 回归：请求上下文有 emp 时 reports/info_packs 仍强制共享区。
+
+        此前 specguard_dir() 无 emp 参数时回退请求上下文 emp，Web 登录态下
+        reports 解析到私有区 → /api/runs/history 空、报告 404（浏览器验证发现）。
+        """
+        from specstd import workspace as wmod
+        monkeypatch.setattr("specstd.workspace.get_workspace_root",
+                            lambda name=None: tmp_path)
+        token = wmod.set_context_emp_no("90000001")
+        try:
+            assert reports_dir() == tmp_path / ".specguard" / "reports"
+            assert info_packs_dir() == tmp_path / ".specguard" / "info_packs"
+            # 私有区产物不受影响（drafts 仍走 emp 私有区）
+            assert wmod.drafts_dir() == tmp_path / ".specguard" / "90000001" / "drafts"
+        finally:
+            wmod.reset_context_emp_no(token)
+
 
 # ══════════════════════════════════════════════════════════
 # emp contextvar 透传

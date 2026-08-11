@@ -1,6 +1,9 @@
 ---
 name: analyze-workspace
 description: 只读分析工作区 spec 结构、场景覆盖与依赖关系
+version: 1.0.0
+author: platform-team
+depends_tools: [read_spec, list_spec_files, list_scenarios, read_scenario, check_dag, query_registry, read_info_pack, scan_compliance]
 trigger: 用户需要分析需求文档结构、梳理场景覆盖、评估测试计划或检查依赖关系时
 keywords: [分析, 覆盖, 梳理, 评估, 完整性, 看下结构, 有哪些场景, 覆盖情况, 依赖关系, 全景]
 ---

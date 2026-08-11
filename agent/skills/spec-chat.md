@@ -1,6 +1,9 @@
 ---
 name: spec-chat
 description: 与用户自由交流 SpecGuard 使用方法、格式规范与最佳实践
+version: 1.0.0
+author: platform-team
+depends_tools: []
 trigger: 用户咨询 SpecGuard 用法、格式规范、最佳实践或测试策略时
 keywords: [怎么用, 如何使用, 用法, 咨询, 怎么配置, 最佳实践, 测试策略, 工具怎么用, 格式规范是什么]
 ---

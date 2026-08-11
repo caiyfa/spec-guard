@@ -1,6 +1,9 @@
 ---
 name: validate-conformance
 description: 校验场景 YAML 的格式合规性和 Spec 关联完整性
+version: 1.0.0
+author: platform-team
+depends_tools: [validate, scan_compliance, read_spec, query_registry]
 trigger: 用户需要校验场景格式、检查 covers 锚点、或验证 tool/oracle 引用时
 keywords: [校验, 合规, validate, 自检, 检查, 格式检查, 能入库吗, 校验草稿, 覆盖检查]
 ---

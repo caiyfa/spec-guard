@@ -622,18 +622,22 @@ def _resolve_emp(emp: str = "") -> str:
     return emp or (get_context_emp_no() or "")
 
 
-def specguard_dir(workspace_root: Path = None, custom_path: str = "", emp: str = "") -> Path:
+def specguard_dir(workspace_root: Path = None, custom_path: str = "", emp: str = "",
+                  force_shared: bool = False) -> Path:
     """获取工作区的 .specguard 目录（可配置位置 + T-014 emp 维度）。
 
     custom_path 非空时用自定义位置，否则默认 {workspace}/.specguard/。
     emp 非空（或请求上下文有 emp）时返回用户私有区 {sg}/{emp}/，
     否则返回工作区级共享区（向后兼容）。
+    force_shared=True 时无视 emp/上下文强制共享区——天然共享产物
+    （reports/ 执行台账、info_packs/ 版本化资产）专用，防 T-014 回归。
     首次创建时自动生成 README + .gitignore。
 
     Args:
         workspace_root: 工作区根路径（None 时使用当前激活工作区）
         custom_path: 自定义 .specguard 目录位置（空字符串用默认）
         emp: 用户工号（空串时尝试请求上下文；均空 = 共享区）
+        force_shared: 强制共享区（忽略 emp 与请求上下文）
 
     Returns:
         .specguard 目录路径
@@ -655,6 +659,8 @@ def specguard_dir(workspace_root: Path = None, custom_path: str = "", emp: str =
 
     sg_dir.mkdir(parents=True, exist_ok=True)
     _ensure_specguard_meta(sg_dir)
+    if force_shared:
+        return sg_dir
     return _emp_subdir(sg_dir, _resolve_emp(emp))
 
 
@@ -671,13 +677,20 @@ def plans_dir(emp: str = "") -> Path:
 
 
 def reports_dir() -> Path:
-    """运行报告目录（天然共享产物，不进私有区）：{.specguard}/reports/。"""
-    return specguard_dir() / "reports"
+    """运行报告目录（天然共享产物，不进私有区）：{.specguard}/reports/。
+
+    T-014 回归修复：必须强制共享区——此前 specguard_dir() 无 emp 参数时
+    回退请求上下文 emp，Web 登录态下解析到私有区导致报告读取 404。
+    """
+    return specguard_dir(force_shared=True) / "reports"
 
 
 def info_packs_dir() -> Path:
-    """基础信息包目录（天然共享产物，不进私有区）：{.specguard}/info_packs/。"""
-    return specguard_dir() / "info_packs"
+    """基础信息包目录（天然共享产物，不进私有区）：{.specguard}/info_packs/。
+
+    T-014 回归修复：与 reports_dir 同因，强制共享区。
+    """
+    return specguard_dir(force_shared=True) / "info_packs"
 
 
 def uploads_dir(emp: str = "") -> Path:

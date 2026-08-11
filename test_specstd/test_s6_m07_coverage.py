@@ -70,10 +70,12 @@ def ws(tmp_path):
 
 
 @pytest.fixture()
-def ctx(tmp_path, ws):
-    """激活工作区 + 临时 DB + 场景/草稿落位。"""
+def ctx(tmp_path, ws, monkeypatch):
+    """激活工作区 + 临时 DB + 场景/草稿落位（注册表隔离到 tmp 防污染）。"""
     from specstd import workspace as wmod
 
+    monkeypatch.setattr(wmod, "REGISTRY_PATH", tmp_path / "registry.yaml")
+    monkeypatch.setattr(wmod, "CLONES_DIR", tmp_path / "_clones")
     token = wmod.set_context_workspace("testws")
     try:
         wmod.register_local("testws", str(ws), "tdm", activate=True, run_conformance=False)
@@ -107,6 +109,10 @@ def ctx(tmp_path, ws):
 
     yield {"ws": ws, "db": db, "draft_dir": draft_dir, "sc_dir": sc_dir}
     wmod.reset_context_workspace(token)
+    try:
+        wmod.unregister("testws")
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════

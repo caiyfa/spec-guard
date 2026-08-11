@@ -2,10 +2,8 @@
 // T-063：归因 Agent——证据包装配 + 定性建议（suggestion 永不自动转 decided）→ 人确认建档 SPQ
 
 import { useState, useEffect } from 'react';
-import { attributionApi } from '../api';
-import type { AttributeResult, SpqEntry } from '../api';
-
-const BASE = '/api';
+import { apiRequest, attributionApi } from '../api';
+import type { AttributeResult, RunSummary, SpqEntry } from '../api';
 
 interface FailedCase {
   scenario_id: string;
@@ -51,9 +49,8 @@ export default function Attribution() {
   };
 
   useEffect(() => {
-    fetch(`${BASE}/runs/history?limit=10`)
-      .then(r => r.json())
-      .then(data => setHistory(data.reports || data || []))
+    apiRequest<{ reports?: RunSummary[] }>('/runs/history?limit=10')
+      .then(data => setHistory(Array.isArray(data) ? data : (data.reports || [])))
       .catch(() => {});
     refreshSpq();
   }, []);
@@ -64,19 +61,16 @@ export default function Attribution() {
     setError('');
     setReport(null);
     try {
-      const res = await fetch(`${BASE}/runs/${id}`);
-      if (!res.ok) throw new Error('运行报告不存在');
-      const data = await res.json();
+      const res = await apiRequest<Record<string, any>>(`/runs/${id}`);
+      if (!res) throw new Error('运行报告不存在');
+      const data = res;
       // 也获取 cases 详情
-      const casesRes = await fetch(`${BASE}/runs/${id}/cases/.json`).catch(() => null);
+      const casesRes = await apiRequest<{ cases?: any[] }>(`/runs/${id}/cases/.json`).catch(() => null);
       let failedCases: FailedCase[] = [];
-      if (casesRes && casesRes.ok) {
-        const casesData = await casesRes.json();
-        if (casesData.cases) {
-          failedCases = casesData.cases.filter((c: any) =>
-            ['FAIL', 'ERROR', 'BLOCKED'].includes(c.verdict)
-          );
-        }
+      if (casesRes && casesRes.cases) {
+        failedCases = casesRes.cases.filter((c: any) =>
+          ['FAIL', 'ERROR', 'BLOCKED'].includes(c.verdict)
+        );
       }
       setReport({
         run_id: id,
@@ -313,54 +307,6 @@ export default function Attribution() {
             })
           )}
 
-          {/* T-063：SPQ 台账（挂链字段 + 状态流转） */}
-          <div className="bg-surface-1 rounded-lg border border-border p-3">
-            <div className="text-sm text-gray-300 font-medium mb-2">📒 SPQ 归因台账</div>
-            {spqList.length === 0 ? (
-              <div className="text-xs text-gray-600">暂无归因台账条目（归因建议经人拍板后在此建档）</div>
-            ) : (
-              <div className="space-y-1.5">
-                {spqList.map((s) => (
-                  <div key={s.spq_id} className="px-2 py-1.5 rounded bg-surface-2 border border-border">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-mono text-info">{s.spq_id}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
-                        {s.status === 'pending' && (
-                          <button onClick={() => handleSpqTransition(s.spq_id, 'in_progress')}
-                            className="text-[10px] px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded hover:bg-yellow-900/60">
-                            处理中
-                          </button>
-                        )}
-                        {s.status !== 'closed' && (
-                          <button onClick={() => handleSpqTransition(s.spq_id, 'closed')}
-                            className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60">
-                            闭环
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={s.title}>{s.title}</div>
-                    <div className="text-[10px] text-gray-600 mt-0.5 flex gap-2 flex-wrap">
-                      {s.run_id && <span>← {s.run_id}</span>}
-                      {s.scenario_id && <span>{s.scenario_id}</span>}
-                      {(s.fr_refs || []).length > 0 && <span>FR: {(s.fr_refs || []).join(',')}</span>}
-                      {s.decided_kind && (
-                        <span className={KIND_LABEL[s.decided_kind]?.cls || ''}>
-                          {KIND_LABEL[s.decided_kind]?.label}
-                        </span>
-                      )}
-                      {s.decided_by && <span>拍板: {s.decided_by}</span>}
-                      {(s.info_pack_synced || []).length > 0 && (
-                        <span className="text-info/80">⟳ 已入包: {(s.info_pack_synced || []).join(',')}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* BUG 单草稿 */}
           {report.failed_cases.length > 0 && (
             <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
@@ -381,6 +327,54 @@ export default function Attribution() {
           )}
         </div>
       )}
+
+      {/* T-063：SPQ 归因台账（独立渲染——不依赖报告加载，T-063 前端需求） */}
+      <div className="bg-surface-1 rounded-lg border border-border p-3 mt-3">
+        <div className="text-sm text-gray-300 font-medium mb-2">📒 SPQ 归因台账</div>
+        {spqList.length === 0 ? (
+          <div className="text-xs text-gray-600">暂无归因台账条目（归因建议经人拍板后在此建档）</div>
+        ) : (
+          <div className="space-y-1.5">
+            {spqList.map((s) => (
+              <div key={s.spq_id} className="px-2 py-1.5 rounded bg-surface-2 border border-border">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-mono text-info">{s.spq_id}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
+                    {s.status === 'pending' && (
+                      <button onClick={() => handleSpqTransition(s.spq_id, 'in_progress')}
+                        className="text-[10px] px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded hover:bg-yellow-900/60">
+                        处理中
+                      </button>
+                    )}
+                    {s.status !== 'closed' && (
+                      <button onClick={() => handleSpqTransition(s.spq_id, 'closed')}
+                        className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60">
+                        闭环
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={s.title}>{s.title}</div>
+                <div className="text-[10px] text-gray-600 mt-0.5 flex gap-2 flex-wrap">
+                  {s.run_id && <span>← {s.run_id}</span>}
+                  {s.scenario_id && <span>{s.scenario_id}</span>}
+                  {(s.fr_refs || []).length > 0 && <span>FR: {(s.fr_refs || []).join(',')}</span>}
+                  {s.decided_kind && (
+                    <span className={KIND_LABEL[s.decided_kind]?.cls || ''}>
+                      {KIND_LABEL[s.decided_kind]?.label}
+                    </span>
+                  )}
+                  {s.decided_by && <span>拍板: {s.decided_by}</span>}
+                  {(s.info_pack_synced || []).length > 0 && (
+                    <span className="text-info/80">⟳ 已入包: {(s.info_pack_synced || []).join(',')}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

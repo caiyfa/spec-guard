@@ -25,6 +25,9 @@ function handleUnauthorized() {
   }
 }
 
+// 鉴权请求包装器（带 token + 工作区头；页面内直用，替代裸 fetch）
+export const apiRequest = request;
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = session.getToken();
   const ws = session.getWorkspace();

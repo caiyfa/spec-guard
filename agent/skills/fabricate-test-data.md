@@ -1,6 +1,9 @@
 ---
 name: fabricate-test-data
 description: 为缺口 FR 制造测试数据准备场景（IS-PREP 数据实例草稿）
+version: 1.0.0
+author: platform-team
+depends_tools: [read_spec, query_registry, next_scenario_id, write_draft, validate]
 trigger: 用户需要制造测试数据、准备数据实例、生成 IS-PREP 场景、数据制造时
 keywords: [数据制造, 数据准备, IS-PREP, 测试数据, 造数据, 准备数据, 工号池, data-contract]
 ---

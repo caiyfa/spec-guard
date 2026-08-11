@@ -16,6 +16,10 @@ from typing import Optional
 
 import yaml
 
+from agent.skill_loader import load_skill
+
+_log = __import__("logging").getLogger("agent.purpose_loader")
+
 PURPOSES_DIR = Path(__file__).resolve().parent / "purposes"
 
 # 内存缓存（L6：并发首载加锁，防多用户同时冷加载重复解析/写覆盖）
@@ -90,7 +94,7 @@ def clear_cache():
 
 
 def _parse_purpose_file(purpose_id: str, text: str) -> PurposeDef:
-    """解析用途文件：YAML frontmatter + Markdown 正文。"""
+    """解析用途文件：YAML frontmatter + Markdown 正文。T-080 悬空引用校验。"""
     frontmatter = {}
     body = text
 
@@ -103,6 +107,23 @@ def _parse_purpose_file(purpose_id: str, text: str) -> PurposeDef:
             except yaml.YAMLError:
                 frontmatter = {}
             body = parts[2].strip()
+
+    # T-080：悬空引用校验——skills 声明在 skill_loader 中不存在则 Warning
+    raw_skills = frontmatter.get("skills", []) or []
+    if isinstance(raw_skills, list):
+        for skill_name in raw_skills:
+            sn = str(skill_name).strip() if skill_name else ""
+            if sn and not load_skill(sn):
+                _log.warning(
+                    "purpose %r 引用了不存在的 skill %r（悬空引用）",
+                    purpose_id, sn)
+    elif isinstance(raw_skills, str):
+        for sn in raw_skills.split(","):
+            sn = sn.strip()
+            if sn and not load_skill(sn):
+                _log.warning(
+                    "purpose %r 引用了不存在的 skill %r（悬空引用）",
+                    purpose_id, sn)
 
     def _str_list(key: str) -> list[str]:
         raw = frontmatter.get(key, []) or []
