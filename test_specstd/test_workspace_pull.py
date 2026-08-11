@@ -77,8 +77,10 @@ class TestPull:
     def test_pull_remote_gone_reports_error(self, git_workspace, tmp_path):
         """远端不可达：ok=False 且 error 指明 git 步骤（K-009 修复前会静默成功）。"""
         src, name = git_workspace
-        # 用 rename 使 origin URL 悬空（Windows 上 .git 对象只读，rmtree 会 PermissionError）
-        src.rename(tmp_path / "remote_gone")
+        # 修改克隆仓库的 remote URL 到不存在的路径，使 git fetch 失败
+        # 不 rename src 目录：Windows 上 .git 对象文件句柄未释放时 rename 会 PermissionError
+        clone_dir = wsm.CLONES_DIR / name
+        _git(["remote", "set-url", "origin", str(tmp_path / "does_not_exist")], cwd=clone_dir)
 
         result = wsm.pull(name)
         assert result["ok"] is False
