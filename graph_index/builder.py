@@ -309,7 +309,10 @@ def build_index(workspace_root: Path, index_path: Path,
 
     store = GraphStore(index_path)
     try:
-        store.clear_all()
+        # BEGIN EXCLUSIVE：整个构建在单事务内完成，提交前其他连接不可见（配合 WAL 模式），
+        # 杜绝清空后读到部分数据的并发窗口（M-01 修复）
+        store.conn.execute("BEGIN IMMEDIATE")
+        store.clear_all(commit=False)
 
         # ── 1. module / feature / fr / ac 节点（specs 锚点）──
         anchors = scan_anchors(workspace_root)
@@ -340,24 +343,29 @@ def build_index(workspace_root: Path, index_path: Path,
                 module=module, feature=feature,
                 attrs={"cov": "ok" if info.ac_ids else "gap"},
                 source_ref=source_ref,
+                commit=False,
             )
             for ac_id in sorted(info.ac_ids):
                 store.upsert_node(
                     id=ac_id, node_type="ac", title=f"{fr_id} 验收标准 {ac_id}",
                     module=module, feature=feature,
                     source_ref={"file": rel, "line_range": line_range or [1, 1]},
+                    commit=False,
                 )
-                store.upsert_edge(src=fr_id, dst=ac_id, edge_type="contains")
+                store.upsert_edge(src=fr_id, dst=ac_id, edge_type="contains",
+                                  commit=False)
 
         for module in sorted(modules):
             store.upsert_node(id=f"mod:{module}", node_type="module",
-                              title=module, module=module, feature="")
+                              title=module, module=module, feature="",
+                              commit=False)
         for feature in sorted(features):
             module = feature.split("/", 1)[0]
             store.upsert_node(id=f"feat:{feature}", node_type="feature",
-                              title=feature.split("/", 1)[1], module=module, feature=feature)
+                              title=feature.split("/", 1)[1], module=module, feature=feature,
+                              commit=False)
             store.upsert_edge(src=f"mod:{module}", dst=f"feat:{feature}",
-                              edge_type="contains")
+                              edge_type="contains", commit=False)
 
         # ── 2. 场景节点 + covers/depends_on 边（两遍扫描：先收集全集再建边，
         #    保证 depends_on 指向的场景无论扫描先后都存在）──
@@ -399,13 +407,16 @@ def build_index(workspace_root: Path, index_path: Path,
                        "source_delta": source_delta},
                 source_ref={"file": str(yaml_file.relative_to(sg_root)).replace("\\", "/"),
                             "line_range": line_range or [1, 1]},
+                commit=False,
             )
             for fr_id in covers:
                 if fr_id in anchors:
-                    store.upsert_edge(src=sid, dst=fr_id, edge_type="covers")
+                    store.upsert_edge(src=sid, dst=fr_id, edge_type="covers",
+                                      commit=False)
             for dep in deps:
                 if dep in scenarios:
-                    store.upsert_edge(src=sid, dst=dep, edge_type="depends_on")
+                    store.upsert_edge(src=sid, dst=dep, edge_type="depends_on",
+                                      commit=False)
 
         # ── 3. delta 节点 + contains 边 ──
         for delta_dir in _scan_delta_dirs(workspace_root):
@@ -415,10 +426,12 @@ def build_index(workspace_root: Path, index_path: Path,
                 title=delta_dir.name,
                 source_ref={"file": str(delta_dir.relative_to(workspace_root)).replace("\\", "/"),
                             "line_range": [1, 1]},
+                commit=False,
             )
             for fr_id in frs:
                 if fr_id in anchors:
-                    store.upsert_edge(src=delta_dir.name, dst=fr_id, edge_type="contains")
+                    store.upsert_edge(src=delta_dir.name, dst=fr_id, edge_type="contains",
+                                      commit=False)
 
         # ── 3.5 血缘链挂链数据（T-073）：面试/决策/外部锚点（workbench.db）──
         _build_lineage_nodes(store, anchors, db_path)
@@ -437,11 +450,12 @@ def build_index(workspace_root: Path, index_path: Path,
                         title=str(title),
                         source_ref={"file": str(plan_file.relative_to(workspace_root))
                                     .replace("\\", "/"), "line_range": [1, 1]},
+                        commit=False,
                     )
                     for sid in scenarios_list:
                         if sid in scenarios:
                             store.upsert_edge(src=f"plan:{plan_id}", dst=sid,
-                                              edge_type="schedules")
+                                              edge_type="schedules", commit=False)
 
         # ── 5. run 节点（reports 归档目录）──
         reports_dir = Path(workspace_root) / ".specguard" / REPORTS_SUBDIR
@@ -463,10 +477,11 @@ def build_index(workspace_root: Path, index_path: Path,
                     title=run_id,
                     source_ref={"file": str(run_dir.relative_to(workspace_root))
                                 .replace("\\", "/"), "line_range": [1, 1]},
+                    commit=False,
                 )
                 if plan_id:
                     store.upsert_edge(src=f"run:{run_id}", dst=f"plan:{plan_id}",
-                                      edge_type="executes")
+                                      edge_type="executes", commit=False)
 
         # ── 6. SPQ 节点 ──
         ledger_path = Path(sg_root) / "feedback" / "ledger.json"
@@ -485,16 +500,20 @@ def build_index(workspace_root: Path, index_path: Path,
                     title=str(entry.get("title") or ""),
                     attrs={"status": str(entry.get("status") or ""),
                            "scenario_id": str(entry.get("scenario_id") or "")},
+                    commit=False,
                 )
                 sid = str(entry.get("scenario_id") or "")
                 if sid in scenarios:
-                    store.upsert_edge(src=spq_id, dst=sid, edge_type="feedback")
+                    store.upsert_edge(src=spq_id, dst=sid, edge_type="feedback",
+                                      commit=False)
 
-        # ── 7. 指纹落库 ──
+        # ── 7. 指纹落库 + 提交事务 ──
         fingerprint = compute_source_fingerprint(workspace_root, scenarios_root, sg_root)
-        store.set_meta("source_fingerprint", fingerprint)
-        store.set_meta("built_at", __import__("datetime").datetime.now().isoformat(timespec="seconds"))
-        store.set_meta("workspace", workspace_root.name)
+        store.set_meta("source_fingerprint", fingerprint, commit=False)
+        store.set_meta("built_at", __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+                       commit=False)
+        store.set_meta("workspace", workspace_root.name, commit=False)
+        store.conn.commit()
 
         return {
             "nodes": store.count_nodes(),
@@ -502,5 +521,8 @@ def build_index(workspace_root: Path, index_path: Path,
             "source_fingerprint": fingerprint,
             "built_at": store.get_meta("built_at"),
         }
+    except BaseException:
+        store.conn.rollback()
+        raise
     finally:
         store.close()

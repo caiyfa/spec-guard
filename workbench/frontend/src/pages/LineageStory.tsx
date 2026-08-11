@@ -24,6 +24,9 @@ const EDGE_LABEL: Record<string, string> = {
   depends_on: '依赖',
 };
 
+// M-03：展示文案长度守卫
+const maxLen = (s: string, n = 100) => s.length <= n ? s : s.slice(0, n - 1) + '…';
+
 export default function LineageStory() {
   const [nodeInput, setNodeInput] = useState('');
   const [trace, setTrace] = useState<LineageTrace | null>(null);

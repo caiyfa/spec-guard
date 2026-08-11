@@ -84,12 +84,13 @@ def _json_loads(raw: Optional[str]) -> dict:
 
 
 def open_index(path: Path) -> sqlite3.Connection:
-    """打开索引库并确保表结构（幂等）。"""
+    """打开索引库并确保表结构（幂等）。WAL 模式允许并发读。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.executescript(_DDL)
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
@@ -102,18 +103,24 @@ class GraphStore:
 
     # ── 写 ──────────────────────────────────────────────
 
-    def clear_all(self):
-        """清空全部节点/边（重建前调用）。"""
+    def clear_all(self, commit: bool = True):
+        """清空全部节点/边（重建前调用）。
+
+        Args:
+            commit: 是否立即提交。False 时调用方负责事务生命周期。
+        """
         with _LOCK:
             self.conn.execute("DELETE FROM nodes")
             self.conn.execute("DELETE FROM edges")
             self.conn.execute("DELETE FROM index_meta")
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
 
     def upsert_node(self, id: str, node_type: str, title: str = "",
                     module: str = "", feature: str = "",
                     attrs: Optional[dict] = None,
-                    source_ref: Optional[dict] = None):
+                    source_ref: Optional[dict] = None,
+                    commit: bool = True):
         """写入节点（幂等，同 id 覆盖）。"""
         if node_type not in NODE_TYPES:
             raise ValueError(f"非法节点类型: {node_type!r}（允许: {NODE_TYPES}）")
@@ -127,9 +134,11 @@ class GraphStore:
                  _json_default(attrs or {}),
                  _json_default(source_ref or {}) if source_ref else None),
             )
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
 
-    def upsert_edge(self, src: str, dst: str, edge_type: str, attrs: Optional[dict] = None):
+    def upsert_edge(self, src: str, dst: str, edge_type: str, attrs: Optional[dict] = None,
+                    commit: bool = True):
         """写入边（幂等，同 (src, dst, edge_type) 覆盖）。"""
         if edge_type not in EDGE_TYPES:
             raise ValueError(f"非法边类型: {edge_type!r}（允许: {EDGE_TYPES}）")
@@ -139,14 +148,16 @@ class GraphStore:
                 " VALUES (?, ?, ?, ?)",
                 (src, dst, edge_type, _json_default(attrs or {})),
             )
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
 
-    def set_meta(self, key: str, value: str):
+    def set_meta(self, key: str, value: str, commit: bool = True):
         with _LOCK:
             self.conn.execute(
                 "INSERT OR REPLACE INTO index_meta (key, value) VALUES (?, ?)",
                 (key, value))
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
 
     # ── 读 ──────────────────────────────────────────────
 

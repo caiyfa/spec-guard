@@ -28,6 +28,10 @@ const LENS_COLOR: Record<Lens, string> = {
   map: 'border-gray-500/60',
 };
 
+// M-03：展示文案长度守卫
+const MAX_LEN = 100;
+const maxLen = (s: string, n = MAX_LEN) => s.length <= n ? s : s.slice(0, n - 1) + '…';
+
 export default function GraphPanorama() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState<GraphStatus | null>(null);
@@ -383,13 +387,13 @@ export default function GraphPanorama() {
                   <span className="text-gray-200 font-medium">{fr.id}</span>
                   <span className="text-[10px] text-gray-500">{fr.cov === 'ok' ? '已覆盖' : '缺口'}</span>
                 </div>
-                <p className="text-gray-400 mt-1 line-clamp-2">{fr.t}</p>
+                <p className="text-gray-400 mt-1 line-clamp-2">{maxLen(fr.t)}</p>
                 {fr.source_ref && (
                   <button
                     className="mt-1.5 text-[10px] text-info/80 hover:text-info"
                     onClick={e => { e.stopPropagation(); openSource(fr.source_ref!.file, fr.source_ref!.line_range[0]); }}
                   >
-                    📍 {fr.source_ref.file}:{fr.source_ref.line_range[0]}
+                    📍 {maxLen(fr.source_ref.file, 80)}:{fr.source_ref.line_range[0]}
                   </button>
                 )}
               </div>
@@ -405,14 +409,14 @@ export default function GraphPanorama() {
                   <span className="w-2 h-2 rounded-full bg-cyan-400" />
                   <span className="text-gray-200 font-medium">{sc.id}</span>
                 </div>
-                <p className="text-gray-400 mt-1 line-clamp-1">{sc.title}</p>
+                <p className="text-gray-400 mt-1 line-clamp-1">{maxLen(sc.title)}</p>
                 <p className="text-[10px] text-gray-600 mt-0.5">covers: {sc.covers.join(', ')}</p>
                 {sc.source_ref && (
                   <button
                     className="mt-1 text-[10px] text-info/80 hover:text-info"
                     onClick={() => openSource(sc.source_ref!.file, sc.source_ref!.line_range[0])}
                   >
-                    📍 {sc.source_ref.file}:{sc.source_ref.line_range[0]}
+                    📍 {maxLen(sc.source_ref.file, 80)}:{sc.source_ref.line_range[0]}
                   </button>
                 )}
               </div>

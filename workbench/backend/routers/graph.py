@@ -147,6 +147,12 @@ def graph_source(
         raise HTTPException(status_code=403, detail=f"OUT_OF_SCOPE: 路径越界: {file}")
     if not target.is_file():
         raise HTTPException(status_code=404, detail=f"源头文件不存在: {file}")
+    # M-02：仅允许文本文件扩展名，过滤二进制/索引/配置等非源头文件
+    ALLOWED_EXTS = (".yaml", ".yml", ".json", ".md")
+    if not target.suffix.lower() in ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"OUT_OF_SCOPE: 不允许读取 {target.suffix} 文件（仅允许 {', '.join(ALLOWED_EXTS)}）")
     try:
         content = target.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
@@ -175,6 +181,10 @@ def graph_snapshot_create(
 ):
     """手动打里程碑快照（写 .specflow/graph_snapshots/，版本化保留）。"""
     require_role(user, "admin", "tester")
+    # L-01：label 长度校验（30 字以内，与 snapshot._snapshot_id 净化后截断 40 一致）
+    if len(label) > 60:
+        raise HTTPException(status_code=400,
+                            detail=f"label 过长（{len(label)} 字符，上限 60）")
     from graph_index import snapshot
     root = _workspace_root(workspace)
     try:
