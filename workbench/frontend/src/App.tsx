@@ -25,6 +25,7 @@ import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
 import Knowledge from './pages/Knowledge';  // T-509：知识维护页（一页三区）
+import Skills from './pages/Skills';
 import GraphPanorama from './pages/GraphPanorama';
 import LineageStory from './pages/LineageStory';
 import WorkspaceSelector from './components/WorkspaceSelector';
@@ -101,6 +102,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/agent', label: '对话', roles: PRODUCT_UP },
       { to: '/drafts', label: '草稿评审', roles: TESTER_UP },
+      { to: '/skills', label: '技能', roles: ALL },
     ],
   },
   {
@@ -402,6 +404,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/admin-users" element={<AdminUsers />} />
             <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
             <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
+            <Route path="/skills" element={<Skills />} />  {/* T-080：Skill 注册表 */}
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
