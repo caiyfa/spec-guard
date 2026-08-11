@@ -26,6 +26,8 @@
 > **v1.10 决策（2026-08-10，sess-s2-dev）**：**S2 面试闭环全部完成**——T-020~T-024 五任务全量交付：specflow/interview 包（IV 生命周期/议题卡 7 种 source/11 章提问库/决策台账 6 表/amendment 增补链/P0 清零门禁）+ MCP 工具 11 个 + REST API 2 模块 19 端点 + 55 单测全绿（全库 798 绿 1 预存红）；§2.1 S2 行标注 ✅，§3.1 硬串行 S2 后续依赖（S3）可认领。
 >
 > **v1.11 决策（2026-08-11，sess-s2.5）**：**新增 S2.5 阶段**——日程获取与文档权限处理。飞书日程 `+agenda` → `+meeting` → `vc +detail` → `note +detail` → `docs +fetch` 链路已验证通（§2.3 08-07「应用交付组AI Coding分享」纪要正文成功读取）；日历 `calendar:calendar.event:read` scope 已授权。面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时结构化提示+申请引导（`+apply-permission`）。S2.5 不阻塞 S3，随 S2 完成后可认领。
+>
+> **v1.12 决策（2026-08-11，sess-s2-fix）**：**S2 审查验收修复闭环**——S2 交付后全量代码审查发现并修复 12 项问题：H1 resolve/amend `require_role` 传 list 致 500、H2 问题登记链路缺失（新增 MCP 工具 `iv_ask_question`）、H3 评分确认无入口冻结恒 409（补 `POST /scores/{id}/confirm` + evaluate 幂等）、M1 freeze/impact-confirm 无角色闸门、M2 跨工作区数据串扰（gate 读路径 workspace 隔离 fail-closed + D-xxx 编号全局唯一 + sf_questions 补 workspace 列）、M3 specflow 路由缺 workspace_grants 授权、M4 MCP 开标无 emp 留痕、M5 `iv_read_baseline` stub 假数据改真实 specstd.anchors 摘录、M6 冻结状态机越级/500（p0_cleared 全链推进 + 404/409 语义）、M7 record_answer 跨面试篡改、M8 sf_store 事务返回 None；低危 6 项（iv_id 路径穿越校验/amend 跨面试拒绝/content_sha 落锤重算/静默异常改日志/编号锁/DB 路径收口）；新增 REST/MCP 层测试 27 例，test_specstd 826 绿 1 预存红（auth dual）、release_check PASS。详见 §4.2 T-020~T-024 修复备注、§5 sess-s2-fix、§6 登记行。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -74,7 +76,7 @@
 | **S0** 会话编排单测 | agent 编排层测试先行，套件可离线复跑（**v1.2 起前置至打磨期 §4.1 T-401**） | 单测全绿 + `--mock` CI 可挂；后续所有阶段的回归底座 | agent/（runtime/session/compactor） |
 | **S0.5** 依据透明（v1.5 新增快车道） | agent 读过的关键文档进面板，关键章节可见 | 用户跟上 agent 关键思路、把判断依据摊开（阅读足迹面板 + 章节提取）；**不阻塞 S1** | agent/runtime + workbench（《知识体系设计》§4.5） |
 | **S1** purpose 地基 ✅ | 会话创建期锁定 + 工具白名单运行时强制 | 越权工具调用被确定性拒绝；purpose 不可变（**✅ 2026-08-10 完成：T-010~T-014 全部交付，S2 依赖就绪**） ；[2026-08-10 修复] 全量代码审查修复 6 项安全漏洞（H1/H2/M1-M6），详见 §4.2 T-010~T-014 备注与 §5 sess-s1-fix | M01 / M12 / M13(P1骨架) |
-| **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示 | M02 / M04 |
+| **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示（**[2026-08-11 修复] 审查验收修复 12 项（H1-H3/M1-M8/低危），详见 §4.2 T-020~T-024 备注与 §5 sess-s2-fix**） | M02 / M04 |
 | **S2.5** 日程获取与文档权限 | 日历+会议纪要链路封装 + 无权限文档结构化引导 | 面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时展示提示+申请链接（`+apply-permission`），不静默降级 | 飞书 CLI（calendar/vc/note/docs） |
 | **S3** 材料包与信息包 | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归 | M03 |
 | **S4** 扫描仪与评分卡 | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效 | M05 / M04 |
@@ -237,11 +239,11 @@ flowchart LR
 | T-012 | S1 | agent/purposes/ 热加载注册表 | M01 | 30s可见不重启不改runtime | T-010 | 已完成 | sess-s1-foundation | ✅ 2026-08-10（sess-s1-foundation）：purpose_loader（30s TTL 仿 skill_loader，frontmatter：id/title/icon/color/chips/roles/tools/panels/description）+ 两用途定义（requirement_interview/test_workbench）；visible_purposes 角色集合并集；GET /purposes 端点；test 5 例（加载/缺失/列表/热加载新文件/并集过滤） ；[2026-08-10 修复 L6] 并发首载加锁（双重检查 + 锁内解析） |
 | T-013 | S1 | RBAC 用途过滤+归属留痕 | M01/M12 | **角色集合并集过滤（v1.8：单角色→多角色，一人可多用途）**：`users.roles` 多值 + `require_role` 包含任一；`/purposes` 按角色集合∩用途 roles 返回可见用途（多用途用户多卡）；归属留痕（会话 emp_no + purpose） | T-010 | 已完成 | sess-s1-foundation | ✅ 2026-08-10（sess-s1-foundation）：user_store VALID_ROLES 加 product、users 表加 roles 列（逗号分隔，存量 role 列回退解析）、set_roles 批量（set_role 兼容单值，审计 action 保持 set_role）；auth CurrentUser.roles（__post_init__ 兼容）、require_role/require_role_ws 交集语义、is_admin 不变；认证链注入 specstd emp contextvar（T-014 透传）；test 5 例；[2026-08-10 修复 H2/M3/L2] _has_admin 多角色检测（role+roles 双列）；product 会话读/取消/导出权限补齐；create_session workspace 授权校验 |
 | T-014 | S1 | 多会话产物地基：emp 维度路径 + 私有/共享状态机制 | specstd/workspace.py + 全链路产物写读点 | ① `specguard_dir()` 等路径函数支持 emp 维度：**未确认产物落私有区 `{ws}/.specguard/{emp}/drafts|plans|uploads/`、`{ws}/.specflow/{emp}/interviews/`**，确认动作（promote 入库→`scenarios/`、计划确认、面试冻结→基线）后进共享区；**天然共享产物不进私有区**（`reports/` 执行台账、`info_packs/` 版本化资产）；② emp contextvar 透传（复用 workspace contextvar 模式，从 `get_current_user` 注入）；③ 私有区越权读校验（仅归属 emp + admin，确定性拒绝）；④ 存量 drafts 按会话 emp_no 迁移脚本（会话 `_meta.json` 可追溯）；⑤ M01/M03 布局约定同步 | T-001 | 已完成 | sess-s1-foundation | ✅ 2026-08-10（sess-s1-foundation）：specguard_dir/drafts_dir/plans_dir/uploads_dir 加 emp 维度（_emp_subdir 防穿越，`..`/`/` 拒绝回退共享区）；set/get/reset_context_emp_no（auth 认证链注入，产物写读点零改动自动落私有区）；reports/info_packs 保持共享；can_read_private 越权校验纯函数；scenarios uploads 走 uploads_dir；migrate_drafts_emp 迁移脚本（会话 JSONL 扫描归属，无归属保留共享）；test_workspace_emp 12 例；[2026-08-10 修复 M1/M2/M6] can_read_private 接入 drafts 路由；移除全局草稿回退+draft_promote 同步；pending files 改 contextvar |
-| T-020 | S2 | specflow/interview 包+IV生命周期 | M02 | 开标→提问→清零→归档状态机 | T-010 | 已完成 | sess-s2-dev | ✅ 2026-08-10（specflow/interview 包：topic.py 议题卡 + iv_lifecycle.py 生命周期 + question_bank.py 11章扫描 + gate.py P0门禁壳 + decision_ledger.py 决策台账+MCP+REST） |
-| T-021 | S2 | 议题卡 topic.yaml 装配 | M02 | 来源PRD+SPQ反哺可载入 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（Topic/SourceRef/BaselineRef 模型 + 7种 source 类型 + topic.yaml 序列化/反序列化 + create_topic 文件落盘 + 缺挂链校验） |
-| T-022 | S2 | sf_interviews/sf_questions 表 | M02 | P0/P1/P2分级落库 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（sf_store.py：sf_interviews + sf_questions 建表/CRUD/索引，参照 agent_session_store 模式） |
-| T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（decision_ledger.py：sf_decisions/sf_decision_links/sf_decision_amendments/sf_decision_draft_marks/sf_gate_evidence/sf_scores 六表 + pending→resolved→superseded + resolve仅REST+product + score confirm仅tester；resolve/amend不暴露MCP） |
-| T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 已完成 | sess-s2-dev | ✅ 2026-08-10（check_p0_clear 纯函数零LLM + gate_aggregate 三要素聚合 + validate_freeze_request 冻结校验 + GateResult 数据类；测试覆盖三种缺口组合） |
+| T-020 | S2 | specflow/interview 包+IV生命周期 | M02 | 开标→提问→清零→归档状态机 | T-010 | 已完成 | sess-s2-dev | ✅ 2026-08-10（specflow/interview 包：topic.py 议题卡 + iv_lifecycle.py 生命周期 + question_bank.py 11章扫描 + gate.py P0门禁壳 + decision_ledger.py 决策台账+MCP+REST） ；[2026-08-11 sess-s2-fix] M4 MCP 开标 emp 留痕 + workspace 缺失拒绝、M8 sf_store 事务返回 None 修复、M6 冻结状态机 p0_cleared 全链推进、iv_id 格式校验防路径穿越、编号锁 |
+| T-021 | S2 | 议题卡 topic.yaml 装配 | M02 | 来源PRD+SPQ反哺可载入 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（Topic/SourceRef/BaselineRef 模型 + 7种 source 类型 + topic.yaml 序列化/反序列化 + create_topic 文件落盘 + 缺挂链校验） ；[2026-08-11 sess-s2-fix] H2 新增 MCP 工具 iv_ask_question 接通问题登记链（sf_questions 原无写入通道）、M5 iv_read_baseline 改真实 specstd.anchors 摘录（原 stub 假数据） |
+| T-022 | S2 | sf_interviews/sf_questions 表 | M02 | P0/P1/P2分级落库 | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（sf_store.py：sf_interviews + sf_questions 建表/CRUD/索引，参照 agent_session_store 模式） ；[2026-08-11 sess-s2-fix] M2 sf_questions 补 workspace 列（旧表 ALTER 迁移）+ 面试存在性校验 + M7 record_answer 跨面试归属校验 |
+| T-023 | S2 | D-xxx台账schema+amendment增补链 | M04 | 落锤不可推翻；写操作不进MCP | T-020 | 已完成 | sess-s2-dev | ✅ 2026-08-10（decision_ledger.py：sf_decisions/sf_decision_links/sf_decision_amendments/sf_decision_draft_marks/sf_gate_evidence/sf_scores 六表 + pending→resolved→superseded + resolve仅REST+product + score confirm仅tester；resolve/amend不暴露MCP） ；[2026-08-11 sess-s2-fix] H1 require_role 传 list 致 500 修正（Depends 注入）、H3 补评分 confirm 端点 + evaluate 幂等、M2 跨工作区隔离（gate 函数 workspace 过滤）+ D-xxx 编号全局唯一（原跨工作区撞主键）、amend 跨面试拒绝、content_sha 落锤重算（含 resolution） |
+| T-024 | S2 | gate.py P0清零确定性纯函数 | M04 | 未清零冻结硬拒 | T-023 | 已完成 | sess-s2-dev | ✅ 2026-08-10（check_p0_clear 纯函数零LLM + gate_aggregate 三要素聚合 + validate_freeze_request 冻结校验 + GateResult 数据类；测试覆盖三种缺口组合） ；[2026-08-11 sess-s2-fix] M6 冻结状态机 interviewing→p0_cleared→frozen 全链推进（中间态不可达修复）+ 404 优先于 409 + 非法流转 409 不再 500 |
 | T-025 | S2.5 | 日程获取与会议纪要链路封装 | 飞书 CLI（calendar/vc/note/docs） | MCP 工具封装：`feishu_calendar_agenda`（日程列表，`+agenda`）→ `feishu_meeting_notes`（从 event_id 经 `+meeting`→`vc +detail`→`note +detail`→`docs +fetch` 全链路取纪要正文）；面试官可从日程获取会议上下文/纪要素材入信息包；支持 `--start/--end` 时间范围 | T-020 | 未认领 | | 不阻塞 S3（§3.1 虚线依赖）；`calendar:calendar.event:read` scope 已授权 ✅ 2026-08-11 |
 | T-026 | S2.5 | 外部文档权限处理与申请引导 | 飞书 CLI（docs/minutes/note） | 面试官拉取飞书文档/妙记/纪要时遇到权限不足（无查看权限），**不静默降级、不报内部错误**——返回结构化信息块：`{resource_type, title?, url/app_link, hint: "无权限，请点击链接申请权限", apply_command: "minutes +apply-permission --minute-token xxx"}`；面试官据此向用户展示无权限提示+可点击链接；用户可自行点链接申请权限后重试 | T-020 | 未认领 | | 链路已验证：calendar→meeting→vc→note 全线走通，妙记 `minutes +detail` 遇无权限返回友好错误 |
 
@@ -356,6 +358,7 @@ flowchart LR
 | sess-s1-foundation | S1 purpose 地基施工 | T-014 → T-010 → T-012 → T-013 → T-011 | 2026-08-10 | ✅ 2026-08-10 全部完成：五任务串行施工（产物地基 → purpose 会话模型 → purposes 注册表 → RBAC 多角色 → 三层交集白名单）；S1 里程碑验收五项全过；前端卡片页留 S2（M01 F3 完整交付） |
 | sess-s1-fix | S1 安全修复施工 | 全量代码审查→H1/H2/M1-M6/L2-L6/存量穿越修复 | 2026-08-10 | 2026-08-10 全量审查修复：H1 rbac 未知角色 fail-closed、H2 admin 多角色漏检、M1 can_read_private 接入、M2 移除全局回退+补门禁、M3 product 权限补齐、M4 空白名单拒绝、M5 快照装配、M6 pending files 改 contextvar、L2-L6 低危项、存量 plans 路径穿越 + 门禁；test_specstd 745 绿 / engine_modes 39 绿 |
 | sess-s2-dev | S2 面试闭环施工 | T-021 → T-022/T-020 → T-023 → T-024 | 2026-08-10 | 全部完成：specflow/interview 包（IV 生命周期 + 议题卡 + 提问维度库 + 决策台账 + P0 清零门禁）+ sf_* 表（6张）+ MCP 工具（11 个）+ REST API（2 路由 19 端点）+ tests 55 绿；test_specstd 798 绿 1 预存红 |
+| sess-s2-fix | S2 审查验收修复施工 | 全量代码审查→H1-H3/M1-M8/低危 6 项 | 2026-08-11 | 审查验收修复 12 项：H1 require_role 传 list 500、H2 iv_ask_question 登记通道、H3 评分 confirm 端点 + evaluate 幂等、M1 freeze/impact-confirm product 闸门、M2 workspace 隔离 + D-xxx 全局唯一 + sf_questions workspace 列、M3 resolve_workspace 授权、M4 emp 留痕、M5 真实基线摘录、M6 冻结状态机、M7 跨面试归属校验、M8 sf_store 事务；新增 REST/MCP 测试 27 例；test_specstd 826 绿 1 预存红 / release_check PASS |
 | | | | | |
 
 ---
@@ -510,6 +513,22 @@ flowchart LR
 | test_specstd/test_mcp_server.py | sess-s2-dev | 2026-08-10 | b0f894498a0e | b0f894498a0e | 已完成 | S2：MCP 工具数 26→37 + 名称集加 11 个 specflow 工具 |
 | test_specstd/test_specflow_interview.py | sess-s2-dev | 2026-08-10 | NEW | 3ae2e9850672 | 已完成 | T-020/T-021/T-024：议题卡/生命周期/门禁/提问库单测 36 例 |
 | test_specstd/test_specflow_ledger.py | sess-s2-dev | 2026-08-10 | NEW | a23b942b247a | 已完成 | T-023/T-024：决策台账/amendment/评分/门禁联动单测 19 例 |
+| agent/purposes/requirement_interview.md | sess-s2-fix | 2026-08-11 | 86e06683eb38 | 9221f8b544b2 | 已完成 | S2 修复：白名单加 iv_ask_question（11→12 工具） |
+| mcp_server/tools/specflow_interview.py | sess-s2-fix | 2026-08-11 | 916de44d261e | c41195259dce | 已完成 | H2 新增 iv_ask_question 登记通道 / M4 emp 留痕 + workspace 缺失拒绝 / M5 read_baseline 真实摘录 / iv_id 格式校验 |
+| mcp_server/tools/specflow_ledger.py | sess-s2-fix | 2026-08-11 | 7f98e6fa4610 | 5f6ca1b19598 | 已完成 | M2 workspace 透传 + 评分幂等去重 + 占位分 TODO(F2/S4) 标注 |
+| specflow/interview/decision_ledger.py | sess-s2-fix | 2026-08-11 | c77276784b3b | ab0451921457 | 已完成 | M2 gate 函数 workspace 隔离 fail-closed + D-xxx 编号全局唯一（原跨工作区撞主键）+ content_sha 落锤重算 + amend 跨面试拒绝 |
+| specflow/interview/iv_lifecycle.py | sess-s2-fix | 2026-08-11 | e7c99e25e920 | b1e944b99911 | 已完成 | validate_iv_id 格式校验（路径拼接入口防穿越）+ 状态机常量区 |
+| specflow/interview/topic.py | sess-s2-fix | 2026-08-11 | e477758f688d | 4e7e90152bba | 已完成 | _next_iv_id 并发锁 + load_topic iv_id 校验 |
+| workbench/backend/routers/specflow_decisions.py | sess-s2-fix | 2026-08-11 | ded72086eaf3 | 55fe313adb0d | 已完成 | H1 require_role 传 list 致 500 修正（Depends 注入）+ H3 评分 confirm 端点 + M3 resolve_workspace 授权 + 路由遮蔽修复（/scores 前移）+ 跨工作区 404 |
+| workbench/backend/routers/specflow_interview.py | sess-s2-fix | 2026-08-11 | 1f752557ca69 | d848432731c2 | 已完成 | M1 freeze/impact-confirm product 闸门 + M3 resolve_workspace + M6 冻结状态机全链推进 + M7 record_answer 归属校验 |
+| workbench/backend/services/specflow/decision_service.py | sess-s2-fix | 2026-08-11 | 4f90f7afc469 | be97b66ff1bd | 已完成 | workspace 透传（gate/scores/export）+ 评分幂等 skip_if_suggested |
+| workbench/backend/services/specflow/interview_service.py | sess-s2-fix | 2026-08-11 | e61780e25c1c | 9860a62809f4 | 已完成 | M8 impact-confirm 缺 commit 修复 + 静默异常改日志 + specflow_base 防御 + DB 路径单一事实源 |
+| workbench/backend/services/specflow/sf_store.py | sess-s2-fix | 2026-08-11 | c140abeb6f4e | d364e8cce704 | 已完成 | M8 create_* 事务返回 None 修复 + sf_questions workspace 列迁移 + 面试存在性校验 |
+| test_specstd/test_mcp_server.py | sess-s2-fix | 2026-08-11 | b0f894498a0e | cb17c991f3b6 | 已完成 | 工具注册数 37→38（iv_ask_question） |
+| test_specstd/test_specflow_ledger.py | sess-s2-fix | 2026-08-11 | 4144c5bb7592 | cf0c2e60afd7 | 已完成 | workspace 参数适配 + 新增跨工作区隔离/sha 审计/增补跨面试 4 例 |
+| test_specstd/test_specflow_mcp.py | sess-s2-fix | 2026-08-11 | NEW | 6278cc15404a | 已完成 | MCP 层测试 10 例（iv_ask_question/read_baseline 真实摘录/emp 留痕/workspace 隔离） |
+| test_specstd/test_specflow_rest.py | sess-s2-fix | 2026-08-11 | NEW | f41e2a113756 | 已完成 | REST 层测试 13 例（角色闸门/409 缺口/评分 confirm/幂等/跨面试 404/授权 403） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s2-fix | 2026-08-11 | 268b7d532a6a | 3d9ae4bec01f | 已完成 | v1.12 自身登记：S2 审查验收修复闭环——v1.12 决策头 + §2.1 S2 行修复摘要 + §4.2 T-020~T-024 备注 + §5 sess-s2-fix + §6 15 行；修改后hash = 登记中形态指纹 3d9ae4bec01f |
 | | | | | | | |
 
 ---
