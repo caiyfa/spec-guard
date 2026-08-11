@@ -10,6 +10,7 @@ frozen ──verify-delta + 合并基线──> archived
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,21 @@ from typing import Optional
 # ── 合法状态 ──
 VALID_STATUSES = frozenset({"opened", "interviewing", "p0_cleared",
                             "frozen", "archived", "closed"})
+
+# IV-xxx 编号格式（路径拼接入口统一校验，防路径穿越）
+IV_ID_RE = re.compile(r"^IV-\d{3,}$")
+
+
+def validate_iv_id(iv_id: str) -> Optional[str]:
+    """校验 IV-xxx 编号格式，返回错误消息或 None。
+
+    所有用 iv_id 拼接路径的入口必须先过此校验（防目录穿越）。
+    """
+    if not iv_id or not isinstance(iv_id, str):
+        return "iv_id 不能为空"
+    if not IV_ID_RE.match(iv_id):
+        return f"非法 IV 编号: {iv_id!r}（格式应为 IV-xxx）"
+    return None
 
 # 合法状态流转（closed 为终态，不可重开）
 ALLOWED_TRANSITIONS = {
@@ -82,7 +98,10 @@ def read_transcript(transcript_path: Path) -> list[dict]:
 # ── 目录结构 ──
 
 def iv_dir(specflow_base: Path, iv_id: str) -> Path:
-    """返回 IV-xxx 目录路径。"""
+    """返回 IV-xxx 目录路径（iv_id 必须通过格式校验，防路径穿越）。"""
+    err = validate_iv_id(iv_id)
+    if err:
+        raise ValueError(err)
     return specflow_base / "interviews" / iv_id
 
 

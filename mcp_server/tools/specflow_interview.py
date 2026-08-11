@@ -33,7 +33,7 @@ iv_open_topic_tool = Tool(
 
 iv_read_baseline_tool = Tool(
     name="iv_read_baseline",
-    description="基线锚点摘录（内部走 spec_reader + specstd.anchors，纯读）",
+    description="基线锚点摘录（内部走 specstd.anchors 扫描当前工作区 specs/，纯读）",
     inputSchema={
         "type": "object",
         "properties": {
@@ -44,6 +44,23 @@ iv_read_baseline_tool = Tool(
             },
         },
         "required": ["fr_refs"],
+    },
+)
+
+iv_ask_question_tool = Tool(
+    name="iv_ask_question",
+    description="登记分级问题（面试官 Agent 生成问题后入库，供产品回答；仅写 .specflow 侧 DB）",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "iv_id": {"type": "string", "description": "面试编号 IV-xxx"},
+            "priority": {"type": "string", "enum": ["P0", "P1", "P2"]},
+            "question": {"type": "string", "description": "问题原文"},
+            "chapter": {"type": "integer", "description": "11 章维度编号 1-11"},
+            "spq_ref": {"type": "string", "description": "SPQ 反哺引用"},
+            "fr_refs": {"type": "string", "description": "关联 FR 锚点（逗号分隔）"},
+        },
+        "required": ["iv_id", "priority", "question"],
     },
 )
 
@@ -102,6 +119,7 @@ iv_append_transcript_tool = Tool(
 TOOLS = [
     iv_open_topic_tool,
     iv_read_baseline_tool,
+    iv_ask_question_tool,
     iv_next_question_tool,
     iv_record_answer_tool,
     iv_p0_clear_check_tool,
@@ -117,6 +135,7 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     handlers = {
         "iv_open_topic": _handle_iv_open_topic,
         "iv_read_baseline": _handle_iv_read_baseline,
+        "iv_ask_question": _handle_iv_ask_question,
         "iv_next_question": _handle_iv_next_question,
         "iv_record_answer": _handle_iv_record_answer,
         "iv_p0_clear_check": _handle_iv_p0_clear_check,
@@ -128,20 +147,37 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     return await handler(arguments)
 
 
+def _require_workspace() -> tuple[str, str]:
+    """获取工作区/emp 上下文；缺失时返回错误提示（写路径 fail-closed）。"""
+    from specstd.workspace import get_context_workspace, get_context_emp_no
+    ws = get_context_workspace() or ""
+    emp = get_context_emp_no() or ""
+    if not ws:
+        return "", "缺少工作区上下文（SG_WORKSPACE/认证链未注入）"
+    return ws, ""
+
+
 async def _handle_iv_open_topic(args: dict) -> list[TextContent]:
     try:
         from workbench.backend.services.specflow.interview_service import open_interview
-        from specstd.workspace import specflow_dir, get_context_workspace
+        from specstd.workspace import specflow_dir, get_context_workspace, get_context_emp_no
 
-        sf_base = specflow_dir()
+        ws = get_context_workspace() or ""
+        if not ws:
+            return [TextContent(type="text",
+                                text="开标失败: 缺少工作区上下文（写路径需要 SG_WORKSPACE/认证链注入）")]
+        # T-014 归属留痕：发起人从认证链 emp contextvar 注入（MCP 无登录态时留空）
+        emp = get_context_emp_no() or ""
+
+        sf_base = specflow_dir(emp=emp)
         result = open_interview(
             title=args["title"],
-            initiator_emp="",
+            initiator_emp=emp,
             initiator_role="",
             source=args.get("source", []),
             target_delta=args.get("target_delta", ""),
             session_id=args.get("session_id", ""),
-            workspace=get_context_workspace() or "",
+            workspace=ws,
             specflow_base=sf_base,
         )
         return [TextContent(type="text", text=str(result))]
@@ -150,22 +186,98 @@ async def _handle_iv_open_topic(args: dict) -> list[TextContent]:
 
 
 async def _handle_iv_read_baseline(args: dict) -> list[TextContent]:
+    """基线锚点摘录：specstd.anchors 扫描当前工作区 specs/，返回真实 FR 信息。
+
+    不存在的 FR 返回 not_found + 可用锚点自愈提示（诚实结果，不编造）。
+    """
+    from specstd.anchors import scan_anchors
+    from specstd.workspace import get_workspace_root
+
     fr_refs = args.get("fr_refs", [])
+    ws_root = get_workspace_root()
+    if not ws_root:
+        return [TextContent(type="text", text="错误：无激活的工作区")]
+    anchors = scan_anchors(ws_root)
     results = []
     for fr in fr_refs:
-        results.append({"fr": fr, "status": "ref_available"})
-    return [TextContent(type="text", text=str({"baseline_refs": results}))]
+        info = anchors.get(str(fr))
+        if not info:
+            results.append({"fr": fr, "status": "not_found"})
+            continue
+        results.append({
+            "fr": fr,
+            "status": "found",
+            "title": info.title,
+            "module": info.module,
+            "feature": info.feature,
+            "ac_ids": list(info.ac_ids),
+            "file": info.file_path,
+        })
+    # 附可引用锚点清单（自愈提示）
+    available = sorted(anchors.keys())
+    return [TextContent(type="text", text=str({
+        "baseline_refs": results,
+        "available_frs": available[:50],
+        "total_frs": len(available),
+    }))]
+
+
+async def _handle_iv_ask_question(args: dict) -> list[TextContent]:
+    """登记分级问题（面试官 Agent 生成 → 入库 → 产品可回答）。"""
+    try:
+        from specflow.interview.iv_lifecycle import validate_iv_id
+        from workbench.backend.services.specflow.sf_store import create_question
+
+        iv_id = args["iv_id"]
+        err = validate_iv_id(iv_id)
+        if err:
+            return [TextContent(type="text", text=f"登记失败: {err}")]
+        priority = args["priority"]
+        if priority not in ("P0", "P1", "P2"):
+            return [TextContent(type="text", text=f"登记失败: 非法优先级 {priority!r}")]
+        question = args["question"]
+        if not question.strip():
+            return [TextContent(type="text", text="登记失败: question 不能为空")]
+
+        ws, ws_err = _require_workspace()
+        if ws_err:
+            return [TextContent(type="text", text=f"登记失败: {ws_err}")]
+
+        q = create_question(
+            iv_id=iv_id,
+            priority=priority,
+            question=question,
+            chapter=args.get("chapter", 0),
+            spq_ref=args.get("spq_ref", ""),
+            fr_refs=args.get("fr_refs", ""),
+            workspace=ws,
+        )
+        return [TextContent(type="text", text=str({
+            "status": "created",
+            "q_id": q["q_id"],
+            "priority": q["priority"],
+            "question": q["question"],
+        }))]
+    except ValueError as e:
+        return [TextContent(type="text", text=f"登记失败: {e}")]
+    except Exception as e:
+        return [TextContent(type="text", text=f"登记失败: {e}")]
 
 
 async def _handle_iv_next_question(args: dict) -> list[TextContent]:
     iv_id = args["iv_id"]
     from specflow.interview.topic import load_topic
-    from specstd.workspace import specflow_dir
+    from specflow.interview.iv_lifecycle import validate_iv_id
+    from specstd.workspace import specflow_dir, get_context_workspace
     from workbench.backend.services.specflow.sf_store import list_questions
 
+    err = validate_iv_id(iv_id)
+    if err:
+        return [TextContent(type="text", text=f"错误: {err}")]
     sf_base = specflow_dir()
     topic = load_topic(iv_id, sf_base)
-    questions = list_questions(iv_id, status="pending")
+    ws = get_context_workspace() or ""
+    questions = list_questions(iv_id, status="pending", workspace=ws)
     return [TextContent(type="text", text=str({
         "iv_id": iv_id,
         "status": topic.status if topic else "unknown",
@@ -175,9 +287,18 @@ async def _handle_iv_next_question(args: dict) -> list[TextContent]:
 
 
 async def _handle_iv_record_answer(args: dict) -> list[TextContent]:
-    from workbench.backend.services.specflow.sf_store import update_answer, get_question
+    from workbench.backend.services.specflow.sf_store import (
+        update_answer, get_question,
+    )
+    from specstd.workspace import get_context_workspace
+
     q_id = args["q_id"]
     answer = args["answer"]
+    ws = get_context_workspace() or ""
+
+    q = get_question(q_id)
+    if not q or q.get("workspace", "") != ws:
+        return [TextContent(type="text", text=f"记录失败: 问题 {q_id} 不存在")]
     ok = update_answer(q_id, answer)
     if ok:
         q = get_question(q_id)
@@ -195,8 +316,15 @@ async def _handle_iv_record_answer(args: dict) -> list[TextContent]:
 
 async def _handle_iv_p0_clear_check(args: dict) -> list[TextContent]:
     from workbench.backend.services.specflow.decision_service import db_get_gate
+    from specflow.interview.iv_lifecycle import validate_iv_id
+    from specstd.workspace import get_context_workspace
+
     iv_id = args["iv_id"]
-    gate = db_get_gate(iv_id)
+    err = validate_iv_id(iv_id)
+    if err:
+        return [TextContent(type="text", text=f"错误: {err}")]
+    ws = get_context_workspace() or ""
+    gate = db_get_gate(iv_id, ws)
     if gate["pending_p0"] == 0:
         return [TextContent(type="text", text=str({
             "status": "PASS",
@@ -210,11 +338,16 @@ async def _handle_iv_p0_clear_check(args: dict) -> list[TextContent]:
 
 
 async def _handle_iv_append_transcript(args: dict) -> list[TextContent]:
-    from specflow.interview.iv_lifecycle import append_transcript, iv_transcript_path
+    from specflow.interview.iv_lifecycle import append_transcript, iv_transcript_path, validate_iv_id
     from specstd.workspace import specflow_dir
 
+    iv_id = args["iv_id"]
+    err = validate_iv_id(iv_id)
+    if err:
+        return [TextContent(type="text", text=f"错误: {err}")]
+
     sf_base = specflow_dir()
-    tpath = iv_transcript_path(sf_base, args["iv_id"])
+    tpath = iv_transcript_path(sf_base, iv_id)
     entry = {
         "role": args["role"],
         "text": args["text"],

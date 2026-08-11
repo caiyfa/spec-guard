@@ -36,6 +36,12 @@ def open_interview(title: str, initiator_emp: str, initiator_role: str,
         {iv_id, topic, status}
     """
     from workbench.backend.services.specflow import sf_store as sf
+    import logging
+    logger = logging.getLogger(__name__)
+
+    if not specflow_base:
+        from specstd.workspace import specflow_dir
+        specflow_base = specflow_dir()
 
     src_objs = [SourceRef(**s) for s in source]
     bl_objs = [BaselineRef(**r) for r in (baseline_refs or [])]
@@ -53,28 +59,28 @@ def open_interview(title: str, initiator_emp: str, initiator_role: str,
     topic.status = "interviewing"
     topic.write(specflow_base / "interviews" / topic.iv_id)
 
-    # DB 记录
+    # DB 记录（索引失败不阻断主链路，但记录日志供排查）
     if workspace and session_id:
         try:
             sf.create_interview(topic.iv_id, workspace, session_id,
                                 title, initiator_emp, target_delta)
-            sf.init_tables()
-            # 同时初始化 decision_ledger 表
+            # 同时初始化 decision_ledger 表（复用 sf_store 连接，路径单一事实源）
             from specflow.interview.decision_ledger import init_tables as dl_init
-            import sqlite3
-            conn = sqlite3.connect(str(Path(__file__).resolve().parent.parent.parent / "data" / "workbench.db"))
+            conn = sf._connect()
             dl_init(conn)
             conn.close()
-        except Exception:
-            pass  # DB 索引失败不阻断主链路
+        except Exception as e:
+            logger.warning("sf 索引失败（不阻断开标）: %s", e)
 
     return {"iv_id": topic.iv_id, "topic": topic, "status": "interviewing"}
 
 
-def get_gate_status(iv_id: str, specflow_base: Path = None) -> GateResult:
-    """获取门禁聚合状态。"""
-    from workbench.backend.services.specflow import sf_store as sf
+def get_gate_status(iv_id: str, workspace: str = "",
+                    specflow_base: Path = None) -> GateResult:
+    """获取门禁聚合状态（按工作区隔离）。"""
     from workbench.backend.services.specflow.sf_store import _connect
+    import logging
+    logger = logging.getLogger(__name__)
 
     p0_pending = 0
     impact_confirmed = False
@@ -82,12 +88,12 @@ def get_gate_status(iv_id: str, specflow_base: Path = None) -> GateResult:
 
     try:
         conn = _connect()
-        p0_pending = count_pending_p0(conn, iv_id)
-        impact_confirmed = get_impact_confirmed(conn, iv_id)
-        total_score = calculate_total_score(conn, iv_id)
+        p0_pending = count_pending_p0(conn, iv_id, workspace)
+        impact_confirmed = get_impact_confirmed(conn, iv_id, workspace)
+        total_score = calculate_total_score(conn, iv_id, workspace)
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("门禁聚合读取失败（按全零 fail-closed）: %s", e)
 
     return gate_aggregate(
         p0_pending_count=p0_pending,
@@ -113,6 +119,7 @@ def confirm_impact(iv_id: str, actor: str, affected_frs: list[str] = None,
                                "impact_confirm", "pass",
                                evidence=snapshot_path or "",
                                actor=actor)
+    conn.commit()
     conn.close()
 
     # 写快照文件
@@ -159,7 +166,7 @@ def record_transcript(iv_id: str, role: str, text: str,
 def check_freeze(iv_id: str, workspace: str = "",
                  specflow_base: Path = None) -> dict:
     """检查冻结条件并返回门禁聚合结果。"""
-    result = get_gate_status(iv_id, specflow_base)
+    result = get_gate_status(iv_id, workspace, specflow_base)
     error = validate_freeze_request(result)
     return {
         "allowed": error is None,

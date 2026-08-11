@@ -33,7 +33,7 @@ def _connect(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 def init_tables(db_path: Path | None = None):
-    """建表（幂等）。"""
+    """建表（幂等，含旧表 workspace 列迁移）。"""
     with _LOCK, _connect(db_path) as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS sf_interviews (
@@ -51,7 +51,8 @@ def init_tables(db_path: Path | None = None):
 
         CREATE TABLE IF NOT EXISTS sf_questions (
           q_id         TEXT PRIMARY KEY,
-          iv_id        TEXT NOT NULL REFERENCES sf_interviews(iv_id),
+          iv_id        TEXT NOT NULL,
+          workspace    TEXT NOT NULL DEFAULT '',
           priority     TEXT NOT NULL,
           chapter      INTEGER,
           question     TEXT NOT NULL,
@@ -65,6 +66,13 @@ def init_tables(db_path: Path | None = None):
         );
         CREATE INDEX IF NOT EXISTS idx_q_iv ON sf_questions(iv_id, priority, status);
         """)
+        # 旧表迁移：sf_questions 补 workspace 列（幂等）
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(sf_questions)")]
+        if "workspace" not in cols:
+            conn.execute(
+                "ALTER TABLE sf_questions "
+                "ADD COLUMN workspace TEXT NOT NULL DEFAULT ''")
+            conn.commit()
 
 
 # ══════════════════════════════════════════════════════════
@@ -75,7 +83,11 @@ def create_interview(iv_id: str, workspace: str, session_id: str,
                      title: str, initiator: str,
                      target_delta: str = "",
                      db_path: Path | None = None) -> dict:
-    """创建面试记录。"""
+    """创建面试记录。
+
+    Raises:
+        ValueError: 会话已在该工作区开标过（UNIQUE(workspace, session_id)）
+    """
     now = _now()
     init_tables(db_path)
     with _LOCK, _connect(db_path) as conn:
@@ -86,7 +98,10 @@ def create_interview(iv_id: str, workspace: str, session_id: str,
             (iv_id, workspace, session_id, title, initiator,
              target_delta or None, now),
         )
-        return get_interview(iv_id, db_path)
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM sf_interviews WHERE iv_id = ?", (iv_id,)).fetchone()
+        return dict(row)
 
 
 def get_interview(iv_id: str, db_path: Path | None = None) -> Optional[dict]:
@@ -138,18 +153,27 @@ def list_interviews_db(workspace: str = "", session_id: str = "",
 
 def create_question(iv_id: str, priority: str, question: str,
                     chapter: int = 0, spq_ref: str = "",
-                    fr_refs: str = "",
+                    fr_refs: str = "", workspace: str = "",
                     db_path: Path | None = None) -> dict:
     """创建问题记录。
 
     自动生成 q_id 格式: IV-xxx-Q<seq>。
+
+    Raises:
+        ValueError: 面试不存在 / 优先级非法 / 同 q_id 已存在（跨工作区撞号）
     """
     init_tables(db_path)
     with _LOCK, _connect(db_path) as conn:
+        # 归属校验：面试必须已存在（SQLite 默认 FK 关闭，手动保证引用完整性）
+        row = conn.execute(
+            "SELECT 1 FROM sf_interviews WHERE iv_id = ?", (iv_id,)).fetchone()
+        if not row:
+            raise ValueError(f"面试不存在: {iv_id}")
         # 计算下一个问题序号
         cursor = conn.execute(
-            "SELECT q_id FROM sf_questions WHERE iv_id = ? ORDER BY q_id DESC LIMIT 1",
-            (iv_id,))
+            "SELECT q_id FROM sf_questions WHERE iv_id = ? AND workspace = ? "
+            "ORDER BY q_id DESC LIMIT 1",
+            (iv_id, workspace))
         row = cursor.fetchone()
         seq = 1
         if row:
@@ -161,14 +185,20 @@ def create_question(iv_id: str, priority: str, question: str,
                     pass
         q_id = f"{iv_id}-Q{seq}"
         now = _now()
-        conn.execute(
-            "INSERT INTO sf_questions (q_id, iv_id, priority, chapter, "
-            "question, spq_ref, fr_refs, status, asked_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
-            (q_id, iv_id, priority, chapter or None, question,
-             spq_ref or None, fr_refs or None, now),
-        )
-        return get_question(q_id, db_path)
+        try:
+            conn.execute(
+                "INSERT INTO sf_questions (q_id, iv_id, workspace, priority, "
+                "chapter, question, spq_ref, fr_refs, status, asked_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+                (q_id, iv_id, workspace, priority, chapter or None, question,
+                 spq_ref or None, fr_refs or None, now),
+            )
+        except Exception as e:
+            raise ValueError(f"问题登记失败: {e}")
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM sf_questions WHERE q_id = ?", (q_id,)).fetchone()
+        return dict(row)
 
 
 def get_question(q_id: str, db_path: Path | None = None) -> Optional[dict]:
@@ -192,10 +222,11 @@ def update_answer(q_id: str, answer: str, decision_ref: str = "",
 
 
 def list_questions(iv_id: str, status: str = "", priority: str = "",
+                   workspace: str = "",
                    db_path: Path | None = None) -> list[dict]:
-    """列出指定面试的问题。"""
+    """列出指定面试的问题（按工作区隔离，空 workspace 匹配空串 fail-closed）。"""
     init_tables(db_path)
-    clauses, params = ["iv_id = ?"], [iv_id]
+    clauses, params = ["iv_id = ?", "workspace = ?"], [iv_id, workspace]
     if status:
         clauses.append("status = ?")
         params.append(status)

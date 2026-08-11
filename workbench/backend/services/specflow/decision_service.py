@@ -13,7 +13,7 @@ from specflow.interview.decision_ledger import (
     get_decision, list_decisions, count_pending_p0,
     add_gate_evidence, get_impact_confirmed,
     add_score, confirm_score, list_scores, calculate_total_score,
-    export_ledger,
+    has_suggested_score, export_ledger,
 )
 from specflow.interview.gate import gate_aggregate, GateResult
 
@@ -76,14 +76,14 @@ def db_list_decisions(interview_id: str = "", status: str = "",
         conn.close()
 
 
-def db_get_gate(interview_id: str) -> dict:
-    """P0 清零门禁聚合。"""
+def db_get_gate(interview_id: str, workspace: str = "") -> dict:
+    """P0 清零门禁聚合（按工作区隔离，防跨工作区 IV-xxx 重号串扰）。"""
     conn = _connect()
     init_tables(conn)
     try:
-        p0_pending = count_pending_p0(conn, interview_id)
-        impact_confirmed = get_impact_confirmed(conn, interview_id)
-        total_score = calculate_total_score(conn, interview_id)
+        p0_pending = count_pending_p0(conn, interview_id, workspace)
+        impact_confirmed = get_impact_confirmed(conn, interview_id, workspace)
+        total_score = calculate_total_score(conn, interview_id, workspace)
         result = gate_aggregate(
             p0_pending_count=p0_pending,
             impact_confirmed=impact_confirmed,
@@ -113,11 +113,17 @@ def db_confirm_impact(workspace: str, interview_id: str,
 
 def db_add_score(workspace: str, interview_id: str,
                  dimension: str, score: int, source: str,
-                 evidence: str = "", spec_sha: str = "") -> dict:
-    """添加评分条目。"""
+                 evidence: str = "", spec_sha: str = "",
+                 skip_if_suggested: bool = False) -> dict:
+    """添加评分条目（skip_if_suggested=True 时已有 suggested 则跳过，幂等）。"""
     conn = _connect()
     init_tables(conn)
     try:
+        if skip_if_suggested and has_suggested_score(
+                conn, interview_id, dimension, workspace):
+            return {"id": None, "dimension": dimension,
+                    "score": None, "source": source,
+                    "status": "suggested", "skipped": True}
         result = add_score(conn, workspace, interview_id, dimension,
                            score, source, evidence, spec_sha)
         conn.commit()
@@ -138,23 +144,23 @@ def db_confirm_score(score_id: int, verdict: str, confirmed_by: str) -> dict:
         conn.close()
 
 
-def db_list_scores(interview_id: str) -> list[dict]:
-    """列出评分记录。"""
+def db_list_scores(interview_id: str, workspace: str = "") -> dict:
+    """列出评分记录（按工作区隔离）。"""
     conn = _connect()
     init_tables(conn)
     try:
-        scores = list_scores(conn, interview_id)
-        total = calculate_total_score(conn, interview_id)
+        scores = list_scores(conn, interview_id, workspace)
+        total = calculate_total_score(conn, interview_id, workspace)
         return {"scores": scores, "total": round(total, 1), "pass": total >= 70.0}
     finally:
         conn.close()
 
 
-def db_export_ledger(interview_id: str) -> dict:
-    """导出面试台账快照。"""
+def db_export_ledger(interview_id: str, workspace: str = "") -> dict:
+    """导出面试台账快照（按工作区隔离）。"""
     conn = _connect()
     init_tables(conn)
     try:
-        return export_ledger(conn, interview_id)
+        return export_ledger(conn, interview_id, workspace)
     finally:
         conn.close()

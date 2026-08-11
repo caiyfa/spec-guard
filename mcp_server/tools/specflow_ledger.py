@@ -114,9 +114,11 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
 
 async def _handle_sf_list_decisions(args: dict) -> list[TextContent]:
     from workbench.backend.services.specflow.decision_service import db_list_decisions
+    from specstd.workspace import get_context_workspace
     decisions = db_list_decisions(
         interview_id=args.get("interview_id", ""),
         status=args.get("status", ""),
+        workspace=get_context_workspace() or "",
     )
     return [TextContent(type="text", text=str({"decisions": decisions}))]
 
@@ -140,7 +142,8 @@ async def _handle_sf_propose_decision(args: dict) -> list[TextContent]:
 
 async def _handle_sf_check_p0_gate(args: dict) -> list[TextContent]:
     from workbench.backend.services.specflow.decision_service import db_get_gate
-    gate = db_get_gate(args["interview_id"])
+    from specstd.workspace import get_context_workspace
+    gate = db_get_gate(args["interview_id"], get_context_workspace() or "")
     return [TextContent(type="text", text=str({
         "review_id": args["interview_id"],
         "pending_p0": gate.get("pending_p0", 0),
@@ -150,6 +153,12 @@ async def _handle_sf_check_p0_gate(args: dict) -> list[TextContent]:
 
 
 async def _handle_sf_suggest_scores(args: dict) -> list[TextContent]:
+    """建议五维评分（写库 status=suggested，不计入总分）。
+
+    TODO(F2/S4)：当前机打维度为占位常量，真实实现由 specstd/conformance
+    驱动（11 章齐全性/边界异常比对器），S4 扫描仪与评分卡落地时替换。
+    幂等：同面试同维度已有 suggested 记录时跳过，不重复插入。
+    """
     from workbench.backend.services.specflow.decision_service import db_add_score
     from specstd.workspace import get_context_workspace
     ws = get_context_workspace() or ""
@@ -162,10 +171,11 @@ async def _handle_sf_suggest_scores(args: dict) -> list[TextContent]:
         ("precondition", 70, "前置条件完整"),
     ]
     for dim, score, evidence in machine_dims:
-        r = db_add_score(ws, iv_id, dim, score, "machine", evidence)
+        r = db_add_score(ws, iv_id, dim, score, "machine", evidence,
+                         skip_if_suggested=True)
         results.append(r)
     r = db_add_score(ws, iv_id, "clarity", 62, "llm_suggested",
-                     "LLM 建议：预期清晰度待 QA 复核")
+                     "LLM 建议：预期清晰度待 QA 复核", skip_if_suggested=True)
     results.append(r)
     return [TextContent(type="text", text=str({
         "status": "suggested",
@@ -176,5 +186,6 @@ async def _handle_sf_suggest_scores(args: dict) -> list[TextContent]:
 
 async def _handle_sf_read_score_gate(args: dict) -> list[TextContent]:
     from workbench.backend.services.specflow.decision_service import db_list_scores
-    result = db_list_scores(args["interview_id"])
+    from specstd.workspace import get_context_workspace
+    result = db_list_scores(args["interview_id"], get_context_workspace() or "")
     return [TextContent(type="text", text=str(result))]

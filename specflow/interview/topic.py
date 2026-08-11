@@ -9,6 +9,7 @@ feishu_minutes, feishu_im, zentao_story。
 from __future__ import annotations
 
 import re
+import threading
 import yaml
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -97,18 +98,23 @@ class Topic:
         topic_path.write_text(self.to_yaml(), encoding="utf-8")
 
 
+# IV-xxx 编号生成锁（并发开标防撞号）
+_IV_ID_LOCK = threading.Lock()
+
+
 def _next_iv_id(interviews_root: Path) -> str:
-    """在 interviews 目录下生成下一个 IV-xxx 编号。"""
-    max_num = 0
-    if interviews_root.is_dir():
-        for d in interviews_root.iterdir():
-            if d.is_dir() and d.name.startswith("IV-"):
-                try:
-                    num = int(d.name[3:])
-                    max_num = max(max_num, num)
-                except ValueError:
-                    pass
-    return f"IV-{max_num + 1:03d}"
+    """在 interviews 目录下生成下一个 IV-xxx 编号（并发安全）。"""
+    with _IV_ID_LOCK:
+        max_num = 0
+        if interviews_root.is_dir():
+            for d in interviews_root.iterdir():
+                if d.is_dir() and d.name.startswith("IV-"):
+                    try:
+                        num = int(d.name[3:])
+                        max_num = max(max_num, num)
+                    except ValueError:
+                        pass
+        return f"IV-{max_num + 1:03d}"
 
 
 def create_topic(
@@ -184,7 +190,14 @@ def load_topic(iv_id: str, specflow_base: Path = None) -> Optional[Topic]:
 
     Returns:
         Topic 对象，不存在时返回 None
+
+    Raises:
+        ValueError: iv_id 格式非法（防路径穿越）
     """
+    from specflow.interview.iv_lifecycle import validate_iv_id
+    err = validate_iv_id(iv_id)
+    if err:
+        raise ValueError(err)
     if not specflow_base:
         from specstd.workspace import specflow_dir
         specflow_base = specflow_dir()
