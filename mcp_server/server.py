@@ -35,6 +35,7 @@ from mcp_server.tools import (  # noqa: E402
     specflow_ledger,
     feishu_fetch,
     specflow_pack,
+    specflow_refs,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -63,6 +64,7 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         specflow_ledger,
         feishu_fetch,
         specflow_pack,
+        specflow_refs,
     ]
     if include_info_pack:
         try:

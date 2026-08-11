@@ -59,8 +59,10 @@ class PlanBody(BaseModel):
 
 @router.put("/{plan_id}", dependencies=[Depends(require_role("admin", "tester"))])
 def api_save_plan(plan_id: str, body: PlanBody):
-    """创建/更新计划"""
+    """更新已存在计划（铁律 6：手动新建计划无 API，计划只能由 delta 导入生成）。"""
     _guard_plan_id(plan_id)
+    if get_plan(plan_id) is None:
+        raise HTTPException(status_code=404, detail=f"计划 {plan_id} 不存在（计划只能由 delta 导入生成）")
     return save_plan(plan_id, body.model_dump())
 
 

@@ -13,15 +13,18 @@ from typing import Optional
 class FeedbackLedger:
     """反哺报告台账。"""
 
-    VALID_STATUSES = ["pending", "in_progress", "closed"]
+    VALID_STATUSES = ["pending", "in_progress", "zentao_filed", "closed"]
     VALID_SOURCES = ["loop_a", "loop_b"]
     # H-1: 漏洞条目扩展
     VALID_VTYPES = ["logic_defect", "spec_impl_mismatch", "missing_info", "behavior_deviation"]
     VALID_SEVERITIES = ["blocker", "major", "minor"]
     # V15 修复：合法状态流转（closed 为终态，不可重开）
+    # M06 §4.3：zentao_filed = 已提禅道 BUG（挂 sf_external_refs 双向链接），
+    # 禅道修复后回归：PASS → closed，FAIL → 回 in_progress + 通知
     ALLOWED_TRANSITIONS = {
-        "pending": {"in_progress", "closed"},
-        "in_progress": {"pending", "closed"},
+        "pending": {"in_progress", "zentao_filed", "closed"},
+        "in_progress": {"pending", "zentao_filed", "closed"},
+        "zentao_filed": {"in_progress", "closed"},
         "closed": set(),
     }
 

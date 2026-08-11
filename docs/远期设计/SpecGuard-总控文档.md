@@ -32,6 +32,8 @@
 > **v1.13 决策（2026-08-11，sess-s2.5-dev）**：**S2.5 阶段全部完成**——T-025/T-026 交付：`feishu_fetch` MCP 模块 2 工具（`feishu_calendar_agenda` 日程列表 / `feishu_meeting_notes` 纪要全链路），真实链路冒烟打通（08-07「应用交付组AI Coding分享」纪要正文成功拉取：event_id→+meeting→vc +detail→note +detail→docs +fetch）；T-026 无权限结构化信息块（`permission_denied` + apply_command，docs/note 域暂无 apply 命令走链接引导，不静默降级）；测试 19 例全绿（test_specstd 845 绿 1 预存红）；§2.1 S2.5 行标注 ✅，§3.1 虚线依赖说明维持（S3 可并行）。
 >
 > **v1.14 决策（2026-08-11，sess-s3-dev）**：**S3 材料包与信息包全部完成**——T-030/T-031/T-032 交付：`specflow/materials/` 包（store 两表 + pipeline 解析管线 + pack_assembler 六分区装配器）+ MCP 工具 5 个（pack_assemble/pack_read_section/material_parse_status/material_extract_topics/pack_freshness_check）+ REST 路由（上传/列表/预览/候选确认/入包/装配 8 端点）+ info_pack.py 挂载（runtime 侧，stdio 保持 T-602 收窄设计）；F3 验收主路径走通（上传 md→indexed→候选 confirm→入包→六分区装配→分区读取含候选挂链）；测试 33 例全绿（test_specstd 878 绿 1 预存红）、release_check PASS；§2.1 S3 行标注 ✅。飞书/禅道 fetcher（G7/G8）按规划留 T-701 支线与 S5/M06。
+>
+> **v1.15 决策（2026-08-11，sess-s5-dev）**：**S5 三闸冻结 + 禅道集成全部完成**——T-050/T-051/T-052 由 S4 交付并完成漏洞修复闭环（闸门纯读化/路径净化/conformance fail-closed/归档冻结校验）；T-053~T-056 交付：`integrations/zentao/` 单包（story get/search/create/update + bug get/create，与 S2 禅道只读设计同包收敛，杜绝两套链接）+ `sf_external_refs`/`sf_zentao_jobs`/`sf_storypoint_estimates` 三表 + 幂等作业编排（idem_key UNIQUE 防重/指数退避/回滚不删禅道资产）+ 提 BUG 双入口（from-run 仅 FAIL 可提单，SKIP/BLOCKED 被拒）+ 故事点评估链路（恒 suggested → 产品确认 → 回写）+ MCP 3 工具（读写分层，写不暴露）+ 铁律 6 负向测试（手动新建计划 404）；测试 36 例全绿（test_specstd 985 全绿）、release_check PASS；§2.1 S5 行标注 ✅，S6 依赖就绪可认领。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -83,8 +85,8 @@
 | **S2** F1 面试闭环 ★价值拐点 ✅ | specflow/interview 从零到端到端 | 产品在 AgentChat 完成面试→台账→P0 清零→归档，可演示（**[2026-08-11 修复] 审查验收修复 12 项（H1-H3/M1-M8/低危），详见 §4.2 T-020~T-024 备注与 §5 sess-s2-fix**） | M02 / M04 |
 | **S2.5** 日程获取与文档权限 ✅ | 日历+会议纪要链路封装 + 无权限文档结构化引导 | 面试官可从日程获取会议上下文/纪要素材；遇到无权限文档时展示提示+申请链接（`+apply-permission`），不静默降级（**✅ 2026-08-11 完成：feishu_fetch 模块 2 工具 + 真实链路冒烟打通，详见 §4.2 T-025/T-026 与 §5 sess-s2.5-dev**） | 飞书 CLI（calendar/vc/note/docs） |
 | **S3** 材料包与信息包 ✅ | 多源文档解析入包，挂载补票 | 三类文档→议题候选→人拍板入包；list_tools 回归（**✅ 2026-08-11 完成：材料管线/候选闸门/六分区装配 + 5 MCP 工具 + 8 REST 端点，详见 §4.2 T-030~T-032 与 §5 sess-s3-dev**） | M03 |
-| **S4** 扫描仪与评分卡 | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效 | M05 / M04 |
-| **S5** 三闸冻结 + 禅道 | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记 | M05 / M06 |
+| **S4** 扫描仪与评分卡 ✅ | 草案机打校验 + 五维半自动 | 机打维度走 specstd；LLM 预打分 QA 确认才生效（**✅ 2026-08-11 完成：specflow/anchor + delta 包 + 三闸冻结，详见 §4.2 T-040~T-042/T-050~T-052 与 §5 sess-s5-dev；漏洞修复闭环（纯读化/路径净化/fail-closed）同日完成**） | M05 / M04 |
+| **S5** 三闸冻结 + 禅道 ✅ | 产物规格化 + 跨系统挂链 | 三闸冻结；zentao-cli 幂等建故事/提 BUG；external_refs 登记（**✅ 2026-08-11 完成：integrations/zentao 单包 + 幂等作业 + 双入口提单 + 故事点评估 + 三表，详见 §4.2 T-053~T-056 与 §5 sess-s5-dev**） | M05 / M06 |
 | **S6** 测试侧三增强 | 闸门保护下启用 Agent | 缺口泳道真实一致；数据制造/归因产物全过闸 | M07 / M08 / M09 |
 | **S7** 血缘与图谱 | 图谱派生 + 血缘投影（汇合 P-A） | Q1/Q2 双向 trace 不断链；演化 diff 可重建 | M10 / M11 |
 | **S8** 治理件 + 对外 L0 | skill 体系化 + open/ 只读面 + 研发侧消费通道 | 旗舰 e2e：外部编码 Agent 经 MCP 读冻结 spec；研发侧 dev_context 三入口（接需求/开发接口/修BUG）从 ZT-STORY 号拿到带指纹的 dev-context-pack | M13 / M12 |
@@ -259,16 +261,16 @@ flowchart LR
 | T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配（议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml，零 LLM，回调注入只读数据源）+ specflow_pack MCP 5 工具 + REST 8 端点（上传/列表/预览/候选/confirm/include/pack/reassemble）+ info_pack.py 挂载（runtime 侧 include_info_pack=True；stdio 保持 T-602 收窄设计）+ 人拍板入包闸门（pack_included=1 才纳入装配）；工具注册 45（stdio）/48（runtime）） |
 | T-033 | S3 | info_pack.yaml六分区装配器 | M03 | 面试会话可消费 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配器：议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml；回调注入只读数据源（anchors/ledger/execution_index/M04 台账）；pack_included 与 confirmed 双闸门控制入包；面试会话经 pack_read_section 消费） |
 | T-034 | S3 | coverage_map覆盖率机打依据 | M03 | 供T-041消费接口联调 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（coverage.py：PRD 类材料条目↔FR 锚点机打映射（FR 标题关键词片段+2-gram 词表，中文无分词器零新依赖；high 置信=词表确定命中，low=LLM 建议待确认）；解析管线对 pdf 含 § 锚点材料自动产出 _parsed/{stem}.coverage_map.yaml；未映射条目=覆盖率缺口（gap_summary 确定性计算）；测试 5 例） |
-| T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 未认领 | | 依赖 T-020 ✅ 2026-08-10（S2 完成，可认领） |
-| T-041 | S4 | 五维评分卡（机打+QA确认） | M04 | 未确认不生效测试 | T-023/T-034 | 未认领 | | |
-| T-042 | S4 | 评分门禁入冻结链路 | M04/M05 | 未达标阻断冻结 | T-041/T-024 | 未认领 | | |
-| T-050 | S5 | delta manifest+verify-delta V1-V6 | M05 | 三段式+manifest一致 | T-040 | 未认领 | | |
-| T-051 | S5 | 需求侧三闸冻结 | M05 | ①确认②合规③清零全过才冻结 | T-050/T-042 | 未认领 | | |
-| T-052 | S5 | proposal/spec导出归档 | M05 | 四段式+锚点完整 | T-051 | 未认领 | | |
-| T-053 | S5 | zentao-cli封装（幂等/凭据/回滚） | M06 | 幂等键防重；回滚不删禅道资产 | T-051 | 未认领 | | ∥T-054/055/056 |
-| T-054 | S5 | 故事点评估skill | M06 | estimate恒suggested确认才回写 | T-051 | 未认领 | | ∥ |
-| T-055 | S5 | 提BUG双入口 | M06 | SKIP/BLOCKED提单被拒 | T-051 | 未认领 | | ∥ |
-| T-056 | S5 | sf_external_refs外部锚点表 | M06 | 建故事/提BUG均登记 | T-051 | 未认领 | | ∥ |
+| T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 已完成 | sess-s4-dev | ✅ 2026-08-11（specflow/anchor 包：proposal_schema 四段式 + spec_draft 11 章/TBD + scoring 机打采集；测试 40 例） |
+| T-041 | S4 | 五维评分卡（机打+QA确认） | M04 | 未确认不生效测试 | T-023/T-034 | 已完成 | sess-s4-dev | ✅ 2026-08-11（scoring.py 四机打维 + clarity 恒 suggested 出生，QA confirm 才计入总分；空文本拒绝采集守卫） |
+| T-042 | S4 | 评分门禁入冻结链路 | M04/M05 | 未达标阻断冻结 | T-041/T-024 | 已完成 | sess-s4-dev | ✅ 2026-08-11（freeze_gate 三闸编排 + specflow_freeze REST；本会话漏洞修复：闸门纯读化/异常 fail-closed/归档冻结校验） |
+| T-050 | S5 | delta manifest+verify-delta V1-V6 | M05 | 三段式+manifest一致 | T-040 | 已完成 | sess-s4-dev | ✅ 2026-08-11（specflow/delta 包：manifest/verify V1-V6/merge/archive；V6 一致性比较对象缺陷本会话修复 + 补 6 例测试） |
+| T-051 | S5 | 需求侧三闸冻结 | M05 | ①确认②合规③清零全过才冻结 | T-050/T-042 | 已完成 | sess-s4-dev | ✅ 2026-08-11（freeze_gate + REST 端点；本会话漏洞修复：check_all_gates 纯读化（GET 无写副作用）/product_confirm 带操作人/delta_id 白名单/未冻结禁归档） |
+| T-052 | S5 | proposal/spec导出归档 | M05 | 四段式+锚点完整 | T-051 | 已完成 | sess-s4-dev | ✅ 2026-08-11（archive/export 端点：verify 前置 + 冻结凭证校验 + FREEZE.yaml 落盘） |
+| T-053 | S5 | zentao-cli封装（幂等/凭据/回滚） | M06 | 幂等键防重；回滚不删禅道资产 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（integrations/zentao 单包：api+cli（story get/search/create/update + bug get/create，协议与 devops zentao_client 同源）+ services/zentao/client 作业编排：idem_key UNIQUE 防重/指数退避重试/失败回滚不删禅道资产/凭据仅环境变量与 settings 加密、不落日志 argv；测试 12 例） |
+| T-054 | S5 | 故事点评估skill | M06 | estimate恒suggested确认才回写 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（agent/skills/zentao-story-point.md + estimator.py：FR 拆解经验基线（ADDED=2/MODIFIED=2/REMOVED=1，级联+1）+ 历史参照 + 置信度；恒 suggested 出生，writeback-points 仅 product 且要求 confirmed；测试 6 例） |
+| T-055 | S5 | 提BUG双入口 | M06 | SKIP/BLOCKED提单被拒 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（from-run 仅 verdict=FAIL 可提单（SKIP/BLOCKED 被拒，诚实结果铁律 7）+ manual 同作业/幂等/登记管线；repro_builder 场景 doc 层 + run 执行证据装配 steps；提单成功 SPQ → zentao_filed；测试 8 例） |
+| T-056 | S5 | sf_external_refs外部锚点表 | M06 | 建故事/提BUG均登记 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（sf_refs_store 三表：external_refs（UNIQUE 幂等）/zentao_jobs（idem_key 防重）/storypoint_estimates（状态机）；建故事登记 delta+fr_anchor、提单登记 spq+scenario+run；对账 reconcile 补登记；MCP 3 工具（list/register/get_job，写不暴露）；测试 8 例） |
 | T-060 | S6 | 覆盖缺口三态聚合 | M07 | 与真实基线一致；草稿不计覆盖 | S5 | 未认领 | | ∥T-061 |
 | T-061 | S6 | sg_draft_gates三闸状态机 | M07 | promote硬前置；只产草稿不产计划 | S5 | 未认领 | | ∥T-060 |
 | T-062 | S6 | 测试数据制造Agent | M08 | 产物过三闸；数据校验器硬拒；引擎零改动 | T-061 | 未认领 | | ∥T-063 |
