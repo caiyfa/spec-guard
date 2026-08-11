@@ -68,24 +68,14 @@ get_plan_status_tool = Tool(
     },
 )
 
-read_run_report_tool = Tool(
-    name="read_run_report",
-    description="读取执行报告（映射内部工具）：任务号 EX-xxx 的 verdict 分布、失败场景、"
-                "断言差异、步骤轨迹。编码 Agent 看「改动验证过没有」。",
-    inputSchema={
-        "type": "object",
-        "properties": {
-            "run_id": {"type": "string", "description": "任务号（EX-xxxxxxxx）"},
-        },
-        "required": ["run_id"],
-    },
-)
+# read_run_report：映射内部 attribution.read_run_report（M13 §4.5「旧工具直接映射」）——
+# 不重复注册 Tool 对象（工具名全局唯一，重复注册会触发 LLM API 400），
+# handle 层转发 attribution 实现；open 面语义上可见、注册面上与内部工具同名同源。
 
 TOOLS = [
     get_coverage_gaps_tool,
     get_test_debt_tool,
     get_plan_status_tool,
-    read_run_report_tool,
 ]
 
 

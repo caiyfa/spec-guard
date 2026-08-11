@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 84  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 16（T-083；read_run_report 复用内部同名，15 新名）(stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 83  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）(stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}

@@ -54,10 +54,13 @@ _KNOWN_WRITERS: dict[str, str] = {
     "add_to_info_pack": SIDE_DRAFT,
     # zentao 相关（写外部系统放行前暂标 draft，确认 external-write 安全后再升）
     "sf_suggest_story_draft": SIDE_DRAFT,
-    # T-701/T-702 飞书 CLI：写凭据文件+执行外部命令
-    "lark_auth_login": SIDE_EXTERNAL_WRITE,
-    "lark_auth_logout": SIDE_EXTERNAL_WRITE,
-    "lark_execute": SIDE_EXTERNAL_WRITE,
+    # T-701/T-702 飞书 CLI：登录写本地凭据文件（~/.lark-cli/{emp}/）、
+    # lark_execute 执行命令（high-risk-write 在工具内部强制 --yes 确认）——
+    # 遵循 zentao 先例暂标 draft（写内部/受控），external-write 保持空集红线；
+    # 确认安全边界后再评估是否升级
+    "lark_auth_login": SIDE_DRAFT,
+    "lark_auth_logout": SIDE_DRAFT,
+    "lark_execute": SIDE_DRAFT,
 }
 
 # ── 外部写集（初始化为空——「外部写不进 MCP」通则）──

@@ -677,6 +677,11 @@ flowchart LR
 | mcp_server/server.py | sess-s8-dev | 2026-08-11 | d7ee368841d9 | a418eebb1325 | 已完成 | 并发提交事故修复：3092367 合并提交的 server.py 丢失 open/lark 挂载（mods 仅含 knowledge），重新追加挂载（open 五模块 + lark_auth/lark_run，追加式）；工具数恢复 84 |
 | test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | 58cb619e2868 | 25c97e028453 | 已完成 | 并发提交事故修复：断言随挂载恢复 64→84（保留 T-507 知识层 3 名）+ 名称集补 lark 4 + open 15 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 9c7545ec9cea | 52bc0e4a082d | 已完成 | v1.22 自身登记（补）：并发提交事故修复登记——3092367 提交丢失 server.py 挂载（open/lark），重挂载 + 断言更新；修改后hash = 登记中形态指纹 52bc0e4a082d（v1.3 约定） |
+| mcp_server/tools/open/quality_query.py | sess-s8-dev | 2026-08-11 | 44f2756dff52 | 2d332d82c40c | 已完成 | 验收修复：read_run_report 不重复注册 Tool 对象（重名触发 LLM API 400「Tool names must be unique」），改 handle 层映射 attribution，open 注册面 15 工具 |
+| mcp_server/tools/side_effect_registry.py | sess-s8-dev | 2026-08-11 | 5a7bd7b767c8 | d7761f8f7aa7 | 已完成 | 验收修复：lark_auth_login/logout/lark_execute 改标 draft（7513b38 误标 external-write 破坏空集红线 + runtime 拒用），遵循 zentao 先例暂标 draft |
+| test_specstd/test_open_surface.py | sess-s8-dev | 2026-08-11 | c52c7bf574b2 | b326770ae3ea | 已完成 | 验收修复：open 注册断言 16→15 + 新增 read_run_report 不重复注册断言 |
+| test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | 25c97e028453 | 366756de0725 | 已完成 | 验收修复：工具数 84→83（read_run_report 去重） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 52bc0e4a082d | 5cd365e9b502 | 已完成 | v1.22 自身登记（补二）：全量验收修复登记——read_run_report 去重 + lark 分级 draft；修改后hash = 登记中形态指纹 5cd365e9b502（v1.3 约定） |
 | | | | | | | |
 
 ---

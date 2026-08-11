@@ -268,15 +268,25 @@ def env(tmp_path, monkeypatch):
 class TestOpenRegistration:
     OPEN_MODULES = [open_refs, open_quality, open_lineage, open_refs_query, open_devctx]
 
-    def test_five_modules_sixteen_tools(self):
+    def test_five_modules_fifteen_tools(self):
+        """open/ 注册 15 工具；read_run_report 为内部工具映射（M13 旧工具直接映射，
+        不重复注册 Tool 对象——工具名全局唯一，重复注册会触发 LLM API 400）。"""
         names = sorted({t.name for mod in self.OPEN_MODULES for t in mod.TOOLS})
         assert names == [
             "dev_context_by_anchor", "dev_context_by_fr", "dev_context_by_zt_ref",
             "get_coverage_gaps", "get_delta_contract", "get_frozen_spec",
             "get_interview_status", "get_plan_status", "get_proposal",
             "get_test_debt", "lookup_external_ref", "query_decisions",
-            "query_graph", "read_run_report", "trace_backward", "trace_forward",
+            "query_graph", "trace_backward", "trace_forward",
         ]
+
+    def test_read_run_report_mapped_not_duplicated(self, env):
+        """read_run_report：open 面 handle 可调（映射 attribution），注册面不重复。"""
+        from mcp_server.server import ALL_TOOLS
+        dup = [t.name for t in ALL_TOOLS if t.name == "read_run_report"]
+        assert len(dup) == 1, f"read_run_report 重复注册: {len(dup)} 个"
+        from mcp_server.tools.open import quality_query
+        assert all(t.name != "read_run_report" for t in quality_query.TOOLS)
 
     def test_l2_tools_absent_in_open(self):
         """L2 永不开放清单：promote/禅道写/平台管理/面试过程工具在 open/ 物理不存在。"""
