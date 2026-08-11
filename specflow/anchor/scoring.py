@@ -41,6 +41,9 @@ MACHINE_DIMENSIONS = [
 # 权重（等权 20）
 DIMENSION_WEIGHT = 20
 
+# 机打采集最小文本长度：低于此值视为无有效内容，拒绝采集（空文本评分无意义）
+MIN_SPEC_TEXT_LEN = 50
+
 
 def collect_logic_dimension(spec_text: str) -> dict:
     """机打维度：逻辑完整性——11 章齐全性 + SHALL 语句密度。
@@ -127,7 +130,6 @@ def collect_boundary_dimension(text: str) -> dict:
     boundary_keywords = [
         "异常", "边界", "极限", "超时", "重试", "异常处理",
         "失败", "错误", "回滚", "异常场景", "边界条件",
-        "特殊", "xxx", "其他",
     ]
     found = [kw for kw in boundary_keywords if kw in text]
     count = len(found)
@@ -177,9 +179,14 @@ def collect_all_machine_dimensions(
 ) -> list[dict]:
     """采集全部机打维度的评分数据。
 
+    spec_text 过短（< MIN_SPEC_TEXT_LEN）时返回空列表——
+    基于空文本的评分无意义，调用方应跳过写库。
+
     Returns:
         [(dimension, score, evidence), ...]
     """
+    if len((spec_text or "").strip()) < MIN_SPEC_TEXT_LEN:
+        return []
     logic = collect_logic_dimension(spec_text)
     coverage_result = collect_coverage_dimension(
         coverage_gap_summary, coverage_total, coverage_mapped)

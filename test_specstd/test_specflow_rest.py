@@ -289,17 +289,34 @@ class TestScoreConfirm:
         """重复 evaluate 不重复插入（同面试同维度 suggested 幂等）。"""
         headers = _as_role(client, roles=("product",))
         iv_id = _open_interview()
+        spec_text = ("## 一、概述\n系统 SHALL 支持绩效域落位。\n"
+                     "## 二、范围\n本规范适用。\n"
+                     "## 三、功能需求\n系统 SHALL 按新规则计算。\n")
         r1 = client.post("/api/specflow/decisions/scores/evaluate",
-                         headers=headers, json={"interview_id": iv_id})
+                         headers=headers,
+                         json={"interview_id": iv_id, "spec_text": spec_text})
         assert r1.status_code == 200
         r2 = client.post("/api/specflow/decisions/scores/evaluate",
-                         headers=headers, json={"interview_id": iv_id})
+                         headers=headers,
+                         json={"interview_id": iv_id, "spec_text": spec_text})
         assert r2.status_code == 200
         # 两次 evaluate 后仍只有 5 条 suggested
         lst = client.get(f"/api/specflow/decisions/scores?interview_id={iv_id}",
                          headers=headers)
         assert lst.status_code == 200
         assert len(lst.json()["scores"]) == 5
+
+    def test_evaluate_empty_text_skips_machine_dims(self, client):
+        """I4 修复：空 spec_text 时不写机打维度（仅 clarity 建议）。"""
+        headers = _as_role(client, roles=("product",))
+        iv_id = _open_interview()
+        r = client.post("/api/specflow/decisions/scores/evaluate",
+                        headers=headers, json={"interview_id": iv_id})
+        assert r.status_code == 200
+        scores = r.json()["scores"]
+        # 仅 clarity 1 条（机打维度基于空文本无意义，拒绝采集）
+        assert len(scores) == 1
+        assert scores[0]["dimension"] == "clarity"
 
 
 # ══════════════════════════════════════════════════════════

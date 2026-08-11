@@ -6,12 +6,23 @@
 闸③ P0 清零转发 M04 gate API。
 """
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from services.auth import CurrentUser, get_current_user, require_role, resolve_workspace
 
 router = APIRouter(prefix="/api/specflow/freeze", tags=["specflow"],
                    dependencies=[Depends(get_current_user)])
+
+# delta_id 白名单（与 spec_draft.DELTA_MARK_RE 的代号规则对齐）
+_VALID_DELTA_ID = re.compile(r"^[a-z0-9_-]+$")
+
+
+def _check_delta_id(delta_id: str) -> None:
+    """delta_id 路径净化：拒绝路径穿越/特殊字符。"""
+    if not delta_id or not _VALID_DELTA_ID.match(delta_id):
+        raise HTTPException(status_code=400, detail=f"非法 delta_id: {delta_id!r}")
 
 
 @router.post("/changes/{delta_id}/gates/1-product-confirm")
@@ -22,6 +33,7 @@ def gate1_product_confirm(
     workspace: str = Depends(resolve_workspace),
 ):
     """闸① 产品确认（仅 product 角色）。"""
+    _check_delta_id(delta_id)
     from workbench.backend.services.specflow.freeze_gate import product_confirm
     interview_id = body.get("interview_id", "")
     result = product_confirm(
@@ -37,6 +49,7 @@ def gate2_conformance(
     workspace: str = Depends(resolve_workspace),
 ):
     """闸② specstd 合规校验（确定性，纯读）。"""
+    _check_delta_id(delta_id)
     from workbench.backend.services.specflow.freeze_gate import conformance_check
     spec_text = body.get("spec_text", "")
     result = conformance_check(workspace, delta_id, spec_text)
@@ -51,7 +64,8 @@ def get_all_gates(
     user: CurrentUser = Depends(get_current_user),
     workspace: str = Depends(resolve_workspace),
 ):
-    """三闸全量状态聚合。"""
+    """三闸全量状态聚合（纯读，无写副作用）。"""
+    _check_delta_id(delta_id)
     from workbench.backend.services.specflow.freeze_gate import check_all_gates
     return check_all_gates(workspace, interview_id, delta_id, spec_text)
 
@@ -64,6 +78,7 @@ def freeze_delta(
     workspace: str = Depends(resolve_workspace),
 ):
     """执行冻结（三闸全 pass 才放行，否则 409）。"""
+    _check_delta_id(delta_id)
     from workbench.backend.services.specflow.freeze_gate import freeze_delta as _freeze
     interview_id = body.get("interview_id", "")
     spec_sha = body.get("spec_sha", "")
@@ -84,6 +99,7 @@ def archive_delta(
     workspace: str = Depends(resolve_workspace),
 ):
     """归档 delta（product 角色，冻结后可归档）。"""
+    _check_delta_id(delta_id)
     from workbench.backend.services.specflow.freeze_gate import archive_delta as _archive
     result = _archive(workspace, delta_id, archive_by=user.emp_no)
     if not result.get("ok"):
@@ -98,6 +114,7 @@ def export_delta_pack(
     workspace: str = Depends(resolve_workspace),
 ):
     """导出 delta 交付包（proposal.md + delta-spec.md + manifest）。"""
+    _check_delta_id(delta_id)
     from specstd.workspace import specflow_dir
     from specflow.delta.manifest import load_manifest
     sf = specflow_dir()

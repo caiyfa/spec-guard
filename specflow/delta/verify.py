@@ -40,11 +40,11 @@ class VerifyResult:
 
 
 def verify_v1_anchor_valid(manifest: DeltaManifest) -> list[str]:
-    """V1: 锚点有效——FR/AC 锚点可解析。"""
+    """V1: 锚点有效——FR/AC 锚点格式合法。"""
     errors = []
     frs = collect_operation_frs(manifest.operations)
     for fr in sorted(frs):
-        if not fr.startswith("FR-"):
+        if not (fr.startswith("FR-") or fr.startswith("AC-")):
             errors.append(f"锚点格式非法: {fr}")
     return errors
 
@@ -78,16 +78,33 @@ def verify_v4_traceable(manifest: DeltaManifest) -> list[str]:
 def verify_v6_manifest_consistency(
     manifest: DeltaManifest, delta_spec_text: str
 ) -> list[str]:
-    """V6: manifest 与 delta-spec.md 正文一致。"""
+    """V6: manifest 与 delta-spec.md 正文一致。
+
+    正文操作块标记 [delta:代号 操作类型] 的 (代号, 操作) 二元组集合
+    与 manifest operations 集（(manifest.delta, op)）比较；
+    正文标记缺少操作类型视为不一致（fail-closed）。
+    """
     errors = []
-    manifest_frs = collect_operation_frs(manifest.operations)
-    # 从 delta-spec.md 正文提取 [delta:xxx] 标记
+    if not delta_spec_text:
+        return errors
+    # 统一用 spec_draft.DELTA_MARK_RE 提取正文标记（与 find_delta_marks 同源）
+    from specflow.anchor.spec_draft import find_delta_marks
     import re
-    text_frs = set(re.findall(r"\[delta:([a-z0-9_-]+)\]", delta_spec_text))
-    if manifest_frs and text_frs and manifest_frs != text_frs:
+    text_pairs = set()
+    for m in find_delta_marks(delta_spec_text):
+        op = None
+        op_m = re.search(r"\[delta:[a-z0-9_-]+\s+(\w+)\]", m["full"])
+        if op_m:
+            op = op_m.group(1)
+        text_pairs.add((m["delta"], op))
+    manifest_pairs = {
+        (manifest.delta, op.get("op", ""))
+        for op in (manifest.operations or [])
+    }
+    if text_pairs != manifest_pairs:
         errors.append(
-            f"manifest FR 集 ({sorted(manifest_frs)}) "
-            f"与正文 FR 集 ({sorted(text_frs)}) 不一致")
+            f"正文操作标记集 {sorted(text_pairs)} 与 manifest operations 集 "
+            f"{sorted(manifest_pairs)} 不一致")
     return errors
 
 

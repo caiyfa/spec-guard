@@ -32,8 +32,12 @@ def find_delta_marks(text: str) -> list[dict]:
 
 
 def resolve_tbd(text: str, replacement: str) -> str:
-    """替换第一个 TBD 标记为确定文本（用于决策落锤联动）。"""
-    return TBD_RE.sub(replacement, text, count=1)
+    """替换第一个 TBD 标记为确定文本（用于决策落锤联动）。
+
+    函数式替换：replacement 原样插入，不解释反斜杠转义/组引用
+    （re.sub 字符串替换会崩于含 \\1 等内容的替换文本）。
+    """
+    return TBD_RE.sub(lambda m: replacement, text, count=1)
 
 
 def resolve_all_tbd(text: str, replacements: dict[str, str]) -> str:

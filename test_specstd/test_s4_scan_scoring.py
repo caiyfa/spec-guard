@@ -297,3 +297,236 @@ class TestFreezeRest:
                        params={"interview_id":"IV-001"},
                        headers={"Authorization": "Bearer mock-admin"})
         assert r.status_code in (200, 403)
+
+
+class TestVerifyV6:
+    """I2 修复：V6 一致性校验（正文 [delta:代号 OP] 集 == manifest operations 集）。"""
+    def _m(self, delta="grid-rule-perf", ops=None):
+        from specflow.delta.manifest import DeltaManifest
+        return DeltaManifest(
+            delta=delta, source_interview="IV-001", base_spec="s.md",
+            operations=ops or [{"op": "MODIFIED", "anchor": "FR-001",
+                                "reason": "x"}])
+
+    def test_v6_consistent(self):
+        from specflow.delta.verify import verify_v6_manifest_consistency
+        text = "## FR-001. 规则\n[delta:grid-rule-perf MODIFIED]\n新内容"
+        assert verify_v6_manifest_consistency(self._m(), text) == []
+
+    def test_v6_consistent_multi_ops(self):
+        from specflow.delta.verify import verify_v6_manifest_consistency
+        ops = [{"op": "ADDED", "anchor": "FR-002"},
+               {"op": "MODIFIED", "anchor": "FR-001", "reason": "x"}]
+        text = "[delta:grid-rule-perf ADDED]\n[delta:grid-rule-perf MODIFIED]"
+        assert verify_v6_manifest_consistency(self._m(ops=ops), text) == []
+
+    def test_v6_inconsistent_op(self):
+        """正文操作类型与 manifest 不一致 → 报错。"""
+        from specflow.delta.verify import verify_v6_manifest_consistency
+        text = "[delta:grid-rule-perf ADDED]"
+        assert len(verify_v6_manifest_consistency(self._m(), text)) > 0
+
+    def test_v6_inconsistent_delta(self):
+        """正文 delta 代号与 manifest.delta 不一致 → 报错。"""
+        from specflow.delta.verify import verify_v6_manifest_consistency
+        text = "[delta:other-name MODIFIED]"
+        assert len(verify_v6_manifest_consistency(self._m(), text)) > 0
+
+    def test_v6_missing_op_suffix(self):
+        """正文标记缺操作类型 → 视为不一致（fail-closed）。"""
+        from specflow.delta.verify import verify_v6_manifest_consistency
+        text = "[delta:grid-rule-perf]"
+        assert len(verify_v6_manifest_consistency(self._m(), text)) > 0
+
+    def test_v6_empty_text_skip(self):
+        from specflow.delta.verify import verify_v6_manifest_consistency
+        assert verify_v6_manifest_consistency(self._m(), "") == []
+
+
+class TestResolveTbdEdge:
+    """I5 修复：resolve_tbd 替换文本含反斜杠/组引用不崩溃。"""
+    def test_resolve_tbd_backslash(self):
+        from specflow.anchor.spec_draft import resolve_tbd
+        replacement = r"C:\temp\1\g<x>"
+        result = resolve_tbd("「待确认处理方案」", replacement)
+        assert replacement in result
+        assert "待确认" not in result
+
+
+class TestScoringGuard:
+    """I4 修复：空/过短文本拒绝机打采集。"""
+    def test_all_machine_empty(self):
+        from specflow.anchor.scoring import collect_all_machine_dimensions
+        assert collect_all_machine_dimensions("") == []
+
+    def test_all_machine_short(self):
+        from specflow.anchor.scoring import collect_all_machine_dimensions
+        assert collect_all_machine_dimensions("仅一句短文本") == []
+
+    def test_all_machine_long_ok(self):
+        from specflow.anchor.scoring import collect_all_machine_dimensions
+        assert len(collect_all_machine_dimensions(SAMPLE_DRAFT)) == 4
+
+
+class TestFreezeGatePureRead:
+    """C1/C2 修复：check_all_gates 纯读；确认必须带操作人。"""
+    def test_check_all_gates_no_side_effect(self, db):
+        """三闸聚合不写任何 product_confirm 证据（修复前每次检查插入一条）。"""
+        from workbench.backend.services.specflow.freeze_gate import check_all_gates
+        from workbench.backend.services.specflow.sf_store import _connect
+        check_all_gates("tdm", "IV-001", "delta-a", "spec_text")
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM sf_gate_evidence "
+                "WHERE gate_item = 'product_confirm'").fetchone()
+            assert row[0] == 0
+        finally:
+            conn.close()
+
+    def test_unconfirmed_gate_blocks_freeze(self, db):
+        """未确认时闸① fail → freeze_allowed=False（不再自动通过）。"""
+        from workbench.backend.services.specflow.freeze_gate import check_all_gates
+        r = check_all_gates("tdm", "IV-001", "delta-a", "spec_text")
+        assert r["gates"]["product_confirm"]["status"] == "fail"
+        assert r["freeze_allowed"] is False
+
+    def test_confirm_then_gate_pass(self, db):
+        """确认后 check_all_gates 闸① pass（纯读查询到已有证据）。"""
+        from workbench.backend.services.specflow.freeze_gate import (
+            product_confirm, check_all_gates)
+        r = product_confirm("delta-a", "tdm", "emp-001", interview_id="IV-001")
+        assert r["status"] == "pass"
+        r2 = check_all_gates("tdm", "IV-001", "delta-a", "spec_text")
+        assert r2["gates"]["product_confirm"]["status"] == "pass"
+
+    def test_product_confirm_empty_actor_rejected(self, db):
+        """空操作人确认被拒绝，且不写库。"""
+        from workbench.backend.services.specflow.freeze_gate import product_confirm
+        from workbench.backend.services.specflow.sf_store import _connect
+        r = product_confirm("delta-a", "tdm", "", interview_id="IV-001")
+        assert r["status"] == "fail"
+        conn = _connect()
+        try:
+            # 空操作人路径不会建表，先初始化（真实环境表必然存在）
+            from specflow.interview.decision_ledger import init_tables
+            init_tables(conn)
+            row = conn.execute(
+                "SELECT COUNT(*) FROM sf_gate_evidence "
+                "WHERE gate_item = 'product_confirm'").fetchone()
+            assert row[0] == 0
+        finally:
+            conn.close()
+
+    def test_freeze_requires_actor(self, db):
+        """freeze_delta 无操作人 → 拒绝且不落凭证。"""
+        from workbench.backend.services.specflow.freeze_gate import freeze_delta
+        r = freeze_delta("tdm", "IV-001", "delta-a")
+        assert r["ok"] is False
+        assert "frozen_by" in r["error"]
+
+
+class TestConformanceFailClosed:
+    """I1 修复：conformance 异常/上下文缺失 → fail（不再静默降级 pass）。"""
+    def test_ws_missing_fails(self, monkeypatch):
+        import specstd.workspace as wsm
+        monkeypatch.setattr(wsm, "get_active_workspace", lambda: None)
+        from workbench.backend.services.specflow.freeze_gate import conformance_check
+        r = conformance_check("tdm", "delta-a", "spec_text")
+        assert r["status"] == "fail"
+        assert r.get("degraded") is True
+
+    def test_exception_fails(self, monkeypatch):
+        import specstd.conformance as conf
+        import specstd.workspace as wsm
+        monkeypatch.setattr(
+            conf, "check_conformance",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setattr(
+            wsm, "get_active_workspace",
+            lambda: type("WS", (), {"root": "x"})())
+        from workbench.backend.services.specflow.freeze_gate import conformance_check
+        r = conformance_check("tdm", "delta-a", "spec_text")
+        assert r["status"] == "fail"
+        assert r.get("degraded") is True
+        assert "异常" in r["errors"][0]
+
+
+class TestArchiveFreezeGate:
+    """I3 修复：未冻结 delta 禁止归档。"""
+    def test_archive_unfrozen_rejected(self, tmp_path, monkeypatch):
+        import specstd.workspace as wsm
+        sf = tmp_path / ".specflow"
+        (sf / "changes" / "delta-test").mkdir(parents=True)
+        monkeypatch.setattr(wsm, "specflow_dir", lambda *a, **k: sf)
+        from workbench.backend.services.specflow.freeze_gate import archive_delta
+        r = archive_delta("tdm", "delta-test")
+        assert r["ok"] is False
+        assert "未冻结" in r["error"]
+
+    def test_archive_frozen_ok(self, tmp_path, monkeypatch):
+        import specstd.workspace as wsm
+        sf = tmp_path / ".specflow"
+        d = sf / "changes" / "delta-test"
+        d.mkdir(parents=True)
+        (d / "FREEZE.yaml").write_text("frozen: true", encoding="utf-8")
+        (d / "delta.manifest.yaml").write_text(
+            "delta: delta-test\nsource_interview: IV-001\nbase_spec: s.md\n"
+            "operations:\n  - op: MODIFIED\n    anchor: FR-001\n    reason: x\n",
+            encoding="utf-8")
+        (d / "delta-spec.md").write_text(
+            "## FR-001\n[delta:delta-test MODIFIED]\n新内容", encoding="utf-8")
+        monkeypatch.setattr(wsm, "specflow_dir", lambda *a, **k: sf)
+        from workbench.backend.services.specflow.freeze_gate import archive_delta
+        r = archive_delta("tdm", "delta-test")
+        assert r["ok"] is True, r
+        assert "delta-test" in r["archive_path"]
+
+
+class TestDeltaIdSanitize:
+    """C3 修复：delta_id 白名单（REST 层 + 单元级）。"""
+    def test_check_delta_id_valid(self):
+        from routers.specflow_freeze import _check_delta_id
+        _check_delta_id("delta-a")
+        _check_delta_id("grid_rule_perf")
+        _check_delta_id("iv-001")
+
+    def test_check_delta_id_invalid(self):
+        import pytest
+        from fastapi import HTTPException
+        from routers.specflow_freeze import _check_delta_id
+        for bad in ("..", "a/b", "a\\b", "a b", "", "../x", "a.b"):
+            with pytest.raises(HTTPException):
+                _check_delta_id(bad)
+
+    def test_gates_400_on_path_traversal(self, client):
+        """GET 聚合端点拒绝路径穿越 delta_id（%2E%2E = 编码的 ..）。"""
+        r = client.get("/api/specflow/freeze/changes/%2E%2E/gates",
+                       params={"interview_id": "IV-001"},
+                       headers={"Authorization": "Bearer mock-admin",
+                                "X-SG-Workspace": "tdm"})
+        assert r.status_code == 400
+
+    def test_export_400_on_invalid_delta_id(self, client):
+        """export 端点拒绝非法 delta_id。"""
+        r = client.post("/api/specflow/freeze/changes/a.b/export",
+                        headers={"Authorization": "Bearer mock-admin",
+                                 "X-SG-Workspace": "tdm"})
+        assert r.status_code == 400
+
+    def test_get_gates_no_side_effect(self, client, db):
+        """C1 端到端：GET 聚合后 sf_gate_evidence 无 product_confirm 证据。"""
+        from workbench.backend.services.specflow.sf_store import _connect
+        r = client.get("/api/specflow/freeze/changes/delta-a/gates",
+                       params={"interview_id": "IV-001"},
+                       headers={"Authorization": "Bearer mock-admin",
+                                "X-SG-Workspace": "tdm"})
+        assert r.status_code == 200
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM sf_gate_evidence "
+                "WHERE gate_item = 'product_confirm'").fetchone()
+            assert row[0] == 0
+        finally:
+            conn.close()

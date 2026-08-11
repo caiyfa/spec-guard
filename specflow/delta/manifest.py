@@ -30,7 +30,7 @@ class DeltaManifest:
     base_spec_sha: str = ""
     operations: list[dict] = field(default_factory=list)
     freeze: dict = field(default_factory=lambda: {
-        "gates": {"product_confirm": "pass", "conformance": "pass", "p0_zero": "pass"},
+        "gates": {},
         "frozen_at": None,
     })
 
