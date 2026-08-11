@@ -34,6 +34,8 @@
 > **v1.14 决策（2026-08-11，sess-s3-dev）**：**S3 材料包与信息包全部完成**——T-030/T-031/T-032 交付：`specflow/materials/` 包（store 两表 + pipeline 解析管线 + pack_assembler 六分区装配器）+ MCP 工具 5 个（pack_assemble/pack_read_section/material_parse_status/material_extract_topics/pack_freshness_check）+ REST 路由（上传/列表/预览/候选确认/入包/装配 8 端点）+ info_pack.py 挂载（runtime 侧，stdio 保持 T-602 收窄设计）；F3 验收主路径走通（上传 md→indexed→候选 confirm→入包→六分区装配→分区读取含候选挂链）；测试 33 例全绿（test_specstd 878 绿 1 预存红）、release_check PASS；§2.1 S3 行标注 ✅。飞书/禅道 fetcher（G7/G8）按规划留 T-701 支线与 S5/M06。
 >
 > **v1.15 决策（2026-08-11，sess-s5-dev）**：**S5 三闸冻结 + 禅道集成全部完成**——T-050/T-051/T-052 由 S4 交付并完成漏洞修复闭环（闸门纯读化/路径净化/conformance fail-closed/归档冻结校验）；T-053~T-056 交付：`integrations/zentao/` 单包（story get/search/create/update + bug get/create，与 S2 禅道只读设计同包收敛，杜绝两套链接）+ `sf_external_refs`/`sf_zentao_jobs`/`sf_storypoint_estimates` 三表 + 幂等作业编排（idem_key UNIQUE 防重/指数退避/回滚不删禅道资产）+ 提 BUG 双入口（from-run 仅 FAIL 可提单，SKIP/BLOCKED 被拒）+ 故事点评估链路（恒 suggested → 产品确认 → 回写）+ MCP 3 工具（读写分层，写不暴露）+ 铁律 6 负向测试（手动新建计划 404）；测试 36 例全绿（test_specstd 985 全绿）、release_check PASS；§2.1 S5 行标注 ✅，S6 依赖就绪可认领。
+>
+> **v1.16 决策（2026-08-11，sess-s5-dev）**：**S5 前端补全（T-057）+ 前端缺口全景审视**——① 新增 T-057 并完成：禅道集成面板（四区：冻结 delta 交付/提 BUG 双入口/对话草案确认/锚点作业）+ 飞书文档/多维表格对话建故事链路（feishu_doc_read/feishu_base_query MCP 纯读拉取 + sf_suggest_story_draft 草案建议 + sf_story_drafts 表 + from-draft REST 人拍板，幂等优先）；前端 build 通过、test_specstd 1003 全绿、release_check PASS；② **前端缺口全景审视结论**：S2/S2.5 为对话式交付（AgentChat 承载，设计如此，无独立 UI）；S3 材料包（上传/候选确认/入包）与 S4 五维评分（QA 确认/冻结闸门）**存在前端缺口**（REST 已就绪、待 UI 页签，见 T-030~T-042 备注）；后续任务（S6/S7/S8/P-A）已在 §4.2 备注标注前端需求（三态泳道/promote 三闸/归因确认/血缘链/图谱三镜头/演化 diff/skill 管理页），认领时须将前端纳入交付范围。
 ---
 
 ## 1. 开发会话工作协议（强制，六步）
@@ -256,14 +258,14 @@ flowchart LR
 > **S2 背景知识（v1.1，2026-08-10 实测补充）**：面试素材可经飞书 CLI 直接拉取——飞书文档/多维表格/妙记/群私聊四通道均验证可用（`lark-cli`，user 身份，文本直取无需下载；`search:docs:read` scope 已授权）。详细链路、权限边界与 M02/M03 接入建议见《[SpecGuard-飞书CLI能力背景-S2面试材料获取](远期设计/SpecGuard-飞书CLI能力背景-S2面试材料获取.md)》（同目录）；M02/M03 模块设计已同步 v1.1 增补（素材来源/topic.yaml source 扩展/feishu_fetch 工具/`_fetched/` 布局）。T-020/T-021/T-023 施工时须将飞书拉取并入信息包装配与议题卡 source 挂链。**✅ 2026-08-10 S2 施工完成：topic.yaml source 已支持 7 种类型（含 feishu_doc/feishu_base/feishu_minutes/feishu_im/zentao_story 挂链），实际拉取通道（feishu_fetch / 禅道 story get/search）随飞书 CLI 支线（T-701~T-703）与 S5/M06 落地。**
 >
 > **S2.5 背景知识（v1.11，2026-08-11 实测补充）**：日程获取与文档权限处理——calender `+agenda` → `+meeting` → `vc +detail` → `note +detail` → `docs +fetch` 全链路已验证通（08-07「应用交付组AI Coding分享」纪要正文成功读取）；`calendar:calendar.event:read` scope 已授权 ✅。无权限文档场景下 `minutes +detail` 返回友好错误（不静默降级），用户可点击链接经 `+apply-permission` 申请权限。T-025/T-026 施工见上。
-| T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 已完成 | sess-s3-dev | ✅ 2026-08-11（specflow/materials/pipeline.py：magic bytes 格式识别（不信任扩展名 + 控制字符比例防二进制误判）/md 直读/docx zip+xml 抽取（XXE 载荷确定性拒绝）/pdf 文本层（扫描件无文本层→failed 提示人工转录，不做 OCR）/chunk 按 md 标题、PRD § 锚点、PDF 页标切分；store.py sf_materials 表（MAT-xxx 全局唯一编号 + sha256_12 指纹 + 状态机 uploaded→parsing→parsed→indexed→packed|failed + workspace 隔离 fail-closed）；上传落盘 materials/ 原文不动 + _parsed/ 派生物可重建） |
-| T-031 | S3 | 议题候选提取+确认闸门 | M03 | 候选confirmed=0不进上下文 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（store.py sf_material_topics 表 + material_extract_topics MCP 工具（LLM 在 Agent 侧，候选 confirmed=0 出生）+ REST POST /materials/{mid}/topics/{tid}/confirm 人拍板闸门（仅 product）；confirmed_only 查询隔离未拍板候选；端到端验证：候选确认后随材料入包挂链） |
-| T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配（议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml，零 LLM，回调注入只读数据源）+ specflow_pack MCP 5 工具 + REST 8 端点（上传/列表/预览/候选/confirm/include/pack/reassemble）+ info_pack.py 挂载（runtime 侧 include_info_pack=True；stdio 保持 T-602 收窄设计）+ 人拍板入包闸门（pack_included=1 才纳入装配）；工具注册 45（stdio）/48（runtime）） |
+| T-030 | S3 | 材料解析管线 sniff/extract/chunk | M03 | .md/.docx/.pdf三类可用 | T-020 | 已完成 | sess-s3-dev | ✅ 2026-08-11（specflow/materials/pipeline.py：magic bytes 格式识别（不信任扩展名 + 控制字符比例防二进制误判）/md 直读/docx zip+xml 抽取（XXE 载荷确定性拒绝）/pdf 文本层（扫描件无文本层→failed 提示人工转录，不做 OCR）/chunk 按 md 标题、PRD § 锚点、PDF 页标切分；store.py sf_materials 表（MAT-xxx 全局唯一编号 + sha256_12 指纹 + 状态机 uploaded→parsing→parsed→indexed→packed|failed + workspace 隔离 fail-closed）；上传落盘 materials/ 原文不动 + _parsed/ 派生物可重建）｜**前端缺口**：材料上传/解析状态无 UI（REST 已就绪，待 UI 页签） |
+| T-031 | S3 | 议题候选提取+确认闸门 | M03 | 候选confirmed=0不进上下文 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（store.py sf_material_topics 表 + material_extract_topics MCP 工具（LLM 在 Agent 侧，候选 confirmed=0 出生）+ REST POST /materials/{mid}/topics/{tid}/confirm 人拍板闸门（仅 product）；confirmed_only 查询隔离未拍板候选；端到端验证：候选确认后随材料入包挂链）｜**前端缺口**：候选确认/入包闸门无 UI |
+| T-032 | S3 | info_pack.py挂载补票+specflow_pack.py | M03/M13 | list_tools计数回归一致 | T-011 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配（议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml，零 LLM，回调注入只读数据源）+ specflow_pack MCP 5 工具 + REST 8 端点（上传/列表/预览/候选/confirm/include/pack/reassemble）+ info_pack.py 挂载（runtime 侧 include_info_pack=True；stdio 保持 T-602 收窄设计）+ 人拍板入包闸门（pack_included=1 才纳入装配）；工具注册 45（stdio）/48（runtime））｜**前端缺口**：材料管理页签无 UI |
 | T-033 | S3 | info_pack.yaml六分区装配器 | M03 | 面试会话可消费 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（pack_assembler.py 六分区确定性装配器：议题卡/材料/基线/SPQ/上轮报告/历史决策→info_pack.yaml；回调注入只读数据源（anchors/ledger/execution_index/M04 台账）；pack_included 与 confirmed 双闸门控制入包；面试会话经 pack_read_section 消费） |
 | T-034 | S3 | coverage_map覆盖率机打依据 | M03 | 供T-041消费接口联调 | T-030 | 已完成 | sess-s3-dev | ✅ 2026-08-11（coverage.py：PRD 类材料条目↔FR 锚点机打映射（FR 标题关键词片段+2-gram 词表，中文无分词器零新依赖；high 置信=词表确定命中，low=LLM 建议待确认）；解析管线对 pdf 含 § 锚点材料自动产出 _parsed/{stem}.coverage_map.yaml；未映射条目=覆盖率缺口（gap_summary 确定性计算）；测试 5 例） |
-| T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 已完成 | sess-s4-dev | ✅ 2026-08-11（specflow/anchor 包：proposal_schema 四段式 + spec_draft 11 章/TBD + scoring 机打采集；测试 40 例） |
-| T-041 | S4 | 五维评分卡（机打+QA确认） | M04 | 未确认不生效测试 | T-023/T-034 | 已完成 | sess-s4-dev | ✅ 2026-08-11（scoring.py 四机打维 + clarity 恒 suggested 出生，QA confirm 才计入总分；空文本拒绝采集守卫） |
-| T-042 | S4 | 评分门禁入冻结链路 | M04/M05 | 未达标阻断冻结 | T-041/T-024 | 已完成 | sess-s4-dev | ✅ 2026-08-11（freeze_gate 三闸编排 + specflow_freeze REST；本会话漏洞修复：闸门纯读化/异常 fail-closed/归档冻结校验） |
+| T-040 | S4 | 草案扫描仪（11章/SHALL/AC） | M05 | 调specstd conformance纯读 | T-020 | 已完成 | sess-s4-dev | ✅ 2026-08-11（specflow/anchor 包：proposal_schema 四段式 + spec_draft 11 章/TBD + scoring 机打采集；测试 40 例）｜**前端缺口**：草案扫描结果无 UI |
+| T-041 | S4 | 五维评分卡（机打+QA确认） | M04 | 未确认不生效测试 | T-023/T-034 | 已完成 | sess-s4-dev | ✅ 2026-08-11（scoring.py 四机打维 + clarity 恒 suggested 出生，QA confirm 才计入总分；空文本拒绝采集守卫）｜**前端缺口**：五维评分确认无 UI（QA confirm 端点仅 REST） |
+| T-042 | S4 | 评分门禁入冻结链路 | M04/M05 | 未达标阻断冻结 | T-041/T-024 | 已完成 | sess-s4-dev | ✅ 2026-08-11（freeze_gate 三闸编排 + specflow_freeze REST；本会话漏洞修复：闸门纯读化/异常 fail-closed/归档冻结校验）｜**前端缺口**：冻结三闸状态无 UI |
 | T-050 | S5 | delta manifest+verify-delta V1-V6 | M05 | 三段式+manifest一致 | T-040 | 已完成 | sess-s4-dev | ✅ 2026-08-11（specflow/delta 包：manifest/verify V1-V6/merge/archive；V6 一致性比较对象缺陷本会话修复 + 补 6 例测试） |
 | T-051 | S5 | 需求侧三闸冻结 | M05 | ①确认②合规③清零全过才冻结 | T-050/T-042 | 已完成 | sess-s4-dev | ✅ 2026-08-11（freeze_gate + REST 端点；本会话漏洞修复：check_all_gates 纯读化（GET 无写副作用）/product_confirm 带操作人/delta_id 白名单/未冻结禁归档） |
 | T-052 | S5 | proposal/spec导出归档 | M05 | 四段式+锚点完整 | T-051 | 已完成 | sess-s4-dev | ✅ 2026-08-11（archive/export 端点：verify 前置 + 冻结凭证校验 + FREEZE.yaml 落盘） |
@@ -271,17 +273,18 @@ flowchart LR
 | T-054 | S5 | 故事点评估skill | M06 | estimate恒suggested确认才回写 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（agent/skills/zentao-story-point.md + estimator.py：FR 拆解经验基线（ADDED=2/MODIFIED=2/REMOVED=1，级联+1）+ 历史参照 + 置信度；恒 suggested 出生，writeback-points 仅 product 且要求 confirmed；测试 6 例） |
 | T-055 | S5 | 提BUG双入口 | M06 | SKIP/BLOCKED提单被拒 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（from-run 仅 verdict=FAIL 可提单（SKIP/BLOCKED 被拒，诚实结果铁律 7）+ manual 同作业/幂等/登记管线；repro_builder 场景 doc 层 + run 执行证据装配 steps；提单成功 SPQ → zentao_filed；测试 8 例） |
 | T-056 | S5 | sf_external_refs外部锚点表 | M06 | 建故事/提BUG均登记 | T-051 | 已完成 | sess-s5-dev | ✅ 2026-08-11（sf_refs_store 三表：external_refs（UNIQUE 幂等）/zentao_jobs（idem_key 防重）/storypoint_estimates（状态机）；建故事登记 delta+fr_anchor、提单登记 spq+scenario+run；对账 reconcile 补登记；MCP 3 工具（list/register/get_job，写不暴露）；测试 8 例） |
-| T-060 | S6 | 覆盖缺口三态聚合 | M07 | 与真实基线一致；草稿不计覆盖 | S5 | 未认领 | | ∥T-061 |
-| T-061 | S6 | sg_draft_gates三闸状态机 | M07 | promote硬前置；只产草稿不产计划 | S5 | 未认领 | | ∥T-060 |
+| T-057 | S5 | 禅道集成前端面板+飞书建故事链路 | M06/M03 | 页签四区可用；对话草案→人确认→建故事 | T-053~T-056 | 已完成 | sess-s5-dev | ✅ 2026-08-11（ZentaoPanel.tsx 四区面板（冻结 delta 一键建故事/评估回写、提 BUG 双入口、对话草案确认、锚点与作业）+ feishu_doc_read/feishu_base_query MCP 拉取（lark-cli 纯读，权限结构化提示）+ sf_suggest_story_draft 草案建议 + sf_story_drafts 表（draft→created/cancelled）+ from-draft REST（幂等优先、product 人拍板）+ jobs 列表端点；RBAC product +3 工具；MCP 注册 48→51；前端 build 通过；测试 18 例（test_specstd 1003 全绿）） |
+| T-060 | S6 | 覆盖缺口三态聚合 | M07 | 与真实基线一致；草稿不计覆盖 | S5 | 未认领 | | ∥T-061｜**前端需求**：覆盖缺口三态泳道视图 |
+| T-061 | S6 | sg_draft_gates三闸状态机 | M07 | promote硬前置；只产草稿不产计划 | S5 | 未认领 | | ∥T-060｜**前端需求**：Drafts 页 promote 三闸扩展 |
 | T-062 | S6 | 测试数据制造Agent | M08 | 产物过三闸；数据校验器硬拒；引擎零改动 | T-061 | 未认领 | | ∥T-063 |
-| T-063 | S6 | 失败归因Agent | M09 | suggestion不自动转decided；诚实性复核 | T-061 | 未认领 | | ∥T-062 |
+| T-063 | S6 | 失败归因Agent | M09 | suggestion不自动转decided；诚实性复核 | T-061 | 未认领 | | ∥T-062｜**前端需求**：Attribution 页归因建议确认扩展 |
 | T-064 | S6 | SPQ→面试信息包loop-back | M09/M02 | SPQ自动入下轮信息包 | T-063/T-033 | 未认领 | | |
 | T-070 | P-A | graph_index确定性派生服务 | M11 | 指纹失效即重建；删重建同图 | 无（S3起并行） | 未认领 | | P-A支路｜S3 起 P0（v1.6 咽喉标注：喂 T-071/072/073/085 四条下游链，优先认领） |
-| T-071 | P-A | L0/L1/L2视图+三镜头 | M11 | elkjs渲染；图谱不回写spec | T-070 | 未认领 | | P-A支路 |
-| T-072 | P-A | 里程碑快照+演化diff | M11 | 三触发点；可凭指纹重建校验 | T-070 | 未认领 | | P-A支路 |
-| T-073 | S7 | 血缘链投影+Q1/Q2 trace API | M10 | 双向不断链；外部锚点虚线 | T-070/T-056/S5 | 未认领 | | v1.6：S5 完成 + T-070 就绪即可认领，与 S6 并行（S7 只剩 T-074 收尾） |
+| T-071 | P-A | L0/L1/L2视图+三镜头 | M11 | elkjs渲染；图谱不回写spec | T-070 | 未认领 | | P-A支路｜**前端需求**：图谱 L0/L1/L2 三镜头视图（elkjs） |
+| T-072 | P-A | 里程碑快照+演化diff | M11 | 三触发点；可凭指纹重建校验 | T-070 | 未认领 | | P-A支路｜**前端需求**：演化 diff 视图 |
+| T-073 | S7 | 血缘链投影+Q1/Q2 trace API | M10 | 双向不断链；外部锚点虚线 | T-070/T-056/S5 | 未认领 | | v1.6：S5 完成 + T-070 就绪即可认领，与 S6 并行（S7 只剩 T-074 收尾）｜**前端需求**：血缘链视图（M10 外部节点跳转） |
 | T-074 | S7 | 断链规则集BL（WARNING级） | M10 | 断链检测确定性校验 | T-073 | 未认领 | | |
-| T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 未认领 | | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值）；S2 ✅ 2026-08-10 前置已满足，可认领 |
+| T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 未认领 | | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值）；S2 ✅ 2026-08-10 前置已满足，可认领｜**前端需求**：skill 管理页（M13） |
 | T-081 | S8 | side_effect分级+纯读运行时强制 | M13/M12 | 写伪装读被硬拒测试 | T-011 | 未认领 | | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值） |
 | T-082 | S8 | 调用审计（工号/会话/工具/入参摘要） | M13 | sf_mcp_call_audit可查 | T-011 | 未认领 | | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值） |
 | T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 未认领 | | |
@@ -550,6 +553,18 @@ flowchart LR
 | specflow/materials/pack_assembler.py | sess-s3-dev | 2026-08-11 | NEW | da9a70fed2a0 | 已完成 | T-032/T-033：六分区确定性装配 → info_pack.yaml（回调注入只读数据源 + 双闸门） |
 | workbench/backend/services/specflow/materials_service.py | sess-s3-dev | 2026-08-11 | NEW | c509b574a13b | 已完成 | T-030~T-034：上传/解析/候选/入包/装配/新鲜度服务编排（REST/MCP 共用） |
 | mcp_server/tools/specflow_pack.py | sess-s3-dev | 2026-08-11 | NEW | 72b3ae801ebc | 已完成 | T-032：pack_assemble/pack_read_section/material_parse_status/material_extract_topics/pack_freshness_check 5 工具 |
+| workbench/frontend/src/pages/ZentaoPanel.tsx | sess-s5-dev | 2026-08-11 | NEW | 798e2e66d21f | 已完成 | T-057：禅道集成面板四区（冻结 delta 交付/提 BUG 双入口/对话草案确认/锚点作业） |
+| workbench/frontend/src/api.ts | sess-s5-dev | 2026-08-11 | 51cf26680afd | 8edecea8631f | 已完成 | T-057：zentaoApi（stories/from-draft/estimates/bugs/jobs/refs/story-drafts） |
+| workbench/frontend/src/App.tsx | sess-s5-dev | 2026-08-11 | 667073a09648 | 324b83bb3b81 | 已完成 | T-057：需求分组新增「禅道集成」菜单 + /zentao 路由 |
+| mcp_server/tools/feishu_fetch.py | sess-s5-dev | 2026-08-11 | e02940f0973f | 12f62fd0d601 | 已完成 | T-057：+feishu_doc_read/feishu_base_query（lark-cli 纯读，权限结构化提示） |
+| mcp_server/tools/specflow_refs.py | sess-s5-dev | 2026-08-11 | 7c28e7ac6e71 | 75b1e53ffd61 | 已完成 | T-057：+sf_suggest_story_draft（草案建议恒 draft 态，不触禅道） |
+| workbench/backend/services/specflow/sf_refs_store.py | sess-s5-dev | 2026-08-11 | 5ddc936214c8 | 58e52807b6b7 | 已完成 | T-057：+sf_story_drafts 表（draft→created/cancelled 状态机） |
+| workbench/backend/services/zentao/client.py | sess-s5-dev | 2026-08-11 | 28c0cf9f4ce2 | 2029b0ba931f | 已完成 | T-057：create_story_from_draft_job（幂等优先）+ list_frozen_deltas |
+| workbench/backend/routers/zentao.py | sess-s5-dev | 2026-08-11 | 3b8367208ecb | 3d0f9f8dc3c2 | 已完成 | T-057：+from-draft/story-drafts/cancel/frozen-deltas/jobs 列表端点 |
+| agent/runtime.py | sess-s5-dev | 2026-08-11 | 4e8fb4f0bbe9 | b31bb4e2bb2c | 已完成 | T-057：product 只读集 +3 工具（feishu_doc_read/base_query/sf_suggest_story_draft） |
+| test_specstd/test_s5_zentao.py | sess-s5-dev | 2026-08-11 | ab4e3476a6f7 | e0aa9829d071 | 已完成 | T-057：+18 例（草案链路/幂等/角色闸门/feishu handler） |
+| test_specstd/test_mcp_server.py | sess-s5-dev | 2026-08-11 | 0bffc45f2ee6 | 2baf73971d90 | 已完成 | T-057：工具注册数 48→51 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s5-dev | 2026-08-11 | 3d1a3ce97167 | afd4eed79992 | 已完成 | v1.16 自身登记：S5 前端补全（T-057）+ 前端缺口全景审视——v1.16 决策头 + T-057 行 + 历史任务前端缺口备注（T-030~T-042）+ 未来任务前端需求标注（T-060/061/063/071/072/073/080）+ §6 12 行；修改后hash = 登记中形态指纹 afd4eed79992 |
 | workbench/backend/routers/specflow_materials.py | sess-s3-dev | 2026-08-11 | NEW | d55ff8e23fdc | 已完成 | T-030~T-032：上传/列表/预览/候选/confirm/include/pack/reassemble 8 端点（confirm/include 仅 product） |
 | mcp_server/server.py | sess-s3-dev | 2026-08-11 | d36cb4d3d68d | dd431ab9e597 | 已完成 | 注册 specflow_pack（info_pack 保持参数化 stdio 收窄） |
 | workbench/backend/main.py | sess-s3-dev | 2026-08-11 | b79e40c8d73b | 8e48ad8699f5 | 已完成 | include_router specflow_materials |
