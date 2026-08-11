@@ -314,8 +314,8 @@ flowchart LR
 | T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 已完成 | sess-fix | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值）；✅ 2026-08-11（skill_loader 格式校验：name/description 强校验 + 目录名=name 精确匹配 + <> 注入拒载 + 未知字段宽容 + version/author/depends_tools；/api/agent/skills 注册表全角色可读；悬空引用 warning；测试 12 例）｜**前端需求**：skill 管理页（M13，未含在本次交付） |
 | T-081 | S8 | side_effect分级+纯读运行时强制 | M13/M12 | 写伪装读被硬拒测试 | T-011 | 已完成 | sess-fix | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值）；✅ 2026-08-11（side_effect_registry 三级分级 + runtime 纯读强制：执行前后指纹比对（含工作区产物+台账 DB）+ external-write 确定性拒绝 + 僵尸声明清除/重复键修正；纯读强制真测试 2 例） |
 | T-082 | S8 | 调用审计（工号/会话/工具/入参摘要） | M13 | sf_mcp_call_audit可查 | T-011 | 已完成 | sess-fix | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值）；✅ 2026-08-11（sf_mcp_call_audit 表 append-only + record_call 脱敏落库（JSON/query 双形态）+ admin 查询端点 /api/agent/audit + todo_write 纳入审计；脱敏负向测试 4 例） |
-| T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 进行中 | sess-s8-dev | 2026-08-11 认领；L0 五模块（specflow_refs/quality_query/lineage_query/refs_query/dev_context）挂 stdio server；L2 工具（promote/禅道写/平台管理）在 open/ 不存在 |
-| T-085 | S8 | open/dev_context研发侧三入口+旗舰场景群e2e | M13/M06/M11 | 三入口（by_zt_ref/by_anchor/by_fr）+六分区pack+指纹校验；e2e从ZT-STORY拿到pack，草稿零泄漏 | T-080/081/082/T-056/T-070 | 进行中 | sess-s8-dev | 研发提效卖点；2026-08-11 认领；与 T-083 同会话串行施工 |
+| T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 已完成 | sess-s8-dev | ✅ 2026-08-11（open/ 命名空间 L0 五模块 16 工具挂 stdio server：specflow_refs 5 / quality_query 4（read_run_report 复用内部映射）/ lineage_query 3 / refs_query 1 / dev_context 3；全部 side_effect: none；L2 工具（promote/禅道写/面试过程/图谱重建）在 open/ 物理不存在；旗舰 e2e：get_frozen_spec（FR 锚点+SHALL+delta 契约）→ trace_forward/query_graph 查受影响场景 → read_run_report 读执行报告；工具数 81（含并发 lark 4）；测试 35 例） |
+| T-085 | S8 | open/dev_context研发侧三入口+旗舰场景群e2e | M13/M06/M11 | 三入口（by_zt_ref/by_anchor/by_fr）+六分区pack+指纹校验；e2e从ZT-STORY拿到pack，草稿零泄漏 | T-080/081/082/T-056/T-070 | 已完成 | sess-s8-dev | ✅ 2026-08-11（dev-context-pack 六分区（identity 聚合指纹/spec_excerpt/acceptance/scenarios/data_contracts/lineage_decisions）+ 默认取版自动发现当前冻结版 + 未冻结 delta 不可达 + 草稿零泄漏专项验证；e2e 从 ZT-STORY-4821 拿到 pack；同会话与 T-083 串行施工） |
 | T-084 | P3 | 审查管线完整化/对外L1/生态Registry | M13 | 储备项，触发制 | T-083 | 储备 | | 不得认领 |
 
 ### 4.3 引擎演进补点（对标第三批评估，v1.3 新增，可认领）
@@ -337,12 +337,12 @@ flowchart LR
 
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| T-505 | 知识-词典 | 语义词典冷启动 | 工作区 glossary.md + specstd | 词条格式约定（七维适配版 + [token:] 锚点复用 specstd/anchors）；Agent 辅助候选提取（spec FR/AC + 场景 + env yaml + 经验包）；人批量落锤首批收录（20-50 候选） | — | 未认领 | | P1 ｜ 纯内容+轻解析，零引擎改动；词条-FR 关联校验进 conformance 留 T-508 后评 |
-| T-506 | 知识-环境 | 环境叙事 env.sit.md 起草 | systems/tdm/config/ | Agent 辅助起草（env yaml + T-308/309 职责拆分 + EX 排障记录）+ 人审；内容五段：定位/拓扑/账号池/资源码/已知坑；红线：永不写凭据 | — | 未认领 | | P1 ｜ 纯文档零代码 |
-| T-507 | 知识-瘦身 | prompt 瘦身装配 | agent/prompts + runtime + skill_loader | skills 目录化常驻 + load_skill 按需取正文（M13 T-080 前置）；modes 指引并入 skills 去重；**激进/保守定档评审**（format_spec 骨架化涉 K-023 决策修订）；目标静态 ≤30KB（激进）/≤52KB（保守） | T-010 | 未认领 | | P1 ｜ S1 purpose 装配改革期实施 |
-| T-508 | 知识-分发 | 触景触发引擎 | runtime + mcp_server + specstd | 触发索引（kg:// 寻址，指纹失效即重建，30s TTL）+ 双通道匹配（工具结构化字段为主/用户输入关键词为辅，**不做 agent 输出匹配**防回环）+ `<knowledge_refs>` 投递（每篇每会话一次、≤400 字符摘要+指针、会话总量 ≤4KB）+ read_knowledge / read_format_spec 工具 | S3 | 未认领 | | P1 ｜ 挂 T-403 统一出口；确定性触发无 LLM 路由；**v1.5：V1/V2 面板呈现部分已由 S0.5 T-511/T-512 前置承接，本任务聚焦触发索引 + nudge + read_knowledge** |
-| T-509 | 知识-页面 | 知识维护页（一页三区） | workbench 前端+backend | 「📚 知识」单菜单：词条编辑（保存即 conformance 校验、断链标红）+ 环境叙事编辑（凭据红线提示）+ 经验审核队列（S6 随 T-510 落地）；RBAC 写权限+审计留痕；agent 提议进待确认队列 | T-505/T-506/T-508 | 未认领 | | P1 ｜ S3 v1 两区、S6 v2 加经验审核 |
-| T-510 | 知识-经验 | 经验飞轮 | agent/ + .specguard/experience/ | run 终局落行（success/failed/corrected）+ 用户纠正关键词检测 + recency×hit_count 检索注入（≤2KB 封顶）+ 👍/👎 API；反复命中经知识页提炼为经验包（既有五段式流程） | S6 | 未认领 | | P1 ｜ 随 M09 归因落地；参考 deepferry memory.py |
+| T-505 | 知识-词典 | 语义词典冷启动 | 工作区 glossary.md + specstd | 词条格式约定（七维适配版 + [token:] 锚点复用 specstd/anchors）；Agent 辅助候选提取（spec FR/AC + 场景 + env yaml + 经验包）；人批量落锤首批收录（20-50 候选） | — | 已完成 | sess-know-dev | P1 ✅ 2026-08-11（sess-know-dev）：specstd/glossary.py 轻解析器（[token:] 锚点复用 anchors 正则风格 + 六维字段行，词条↔FR 关联校验留 T-508 后评）；tdm 工作区 glossary.md 落盘 24 条候选词条（格式约定 + 收录标准 + 全部 FR 关联经 anchors 核查通过）；test_glossary 8 例；零引擎改动 |
+| T-506 | 知识-环境 | 环境叙事 env.sit.md 起草 | systems/tdm/config/ | Agent 辅助起草（env yaml + T-308/309 职责拆分 + EX 排障记录）+ 人审；内容五段：定位/拓扑/账号池/资源码/已知坑；红线：永不写凭据 | — | 已完成 | sess-know-dev | P1 ✅ 2026-08-11（sess-know-dev）：systems/tdm/config/env.sit.md 五段内容（定位/拓扑/账号池/资源码/已知坑）落盘；凭据红线（凭据走 env yaml 占位符 + devops 回退）；含 EX-8200eada 已知坑与切换提醒 |
+| T-507 | 知识-瘦身 | prompt 瘦身装配 | agent/prompts + runtime + skill_loader | skills 目录化常驻 + load_skill 按需取正文（M13 T-080 前置）；modes 指引并入 skills 去重；**激进/保守定档评审**（format_spec 骨架化涉 K-023 决策修订）；目标静态 ≤30KB（激进）/≤52KB（保守） | T-010 | 已完成 | sess-know-dev | P1 ✅ 2026-08-11（sess-know-dev）：**定档激进档**（用户拍板）；build_skills_xml 目录化（10 技能 15.1KB 正文 → 1.3KB 目录常驻，正文由 load_skill 按需取）；format_spec 骨架生成器（5.8KB 章节索引+硬约束核心，_BODY 派生防漂移）+ runtime 切骨架常驻；prompt 静态 51.8KB → 23KB（含 AGENTS）/ 9.2KB（无工作区）；新工具 load_skill/read_format_spec（knowledge 模块，RBAC product 只读可见）；test_mcp_server 63 工具断言同步；test_agent 断言迁移（正文不再注入） |
+| T-508 | 知识-分发 | 触景触发引擎 | runtime + mcp_server + specstd | 触发索引（kg:// 寻址，指纹失效即重建，30s TTL）+ 双通道匹配（工具结构化字段为主/用户输入关键词为辅，**不做 agent 输出匹配**防回环）+ `<knowledge_refs>` 投递（每篇每会话一次、≤400 字符摘要+指针、会话总量 ≤4KB）+ read_knowledge / read_format_spec 工具 | S3 | 已完成 | sess-know-dev | P1 ✅ 2026-08-11（sess-know-dev）：specstd/knowledge_index.py 触发索引（glossary/env 叙事/经验库三源 → kg://{ws}/{layer}/{token}；指纹 sha256-12 失效重建 + 30s TTL；物理隔离按工作区）；双通道匹配（工具结构化字段 scenario_id/错误签名 为主 + 用户关键词为辅，无 agent 输出匹配入口）；KnowledgeNudger 投递纪律（每篇每会话一次、≤400 摘要、总量 ≤4KB）；runtime 接入（用户消息入口 + 工具结果尾部 `<knowledge_refs>` 挂 T-403 出口，无工作区静默降级）；read_knowledge 工具（kg:// 解析按层读取，env 走系统适配包）；test_knowledge_index 19 例 |
+| T-509 | 知识-页面 | 知识维护页（一页三区） | workbench 前端+backend | 「📚 知识」单菜单：词条编辑（保存即 conformance 校验、断链标红）+ 环境叙事编辑（凭据红线提示）+ 经验审核队列（S6 随 T-510 落地）；RBAC 写权限+审计留痕；agent 提议进待确认队列 | T-505/T-506/T-508 | 已完成 | sess-know-dev | P1 ✅ 2026-08-11（sess-know-dev）：knowledge_service + knowledge router（GET/PUT glossary 保存即断链校验、GET/PUT env 凭据红线拒绝保存、GET experience 队列、POST experience/{token}/rate）；「📚 知识」菜单（TESTER_UP）+ Knowledge.tsx 一页三区（词条 textarea 编辑 + 断链标红、环境叙事 + 凭据红线提示、经验审核 + 👍/👎）；RBAC require_role(admin/tester) + 审计留痕；test_knowledge_page 10 例 |
+| T-510 | 知识-经验 | 经验飞轮 | agent/ + .specguard/experience/ | run 终局落行（success/failed/corrected）+ 用户纠正关键词检测 + recency×hit_count 检索注入（≤2KB 封顶）+ 👍/👎 API；反复命中经知识页提炼为经验包（既有五段式流程） | S6 | 已完成 | sess-know-dev | P1 ✅ 2026-08-11（sess-know-dev）：experience_store（run 终局落行 FAIL/BLOCKED/ERROR → 五段式经验草稿 .md + _meta.json 登记，幂等；纠正关键词检测；token 化检索 recency×hit_count ≤2KB 封顶；👍/👎 rating）；runner 整轮+断点批次两处终局挂 _record_experience；runtime 纠正消息 → `<experience_refs>` 检索注入；前端经验区 👍/👎 联动；test_experience_store 14 例 |
 
 ### 4.5 瘦身任务块（v1.6 新增，依据《SpecGuard-瘦身分析与任务顺序评估》v1）
 
@@ -415,7 +415,7 @@ flowchart LR
 | sess-pa-dev | P-A 图谱支路施工 | T-070 → T-071 → T-072 → T-073 → T-074 | 2026-08-11 | ✅ 2026-08-11 全部完成：图谱索引（source_ref 源头定位补强随 builder 派生一次到位）→ 图谱视图（三镜头+backlink+源头跳转）→ 里程碑快照/演化 diff → 血缘链 Q1/Q2 → 断链规则集；与 S6 会话并发共存（追加式修改零覆盖）；测试 29 例 + 前端 build PASS |
 | sess-master | 总控文档 v1.22 编排（总控人指令） | T-801~T-806 追加（编排登记，非施工认领） | 2026-08-11 | §4.7 规模化升级支线：多角色访问流转与升级设计落盘（T-801/T-805 随时可认领，T-802~T-804 触发制，T-806 储备）；已完成任务全部保持不变 |
 | sess-engine-t502 | 引擎演进补点施工（§4.3） | T-502 | 2026-08-11 | ✅ 2026-08-11 全部完成：preflight with.file 静态扫描 + missing_files 预检阻断 + scan_compliance 收录 + validator MISSING_FILE WARN + 前端 📎 分组；TDD 9 例全绿；与 sess-lark-dev（T-701~T-703）/sess-s8-dev（T-083~T-085）并行共存（stash 冲突对齐，文件零重叠） |
-| sess-s8-dev | S8 对外开放面施工 | T-083 → T-085 | 2026-08-11 | 对外 L0 五模块（open/ 命名空间）+ 研发侧 dev_context 三入口旗舰场景群；依赖就绪（治理三件套/T-052/T-056/T-070）；同会话串行施工 |
+| sess-s8-dev | S8 对外开放面施工 | T-083 → T-085 | 2026-08-11 | ✅ 2026-08-11 全部完成：对外 L0 五模块（open/ 命名空间，16 工具全纯读）+ 研发侧 dev_context 三入口旗舰场景群（六分区 pack + 指纹 + 草稿零泄漏）；与 sess-engine-t502/sess-lark-dev 并发共存（追加式修改零覆盖）；顺带修复预存测试污染（test_failure_index 直接赋值改 monkeypatch）；test_specstd 1225 全绿 / release_check PASS |
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | | | | | |
 
@@ -663,16 +663,20 @@ flowchart LR
 | docs/远期设计/SpecGuard-飞书CLI集成设计-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 设计文档 |
 | docs/远期设计/SpecGuard-飞书CLI集成计划-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 实施计划 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-engine-t502 | 2026-08-11 | 7f4052085d3d | e009b8f1697f | 已完成 | T-502 施工自身登记（覆盖本会话全部总控文档编辑：§5 注册、T-502 认领与核销、§6 各行回填）；修改后hash = 登记中形态指纹 e009b8f1697f（v1.3 约定：本字段留空 + 状态=登记中、其余全文终态时的指纹；外部会话追加登记行后重算）；并行会话共存说明：sess-lark-dev（T-701~T-703）/sess-s8-dev（T-083~T-085）同时段施工，stash 对齐后文件零重叠，v1.22 编排内容未受影响 |
-| docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 7f4052085d3d | | 登记中 | v1.22 自身登记：S8 对外开放面开工——§5 注册 sess-s8-dev + §4.2 T-083/T-085 认领（进行中）+ §6 文件登记行；与 sess-engine-t502 并发共存（追加式修改零覆盖）；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
-| mcp_server/tools/open/__init__.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：open/ 命名空间包（L0 只读面红线注释） |
-| mcp_server/tools/open/specflow_refs.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：get_frozen_spec/get_proposal/query_decisions/get_interview_status/get_delta_contract 五工具（M05/M04 数据源） |
-| mcp_server/tools/open/quality_query.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：get_coverage_gaps/get_test_debt/get_plan_status/read_run_report 四工具（M07/M08/M09 读面） |
-| mcp_server/tools/open/lineage_query.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：trace_forward/trace_backward/query_graph 三工具（M10/M11 读面） |
-| mcp_server/tools/open/refs_query.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：lookup_external_ref（M06 sf_external_refs 读面） |
-| mcp_server/tools/open/dev_context.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-085：dev_context_by_zt_ref/by_anchor/by_fr 三入口 + 六分区 pack + 指纹校验 + 草稿零泄漏 |
-| mcp_server/server.py | sess-s8-dev | 2026-08-11 | 20655e345afe | | 登记中 | T-083：build_tool_modules 追加 open 五模块（与内部工具面共存） |
-| test_specstd/test_open_surface.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083/T-085：open 面测试（旗舰 e2e/L2 不存在/草稿零泄漏/纯读强制） |
-| test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | ac16c2fc52ca | | 登记中 | T-083：工具数 61→77 + 名称集补 open 15 新名（read_run_report 复用不新增名）；与 §6 最新登记 hash 差异系 sess-s6-dev 联合提交合法变更，按 §7 以新 hash 重新登记 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 7f4052085d3d | 9c7545ec9cea | 已完成 | v1.22 自身登记：S8 对外开放面完成——§4.2 T-083/T-085 已完成 + §5 sess-s8-dev 收口 + §6 回填；与 sess-engine-t502/sess-lark-dev 并发共存（追加式修改零覆盖）；修改后hash = 登记中形态指纹 9c7545ec9cea（v1.3 约定：本字段留空 + 状态=登记中、其余全文终态时的指纹） |
+| mcp_server/tools/open/__init__.py | sess-s8-dev | 2026-08-11 | NEW | 1ae7b5896e2b | 已完成 | T-083：open/ 命名空间包（L0 只读面红线注释 + 共享只读辅助：工作区解析/changes 扫描/图谱只读打开） |
+| mcp_server/tools/open/specflow_refs.py | sess-s8-dev | 2026-08-11 | NEW | 9417260214fa | 已完成 | T-083：get_frozen_spec/get_proposal/query_decisions/get_interview_status/get_delta_contract 五工具（M05/M04 数据源） |
+| mcp_server/tools/open/quality_query.py | sess-s8-dev | 2026-08-11 | NEW | 734c0dc6de10 | 已完成 | T-083：get_coverage_gaps/get_test_debt/get_plan_status/read_run_report 四工具（M07/M08/M09 读面；read_run_report 转发 attribution） |
+| mcp_server/tools/open/lineage_query.py | sess-s8-dev | 2026-08-11 | NEW | 7785e721724d | 已完成 | T-083：trace_forward/trace_backward/query_graph 三工具（只读存量索引，不调 ensure_fresh；panorama_* 直读） |
+| mcp_server/tools/open/refs_query.py | sess-s8-dev | 2026-08-11 | NEW | 42e1cf1fb0f0 | 已完成 | T-083：lookup_external_ref（M06 sf_external_refs 读面 + 谱系提示） |
+| mcp_server/tools/open/dev_context.py | sess-s8-dev | 2026-08-11 | NEW | c057061178a3 | 已完成 | T-085：dev_context_by_zt_ref/by_anchor/by_fr 三入口 + 六分区 pack + 聚合指纹 + 默认取版（自动发现当前冻结版）+ 未冻结不可达 + 草稿零泄漏 |
+| mcp_server/server.py | sess-s8-dev | 2026-08-11 | 20655e345afe | d7ee368841d9 | 已完成 | T-083：build_tool_modules 追加 open 五模块（与 sess-lark-dev 追加式共存） |
+| test_specstd/test_open_surface.py | sess-s8-dev | 2026-08-11 | NEW | 6d400b5b4723 | 已完成 | T-083/T-085：open 面测试 35 例（旗舰 e2e/L2 不存在/草稿零泄漏/纯读强制/指纹确定性） |
+| test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | ac16c2fc52ca | 58cb619e2868 | 已完成 | T-083：工具数 81（61 基础 + lark 4 + open 16）+ 名称集补 15 新名 |
+| test_specstd/test_failure_index.py | sess-s8-dev | 2026-08-11 | NEW | b3c11cd1af97 | 已完成 | T-083 顺带：预存测试污染修复——attribution._get_reports_root 直接赋值改 monkeypatch（3 处），防模块级残留污染后续测试 |
+| mcp_server/server.py | sess-s8-dev | 2026-08-11 | d7ee368841d9 | a418eebb1325 | 已完成 | 并发提交事故修复：3092367 合并提交的 server.py 丢失 open/lark 挂载（mods 仅含 knowledge），重新追加挂载（open 五模块 + lark_auth/lark_run，追加式）；工具数恢复 84 |
+| test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | 58cb619e2868 | 25c97e028453 | 已完成 | 并发提交事故修复：断言随挂载恢复 64→84（保留 T-507 知识层 3 名）+ 名称集补 lark 4 + open 15 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 9c7545ec9cea | 52bc0e4a082d | 已完成 | v1.22 自身登记（补）：并发提交事故修复登记——3092367 提交丢失 server.py 挂载（open/lark），重挂载 + 断言更新；修改后hash = 登记中形态指纹 52bc0e4a082d（v1.3 约定） |
 | | | | | | | |
 
 ---

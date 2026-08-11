@@ -380,6 +380,7 @@ class RunManager:
         # D2 修复：执行完成后按注册表自动推送飞书通知（fail/drift/skip 事件）
         self._record_failures()  # K-052：失败索引（场景×任务号×原因台账）
         self._record_executions()  # 执行台账：全量结果（场景×任务号×verdict×saved_vars）
+        self._record_experience()  # T-510：经验飞轮落行（失败场景 → 五段式经验草稿）
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()
@@ -405,6 +406,31 @@ class RunManager:
                 json.dump(ctx, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+
+    def _record_experience(self):
+        """T-510：经验飞轮落行——失败场景自动落五段式经验草稿（幂等）。
+
+        从 run.json 提取 FAIL/BLOCKED/ERROR 场景 → {ws}/.specguard/experience/；
+        断点分批报告的批次目录（{run_id}-bN）逐批收录。
+        """
+        try:
+            from services import experience_store
+            root = _get_reports_root()
+            ws_root = None
+            try:
+                from specstd.workspace import get_workspace_root
+                ws_root = get_workspace_root()
+            except Exception:
+                pass
+            if not ws_root:
+                return
+            n = experience_store.append_experience(root, self.run_id, ws_root)
+            for batch_dir in sorted(root.glob(f"{self.run_id}-b*")):
+                n += experience_store.append_experience(root, batch_dir.name, ws_root)
+            if n:
+                self._write_output_log(f"> {self.run_id} | {n} 条失败经验已落行（.specguard/experience/）")
+        except Exception:
+            pass  # 经验落行失败不影响执行主流程
 
     def _record_failures(self):
         """K-052：执行完成后把失败场景写入失败索引（failures/index.jsonl）——
@@ -734,6 +760,7 @@ class RunManager:
         # D2 修复：断点分段执行完成后同样自动推送通知
         self._record_failures()  # K-052：失败索引（场景×任务号×原因台账）
         self._record_executions()  # 执行台账：全量结果（场景×任务号×verdict×saved_vars）
+        self._record_experience()  # T-510：经验飞轮落行
         await self._push_run_notifications()
         # M8：收尾并消费队列下一个
         await self._finish_current_run()

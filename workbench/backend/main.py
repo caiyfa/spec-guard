@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, zentao, coverage, data_fab, graph, lineage, agent_skills, audit
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge
 from services.auth import get_current_user
 from services import user_store
 
@@ -147,6 +147,7 @@ app.include_router(graph.router, dependencies=[Depends(get_current_user)])
 app.include_router(lineage.router, dependencies=[Depends(get_current_user)])
 app.include_router(agent_skills.router, dependencies=[Depends(get_current_user)])
 app.include_router(audit.router, dependencies=[Depends(get_current_user)])
+app.include_router(knowledge.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/api/health")

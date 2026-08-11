@@ -24,6 +24,7 @@ import MaterialsPanel from './pages/MaterialsPanel';
 import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
+import Knowledge from './pages/Knowledge';  // T-509：知识维护页（一页三区）
 import GraphPanorama from './pages/GraphPanorama';
 import LineageStory from './pages/LineageStory';
 import WorkspaceSelector from './components/WorkspaceSelector';
@@ -66,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       // K-009：原「工作区管理」+「文档中心」合并为工作区中心，全角色可见（页内按角色显隐操作）
       { to: '/workspace', label: '工作区中心', roles: ALL },
+      { to: '/knowledge', label: '知识', roles: TESTER_UP },  // T-509：词条/叙事/经验一页三区
       { to: '/env-config', label: '环境配置', roles: ADMIN_ONLY },  // T-306：环境信息独立维护
       { to: '/settings', label: '系统设置', roles: ADMIN_ONLY },
       { to: '/admin-users', label: '用户管理', roles: ADMIN_ONLY },
@@ -377,7 +379,8 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <Route path="/scores" element={<ScoreFreezePanel />} />
             <Route path="/zentao" element={<ZentaoPanel />} />
             <Route path="/plans" element={<Scenarios />} />
-                        <Route path="/coverage" element={<CoveragePanel />} />
+            <Route path="/coverage" element={<CoveragePanel />} />
+            <Route path="/knowledge" element={<Knowledge />} />  {/* T-509：知识维护页 */}
             <Route path="/run" element={<RunControl />} />
             <Route path="/dag" element={<DagEditor />} />
             <Route path="/history" element={<History />} />

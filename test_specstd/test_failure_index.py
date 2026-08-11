@@ -102,29 +102,29 @@ class TestQueryFailures:
 
 
 class TestReadRunLog:
-    def test_read_log_tail(self, tmp_path):
+    def test_read_log_tail(self, tmp_path, monkeypatch):
         run_dir = _mk_run(tmp_path, "EX-bbb00001", [])
         (run_dir / "output.log").write_text("\n".join(f"line{i}" for i in range(50)),
                                             encoding="utf-8")
         import asyncio
         from mcp_server.tools import attribution
-        attribution._get_reports_root = lambda: tmp_path  # 测试注入
+        monkeypatch.setattr(attribution, "_get_reports_root", lambda: tmp_path)  # 测试注入（monkeypatch 自动恢复，防模块级污染）
         out = asyncio.run(attribution.handle("read_run_log", {"run_id": "EX-bbb00001", "tail": 10}))
         r = json.loads(out[0].text)
         assert r["ok"] and r["total_lines"] == 50 and r["returned_lines"] == 10
         assert "line49" in r["log"] and "line40" in r["log"] and "line39" not in r["log"]
 
-    def test_guard_illegal_run_id(self, tmp_path):
+    def test_guard_illegal_run_id(self, tmp_path, monkeypatch):
         import asyncio
         from mcp_server.tools import attribution
-        attribution._get_reports_root = lambda: tmp_path
+        monkeypatch.setattr(attribution, "_get_reports_root", lambda: tmp_path)
         out = asyncio.run(attribution.handle("read_run_log", {"run_id": "../etc"}))
         assert "OUT_OF_SCOPE" in out[0].text
 
-    def test_missing_log_friendly(self, tmp_path):
+    def test_missing_log_friendly(self, tmp_path, monkeypatch):
         import asyncio
         from mcp_server.tools import attribution
-        attribution._get_reports_root = lambda: tmp_path
+        monkeypatch.setattr(attribution, "_get_reports_root", lambda: tmp_path)
         out = asyncio.run(attribution.handle("read_run_log", {"run_id": "2026-01-01_000000"}))
         r = json.loads(out[0].text)
         assert not r["ok"] and "K-050" in r["hint"]

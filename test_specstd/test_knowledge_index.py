@@ -222,3 +222,99 @@ class TestNudger:
             total += len(blk)
             assert total <= NUDGE_BUDGET
         assert total <= NUDGE_BUDGET
+
+
+# ══════════════════════════════════════════════════════════
+# runtime 集成（T-508 触景投递挂 T-403 统一出口）
+# ══════════════════════════════════════════════════════════
+
+class TestRuntimeIntegration:
+    def test_user_message_nudge(self, ws):
+        """用户消息入口：关键词命中时注入 <knowledge_refs>（每篇每会话一次）。"""
+        from agent.runtime import AgentRuntime
+        from unittest.mock import MagicMock
+        llm = MagicMock()
+        llm.is_mock = True
+        llm.chat.return_value = ({"role": "assistant", "content": "好的", "tool_calls": None}, {})
+        llm.max_context_tokens = 128000
+        runtime = AgentRuntime(llm)
+        # 构造含词典的工作区索引
+        from specstd.knowledge_index import build_index, KnowledgeNudger
+        runtime._knowledge_nudger = KnowledgeNudger(build_index(ws, system_dir=None))
+        messages = runtime.run("sys", "帮我看看盘点会话为什么失败")
+        # 用户消息尾部应含知识引用
+        assert any("<knowledge_refs>" in str(m.get("content", "")) for m in messages)
+
+    def test_tool_result_nudge(self, ws):
+        """工具结果尾部：scenario_id 命中时 nudge 注入工具结果。"""
+        from agent.runtime import AgentRuntime
+        from unittest.mock import MagicMock
+        llm = MagicMock()
+        llm.is_mock = True
+        llm.max_context_tokens = 128000
+        llm.chat.side_effect = [
+            ({"role": "assistant", "content": "查一下",
+              "tool_calls": [{"id": "c1", "type": "function",
+                               "function": {"name": "read_scenario",
+                                             "arguments": "{\"scenario_id\": \"IS-PREP-002\"}"}}]}, {}),
+            ({"role": "assistant", "content": "完成", "tool_calls": None}, {}),
+        ]
+        runtime = AgentRuntime(llm, max_turns=3)
+        # 注入索引 + 拦截 read_scenario 工具（用户消息避开关键词，保证工具通道命中）
+        from specstd.knowledge_index import build_index, KnowledgeNudger
+        runtime._knowledge_nudger = KnowledgeNudger(build_index(ws, system_dir=None))
+        orig_execute = runtime._execute_tool
+        def fake_execute(tc):
+            return "场景已读取（IS-PREP-002）"
+        runtime._execute_tool = fake_execute
+        messages = runtime.run("sys", "开始执行吧")
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        assert tool_msgs, "应有 tool 消息"
+        assert any("<knowledge_refs>" in m.get("content", "") for m in tool_msgs)
+
+    def test_no_workspace_silent_degrade(self, tmp_path):
+        """无激活工作区时静默降级（不抛异常、不注入）。"""
+        from agent.runtime import AgentRuntime
+        from unittest.mock import MagicMock
+        llm = MagicMock()
+        llm.is_mock = True
+        llm.chat.return_value = ({"role": "assistant", "content": "好的", "tool_calls": None}, {})
+        llm.max_context_tokens = 128000
+        runtime = AgentRuntime(llm)
+        messages = runtime.run("sys", "hello")
+        assert not any("<knowledge_refs>" in str(m.get("content", "")) for m in messages)
+
+
+# ══════════════════════════════════════════════════════════
+# read_knowledge 工具（kg:// 寻址 + 物理隔离）
+# ══════════════════════════════════════════════════════════
+
+class TestReadKnowledge:
+    def test_read_term(self, ws, monkeypatch):
+        """kg://{ws}/term/{token} → 词条正文。"""
+        from mcp_server.tools import knowledge as k
+        from unittest.mock import patch
+        from specstd import workspace as ws_mod
+        import specstd.workspace as ws_pkg
+        # 注册临时工作区（读路径解析用）
+        with patch.object(ws_pkg, "get_workspace") as mock_get:
+            mock_get.return_value = type("W", (), {"root": ws, "system": "tdm", "name": "tdm"})()
+            result = k._read_knowledge("kg://tdm/term/inventory-session")
+        assert "盘点会话" in result
+        assert "一次盘点活动内的会话" in result
+
+    def test_read_knowledge_bad_ref(self):
+        """非法引用返回错误消息（不抛异常）。"""
+        from mcp_server.tools import knowledge as k
+        assert "格式非法" in k._read_knowledge("kg://tdm/term")
+        assert "格式非法" in k._read_knowledge("../etc/passwd")
+
+    def test_read_unknown_token(self, ws, monkeypatch):
+        """词条不存在返回明确消息。"""
+        from mcp_server.tools import knowledge as k
+        from unittest.mock import patch
+        import specstd.workspace as ws_pkg
+        with patch.object(ws_pkg, "get_workspace") as mock_get:
+            mock_get.return_value = type("W", (), {"root": ws, "system": "tdm", "name": "tdm"})()
+            result = k._read_knowledge("kg://tdm/term/not-exist")
+        assert "词条不存在" in result

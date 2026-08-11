@@ -80,6 +80,8 @@ _RBAC_READONLY_TOOLS = frozenset({
     "material_extract_topics", "pack_freshness_check",
     # info_pack 工具
     "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
+    # T-507/T-508 知识层（只读：技能正文/知识正文/格式规范章节按需取）
+    "load_skill", "read_knowledge", "read_format_spec",
     # 飞书日程/会议纪要（需求面试场景材料收集用）
     "feishu_calendar_agenda", "feishu_meeting_notes",
     # 飞书文档/多维表格拉取 + 故事草案建议（S5 增补：对话分析建故事链路）
@@ -308,7 +310,7 @@ class AgentRuntime:
 
         # T-508：会话级知识 nudge（每篇每会话一次、总量 ≤4KB；懒初始化——
         # 无激活工作区/词典缺失时静默降级为不投递）
-        self._nudger = None
+        self._knowledge_nudger = None
 
         # K-023 去模式化：全量工具常驻（工具描述自带适用条件；写操作护栏在工具内部——
         # drafts 沙箱/promote 三道闸+回滚/OVERWRITE_DENIED。模式白名单在生产中
@@ -495,6 +497,73 @@ class AgentRuntime:
         且不再写会话文件。
         """
         self._cancel_event.set()
+
+    def _get_nudger(self):
+        """懒初始化会话级知识 nudger（T-508）。无激活工作区/词典缺失时静默降级。"""
+        if self._knowledge_nudger is None:
+            try:
+                from specstd.workspace import get_active_workspace
+                from specstd.knowledge_index import build_index, KnowledgeNudger
+                ws = get_active_workspace()
+                if ws:
+                    system_dir = (SG_ROOT / "systems" / ws.system / "config")
+                    idx = build_index(ws.root, system_dir=system_dir, name=ws.name)
+                    if idx.entries:
+                        self._knowledge_nudger = KnowledgeNudger(idx)
+            except Exception:
+                pass
+        return self._knowledge_nudger
+
+    def _nudge_for_user(self, user_message: str) -> str:
+        """用户消息入口知识 nudge（T-508 通道二 + T-510 经验检索注入）。
+
+        T-510：用户消息含纠正关键词 → 检索相关经验（≤2KB 封顶）注入；
+        无纠正关键词时走常规关键词匹配。经验检索独立于词典 nudger（
+        无词典时经验注入仍可用）。
+        """
+        parts = []
+        # T-510：纠正关键词 → 经验飞轮检索注入（recency×hit_count，≤2KB 封顶）
+        try:
+            from services.experience_store import detect_correction, search_experiences
+            from specstd.workspace import get_workspace_root
+            if detect_correction(user_message):
+                root = get_workspace_root()
+                if root is not None:
+                    hits = search_experiences(root, user_message[:200])
+                    if hits:
+                        exp_lines = ["<experience_refs>（经验飞轮：相关历史失败经验）"]
+                        for h in hits:
+                            exp_lines.append(
+                                f"- [{h['token']}] hit×{h['hit_count']}：{h['text'][:200]}")
+                        exp_lines.append("</experience_refs>")
+                        parts.append("\n".join(exp_lines))
+        except Exception:
+            pass
+
+        # T-508：常规词典 nudge（无词典时静默跳过）
+        nudger = self._get_nudger()
+        if nudger:
+            try:
+                nudge = nudger.compose(user_text=user_message)
+                if nudge:
+                    parts.append(nudge)
+            except Exception:
+                pass
+        return "\n\n".join(parts)
+
+    def _nudge_for_tool(self, tool_name: str, arguments: dict, result: str) -> str:
+        """工具结果尾部知识 nudge（T-508 通道一：结构化字段为主）。"""
+        nudger = self._get_nudger()
+        if not nudger:
+            return ""
+        try:
+            # 工具通道上下文：scenario_id/错误文本（非文本扫描，结构化字段优先）
+            ctx = str(arguments.get("scenario_id", "") or "")
+            if not ctx and "error" in result[:200].lower():
+                ctx = result[:500]
+            return nudger.compose(tool_context=ctx, user_text="")
+        except Exception:
+            return ""
 
     def _truncate_tool_result(self, result: str, tool_name: str) -> str:
         """T-403：工具结果统一截断——超限落盘 + 回喂引用。"""

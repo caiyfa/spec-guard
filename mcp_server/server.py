@@ -40,6 +40,15 @@ from mcp_server.tools import (  # noqa: E402
     graph_index,
     fabrication,
     knowledge,
+    lark_auth,
+    lark_run,
+)
+from mcp_server.tools.open import (  # noqa: E402  S8 对外开放面（T-083/T-085，L0 只读）
+    specflow_refs as open_specflow_refs,
+    quality_query as open_quality_query,
+    lineage_query as open_lineage_query,
+    refs_query as open_refs_query,
+    dev_context as open_dev_context,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -73,6 +82,14 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         graph_index,
         fabrication,
         knowledge,
+        lark_auth,
+        lark_run,
+        # S8 对外开放面（T-083/T-085）：L0 五模块，全部 side_effect: none
+        open_specflow_refs,
+        open_quality_query,
+        open_lineage_query,
+        open_refs_query,
+        open_dev_context,
     ]
     if include_info_pack:
         try:

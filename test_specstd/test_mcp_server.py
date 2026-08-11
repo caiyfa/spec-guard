@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 64  # 基础 51 + S6 coverage: 1 + P-A graph/lineage: 8 + S6 fabrication: 1 + S6 assemble_evidence: 1 + T-507 load_skill/read_format_spec: 2 + knowledge: 1 (stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 84  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 16（T-083；read_run_report 复用内部同名，15 新名）(stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -94,6 +94,17 @@ class TestToolRegistration:
                      "load_skill", "read_format_spec",
                      # T-507 knowledge 知识触达（1）
                      "read_knowledge",
+                     # 飞书 CLI 支线（4，T-701/T-702）
+                     "lark_auth_login", "lark_auth_logout", "lark_auth_status",
+                     "lark_execute",
+                     # S8 open/ 对外开放面（15 新名；read_run_report 复用内部同名，M13 §5.1）
+                     "get_frozen_spec", "get_proposal", "query_decisions",
+                     "get_interview_status", "get_delta_contract",
+                     "get_coverage_gaps", "get_test_debt", "get_plan_status",
+                     "trace_forward", "trace_backward", "query_graph",
+                     "lookup_external_ref",
+                     "dev_context_by_zt_ref", "dev_context_by_anchor",
+                     "dev_context_by_fr",
                      }
         assert names == expected
 
