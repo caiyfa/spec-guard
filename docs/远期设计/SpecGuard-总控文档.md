@@ -301,8 +301,8 @@ flowchart LR
 | T-080 | S8 | skill格式对齐+注册表/api/agent/skills | M13 | 悬空引用加载期报错 | S2 | 已完成 | sess-fix | ∥T-081/082｜v1.6：S2 完成后空窗可认领（削 S8 峰值）；✅ 2026-08-11（skill_loader 格式校验：name/description 强校验 + 目录名=name 精确匹配 + <> 注入拒载 + 未知字段宽容 + version/author/depends_tools；/api/agent/skills 注册表全角色可读；悬空引用 warning；测试 12 例）｜**前端需求**：skill 管理页（M13，未含在本次交付） |
 | T-081 | S8 | side_effect分级+纯读运行时强制 | M13/M12 | 写伪装读被硬拒测试 | T-011 | 已完成 | sess-fix | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值）；✅ 2026-08-11（side_effect_registry 三级分级 + runtime 纯读强制：执行前后指纹比对（含工作区产物+台账 DB）+ external-write 确定性拒绝 + 僵尸声明清除/重复键修正；纯读强制真测试 2 例） |
 | T-082 | S8 | 调用审计（工号/会话/工具/入参摘要） | M13 | sf_mcp_call_audit可查 | T-011 | 已完成 | sess-fix | ∥｜v1.6：S1 完成后空窗可认领（削 S8 峰值）；✅ 2026-08-11（sf_mcp_call_audit 表 append-only + record_call 脱敏落库（JSON/query 双形态）+ admin 查询端点 /api/agent/audit + todo_write 纳入审计；脱敏负向测试 4 例） |
-| T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 未认领 | | |
-| T-085 | S8 | open/dev_context研发侧三入口+旗舰场景群e2e | M13/M06/M11 | 三入口（by_zt_ref/by_anchor/by_fr）+六分区pack+指纹校验；e2e从ZT-STORY拿到pack，草稿零泄漏 | T-080/081/082/T-056/T-070 | 未认领 | | 研发提效卖点 |
+| T-083 | S8 | open/对外L0五模块+旗舰e2e | M13 | 编码Agent读冻结spec全链路 | T-080/081/082/T-052 | 进行中 | sess-s8-dev | 2026-08-11 认领；L0 五模块（specflow_refs/quality_query/lineage_query/refs_query/dev_context）挂 stdio server；L2 工具（promote/禅道写/平台管理）在 open/ 不存在 |
+| T-085 | S8 | open/dev_context研发侧三入口+旗舰场景群e2e | M13/M06/M11 | 三入口（by_zt_ref/by_anchor/by_fr）+六分区pack+指纹校验；e2e从ZT-STORY拿到pack，草稿零泄漏 | T-080/081/082/T-056/T-070 | 进行中 | sess-s8-dev | 研发提效卖点；2026-08-11 认领；与 T-083 同会话串行施工 |
 | T-084 | P3 | 审查管线完整化/对外L1/生态Registry | M13 | 储备项，触发制 | T-083 | 储备 | | 不得认领 |
 
 ### 4.3 引擎演进补点（对标第三批评估，v1.3 新增，可认领）
@@ -313,7 +313,7 @@ flowchart LR
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
 | T-501 | 引擎-断言 | schema 结构断言（fuzzy-match-lite 零依赖版） | engine/registry + format_spec | 新增 schema 断言器类型（断言器注册制，**语法零变更、零新增依赖**）：支持 `#string/#number/#bool/#null` 类型标记、`##` 可选前缀、`#[]` 数组模式与嵌套对象/数组递归匹配；不引 jsonschema（完整 JSON Schema 语义需要时另行 Ask First 评审）；test_engine 先写失败测试；三同步 | — | 已完成 | sess-engine-t501 | P1 ✅ 2026-08-07（engine/schema_match.py：fuzzy-match-lite 纯函数 match——#string/#number/#boolean/#null 类型标记（#number 拒 bool）、## 可选键、#[] 数组模式空数组通过、字面值精确相等 bool/number 不混、键集严格多键即失败、嵌套递归、不支持标记明确报错；oracle_schema_match（of 缺省 resp、U-1 取值、params 插值 render、字段级路径失败消息复用 T-314 日志通道）+ register_builtin_oracles 挂 conftest/live_registry 两处，冻结层零改动零新依赖；test_schema_match 31 例；三同步 format_spec 2.5.0（§1.8.1）+ 快照重导出，verify 不进指纹基线不变；门禁 test_engine 135 + engine_modes 39 + test_specstd 721 + release_check 全绿）；第三批 P1-2 复核修正版（2026-08-07）；∥T-502 |
-| T-502 | 引擎-预检 | fixtures 文件引用预检静态扫描 | preflight/validator | preflight 静态扫描 tool 步骤 `with.file` 引用（oss_upload 等）并比对文件存在性：已提交 fixtures 缺失 → 预检 FAIL（仓库缺陷 ≠ 环境缺口，区别于运行期 SKIP）；scan_dependencies/scan_compliance 同步收录；**不做 fixtures: 声明段**（语法零变更，声明式留待真实需求）；test_engine 先写失败测试 | — | 未认领 | | P1 ｜ 第三批 P1-3 复核修正版（承接 U-4）；∥T-501 |
+| T-502 | 引擎-预检 | fixtures 文件引用预检静态扫描 | preflight/validator | preflight 静态扫描 tool 步骤 `with.file` 引用（oss_upload 等）并比对文件存在性：已提交 fixtures 缺失 → 预检 FAIL（仓库缺陷 ≠ 环境缺口，区别于运行期 SKIP）；scan_dependencies/scan_compliance 同步收录；**不做 fixtures: 声明段**（语法零变更，声明式留待真实需求）；test_engine 先写失败测试 | — | 进行中 | sess-engine-t502 | P1 ｜ 第三批 P1-3 复核修正版（承接 U-4）；∥T-501 |
 | T-503 | 引擎-储备 | DB 轮询 + 通用重试原语 | engine/scenario_runner | poll 扩展 db_query 轮询体（改动集中 step_poll）或 verify retry 原语；触发制：**首个真实场景需要时启动**——当前 4 个 poll 场景全为 HTTP 且工作正常，零真实需求证据 | 触发 | 储备 | | 第三批 P1-1，2026-08-07 复核降级为储备 |
 | T-504 | 引擎-储备 | 数据驱动参数化 + 场景级超时 | engine | 观察项：参数化动语法层需冻结层评审（Agent 生成场景成本极低，ROI 不足）；场景级超时边际价值仅归因粒度（T-118 run 看门狗已兜底整轮拖死风险） | 触发 | 储备 | | 第三批 P2-1/P2-2，2026-08-07 复核降级为观察 |
 
@@ -354,9 +354,9 @@ flowchart LR
 
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| T-701 | 飞书-认证 | 多用户认证服务 | mcp_server/tools/lark_auth.py + specstd.workspace | 每用户独立配置目录 `{SG_ROOT}/.lark-cli/{emp_no}/`（USERPROFILE 注入，实测生效）+ .gitignore 补充；lark_auth_login 两阶段（--no-wait 返回 verification_url 给用户 → --device-code 完成；--recommend 与现状 app scope 一致）；lark_auth_status / lark_auth_logout（按 emp_no 隔离）；未绑定用户明确提示引导授权 | T-602 | 未认领 | | P0｜近期可认领，与 S1+ 并行；子进程并发锁（每用户一把，防 token 刷新互踩） |
-| T-702 | 飞书-执行 | 通用执行器 | mcp_server/tools/lark_run.py + agent/runtime | lark_run 透传全部 lark-* 域命令（能力探索不限定域）：子进程注入当前用户 USERPROFILE、命令白名单校验（禁 shell 拼接）、超时 60s + 结果截断（复用 _TOOL_RESULT_MAX_CHARS 出口）；写操作（high-risk-write）强制 --yes 且需用户确认；调用留痕（工号×命令×结果摘要） | T-701 | 未认领 | | P0｜能力探索随本任务验证（calendar/im/task/approval 等域） |
-| T-703 | 飞书-工作台 | workbench 绑定页与审计 | workbench 前后端 | 「个人设置 → 绑定飞书」：授权 URL / 授权状态 / scope 清单 / 解绑；Agent 会话自动带出当前用户飞书身份（emp_no → 配置目录映射）；调用审计（工号/会话/工具/入参摘要，与 T-082 口径对齐） | T-701/T-702 | 未认领 | | P1｜近期可认领 |
+| T-701 | 飞书-认证 | 多用户认证服务 | mcp_server/tools/lark_auth.py + specstd.workspace | 每用户独立配置目录 `{SG_ROOT}/.lark-cli/{emp_no}/`（USERPROFILE 注入，实测生效）+ .gitignore 补充；lark_auth_login 两阶段（--no-wait 返回 verification_url 给用户 → --device-code 完成；--recommend 与现状 app scope 一致）；lark_auth_status / lark_auth_logout（按 emp_no 隔离）；未绑定用户明确提示引导授权 | T-602 | 进行中 | sess-lark-dev | P0｜近期可认领，与 S1+ 并行；子进程并发锁（每用户一把，防 token 刷新互踩） |
+| T-702 | 飞书-执行 | 通用执行器 | mcp_server/tools/lark_run.py + agent/runtime | lark_run 透传全部 lark-* 域命令（能力探索不限定域）：子进程注入当前用户 USERPROFILE、命令白名单校验（禁 shell 拼接）、超时 60s + 结果截断（复用 _TOOL_RESULT_MAX_CHARS 出口）；写操作（high-risk-write）强制 --yes 且需用户确认；调用留痕（工号×命令×结果摘要） | T-701 | 进行中 | sess-lark-dev | P0｜能力探索随本任务验证（calendar/im/task/approval 等域） |
+| T-703 | 飞书-工作台 | workbench 绑定页与审计 | workbench 前后端 | 「个人设置 → 绑定飞书」：授权 URL / 授权状态 / scope 清单 / 解绑；Agent 会话自动带出当前用户飞书身份（emp_no → 配置目录映射）；调用审计（工号/会话/工具/入参摘要，与 T-082 口径对齐） | T-701/T-702 | 进行中 | sess-lark-dev | P1｜近期可认领 |
 
 ---
 
@@ -386,6 +386,9 @@ flowchart LR
 | sess-s3-dev | S3 材料包与信息包施工 | T-030 → T-031 → T-032 | 2026-08-11 | 全部完成：specflow/materials 包（store 两表 + pipeline + pack_assembler）+ specflow_pack MCP 5 工具 + REST 8 端点 + info_pack 挂载（runtime 侧）；F3 验收主路径走通（上传→indexed→候选确认→入包→六分区装配）；测试 33 例；test_specstd 878 绿 1 预存红 / release_check PASS |
 | sess-s6-dev | S6 测试侧三增强施工 | T-060/T-061 → T-062/T-063 → T-064 | 2026-08-11 | ✅ 2026-08-11 全部完成：覆盖缺口三态聚合 + sg_draft_gates 三闸状态机 + 测试数据制造 Agent + 失败归因 Agent + SPQ→信息包 loop-back；前端三需求（三态泳道/promote 三闸/归因确认）随任务交付；test_specstd 1076 全绿 / engine_modes 39 / test_engine 135 / release_check PASS / 前端 build PASS；P-A 并行会话联合提交（2832e05）后收尾：修复点号工具名（LLM 400）+ 旧测试三闸适配 + 恢复被污染 contracts_baseline.json |
 | sess-pa-dev | P-A 图谱支路施工 | T-070 → T-071 → T-072 → T-073 → T-074 | 2026-08-11 | ✅ 2026-08-11 全部完成：图谱索引（source_ref 源头定位补强随 builder 派生一次到位）→ 图谱视图（三镜头+backlink+源头跳转）→ 里程碑快照/演化 diff → 血缘链 Q1/Q2 → 断链规则集；与 S6 会话并发共存（追加式修改零覆盖）；测试 29 例 + 前端 build PASS |
+| sess-engine-t502 | 引擎演进补点施工（§4.3） | T-502 | 2026-08-11 | fixtures 文件引用预检静态扫描（第三批 §6.3 规格）：preflight with.file 扫描 + missing_files FAIL + scan_compliance 收录 + validator MISSING_FILE WARN；∥T-501 |
+| sess-s8-dev | S8 对外开放面施工 | T-083 → T-085 | 2026-08-11 | 对外 L0 五模块（open/ 命名空间）+ 研发侧 dev_context 三入口旗舰场景群；依赖就绪（治理三件套/T-052/T-056/T-070）；同会话串行施工 |
+| sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | | | | | |
 
 ---
@@ -611,6 +614,34 @@ flowchart LR
 | workbench/frontend/src/pages/GraphPanorama.tsx | sess-pa-dev | 2026-08-11 | NEW | efdd4366e5ce | 已完成 | T-071/T-072：三层下钻 + 三镜头 + backlink + 里程碑时间轴/diff + 📍 源头定位行高亮 |
 | workbench/frontend/src/pages/LineageStory.tsx | sess-pa-dev | 2026-08-11 | NEW | 7c5500d0d9a8 | 已完成 | T-073/T-074：四阶段分带 + Q1/Q2 追溯 + 外部锚点虚线 + 断链 WARNING 面板 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-pa-dev | 2026-08-11 | 49510cd8a647 | d77e21e29e21 | 已完成 | v1.20 自身登记：P-A 完成——版本头 v1.20 决策 + §4.2 T-070~T-074 已完成 + §5 sess-pa-dev 收口 + §6 20 行；修改后hash = 登记中形态指纹 d77e21e29e21 |
+| workbench/backend/services/preflight.py | sess-engine-t502 | 2026-08-11 | 754a746b9fa1 | | 登记中 | T-502：_static_file_refs（with.file 提取）+ scan_dependencies/scan_compliance 收录 missing_files/unknown_file_refs |
+| mcp_server/tools/validator.py | sess-engine-t502 | 2026-08-11 | be02323a5a8c | | 登记中 | T-502：MISSING_FILE WARN（文件引用存在性，与 BODY_KEY/UNKNOWN_TPL 同族） |
+| test_specstd/test_preflight.py | sess-engine-t502 | 2026-08-11 | 489991496228 | | 登记中 | T-502：TDD 追加测试（文件存在无缺口/缺失报 missing_files/插值进 unknown_file_refs/teardown 扫描/scan_compliance 收录） |
+| workbench/frontend/src/api.ts | sess-engine-t502 | 2026-08-11 | 31f0f87cb42f | | 登记中 | T-502：PreflightResult 接口扩展 file_refs/missing_files/unknown_file_refs |
+| workbench/frontend/src/pages/RunControl.tsx | sess-engine-t502 | 2026-08-11 | 9bd6c6dee39c | | 登记中 | T-502：弹窗预警区 📎 fixtures 分组（复用 T-318 ❓ 插值展示通道） |
+| mcp_server/tools/lark_auth.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701：MCP 3 工具（lark_auth_status/login/logout）+ RPEST 共用底层函数 |
+| mcp_server/tools/lark_run.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-702：lark_execute 通用执行器（白名单/写保护/审计） |
+| mcp_server/server.py | sess-lark-dev | 2026-08-11 | 5176e99713cc | | 登记中 | T-701/T-702：TOOL_MODULES 注册 lark_auth + lark_run |
+| .gitignore | sess-lark-dev | 2026-08-11 | a9c6c2c5be38 | | 登记中 | T-701：补充 .lark-cli/ |
+| workbench/backend/routers/lark_binding.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-703：REST 端点 4 个（status/login/logout/scopes） |
+| workbench/backend/main.py | sess-lark-dev | 2026-08-11 | 3bbd4741ac30 | | 登记中 | T-703：include_router lark_binding |
+| workbench/frontend/src/api.ts | sess-lark-dev | 2026-08-11 | 886a405dcca0 | | 登记中 | T-703：larkApi 类型+方法 |
+| workbench/frontend/src/App.tsx | sess-lark-dev | 2026-08-11 | b43a13ab3d15 | | 登记中 | T-703：菜单「绑定飞书」+ 路由 /lark-binding |
+| workbench/frontend/src/pages/LarkBinding.tsx | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-703：绑定页 UI（状态卡片/scope 清单/绑定引导） |
+| agent/purposes/requirement_interview.md | sess-lark-dev | 2026-08-11 | 1cb823842e19 | | 登记中 | T-702：白名单加 lark_auth_* 3 + lark_execute |
+| docs/远期设计/SpecGuard-飞书CLI集成设计-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 设计文档 |
+| docs/远期设计/SpecGuard-飞书CLI集成计划-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 实施计划 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-engine-t502 | 2026-08-11 | 7f4052085d3d | | 登记中 | T-502 施工自身登记（覆盖本会话全部总控文档编辑：§5 注册、T-502 认领、§6 各行回填）；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 7f4052085d3d | | 登记中 | v1.22 自身登记：S8 对外开放面开工——§5 注册 sess-s8-dev + §4.2 T-083/T-085 认领（进行中）+ §6 文件登记行；与 sess-engine-t502 并发共存（追加式修改零覆盖）；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 |
+| mcp_server/tools/open/__init__.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：open/ 命名空间包（L0 只读面红线注释） |
+| mcp_server/tools/open/specflow_refs.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：get_frozen_spec/get_proposal/query_decisions/get_interview_status/get_delta_contract 五工具（M05/M04 数据源） |
+| mcp_server/tools/open/quality_query.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：get_coverage_gaps/get_test_debt/get_plan_status/read_run_report 四工具（M07/M08/M09 读面） |
+| mcp_server/tools/open/lineage_query.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：trace_forward/trace_backward/query_graph 三工具（M10/M11 读面） |
+| mcp_server/tools/open/refs_query.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083：lookup_external_ref（M06 sf_external_refs 读面） |
+| mcp_server/tools/open/dev_context.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-085：dev_context_by_zt_ref/by_anchor/by_fr 三入口 + 六分区 pack + 指纹校验 + 草稿零泄漏 |
+| mcp_server/server.py | sess-s8-dev | 2026-08-11 | 20655e345afe | | 登记中 | T-083：build_tool_modules 追加 open 五模块（与内部工具面共存） |
+| test_specstd/test_open_surface.py | sess-s8-dev | 2026-08-11 | NEW | | 登记中 | T-083/T-085：open 面测试（旗舰 e2e/L2 不存在/草稿零泄漏/纯读强制） |
+| test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | ac16c2fc52ca | | 登记中 | T-083：工具数 61→77 + 名称集补 open 15 新名（read_run_report 复用不新增名）；与 §6 最新登记 hash 差异系 sess-s6-dev 联合提交合法变更，按 §7 以新 hash 重新登记 |
 | | | | | | | |
 
 ---

@@ -226,6 +226,7 @@ export interface PreflightGap {
   account?: string;    // missing_accounts
   ref?: string;        // unresolved_upstream
   tpl?: string;        // unresolved_templates_gaps（T-318）
+  file?: string;       // missing_files / unknown_file_refs_gaps（T-502）
   scenarios: string[];
 }
 export interface PreflightScenario {
@@ -234,6 +235,9 @@ export interface PreflightScenario {
   env_keys: string[];
   upstream_refs: string[];
   unresolved_templates: string[];
+  file_refs: string[];          // T-502：with.file 引用（含插值）
+  missing_files: string[];      // T-502：仓库缺陷——已提交但文件不存在
+  unknown_file_refs: string[];  // T-502：含插值路径，静态不可判
   missing_accounts: string[];
   missing_env: string[];
   unresolved_upstream: string[];
@@ -249,10 +253,14 @@ export interface PreflightResult {
   env_keys: string[];
   upstream_refs: string[];
   unresolved_templates: string[];
+  file_refs: string[];                    // T-502
   missing_accounts: PreflightGap[];
   missing_env: PreflightGap[];
   unresolved_upstream: PreflightGap[];
   unresolved_templates_gaps: PreflightGap[];
+  missing_files: PreflightGap[];          // T-502：预检阻断（仓库缺陷，无覆盖输入）
+  unknown_file_refs: string[];            // T-502：插值路径集合
+  unknown_file_refs_gaps: PreflightGap[]; // T-502：插值路径分组
   has_gaps: boolean;
   error?: string;
 }
@@ -1372,4 +1380,35 @@ export interface SkillItem {
 export const skillsApi = {
   list: () => request<{ skills: SkillItem[] }>('/agent/skills'),
   get: (name: string) => request<{ skill: SkillItem }>(`/agent/skills/${encodeURIComponent(name)}`),
+};
+
+// ── T-703：飞书 CLI 绑定 ──
+export interface LarkStatus {
+  bound: boolean;
+  identity: string;
+  identity_name: string;
+  open_id: string;
+  scopes: string[];
+  config_dir: string;
+  error?: string;
+}
+
+export interface LarkLoginResult {
+  phase: 'waiting' | 'completed' | 'error';
+  verification_url?: string;
+  device_code?: string;
+  identity?: string;
+  open_id?: string;
+  identity_name?: string;
+  error?: string;
+}
+
+export const larkApi = {
+  status: () => request<LarkStatus>('/settings/lark/status'),
+  login: (scope = '') => request<LarkLoginResult>('/settings/lark/login', {
+    method: 'POST',
+    body: JSON.stringify({ scope }),
+  }),
+  logout: () => request<{ ok: boolean }>('/settings/lark/logout', { method: 'POST' }),
+  scopes: () => request<{ scopes: string[]; bound: boolean }>('/settings/lark/scopes'),
 };

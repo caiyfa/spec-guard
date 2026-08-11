@@ -1,0 +1,294 @@
+"""lark_auth.py — T-701：多用户飞书 CLI 认证服务。
+
+MCP 工具：
+  lark_auth_status: 查询当前用户飞书绑定状态
+  lark_auth_login:  两阶段飞书授权（返回 verification_url → device-code 完成）
+  lark_auth_logout: 解绑（清空隔离目录登录态）
+
+REST 共用函数（供 lark_binding.py 调用）：
+  do_status(emp_no) / do_login(emp_no) / do_logout(emp_no)
+
+安全红线：
+- 每用户独立 USERPROFILE 隔离目录 {SG_ROOT}/.lark-cli/{emp_no}/
+- 凭据不落日志/argv（审计脱敏复用 audit_store 规则）
+- 飞书 CLI 路径从环境变量/shutil.which 发现，不硬编码
+- server 进程不保存用户 token，仅在服务调用时由用户上下文决定
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
+from pathlib import Path
+
+from mcp.types import Tool, TextContent
+
+SG_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(SG_ROOT) not in sys.path:
+    sys.path.insert(0, str(SG_ROOT))
+
+# ── 用户隔离目录 ──
+_LARK_DIR = SG_ROOT / ".lark-cli"
+_LOCK_CREATE = threading.Lock()
+_USER_LOCKS: dict[str, threading.Lock] = {}
+_LARK_TIMEOUT = 90  # login 两阶段放宽
+
+
+def _lark_command() -> list[str]:
+    """返回 lark-cli 可执行命令前缀（Windows 需经 cmd /c 执行 .cmd 包装）。"""
+    if sys.platform == "win32":
+        full = shutil.which("lark-cli") or "lark-cli"
+        return ["cmd", "/c", full]
+    return ["lark-cli"]
+
+
+def _user_lark_dir(emp_no: str) -> Path:
+    """返回并创建用户隔离目录。"""
+    d = _LARK_DIR / emp_no
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _inject_userprof(emp_no: str) -> dict:
+    """子进程环境变量：USERPROFILE（Win）/ HOME（Linux）指向用户隔离目录。"""
+    env = os.environ.copy()
+    lark_dir = str(_user_lark_dir(emp_no))
+    if sys.platform == "win32":
+        env["USERPROFILE"] = lark_dir
+    else:
+        env["HOME"] = lark_dir
+    return env
+
+
+def _user_lock(emp_no: str) -> threading.Lock:
+    """每用户并发锁（防 token 刷新互踩）。"""
+    with _LOCK_CREATE:
+        if emp_no not in _USER_LOCKS:
+            _USER_LOCKS[emp_no] = threading.Lock()
+    return _USER_LOCKS[emp_no]
+
+
+def _run_lark(emp_no: str, args: list[str], timeout: int = _LARK_TIMEOUT) -> dict:
+    """执行 lark-cli 并解析 JSON 输出（用户隔离上下文）。
+
+    Args:
+        emp_no: 用户工号（决定 USERPROFILE 隔离目录）
+        args: lark-cli 命令参数（不含 --format json，自动追加）
+        timeout: 超时秒数
+
+    Returns:
+        解析后的 lark-cli 响应 dict
+
+    Raises:
+        ValueError: 超时/CLI 不可用/输出非 JSON/lark-cli 返回失败
+    """
+    cmd = _lark_command() + args + ["--format", "json"]
+    env = _inject_userprof(emp_no)
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace", check=False, env=env)
+    except subprocess.TimeoutExpired:
+        raise ValueError(f"lark-cli 调用超时（>{timeout}s）: {' '.join(args[:3])}")
+    except OSError as e:
+        raise ValueError(f"lark-cli 不可用: {e}")
+
+    text = (proc.stdout or "") + (proc.stderr or "")
+    try:
+        payload = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError:
+        raise ValueError(f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}")
+    if not payload.get("ok"):
+        raise ValueError(f"lark-cli 调用失败: {text[:300]}")
+    return payload
+
+
+# ══════════════════════════════════════════════════════════
+# 底层认证函数（REST + MCP 共用）
+# ══════════════════════════════════════════════════════════
+
+def do_status(emp_no: str) -> dict:
+    """查询当前用户的飞书 CLI 绑定状态。
+
+    Returns:
+        dict with fields: bound, identity, identity_name, open_id, scopes, config_dir
+        未绑定时 bound=False，其他字段为空。
+    """
+    lark_dir = _user_lark_dir(emp_no)
+    # 检查隔离目录下是否有 token json 文件（lark-cli 登录态）
+    has_token = any(f.name.endswith(".json") for f in lark_dir.rglob("*") if f.is_file())
+    if not has_token:
+        return {
+            "bound": False,
+            "identity": "",
+            "identity_name": "",
+            "open_id": "",
+            "scopes": [],
+            "config_dir": str(lark_dir),
+        }
+    try:
+        payload = _run_lark(emp_no, ["auth", "status"])
+        data = payload.get("data") or payload
+        bot_info = data.get("bot") or {}
+        user_info = data.get("user") or {}
+        scopes = data.get("scopes", [])
+        # 优先 user 身份
+        if user_info:
+            identity = "user"
+            identity_name = user_info.get("name", user_info.get("open_id", ""))
+            open_id = user_info.get("open_id", "")
+        elif bot_info:
+            identity = "bot"
+            identity_name = bot_info.get("name", bot_info.get("open_id", ""))
+            open_id = bot_info.get("open_id", "")
+        else:
+            identity = ""
+            identity_name = ""
+            open_id = ""
+        return {
+            "bound": True,
+            "identity": identity,
+            "identity_name": identity_name,
+            "open_id": open_id,
+            "scopes": scopes if isinstance(scopes, list) else [],
+            "config_dir": str(lark_dir),
+        }
+    except ValueError as e:
+        # auth status 失败（如 token 过期/未登录）→ unbound
+        return {
+            "bound": False,
+            "identity": "",
+            "identity_name": "",
+            "open_id": "",
+            "scopes": [],
+            "config_dir": str(lark_dir),
+            "error": str(e),
+        }
+
+
+def do_login(emp_no: str, scope: str = "") -> dict:
+    """两阶段飞书授权。
+
+    Phase1: 返回 verification_url + device_code，用户需打开该 URL 完成授权
+    Phase2: 自动检测授权完成状态
+
+    Args:
+        emp_no: 用户工号
+        scope: 可选，指定授权 scope 范围
+
+    Returns:
+        Phase1: {"phase": "waiting", "verification_url": str, "device_code": str}
+        Phase2: {"phase": "completed", "identity": str, "open_id": str, "identity_name": str}
+        Error:  {"phase": "error", "error": str}
+    """
+    with _user_lock(emp_no):
+        args = ["auth", "login", "--no-wait"]
+        if scope:
+            args += ["--scope", scope]
+        try:
+            payload = _run_lark(emp_no, args)
+        except ValueError as e:
+            return {"phase": "error", "error": str(e)}
+        data = payload.get("data") or payload
+        verification_url = data.get("verification_url", data.get("url", ""))
+        device_code = data.get("device_code", "")
+        if not verification_url:
+            # 可能已经登录成功（首次调用已授权）
+            status = do_status(emp_no)
+            if status.get("bound"):
+                return {
+                    "phase": "completed",
+                    "identity": status.get("identity", ""),
+                    "open_id": status.get("open_id", ""),
+                    "identity_name": status.get("identity_name", ""),
+                }
+            return {"phase": "error", "error": "返回无 verification_url"}
+        return {
+            "phase": "waiting",
+            "verification_url": verification_url,
+            "device_code": device_code,
+        }
+
+
+def do_logout(emp_no: str) -> dict:
+    """解绑当前用户的飞书 CLI 身份。"""
+    with _user_lock(emp_no):
+        try:
+            _run_lark(emp_no, ["auth", "logout", "--yes"])
+        except ValueError:
+            # 未登录状态也算成功
+            pass
+        return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════
+# MCP 工具定义
+# ══════════════════════════════════════════════════════════
+
+lark_auth_status_tool = Tool(
+    name="lark_auth_status",
+    description="查询当前用户飞书 CLI 绑定状态（bound/unbound、身份 user|bot、open_id、"
+                "scope 列表）。Agent 对话中用于判断飞书能力是否可用。",
+    inputSchema={
+        "type": "object",
+        "properties": {},
+    },
+)
+
+lark_auth_login_tool = Tool(
+    name="lark_auth_login",
+    description="发起飞书 CLI 两阶段授权。Phase1 返回 verification_url（用户需打开该链接"
+                "完成飞书 OAuth 授权），phase2 自动检测完成。可指定 scope 参数缩小或扩大授权范围。",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "scope": {
+                "type": "string",
+                "description": "可选：指定授权 scope（如 'docs:* base:*'），默认与现有 app 一致",
+            },
+        },
+    },
+)
+
+lark_auth_logout_tool = Tool(
+    name="lark_auth_logout",
+    description="解绑当前用户飞书 CLI 账号（清空隔离目录登录态）。解绑后需重新授权才能使用飞书工具。",
+    inputSchema={
+        "type": "object",
+        "properties": {},
+    },
+)
+
+TOOLS = [lark_auth_status_tool, lark_auth_login_tool, lark_auth_logout_tool]
+
+
+async def handle(name: str, arguments: dict) -> list[TextContent]:
+    """MCP 工具分发入口。"""
+    try:
+        from services.auth import current_emp_no as _get_emp_no
+        emp_no = _get_emp_no()
+    except Exception:
+        # MCP server 独立模式（无 runtime 上下文）：从环境变量或默认取
+        emp_no = os.environ.get("SG_LARK_EMP_NO", "")
+    if not emp_no:
+        return [TextContent(type="text", text=json.dumps({
+            "error": "未获取到当前用户身份（emp_no 为空）",
+            "hint": "请在 Agent 运行时中调用，或设置 SG_LARK_EMP_NO 环境变量",
+        }, ensure_ascii=False))]
+
+    try:
+        if name == "lark_auth_status":
+            result = do_status(emp_no)
+        elif name == "lark_auth_login":
+            result = do_login(emp_no, arguments.get("scope", ""))
+        elif name == "lark_auth_logout":
+            result = do_logout(emp_no)
+        else:
+            return [TextContent(type="text", text=json.dumps({"error": f"未知工具: {name}"}, ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))]
+    except Exception as e:
+        return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False, default=str))]

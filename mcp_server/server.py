@@ -39,6 +39,7 @@ from mcp_server.tools import (  # noqa: E402
     coverage,
     graph_index,
     fabrication,
+    knowledge,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -71,6 +72,7 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         coverage,
         graph_index,
         fabrication,
+        knowledge,
     ]
     if include_info_pack:
         try:
