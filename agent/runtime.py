@@ -86,6 +86,15 @@ _RBAC_READONLY_TOOLS = frozenset({
     "feishu_calendar_agenda", "feishu_meeting_notes",
     # 飞书文档/多维表格拉取 + 故事草案建议（S5 增补：对话分析建故事链路）
     "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
+    # S8 open/ 对外开放面（L0 只读，全部 side_effect: none）
+    "get_frozen_spec", "get_proposal", "query_decisions",
+    "get_interview_status", "get_delta_contract",
+    "get_coverage_gaps", "get_test_debt", "get_plan_status",
+    "trace_forward", "trace_backward", "query_graph",
+    "lookup_external_ref",
+    "dev_context_by_zt_ref", "dev_context_by_anchor", "dev_context_by_fr",
+    # 飞书认证状态查询（纯读）
+    "lark_auth_status",
 })
 
 # 全量角色（语义 = 不额外收窄；与 _RBAC_TOOL_SETS 分离，避免 None 二义）

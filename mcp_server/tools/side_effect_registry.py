@@ -54,6 +54,10 @@ _KNOWN_WRITERS: dict[str, str] = {
     "add_to_info_pack": SIDE_DRAFT,
     # zentao 相关（写外部系统放行前暂标 draft，确认 external-write 安全后再升）
     "sf_suggest_story_draft": SIDE_DRAFT,
+    # T-701/T-702 飞书 CLI：写凭据文件+执行外部命令
+    "lark_auth_login": SIDE_EXTERNAL_WRITE,
+    "lark_auth_logout": SIDE_EXTERNAL_WRITE,
+    "lark_execute": SIDE_EXTERNAL_WRITE,
 }
 
 # ── 外部写集（初始化为空——「外部写不进 MCP」通则）──
