@@ -61,9 +61,43 @@ feishu_meeting_notes_tool = Tool(
     },
 )
 
+feishu_doc_read_tool = Tool(
+    name="feishu_doc_read",
+    description="飞书云文档正文拉取（S5 增补）：docs +fetch 纯读，支持 /docx/ /wiki/ URL 或 token。"
+                "对话中分析飞书文档内容（需求说明/PRD 片段）作为禅道故事草案素材。纯读。",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "doc": {"type": "string",
+                    "description": "飞书文档 URL 或 token（/docx/ 或 /wiki/）"},
+            "max_chars": {"type": "integer",
+                           "description": "正文截断上限（默认 8000），防撑爆上下文"},
+        },
+        "required": ["doc"],
+    },
+)
+
+feishu_base_query_tool = Tool(
+    name="feishu_base_query",
+    description="飞书多维表格记录查询（S5 增补）：+url-resolve 解析 token 后 +record-list 纯读。"
+                "对话中分析表格内容（需求清单/优先级矩阵）作为禅道故事草案素材。纯读。",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "多维表格分享 URL（/base/）"},
+            "table_id": {"type": "string",
+                          "description": "可选：指定数据表 ID（缺省取 url-resolve 返回的第一个表）"},
+            "limit": {"type": "integer", "description": "记录条数上限（默认 50）"},
+        },
+        "required": ["url"],
+    },
+)
+
 TOOLS = [
     feishu_calendar_agenda_tool,
     feishu_meeting_notes_tool,
+    feishu_doc_read_tool,
+    feishu_base_query_tool,
 ]
 
 
@@ -151,6 +185,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     handlers = {
         "feishu_calendar_agenda": _handle_agenda,
         "feishu_meeting_notes": _handle_meeting_notes,
+        "feishu_doc_read": _handle_doc_read,
+        "feishu_base_query": _handle_base_query,
     }
     handler = handlers.get(name)
     if not handler:
@@ -294,3 +330,89 @@ async def _handle_meeting_notes(args: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"纪要拉取失败: {e}")]
     except Exception as e:
         return [TextContent(type="text", text=f"纪要拉取失败: {e}")]
+
+
+# ══════════════════════════════════════════════════════════
+# S5 增补：文档/多维表格拉取（禅道故事草案素材）
+# ══════════════════════════════════════════════════════════
+
+_DOC_FETCH_TIMEOUT = 90  # docs +fetch 大文档放宽
+
+
+def _extract_content(payload: dict, fallback_keys=("content", "markdown", "data")) -> str:
+    """从 lark-cli 响应中提取正文（兼容多种返回形态）。"""
+    for key in fallback_keys:
+        val = payload.get(key)
+        if val is not None:
+            return str(val)
+    return str(payload)
+
+
+async def _handle_doc_read(arguments: dict) -> list[TextContent]:
+    """飞书云文档正文拉取（docs +fetch 纯读）。"""
+    doc = str(arguments.get("doc", "")).strip()
+    if not doc:
+        return [TextContent(type="text",
+                            text=str({"ok": False, "error": "doc 必填（URL 或 token）"}))]
+    try:
+        payload = _run_lark(["docs", "+fetch", "--as", "user", "--doc", doc,
+                             "--doc-format", "markdown"],
+                            timeout=_DOC_FETCH_TIMEOUT)
+    except ValueError as e:
+        if _looks_like_permission_denied(str(e)):
+            return [TextContent(type="text", text=str(_permission_block(
+                resource_type="docx", url=doc)))]
+        return [TextContent(type="text",
+                            text=str({"ok": False, "error": str(e)}))]
+    content = _extract_content(payload)
+    max_chars = int(arguments.get("max_chars") or 8000)
+    truncated = len(content) > max_chars
+    return [TextContent(type="text", text=str({
+        "ok": True,
+        "doc": doc,
+        "truncated": truncated,
+        "content": content[:max_chars],
+    }))]
+
+
+async def _handle_base_query(arguments: dict) -> list[TextContent]:
+    """飞书多维表格记录查询（+url-resolve → +record-list 纯读）。"""
+    url = str(arguments.get("url", "")).strip()
+    if not url:
+        return [TextContent(type="text",
+                            text=str({"ok": False, "error": "url 必填（/base/ 分享链接）"}))]
+    try:
+        # ① URL → base_token/table_id
+        resolved = _run_lark(["base", "+url-resolve", "--url", url,
+                              "--as", "user"])
+        data = resolved.get("data") or resolved
+        base_token = (data.get("base_token") or "").strip()
+        table_id = str(arguments.get("table_id", "")).strip() or \
+            str((data.get("table_id") or "")).strip()
+        if not base_token:
+            return [TextContent(type="text", text=str({
+                "ok": False,
+                "error": "url-resolve 未返回 base_token（请确认是 /base/ 链接）",
+                "resolved": data,
+            }))]
+        # ② 记录查询
+        rec_args = ["base", "+record-list", "--base-token", base_token,
+                    "--limit", str(int(arguments.get("limit") or 50))]
+        if table_id:
+            rec_args += ["--table-id", table_id]
+        payload = _run_lark(rec_args, timeout=_DOC_FETCH_TIMEOUT)
+        records = payload.get("records") or ((payload.get("data") or {})
+                                              .get("records") or [])
+        return [TextContent(type="text", text=str({
+            "ok": True,
+            "base_token": base_token,
+            "table_id": table_id,
+            "record_count": len(records) if isinstance(records, list) else -1,
+            "records": records,
+        }))]
+    except ValueError as e:
+        if _looks_like_permission_denied(str(e)):
+            return [TextContent(type="text", text=str(_permission_block(
+                resource_type="base", url=url)))]
+        return [TextContent(type="text",
+                            text=str({"ok": False, "error": str(e)}))]

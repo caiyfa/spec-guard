@@ -82,6 +82,8 @@ _RBAC_READONLY_TOOLS = frozenset({
     "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
     # 飞书日程/会议纪要（需求面试场景材料收集用）
     "feishu_calendar_agenda", "feishu_meeting_notes",
+    # 飞书文档/多维表格拉取 + 故事草案建议（S5 增补：对话分析建故事链路）
+    "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
 })
 
 # 全量角色（语义 = 不额外收窄；与 _RBAC_TOOL_SETS 分离，避免 None 二义）

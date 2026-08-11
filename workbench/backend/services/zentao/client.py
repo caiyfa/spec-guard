@@ -183,6 +183,84 @@ def create_story_job(workspace: str, delta_id: str, title: str,
         return sf_refs_store.get_job(job["job_id"])
 
 
+def create_story_from_draft_job(workspace: str, draft_id: int, actor: str,
+                                product_id: int = None) -> dict:
+    """对话草案建故事作业（S5 增补：飞书文档/多维表格分析产出）。
+
+    前置闸门：草案必须存在且为 draft 态（人拍板确认后才可创建——
+    铁律 1：Agent 只建议，人拍板）；幂等键防重复建单。
+    """
+    _require_credentials()
+    idem_key = f"story-draft:{workspace}:{draft_id}"
+    # 幂等优先：同草案已有作业（含 succeeded）直接返回原作业，防重复建单
+    existing = sf_refs_store.find_job_by_idem("story_create", idem_key)
+    if existing:
+        return {**existing, "duplicate": True}
+    draft = sf_refs_store.get_story_draft(draft_id)
+    if not draft:
+        raise KeyError(f"故事草案不存在: {draft_id}")
+    if draft["status"] != "draft":
+        raise ValueError(f"草案 {draft_id} 已处理（status={draft['status']}），不可重复创建")
+    job = sf_refs_store.create_job(
+        workspace, "story_create", idem_key,
+        {"draft_id": draft_id, "title": draft["title"],
+         "source_refs": draft.get("source_refs") or [], "actor": actor},
+        created_by=actor)
+    if job.get("duplicate"):
+        return job
+    try:
+        body = draft["spec"]
+        srcs = draft.get("source_refs") or []
+        if srcs:
+            src_lines = ["\n## 素材来源"]
+            for s in srcs:
+                src_lines.append(
+                    f"- {s.get('type', '')}: {s.get('ref', '')} "
+                    f"{s.get('url', '')} {s.get('note', '')}".strip())
+            body = body + "\n" + "\n".join(src_lines)
+        cfg = get_zentao_config()
+        client = ZenTaoClient(base_url=cfg["base_url"], token=cfg["token"])
+        data = {
+            "product": int(product_id) if product_id else _resolve_product(cfg["product"]),
+            "title": draft["title"],
+            "spec": body,
+            "category": "feature",
+        }
+        result, stdout, stderr = _run_with_retry(
+            lambda: client.story_create(data), "story_create")
+        if result is None:
+            sf_refs_store.update_job(job["job_id"], status="failed",
+                                     stderr=stderr)
+            return sf_refs_store.get_job(job["job_id"])
+        story = result.get("story", result)
+        story_id = str(story.get("id", ""))
+        sf_refs_store.update_job(job["job_id"], status="succeeded",
+                                 zt_ref=story_id, stdout=stdout)
+        sf_refs_store.mark_draft_created(draft_id, story_id)
+        # 锚点登记：zt_story → 来源会话（对话分析链路血缘）
+        sf_refs_store.register_ref(
+            workspace, "zt_story", story_id, "interview",
+            draft.get("session_id") or f"draft:{draft_id}",
+            ref_url=_story_url(story_id),
+            note=f"story_from_draft by {actor}", registered_by=actor)
+        return sf_refs_store.get_job(job["job_id"])
+    except Exception as e:  # noqa: BLE001
+        sf_refs_store.update_job(job["job_id"], status="failed", stderr=str(e))
+        return sf_refs_store.get_job(job["job_id"])
+
+
+def list_frozen_deltas() -> list[dict]:
+    """列出已冻结 delta（changes/*/FREEZE.yaml 存在），供页签一键建故事。"""
+    from specstd.workspace import specflow_dir
+    changes = specflow_dir() / "changes"
+    out = []
+    if changes.is_dir():
+        for d in sorted(changes.iterdir()):
+            if d.is_dir() and (d / "FREEZE.yaml").is_file():
+                out.append({"delta_id": d.name, "frozen": True})
+    return out
+
+
 def writeback_points_job(workspace: str, estimate_id: int, actor: str) -> dict:
     """故事点回写作业（estimate 必须已 confirmed——产品确认闸门）。
 

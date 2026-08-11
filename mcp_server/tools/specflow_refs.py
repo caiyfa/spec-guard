@@ -63,10 +63,30 @@ sf_get_zentao_job_tool = Tool(
     },
 )
 
+sf_suggest_story_draft_tool = Tool(
+    name="sf_suggest_story_draft",
+    description="建议禅道故事草案（对话分析飞书文档/多维表格后产出，恒 draft 态写库，"
+                "不触禅道——创建必须人在页签确认）",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "description": "故事标题"},
+            "spec": {"type": "string", "description": "故事正文草案（功能描述/验收要点）"},
+            "source_refs": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "素材来源 [{type: feishu_doc/feishu_base/manual, ref, url, note}]（可选）",
+            },
+        },
+        "required": ["title", "spec"],
+    },
+)
+
 TOOLS = [
     sf_list_external_refs_tool,
     sf_register_external_ref_tool,
     sf_get_zentao_job_tool,
+    sf_suggest_story_draft_tool,
 ]
 
 
@@ -123,8 +143,31 @@ async def _handle_sf_get_zentao_job(args: dict) -> list[TextContent]:
     }))]
 
 
+async def _handle_sf_suggest_story_draft(args: dict) -> list[TextContent]:
+    """对话产出故事草案（恒 draft 态，不触禅道——铁律 1：Agent 只建议）。"""
+    from workbench.backend.services.specflow import sf_refs_store
+    from specstd.workspace import get_context_workspace, get_context_emp_no
+    ws = get_context_workspace() or ""
+    emp = get_context_emp_no() or "agent:mcp"
+    try:
+        draft = sf_refs_store.create_story_draft(
+            ws, args["title"], args["spec"],
+            source_refs=args.get("source_refs") or [],
+            created_by=f"agent:{emp}")
+    except ValueError as e:
+        return [TextContent(type="text", text=str({"ok": False, "error": str(e)}))]
+    return [TextContent(type="text", text=str({
+        "ok": True,
+        "draft_id": draft["id"],
+        "title": draft["title"],
+        "status": draft["status"],
+        "hint": "草案已生成（draft 态），请在禅道页签确认后创建故事",
+    }))]
+
+
 HANDLERS = {
     "sf_list_external_refs": _handle_sf_list_external_refs,
     "sf_register_external_ref": _handle_sf_register_external_ref,
     "sf_get_zentao_job": _handle_sf_get_zentao_job,
+    "sf_suggest_story_draft": _handle_sf_suggest_story_draft,
 }

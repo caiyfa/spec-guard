@@ -50,6 +50,59 @@ def create_story(
     return {"job": job}
 
 
+@router.get("/frozen-deltas")
+def list_frozen_deltas(
+    user: CurrentUser = Depends(get_current_user),
+    workspace: str = Depends(resolve_workspace),
+):
+    """列出已冻结 delta（一键建故事下拉数据源）。"""
+    from workbench.backend.services.zentao import client as zt_client
+    return {"deltas": zt_client.list_frozen_deltas()}
+
+
+@router.post("/stories/from-draft")
+def create_story_from_draft(
+    body: dict,
+    user: CurrentUser = Depends(require_role("product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """对话草案建故事（product 人拍板；草案必须 draft 态，幂等防重）。"""
+    from workbench.backend.services.zentao import client as zt_client
+    draft_id = body.get("draft_id")
+    if not draft_id:
+        raise HTTPException(status_code=400, detail="缺少 draft_id")
+    try:
+        job = zt_client.create_story_from_draft_job(
+            workspace, int(draft_id), user.emp_no)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    return {"job": job}
+
+
+@router.get("/story-drafts")
+def list_story_drafts(
+    status: str = "",
+    session_id: str = "",
+    user: CurrentUser = Depends(get_current_user),
+    workspace: str = Depends(resolve_workspace),
+):
+    """故事草案列表（对话产出待确认）。"""
+    return {"drafts": _sf_store().list_story_drafts(
+        workspace=workspace, status=status, session_id=session_id)}
+
+
+@router.post("/story-drafts/{draft_id}/cancel")
+def cancel_story_draft(
+    draft_id: int,
+    user: CurrentUser = Depends(require_role("product", "tester")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """取消草案（draft → cancelled，不触禅道）。"""
+    if not _sf_store().cancel_story_draft(draft_id):
+        raise HTTPException(status_code=403, detail=f"草案 {draft_id} 无法取消（不存在或已非 draft）")
+    return {"ok": True, "draft_id": draft_id}
+
+
 @router.post("/stories/{story_id}/estimate-points")
 def estimate_points(
     story_id: str,
@@ -208,6 +261,20 @@ def get_job(
     if job.get("workspace") and job["workspace"] != workspace:
         raise HTTPException(status_code=404, detail=f"作业不存在: {job_id}")
     return {"job": job}
+
+
+@router.get("/jobs")
+def list_jobs(
+    kind: str = "",
+    status: str = "",
+    limit: int = 50,
+    user: CurrentUser = Depends(get_current_user),
+    workspace: str = Depends(resolve_workspace),
+):
+    """作业列表（面板最近作业/审计）。"""
+    jobs = _sf_store().list_jobs(workspace=workspace, kind=kind,
+                                 status=status)
+    return {"jobs": jobs[:limit]}
 
 
 @router.get("/refs")

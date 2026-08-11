@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 48  # T-601: 26 + S2 specflow: 12 + S2.5 feishu: 2 + S3 pack: 5 + S5 refs: 3 (stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 51  # T-601: 26 + S2 specflow: 12 + S2.5 feishu: 2 + S3 pack: 5 + S5 refs: 3 + S5 增补: 3 (stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -81,6 +81,8 @@ class TestToolRegistration:
                      # S5 外部锚点/禅道作业工具（3，M06 §5.3）
                      "sf_list_external_refs", "sf_register_external_ref",
                      "sf_get_zentao_job",
+                     # S5 增补：飞书文档/多维表格拉取 + 故事草案建议（对话分析建故事链路）
+                     "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
                      }
         assert names == expected
 

@@ -88,6 +88,21 @@ def init_tables(db_path: Path | None = None):
         );
         CREATE INDEX IF NOT EXISTS idx_est_delta
           ON sf_storypoint_estimates(workspace, delta_id, status);
+
+        CREATE TABLE IF NOT EXISTS sf_story_drafts (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          workspace   TEXT NOT NULL,
+          session_id  TEXT NOT NULL DEFAULT '',
+          title       TEXT NOT NULL,
+          spec        TEXT NOT NULL,
+          source_refs TEXT NOT NULL DEFAULT '[]',
+          status      TEXT NOT NULL DEFAULT 'draft',
+          created_by  TEXT NOT NULL,
+          created_at  TEXT NOT NULL,
+          zt_story    TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_drafts_status
+          ON sf_story_drafts(workspace, status);
         """)
 
 
@@ -276,6 +291,99 @@ def list_jobs(workspace: str = "", kind: str = "", status: str = "",
             d["payload"] = json.loads(d.get("payload") or "{}")
             out.append(d)
         return out
+
+
+# ══════════════════════════════════════════════════════════
+# sf_story_drafts CRUD（S5 增补：对话分析产出的禅道故事草案）
+# ══════════════════════════════════════════════════════════
+
+VALID_DRAFT_STATUSES = ("draft", "created", "cancelled")
+
+
+def create_story_draft(workspace: str, title: str, spec: str,
+                       source_refs: list = None, created_by: str = "agent:mcp",
+                       session_id: str = "",
+                       db_path: Path | None = None) -> dict:
+    """创建故事草案（恒 draft 态出生，人拍板后才创建禅道故事）。"""
+    if not title or not spec:
+        raise ValueError("title 与 spec 不能为空")
+    init_tables(db_path)
+    with _LOCK, _connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO sf_story_drafts (workspace, session_id, title, spec, "
+            "source_refs, status, created_by, created_at) "
+            "VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)",
+            (workspace, session_id, title, spec,
+             json.dumps(source_refs or [], ensure_ascii=False),
+             created_by, _now()))
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM sf_story_drafts WHERE id = last_insert_rowid()"
+        ).fetchone()
+        return _draft_dict(row)
+
+
+def get_story_draft(draft_id: int,
+                    db_path: Path | None = None) -> Optional[dict]:
+    """查询故事草案。"""
+    init_tables(db_path)
+    with _LOCK, _connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM sf_story_drafts WHERE id=?", (draft_id,)).fetchone()
+        return _draft_dict(row) if row else None
+
+
+def list_story_drafts(workspace: str = "", status: str = "",
+                      session_id: str = "",
+                      db_path: Path | None = None) -> list[dict]:
+    """列出故事草案（工作区隔离）。"""
+    init_tables(db_path)
+    clauses, params = [], []
+    if workspace:
+        clauses.append("workspace = ?")
+        params.append(workspace)
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(session_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with _LOCK, _connect(db_path) as conn:
+        rows = conn.execute(
+            f"SELECT * FROM sf_story_drafts {where} ORDER BY id DESC",
+            params).fetchall()
+        return [_draft_dict(r) for r in rows]
+
+
+def mark_draft_created(draft_id: int, zt_story: str,
+                       db_path: Path | None = None) -> bool:
+    """草案 → created（禅道故事创建成功后回填编号）。"""
+    init_tables(db_path)
+    with _LOCK, _connect(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE sf_story_drafts SET status='created', zt_story=? "
+            "WHERE id=? AND status='draft'",
+            (zt_story, draft_id))
+        return cur.rowcount > 0
+
+
+def cancel_story_draft(draft_id: int,
+                       db_path: Path | None = None) -> bool:
+    """取消草案（draft → cancelled）。"""
+    init_tables(db_path)
+    with _LOCK, _connect(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE sf_story_drafts SET status='cancelled' "
+            "WHERE id=? AND status='draft'",
+            (draft_id,))
+        return cur.rowcount > 0
+
+
+def _draft_dict(row) -> dict:
+    d = dict(row)
+    d["source_refs"] = json.loads(d.get("source_refs") or "[]")
+    return d
 
 
 # ══════════════════════════════════════════════════════════

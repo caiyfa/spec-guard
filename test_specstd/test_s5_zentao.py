@@ -546,6 +546,201 @@ class TestIronRule6:
 
 
 # ══════════════════════════════════════════════════════════
+# S5 增补：对话草案 → 禅道故事（飞书文档/多维表格分析链路）
+# ══════════════════════════════════════════════════════════
+
+class TestStoryDraftsStore:
+    """sf_story_drafts 表 CRUD。"""
+    def test_create_and_list(self, db):
+        from workbench.backend.services.specflow import sf_refs_store
+        d = sf_refs_store.create_story_draft(
+            "tdm", "绩效域落位", "系统 SHALL 支持新规则计算。",
+            source_refs=[{"type": "feishu_doc", "ref": "Z1Fj",
+                          "url": "https://xxx/docx/Z1Fj", "note": "PRD"}],
+            created_by="agent:emp1")
+        assert d["status"] == "draft"
+        assert d["source_refs"][0]["type"] == "feishu_doc"
+        rows = sf_refs_store.list_story_drafts(workspace="tdm", status="draft")
+        assert len(rows) == 1
+        # workspace 隔离
+        assert sf_refs_store.list_story_drafts(workspace="other") == []
+
+    def test_mark_created_and_cancel(self, db):
+        from workbench.backend.services.specflow import sf_refs_store
+        d = sf_refs_store.create_story_draft("tdm", "t", "spec", created_by="u")
+        assert sf_refs_store.mark_draft_created(d["id"], "4821")
+        assert sf_refs_store.get_story_draft(d["id"])["status"] == "created"
+        assert sf_refs_store.get_story_draft(d["id"])["zt_story"] == "4821"
+        # created 后不可再 cancel
+        assert not sf_refs_store.cancel_story_draft(d["id"])
+        d2 = sf_refs_store.create_story_draft("tdm", "t2", "spec2", created_by="u")
+        assert sf_refs_store.cancel_story_draft(d2["id"])
+        assert sf_refs_store.get_story_draft(d2["id"])["status"] == "cancelled"
+
+    def test_empty_title_rejected(self, db):
+        from workbench.backend.services.specflow import sf_refs_store
+        with pytest.raises(ValueError):
+            sf_refs_store.create_story_draft("tdm", "", "spec", created_by="u")
+
+
+class TestDraftClient:
+    """client.create_story_from_draft_job：幂等/状态机/登记。"""
+    def _make_draft(self, db):
+        from workbench.backend.services.specflow import sf_refs_store
+        return sf_refs_store.create_story_draft(
+            "tdm", "绩效域落位", "系统 SHALL 支持新规则计算。\n验收：落位正确。",
+            source_refs=[{"type": "feishu_doc", "ref": "Z1Fj", "url": "u"}],
+            created_by="agent:emp1", session_id="sess-1")
+
+    def test_from_draft_idempotent(self, db, frozen_delta, fake_zt):
+        from workbench.backend.services.zentao import client as zt_client
+        draft = self._make_draft(db)
+        j1 = zt_client.create_story_from_draft_job("tdm", draft["id"], "u1")
+        j2 = zt_client.create_story_from_draft_job("tdm", draft["id"], "u1")
+        assert j1["status"] == "succeeded"
+        assert j2["duplicate"] is True
+        assert fake_zt["story_create"] == 1  # 只建一单
+
+    def test_from_draft_registers_and_marks(self, db, frozen_delta, fake_zt):
+        from workbench.backend.services.zentao import client as zt_client
+        from workbench.backend.services.specflow import sf_refs_store
+        draft = self._make_draft(db)
+        zt_client.create_story_from_draft_job("tdm", draft["id"], "u1")
+        # 草案状态推进 + 编号回填
+        got = sf_refs_store.get_story_draft(draft["id"])
+        assert got["status"] == "created"
+        assert got["zt_story"] == "4821"
+        # 锚点登记：zt_story → interview（来源会话）
+        refs = sf_refs_store.list_refs(workspace="tdm", ref_type="zt_story",
+                                       linked_type="interview")
+        assert refs and refs[0]["linked"] == "sess-1"
+
+    def test_from_draft_rejects_non_draft(self, db, frozen_delta, fake_zt):
+        from workbench.backend.services.zentao import client as zt_client
+        from workbench.backend.services.specflow import sf_refs_store
+        draft = self._make_draft(db)
+        sf_refs_store.cancel_story_draft(draft["id"])
+        with pytest.raises(ValueError, match="不可重复创建"):
+            zt_client.create_story_from_draft_job("tdm", draft["id"], "u1")
+
+    def test_from_draft_not_found(self, db, frozen_delta, fake_zt):
+        from workbench.backend.services.zentao import client as zt_client
+        with pytest.raises(KeyError):
+            zt_client.create_story_from_draft_job("tdm", 99999, "u1")
+
+    def test_from_draft_no_credentials(self, db, monkeypatch, frozen_delta):
+        monkeypatch.delenv("SG_ZENTAO_TOKEN", raising=False)
+        from workbench.backend.services.zentao import client as zt_client
+        from workbench.backend.services.specflow import sf_refs_store
+        draft = sf_refs_store.create_story_draft("tdm", "t", "s", created_by="u")
+        with pytest.raises(ValueError, match="凭据"):
+            zt_client.create_story_from_draft_job("tdm", draft["id"], "u1")
+
+
+class TestDraftRest:
+    """REST：from-draft 角色闸门/草案列表/取消。"""
+    def test_from_draft_403_for_tester(self, client, db, frozen_delta):
+        from workbench.backend.services.specflow import sf_refs_store
+        draft = sf_refs_store.create_story_draft("tdm", "t", "s", created_by="u")
+        headers = _as_role(client)
+        r = client.post("/api/zentao/stories/from-draft", headers=headers,
+                        json={"draft_id": draft["id"]})
+        assert r.status_code == 403
+
+    def test_from_draft_full_flow(self, client, db, frozen_delta, fake_zt):
+        from workbench.backend.services.specflow import sf_refs_store
+        draft = sf_refs_store.create_story_draft(
+            "tdm", "绩效域落位", "系统 SHALL 支持新规则计算。",
+            source_refs=[{"type": "feishu_base", "ref": "basetoken"}],
+            created_by="agent:emp1")
+        headers = _as_role(client, roles=("product",))
+        r = client.post("/api/zentao/stories/from-draft", headers=headers,
+                        json={"draft_id": draft["id"]})
+        assert r.status_code == 200, r.text
+        assert r.json()["job"]["status"] == "succeeded"
+        assert r.json()["job"]["zt_ref"] == "4821"
+
+    def test_story_drafts_list_and_cancel(self, client, db):
+        from workbench.backend.services.specflow import sf_refs_store
+        draft = sf_refs_store.create_story_draft("tdm", "t", "s", created_by="u")
+        headers = _as_role(client, roles=("product",))
+        r = client.get("/api/zentao/story-drafts?status=draft", headers=headers)
+        assert r.status_code == 200
+        assert len(r.json()["drafts"]) == 1
+        # 取消
+        r2 = client.post(f"/api/zentao/story-drafts/{draft['id']}/cancel",
+                         headers=headers)
+        assert r2.status_code == 200
+        # 已取消不可再取消
+        r3 = client.post(f"/api/zentao/story-drafts/{draft['id']}/cancel",
+                         headers=headers)
+        assert r3.status_code == 403
+
+    def test_frozen_deltas_list(self, client, frozen_delta):
+        headers = _as_role(client, roles=("product",))
+        r = client.get("/api/zentao/frozen-deltas", headers=headers)
+        assert r.status_code == 200
+        assert any(d["delta_id"] == "delta-test" for d in r.json()["deltas"])
+
+
+class TestFeishuFetch:
+    """S5 增补：飞书文档/多维表格拉取 handler（mock lark-cli）。"""
+    def test_doc_read_ok(self, monkeypatch):
+        import mcp_server.tools.feishu_fetch as ff
+        monkeypatch.setattr(
+            ff, "_run_lark",
+            lambda args, timeout=90: {"ok": True, "content": "## 需求\n系统支持盘点"})
+        result = asyncio.run(ff._handle_doc_read({"doc": "Z1Fj"}))
+        assert "'ok': True" in result[0].text
+        assert "盘点" in result[0].text
+
+    def test_doc_read_missing_arg(self, monkeypatch):
+        import mcp_server.tools.feishu_fetch as ff
+        result = asyncio.run(ff._handle_doc_read({}))
+        assert "doc 必填" in result[0].text
+
+    def test_doc_read_permission_denied(self, monkeypatch):
+        import mcp_server.tools.feishu_fetch as ff
+        monkeypatch.setattr(
+            ff, "_run_lark",
+            lambda args, timeout=90: (_ for _ in ()).throw(
+                ValueError("无权限访问该文档")))
+        result = asyncio.run(ff._handle_doc_read({"doc": "Z1Fj"}))
+        assert "permission_denied" in result[0].text
+
+    def test_base_query_ok(self, monkeypatch):
+        import mcp_server.tools.feishu_fetch as ff
+        calls = []
+
+        def fake_run_lark(args, timeout=90):
+            calls.append(args)
+            if args[1] == "+url-resolve":
+                return {"ok": True, "data": {"base_token": "BT1",
+                                               "table_id": "TB1"}}
+            return {"ok": True, "records": [{"fields": {"标题": "需求A"}}]}
+
+        monkeypatch.setattr(ff, "_run_lark", fake_run_lark)
+        result = asyncio.run(ff._handle_base_query({"url": "https://x/base/BT1"}))
+        assert "'ok': True" in result[0].text
+        assert "'record_count': 1" in result[0].text
+        assert "需求A" in result[0].text
+
+    def test_base_query_missing_arg(self, monkeypatch):
+        import mcp_server.tools.feishu_fetch as ff
+        result = asyncio.run(ff._handle_base_query({}))
+        assert "url 必填" in result[0].text
+
+    def test_base_query_no_token(self, monkeypatch):
+        import mcp_server.tools.feishu_fetch as ff
+        monkeypatch.setattr(
+            ff, "_run_lark",
+            lambda args, timeout=90: {"ok": True, "data": {}})
+        result = asyncio.run(ff._handle_base_query({"url": "https://x/base/xx"}))
+        assert "base_token" in result[0].text
+
+
+
+# ══════════════════════════════════════════════════════════
 # MCP 工具行为（注册集合断言在 test_mcp_server，此处测 handler）
 # ══════════════════════════════════════════════════════════
 
