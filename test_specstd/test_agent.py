@@ -174,6 +174,25 @@ class TestSession:
         # 会话内容仍可加载
         assert sm.load(sid) is not None
 
+    def test_list_excludes_metrics_file(self, tmp_path):
+        """list_sessions 排除 {sid}_metrics.jsonl 纯指标文件（不当作会话展示/可勾选）。"""
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [{"role": "user", "content": "x"}], metrics={"total_tokens": 100})
+        # 仅一个会话（metrics 文件被排除）
+        sessions = sm.list_sessions()
+        assert len(sessions) == 1 and sessions[0]["id"] == sid
+
+    def test_set_archived_returns_false_for_metrics_file(self, tmp_path):
+        """set_archived 对非会话文件（首行非 session_meta）返回 False（不误报成功）。"""
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [{"role": "user", "content": "x"}], metrics={"total_tokens": 100})
+        # 直接对 metrics 文件调用（模拟异常文件）
+        assert sm.set_archived(sid + "_metrics", True) is False
+        # 正常会话返回 True
+        assert sm.set_archived(sid, True) is True
+
     def test_resume(self, tmp_path):
         """恢复会话。"""
         sm = SessionManager(tmp_path / "sessions")

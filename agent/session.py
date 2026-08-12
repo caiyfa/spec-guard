@@ -100,23 +100,28 @@ class SessionManager:
         except (json.JSONDecodeError, IndexError):
             pass
 
-    def set_archived(self, session_id: str, archived: bool):
-        """归档/恢复会话（修改 JSONL 首行元数据的 archived 字段，消息文件不动）。"""
+    def set_archived(self, session_id: str, archived: bool) -> bool:
+        """归档/恢复会话（修改 JSONL 首行元数据的 archived 字段，消息文件不动）。
+
+        返回是否真正写入（文件不存在或首行非 session_meta 返回 False）。
+        """
         _validate_session_id(session_id)
         path = self.sessions_dir / f"{session_id}.jsonl"
         if not path.is_file():
-            return
+            return False
         lines = path.read_text(encoding="utf-8").splitlines()
         if not lines:
-            return
+            return False
         try:
             meta = json.loads(lines[0])
             if meta.get("_type") == "session_meta":
                 meta["archived"] = bool(archived)
                 lines[0] = json.dumps(meta, ensure_ascii=False)
                 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                return True
         except (json.JSONDecodeError, IndexError):
             pass
+        return False
 
     def save(self, session_id: str, messages: list[dict], metrics: dict = None,
              todos: list[dict] = None, emp_no: str = "", workspace: str = ""):
@@ -241,11 +246,18 @@ class SessionManager:
         return messages
 
     def list_sessions(self) -> list[dict]:
-        """列出所有会话（含元数据 + 标题 + T-010 purpose）。"""
+        """列出所有会话（含元数据 + 标题 + T-010 purpose）。
+
+        仅识别首行为 session_meta 的会话文件（排除 {sid}_metrics.jsonl 等非会话文件）。
+        """
         sessions = []
         for f in sorted(self.sessions_dir.glob("*.jsonl"), reverse=True):
-            stat = f.stat()
+            if f.name.endswith("_metrics.jsonl"):
+                continue  # 纯指标文件不是会话
             meta = self._read_meta(f)
+            if meta.get("_type") != "session_meta":
+                continue  # 首行非会话元数据（旧/异常文件）不作为会话展示
+            stat = f.stat()
             sessions.append({
                 "id": f.stem,
                 "size": stat.st_size,

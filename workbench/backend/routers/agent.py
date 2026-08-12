@@ -346,10 +346,10 @@ def patch_session(session_id: str, body: dict,
 def batch_archive_sessions(body: dict,
                            workspace: str = "",
                            user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
-    """批量归档/恢复会话（T-010 扩展）：只处理操作人自己的会话，非本人 id 跳过。
+    """批量归档/恢复会话（T-010 扩展）：owner 权限——每个用户只管理自己创建的会话，admin 无越权。
 
     入参：{session_ids: [...], archived: bool}
-    返回：{processed: n, skipped: [id...]}
+    返回：{processed: n, skipped: [id...]}（skipped 仅当 id 不在本人目录；前端只允许勾选本人会话，UI 上零跳过）
     """
     raw_ids = body.get("session_ids", []) or []
     if not isinstance(raw_ids, list) or not raw_ids:
@@ -367,12 +367,14 @@ def batch_archive_sessions(body: dict,
         except ValueError:
             skipped.append(sid)
             continue
-        # 不存在 = 他人会话或非法 id（emp 目录隔离，不泄露存在性）；
-        # 存在性用 is None（空会话 load 返回 []，falsy 会误判）
+        # 存在性用 is None（空会话 load 返回 []，falsy 会误判）；不在本人目录 = 他人会话，跳过
         if sm.load(sid) is None:
             skipped.append(sid)
             continue
-        sm.set_archived(sid, archived)
+        # set_archived 返回 False = 首行非 session_meta（异常文件），按失败计入 skipped
+        if not sm.set_archived(sid, archived):
+            skipped.append(sid)
+            continue
         processed += 1
     return {"ok": True, "processed": processed, "skipped": skipped, "archived": archived}
 
@@ -392,6 +394,9 @@ def list_sessions(workspace: str = "", purpose: str = "", include_archived: int 
     else:
         sm_dir = _sessions_dir(user.emp_no)
         sessions = _list_sessions_in_dir(sm_dir, workspace=workspace)
+        # owner 字段统一（前端 owner 权限判断依赖；非 admin 列表仅本人会话，owner=本人）
+        for s in sessions:
+            s.setdefault("owner", user.emp_no)
         if purpose:
             sessions = [s for s in sessions if s.get("purpose") == purpose]
     if not include_archived:

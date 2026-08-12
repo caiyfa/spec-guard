@@ -11,7 +11,7 @@ import '@xyflow/react/dist/style.css';
 import ScenarioNode from '../components/ScenarioNode';
 import { layoutDagByELK } from '../utils/elkLayout';
 import { useJsTokens } from '../theme';
-import { session, agentApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi } from '../api';
+import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi } from '../api';
 import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData } from '../api';
 import SessionTree from '../components/SessionTree';
 import TodoPanel from '../components/TodoPanel';
@@ -2050,17 +2050,24 @@ export default function AgentChat() {
   }, []);
 
   // T-010 扩展：批量归档/恢复（后端只处理本人会话，非本人跳过）
+  const [notice, setNotice] = useState('');  // 绿色成功提示（区别于红色错误）
   const handleBatchArchive = useCallback(async (ids: string[], archived: boolean) => {
     try {
       const r = await agentApi.batchArchive(ids, archived, currentWorkspace);
       setSessionsVersion(v => v + 1);
-      const skipNote = r.skipped?.length ? `，${r.skipped.length} 个跳过（非本人会话）` : '';
-      setError(`${archived ? '🗄 已归档' : '↺ 已恢复'} ${r.processed} 个会话${skipNote}`);
-      setTimeout(() => setError(''), 3000);
+      const skipNote = r.skipped?.length ? `，${r.skipped.length} 个未生效（仅本人会话可管理）` : '';
+      setNotice(`${archived ? '🗄 已归档' : '↺ 已恢复'} ${r.processed} 个会话${skipNote}`);
+      setTimeout(() => setNotice(''), 3000);
     } catch (e: any) {
       setError(e.message || '批量操作失败');
     }
   }, [currentWorkspace]);
+
+  // owner 权限：当前用户工号（批量模式下仅本人会话可勾选）
+  const [ownEmpNo, setOwnEmpNo] = useState('');
+  useEffect(() => {
+    authApi.me().then(u => setOwnEmpNo(u.emp_no)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     modelApi.list().then(r => {
@@ -2800,6 +2807,7 @@ export default function AgentChat() {
           sessions={sessions}
           currentSessionId={sessionId}
           currentWorkspace={currentWorkspace}
+          ownEmpNo={ownEmpNo}
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
           onBatchArchive={handleBatchArchive}
@@ -2910,6 +2918,11 @@ export default function AgentChat() {
               {error && (
                 <div className="bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
                   <span className="text-red-400 text-sm">❌ {error}</span>
+                </div>
+              )}
+              {notice && (
+                <div className="bg-green-900/20 border border-green-700/30 rounded p-2 mb-2">
+                  <span className="text-green-400 text-sm">✓ {notice}</span>
                 </div>
               )}
               </ArtifactCtx.Provider>

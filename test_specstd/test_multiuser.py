@@ -383,22 +383,38 @@ class TestSessionArchive:
         assert r.json()["processed"] == 2
 
     def test_batch_archive_skips_others(self, client):
-        """批量归档只处理操作人自己的会话：他人会话跳过（emp 目录隔离，不泄露存在性）。"""
-        h1 = _login(client, "90000001")
+        """owner 权限：每个用户只管理自己创建的会话，admin 也无越权——他人会话跳过。"""
+        h1 = _login(client, "90000001")  # 首个登录 = admin
         h2 = _login(client, "90000002")
         # 90000002 提升为 tester（bootstrap 首个用户已占 admin，次用户默认 viewer）
         r = client.put("/api/users/90000002/role", json={"role": "tester"}, headers=h1)
         assert r.status_code == 200, r.text
-        sid_other = self._create(client, h1)  # 90000001 的会话
-        # 90000002 尝试归档他人会话 → skipped
+        sid_a = self._create(client, h1)  # admin 的会话
+        sid_b = self._create(client, h2)  # tester 的会话
+        # 非 admin 尝试归档他人会话 → skipped
         r = client.post("/api/agent/sessions/batch-archive", headers=h2,
-                        json={"session_ids": [sid_other], "archived": True})
+                        json={"session_ids": [sid_a], "archived": True})
         assert r.status_code == 200
         body = r.json()
-        assert body["processed"] == 0 and body["skipped"] == [sid_other]
-        # 原会话未被归档（90000001 的列表仍可见）
+        assert body["processed"] == 0 and body["skipped"] == [sid_a]
+        # admin 同样无越权：归档他人会话 → skipped
+        r = client.post("/api/agent/sessions/batch-archive", headers=h1,
+                        json={"session_ids": [sid_b], "archived": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["processed"] == 0 and body["skipped"] == [sid_b]
+        # 原会话均未被归档（各自列表仍可见）
         r = client.get("/api/agent/sessions", headers=h1)
-        assert any(s["id"] == sid_other for s in r.json()["sessions"])
+        assert any(s["id"] == sid_a for s in r.json()["sessions"])
+        r = client.get("/api/agent/sessions", headers=h2)
+        assert any(s["id"] == sid_b for s in r.json()["sessions"])
+        # 各自管理自己的会话正常生效
+        r = client.post("/api/agent/sessions/batch-archive", headers=h2,
+                        json={"session_ids": [sid_b], "archived": True})
+        assert r.json()["processed"] == 1
+        r = client.post("/api/agent/sessions/batch-archive", headers=h1,
+                        json={"session_ids": [sid_a], "archived": True})
+        assert r.json()["processed"] == 1
 
     def test_batch_archive_empty_rejected(self, client):
         h = _login(client, "90000001")
