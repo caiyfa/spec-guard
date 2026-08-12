@@ -100,6 +100,24 @@ class SessionManager:
         except (json.JSONDecodeError, IndexError):
             pass
 
+    def set_archived(self, session_id: str, archived: bool):
+        """归档/恢复会话（修改 JSONL 首行元数据的 archived 字段，消息文件不动）。"""
+        _validate_session_id(session_id)
+        path = self.sessions_dir / f"{session_id}.jsonl"
+        if not path.is_file():
+            return
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if not lines:
+            return
+        try:
+            meta = json.loads(lines[0])
+            if meta.get("_type") == "session_meta":
+                meta["archived"] = bool(archived)
+                lines[0] = json.dumps(meta, ensure_ascii=False)
+                path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except (json.JSONDecodeError, IndexError):
+            pass
+
     def save(self, session_id: str, messages: list[dict], metrics: dict = None,
              todos: list[dict] = None, emp_no: str = "", workspace: str = ""):
         """保存会话到 JSONL（覆盖写，每次全量保存）。
@@ -126,7 +144,7 @@ class SessionManager:
                 meta["purpose_locked"] = True
             elif "purpose" in old_meta:
                 meta["purpose"] = old_meta["purpose"]
-            for k in ("tool_whitelist", "panels", "title"):
+            for k in ("tool_whitelist", "panels", "title", "archived"):
                 if k in old_meta:
                     meta[k] = old_meta[k]
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
@@ -238,6 +256,7 @@ class SessionManager:
                 "title": meta.get("title", ""),
                 "purpose": meta.get("purpose", ""),       # T-010
                 "purpose_locked": meta.get("purpose_locked", False),
+                "archived": meta.get("archived", False),   # 归档标记
                 "tool_whitelist": meta.get("tool_whitelist", []),
                 "panels": meta.get("panels", []),
             })

@@ -334,6 +334,79 @@ class TestWebSocketAuth:
 # 执行队列（M8）
 # ══════════════════════════════════════════════════════════
 
+class TestSessionArchive:
+    """T-010 扩展：会话批量归档/恢复（只处理本人会话；列表默认不含已归档）。"""
+
+    def _create(self, client, headers, workspace=""):
+        r = client.post("/api/agent/sessions",
+                        headers=headers, json={"purpose": "test_workbench", "workspace": workspace})
+        assert r.status_code == 200, r.text
+        return r.json()["session_id"]
+
+    def test_patch_archived_roundtrip(self, client):
+        h = _login(client, "90000001")
+        sid = self._create(client, h)
+        # 默认未归档且列表可见
+        r = client.get("/api/agent/sessions", headers=h)
+        assert any(s["id"] == sid and not s.get("archived") for s in r.json()["sessions"])
+        # 归档
+        r = client.patch(f"/api/agent/sessions/{sid}", headers=h, json={"archived": True})
+        assert r.status_code == 200
+        # 默认列表不含已归档；include_archived=1 含且标记为 True
+        r = client.get("/api/agent/sessions", headers=h)
+        assert all(s["id"] != sid for s in r.json()["sessions"])
+        r = client.get("/api/agent/sessions?include_archived=1", headers=h)
+        found = [s for s in r.json()["sessions"] if s["id"] == sid]
+        assert len(found) == 1 and found[0]["archived"] is True
+        # 恢复
+        r = client.patch(f"/api/agent/sessions/{sid}", headers=h, json={"archived": False})
+        assert r.status_code == 200
+        r = client.get("/api/agent/sessions", headers=h)
+        assert any(s["id"] == sid and not s.get("archived") for s in r.json()["sessions"])
+
+    def test_batch_archive_own_sessions(self, client):
+        h = _login(client, "90000001")
+        sid1 = self._create(client, h)
+        sid2 = self._create(client, h)
+        r = client.post("/api/agent/sessions/batch-archive", headers=h,
+                        json={"session_ids": [sid1, sid2], "archived": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["processed"] == 2 and body["skipped"] == []
+        # 默认列表两者都不可见
+        r = client.get("/api/agent/sessions", headers=h)
+        ids = {s["id"] for s in r.json()["sessions"]}
+        assert sid1 not in ids and sid2 not in ids
+        # 批量恢复
+        r = client.post("/api/agent/sessions/batch-archive", headers=h,
+                        json={"session_ids": [sid1, sid2], "archived": False})
+        assert r.json()["processed"] == 2
+
+    def test_batch_archive_skips_others(self, client):
+        """批量归档只处理操作人自己的会话：他人会话跳过（emp 目录隔离，不泄露存在性）。"""
+        h1 = _login(client, "90000001")
+        h2 = _login(client, "90000002")
+        # 90000002 提升为 tester（bootstrap 首个用户已占 admin，次用户默认 viewer）
+        r = client.put("/api/users/90000002/role", json={"role": "tester"}, headers=h1)
+        assert r.status_code == 200, r.text
+        sid_other = self._create(client, h1)  # 90000001 的会话
+        # 90000002 尝试归档他人会话 → skipped
+        r = client.post("/api/agent/sessions/batch-archive", headers=h2,
+                        json={"session_ids": [sid_other], "archived": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["processed"] == 0 and body["skipped"] == [sid_other]
+        # 原会话未被归档（90000001 的列表仍可见）
+        r = client.get("/api/agent/sessions", headers=h1)
+        assert any(s["id"] == sid_other for s in r.json()["sessions"])
+
+    def test_batch_archive_empty_rejected(self, client):
+        h = _login(client, "90000001")
+        r = client.post("/api/agent/sessions/batch-archive", headers=h,
+                        json={"session_ids": [], "archived": True})
+        assert r.status_code == 400
+
+
 class TestRunQueue:
     def test_enqueue_when_running(self, db, monkeypatch):
         import asyncio

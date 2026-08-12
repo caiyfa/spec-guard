@@ -148,6 +148,32 @@ class TestSession:
         assert len(sessions) == 1
         assert sessions[0]["id"] == sid
 
+    def test_set_archived_roundtrip(self, tmp_path):
+        """归档/恢复往返：list_sessions 返回 archived 标记。"""
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [{"role": "user", "content": "x"}])
+        # 默认未归档
+        assert sm.list_sessions()[0]["archived"] is False
+        # 归档
+        sm.set_archived(sid, True)
+        assert sm.list_sessions()[0]["archived"] is True
+        # 恢复
+        sm.set_archived(sid, False)
+        assert sm.list_sessions()[0]["archived"] is False
+
+    def test_archived_survives_save(self, tmp_path):
+        """归档标记在 save 重写首行 meta 后保留（防继续对话丢归档）。"""
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [{"role": "user", "content": "x"}])
+        sm.set_archived(sid, True)
+        # 模拟归档后继续对话（save 重写首行）
+        sm.save(sid, [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}])
+        assert sm.list_sessions()[0]["archived"] is True
+        # 会话内容仍可加载
+        assert sm.load(sid) is not None
+
     def test_resume(self, tmp_path):
         """恢复会话。"""
         sm = SessionManager(tmp_path / "sessions")

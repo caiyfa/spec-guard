@@ -2043,10 +2043,24 @@ export default function AgentChat() {
 
   const loadSessions = useCallback(async () => {
     try {
-      const r = await agentApi.listSessions('');
+      // T-010 扩展：一次拉全（含归档），SessionTree 内部分组显示
+      const r = await agentApi.listSessions('', '', true);
       setSessions(r.sessions || []);
     } catch { setSessions([]); }
   }, []);
+
+  // T-010 扩展：批量归档/恢复（后端只处理本人会话，非本人跳过）
+  const handleBatchArchive = useCallback(async (ids: string[], archived: boolean) => {
+    try {
+      const r = await agentApi.batchArchive(ids, archived, currentWorkspace);
+      setSessionsVersion(v => v + 1);
+      const skipNote = r.skipped?.length ? `，${r.skipped.length} 个跳过（非本人会话）` : '';
+      setError(`${archived ? '🗄 已归档' : '↺ 已恢复'} ${r.processed} 个会话${skipNote}`);
+      setTimeout(() => setError(''), 3000);
+    } catch (e: any) {
+      setError(e.message || '批量操作失败');
+    }
+  }, [currentWorkspace]);
 
   useEffect(() => {
     modelApi.list().then(r => {
@@ -2514,7 +2528,7 @@ export default function AgentChat() {
     setSessionId(id);
     // T-010: 恢复会话时带出锁定用途（会话列表含 purpose 字段；找不到时保持现状）
     try {
-      const lst = await agentApi.listSessions(ws);
+      const lst = await agentApi.listSessions(ws, '', true);
       const meta = (lst.sessions || []).find((s: any) => s.id === id);
       const p = meta?.purpose || '';
       if (p) {
@@ -2788,6 +2802,7 @@ export default function AgentChat() {
           currentWorkspace={currentWorkspace}
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
+          onBatchArchive={handleBatchArchive}
           collapsed={sessCollapsed}
           onToggleCollapse={toggleSessCollapsed}
         />

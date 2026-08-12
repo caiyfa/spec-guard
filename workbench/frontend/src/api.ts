@@ -525,10 +525,13 @@ export const agentApi = {
   createSession: (body: { purpose: string; workspace?: string; title?: string }) =>
     request<{ ok: boolean; session_id: string; session: any }>('/agent/sessions', { method: 'POST', body: JSON.stringify(body) }),
   // T-010: 改标题/归档；请求体含 purpose 一律 409
-  patchSession: (id: string, body: { title?: string }, workspace = '') =>
+  patchSession: (id: string, body: { title?: string; archived?: boolean }, workspace = '') =>
     request<{ ok: boolean; session_id: string }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  listSessions: (workspace = '', purpose = '') =>
-    request<{ sessions: any[] }>(`/agent/sessions${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}${purpose ? `${workspace ? '&' : '?'}purpose=${encodeURIComponent(purpose)}` : ''}`),
+  listSessions: (workspace = '', purpose = '', includeArchived = false) =>
+    request<{ sessions: any[] }>(`/agent/sessions${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}${purpose ? `${workspace ? '&' : '?'}purpose=${encodeURIComponent(purpose)}` : ''}${includeArchived ? `${workspace || purpose ? '&' : '?'}include_archived=1` : ''}`),
+  // T-010 扩展：批量归档/恢复（只处理本人会话）
+  batchArchive: (ids: string[], archived: boolean, workspace = '') =>
+    request<{ ok: boolean; processed: number; skipped: string[]; archived: boolean }>(`/agent/sessions/batch-archive${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'POST', body: JSON.stringify({ session_ids: ids, archived }) }),
   getSession: (id: string, workspace = '') =>
     request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>

@@ -325,7 +325,8 @@ def patch_session(session_id: str, body: dict,
     if "purpose" in body:
         raise HTTPException(status_code=409, detail="用途创建即锁定，不可中途变更（换用途 = 新建会话）")
     sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
-    if not sm.load(session_id):
+    # 存在性用 is None 判断（空会话 load 返回 []，falsy 会误判不存在）
+    if sm.load(session_id) is None:
         raise HTTPException(status_code=404, detail="会话不存在")
     title = str(body.get("title", "") or "").strip()
     if title:
@@ -335,12 +336,51 @@ def patch_session(session_id: str, body: dict,
             agent_session_store.update_title(session_id, title)
         except Exception:
             pass
+    # 归档/恢复（T-010 扩展：列表瘦身，归档不删文件）
+    if "archived" in body:
+        sm.set_archived(session_id, bool(body.get("archived")))
     return {"ok": True, "session_id": session_id}
 
 
+@router.post("/sessions/batch-archive")
+def batch_archive_sessions(body: dict,
+                           workspace: str = "",
+                           user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """批量归档/恢复会话（T-010 扩展）：只处理操作人自己的会话，非本人 id 跳过。
+
+    入参：{session_ids: [...], archived: bool}
+    返回：{processed: n, skipped: [id...]}
+    """
+    raw_ids = body.get("session_ids", []) or []
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=400, detail="session_ids 必填（非空数组）")
+    archived = bool(body.get("archived", True))
+    sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
+    processed = 0
+    skipped = []
+    for sid in raw_ids:
+        sid = str(sid).strip()
+        if not sid:
+            continue
+        try:
+            _validate_session_id(sid)
+        except ValueError:
+            skipped.append(sid)
+            continue
+        # 不存在 = 他人会话或非法 id（emp 目录隔离，不泄露存在性）；
+        # 存在性用 is None（空会话 load 返回 []，falsy 会误判）
+        if sm.load(sid) is None:
+            skipped.append(sid)
+            continue
+        sm.set_archived(sid, archived)
+        processed += 1
+    return {"ok": True, "processed": processed, "skipped": skipped, "archived": archived}
+
+
 @router.get("/sessions")
-def list_sessions(workspace: str = "", purpose: str = "", user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
-    """列出会话：本人目录；admin 聚合全部用户目录。支持按工作区/用途筛选。"""
+def list_sessions(workspace: str = "", purpose: str = "", include_archived: int = 0,
+                  user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+    """列出会话：本人目录；admin 聚合全部用户目录。支持按工作区/用途筛选；默认不含已归档会话。"""
     if user.is_admin:
         sessions = []
         for d in _iter_all_session_dirs():
@@ -349,11 +389,13 @@ def list_sessions(workspace: str = "", purpose: str = "", user: CurrentUser = De
                 sessions.append(s)
         if purpose:
             sessions = [s for s in sessions if s.get("purpose") == purpose]
-        return {"sessions": sessions}
-    sm_dir = _sessions_dir(user.emp_no)
-    sessions = _list_sessions_in_dir(sm_dir, workspace=workspace)
-    if purpose:
-        sessions = [s for s in sessions if s.get("purpose") == purpose]
+    else:
+        sm_dir = _sessions_dir(user.emp_no)
+        sessions = _list_sessions_in_dir(sm_dir, workspace=workspace)
+        if purpose:
+            sessions = [s for s in sessions if s.get("purpose") == purpose]
+    if not include_archived:
+        sessions = [s for s in sessions if not s.get("archived")]
     return {"sessions": sessions}
 
 
