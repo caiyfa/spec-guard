@@ -382,23 +382,17 @@ def batch_archive_sessions(body: dict,
 @router.get("/sessions")
 def list_sessions(workspace: str = "", purpose: str = "", include_archived: int = 0,
                   user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
-    """列出会话：本人目录；admin 聚合全部用户目录。支持按工作区/用途筛选；默认不含已归档会话。"""
-    if user.is_admin:
-        sessions = []
-        for d in _iter_all_session_dirs():
-            for s in _list_sessions_in_dir(d, workspace=workspace):
-                s["owner"] = d.name
-                sessions.append(s)
-        if purpose:
-            sessions = [s for s in sessions if s.get("purpose") == purpose]
-    else:
-        sm_dir = _sessions_dir(user.emp_no)
-        sessions = _list_sessions_in_dir(sm_dir, workspace=workspace)
-        # owner 字段统一（前端 owner 权限判断依赖；非 admin 列表仅本人会话，owner=本人）
-        for s in sessions:
-            s.setdefault("owner", user.emp_no)
-        if purpose:
-            sessions = [s for s in sessions if s.get("purpose") == purpose]
+    """列出会话：owner 权限——每个用户只列出自己创建的会话（admin 无聚合特权，他人会话不出现在列表中）。
+
+    支持按工作区/用途筛选；默认不含已归档会话。
+    """
+    sm_dir = _sessions_dir(user.emp_no)
+    sessions = _list_sessions_in_dir(sm_dir, workspace=workspace)
+    # owner 字段统一（前端 owner 权限判断依赖；本列表均为本人会话）
+    for s in sessions:
+        s.setdefault("owner", user.emp_no)
+    if purpose:
+        sessions = [s for s in sessions if s.get("purpose") == purpose]
     if not include_archived:
         sessions = [s for s in sessions if not s.get("archived")]
     return {"sessions": sessions}

@@ -416,6 +416,23 @@ class TestSessionArchive:
                         json={"session_ids": [sid_a], "archived": True})
         assert r.json()["processed"] == 1
 
+    def test_list_sessions_own_only(self, client):
+        """会话列表只返回自己的会话：admin 也无聚合特权，他人会话不出现在查询结果中。"""
+        h1 = _login(client, "90000001")  # 首个登录 = admin
+        h2 = _login(client, "90000002")
+        r = client.put("/api/users/90000002/role", json={"role": "tester"}, headers=h1)
+        assert r.status_code == 200, r.text
+        sid_a = self._create(client, h1)
+        sid_b = self._create(client, h2)
+        # admin 列表只有自己的会话，不含他人会话
+        r = client.get("/api/agent/sessions?include_archived=1", headers=h1)
+        ids = {s["id"] for s in r.json()["sessions"]}
+        assert sid_a in ids and sid_b not in ids
+        # 非 admin 同理
+        r = client.get("/api/agent/sessions?include_archived=1", headers=h2)
+        ids = {s["id"] for s in r.json()["sessions"]}
+        assert sid_b in ids and sid_a not in ids
+
     def test_batch_archive_empty_rejected(self, client):
         h = _login(client, "90000001")
         r = client.post("/api/agent/sessions/batch-archive", headers=h,
