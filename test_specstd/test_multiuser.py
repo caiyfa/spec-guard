@@ -323,9 +323,9 @@ class TestWebSocketAuth:
         with pytest.raises(Exception):
             with client.websocket_connect(f"/api/agent/ws?token={viewer_token}"):
                 pass
-        # admin 可连接并收到 started 事件
+        # admin 可连接并收到 started 事件（T-010：新建会话必须带用途，未选使命被拒）
         with client.websocket_connect(f"/api/agent/ws?token={admin_token}") as ws:
-            ws.send_json({"message": "ping"})
+            ws.send_json({"message": "ping", "purpose": "test_workbench"})
             msg = ws.receive_json()
             assert msg["type"] == "state" and msg.get("status") == "started"
 

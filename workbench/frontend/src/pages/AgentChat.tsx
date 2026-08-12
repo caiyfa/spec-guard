@@ -161,6 +161,12 @@ interface PurposeCardDef {
   description: string;
 }
 
+// 用途标题兜底映射（页面刷新后 purposes 列表为空时 badge 仍可显示；新用途在 purposes 动态命中）
+const PURPOSE_TITLE_FALLBACK: Record<string, string> = {
+  test_workbench: '测试工作台',
+  requirement_interview: '产品工作台',
+};
+
 const PURPOSE_COLORS: Record<string, { border: string; bg: string; text: string; badge: string }> = {
   test: { border: 'border-info/40', bg: 'bg-info/5', text: 'text-info', badge: 'bg-info/15 text-info' },
   req: { border: 'border-purple-500/40', bg: 'bg-purple-900/10', text: 'text-purple-300', badge: 'bg-purple-900/30 text-purple-300' },
@@ -2274,6 +2280,7 @@ export default function AgentChat() {
           message: msg, session_id: '', max_turns: 50,
           workspace: currentWorkspace, scenario_id: scenarioId,
           model_id: currentModelId,
+          purpose: 'test_workbench',
           context: { current_page: currentPage, editing_scenario_id: scenarioId },
         }));
       }
@@ -2293,6 +2300,7 @@ export default function AgentChat() {
           message: msg, session_id: '', max_turns: 50,
           workspace: currentWorkspace, scenario_id: '',
           model_id: currentModelId,
+          purpose: 'test_workbench',
           context: {
             current_page: 'execution',
             last_run_failed: true,
@@ -2320,10 +2328,43 @@ export default function AgentChat() {
 
   // 发送消息
   // 返回是否真正发出——ChatInput 据此决定清空输入框（发送被拒时保留草稿）
+  // T-010: 拉取可见用途并决定是否显示选择卡片（单用途自动锁定；多用途弹卡片；失败静默降级）
+  const fetchAndShowPurposes = useCallback(async (): Promise<boolean> => {
+    try {
+      const r = await agentApi.listPurposes();
+      const list = r.purposes || [];
+      setPurposes(list);
+      if (list.length === 1) {
+        // 单用途：跳过选择直接锁定
+        setPickedPurpose(list[0].id);
+        localStorage.setItem('sg_picked_purpose', list[0].id);
+        setShowPurposePicker(false);
+        return true;
+      } else if (list.length > 1) {
+        // 多用途：展示使命卡片，等用户拍板
+        setShowPurposePicker(true);
+        setPickedPurpose('');
+        localStorage.removeItem('sg_picked_purpose');
+        return false;
+      }
+      setShowPurposePicker(false);
+      return true;  // 无用途定义：不拦截（存量兼容）
+    } catch {
+      setShowPurposePicker(false);
+      return true;  // 拉取失败：不拦截，避免功能不可用
+    }
+  }, []);
+
   const handleSend = useCallback((text: string, refs: ChatReference[]): boolean => {
     const userMsg = text.trim();
     const ws = wsRef.current;
     if (!userMsg || loading) return false;
+    // T-010: 新会话必须先选用途——未选使命直接发送会创建无用途会话（工具集不锁定、提示词不装配），此处拦截并弹卡片
+    if (!sessionId && !pickedPurpose) {
+      setError('请先选择会话用途（测试工作台 / 产品工作台）再开始对话');
+      fetchAndShowPurposes();
+      return false;
+    }
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setError('连接已断开，正在尝试重连…（消息未发送，重连后请重发）');
       reconnectAttemptsRef.current = 0;
@@ -2350,7 +2391,7 @@ export default function AgentChat() {
       context: { current_page: currentPage, editing_scenario_id: scenarioId },
     }));
     return true;
-  }, [loading, sessionId, pickedPurpose, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo]);
+  }, [loading, sessionId, pickedPurpose, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo, fetchAndShowPurposes]);
 
   // T-402: 打断会话（真打断——先调用 cancel API，再关 WS）
   const handleStop = useCallback(() => {
@@ -2471,6 +2512,16 @@ export default function AgentChat() {
     const msgs = r.messages || [];
     setMessages(msgs);
     setSessionId(id);
+    // T-010: 恢复会话时带出锁定用途（会话列表含 purpose 字段；找不到时保持现状）
+    try {
+      const lst = await agentApi.listSessions(ws);
+      const meta = (lst.sessions || []).find((s: any) => s.id === id);
+      const p = meta?.purpose || '';
+      if (p) {
+        setPickedPurpose(p);
+        localStorage.setItem('sg_picked_purpose', p);
+      }
+    } catch { /* 恢复用途失败不阻塞会话加载 */ }
     setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setReadingFeed([]);  // T-511：足迹=本轮运行依据，恢复历史会话时清空（不持久化）
@@ -2522,24 +2573,7 @@ export default function AgentChat() {
     setFileTabs([]); setActiveSideTab('todos');
     localStorage.removeItem('sg_agent_session');
     // T-010: 获取用途列表并决定是否显示选择卡片
-    try {
-      const r = await agentApi.listPurposes();
-      const list = r.purposes || [];
-      if (list.length === 1) {
-        // 单用途：跳过选择直接锁定
-        setPickedPurpose(list[0].id);
-        localStorage.setItem('sg_picked_purpose', list[0].id);
-        setShowPurposePicker(false);
-      } else if (list.length > 1) {
-        // 多用途：展示使命卡片
-        setPurposes(list);
-        setShowPurposePicker(true);
-        setPickedPurpose('');
-        localStorage.removeItem('sg_picked_purpose');
-      }
-    } catch {
-      setShowPurposePicker(false);
-    }
+    await fetchAndShowPurposes();
   };
 
   const handleExportSession = async () => {
@@ -2773,12 +2807,16 @@ export default function AgentChat() {
             <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>
               {wsState === 'open' ? '●' : '○'}
             </span>
-            {pickedPurpose && (pickedPurpose === 'requirement_interview' || pickedPurpose === '需求面试') && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-300">需求面试</span>
-            )}
-            {pickedPurpose && pickedPurpose === 'test_workbench' && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-info/15 text-info">测试工作台</span>
-            )}
+            {pickedPurpose && (() => {
+              const pt = purposes.find(p => p.id === pickedPurpose)?.title || PURPOSE_TITLE_FALLBACK[pickedPurpose];
+              if (!pt) return null;
+              const isReq = pickedPurpose === 'requirement_interview';
+              return (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isReq ? 'bg-purple-900/30 text-purple-300' : 'bg-info/15 text-info'}`}>
+                  {pt}
+                </span>
+              );
+            })()}
             {sessionTitle && <span className="text-gray-300 font-medium">{sessionTitle}</span>}
             {sessionId && (
               <>

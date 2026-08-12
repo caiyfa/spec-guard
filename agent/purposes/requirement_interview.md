@@ -1,6 +1,6 @@
 ---
 id: requirement_interview
-title: 需求面试
+title: 产品工作台
 icon: 🧭
 color: req
 chips: [specflow 工具集, 台账/评分明板, 影响面图谱]

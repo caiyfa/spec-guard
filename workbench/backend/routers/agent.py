@@ -516,10 +516,17 @@ async def agent_ws(websocket: WebSocket,
             sessions_dir = _sessions_dir(emp_no)
             sm = SessionManager(sessions_dir, workspace=workspace)
             is_new_session = not session_id
-            # T-010: 新建会话时校验并透传 purpose（非法/无权限 403 语义；已有会话读锁定值）
+            # T-010: 新建会话必须选用途（未选使命 = 创建无用途会话：工具集不锁定、提示词不装配；
+            # 前端已拦截，此处兜底拒绝绕过前端的直连 WS）
             session_purpose = purpose or ""
             session_tools_snapshot = None  # M5：已建会话的创建期 tool_whitelist 快照
-            if is_new_session and session_purpose:
+            if is_new_session:
+                if not session_purpose:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "请先选择会话用途（测试工作台 / 产品工作台）",
+                    })
+                    continue
                 pdef = load_purpose(session_purpose)
                 if pdef is None or not (set(_ws_roles) & set(pdef.roles)):
                     await websocket.send_json({
@@ -527,7 +534,7 @@ async def agent_ws(websocket: WebSocket,
                         "message": f"用途不存在或无权限: {session_purpose}",
                     })
                     continue
-            elif not is_new_session:
+            else:
                 try:
                     metas = sm.list_sessions()
                     meta = next((s for s in metas if s["id"] == session_id), {})
