@@ -47,13 +47,15 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 84  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 86  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
         expected = {"read_spec", "list_spec_files", "list_scenarios",
                      "read_scenario", "next_scenario_id",
                      "query_registry", "write_draft", "undo_draft", "validate",
+                     "write_delta_doc",  # 方案 A：delta 文档写通道（changes/ 起草区限定）
+                     "commit_delta_changes",  # 方案 A：delta 受限提交（add+commit，不 push）
                      "read_run_report", "db_evidence",
                      "write_audit_report", "report_vulnerability",
                      "todo_write",

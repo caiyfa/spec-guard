@@ -29,6 +29,10 @@ VALID_LEVELS = frozenset({SIDE_NONE, SIDE_DRAFT, SIDE_EXTERNAL_WRITE})
 _KNOWN_WRITERS: dict[str, str] = {
     # draft_writer
     "write_draft": SIDE_DRAFT,
+    # delta_doc_writer（方案 A：产品可写 changes/{delta}/ 起草区文档，不代提交 git）
+    "write_delta_doc": SIDE_DRAFT,
+    # delta_committer（受限提交：git add + commit，不 push，本地仓库写）
+    "commit_delta_changes": SIDE_DRAFT,
     # fabrication
     "fabricate_data": SIDE_DRAFT,
     # scenario_tools

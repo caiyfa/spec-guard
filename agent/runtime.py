@@ -93,8 +93,16 @@ _RBAC_READONLY_TOOLS = frozenset({
     "trace_forward", "trace_backward", "query_graph",
     "lookup_external_ref",
     "dev_context_by_zt_ref", "dev_context_by_anchor", "dev_context_by_fr",
-    # 飞书认证状态查询（纯读）
-    "lark_auth_status",
+    # 飞书认证状态查询（纯读）+ 飞书 CLI 通用执行器（im 域只读命令：群聊定位/拉取/检索）
+    "lark_auth_status", "lark_execute",
+    # 飞书授权发起（写操作仅限本人隔离目录登录态，不写业务数据；未授权时对话内展示二维码+链接）
+    "lark_auth_login",
+    # 草稿写入（product 角色可起草 delta spec / scenario YAML，不含 promote 入库操作）
+    "write_draft",
+    # delta 文档写入（方案 A：product 可写 changes/{delta}/ 起草区文档，不代提交 git）
+    "write_delta_doc",
+    # delta 受限提交（git add + commit，不 push；前置 conformance 门禁）
+    "commit_delta_changes",
 })
 
 # 全量角色（语义 = 不额外收窄；与 _RBAC_TOOL_SETS 分离，避免 None 二义）
@@ -217,13 +225,18 @@ def _load_prompt_template() -> str:
 
 
 def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
-                        scenario_context: str = "") -> str:
+                        scenario_context: str = "", purpose: str = "") -> str:
     """构建统一 system prompt（K-023 去模式化 + T-601 技能单一事实源）。
 
-    - format_spec 全量常驻（不再按模式条件注入——条件注入是路由复杂度的回潮；
-      prompt cache 摊销重复成本）
+    - format_spec 按用途选择变体：product/requirement_interview 用途使用
+      产品友好版（仅 Spec 模板结构与 FR/AC 写作规范，不含执行层细节）；
+      其他用途使用全量骨架。
     - skills 全量注入（T-601：modes 正文并入 skills 后唯一事实源，不再有 mode_guidance 章节）
     - 静态大块在前、动态内容（场景上下文）在最后，保 prompt cache 前缀命中
+
+    purpose 参数在 build_system_prompt 层面控制注入内容的技术深度——
+    对产品侧隐藏执行层技术细节（步骤语法/断言类型/tool 目录/轮询/DB 断言），
+    聚焦 Spec 模板结构、FR/AC 写作规范和基线核对流程。
     """
     if not format_spec_text:
         try:
@@ -231,8 +244,12 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
             if str(BACKEND_DIR) not in sys.path:
                 sys.path.insert(0, str(BACKEND_DIR))
             # T-507 激进档（定档 2026-08-11）：骨架常驻 + read_format_spec 按需取细节
-            from services.format_spec import generate_format_spec_skeleton
-            format_spec_text = generate_format_spec_skeleton()
+            # 区别：product 用途用产品友好变体，其余用途用全量骨架
+            from services.format_spec import generate_format_spec_skeleton, generate_format_spec_product
+            is_product = purpose in ("requirement_interview",)
+            format_spec_text = (
+                generate_format_spec_product() if is_product
+                else generate_format_spec_skeleton())
         except Exception:
             format_spec_text = "（format_spec 加载失败，请用 query_registry 查询可用工具）"
 
@@ -243,9 +260,27 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
         except Exception:
             agents_md = "（工作区未激活）"
 
+    import re as _re
     # G3-2：技能全量注入（K-023 不再按模式过滤；T-601：modes 正文已并入 skills，
     # 技能为任务行为指引的唯一事实源——不再组装 mode_guidance 条件章节）
+    # 区别：product 用途仅列出产品相关技能，隐藏测试执行层技能
     skills_xml = build_skills_xml() or "（无）"
+    is_product_purpose = purpose in ("requirement_interview",)
+    if is_product_purpose and skills_xml and skills_xml != "（无）":
+        # 保留产品相关技能，移除技术执行类技能
+        product_skills = {"analyze-workspace", "spec-chat", "audit-spec",
+                         "validate-conformance", "zentao-story-point", "feishu-chat"}
+        kept = []
+        for line in skills_xml.splitlines():
+            if not line.strip().startswith("<skill"):
+                kept.append(line)
+                continue
+            m = _re.search(r'name="([^"]+)"', line)
+            if m and m.group(1) in product_skills:
+                kept.append(line)
+        skills_xml = "\n".join(kept)
+        if skills_xml.strip() in ("<skills>", "<skills></skills>"):
+            skills_xml = "（当前用途下无可展示技能）"
 
     prompt = (_load_prompt_template()
               .replace("{{ format_spec }}", format_spec_text)
@@ -299,7 +334,8 @@ class AgentRuntime:
     """
 
     def __init__(self, llm: LLMClient, tools: list = None, max_turns: int = 12,
-                 mode_name: str = ""):
+                 mode_name: str = "", purpose_name: str = "",
+                 user_roles: list = None):
         self.llm = llm
         self.max_turns = max_turns
         self.events = EventBus()
@@ -321,6 +357,10 @@ class AgentRuntime:
         # 无激活工作区/词典缺失时静默降级为不投递）
         self._knowledge_nudger = None
 
+        # 工具白名单跟随配置（不锁死在会话创建时，每次工具执行前 _refresh_whitelist）
+        self._purpose_name = purpose_name
+        self._user_roles = user_roles or []
+
         # K-023 去模式化：全量工具常驻（工具描述自带适用条件；写操作护栏在工具内部——
         # drafts 沙箱/promote 三道闸+回滚/OVERWRITE_DENIED。模式白名单在生产中
         # 防住的都是合法工作流：K-012 未知工具报错/K-018 模式落错/K-022「没有入库工具」）
@@ -332,6 +372,18 @@ class AgentRuntime:
         # 重建 tool_map（meta 工具在 _execute_tool 中拦截，不映射到模块）
         self._tool_map = {}
         self._rebuild_tool_map()
+
+    def _refresh_whitelist(self):
+        """从当前 purpose 文件刷新工具白名单（定义变动即时生效，不锁死会话创建时刻）。"""
+        if not self._purpose_name:
+            return
+        from agent.purpose_loader import load_purpose
+        pdef = load_purpose(self._purpose_name)
+        if pdef:
+            tools = resolve_tools(list(pdef.tools), self._user_roles)
+            self.tools = list(tools)
+            self._tool_whitelist = {t.name for t in tools}
+            self._rebuild_tool_map()
 
     def run(self, system_prompt: str, user_message: str,
             session: Optional[SessionManager] = None,
@@ -615,6 +667,8 @@ class AgentRuntime:
         T-081：side_effect 检查——none 级工具执行后做指纹比对，变化即报错。
         T-082：每次调用落审计日志。
         """
+        # 每次执行前刷新工具白名单（定义变动即时生效，不锁死会话创建时刻）
+        self._refresh_whitelist()
         name = tool_call.get("function", {}).get("name", "")
         raw_args = tool_call.get("function", {}).get("arguments", "{}")
 
