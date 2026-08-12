@@ -113,6 +113,9 @@ def client(db, tmp_path, monkeypatch):
     import specstd.workspace as wsm
     monkeypatch.setattr(wsm, "REGISTRY_PATH", tmp_path / "registry.yaml")
     monkeypatch.setattr(wsm, "CLONES_DIR", tmp_path / "_clones")
+    # 会话目录隔离（否则 TestClient 端到端测试写真实 agent/sessions）
+    from routers import agent as agent_router
+    monkeypatch.setattr(agent_router, "SESSIONS_ROOT", tmp_path / "sessions")
     # 注册一个合规工作区供授权测试
     from test_specstd.helpers import create_valid_workspace
     repo = create_valid_workspace(tmp_path / "repo")

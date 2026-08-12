@@ -263,9 +263,14 @@ class TestPurposeEndpoints:
     """POST /sessions purpose 锁定 + PATCH 409 + GET /purposes 过滤。"""
 
     @pytest.fixture()
-    def client(self):
+    def client(self, tmp_path, monkeypatch):
+        """装配 TestClient（隔离 DB + sessions，不污染真实数据）。"""
         sys.path.insert(0, str(SG_ROOT / "workbench" / "backend"))
         try:
+            from services import user_store
+            monkeypatch.setattr(user_store, "DB_PATH", tmp_path / "workbench.db")
+            from routers import agent as agent_router
+            monkeypatch.setattr(agent_router, "SESSIONS_ROOT", tmp_path / "sessions")
             from main import app
             from fastapi.testclient import TestClient
             with TestClient(app) as c:
@@ -301,6 +306,10 @@ class TestPurposeEndpoints:
 
     def test_create_session_viewer_denied(self, client, monkeypatch):
         monkeypatch.setenv("SG_AUTH_MODE", "mock")
+        # 显式预置 viewer 角色（隔离 DB 下首个用户会 bootstrap 为 admin，不能依赖隐式状态）
+        from services import user_store
+        user_store.upsert_user("90024170", "查看者")
+        user_store.set_roles("90024170", ["viewer"], "90000001")
         h = self._login(client, "90024170")  # viewer 角色
         r = client.post("/api/agent/sessions",
                         json={"purpose": "test_workbench", "workspace": "tdm"},
