@@ -277,3 +277,208 @@ class TestRunLark:
         monkeypatch.setattr(feishu_fetch.subprocess, "run", hang)
         with pytest.raises(ValueError, match="超时"):
             feishu_fetch._run_lark(["calendar", "+agenda"])
+
+
+# ══════════════════════════════════════════════════════════
+# S5 增补：feishu_doc_read（云文档正文）
+# ══════════════════════════════════════════════════════════
+
+_DOC_PAYLOAD = {"ok": True, "data": {"document": {
+    "content": "<title>测试文档</title><p>正文内容</p>",
+    "document_id": "D1", "revision_id": 1}}}
+
+
+def _doc_payload(*args):
+    return _DOC_PAYLOAD
+
+
+class TestDocRead:
+    def test_doc_read_ok(self, monkeypatch):
+        calls = []
+
+        def fake(args, **kwargs):
+            calls.append(args)
+            return _DOC_PAYLOAD
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", fake)
+        r = _call(feishu_fetch, "feishu_doc_read",
+                  {"doc": "https://x.feishu.cn/docx/DnUwXXX"})
+        text = r[0].text
+        assert "'ok': True" in text
+        assert "测试文档" in text
+        # 命令构造：--doc-format markdown + URL 原样传递
+        assert calls[0][:3] == ["docs", "+fetch", "--as"]
+        assert "--doc-format" in calls[0] and "markdown" in calls[0]
+        assert "https://x.feishu.cn/docx/DnUwXXX" in calls[0]
+
+    def test_doc_read_truncate(self, monkeypatch):
+        def fake(args, **kwargs):
+            return {"ok": True, "data": {"document": {"content": "x" * 9000}}}
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", fake)
+        r = _call(feishu_fetch, "feishu_doc_read",
+                  {"doc": "D1", "max_chars": 100})
+        text = r[0].text
+        assert "'truncated': True" in text
+        assert len(text) < 2000  # 截断生效
+
+    def test_doc_read_empty_doc(self, monkeypatch):
+        r = _call(feishu_fetch, "feishu_doc_read", {})
+        assert "doc 必填" in r[0].text
+
+    def test_doc_read_permission_denied(self, monkeypatch):
+        def boom(args, **kwargs):
+            raise ValueError("lark-cli 调用失败: 无权限查看该文档")
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", boom)
+        r = _call(feishu_fetch, "feishu_doc_read",
+                  {"doc": "https://x.feishu.cn/docx/D1"})
+        text = r[0].text
+        assert "'status': 'permission_denied'" in text
+        assert "'resource_type': 'docx'" in text
+
+
+# ══════════════════════════════════════════════════════════
+# S5 增补：feishu_base_query（多维表格记录）
+# ══════════════════════════════════════════════════════════
+
+_BASE_RESOLVE = {"ok": True, "data": {"base_token": "b1", "table_id": "t1"}}
+_BASE_RECORDS = {"ok": True, "data": {"records": [{"fields": {"名称": "A"}}]}}
+
+
+class TestBaseQuery:
+    def test_base_query_ok(self, monkeypatch):
+        calls = []
+        script = [
+            lambda a: _BASE_RESOLVE,
+            lambda a: _BASE_RECORDS,
+        ]
+        it = iter(script)
+
+        def fake(args, **kwargs):
+            calls.append(args)
+            return next(it)(args)
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", fake)
+        r = _call(feishu_fetch, "feishu_base_query",
+                  {"url": "https://x.feishu.cn/base/b1"})
+        text = r[0].text
+        assert "'ok': True" in text
+        assert "'record_count': 1" in text
+        assert calls[0][:3] == ["base", "+url-resolve", "--url"]
+        assert "--base-token" in calls[1] and "b1" in calls[1]
+        assert "--table-id" in calls[1] and "t1" in calls[1]
+
+    def test_base_query_no_base_token(self, monkeypatch):
+        monkeypatch.setattr(feishu_fetch, "_run_lark",
+                            lambda args, **kwargs: {"ok": True, "data": {}})
+        r = _call(feishu_fetch, "feishu_base_query",
+                  {"url": "https://x.feishu.cn/base/b9"})
+        assert "未返回 base_token" in r[0].text
+
+    def test_base_query_permission_denied(self, monkeypatch):
+        def boom(args, **kwargs):
+            raise ValueError("lark-cli 调用失败: permission denied")
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", boom)
+        r = _call(feishu_fetch, "feishu_base_query",
+                  {"url": "https://x.feishu.cn/base/b1"})
+        assert "'status': 'permission_denied'" in r[0].text
+        assert "'resource_type': 'base'" in r[0].text
+
+
+# ══════════════════════════════════════════════════════════
+# 链接统一解析入口：feishu_link_read（/docx/ /wiki/ /minutes/ /base/）
+# ══════════════════════════════════════════════════════════
+
+class TestLinkRead:
+    def test_docx_route(self, monkeypatch):
+        calls = []
+
+        def fake(args, **kwargs):
+            calls.append(args)
+            return _DOC_PAYLOAD
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", fake)
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://fehorizon.feishu.cn/docx/DnUwXXX"})
+        text = r[0].text
+        assert "'type': 'docx'" in text
+        assert "测试文档" in text
+        assert calls[0][0] == "docs" and "--doc-format" in calls[0]
+
+    def test_wiki_route(self, monkeypatch):
+        monkeypatch.setattr(feishu_fetch, "_run_lark",
+                            lambda args, **kwargs: _DOC_PAYLOAD)
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://x.feishu.cn/wiki/W1"})
+        assert "'type': 'wiki'" in r[0].text
+
+    def test_minutes_route(self, monkeypatch):
+        """妙记链接：路径末段提取 token（剥离 query 参数），minutes +detail --summary --keyword。"""
+        calls = []
+
+        def fake(args):
+            calls.append(args)
+            return {"ok": True, "data": {"summary": "妙记总结内容"}}
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", fake)
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://x.feishu.cn/minutes/obcn123?from=share"})
+        text = r[0].text
+        assert "'type': 'minutes'" in text
+        assert "'minute_token': 'obcn123'" in text
+        assert "妙记总结内容" in text
+        assert calls[0][0] == "minutes" and "--minute-tokens" in calls[0]
+        assert "obcn123" in calls[0]
+        assert "--summary" in calls[0] and "--keyword" in calls[0]
+
+    def test_base_route(self, monkeypatch):
+        calls = []
+        script = [lambda a: _BASE_RESOLVE, lambda a: _BASE_RECORDS]
+        it = iter(script)
+
+        def fake(args, **kwargs):
+            calls.append(args)
+            return next(it)(args)
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", fake)
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://x.feishu.cn/base/b1?table=tb1"})
+        text = r[0].text
+        assert "'type': 'base'" in text
+        assert "'record_count': 1" in text
+        assert calls[0][0] == "base" and "+url-resolve" in calls[0]
+        assert calls[1][0] == "base" and "+record-list" in calls[1]
+
+    def test_unknown_route(self, monkeypatch):
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://example.com/foo"})
+        assert "无法识别链接类型" in r[0].text
+        assert "仅支持 /docx/ /wiki/ /minutes/ /base/" in r[0].text
+
+    def test_empty_url(self, monkeypatch):
+        r = _call(feishu_fetch, "feishu_link_read", {})
+        assert "url 必填" in r[0].text
+
+    def test_minutes_permission_denied(self, monkeypatch):
+        def boom(args):
+            raise ValueError("lark-cli 调用失败: 无权限查看该妙记")
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", boom)
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://x.feishu.cn/minutes/obcn99"})
+        text = r[0].text
+        assert "'status': 'permission_denied'" in text
+        assert "'resource_type': 'minutes'" in text
+        assert "minutes +apply-permission --minute-token obcn99" in text
+
+    def test_docx_permission_denied(self, monkeypatch):
+        def boom(args, **kwargs):
+            raise ValueError("lark-cli 调用失败: forbidden")
+
+        monkeypatch.setattr(feishu_fetch, "_run_lark", boom)
+        r = _call(feishu_fetch, "feishu_link_read",
+                  {"url": "https://x.feishu.cn/docx/D1"})
+        assert "'status': 'permission_denied'" in r[0].text
+        assert "'resource_type': 'docx'" in r[0].text

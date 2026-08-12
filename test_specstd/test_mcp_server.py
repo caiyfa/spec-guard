@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 83  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）(stdio 不含 info_pack)
+        assert len(ALL_TOOLS) == 84  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack)
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -81,8 +81,8 @@ class TestToolRegistration:
                      # S5 外部锚点/禅道作业工具（3，M06 §5.3）
                      "sf_list_external_refs", "sf_register_external_ref",
                      "sf_get_zentao_job",
-                     # S5 增补：飞书文档/多维表格拉取 + 故事草案建议（对话分析建故事链路）
-                     "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
+                     # S5 增补：飞书文档/多维表格拉取 + 链接统一解析 + 故事草案建议（对话分析建故事链路）
+                     "feishu_doc_read", "feishu_base_query", "feishu_link_read", "sf_suggest_story_draft",
                      # S6 覆盖缺口查询（1，M07 §5.2）
                      "query_coverage_gaps",
                      # P-A 图谱查询（8，M11 §5.2 + M10 §5.2，T-070/T-072/T-073/T-074）

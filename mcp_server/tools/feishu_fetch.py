@@ -93,11 +93,30 @@ feishu_base_query_tool = Tool(
     },
 )
 
+feishu_link_read_tool = Tool(
+    name="feishu_link_read",
+    description="飞书链接统一解析入口：用户直接把 /docx/ /wiki/ /minutes/ /base/ 链接贴在会话中，"
+                "自动识别类型并拉取正文/摘要/记录（docs +fetch / minutes +detail / url-resolve + record-list）。"
+                "贴链接即可读，无需先取 token。纯读。",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string",
+                      "description": "飞书链接（/docx/ /wiki/ 云文档、/minutes/ 妙记、/base/ 多维表格）"},
+            "max_chars": {"type": "integer",
+                           "description": "docs 正文截断上限（默认 8000），防撑爆上下文"},
+            "limit": {"type": "integer", "description": "base 记录条数上限（默认 50）"},
+        },
+        "required": ["url"],
+    },
+)
+
 TOOLS = [
     feishu_calendar_agenda_tool,
     feishu_meeting_notes_tool,
     feishu_doc_read_tool,
     feishu_base_query_tool,
+    feishu_link_read_tool,
 ]
 
 
@@ -187,6 +206,7 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         "feishu_meeting_notes": _handle_meeting_notes,
         "feishu_doc_read": _handle_doc_read,
         "feishu_base_query": _handle_base_query,
+        "feishu_link_read": _handle_link_read,
     }
     handler = handlers.get(name)
     if not handler:
@@ -344,6 +364,11 @@ def _extract_content(payload: dict, fallback_keys=("content", "markdown", "data"
     for key in fallback_keys:
         val = payload.get(key)
         if val is not None:
+            # docs +fetch 的 data.document.content 是真正正文，去掉包裹层
+            if isinstance(val, dict):
+                inner = val.get("document") or {}
+                if isinstance(inner, dict) and inner.get("content") is not None:
+                    return str(inner["content"])
             return str(val)
     return str(payload)
 
@@ -373,6 +398,96 @@ async def _handle_doc_read(arguments: dict) -> list[TextContent]:
         "truncated": truncated,
         "content": content[:max_chars],
     }))]
+
+
+async def _handle_link_read(arguments: dict) -> list[TextContent]:
+    """飞书链接统一解析入口：按 URL 路径自动路由到对应 lark-cli 命令（纯读）。
+
+    支持：
+    - /docx/ /wiki/  → docs +fetch（云文档正文）
+    - /minutes/      → minutes +detail（妙记摘要+关键词）
+    - /base/         → base +url-resolve → +record-list（多维表格记录）
+    """
+    url = str(arguments.get("url", "")).strip()
+    if not url:
+        return [TextContent(type="text", text=str({
+            "ok": False, "error": "url 必填（/docx/ /wiki/ /minutes/ /base/ 链接）"}))]
+    path = url.split("?")[0].split("#")[0].rstrip("/")
+    try:
+        # ① 妙记链接：路径末段即 minute_token
+        if "/minutes/" in path:
+            token = path.rsplit("/", 1)[-1]
+            if not token:
+                raise ValueError("无法从链接提取 minute_token")
+            try:
+                mm = _run_lark(["minutes", "+detail", "--as", "user",
+                                "--minute-tokens", token, "--summary", "--keyword"])
+            except ValueError as e:
+                if _looks_like_permission_denied(str(e)):
+                    return [TextContent(type="text", text=str(_permission_block(
+                        resource_type="minutes", url=url, minute_token=token)))]
+                raise
+            return [TextContent(type="text", text=str({
+                "ok": True, "type": "minutes", "url": url,
+                "minute_token": token, "content": _extract_content(mm),
+            }))]
+        # ② 云文档链接：URL 原样传给 docs +fetch（lark-cli 接受 URL 或 token）
+        if "/docx/" in path or "/wiki/" in path:
+            try:
+                payload = _run_lark(["docs", "+fetch", "--as", "user",
+                                     "--doc", url, "--doc-format", "markdown"],
+                                    timeout=_DOC_FETCH_TIMEOUT)
+            except ValueError as e:
+                if _looks_like_permission_denied(str(e)):
+                    return [TextContent(type="text", text=str(_permission_block(
+                        resource_type="docx", url=url)))]
+                raise
+            content = _extract_content(payload)
+            max_chars = int(arguments.get("max_chars") or 8000)
+            return [TextContent(type="text", text=str({
+                "ok": True, "type": "docx" if "/docx/" in path else "wiki",
+                "url": url, "truncated": len(content) > max_chars,
+                "content": content[:max_chars],
+            }))]
+        # ③ 多维表格链接：url-resolve 取坐标后 record-list
+        if "/base/" in path:
+            try:
+                resolved = _run_lark(["base", "+url-resolve", "--url", url,
+                                      "--as", "user"])
+            except ValueError as e:
+                if _looks_like_permission_denied(str(e)):
+                    return [TextContent(type="text", text=str(_permission_block(
+                        resource_type="base", url=url)))]
+                raise
+            data = resolved.get("data") or resolved
+            base_token = (data.get("base_token") or "").strip()
+            if not base_token:
+                return [TextContent(type="text", text=str({
+                    "ok": False, "type": "base", "url": url,
+                    "error": "url-resolve 未返回 base_token（请确认是 /base/ 链接）",
+                    "resolved": data,
+                }))]
+            rec_args = ["base", "+record-list", "--base-token", base_token,
+                        "--limit", str(int(arguments.get("limit") or 50))]
+            table_id = (data.get("table_id") or "").strip()
+            if table_id:
+                rec_args += ["--table-id", table_id]
+            payload = _run_lark(rec_args, timeout=_DOC_FETCH_TIMEOUT)
+            records = payload.get("records") or ((payload.get("data") or {})
+                                                  .get("records") or [])
+            return [TextContent(type="text", text=str({
+                "ok": True, "type": "base", "url": url,
+                "base_token": base_token, "table_id": table_id,
+                "record_count": len(records) if isinstance(records, list) else -1,
+                "records": records,
+            }))]
+        return [TextContent(type="text", text=str({
+            "ok": False,
+            "error": "无法识别链接类型，仅支持 /docx/ /wiki/ /minutes/ /base/ 链接",
+            "url": url,
+        }))]
+    except ValueError as e:
+        return [TextContent(type="text", text=str({"ok": False, "error": str(e)}))]
 
 
 async def _handle_base_query(arguments: dict) -> list[TextContent]:

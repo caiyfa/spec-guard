@@ -84,8 +84,8 @@ _RBAC_READONLY_TOOLS = frozenset({
     "load_skill", "read_knowledge", "read_format_spec",
     # 飞书日程/会议纪要（需求面试场景材料收集用）
     "feishu_calendar_agenda", "feishu_meeting_notes",
-    # 飞书文档/多维表格拉取 + 故事草案建议（S5 增补：对话分析建故事链路）
-    "feishu_doc_read", "feishu_base_query", "sf_suggest_story_draft",
+    # 飞书文档/多维表格/链接统一解析 + 故事草案建议（S5 增补：对话分析建故事链路）
+    "feishu_doc_read", "feishu_base_query", "feishu_link_read", "sf_suggest_story_draft",
     # S8 open/ 对外开放面（L0 只读，全部 side_effect: none）
     "get_frozen_spec", "get_proposal", "query_decisions",
     "get_interview_status", "get_delta_contract",
