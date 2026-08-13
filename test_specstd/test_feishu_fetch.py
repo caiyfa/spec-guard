@@ -240,15 +240,20 @@ class TestPermissionBlock:
 # ══════════════════════════════════════════════════════════
 
 class TestRunLark:
+    """lark-cli 封装行为（T-914 起实现迁至 specflow.feishu_pool.lark_cli，
+    feishu_fetch 经 import 复用——patch 目标指向实现所在模块命名空间）。"""
+
     def test_windows_command_prefix(self, monkeypatch):
         """Windows 下经 cmd /c 执行 lark-cli.cmd（实测：直接 CreateProcess 会 FileNotFound）。"""
-        monkeypatch.setattr(feishu_fetch, "sys", type("S", (), {"platform": "win32"})())
+        from specflow.feishu_pool import lark_cli
+        monkeypatch.setattr(lark_cli, "sys", type("S", (), {"platform": "win32"})())
         cmd = feishu_fetch._lark_command()
         assert cmd[0] == "cmd" and cmd[1] == "/c"
         assert "lark-cli" in cmd[2].lower()
 
     def test_non_win_command_prefix(self, monkeypatch):
-        monkeypatch.setattr(feishu_fetch, "sys", type("S", (), {"platform": "linux"})())
+        from specflow.feishu_pool import lark_cli
+        monkeypatch.setattr(lark_cli, "sys", type("S", (), {"platform": "linux"})())
         assert feishu_fetch._lark_command() == ["lark-cli"]
 
     def test_non_json_output(self, monkeypatch):

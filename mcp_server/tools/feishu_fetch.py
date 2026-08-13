@@ -24,6 +24,10 @@ from datetime import datetime, timedelta
 
 from mcp.types import Tool, TextContent
 
+# 飞书知识图谱一期 T-914：lark-cli 子进程封装统一为 specflow.feishu_pool.lark_cli
+#（原内联实现迁移，行为不变；_PERMISSION_HINTS 为本模块特有保留）
+from specflow.feishu_pool.lark_cli import _LARK_TIMEOUT, _lark_command, _run_lark  # noqa: F401
+
 # ══════════════════════════════════════════════════════════
 # 工具定义
 # ══════════════════════════════════════════════════════════
@@ -121,56 +125,14 @@ TOOLS = [
 
 
 # ══════════════════════════════════════════════════════════
-# lark-cli 子进程封装
+# lark-cli 子进程封装：已统一迁移至 specflow.feishu_pool.lark_cli（T-914）
 # ══════════════════════════════════════════════════════════
-
-_LARK_TIMEOUT = 90  # 秒（会议链路多跳，放宽）
 
 # 无权限错误关键词（T-026 结构化引导；lark-cli 无权限返回友好错误而非静默降级）
 _PERMISSION_HINTS = (
     "无权限", "权限不足", "没有权限", "no permission", "forbidden",
     "permission denied", "denied", "无权", "申请权限",
 )
-
-
-def _lark_command() -> list[str]:
-    """返回 lark-cli 可执行命令前缀（Windows 需经 cmd /c 执行 .cmd 包装）。"""
-    if sys.platform == "win32":
-        full = shutil.which("lark-cli") or "lark-cli"
-        return ["cmd", "/c", full]
-    return ["lark-cli"]
-
-
-def _run_lark(args: list[str], timeout: int = _LARK_TIMEOUT) -> dict:
-    """执行 lark-cli 并解析 JSON 输出。
-
-    Returns:
-        解析后的响应 dict
-
-    Raises:
-        ValueError: 认证未就绪/网络失败/输出非 JSON/命令超时（确定性错误）
-    """
-    cmd = _lark_command() + args + ["--format", "json"]
-    try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace", check=False)
-    except subprocess.TimeoutExpired:
-        raise ValueError(f"lark-cli 调用超时（>{timeout}s）: {' '.join(args[:3])}")
-    except OSError as e:
-        raise ValueError(f"lark-cli 不可用: {e}（请确认已安装 npm 全局 lark-cli）")
-
-    text = (proc.stdout or "") + (proc.stderr or "")
-    # 认证未就绪（auth status ready 是调用前置）
-    if "not logged in" in text or "登录" in text and "请先" in text:
-        raise ValueError("飞书认证未就绪：请先执行 lark-cli auth login 完成 user 身份授权")
-    try:
-        payload = json.loads(proc.stdout or "{}")
-    except json.JSONDecodeError:
-        raise ValueError(f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}")
-    if not payload.get("ok"):
-        raise ValueError(f"lark-cli 调用失败: {text[:300]}")
-    return payload
 
 
 def _permission_block(resource_type: str, title: str = "",
