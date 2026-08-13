@@ -23,6 +23,7 @@ from agent.events import EventBus
 from agent.compactor import should_compact, compact
 from agent.skill_loader import build_skills_xml, match_skills_hint
 from agent.doc_read import build_doc_read
+from agent.doc_write import build_doc_write
 
 # T-602：工具模块单一注册（B1 修复——server 导出、runtime 复用，消除双写漂移；
 # runtime 侧 include_info_pack=True（workbench Agent 需要 info_pack），stdio server 刻意排除）
@@ -523,6 +524,15 @@ class AgentRuntime:
                     thinking=clean_message.get("content", ""))
                 if doc_evt is not None:
                     self.events.emit("doc_read", **doc_evt)
+                # S0.6 更新足迹：写型工具成功后补发 doc_write（与 doc_read 对称），
+                # 前端 📝 更新与产物页签汇聚；读型/查询型工具与失败结果不上足迹
+                write_evt = build_doc_write(
+                    tc.get("function", {}).get("name", ""),
+                    _parse_tc_arguments(tc),
+                    result, turn,
+                    thinking=clean_message.get("content", ""))
+                if write_evt is not None:
+                    self.events.emit("doc_write", **write_evt)
                 
                 # T-508：工具结果尾部知识 nudge（挂 T-403 统一出口）
                 if not result.startswith("[SIDE_EFFECT_VIOLATION]"):

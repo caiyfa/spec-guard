@@ -533,7 +533,7 @@ export const agentApi = {
   batchArchive: (ids: string[], archived: boolean, workspace = '') =>
     request<{ ok: boolean; processed: number; skipped: string[]; archived: boolean }>(`/agent/sessions/batch-archive${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'POST', body: JSON.stringify({ session_ids: ids, archived }) }),
   getSession: (id: string, workspace = '') =>
-    request<{ session_id: string; messages: any[]; reading_feed?: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+    request<{ session_id: string; messages: any[]; reading_feed?: any[]; writing_feed?: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>
     request<any>(`/agent/sessions/${id}/export${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   // T-402: 取消会话当前运行（真打断）
@@ -583,7 +583,6 @@ export interface ModelConfig {
   api_key: string;
   model: string;
   timeout: string;
-  temperature: string;
   max_context_tokens: string;
   max_output_tokens: string;
   thinking_enabled: string;

@@ -28,6 +28,7 @@ from agent.session import SessionManager, _validate_session_id
 from agent.runtime import AgentRuntime, build_system_prompt, resolve_tools
 from agent.purpose_loader import load_purpose, visible_purposes
 from agent.doc_read import build_doc_read
+from agent.doc_write import build_doc_write
 
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 
@@ -113,6 +114,71 @@ def rebuild_items(items: list, key_idx: dict, key: str, card: dict, evt: dict):
         key_idx.clear()
         for pos, item in enumerate(items):
             key_idx[item["key"]] = pos
+
+
+def _rebuild_writing_feed(messages: list) -> list[dict]:
+    """从消息链重建更新足迹（doc_write 事件，用于会话恢复）。
+
+    遍历 assistant 消息的 tool_calls，对写型工具调用 build_doc_write
+    生成更新卡片，同文件去重合并 hunks + 累计更新次数（模拟前端汇聚逻辑）。
+    """
+    items: list[dict] = []
+    key_idx: dict[str, int] = {}
+
+    for i, msg in enumerate(messages):
+        if msg.get("role") != "assistant":
+            continue
+        tcs = msg.get("tool_calls") or []
+        if not tcs:
+            continue
+        # 收集本轮 tool 结果
+        results = {}
+        j = i + 1
+        while j < len(messages) and messages[j].get("role") == "tool":
+            cid = messages[j].get("tool_call_id", "")
+            results[cid] = messages[j].get("content", "")
+            j += 1
+        for tc in tcs:
+            fn = tc.get("function", {})
+            args_raw = fn.get("arguments", "")
+            if isinstance(args_raw, str):
+                try:
+                    args_raw = json.loads(args_raw)
+                except (json.JSONDecodeError, TypeError):
+                    args_raw = {}
+            result_text = results.get(tc.get("id", ""), "")
+            evt = build_doc_write(fn.get("name", ""), args_raw, result_text, 0)
+            if evt is None:
+                continue
+            key = evt.get("path") or evt.get("ref") or f"{evt['tool']}:unknown"
+            card = {
+                "key": key, "tool": evt["tool"], "ref": evt.get("ref", ""),
+                "path": evt.get("path"), "turn": 0, "size": evt.get("size", 0),
+                "excerpt": evt.get("excerpt", ""), "label": evt.get("label", ""),
+                "thinking": evt.get("thinking", ""),
+                "verdict": evt.get("verdict"),
+                "hunks": evt.get("hunks", []), "writes": 1,
+            }
+            if key in key_idx:
+                old = items[key_idx[key]]
+                old["writes"] += 1
+                old["verdict"] = evt.get("verdict") or old.get("verdict")
+                old["excerpt"] = evt.get("excerpt") or old.get("excerpt")
+                old["label"] = evt.get("label") or old.get("label")
+                old["thinking"] = evt.get("thinking") or old.get("thinking")
+                seen = {(h["start"], h["end"], h["title"]) for h in old.get("hunks", [])}
+                for h in evt.get("hunks", []):
+                    if (h["start"], h["end"], h["title"]) not in seen:
+                        old["hunks"].append(h)
+                items.pop(key_idx[key])
+                items.insert(0, old)
+            else:
+                items.insert(0, card)
+            key_idx.clear()
+            for pos, item in enumerate(items):
+                key_idx[item["key"]] = pos
+
+    return items
 
 
 def _build_scenario_context(scenario_id: str) -> str:
@@ -488,17 +554,19 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
         messages = sm.load(session_id)
         if messages is not None:
             reading_feed = _rebuild_reading_feed(messages)
+            writing_feed = _rebuild_writing_feed(messages)
             return {"session_id": session_id, "messages": messages,
-                    "reading_feed": reading_feed, "owner": d.name,
-                    "workspace": workspace}
+                    "reading_feed": reading_feed, "writing_feed": writing_feed,
+                    "owner": d.name, "workspace": workspace}
         # 如果指定工作区未找到，也尝试无工作区（兼容旧会话）
         if workspace:
             sm2 = SessionManager(d)
             messages = sm2.load(session_id)
             if messages is not None:
                 return {"session_id": session_id, "messages": messages,
-                        "reading_feed": reading_feed, "owner": d.name,
-                        "workspace": ""}
+                        "reading_feed": _rebuild_reading_feed(messages),
+                        "writing_feed": _rebuild_writing_feed(messages),
+                        "owner": d.name, "workspace": ""}
     raise HTTPException(status_code=404, detail="会话不存在")
 
 
