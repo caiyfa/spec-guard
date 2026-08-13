@@ -769,23 +769,8 @@ def _resolve_git_workspace(name: Optional[str] = None) -> tuple[Optional[Workspa
     return info, path
 
 
-def git_log(name: Optional[str] = None, limit: int = 50) -> dict:
-    """获取 git 工作区的提交历史（含每个 commit 的变更文件）。
-
-    返回 {ok, workspace, branch, url, commits, local_head, error?}
-    commits: [{sha, short_sha, author, email, date, parents, message,
-               files: [{status: A|M|D|R, path}]}]
-    """
-    info, path = _resolve_git_workspace(name)
-    if info is None:
-        return {"ok": False, "error": "工作区不存在或不是 git 型"}
-    limit = max(1, min(int(limit or 50), 200))
-    fmt = "%x1e%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%P%x1f%s"
-    rc, out = _git_run(["git", "log", "-n", str(limit), "--name-status",
-                        f"--pretty=format:{fmt}"], path)
-    if rc != 0:
-        return {"ok": False, "error": f"git log 失败: {path}"}
-
+def _parse_git_log(out: str) -> list[dict]:
+    """解析 git log --name-status 输出为 commits 列表（git_log 复用）。"""
     commits = []
     for record in out.split("\x1e"):
         record = record.strip("\n")
@@ -813,6 +798,47 @@ def git_log(name: Optional[str] = None, limit: int = 50) -> dict:
             "sha": sha, "short_sha": short_sha, "author": author, "email": email,
             "date": date, "parents": parents, "message": message, "files": files,
         })
+    return commits
+
+
+def git_log(name: Optional[str] = None, limit: int = 50) -> dict:
+    """获取 git 工作区的提交历史（含每个 commit 的变更文件）。
+
+    返回 {ok, workspace, branch, url, commits, local_head, error?,
+          ahead, behind, unpushed}
+    commits: [{sha, short_sha, author, email, date, parents, message,
+               files: [{status: A|M|D|R, path}]}]
+    unpushed: 未推送提交列表（@{u}..HEAD，与 commits 同构）——分叉状态下
+              remote_head 不在本地历史中，不能用 remote_head 比较判断未推送。
+    ahead/behind: 相对上游分支的领先/落后提交数。
+    """
+    info, path = _resolve_git_workspace(name)
+    if info is None:
+        return {"ok": False, "error": "工作区不存在或不是 git 型"}
+    limit = max(1, min(int(limit or 50), 200))
+    fmt = "%x1e%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%P%x1f%s"
+    rc, out = _git_run(["git", "log", "-n", str(limit), "--name-status",
+                        f"--pretty=format:{fmt}"], path)
+    if rc != 0:
+        return {"ok": False, "error": f"git log 失败: {path}"}
+
+    commits = _parse_git_log(out)
+
+    # ahead/behind 与未推送提交（相对上游分支 @{u}）
+    ahead = behind = 0
+    unpushed: list[dict] = []
+    rc, ab_out = _git_run(
+        ["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"], path)
+    if rc == 0 and ab_out.strip():
+        parts = ab_out.split()
+        if len(parts) >= 2:
+            ahead, behind = int(parts[0]), int(parts[1])
+    if ahead > 0:
+        rc, u_out = _git_run(
+            ["git", "log", "-n", str(min(ahead, limit)), "--name-status",
+             f"--pretty=format:{fmt}", "@{u}..HEAD"], path)
+        if rc == 0:
+            unpushed = _parse_git_log(u_out)
 
     return {
         "ok": True,
@@ -821,6 +847,9 @@ def git_log(name: Optional[str] = None, limit: int = 50) -> dict:
         "url": info.source_url,
         "commits": commits,
         "local_head": _git_rev_parse(path),
+        "ahead": ahead,
+        "behind": behind,
+        "unpushed": unpushed,
     }
 
 

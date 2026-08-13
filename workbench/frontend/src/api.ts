@@ -516,6 +516,9 @@ export interface GitLogResponse {
   remote_head: string;
   synced: boolean;
   error?: string;
+  ahead?: number;      // 相对上游分支领先提交数（待推送）
+  behind?: number;     // 相对上游分支落后提交数（待拉取）
+  unpushed?: GitCommit[];  // 未推送提交列表（@{u}..HEAD，分叉状态下可靠）
 }
 
 // ── Agent 对话 ──

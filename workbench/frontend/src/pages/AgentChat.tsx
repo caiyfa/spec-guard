@@ -1196,13 +1196,10 @@ function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // 未推送提交：remote_head 出现在本地历史中的位置之前的都是未推送
-  const unpushed = useMemo(() => {
-    if (!data) return [];
-    const idx = data.commits.findIndex(c => data.remote_head && c.sha.startsWith(data.remote_head));
-    return idx >= 0 ? data.commits.slice(0, idx) : data.commits;
-  }, [data]);
-  const diverged = data ? (data.remote_head && !data.commits.some(c => c.sha.startsWith(data.remote_head))) : false;
+  // 未推送提交：后端 git_log 直接返回（@{u}..HEAD 差集，分叉状态下可靠）
+  const unpushed = data?.unpushed || [];
+  const ahead = data?.ahead || 0;
+  const behind = data?.behind || 0;
 
   const doPush = async () => {
     setPushing(true);
@@ -1257,8 +1254,8 @@ function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
           <span className="ml-1.5 text-[10px] text-green-400">✅ 已全部同步</span>
         ) : (
           <span className="ml-1.5 text-[10px] text-warn">
-            {unpushed.length > 0 ? `⬆ ${unpushed.length} 待推送` : ''}
-            {diverged ? ' · ⚠️ 远端分叉（推送前自动 rebase）' : ''}
+            {ahead > 0 ? `⬆ ${ahead} 待推送` : ''}
+            {behind > 0 ? ` · ⬇ ${behind} 待拉取（推送前自动 rebase）` : ''}
           </span>
         )}
       </div>
