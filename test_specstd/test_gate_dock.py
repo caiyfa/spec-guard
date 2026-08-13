@@ -327,3 +327,67 @@ class TestGateDockCards:
         r2 = client.get(url, headers=headers)
         assert r1.status_code == r2.status_code == 200
         assert r1.json() == r2.json()
+
+
+# ══════════════════════════════════════════════════════════
+# 二期（T-901）：gate_dock_status MCP 工具（纯读，side_effect 默认 none）
+# ══════════════════════════════════════════════════════════
+
+def _call_mcp(name, arguments):
+    import asyncio
+    import json as _json
+    from mcp_server.tools import gate_dock
+    result = asyncio.run(gate_dock.handle(name, arguments))
+    return _json.loads(result[0].text)
+
+
+class TestGateDockMcp:
+    """MCP 层：会话上下文反查 + 卡片 JSON 输出（供 Agent 推卡）。"""
+
+    def test_unknown_tool(self, client):
+        import asyncio
+        from mcp_server.tools import gate_dock
+        with pytest.raises(ValueError):
+            asyncio.run(gate_dock.handle("bogus_tool", {}))
+
+    def test_session_reverse_lookup(self, client):
+        """_session_id（runtime 注入）反查绑定面试，返回待办卡片。"""
+        from specstd.workspace import set_context_workspace
+        set_context_workspace("tdm")
+        iv_id = _open_interview(session_id="SESS-MCP")
+        m = _mk_material(iv_id, status="parsed")
+        r = _call_mcp("gate_dock_status", {"_session_id": "SESS-MCP"})
+        assert r["ok"] is True
+        assert r["interview"]["iv_id"] == iv_id
+        assert any(c["kind"] == "material_include" for c in r["cards"])
+
+    def test_unbound_session_empty(self, client):
+        """未绑定面试 → ok + 空卡片 + hint（诚实空态）。"""
+        from specstd.workspace import set_context_workspace
+        set_context_workspace("tdm")
+        r = _call_mcp("gate_dock_status", {"_session_id": "SESS-NONE"})
+        assert r["ok"] is True
+        assert r["interview"] is None
+        assert r["cards"] == []
+        assert r["hint"]
+
+    def test_explicit_interview_id(self, client):
+        """显式 interview_id 优先于 session 反查。"""
+        from specstd.workspace import set_context_workspace
+        set_context_workspace("tdm")
+        iv_id = _open_interview()
+        r = _call_mcp("gate_dock_status", {"interview_id": iv_id})
+        assert r["ok"] is True
+        assert r["interview"]["iv_id"] == iv_id
+
+    def test_interview_not_found(self, client):
+        from specstd.workspace import set_context_workspace
+        set_context_workspace("tdm")
+        r = _call_mcp("gate_dock_status", {"interview_id": "IV-999"})
+        assert r["ok"] is False
+        assert "不存在" in r["error"]
+
+    def test_side_effect_default_none(self, client):
+        """未在 _KNOWN_WRITERS 声明 → 默认 none（纯读）分级。"""
+        from mcp_server.tools.side_effect_registry import get_side_effect
+        assert get_side_effect("gate_dock_status") == "none"

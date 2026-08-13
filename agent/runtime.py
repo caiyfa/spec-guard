@@ -81,6 +81,8 @@ _RBAC_READONLY_TOOLS = frozenset({
     "material_extract_topics", "pack_freshness_check",
     # info_pack 工具
     "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
+    # GateDock 对话操作台状态查询（T-901，纯读）
+    "gate_dock_status",
     # T-507/T-508 知识层（只读：技能正文/知识正文/格式规范章节按需取）
     "load_skill", "read_knowledge", "read_format_spec",
     # 飞书日程/会议纪要（需求面试场景材料收集用）
@@ -759,6 +761,10 @@ class AgentRuntime:
         pre_fp = ""
         if is_pure_read(name):
             pre_fp = self._take_snapshot_fingerprint()
+
+        # T-901（GateDock 二期）：注入会话上下文特权参数——下划线前缀，
+        # LLM 入参同名键被覆盖（防伪造）；不需要的工具直接忽略该键。
+        arguments = {**arguments, "_session_id": self._session_id or ""}
 
         try:
             result = asyncio.run(mod.handle(name, arguments))

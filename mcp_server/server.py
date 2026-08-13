@@ -44,6 +44,7 @@ from mcp_server.tools import (  # noqa: E402
     lark_run,
     delta_doc_writer,
     spec_search,
+    gate_dock,
 )
 from mcp_server.tools.open import (  # noqa: E402  S8 对外开放面（T-083/T-085，L0 只读）
     specflow_refs as open_specflow_refs,
@@ -88,6 +89,8 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         lark_run,
         delta_doc_writer,
         spec_search,
+        # GateDock 对话操作台状态查询（T-901，纯读）
+        gate_dock,
         # S8 对外开放面（T-083/T-085）：L0 五模块，全部 side_effect: none
         open_specflow_refs,
         open_quality_query,

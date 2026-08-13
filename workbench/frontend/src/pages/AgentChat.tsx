@@ -21,6 +21,7 @@ import type { DocHunk } from '../components/FileViewer';
 import ReadingPanel from '../components/ReadingPanel';
 import type { DocReadItem } from '../components/ReadingPanel';
 import GateDockPanel from './GateDockPanel';
+import GateCardView, { GateExecCard } from '../components/GateCardView';
 
 interface ChatReference {
   type: 'info_pack' | 'file' | 'draft';
@@ -136,6 +137,13 @@ interface ArtifactCtxValue {
 }
 const ArtifactCtx = createContext<ArtifactCtxValue | null>(null);
 
+// GateDock 二期/三期：对话流内嵌闸门卡片的交互回调（帮我按钮 = L1 引导直发对话）
+interface GateDockCtxValue {
+  onAskAgent: (card: GateCard) => void;
+  onError: (msg: string) => void;
+}
+const GateDockCtx = createContext<GateDockCtxValue | null>(null);
+
 const fmtSize = (n?: number) => n === undefined ? '' : n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} B`;
 
 /** md 文本首个标题（产物卡片主标题用） */
@@ -241,10 +249,28 @@ function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
 // ── pre 渲染：大段 markdown 代码块 → 产物卡片（language-markdown/md 且 ≥8 非空行）；其余保持源码框 ──
 function PreBlock({ children }: { children?: ReactNode }) {
   const ctx = useContext(ArtifactCtx);
+  const gateCtx = useContext(GateDockCtx);
   const codeEl = isValidElement(children) ? children as React.ReactElement<{ className?: string; children?: ReactNode }> : null;
   const cls = codeEl?.props?.className || '';
   const raw = codeEl ? codeEl.props.children : children;
   const text = Array.isArray(raw) ? raw.join('') : String(raw ?? '');
+  // GateDock 二期：```gate-card 围栏 → 渲染闸门操作卡（与操作台页签同一组件）
+  if (/language-gate-card(\s|$)/.test(cls)) {
+    try {
+      const card = JSON.parse(text) as GateCard;
+      return (
+        <div className="my-2.5">
+          <GateCardView card={card} onAskAgent={gateCtx?.onAskAgent} onError={gateCtx?.onError} />
+        </div>
+      );
+    } catch {
+      return <pre className="text-[11px] bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-red-400 whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
+    }
+  }
+  // GateDock 三期：```gate-exec 围栏 → 代执行确认卡（白名单硬编码，人确认才执行）
+  if (/language-gate-exec(\s|$)/.test(cls)) {
+    return <div className="my-2.5"><GateExecCard text={text} /></div>;
+  }
   if (ctx && /language-(markdown|md)(\s|$)/.test(cls)) {
     const lines = text.split('\n').filter(l => l.trim()).length;
     if (lines >= 8) {
@@ -3695,6 +3721,7 @@ export default function AgentChat() {
               onJump={handleJumpToUser}
             />
             <div ref={msgBoxRef} className="flex-1 overflow-y-auto px-4 py-3">
+              <GateDockCtx.Provider value={{ onAskAgent: askAgentGuide, onError: setError }}>
               <ArtifactCtx.Provider value={artifactCtxValue}>
               {grouped.length === 0 && !loading && (
                 showPurposePicker && purposes.length > 0 ? (
@@ -3728,6 +3755,7 @@ export default function AgentChat() {
                 </div>
               )}
               </ArtifactCtx.Provider>
+</GateDockCtx.Provider>
               <div ref={messagesEndRef} />
             </div>
           </div>

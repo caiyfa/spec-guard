@@ -1,7 +1,9 @@
 # SpecGuard Vision · 开发总控文档
 
 > **本文档是所有开发会话的唯一协调中心。任何开发会话开工前必须完整阅读 §1-§4，并按 §3 协议注册会话、认领任务、登记文件变更。**
-> 版本：v1.23 · 2026-08-13 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+> 版本：v1.24 · 2026-08-13 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+>
+> **v1.24 决策（2026-08-13，sess-gatedock-dev，总控人指令）**：§4.8 GateDock 二期（T-901）+ 三期（T-902）全量交付——① MCP 只读工具 `gate_dock_status`（runtime 注入 `_session_id` 特权参数，RBAC 分级纯读）+ 前端 `gate-card`/`gate-exec` 围栏渲染（AgentChat 消息流内嵌可操作卡片，复用 GateCardView 组件）+ skills 推卡话术（gate-dock-guide.md，L1/L2/L3 分档接管）；② L3 代执行白名单硬编码（material_include/material_exclude/topic_confirm 三可逆低危 action），GateExecCard 用户确认才执行，白名单外确定性拒绝；③ 测试 MCP 6 例 + 全量 1399 全绿 + 前端 build + release_check PASS。
 >
 > **v1.23 决策（2026-08-13，sess-gatedock-dev，总控人指令）**：① **历史归档瘦身**——v1.1~v1.22 决策记录、打磨期（§4.1 四轮）、升级期已完成任务（S0~S8 主线/P-A 支路/引擎补点/知识体系/瘦身块）、历史会话注册与文件登记留痕，归档至《历史区/SpecGuard-总控文档-归档-2026-08-13.md》；总控文档仅保留活跃任务（进行中/未认领/储备）+ §6 登记中行与各文件最新基准行；② **新增 §4.8「对话操作台 GateDock」支线**（T-900~T-902，依据《远期设计/SpecGuard-对话操作台设计-GateDock.md》）：T-900 一期 ✅ 已完成（本会话交付，commit 23a4c60），T-901/T-902 未认领、与全部主线并行。
 >
@@ -147,7 +149,7 @@ flowchart LR
 
 > 状态值：`未认领` / `进行中` / `已完成` / `阻塞`（阻塞须在备注写原因）
 > 表行格式固定，只允许更新「状态/会话ID/备注」三列；新增任务由总控人追加。
-> 分区：**§4.1 打磨期**（✅ 归档）｜**§4.2 远期升级期**（已完成归档，储备保留）｜**§4.3 引擎演进补点**（储备）｜**§4.4 知识体系**（✅ 归档）｜**§4.5 瘦身任务块**（✅ 归档）｜**§4.6 飞书 CLI 集成**（进行中）｜**§4.7 规模化升级**（触发制）｜**§4.8 对话操作台 GateDock**（v1.23 新增，可认领）。
+> 分区：**§4.1 打磨期**（✅ 归档）｜**§4.2 远期升级期**（已完成归档，储备保留）｜**§4.3 引擎演进补点**（储备）｜**§4.4 知识体系**（✅ 归档）｜**§4.5 瘦身任务块**（✅ 归档）｜**§4.6 飞书 CLI 集成**（进行中）｜**§4.7 规模化升级**（触发制）｜**§4.8 对话操作台 GateDock**（✅ T-900~T-902 全完成）。
 > **已完成任务明细（含验收备注/修复记录）统一见归档文件**：`docs/历史区/SpecGuard-总控文档-归档-2026-08-13.md`。
 
 ### 4.1 打磨期（P0，✅ 2026-08-07 结束，已归档）
@@ -215,8 +217,8 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
 | T-900 | GD-一期 | 操作台页签 + 只读汇总端点 + 分档卡片 | workbench 前后端（gate_dock_service / specflow_gate_dock / GateDockPanel / AgentChat SidePanel） | gate-dock 纯读汇总（session_id 经 sf_interviews 反查面试上下文）+ 五类卡片（议题确认/材料入包/评分确认/冻结三闸/禅道建故事）人拍板按钮直调原有 REST + 「🤖 帮我」L1 引导；菜单三面板零回退；测试 11 例 + release_check PASS | — | 已完成 | sess-gatedock-dev | P0 ✅ 2026-08-13（commit 23a4c60）：GET /api/specflow/gate-dock（纯读零写副作用，session_id/interview_id 双入参，未绑定面试返回空态）+ GateDockPanel（L3 档可逆卡绿色标签、L2 档人拍板黄色标签）+ AgentChat 操作台页签 + askAgentGuide（复用 askAgentFix 直发模式）；test_gate_dock.py 11 例全绿 + 63 回归 + 前端 build + release_check 全 PASS |
-| T-901 | GD-二期 | 对话流主动推卡 + L2 参数预填 | AgentChat（assistant 消息 card payload）+ agent/skills + gate-dock 复用 | assistant 消息支持 card payload 渲染 GateCard（references 机制同类扩展先例）；Agent 在状态迁移节点主动推卡（材料解析完→议题确认卡；议题确认毕→入包卡；评分产出→确认卡；三闸全过→冻结卡；delta 冻结→建故事卡；BUG resolved→回归建议卡）；同节点同对象幂等不重复推；L2 预填（故事标题/BUG 严重度/复现步骤）人检查后点确认；各闸门引导话术进 skills | T-900 | 未认领 | | P1｜与全部主线并行；推卡时机表见设计文档 §6 |
-| T-902 | GD-三期 | L3 白名单代执行 | GateDockPanel + 前端用户身份调原 REST | 白名单硬编码前端常量（材料入包/移出、议题确认，均可逆低危）；Agent 代执行经用户对话确认后以前端用户身份调原有 REST（RBAC 兜底、不绕三道闸），对话内回显结果；评分/冻结/禅道写**永远停 L2**，不在本期范围 | T-901 | 未认领 | | P2｜白名单扩缩需评审（比照引擎冻结层语义变更流程） |
+| T-901 | GD-二期 | 对话流主动推卡 + L2 参数预填 | AgentChat（gate-card 围栏渲染）+ mcp_server/tools/gate_dock + agent/runtime + agent/skills | MCP 只读工具 `gate_dock_status`（runtime 注入 `_session_id` 特权参数，RBAC 纯读分级）+ 前端 `language-gate-card` 围栏拦截渲染（复用 GateCardView 组件，操作台与消息内嵌共用）+ skills 推卡话术（gate-dock-guide.md，推卡时机表 + L1/L2 分档接管）+ requirement_interview 白名单加 gate_dock_status | T-900 | 已完成 | sess-gatedock-dev | P1 ✅ 2026-08-13：gate_dock_status MCP 工具（纯读零写副作用，side_effect 默认 none）+ runtime._execute_tool 注入 `_session_id`（下划线前缀防伪造）+ _RBAC_READONLY_TOOLS 加 gate_dock_status + server.py 注册 + AgentChat PreBlock gate-card 围栏拦截（GateDockCtx Provider）+ GateCardView 抽组件（GateDockPanel 瘦容器复用）+ gate-dock-guide.md skills（推卡时机表 + 围栏格式 + 分档话术）；test_gate_dock MCP 6 例 + 全量 1399 全绿 + 前端 build + release_check PASS |
+| T-902 | GD-三期 | L3 白名单代执行 | GateCardView（GateExecCard）+ AgentChat gate-exec 围栏 | 白名单硬编码前端常量 `GATE_EXEC_ACTIONS`（material_include/material_exclude/topic_confirm，均可逆低危）+ `language-gate-exec` 围栏渲染 GateExecCard（确认/忽略双按钮，用户点「确认执行」才以用户身份调原 REST，RBAC 兜底）；白名单外 action 确定性拒绝（黄框提示）；评分/冻结/禅道写**永远停 L2** | T-901 | 已完成 | sess-gatedock-dev | P2 ✅ 2026-08-13：GateExecCard 组件（白名单校验→确认卡→执行→结果回显）+ GATE_EXEC_ACTIONS 三 action 硬编码（扩缩需评审）+ AgentChat PreBlock gate-exec 围栏拦截；白名单外 action 黄框拦截提示；与 T-901 共用同一前端 build + 测试 + release_check 验证批次 |
 
 ---
 
@@ -225,7 +227,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | 会话ID | 角色/方向 | 认领任务ID | 开工时间 | 备注 |
 |---|---|---|---|---|
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
-| sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23 归档编排 | T-900 + 归档瘦身 + T-901/T-902 登记 | 2026-08-13 | T-900 一期完成（11 测试全绿 + release_check PASS，commit 23a4c60）；总控归档瘦身（709 行 → 约 400 行，v1.1~v1.22 决策与已完成任务入历史区） |
+| sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23/v1.24 归档编排 | T-900 + T-901 + T-902 + 归档瘦身 | 2026-08-13 | T-900 一期 ✅（commit 23a4c60）→ T-901 二期 ✅ + T-902 三期 ✅（MCP 工具 + 围栏渲染 + 白名单代执行 + skills 话术）；总控 v1.23 归档瘦身 + v1.24 二三期完成收口 |
 | | | | | |
 
 ---
@@ -385,8 +387,19 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_open_surface.py | sess-s8-dev | 2026-08-11 | c52c7bf574b2 | b326770ae3ea | 已完成 | 验收修复：open 注册断言 16→15 + 新增 read_run_report 不重复注册断言 |
 | test_specstd/test_mcp_server.py | sess-s8-dev | 2026-08-11 | 25c97e028453 | 366756de0725 | 已完成 | 验收修复：工具数 84→83（read_run_report 去重） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-s8-dev | 2026-08-11 | 52bc0e4a082d | 5cd365e9b502 | 已完成 | v1.22 自身登记（补二）：全量验收修复登记——read_run_report 去重 + lark 分级 draft；修改后hash = 登记中形态指纹 5cd365e9b502（v1.3 约定） |
-| docs/远期设计/SpecGuard-总控文档.md | sess-gatedock-dev | 2026-08-13 | 252391d90885 | 29b6ad154684 | 已完成 | v1.23 自身登记：历史归档瘦身（版本决策/§4.1/§4.2 已完成/§4.3 完成行/§4.4/§4.5/§5 历史/§6 历史入归档文件）+ §4.8 GateDock 支线（T-900 ✅ / T-901 / T-902）+ §5 注册；修改后hash 按 v1.3 约定 = 本字段留空 + 状态=登记中、其余全文终态时的指纹 29b6ad154684 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-gatedock-dev | 2026-08-13 | 252391d90885 | 29b6ad154684 | 已完成 | v1.23 自身登记：历史归档瘦身（版本决策/§4.1/§4.2 已完成/§4.3 完成行/§4.4/§4.5/§5 历史/§6 历史入归档文件）+ §4.8 GateDock 支线（T-900 ✅ / T-901 / T-902）+ §5 注册；修改后hash 29b6ad154684 |
 | docs/历史区/SpecGuard-总控文档-归档-2026-08-13.md | sess-gatedock-dev | 2026-08-13 | NEW | 3d69155ce15f | 已完成 | v1.23：归档文件落盘 |
+| mcp_server/tools/gate_dock.py | sess-gatedock-dev | 2026-08-13 | NEW | 976fcd933520 | 已完成 | T-901：gate_dock_status MCP 只读工具（_session_id 特权参数 + interview_id 可选，纯读零写副作用，side_effect 默认 none） |
+| agent/skills/gate-dock-guide.md | sess-gatedock-dev | 2026-08-13 | NEW | 095feb02c8bb | 已完成 | T-901：推卡时机表 + gate-card/gate-exec 围栏格式 + L1/L2/L3 分档接管话术 + 白名单约束 |
+| workbench/frontend/src/components/GateCardView.tsx | sess-gatedock-dev | 2026-08-13 | NEW | 041b7680f51d | 已完成 | T-901/T-902：GateCardView 单卡渲染（操作台与消息内嵌共用）+ GateExecCard 三期确认卡 + GATE_EXEC_ACTIONS 白名单 |
+| agent/runtime.py | sess-gatedock-dev | 2026-08-13 | — | 2420441bc0e2 | 已完成 | T-901：_RBAC_READONLY_TOOLS 加 gate_dock_status + _execute_tool 注入 _session_id 特权参数 |
+| mcp_server/server.py | sess-gatedock-dev | 2026-08-13 | — | 09b16feaeb4c | 已完成 | T-901：import gate_dock + mods 列表注册（工具数 89→90） |
+| agent/purposes/requirement_interview.md | sess-gatedock-dev | 2026-08-13 | — | f9d25c7b4375 | 已完成 | T-901：tools 白名单加 gate_dock_status |
+| workbench/frontend/src/pages/GateDockPanel.tsx | sess-gatedock-dev | 2026-08-13 | — | f89a4352cc47 | 已完成 | T-901：瘦容器重写（复用 GateCardView，251→77 行） |
+| workbench/frontend/src/pages/AgentChat.tsx | sess-gatedock-dev | 2026-08-13 | — | be39793869bc | 已完成 | T-901/T-902：GateDockCtx Provider + PreBlock gate-card/gate-exec 围栏拦截 |
+| test_specstd/test_gate_dock.py | sess-gatedock-dev | 2026-08-13 | — | cb512a5b0e80 | 已完成 | T-901：追加 TestGateDockMcp 6 例（会话反查/空态/显式 ID/未找到/纯读分级） |
+| test_specstd/test_mcp_server.py | sess-gatedock-dev | 2026-08-13 | — | 317c13bc9141 | 已完成 | T-901：工具注册断言 89→90 + gate_dock_status 加入 expected 集合 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-gatedock-dev | 2026-08-13 | 29b6ad154684 | 52e1245a26e4 | 已完成 | v1.24 自身登记：T-901/T-902 已完成收口 + §5 更新 + §6 新增 10 文件登记 |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

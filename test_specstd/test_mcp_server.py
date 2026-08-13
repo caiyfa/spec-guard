@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 89  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）
+        assert len(ALL_TOOLS) == 90  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）+ gate_dock_status 1（T-901 GateDock 对话操作台，纯读）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -111,6 +111,8 @@ class TestToolRegistration:
                      "search_spec_files", "parse_fr_id",
                      # S0.6 git 推送（1：分支级推送远端）
                      "push_delta",
+                     # T-901 GateDock 对话操作台状态查询（1，纯读）
+                     "gate_dock_status",
                      }
         assert names == expected
 
