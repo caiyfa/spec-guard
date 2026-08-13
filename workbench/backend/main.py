@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge
 from services.auth import get_current_user
 from services import user_store
 
@@ -140,6 +140,7 @@ app.include_router(specflow_interview.router, dependencies=[Depends(get_current_
 app.include_router(specflow_decisions.router, dependencies=[Depends(get_current_user)])
 app.include_router(specflow_materials.router, dependencies=[Depends(get_current_user)])
 app.include_router(specflow_freeze.router, dependencies=[Depends(get_current_user)])
+app.include_router(specflow_gate_dock.router, dependencies=[Depends(get_current_user)])
 app.include_router(zentao.router, dependencies=[Depends(get_current_user)])
 app.include_router(coverage.router, dependencies=[Depends(get_current_user)])
 app.include_router(data_fab.router, dependencies=[Depends(get_current_user)])

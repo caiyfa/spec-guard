@@ -408,6 +408,22 @@ export const specApi = {
     request<{ ok: boolean; output?: string; error?: string; note?: string; ahead?: number; commits?: string[] }>('/spec/push', { method: 'POST' }),
 };
 
+// ── rebase 中断界面化恢复 ──
+export const rebaseApi = {
+  status: () =>
+    request<{ ok: boolean; in_progress: boolean; state: string; onto: string; conflicts: { path: string; segments: number }[] }>('/spec/rebase/status'),
+  conflict: (path: string) =>
+    request<{ ok: boolean; path: string; segments: { ours: string; theirs: string }[] }>(`/spec/rebase/conflict?path=${encodeURIComponent(path)}`),
+  resolve: (path: string, resolution: 'ours' | 'theirs' | 'smart' | 'custom', mergedContent = '') =>
+    request<{ ok: boolean; path: string; resolution: string; remaining: string[] }>('/spec/rebase/resolve', {
+      method: 'POST', body: JSON.stringify({ path, resolution, merged_content: mergedContent }),
+    }),
+  abort: () =>
+    request<{ ok: boolean; note?: string }>('/spec/rebase/abort', { method: 'POST' }),
+  continue: () =>
+    request<{ ok: boolean; note?: string; output?: string }>('/spec/rebase/continue', { method: 'POST' }),
+};
+
 // ── 参考信息（编辑器快速引用） ──
 export interface StepRef { type: string; desc: string; snippet: string; params: { name: string; required: boolean; desc: string }[] }
 export interface OracleRef { name: string; desc: string; snippet: string }
@@ -1151,6 +1167,21 @@ export interface GateState {
   errors?: string[];
 }
 
+// ── 对话操作台（GateDock 一期：只读汇总；操作仍走原有 REST 人拍板）──
+export interface GateCard {
+  kind: 'topic_confirm' | 'material_include' | 'score_confirm' | 'freeze_gates' | 'zentao_story';
+  level: 'L1' | 'L2' | 'L3';  // 分档接管：L2 永远人拍板；L3 可逆低危可代执行
+  title: string;
+  summary: string;
+  ref_id: string;
+  payload: any;
+}
+
+export interface GateDockResp {
+  interview: { iv_id: string; title: string; status: string; target_delta?: string } | null;
+  cards: GateCard[];
+}
+
 export const specflowApi = {
   // 面试列表（下拉数据源）
   listInterviews: (status = '') =>
@@ -1170,6 +1201,13 @@ export const specflowApi = {
     request<{ pack: any }>(`/specflow/interviews/${iv_id}/pack`),
   reassemblePack: (iv_id: string) =>
     request<{ pack: any }>(`/specflow/interviews/${iv_id}/pack/reassemble`, { method: 'POST' }),
+  // 对话操作台汇总（GateDock 一期，纯读）：按会话/面试聚合待办闸门卡片
+  gateDock: (params: { session_id?: string; interview_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params.session_id) q.set('session_id', params.session_id);
+    if (params.interview_id) q.set('interview_id', params.interview_id);
+    return request<GateDockResp>(`/specflow/gate-dock?${q.toString()}`);
+  },
   // 评分（T-059）
   listScores: (iv_id: string) =>
     request<{ scores: ScoreItem[] }>(`/specflow/decisions/scores?interview_id=${encodeURIComponent(iv_id)}`),
