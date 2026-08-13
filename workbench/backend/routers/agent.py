@@ -157,12 +157,14 @@ def _rebuild_writing_feed(messages: list) -> list[dict]:
                 "excerpt": evt.get("excerpt", ""), "label": evt.get("label", ""),
                 "thinking": evt.get("thinking", ""),
                 "verdict": evt.get("verdict"),
+                "findings": evt.get("findings", []),
                 "hunks": evt.get("hunks", []), "writes": 1,
             }
             if key in key_idx:
                 old = items[key_idx[key]]
                 old["writes"] += 1
                 old["verdict"] = evt.get("verdict") or old.get("verdict")
+                old["findings"] = evt.get("findings") or old.get("findings", [])
                 old["excerpt"] = evt.get("excerpt") or old.get("excerpt")
                 old["label"] = evt.get("label") or old.get("label")
                 old["thinking"] = evt.get("thinking") or old.get("thinking")

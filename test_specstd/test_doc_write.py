@@ -61,7 +61,9 @@ class TestBuildDocWrite:
         result = json.dumps({
             "ok": True, "path": "changes/0817/delta-spec.md", "backup": True,
             "size": 100,
-            "validation": {"verdict": "REJECT", "findings": [{"level": "ERROR"}]},
+            "validation": {"verdict": "REJECT", "findings": [
+                {"level": "ERROR", "rule": "STRUCT",
+                 "message": "delta '0817' 缺少必备文件: proposal.md"}]},
         }, ensure_ascii=False)
         evt = build_doc_write(
             "write_delta_doc",
@@ -74,6 +76,9 @@ class TestBuildDocWrite:
         assert evt["path"] == "changes/0817/delta-spec.md"
         assert evt["turn"] == 3
         assert evt["verdict"] == "REJECT"
+        # 失败原因与 verdict 同源提取（Agent 据此定位修复）
+        assert evt["findings"] == [{"level": "ERROR", "rule": "STRUCT",
+                                    "message": "delta '0817' 缺少必备文件: proposal.md"}]
         assert evt["label"] == "更新 delta-spec.md（delta 0817）"
         assert evt["thinking"] == "替换 FR 编号为 FR-0817-xxx"
         assert evt["excerpt"] == "# 变更\n行2\n行3"  # 写后内容头部
@@ -91,6 +96,28 @@ class TestBuildDocWrite:
                               {"delta_id": "x", "filename": "a.md", "content": "c"},
                               result, turn=1)
         assert evt["verdict"] == "PASS"
+        assert evt["findings"] == []  # PASS 无失败原因
+
+    def test_findings_capped_and_truncated(self):
+        """失败原因上限 20 条、message 截断 200 字符（防 WS 事件膨胀）。"""
+        findings = [{"level": "ERROR", "rule": "STRUCT", "message": f"缺文件 {i}"}
+                    for i in range(25)]
+        result = json.dumps({"ok": True, "path": "changes/x/a.md",
+                             "validation": {"verdict": "REJECT", "findings": findings}},
+                            ensure_ascii=False)
+        evt = build_doc_write("write_delta_doc",
+                              {"delta_id": "x", "filename": "a.md", "content": "c"},
+                              result, turn=1)
+        assert len(evt["findings"]) == 20
+        long_msg = json.dumps({"ok": True, "path": "changes/x/a.md",
+                               "validation": {"verdict": "REJECT",
+                                               "findings": [{"level": "ERROR", "rule": "R",
+                                                              "message": "长" * 500}]}},
+                              ensure_ascii=False)
+        evt2 = build_doc_write("write_delta_doc",
+                               {"delta_id": "x", "filename": "a.md", "content": "c"},
+                               long_msg, turn=1)
+        assert len(evt2["findings"][0]["message"]) == 200
 
     def test_write_draft_create(self):
         result = json.dumps({"ok": True, "action": "create",

@@ -39,6 +39,10 @@ WRITE_TOOLS = frozenset({
     "undo_draft",
 })
 
+# 校验失败原因提取上限与单条 message 截断（事件体积控制，防 WS 载荷膨胀）
+_FINDINGS_MAX = 20
+_FINDING_MSG_MAX = 200
+
 
 def _parse_result_json(result: str) -> dict:
     """解析工具返回 JSON（写型工具统一 JSON 形态）；非 JSON 返回空 dict。"""
@@ -66,6 +70,29 @@ def _gate_verdict(payload: dict) -> str | None:
     if gate.get("skipped"):
         return "SKIP"
     return "PASS" if gate.get("ok") else "REJECT"
+
+
+def _extract_findings(payload: dict) -> list[dict]:
+    """从校验结果提取失败原因（write_delta_doc validation.findings）。
+
+    失败原因与 verdict 同源（工具返回 JSON），纯解析零 I/O；
+    PASS/SKIP 或无 findings 时为空列表。message 截断防事件膨胀。
+    """
+    validation = payload.get("validation")
+    if not isinstance(validation, dict):
+        return []
+    findings = validation.get("findings") or []
+    out = []
+    for f in findings[: _FINDINGS_MAX]:
+        if not isinstance(f, dict):
+            continue
+        level = str(f.get("level", "") or "")
+        rule = str(f.get("rule", "") or "")
+        message = str(f.get("message", "") or "")
+        if not (level or rule or message):
+            continue
+        out.append({"level": level, "rule": rule, "message": message[: _FINDING_MSG_MAX]})
+    return out
 
 
 def _write_hunk(title: str, excerpt: str, note: str) -> dict:
@@ -146,6 +173,8 @@ def build_doc_write(tool: str, arguments: dict, result: str,
       thinking      — 意义标注②：本轮 K-024 思考文本（runtime 捎带）
       verdict       — 确定性校验结果（write_delta_doc conformance /
                       promote 发布门禁）：PASS/REJECT/SKIP/ERROR，无则 None
+      findings      — 校验失败原因列表（[{level, rule, message}]，与 verdict 同源；
+                      PASS/SKIP 时为空——Agent 据此定位修复）
       hunks         — 更新位置列表（V1 单 hunk：写入内容头部行区间）
     """
     if tool not in WRITE_TOOLS or _is_error_result(result):
@@ -169,5 +198,6 @@ def build_doc_write(tool: str, arguments: dict, result: str,
         "label": label,
         "thinking": (thinking or "").strip(),
         "verdict": verdict,
+        "findings": _extract_findings(payload),
         "hunks": hunks,
     }

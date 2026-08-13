@@ -923,6 +923,7 @@ interface DocWriteItem {
   label: string;
   thinking: string;
   verdict: string | null;   // PASS/REJECT/SKIP/ERROR（conformance/门禁确定性结果）
+  findings: { level: string; rule: string; message: string }[];  // 校验失败原因（与 verdict 同源，Agent 据此修复）
   hunks: DocHunk[];
   writes: number;           // 同文件累计更新次数
 }
@@ -1032,11 +1033,76 @@ function DiffOverlay({ item, onClose }: { item: DocWriteItem; onClose: () => voi
   );
 }
 
+// 更新足迹单卡（失败原因展示 + 查看/对比/让 Agent 修复）
+function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
+  item: DocWriteItem;
+  onOpen: (item: DocWriteItem) => void;
+  onDiff: (item: DocWriteItem) => void;
+  onAskAgent?: (item: DocWriteItem) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const findings = item.findings || [];
+  const failed = item.verdict === 'REJECT' || item.verdict === 'ERROR';
+  const visible = showAll ? findings : findings.slice(0, 3);
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-2/70 p-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] font-mono text-gray-200 truncate flex-1 cursor-pointer hover:text-info"
+          onClick={() => onOpen(item)} title={item.path || item.ref || ''}>{item.label}</span>
+        {item.writes > 1 && (
+          <span className="text-[9px] text-gray-500 flex-shrink-0" title="同文件累计更新次数">×{item.writes}</span>
+        )}
+        {verdictBadge(item.verdict)}
+      </div>
+      <div className="text-[10px] text-gray-600 truncate mt-0.5" title={item.ref}>{item.ref}</div>
+      {item.thinking && <div className="text-[10px] text-gray-600 mt-1">💭 {item.thinking}</div>}
+      {/* 校验失败原因（与 verdict 同源，Agent 据此定位修复） */}
+      {failed && findings.length > 0 && (
+        <div className="mt-1.5 text-[10px] rounded bg-red-900/20 px-1.5 py-1 space-y-0.5">
+          <div className="text-red-400 font-medium">失败原因（{findings.length} 条）</div>
+          {visible.map((f, i) => (
+            <div key={i} className="text-red-300/90 break-all">
+              <span className="text-red-400/80 font-mono">[{f.rule || f.level || 'RULE'}]</span> {f.message}
+            </div>
+          ))}
+          {findings.length > 3 && (
+            <button onClick={() => setShowAll(v => !v)}
+              className="text-red-400 hover:text-red-300 underline">
+              {showAll ? '收起' : `全部 ${findings.length} 条`}
+            </button>
+          )}
+        </div>
+      )}
+      <div className="text-[10px] text-gray-500 mt-1 font-mono whitespace-pre-wrap"
+        style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        {item.excerpt}
+      </div>
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <button onClick={() => onOpen(item)}
+          className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1">查看</button>
+        {item.path && (item.tool === 'write_delta_doc' || item.tool === 'write_draft' || item.tool === 'undo_draft') && (
+          <button onClick={() => onDiff(item)}
+            className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1">🔄 对比 .bak</button>
+        )}
+        {failed && onAskAgent && (
+          <button onClick={() => onAskAgent(item)}
+            className="ml-auto px-2 py-1 rounded bg-warn/20 text-warn text-[11px] hover:bg-warn/30"
+            title="把失败原因带进对话，让 Agent 分析并继续更新">
+            🤖 让 Agent 修复
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // 更新足迹面板（写型工具 doc_write 汇聚，点击打开文件 / 对比 .bak）
-function WritingPanel({ items, onOpen, onDiff, onRefresh }: {
+function WritingPanel({ items, onOpen, onDiff, onAskAgent, onRefresh }: {
   items: DocWriteItem[];
   onOpen: (item: DocWriteItem) => void;
   onDiff: (item: DocWriteItem) => void;
+  onAskAgent?: (item: DocWriteItem) => void;
   onRefresh?: () => void;
 }) {
   if (items.length === 0) {
@@ -1067,30 +1133,7 @@ function WritingPanel({ items, onOpen, onDiff, onRefresh }: {
         )}
       </div>
       {items.map(item => (
-        <div key={item.key} className="rounded-lg border border-border bg-surface-2/70 p-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-mono text-gray-200 truncate flex-1 cursor-pointer hover:text-info"
-              onClick={() => onOpen(item)} title={item.path || item.ref || ''}>{item.label}</span>
-            {item.writes > 1 && (
-              <span className="text-[9px] text-gray-500 flex-shrink-0" title="同文件累计更新次数">×{item.writes}</span>
-            )}
-            {verdictBadge(item.verdict)}
-          </div>
-          <div className="text-[10px] text-gray-600 truncate mt-0.5" title={item.ref}>{item.ref}</div>
-          {item.thinking && <div className="text-[10px] text-gray-600 mt-1">💭 {item.thinking}</div>}
-          <div className="text-[10px] text-gray-500 mt-1 font-mono whitespace-pre-wrap"
-            style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.excerpt}
-          </div>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <button onClick={() => onOpen(item)}
-              className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1">查看</button>
-            {item.path && (item.tool === 'write_delta_doc' || item.tool === 'write_draft' || item.tool === 'undo_draft') && (
-              <button onClick={() => onDiff(item)}
-                className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1">🔄 对比 .bak</button>
-            )}
-          </div>
-        </div>
+        <WritingCard key={item.key} item={item} onOpen={onOpen} onDiff={onDiff} onAskAgent={onAskAgent} />
       ))}
     </div>
   );
@@ -1581,7 +1624,7 @@ interface FileTab {
   hunks?: DocHunk[];  // T-511：阅读足迹打开时携带的使用位置（行区间定位+高亮）
 }
 
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onRefreshWritingFeed }: {
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onRefreshWritingFeed }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -1609,6 +1652,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
   writingFeed: DocWriteItem[];  // S0.6：更新足迹（doc_write 事件汇聚，时间倒序）
   onOpenDocWrite: (item: DocWriteItem) => void;
   onOpenDiff: (item: DocWriteItem) => void;
+  onAskAgentFix?: (item: DocWriteItem) => void;
   onRefreshWritingFeed?: () => void;
 }) {
   const isFileTab = activeTab.startsWith('file:');
@@ -1685,7 +1729,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {activeTab === 'drafts' && (
           <>
             {/* S0.6 分区①：更新足迹（写型工具 doc_write 汇聚，只读） */}
-            <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onRefresh={onRefreshWritingFeed} />
+            <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onRefresh={onRefreshWritingFeed} />
             {/* 分区②：草稿产物操作卡（评审闭环：查看/校验/试跑/入库/废弃） */}
             <div className="px-1 pt-2 pb-1 text-xs font-medium text-gray-300 border-t border-border">
               📝 草稿产物（Agent 会话内评审）
@@ -1856,16 +1900,28 @@ interface ChatInputProps {
   onClearMessages: () => void;
   onExportSession: () => void;
   onModelChange: (id: string) => void;
+  quickText?: string;             // S0.6：外部注入文本（如「让 Agent 修复」带失败原因），注入后自动清空
+  onQuickTextHandled?: () => void;
 }
 
 function ChatInput({
   wsState, loading, models, currentModelId,
   onSend, onStop, onNewSession, onClearMessages, onExportSession, onModelChange,
+  quickText, onQuickTextHandled,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
+
+  // S0.6：外部注入文本（足迹卡「让 Agent 修复」→ 失败原因带进对话），用户确认后发送
+  useEffect(() => {
+    if (!quickText) return;
+    setInput(quickText);
+    inputRef.current?.focus();
+    onQuickTextHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickText]);
   const [atOpen, setAtOpen] = useState(false);
   const [atQuery, setAtQuery] = useState('');
   const [atIndex, setAtIndex] = useState(0);
@@ -2151,6 +2207,8 @@ export default function AgentChat() {
   const [writingFeed, setWritingFeed] = useState<DocWriteItem[]>(_store.writingFeed);  // S0.6
   // 更新对比弹窗（.bak diff）
   const [diffItem, setDiffItem] = useState<DocWriteItem | null>(null);
+  // S0.6：外部注入对话输入框的文本（「让 Agent 修复」带失败原因）
+  const [quickText, setQuickText] = useState('');
 
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsVersion, setSessionsVersion] = useState(0);
@@ -2437,7 +2495,11 @@ export default function AgentChat() {
             key, tool: event.tool || '', ref: event.ref || '', path: event.path || null,
             turn: event.turn ?? 0, size: event.size ?? 0, excerpt: event.excerpt || '',
             label: event.label || event.tool || '', thinking: event.thinking || '',
-            verdict: event.verdict || null, hunks, writes: 1,
+            verdict: event.verdict || null,
+            findings: (event.findings || []).map((f: any) => ({
+              level: f.level || '', rule: f.rule || '', message: f.message || '',
+            })),
+            hunks, writes: 1,
           };
           const idx = prev.findIndex(i => i.key === key);
           if (idx === -1) return [card, ...prev];
@@ -2453,7 +2515,11 @@ export default function AgentChat() {
             ...old, turn: event.turn ?? old.turn, size: event.size ?? old.size,
             excerpt: event.excerpt || old.excerpt, label: event.label || old.label,
             thinking: event.thinking || old.thinking,
-            verdict: event.verdict || old.verdict, hunks: mergedHunks,
+            verdict: event.verdict || old.verdict,
+            findings: (event.findings || []).length > 0 ? (event.findings || []).map((f: any) => ({
+              level: f.level || '', rule: f.rule || '', message: f.message || '',
+            })) : old.findings || [],
+            hunks: mergedHunks,
             writes: (old.writes || 1) + 1,
           };
           next.splice(idx, 1);
@@ -2807,6 +2873,19 @@ export default function AgentChat() {
   // S0.6：更新对比（.bak 旧版 vs 当前，行级 diff 弹窗）
   const openDiff = useCallback((item: DocWriteItem) => {
     setDiffItem(item);
+  }, []);
+
+  // S0.6：让 Agent 修复——失败文件 + 原因（findings）注入对话输入框，
+  // Agent 收到后读取相关文件定位并继续更新（用户确认后发送）
+  const askAgentFix = useCallback((item: DocWriteItem) => {
+    const findings = (item.findings || [])
+      .map(f => `- ${f.level || ''}${f.rule ? ` ${f.rule}` : ''}: ${f.message}`)
+      .join('\n');
+    const target = item.path || item.ref || item.label;
+    setQuickText(
+      `请修复 ${target} 的 conformance 校验失败：\n${findings}\n` +
+      `请先读取相关文件分析失败原因，再继续更新（写入后校验 verdict 随结果返回）。`
+    );
   }, []);
 
   // 会话内 write_draft 内容映射（大段 md 代码块 → 落盘文件匹配，产物卡片去重用）
@@ -3265,6 +3344,8 @@ export default function AgentChat() {
             onClearMessages={() => { setMessages([]); setStats(null); setPlanItems([]); }}
             onExportSession={handleExportSession}
             onModelChange={setCurrentModelId}
+            quickText={quickText}
+            onQuickTextHandled={() => setQuickText('')}
           />
         </div>
 
@@ -3320,7 +3401,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onRefreshWritingFeed={handleRefreshWriting} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onRefreshWritingFeed={handleRefreshWriting} />
           </>
         )}
       </div>
