@@ -72,13 +72,35 @@ def _user_lock(emp_no: str) -> threading.Lock:
     return _USER_LOCKS[emp_no]
 
 
-def _run_lark(emp_no: str, args: list[str], timeout: int = _LARK_TIMEOUT) -> dict:
+def _ensure_config(emp_no: str) -> None:
+    """隔离目录缺 config.json 时，从本机 lark-cli 配置导入（授权前置）。
+
+    lark-cli 读配置路径为 {USERPROFILE}/.lark-cli/config.json；全新隔离目录
+    无配置时 auth 命令报 not_configured。授权入口（do_login）调用本函数：
+    本机已初始化过 lark-cli（含 appId/appSecret）则直接复制，用户无需手动
+    配置；本机也无配置时静默跳过（auth login 自会返回可读错误引导）。
+    """
+    lark_dir = _user_lark_dir(emp_no)
+    dest = lark_dir / ".lark-cli" / "config.json"
+    if dest.is_file():
+        return
+    home = Path(os.environ.get("USERPROFILE") or os.path.expanduser("~"))
+    src = home / ".lark-cli" / "config.json"
+    if src.is_file():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+
+
+def _run_lark(emp_no: str, args: list[str], timeout: int = _LARK_TIMEOUT,
+              json_output: bool = True) -> dict:
     """执行 lark-cli 并解析 JSON 输出（用户隔离上下文）。
 
     Args:
         emp_no: 用户工号（决定 USERPROFILE 隔离目录）
-        args: lark-cli 命令参数（不含 --format json，自动追加）
+        args: lark-cli 命令参数
         timeout: 超时秒数
+        json_output: True 自动追加 --format json；False 不追加（auth 域子命令
+            仅支持 --json，需调用方自行带上）
 
     Returns:
         解析后的 lark-cli 响应 dict
@@ -86,7 +108,9 @@ def _run_lark(emp_no: str, args: list[str], timeout: int = _LARK_TIMEOUT) -> dic
     Raises:
         ValueError: 超时/CLI 不可用/输出非 JSON/lark-cli 返回失败
     """
-    cmd = _lark_command() + args + ["--format", "json"]
+    cmd = _lark_command() + args
+    if json_output:
+        cmd += ["--format", "json"]
     env = _inject_userprof(emp_no)
     try:
         proc = subprocess.run(
@@ -102,9 +126,32 @@ def _run_lark(emp_no: str, args: list[str], timeout: int = _LARK_TIMEOUT) -> dic
         payload = json.loads(proc.stdout or "{}")
     except json.JSONDecodeError:
         raise ValueError(f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}")
-    if not payload.get("ok"):
+    if payload.get("ok") is False:
         raise ValueError(f"lark-cli 调用失败: {text[:300]}")
     return payload
+
+
+# ══════════════════════════════════════════════════════════
+# 二维码生成（授权引导用：verification_url → data URI，对话/页面直接展示）
+# ══════════════════════════════════════════════════════════
+
+def _make_qr_data_uri(url: str) -> str:
+    """verification_url → base64 PNG data URI（segno 纯 Python，零依赖）。
+
+    segno 缺失时返回空串（降级为纯链接展示，不阻断授权流程）。
+    """
+    if not url:
+        return ""
+    try:
+        import base64
+        import io
+        import segno
+
+        buf = io.BytesIO()
+        segno.make(url, error='m').save(buf, kind='png', scale=4, border=2)
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        return ""
 
 
 # ══════════════════════════════════════════════════════════
@@ -131,7 +178,7 @@ def do_status(emp_no: str) -> dict:
             "config_dir": str(lark_dir),
         }
     try:
-        payload = _run_lark(emp_no, ["auth", "status"])
+        payload = _run_lark(emp_no, ["auth", "status", "--json"], json_output=False)
         data = payload.get("data") or payload
         bot_info = data.get("bot") or {}
         user_info = data.get("user") or {}
@@ -186,11 +233,15 @@ def do_login(emp_no: str, scope: str = "") -> dict:
         Error:  {"phase": "error", "error": str}
     """
     with _user_lock(emp_no):
-        args = ["auth", "login", "--no-wait"]
+        # 配置前置：全新隔离目录无 config.json 时从本机导入（否则 auth login 报 not_configured）
+        _ensure_config(emp_no)
+        args = ["auth", "login", "--no-wait", "--json"]
         if scope:
             args += ["--scope", scope]
+        else:
+            args += ["--domain", "all"]  # 未指定范围时请求全部域（lark-shared：login 必须指定范围）
         try:
-            payload = _run_lark(emp_no, args)
+            payload = _run_lark(emp_no, args, json_output=False)
         except ValueError as e:
             return {"phase": "error", "error": str(e)}
         data = payload.get("data") or payload
@@ -211,14 +262,47 @@ def do_login(emp_no: str, scope: str = "") -> dict:
             "phase": "waiting",
             "verification_url": verification_url,
             "device_code": device_code,
+            "qr_data_uri": _make_qr_data_uri(verification_url),
         }
+
+
+def do_login_complete(emp_no: str, device_code: str) -> dict:
+    """device flow 收尾：用户扫码后以 device_code 完成授权（T-703 增补）。
+
+    对应 lark-cli `auth login --device-code <code>`（poll 模式，CLI 阻塞轮询
+    直到用户完成或超时）。返回：
+      completed: 授权完成（token 已落盘隔离目录）
+      pending:   用户尚未完成扫码，可稍后重试
+      error:     其他失败
+    """
+    if not device_code:
+        return {"phase": "error", "error": "device_code 必填"}
+    with _user_lock(emp_no):
+        try:
+            payload = _run_lark(emp_no, ["auth", "login", "--device-code",
+                                         device_code, "--json"],
+                                timeout=15, json_output=False)
+        except ValueError as e:
+            text = str(e)
+            if "超时" in text or "timeout" in text.lower():
+                return {"phase": "pending", "hint": "用户尚未完成授权，请稍后重试"}
+            return {"phase": "error", "error": text[:300]}
+        status = do_status(emp_no) if payload.get("ok") else {}
+        if status.get("bound"):
+            return {
+                "phase": "completed",
+                "identity": status.get("identity", ""),
+                "open_id": status.get("open_id", ""),
+                "identity_name": status.get("identity_name", ""),
+            }
+        return {"phase": "pending", "hint": "授权尚未完成，请稍后重试"}
 
 
 def do_logout(emp_no: str) -> dict:
     """解绑当前用户的飞书 CLI 身份。"""
     with _user_lock(emp_no):
         try:
-            _run_lark(emp_no, ["auth", "logout", "--yes"])
+            _run_lark(emp_no, ["auth", "logout", "--yes", "--json"], json_output=False)
         except ValueError:
             # 未登录状态也算成功
             pass
@@ -241,14 +325,19 @@ lark_auth_status_tool = Tool(
 
 lark_auth_login_tool = Tool(
     name="lark_auth_login",
-    description="发起飞书 CLI 两阶段授权。Phase1 返回 verification_url（用户需打开该链接"
-                "完成飞书 OAuth 授权），phase2 自动检测完成。可指定 scope 参数缩小或扩大授权范围。",
+    description="飞书 CLI 两阶段授权。无 device_code：Phase1 返回 verification_url（用户需打开该链接"
+                "完成飞书 OAuth 授权，附 qr_data_uri 二维码图片）+ device_code；"
+                "传入 device_code：Phase2 完成授权（用户扫码后调用，返回 completed/pending）。",
     inputSchema={
         "type": "object",
         "properties": {
             "scope": {
                 "type": "string",
                 "description": "可选：指定授权 scope（如 'docs:* base:*'），默认与现有 app 一致",
+            },
+            "device_code": {
+                "type": "string",
+                "description": "可选：Phase1 返回的 device_code；传入则执行 Phase2 完成授权（用户扫码后调用）",
             },
         },
     },
@@ -284,7 +373,11 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         if name == "lark_auth_status":
             result = do_status(emp_no)
         elif name == "lark_auth_login":
-            result = do_login(emp_no, arguments.get("scope", ""))
+            device_code = arguments.get("device_code", "")
+            if device_code:
+                result = do_login_complete(emp_no, device_code)
+            else:
+                result = do_login(emp_no, arguments.get("scope", ""))
         elif name == "lark_auth_logout":
             result = do_logout(emp_no)
         else:

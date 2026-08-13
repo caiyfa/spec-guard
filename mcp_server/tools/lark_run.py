@@ -142,6 +142,11 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps({"error": "args 必须是字符串数组"}, ensure_ascii=False))]
     full_args = command.split() + [str(a) for a in raw_args]
 
+    # auth 域子命令仅支持 --json（不支持 --format json），特判处理
+    is_auth_domain = cmd_parts[0] == "auth"
+    if is_auth_domain:
+        full_args.append("--json")
+
     # 写操作自动追加 --yes
     has_write_op = any(kw in full_args for kw in _HIGH_RISK_WRITE)
     if has_write_op and "--yes" not in full_args:
@@ -151,7 +156,7 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     timeout = max(10, min(timeout, 300))
 
     try:
-        payload = _run_lark(emp_no, full_args, timeout=timeout)
+        payload = _run_lark(emp_no, full_args, timeout=timeout, json_output=not is_auth_domain)
     except ValueError as e:
         text = str(e)
         if any(h in text.lower() for h in ("无权限", "权限不足", "forbidden", "denied", "无权")):

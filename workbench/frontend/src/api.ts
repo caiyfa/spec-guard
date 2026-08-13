@@ -533,7 +533,7 @@ export const agentApi = {
   batchArchive: (ids: string[], archived: boolean, workspace = '') =>
     request<{ ok: boolean; processed: number; skipped: string[]; archived: boolean }>(`/agent/sessions/batch-archive${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'POST', body: JSON.stringify({ session_ids: ids, archived }) }),
   getSession: (id: string, workspace = '') =>
-    request<{ session_id: string; messages: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+    request<{ session_id: string; messages: any[]; reading_feed?: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>
     request<any>(`/agent/sessions/${id}/export${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   // T-402: 取消会话当前运行（真打断）
@@ -1399,6 +1399,7 @@ export interface LarkStatus {
 export interface LarkLoginResult {
   phase: 'waiting' | 'completed' | 'error';
   verification_url?: string;
+  qr_data_uri?: string;
   device_code?: string;
   identity?: string;
   open_id?: string;
@@ -1411,6 +1412,10 @@ export const larkApi = {
   login: (scope = '') => request<LarkLoginResult>('/settings/lark/login', {
     method: 'POST',
     body: JSON.stringify({ scope }),
+  }),
+  complete: (deviceCode: string) => request<LarkLoginResult>('/settings/lark/complete', {
+    method: 'POST',
+    body: JSON.stringify({ device_code: deviceCode }),
   }),
   logout: () => request<{ ok: boolean }>('/settings/lark/logout', { method: 'POST' }),
   scopes: () => request<{ scopes: string[]; bound: boolean }>('/settings/lark/scopes'),

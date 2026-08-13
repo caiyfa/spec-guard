@@ -9,9 +9,9 @@
   GET    /api/settings/lark/scopes     — 已授权 scope 详细清单
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from services.auth import get_current_user, CurrentUser
-from mcp_server.tools.lark_auth import do_status, do_login, do_logout
+from mcp_server.tools.lark_auth import do_status, do_login, do_login_complete, do_logout
 
 router = APIRouter(prefix="/api/settings/lark", tags=["lark"])
 
@@ -27,6 +27,14 @@ def lark_status(user: CurrentUser = Depends(get_current_user)):
 def lark_login(scope: str = "", user: CurrentUser = Depends(get_current_user)):
     """发起飞书两阶段授权。"""
     result = do_login(user.emp_no, scope)
+    return result
+
+
+@router.post("/complete")
+def lark_complete(payload: dict = Body(...), user: CurrentUser = Depends(get_current_user)):
+    """device flow 收尾：用户扫码后用 device_code 完成授权。"""
+    device_code = (payload or {}).get("device_code", "")
+    result = do_login_complete(user.emp_no, device_code)
     return result
 
 

@@ -41,9 +41,18 @@ export default function LarkBinding() {
         if (r.verification_url) {
           window.open(r.verification_url, '_blank');
         }
-        // 轮询检测授权完成
+        // 轮询：先 device-code 收尾（用户扫码后 token 落盘），再查状态确认
+        const deviceCode = r.device_code || '';
         const poll = setInterval(async () => {
           try {
+            if (deviceCode) {
+              const c = await larkApi.complete(deviceCode);
+              if (c.phase === 'completed') {
+                clearInterval(poll);
+                await loadStatus();
+                return;
+              }
+            }
             const s = await larkApi.status();
             if (s.bound) {
               clearInterval(poll);
@@ -151,9 +160,17 @@ export default function LarkBinding() {
               <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
               <span className="font-medium">等待授权完成...</span>
             </div>
-            <p className="text-sm text-gray-400 mb-3">
-              请在弹出的页面中完成飞书授权。页面将自动检测授权状态。
-            </p>
+            {loginResult.qr_data_uri ? (
+              <div className="mb-3 flex flex-col items-center gap-2">
+                <img src={loginResult.qr_data_uri} alt="飞书授权二维码"
+                  className="w-48 h-48 bg-white rounded-lg p-2" />
+                <p className="text-xs text-gray-500">使用飞书 App 扫码完成授权</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 mb-3">
+                请在弹出的页面中完成飞书授权。页面将自动检测授权状态。
+              </p>
+            )}
             <div className="bg-surface-1 rounded p-3 mb-3 text-xs break-all">
               <p className="text-gray-500 mb-1">授权 URL:</p>
               <a href={loginResult.verification_url} target="_blank"
@@ -163,7 +180,7 @@ export default function LarkBinding() {
               </a>
             </div>
             <p className="text-xs text-gray-600">
-              若页面未自动打开，请手动复制上方链接在浏览器中打开。
+              若页面未自动打开，请手动复制上方链接在浏览器中打开，或用飞书扫码。
             </p>
           </div>
         )}

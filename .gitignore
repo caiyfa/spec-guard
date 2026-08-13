@@ -65,6 +65,10 @@ scenarios/tmp/
 
 # ── 认证辅助文件（二维码含授权信息，不入库）──
 *-auth-qr.png
+_lark_auth_qr.png
+
+# ── 飞书 CLI 本地状态（token/缓存/日志，含凭据，不入库）──
+.lark-cli/
 
 # ── 测试产物（不入库）──
 workbench/workbench/
