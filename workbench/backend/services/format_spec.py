@@ -148,6 +148,70 @@ def generate_format_spec_skeleton() -> str:
     )
 
 
+def generate_format_spec_product() -> str:
+    """生成产品友好的格式规范（仅含 Spec 模板结构与 FR/AC 写作规范，
+    不含执行层技术细节——供 requirement_interview 等产品用途使用）。
+    """
+    import re as _re
+    lines = _BODY.splitlines()
+
+    def _chapter(chapter: str) -> str:
+        out: list[str] = []
+        capture = False
+        for line in lines:
+            m = _re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+            if m:
+                if capture and len(m.group(1)) <= 3:
+                    break
+                if not capture and m.group(2).startswith(chapter):
+                    capture = True
+            if capture:
+                out.append(line)
+        return "\n".join(out)
+
+    # 仅含产品关心的章节：必填字段 + ID 唯一性规则
+    core = "\n\n".join(_chapter(c) for c in ("1.2 ", "四、"))
+
+    NL = chr(10)
+    return (
+        f"# Spec 编写规范{NL}{NL}"
+        f"> **版本**：{SPEC_VERSION} | **更新时间**：{SPEC_UPDATED}{NL}"
+        f"> 本规范面向需求面试与 Spec 编写任务：列出 Spec 文档的结构模板、"
+        f"FR/AC 写作约定和场景锚点规则；"
+        f"> 执行层细节（步骤语法/断言类型/tool 目录/轮询/DB 断言等）不在此处，{NL}"
+        f"> 属于研发与测试的工作范畴。{NL}{NL}"
+        f"## Spec 文档结构模板（11 章节）{NL}{NL}"
+        f"| 序号 | 章节 | 作者 | 说明 |{NL}"
+        f"|------|------|------|------|{NL}"
+        f"| §1 | Goal（一句话目标） | 🧑\u200d💼💻 | 产品 + 技术共同 |{NL}"
+        f"| §2 | Non-Goals（明确排除） | 🧑\u200d💼💻 | 防止范围蔓延 |{NL}"
+        f"| §3 | User Scenarios | 🧑\u200d💼 | Given/When/Then，P1/P2/P3 |{NL}"
+        f"| §4 | Functional Requirements | 🧑\u200d💼💻 | FR-xxx 编号 |{NL}"
+        f"| §5 | Key Entities | 💻 | 表结构摘要 + 状态流转图 |{NL}"
+        f"| §6 | Edge Cases | 🧑\u200d💼 | 空数据/重复/并发/权限/边界 |{NL}"
+        f"| §7 | API Contract | 💻 | 5 列表格 + YAML 链接 |{NL}"
+        f"| §8 | Acceptance Criteria | 🧑\u200d💼 | 二值化 AC |{NL}"
+        f"| §9 | Deliverables | 💻 | 交付清单 |{NL}"
+        f"| §10 | Rollout & Rollback | 💻 | 上线/回滚/数据兼容 |{NL}"
+        f"| §11 | Changelog | 💻 | 版本变更记录 |{NL}"
+        f"{NL}"
+        f"使用 `templates/spec.md` 查看完整模板。{NL}{NL}"
+        f"---{NL}{NL}"
+        f"## FR/AC 写作约定{NL}{NL}"
+        f"- **FR（Functional Requirement）**：以「系统 SHALL」开头，可独立验证的单条业务规则{NL}"
+        f"- **AC（Acceptance Criteria）**：二值化（通过/不通过），对应一个或多个 FR{NL}"
+        f"- **FR 编号**：基线 `FR-{序号}`（模块内唯一）；delta 新增 `FR-{功能}-{迭代}-{流水号}`{NL}"
+        f"   （如 FR-person-profile-0817-001），全局唯一、永久保留（编号即溯源）{NL}"
+        f"- **covers 锚点**：场景 YAML 的 `doc.covers` 引用 FR 编号，{NL}"
+        f"  是场景与需求的强制关联（场景测试引擎据此做覆盖分析）{NL}"
+        f"- **Delta 更新**：用 `[delta:代号]` 标记每条 FR 的变更来源{NL}{NL}"
+        f"---{NL}{NL}"
+        f"## 必填字段（场景 YAML）{NL}{NL}{_chapter('1.2 ')}"
+        f"---{NL}{NL}"
+        f"## ID 命名规则{NL}{NL}{_chapter('四、')}"
+    )
+
+
 _BODY = """## 一、场景测试 YAML（scenario yaml）
 
 ### 1.1 文件位置与命名

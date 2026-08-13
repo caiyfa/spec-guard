@@ -31,19 +31,34 @@ function formatSize(n: number): string {
   return `${n}B`;
 }
 
-export default function ReadingPanel({ items, onOpen }: {
+export default function ReadingPanel({ items, onOpen, onRefresh }: {
   items: DocReadItem[];
   onOpen: (item: DocReadItem, hunk?: DocHunk) => void;
+  onRefresh?: () => void;
 }) {
   if (items.length === 0) {
     return (
-      <div className="text-xs text-gray-600 text-center py-6 px-4">
-        暂无阅读足迹——agent 调用读型文档工具后自动汇聚到这里
+      <div className="text-xs text-gray-600 text-center py-6 px-4 space-y-3">
+        <div>暂无阅读足迹——agent 调用读型文档工具后自动汇聚到这里</div>
+        {onRefresh && (
+          <button onClick={onRefresh}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] bg-surface-3 rounded hover:bg-surface-3/70 transition-colors">
+            ↻ 刷新
+          </button>
+        )}
       </div>
     );
   }
   return (
     <div className="p-2 space-y-2">
+      {/* 刷新按钮（右上） */}
+      {onRefresh && (
+        <div className="flex justify-end -mb-1">
+          <button onClick={onRefresh}
+            className="text-[10px] text-gray-500 hover:text-info transition-colors px-1"
+            title="重新加载阅读足迹">↻</button>
+        </div>
+      )}
       {items.map((item) => (
         <div key={item.key}
           className="rounded-lg border border-border bg-surface-2/70 p-2 hover:border-info/40 transition-colors">

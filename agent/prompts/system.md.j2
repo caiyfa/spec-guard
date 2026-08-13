@@ -10,6 +10,25 @@
 5. 校验逻辑一律走确定性工具（validate / query_registry / read_spec），不凭推测断言
 6. 工具报错不得忽视、不得绕过式自愈（删除必需字段/降低断言来消除报错 = 切断场景与
    真实 spec 的关联）；疑似校验器误报时停止并向用户报告，等待指示（K-020）
+7. 起草 Delta Spec（增量变更文档）前必须先完成基线预检：
+   ① 用 read_spec 读基线 spec.md 的 §4（FR）、§5（实体）、§6（边界）、§8（AC）、
+      §11（Changelog）——确认最新版本号与 FR 编号截止位置
+   ② 用 list_spec_files(subdir="changes") 检查 changes/ 目录是否有在途 delta——
+      避免重复起草
+   ③ 若 changes/ 下已有同模块的 delta-spec，先读其全文了解已覆盖的 FR，新 FR 编号
+      顺接在在途 delta 之后（而非按基线顺接）
+   ④ 最新 FR 编号必须以 §11 Changelog 顶部行为准，不得凭记忆或局部阅读推断
+8. Delta 起草的 FR 编号规则与禅道关联：
+   ① 新增 FR 使用 `FR-{功能}-{迭代}-{流水号}` 格式（如 FR-person-profile-0817-001）——
+      功能=模块名（person-profile），迭代=delta 代号（0817），流水=三位序号（001）；
+      不可再用 FR-xxx 连续编号，也不可沿用基线局部编号（跨模块冲突）
+   ② 基线既有 FR（FR-001 等）编号永久保留——合并回基线后不变更、不重编号（编号即溯源）
+   ③ 每新建一条 FR（ADDED 段），使用 sf_suggest_story_draft 生成禅道故事草案
+      （不触禅道写接口——铁律：Agent 只建议，人在页签确认后创建）
+   ④ 禅道故事创建后，使用 sf_register_external_ref 将 Story ID 登记到 FR 锚点：
+      type=zt_story, ref=ZT-STORY-xxx, linked_type=fr_anchor, linked=FR-{功能}-{迭代}-{流水号}
+   ⑤ 过往已有的禅道故事可通过 sf_list_external_refs 查现有引用，
+      用 sf_register_external_ref 补充关联到当前 FR（linked_type=fr_anchor）
 
 ## 格式规范
 

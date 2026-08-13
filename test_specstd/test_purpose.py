@@ -140,8 +140,8 @@ class TestResolveTools:
         tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"])
         names = {t.name for t in tools}
         assert "read_spec" in names
-        assert "write_draft" not in names          # 写工具不可见
-        assert "promote_draft" not in names
+        assert "write_draft" in names            # 可起草 delta spec（T-xxx 开放）
+        assert "promote_draft" not in names       # 入库仍 tester/admin
         assert "edit_dependency" not in names
         assert "todo_write" in names               # meta 常驻
 
@@ -160,8 +160,8 @@ class TestResolveTools:
         tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product", "dev"])
         names = {t.name for t in tools}
         assert "read_spec" in names
-        assert "write_draft" not in names
-        assert "promote_draft" not in names
+        assert "write_draft" in names             # 可起草 delta spec
+        assert "promote_draft" not in names        # 入库仍 tester/admin
         # tester + 未知角色：tester 仍是全量（未知角色不拉低）
         tools2 = resolve_tools(purpose_tools=[], user_roles=["tester", "dev"])
         from agent.runtime import ALL_TOOLS
@@ -181,13 +181,13 @@ class TestResolveTools:
         def fake_audit(emp_no, action, target="", detail="", db_path=None):
             captured.update(emp_no=emp_no, action=action, target=target, detail=detail)
         monkeypatch.setattr(us_mod, "audit", fake_audit)
-        result = rt._execute_tool({"function": {"name": "write_draft",
+        result = rt._execute_tool({"function": {"name": "promote_draft",
                                                 "arguments": "{}"}})
         assert "越权拒绝" in result
-        assert "write_draft" not in rt._tool_whitelist
+        assert "promote_draft" not in rt._tool_whitelist
         # WARNING 审计：action=tool_denied，target=越权工具名
         assert captured.get("action") == "tool_denied"
-        assert captured.get("target") == "write_draft"
+        assert captured.get("target") == "promote_draft"
 
 
 # ══════════════════════════════════════════════════════════

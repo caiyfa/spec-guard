@@ -1396,7 +1396,7 @@ interface FileTab {
   hunks?: DocHunk[];  // T-511：阅读足迹打开时携带的使用位置（行区间定位+高亮）
 }
 
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead }: {
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -1420,6 +1420,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
   draftFiles: string[];         // K-xxx：会话内 Agent 写入的草稿（产物区）
   readingFeed: DocReadItem[];   // T-511：阅读足迹（doc_read 事件汇聚，时间倒序）
   onOpenDocRead: (item: DocReadItem, hunk?: DocHunk) => void;
+  onRefreshReadingFeed?: () => void;
 }) {
   const isFileTab = activeTab.startsWith('file:');
   const activeFile = isFileTab ? fileTabs.find(t => `file:${t.path}` === activeTab) : null;
@@ -1486,7 +1487,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
           </>
         )}
         {activeTab === 'reading' && (
-          <ReadingPanel items={readingFeed} onOpen={onOpenDocRead} />
+          <ReadingPanel items={readingFeed} onOpen={onOpenDocRead} onRefresh={onRefreshReadingFeed} />
         )}
         {activeTab === 'pack' && scenarioMeta && (
           <InfoPackPanel meta={scenarioMeta} onUpdate={onUpdateMeta} onError={onError}
@@ -1551,6 +1552,45 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
       {copied ? '✓' : '📋'}
     </button>
   );
+}
+
+// ── assistant 消息内容框：内部顶部工具栏（预览/文本双按钮 + 复制），内容区独立背景 ──
+function MessageWithToolbar({ content }: { content: string }) {
+  const [view, setView] = useState<'preview' | 'text'>('preview');
+  const tabBtn = (active: boolean) =>
+    `px-2 py-0.5 rounded text-[11px] transition-colors ${active ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-info hover:bg-surface-3'}`;
+  return (
+    <div className="rounded-lg border border-border/60 bg-surface-2/40 overflow-hidden">
+      {/* 内容框内部顶部工具栏 */}
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-border/50 bg-surface-3/40">
+        <button onClick={() => setView('preview')} className={tabBtn(view === 'preview')} title="Markdown 渲染效果">
+          👁 预览
+        </button>
+        <button onClick={() => setView('text')} className={tabBtn(view === 'text')} title="原始 Markdown 源码">
+          📝 文本
+        </button>
+        <span className="flex-1" />
+        <CopyButton text={content}
+          className="w-6 h-6 flex items-center justify-center rounded bg-surface-3 text-gray-400 hover:text-info hover:bg-surface-1 text-xs border border-border/50 flex-shrink-0" />
+      </div>
+      {/* 内容区（预览 = Markdown 渲染 / 文本 = 原始源码，独立深色背景） */}
+      {view === 'preview' ? (
+        <div className="px-3 py-2 bg-gray-900/30">
+          <MarkdownText content={_unwrapTextBlock(content)} />
+        </div>
+      ) : (
+        <pre className="text-xs font-mono text-gray-300 bg-gray-900/50 rounded-b-lg p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
+          {content}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/** 解包「摘要 + 代码块 + 后续」模式：去掉外层 ```text/```markdown fences，
+ *  使代码块内的 Markdown 内容得以正常渲染（而非以 <pre><code> 显示）。 */
+function _unwrapTextBlock(content: string): string {
+  return content.replace(/^```(?:text|markdown)\n([\s\S]*?)\n```\s*/gm, '$1');
 }
 
 // ── 多轮会话导航图标列（独立组件，与消息滚动容器平级） ──
@@ -2172,11 +2212,14 @@ export default function AgentChat() {
             }
           }
           const next = [...prev];
-          next[idx] = {
+          const updated = {
             ...old, turn: event.turn ?? old.turn, size: event.size ?? old.size,
             excerpt: event.excerpt || old.excerpt, label: event.label || old.label,
             thinking: event.thinking || old.thinking, hunks: mergedHunks, reads: old.reads + 1,
           };
+          // T-511 修复：已有卡片再次读取后移到列表头部（保持「最近阅读排最前」）
+          next.splice(idx, 1);
+          next.unshift(updated);
           return next;
         });
         break;
@@ -2472,8 +2515,13 @@ export default function AgentChat() {
   // K-032: 关闭文件页签（关闭当前活动页签时回落到待办页）
   const closeFileTab = useCallback((path: string) => {
     setFileTabs(prev => prev.filter(t => t.path !== path));
-    setActiveSideTab(prev => prev === `file:${path}` ? 'todos' : prev);
-  }, []);
+    setActiveSideTab(prev => {
+      if (prev === `file:${path}`) {
+        return readingFeed.length > 0 ? 'reading' : 'todos';
+      }
+      return prev;
+    });
+  }, [readingFeed]);
 
   // 未落盘内容预览（对话内大段 md 代码块 → 虚拟 memo: 页签，FileViewer 按 .md 渲染）
   // T-511：opts.hunks 阅读足迹定位（memo 内容为摘录时 hunk 行区间按内容行数收敛）
@@ -2533,6 +2581,7 @@ export default function AgentChat() {
     const msgs = r.messages || [];
     setMessages(msgs);
     setSessionId(id);
+    setReadingFeed(r.reading_feed || []);  // T-511: 阅读足迹从后端重建（跨刷新保持）
     // T-010: 恢复会话时带出锁定用途（会话列表含 purpose 字段；找不到时保持现状）
     try {
       const lst = await agentApi.listSessions(ws, '', true);
@@ -2573,6 +2622,14 @@ export default function AgentChat() {
       localStorage.setItem('sg_agent_session', id);
     } catch { setError('加载会话失败'); }
   };
+
+  const handleRefreshReading = useCallback(async () => {
+    if (!sessionId || !currentWorkspace) return;
+    try {
+      const r = await agentApi.getSession(sessionId, currentWorkspace);
+      setReadingFeed(r.reading_feed || []);
+    } catch { /* 静默 */ }
+  }, [sessionId, currentWorkspace]);
 
   // K-012: 页面刷新/服务重启后自动恢复上次会话（_store 为空时才补拉，SPA 内导航不触发）
   useEffect(() => {
@@ -2769,7 +2826,7 @@ export default function AgentChat() {
       }
       return (
         <div key={idx} className="mb-3 ml-1 border-l-2 border-border/50 pl-3 py-0.5">
-          <MarkdownText content={item.content || ''} />
+          <MessageWithToolbar content={item.content || ''} />
         </div>
       );
     }
@@ -2989,7 +3046,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} />
           </>
         )}
       </div>

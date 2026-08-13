@@ -4,6 +4,7 @@
 """  # reload-trigger
 
 import asyncio
+import json
 import re
 import sys
 from pathlib import Path
@@ -26,6 +27,7 @@ from agent.llm_client import LLMClient
 from agent.session import SessionManager, _validate_session_id
 from agent.runtime import AgentRuntime, build_system_prompt, resolve_tools
 from agent.purpose_loader import load_purpose, visible_purposes
+from agent.doc_read import build_doc_read
 
 SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 
@@ -41,6 +43,76 @@ _ACTIVE_RUNTIMES: dict[str, "AgentRuntime"] = {}
 def _run_in_progress(session_id: str) -> bool:
     task = _ACTIVE_RUNS.get(session_id)
     return task is not None and not task.done()
+
+
+def _rebuild_reading_feed(messages: list) -> list[dict]:
+    """从消息链重建阅读足迹（doc_read 事件，用于会话恢复）。
+
+    遍历 assistant 消息的 tool_calls，对读型文档工具调用 build_doc_read
+    生成阅读卡片，同文件去重合并 hunks（模拟前端 doc_read 汇聚逻辑）。
+    """
+    items: list[dict] = []
+    key_idx: dict[str, int] = {}
+
+    for i, msg in enumerate(messages):
+        if msg.get("role") != "assistant":
+            continue
+        tcs = msg.get("tool_calls") or []
+        if not tcs:
+            continue
+        # 收集本轮 tool 结果
+        results = {}
+        j = i + 1
+        while j < len(messages) and messages[j].get("role") == "tool":
+            cid = messages[j].get("tool_call_id", "")
+            results[cid] = messages[j].get("content", "")
+            j += 1
+        for tc in tcs:
+            fn = tc.get("function", {})
+            args_raw = fn.get("arguments", "")
+            if isinstance(args_raw, str):
+                try:
+                    args_raw = json.loads(args_raw)
+                except (json.JSONDecodeError, TypeError):
+                    args_raw = {}
+            result_text = results.get(tc.get("id", ""), "")
+            evt = build_doc_read(fn.get("name", ""), args_raw, result_text, 0)
+            if evt is None:
+                continue
+            key = evt.get("path") or evt.get("ref") or f"{evt['tool']}:unknown"
+            card = {
+                "key": key, "tool": evt["tool"], "ref": evt.get("ref", ""),
+                "path": evt.get("path"), "turn": 0, "size": evt.get("size", 0),
+                "excerpt": evt.get("excerpt", ""), "label": evt.get("label", ""),
+                "thinking": evt.get("thinking", ""),
+                "hunks": evt.get("hunks", []), "reads": 1,
+            }
+            # 同 key 去重合并 hunks + 移到头
+            rebuild_items(items, key_idx, key, card, evt)
+
+    return items
+
+
+def rebuild_items(items: list, key_idx: dict, key: str, card: dict, evt: dict):
+    """辅助函数：doc_read 去重合并（模拟前端 doc_read handler）。"""
+    if key in key_idx:
+        idx = key_idx[key]
+        old = items[idx]
+        seen = {(h["start"], h["end"], h["title"]) for h in old.get("hunks", [])}
+        for h in evt.get("hunks", []):
+            if (h["start"], h["end"], h["title"]) not in seen:
+                old["hunks"].append(h)
+        old["reads"] += 1
+        items.pop(idx)
+        items.insert(0, old)
+        key_idx.clear()
+        for pos, item in enumerate(items):
+            key_idx[item["key"]] = pos
+    else:
+        items.insert(0, card)
+        key_idx.clear()
+        for pos, item in enumerate(items):
+            key_idx[item["key"]] = pos
 
 
 def _build_scenario_context(scenario_id: str) -> str:
@@ -415,13 +487,18 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
         sm = SessionManager(d, workspace=workspace)
         messages = sm.load(session_id)
         if messages is not None:
-            return {"session_id": session_id, "messages": messages, "owner": d.name, "workspace": workspace}
+            reading_feed = _rebuild_reading_feed(messages)
+            return {"session_id": session_id, "messages": messages,
+                    "reading_feed": reading_feed, "owner": d.name,
+                    "workspace": workspace}
         # 如果指定工作区未找到，也尝试无工作区（兼容旧会话）
         if workspace:
             sm2 = SessionManager(d)
             messages = sm2.load(session_id)
             if messages is not None:
-                return {"session_id": session_id, "messages": messages, "owner": d.name, "workspace": ""}
+                return {"session_id": session_id, "messages": messages,
+                        "reading_feed": reading_feed, "owner": d.name,
+                        "workspace": ""}
     raise HTTPException(status_code=404, detail="会话不存在")
 
 
@@ -615,18 +692,14 @@ async def agent_ws(websocket: WebSocket,
 
             def _build_prompt(sid_val: str) -> str:
                 ctx = _build_scenario_context(sid_val)
-                return build_system_prompt(scenario_context=ctx)
+                return build_system_prompt(scenario_context=ctx, purpose=session_purpose)
 
             system_prompt = await asyncio.to_thread(_build_prompt, scenario_id)
             # T-011: 三层交集白名单装配——TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools
             # （meta 工具 todo_write 常驻；全量用户 admin/tester 角色层不额外收窄）
-            # M5：已建会话用创建期 tool_whitelist 快照（定义热更新不回流）；
-            # 快照缺失（旧会话）才回退 load_purpose 现解
-            if session_tools_snapshot is not None:
-                purpose_tools = session_tools_snapshot
-            else:
-                pdef_now = load_purpose(session_purpose) if session_purpose else None
-                purpose_tools = list(pdef_now.tools if pdef_now else [])
+            # 工具白名单跟随配置，不锁死在会话创建时（purpose 定义变动即时生效）
+            pdef_now = load_purpose(session_purpose) if session_purpose else None
+            purpose_tools = list(pdef_now.tools if pdef_now else [])
             whitelist_tools = resolve_tools(
                 purpose_tools=purpose_tools,
                 user_roles=list(_ws_roles or []),
@@ -639,7 +712,9 @@ async def agent_ws(websocket: WebSocket,
                     "message": "当前角色无可用的工具白名单（不允许 Agent 运行）",
                 })
                 continue
-            runtime = AgentRuntime(llm, tools=whitelist_tools, max_turns=max_turns)
+            runtime = AgentRuntime(llm, tools=whitelist_tools, max_turns=max_turns,
+                                   purpose_name=session_purpose or "",
+                                   user_roles=list(_ws_roles or []))
             ws_message = f"{ref_block}{message}" if ref_block else message
 
             # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）

@@ -7,6 +7,8 @@
     - 依赖自检：Python 关键模块缺失自动 pip install；package.json 比 node_modules 新时自动 npm install
     - 后端：workbench/backend → uvicorn --reload :9100（SG_AUTH_MODE=mock，改代码自动重载）
     - 前端：workbench/frontend → npm run dev :5173（热更新）
+    - 前端 dist 自动构建：源码比 dist/ 新时自动 npm run build（9100 后端托管 dist 静态文件，
+      不改构建则 9100 上的前端永远是旧版）
     - 后台隐藏进程运行（不开新窗口），日志在 workbench/backend/data/logs/，PID 记录于 dev-pids.json
     - 端口归属校验：9100/5173 被非 SpecGuard 进程占用时报错退出
     - 幂等重启：自动终止上一轮后台进程（PID 文件 + 旧版标题窗口 + 端口兜底），确保运行最新代码
@@ -165,6 +167,27 @@ if ($needNpm) {
     finally { Pop-Location }
 }
 
+# ── 前端构建（dist 缺失或源码更新时重建——9100 后端托管 dist，不重建则 9100 为旧版）──
+$DistDir = Join-Path $FrontendDir 'dist'
+$needBuild = -not (Test-Path (Join-Path $DistDir 'index.html'))
+if (-not $needBuild) {
+    $distTime = (Get-Item (Join-Path $DistDir 'index.html')).LastWriteTime
+    $srcTime = (Get-ChildItem (Join-Path $FrontendDir 'src') -Recurse -File |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    if ($srcTime -gt $distTime) { $needBuild = $true }
+}
+if ($needBuild) {
+    Write-Host "[构建] 前端 dist（源码已更新）..." -ForegroundColor Green
+    Push-Location $FrontendDir
+    try {
+        if (-not (Test-Path 'node_modules')) { npm install; if ($LASTEXITCODE -ne 0) { throw "npm install 失败" } }
+        npm run build
+        if ($LASTEXITCODE -ne 0) { throw "前端构建失败（exit=$LASTEXITCODE）" }
+    } finally { Pop-Location }
+} else {
+    Write-Host "[跳过] 前端 dist 已是最新" -ForegroundColor DarkGray
+}
+
 # ── 清理上一轮进程（隐藏后台 PID 文件 + 旧版标题窗口；端口兜底仍在下方）──
 Stop-PreviousRun
 Stop-SgWindows
@@ -235,13 +258,14 @@ $record = [ordered]@{
 
 if ($ready) {
     Write-Host "启动完成 ✅（第 $($startHistory.Count + 1) 次启动）" -ForegroundColor Green
-    Write-Host "  前端工作台:  http://127.0.0.1:5173  （mock 登录页：输工号直接登录）"
+    Write-Host "  前端工作台:  http://127.0.0.1:9100  （dist 构建产物，源码改动自动重建）"
+    Write-Host "  dev 热更新:   http://127.0.0.1:5173  （vite dev，改前端源码即时生效）"
     Write-Host "  后端 API:    http://127.0.0.1:9100/docs  （--reload：改后端代码自动重载）"
     Write-Host "  后端日志:    $backendOut"
     Write-Host "  前端日志:    $frontendOut"
     Write-Host "  启动统计:    pwsh start-workbench.ps1 -Stats"
     Write-Host "  生产部署:    pwsh serve-prod.ps1"
-    if (-not $NoBrowser) { Start-Process "http://127.0.0.1:5173" }
+    if (-not $NoBrowser) { Start-Process "http://127.0.0.1:9100" }
 } else {
     Write-Host "⚠️ 服务未在 60s 内就绪，请检查日志: $LogDir" -ForegroundColor Red
     exit 1

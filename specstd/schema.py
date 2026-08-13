@@ -55,6 +55,8 @@ DELTA_OPTIONAL_FILES = [FILE_API_DELTA_YAML]
 # ══════════════════════════════════════════════════════════
 
 # FR 锚点标题：### FR-001: 或 ### FR-SEC-001:（支持字母数字下划线 ID）
+# FR ID 结构：基线 `FR-{序号}`（模块内唯一）；delta 新增 `FR-{功能}-{迭代}-{流水号}`
+# （如 FR-person-profile-0817-001，全局唯一、永久保留）——正则以宽匹配兼容两种格式
 FR_HEADING_RE = re.compile(r"^###\s+(FR-[\w-]+)\s*[:：]\s*(.*)$", re.MULTILINE)
 
 # FR 列表定义：- **FR-001**：描述（K-020：真实工作区 spec 的合法写法——

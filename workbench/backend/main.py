@@ -184,7 +184,8 @@ def spa_fallback(full_path: str):
         candidate = FRONTEND_DIST / full_path
         if candidate.is_file():
             return FileResponse(candidate)
-    return FileResponse(index)
+    # index.html 不缓存（每次重新验证，保证 dist 更新后 F5 立即生效）
+    return FileResponse(index, headers={"Cache-Control": "no-cache"})
 
 
 if __name__ == "__main__":

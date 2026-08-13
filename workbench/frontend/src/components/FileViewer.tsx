@@ -266,7 +266,8 @@ export default function FileViewer({ path, content, loading, format, hunks }: Fi
   }
 
   // T-511：带使用位置（hunks）的阅读足迹打开——行号 + 高亮 + 多处导航，优先于排版渲染
-  if (hunks && hunks.length > 0 && !OFFICE_EXTS.has(ext)) {
+  // T-xxx：.md/.yaml 文件不走 LocatedTextView（行号 + 纯文本），走 Markdown/YAML 渲染
+  if (hunks && hunks.length > 0 && !OFFICE_EXTS.has(ext) && ext !== '.md' && ext !== '.yaml' && ext !== '.yml') {
     return <LocatedTextView content={content} hunks={hunks} />;
   }
 
