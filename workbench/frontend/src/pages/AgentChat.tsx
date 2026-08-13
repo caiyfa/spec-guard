@@ -124,6 +124,7 @@ interface GroupedItem {
   thought?: boolean;    // K-024: 工具调用前的思考文本（轻量样式，常驻可见）
   references?: ChatReference[];  // K-013: user 消息携带的 @引用
   artifacts?: ArtifactInfo[];    // 产物卡片（工具组之后，独立于折叠组常驻可见）
+  msgIdx?: number;     // 在 messages[] 中的索引（用于撤回定位）
 }
 
 // ── 产物预览上下文（会话级：draft 内容匹配 + 预览回调，注入 MarkdownText 渲染树）──
@@ -411,12 +412,13 @@ function groupMessages(messages: ChatMessage[]): GroupedItem[] {
     }
   };
 
-  for (const msg of messages) {
+  for (let mi = 0; mi < messages.length; mi++) {
+    const msg = messages[mi];
     if (msg.role === 'system') continue;
 
     if (msg.role === 'user') {
       flushToolGroup();
-      groups.push({ type: 'user', content: msg.content, references: msg.references });
+      groups.push({ type: 'user', content: msg.content, references: msg.references, msgIdx: mi });
     } else if (msg.role === 'assistant') {
       if (msg.tool_calls && msg.tool_calls.length > 0) {
         const cleanContent = msg.content ? stripPlan(msg.content) : '';
@@ -2918,6 +2920,13 @@ export default function AgentChat() {
     );
   }, []);
 
+  // 撤回用户消息：移除该消息及之后全部内容，同时清空足迹（足迹=本轮运行依据）
+  const handleRetract = useCallback((msgIdx: number) => {
+    setMessages(prev => prev.slice(0, msgIdx));
+    setReadingFeed([]);
+    setWritingFeed([]);
+  }, []);
+
   // 会话内 write_draft 内容映射（大段 md 代码块 → 落盘文件匹配，产物卡片去重用）
   const draftContents = useMemo(() => {
     const map = new Map<string, string>();
@@ -3186,7 +3195,16 @@ export default function AgentChat() {
               </div>
             )}
             {stripRefBlock(item.content || '')}
-            <CopyButton text={stripRefBlock(item.content || '')} className="text-[10px] text-info/40 hover:text-info mt-0.5" />
+            <div className="flex items-center gap-1.5 mt-1">
+              <CopyButton text={stripRefBlock(item.content || '')} className="text-[10px] text-info/40 hover:text-info" />
+              {item.msgIdx !== undefined && (
+                <button onClick={() => handleRetract(item.msgIdx!)}
+                  className="text-[10px] text-gray-500 hover:text-red-400"
+                  title="撤回该消息及后续内容">
+                  撤回
+                </button>
+              )}
+            </div>
           </div>
         </div>
       );
