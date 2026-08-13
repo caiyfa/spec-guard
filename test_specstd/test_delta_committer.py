@@ -64,7 +64,7 @@ def _cleanup_ctx():
 
 @pytest.fixture()
 def git_repo(tmp_path, db):
-    """git 型合规工作区（含 delta-001 起草区 + 初始 commit）。"""
+    """git 型合规工作区（含 delta001 起草区 + 初始 commit）。"""
     ws = create_valid_workspace(tmp_path / "repo")
     git_init_workspace(ws)
     register_local("tdm", str(ws), "tdm", activate=True)
@@ -94,7 +94,7 @@ class TestService:
     def _change(self, repo, filename="proposal.md", content="# 变更内容\n"):
         """先写文件制造变更（走 write_delta_doc 产生 .bak 的可控变更）。"""
         from services.specflow.delta_doc_writer import write_delta_doc
-        r = write_delta_doc(workspace="tdm", delta_id="delta-001",
+        r = write_delta_doc(workspace="tdm", delta_id="delta001",
                             filename=filename, content=content, emp_no="90024166")
         assert r["ok"] is True
 
@@ -104,7 +104,7 @@ class TestService:
         register_local("plain", str(ws), "tdm", activate=True)
         try:
             from services.specflow.delta_committer import commit_delta_changes
-            r = commit_delta_changes(workspace="plain", delta_id="delta-001",
+            r = commit_delta_changes(workspace="plain", delta_id="delta001",
                                      emp_no="90024166")
             assert r["ok"] is False and "不是 git 仓库" in r["error"]
         finally:
@@ -116,54 +116,54 @@ class TestService:
         assert r["ok"] is False and "不存在" in r["error"]
 
     def test_frozen_rejected(self, git_repo, db):
-        (git_repo / "changes" / "delta-001" / "FREEZE.yaml").write_text(
+        (git_repo / "changes" / "delta001" / "FREEZE.yaml").write_text(
             "frozen: true\n", encoding="utf-8")
         from services.specflow.delta_committer import commit_delta_changes
-        r = commit_delta_changes(workspace="tdm", delta_id="delta-001", emp_no="90024166")
+        r = commit_delta_changes(workspace="tdm", delta_id="delta001", emp_no="90024166")
         assert r["ok"] is False and "冻结" in r["error"]
 
     def test_conformance_error_rejected(self, git_repo, db):
         """写入破坏 conformance 的内容 → 提交被门禁拦截。"""
-        bad = git_repo / "changes" / "delta-001" / "delta-spec.md"
+        bad = git_repo / "changes" / "delta001" / "delta-spec.md"
         orig = bad.read_text(encoding="utf-8")
         (bad).write_text(orig.replace("FR-001", "FR-999"), encoding="utf-8")
         from services.specflow.delta_committer import commit_delta_changes
-        r = commit_delta_changes(workspace="tdm", delta_id="delta-001", emp_no="90024166")
+        r = commit_delta_changes(workspace="tdm", delta_id="delta001", emp_no="90024166")
         assert r["ok"] is False
         assert "conformance" in r["error"] or "校验" in r["error"]
 
     def test_bad_message_prefix_rejected(self, git_repo, db):
         self._change(git_repo)
         from services.specflow.delta_committer import commit_delta_changes
-        r = commit_delta_changes(workspace="tdm", delta_id="delta-001",
+        r = commit_delta_changes(workspace="tdm", delta_id="delta001",
                                  message="随便写", emp_no="90024166")
         assert r["ok"] is False and "前缀" in r["error"]
 
     def test_no_changes_rejected(self, git_repo, db):
         """无变更 → 拒绝（避免空提交）。"""
         from services.specflow.delta_committer import commit_delta_changes
-        r = commit_delta_changes(workspace="tdm", delta_id="delta-001", emp_no="90024166")
+        r = commit_delta_changes(workspace="tdm", delta_id="delta001", emp_no="90024166")
         assert r["ok"] is False and "无变更" in r["error"]
 
     def test_commit_success_auto_message(self, git_repo, db):
         """正常提交：自动 message、.bak 被排除、文件清单正确。"""
         self._change(git_repo)  # proposal.md 变更 + 生成 .bak
         from services.specflow.delta_committer import commit_delta_changes
-        r = commit_delta_changes(workspace="tdm", delta_id="delta-001", emp_no="90024166")
+        r = commit_delta_changes(workspace="tdm", delta_id="delta001", emp_no="90024166")
         assert r["ok"] is True, r
-        assert r["message"].startswith("feat: delta delta-001")
+        assert r["message"].startswith("feat: delta delta001")
         assert "未 push" in r["note"]
         # 文件清单：proposal.md 在，.bak 不在
         assert any("proposal.md" in f for f in r["files"])
         assert not any(f.endswith(".bak") for f in r["files"])
         # HEAD 前进且工作区干净（proposal.md.bak 未跟踪但被 gitignore？断言提交生效即可）
         out = _git(["git", "log", "-1", "--pretty=%s"], git_repo)
-        assert "delta delta-001" in out.stdout
+        assert "delta delta001" in out.stdout
 
     def test_commit_custom_message(self, git_repo, db):
         self._change(git_repo)
         from services.specflow.delta_committer import commit_delta_changes
-        r = commit_delta_changes(workspace="tdm", delta_id="delta-001",
+        r = commit_delta_changes(workspace="tdm", delta_id="delta001",
                                  message="docs: 修正编号映射", emp_no="90024166")
         assert r["ok"] is True
         out = _git(["git", "log", "-1", "--pretty=%s"], git_repo)
@@ -172,7 +172,7 @@ class TestService:
     def test_commit_audit_recorded(self, git_repo, db):
         self._change(git_repo)
         from services.specflow.delta_committer import commit_delta_changes
-        commit_delta_changes(workspace="tdm", delta_id="delta-001", emp_no="90024166")
+        commit_delta_changes(workspace="tdm", delta_id="delta001", emp_no="90024166")
         import sqlite3
         conn = sqlite3.connect(db)
         n = conn.execute(
@@ -205,31 +205,31 @@ class TestREST:
 
     def _make_change(self, git_repo):
         from services.specflow.delta_doc_writer import write_delta_doc
-        write_delta_doc(workspace="tdm", delta_id="delta-001",
+        write_delta_doc(workspace="tdm", delta_id="delta001",
                         filename="proposal.md", content="# 变更\n", emp_no="90024166")
 
     def test_product_can_commit(self, client, git_repo, db):
         self._make_change(git_repo)
         h = self._login(client, "90024170", ["product"])
-        r = client.post("/api/spec/changes/delta-001/commit", json={}, headers=h)
+        r = client.post("/api/spec/changes/delta001/commit", json={}, headers=h)
         assert r.status_code == 200, r.text
         assert r.json()["ok"] is True
 
     def test_tester_denied(self, client, git_repo, db):
         h = self._login(client, "90024172", ["tester"])
-        r = client.post("/api/spec/changes/delta-001/commit", json={}, headers=h)
+        r = client.post("/api/spec/changes/delta001/commit", json={}, headers=h)
         assert r.status_code == 403
 
     def test_viewer_denied(self, client, git_repo, db):
         h = self._login(client, "90024173", ["viewer"])
-        r = client.post("/api/spec/changes/delta-001/commit", json={}, headers=h)
+        r = client.post("/api/spec/changes/delta001/commit", json={}, headers=h)
         assert r.status_code == 403
 
     def test_frozen_denied_403(self, client, git_repo, db):
-        (git_repo / "changes" / "delta-001" / "FREEZE.yaml").write_text(
+        (git_repo / "changes" / "delta001" / "FREEZE.yaml").write_text(
             "frozen: true\n", encoding="utf-8")
         h = self._login(client, "90024170", ["product"])
-        r = client.post("/api/spec/changes/delta-001/commit", json={}, headers=h)
+        r = client.post("/api/spec/changes/delta001/commit", json={}, headers=h)
         assert r.status_code == 403
         assert "冻结" in r.json()["detail"]
 
@@ -254,16 +254,16 @@ class TestMCP:
 
     def test_commit_success(self, git_repo, db):
         from services.specflow.delta_doc_writer import write_delta_doc
-        write_delta_doc(workspace="tdm", delta_id="delta-001",
+        write_delta_doc(workspace="tdm", delta_id="delta001",
                         filename="proposal.md", content="# MCP 提交\n", emp_no="")
         from mcp_server.tools import delta_doc_writer
-        r = self._call(delta_doc_writer, "commit_delta_changes", {"delta_id": "delta-001"})
+        r = self._call(delta_doc_writer, "commit_delta_changes", {"delta_id": "delta001"})
         assert '"ok": true' in r[0].text
         assert "未 push" in r[0].text
 
     def test_commit_no_changes(self, git_repo, db):
         from mcp_server.tools import delta_doc_writer
-        r = self._call(delta_doc_writer, "commit_delta_changes", {"delta_id": "delta-001"})
+        r = self._call(delta_doc_writer, "commit_delta_changes", {"delta_id": "delta001"})
         assert '"ok": false' in r[0].text
         assert "无变更" in r[0].text
 

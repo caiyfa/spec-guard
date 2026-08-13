@@ -27,6 +27,7 @@ from specstd.schema import (
     REQUIRED_TOP_DIRS, REQUIRED_TOP_FILES,
     DELTA_REQUIRED_FILES,
     FR_HEADING_RE,
+    ITER_CODE_RE,
     DELTA_SECTION_RE, DELTA_SECTIONS,
     SECTION_ADDED, SECTION_MODIFIED, SECTION_REMOVED,
     OP_ADD, OP_MODIFY, OP_REMOVE, VALID_OPERATIONS,
@@ -199,6 +200,18 @@ def _check_anchor(report: ConformanceReport, ws_root: Path) -> dict[str, AnchorI
 def _check_delta(report: ConformanceReport, delta_dir: Path):
     """检查单个 delta 目录的全部规则。"""
     delta_code = delta_dir.name
+
+    # STRUCT — delta 代号字符集（迭代命名限制：字母/数字/下划线开头，可含 '.'，禁 '-'；
+    # 迭代代号是 FR-{功能}-{迭代}-{流水} 双右锚解析的结构前提，含 '-' 则解析歧义不可判）
+    if not ITER_CODE_RE.match(delta_code):
+        report.add(
+            RuleName.STRUCT.value, RuleLevel.ERROR.value,
+            f"delta 代号 '{delta_code}' 非法：迭代代号只允许字母/数字/下划线开头、可含 '.'，"
+            f"禁止含 '-'（如 2026-08-17 请转写为 2026_08_17 或 20260817）——"
+            f"'-' 是 FR-{{功能}}-{{迭代}}-{{流水}} 编号的层级分隔符，代号含 '-' 会导致编号不可解析",
+            path=f"{DIR_CHANGES}/{delta_code}",
+            detail={"delta_code": delta_code},
+        )
 
     # STRUCT — delta 必备文件
     for f in DELTA_REQUIRED_FILES:

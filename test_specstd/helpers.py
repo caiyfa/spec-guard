@@ -59,11 +59,11 @@ paths:
       summary: Test endpoint
 """
 
-DELTA_SPEC_MD = """# Delta: delta-001
+DELTA_SPEC_MD = """# Delta: delta001
 
 ## ADDED Requirements
 
-### FR-001: 新增查询功能 [delta:delta-001]
+### FR-001: 新增查询功能 [delta:delta001]
 
 全量描述：新增查询接口，支持分页和过滤。
 
@@ -71,7 +71,7 @@ DELTA_SPEC_MD = """# Delta: delta-001
 
 ## MODIFIED Requirements
 
-### FR-002: 修改创建功能 [delta:delta-001]
+### FR-002: 修改创建功能 [delta:delta001]
 
 **原描述**: 原来的创建功能
 **新描述**: 修改后的创建功能，增加了参数校验
@@ -81,14 +81,14 @@ DELTA_SPEC_MD = """# Delta: delta-001
 
 ## REMOVED Requirements
 
-### FR-003: 删除旧功能 [delta:delta-001]
+### FR-003: 删除旧功能 [delta:delta001]
 
 **原描述**: 旧的废弃功能
 
 → task: TSK-003
 """
 
-MANIFEST_YAML = """delta: delta-001
+MANIFEST_YAML = """delta: delta001
 baseline: "1.0"
 baseline_sha: "a3f8c21"
 operations:
@@ -113,11 +113,11 @@ operations:
 
 TASK_MD = """# Task List
 
-### TSK-001 新增查询功能 ←delta:delta-001
+### TSK-001 新增查询功能 ←delta:delta001
 
-### TSK-002 修改创建功能 ←delta:delta-001
+### TSK-002 修改创建功能 ←delta:delta001
 
-### TSK-003 删除旧功能 ←delta:delta-001
+### TSK-003 删除旧功能 ←delta:delta001
 """
 
 API_DELTA_YAML = """openapi: 3.0.3
@@ -134,15 +134,15 @@ paths:
 def create_valid_workspace(path: Path) -> Path:
     """创建完全合规的 spec 仓库样例。"""
     (path / "specs" / "module1" / "feature1").mkdir(parents=True, exist_ok=True)
-    (path / "changes" / "delta-001").mkdir(parents=True, exist_ok=True)
+    (path / "changes" / "delta001").mkdir(parents=True, exist_ok=True)
     (path / "archive").mkdir(parents=True, exist_ok=True)
 
     (path / "AGENTS.md").write_text(AGENTS_MD, encoding="utf-8")
     (path / "specs" / "module1" / "feature1" / "spec.md").write_text(SPEC_MD, encoding="utf-8")
     (path / "specs" / "module1" / "feature1" / "api.yaml").write_text(API_YAML, encoding="utf-8")
 
-    delta_dir = path / "changes" / "delta-001"
-    (delta_dir / "proposal.md").write_text("# Delta Proposal: delta-001\n", encoding="utf-8")
+    delta_dir = path / "changes" / "delta001"
+    (delta_dir / "proposal.md").write_text("# Delta Proposal: delta001\n", encoding="utf-8")
     (delta_dir / "delta-spec.md").write_text(DELTA_SPEC_MD, encoding="utf-8")
     (delta_dir / "delta.manifest.yaml").write_text(MANIFEST_YAML, encoding="utf-8")
     (delta_dir / "task.md").write_text(TASK_MD, encoding="utf-8")
@@ -183,7 +183,7 @@ def create_anchor_violation(path: Path) -> Path:
 def create_manifest_violation(path: Path) -> Path:
     """MANIFEST 违规：manifest operations 与 delta-spec 不一致。"""
     ws = create_valid_workspace(path)
-    (ws / "changes" / "delta-001" / "delta.manifest.yaml").write_text(
+    (ws / "changes" / "delta001" / "delta.manifest.yaml").write_text(
         MANIFEST_YAML
         + """  - op: add
     fr: FR-099
@@ -199,12 +199,12 @@ def create_manifest_violation(path: Path) -> Path:
 def create_modify_full_violation(path: Path) -> Path:
     """MODIFY_FULL 违规：MODIFIED 条目缺少三要素。"""
     ws = create_valid_workspace(path)
-    (ws / "changes" / "delta-001" / "delta-spec.md").write_text(
-        """# Delta: delta-001
+    (ws / "changes" / "delta001" / "delta-spec.md").write_text(
+        """# Delta: delta001
 
 ## ADDED Requirements
 
-### FR-001: 新增查询功能 [delta:delta-001]
+### FR-001: 新增查询功能 [delta:delta001]
 
 全量描述：新增查询接口。
 
@@ -212,7 +212,7 @@ def create_modify_full_violation(path: Path) -> Path:
 
 ## MODIFIED Requirements
 
-### FR-002: 修改创建功能 [delta:delta-001]
+### FR-002: 修改创建功能 [delta:delta001]
 
 **原描述**: 原来的创建功能
 **新描述**: 修改后的创建功能
@@ -221,7 +221,7 @@ def create_modify_full_violation(path: Path) -> Path:
 
 ## REMOVED Requirements
 
-### FR-003: 删除旧功能 [delta:delta-001]
+### FR-003: 删除旧功能 [delta:delta001]
 
 **原描述**: 旧的废弃功能
 
@@ -235,7 +235,7 @@ def create_modify_full_violation(path: Path) -> Path:
 def create_trace_violation(path: Path) -> Path:
     """TRACE 违规：delta-spec 引用的 task 在 task.md 中不存在。"""
     ws = create_valid_workspace(path)
-    (ws / "changes" / "delta-001" / "delta-spec.md").write_text(
+    (ws / "changes" / "delta001" / "delta-spec.md").write_text(
         DELTA_SPEC_MD.replace("→ task: TSK-001", "→ task: TSK-099"),
         encoding="utf-8",
     )

@@ -59,6 +59,37 @@ DELTA_OPTIONAL_FILES = [FILE_API_DELTA_YAML]
 # （如 FR-person-profile-0817-001，全局唯一、永久保留）——正则以宽匹配兼容两种格式
 FR_HEADING_RE = re.compile(r"^###\s+(FR-[\w-]+)\s*[:：]\s*(.*)$", re.MULTILINE)
 
+# ── FR-{功能}-{迭代}-{流水} 结构化解析（双右锚，方案 A 终版）──
+# 解析规则（全部锚点在右侧，功能名彻底自由）：
+#   流水 = 恒为最右段 \d{3}；迭代 = 恒为右起第二段（单段，禁 '-'）；
+#   功能 = 剩余前缀整体左取——功能名任意含 '-'、同前缀子模块（person-search /
+#   person-search-v2）共存零歧义，功能名内数字段（eval-360）不误判为迭代。
+# 迭代代号白名单：字母/数字/下划线开头，后续可含 '.'（S24/v2.5/2026Q3 合法），
+# 禁 '-'——迭代代号含 '-' 时功能段会吸进迭代碎片，字符串层面不可判，
+# 故由 delta 目录创建入口与 conformance STRUCT 双点强制。
+ITER_CODE_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.]*$")
+
+# delta FR 编号命名分组解析（仅匹配 delta 新格式；基线 FR-001 不匹配）
+FR_DELTA_ID_RE = re.compile(
+    r"^FR-(?P<func>[a-z0-9]+(?:-[a-z0-9]+)*)-(?P<iter>[A-Za-z0-9_.]+)-(?P<seq>\d{3})$"
+)
+
+
+def parse_fr_delta_id(fr_id: str, known_features: Optional[set[str]] = None) -> Optional[dict[str, str]]:
+    """解析 delta FR 编号为 {func, iter, seq}；非法形态返回 None。
+
+    无 known_features 时为形态级 best-effort 解析（迭代含 '-' 的编号会被
+    形态合法地误切——防线在 ITER_CODE_RE 对 delta 目录代号的强制）；
+    提供 known_features（功能名注册表）时功能段必须命中，否则返回 None，
+    可结构性拦截 'FR-eval-360-2026-08-17-001' 这类迭代含 '-' 的编号。
+    """
+    m = FR_DELTA_ID_RE.match(fr_id)
+    if not m:
+        return None
+    if known_features is not None and m.group("func") not in known_features:
+        return None
+    return {"func": m.group("func"), "iter": m.group("iter"), "seq": m.group("seq")}
+
 # FR 列表定义：- **FR-001**：描述（K-020：真实工作区 spec 的合法写法——
 # tdm specs/system-settings/tag-library/spec.md 等用列表加粗而非三级标题；
 # 仅匹配「行首列表项 + 加粗 FR + 冒号」的定义格式，正文内联引用 **FR-001** 不算锚点）
