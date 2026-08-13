@@ -1,0 +1,248 @@
+// 飞书关联复核面板（飞书知识图谱一期 T-915）：
+// LLM 候选边（依据+置信度）→ 人批量复核 → 共享区事实源 → 图谱派生。
+// 同步范围即授权范围（watch 配置 = 显式授权载体）。
+
+import { useEffect, useMemo, useState } from 'react';
+import { feishuPoolApi, type FeishuReviewItem, type FeishuWatch } from '../api';
+
+const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
+  'fd:': { label: '文档', cls: 'bg-sky-500/15 text-sky-400' },
+  'fm:': { label: '妙记', cls: 'bg-violet-500/15 text-violet-400' },
+  'tp:': { label: '话题', cls: 'bg-amber-500/15 text-amber-400' },
+};
+
+function badgeOf(src: string) {
+  const key = Object.keys(TYPE_BADGE).find(k => src.startsWith(k));
+  return key ? TYPE_BADGE[key] : { label: '材料', cls: 'bg-gray-500/15 text-gray-400' };
+}
+
+function confColor(c: number) {
+  if (c >= 0.8) return 'bg-green-500';
+  if (c >= 0.6) return 'bg-yellow-500';
+  return 'bg-gray-500';
+}
+
+export default function FeishuReviewPanel() {
+  const [items, setItems] = useState<FeishuReviewItem[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [threshold, setThreshold] = useState(0);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState('');
+  const [watchOpen, setWatchOpen] = useState(false);
+  const [watch, setWatch] = useState<FeishuWatch | null>(null);
+  const [watchChats, setWatchChats] = useState('');
+  const [watchDocs, setWatchDocs] = useState('');
+
+  const keyOf = (it: FeishuReviewItem) => `${it.src}||${it.dst}`;
+
+  const load = async () => {
+    try {
+      const { items } = await feishuPoolApi.reviewQueue();
+      setItems(items);
+      setSelected(new Set());
+    } catch (e: any) { setError(e.message); }
+  };
+
+  useEffect(() => { setError(''); load(); }, []);
+
+  const visible = useMemo(
+    () => items.filter(i => i.status === 'pending' && i.confidence >= threshold),
+    [items, threshold]);
+
+  const selectable = visible.filter(i => i.valid);
+  const allChecked = selectable.length > 0
+    && selectable.every(i => selected.has(keyOf(i)));
+
+  const toggleAll = () => {
+    setSelected(allChecked
+      ? new Set()
+      : new Set(selectable.map(keyOf)));
+  };
+
+  const toggleOne = (k: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+
+  const pairsOf = (set: Set<string>): [string, string][] =>
+    [...set].map(k => k.split('||') as [string, string]);
+
+  const handleSync = async () => {
+    setBusy('sync'); setError(''); setNotice('');
+    try {
+      const r = await feishuPoolApi.syncNow();
+      setNotice(`同步完成：文档 ${r.docs} / 妙记 ${r.minutes} / 群聊 ${r.chats}`
+        + (r.errors.length ? `；${r.errors.length} 条失败（诚实呈现）` : ''));
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  const handleBatch = async (action: 'confirm' | 'reject') => {
+    if (selected.size === 0) return;
+    setBusy(action); setError(''); setNotice('');
+    try {
+      const r: { confirmed?: number; rejected?: number; skipped: number } =
+        action === 'confirm'
+          ? await feishuPoolApi.confirm(pairsOf(selected))
+          : await feishuPoolApi.reject(pairsOf(selected));
+      const n = action === 'confirm' ? (r.confirmed ?? 0) : (r.rejected ?? 0);
+      setNotice(`${action === 'confirm' ? '确认' : '拒绝'} ${n} 条`
+        + (r.skipped ? `，跳过 ${r.skipped} 条（invalid/不存在）` : '')
+        + (action === 'confirm' ? '，已提升共享区等待图谱重建' : '，已留痕防重复建议'));
+      await load();
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  const openWatch = async () => {
+    try {
+      const w = await feishuPoolApi.getWatch();
+      setWatch(w);
+      setWatchChats((w.chats || []).map(c => c.chat_id).join('\n'));
+      setWatchDocs((w.docs || []).map(d => d.token).join('\n'));
+      setWatchOpen(true);
+    } catch (e: any) { setError(e.message); }
+  };
+
+  const saveWatch = async () => {
+    if (!watch) return;
+    setBusy('watch'); setError('');
+    try {
+      const cfg: FeishuWatch = {
+        ...watch,
+        chats: watchChats.split('\n').map(s => s.trim()).filter(Boolean)
+          .map(id => ({ chat_id: id })),
+        docs: watchDocs.split('\n').map(s => s.trim()).filter(Boolean)
+          .map(token => ({ token })),
+      };
+      await feishuPoolApi.putWatch(cfg);
+      setNotice('同步范围已保存（即授权范围）');
+      setWatchOpen(false);
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
+  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
+  const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
+
+  return (
+    <div className={card}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold">🔗 关联复核（飞书材料 → FR）</h2>
+        <div className="flex items-center gap-2">
+          <button className={btn} onClick={handleSync} disabled={busy === 'sync'}>
+            {busy === 'sync' ? '同步中…' : '立即同步'}
+          </button>
+          <button className={btn} onClick={openWatch}>同步设置</button>
+        </div>
+      </div>
+      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
+      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+
+      <div className="flex items-center gap-3 mb-2 text-[11px] text-gray-500">
+        <span>置信度过滤：</span>
+        {[{ v: 0, l: '全部' }, { v: 0.6, l: '≥60%' }, { v: 0.8, l: '≥80%' }].map(o => (
+          <button key={o.v}
+            className={`px-2 py-0.5 rounded ${threshold === o.v ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400'}`}
+            onClick={() => setThreshold(o.v)}>{o.l}</button>
+        ))}
+        <span className="ml-auto">待复核 {visible.length} 条 · 已选 {selected.size} 条</span>
+        <button className={btn} onClick={toggleAll} disabled={selectable.length === 0}>
+          {allChecked ? '取消全选' : '全选可见'}
+        </button>
+        <button className={btn} disabled={selected.size === 0 || busy !== ''}
+          onClick={() => handleBatch('confirm')}>批量确认</button>
+        <button className={`${btn} !bg-red-500/15 !text-red-400 hover:!bg-red-500/25`}
+          disabled={selected.size === 0 || busy !== ''}
+          onClick={() => handleBatch('reject')}>批量拒绝</button>
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="text-xs text-gray-500">
+          暂无待复核建议——先「同步设置」配置授权范围并「立即同步」，LLM 建边建议将出现在这里
+        </div>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className={th}></th><th className={th}>来源</th><th className={th}>建议 FR</th>
+              <th className={th}>置信度</th><th className={th}>依据（原文摘录）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map(it => {
+              const k = keyOf(it);
+              const badge = badgeOf(it.src);
+              return (
+                <tr key={k} className={it.valid ? '' : 'opacity-60'}>
+                  <td className={td}>
+                    <input type="checkbox" disabled={!it.valid}
+                      checked={selected.has(k)} onChange={() => toggleOne(k)} />
+                  </td>
+                  <td className={td}>
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] mr-1.5 ${badge.cls}`}>
+                      {badge.label}
+                    </span>
+                    <code className="text-[11px]">{it.src}</code>
+                  </td>
+                  <td className={td}><code className="text-[11px]">{it.dst}</code></td>
+                  <td className={td}>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-14 h-1.5 rounded bg-surface-3 overflow-hidden">
+                        <div className={`h-full ${confColor(it.confidence)}`}
+                          style={{ width: `${Math.round(it.confidence * 100)}%` }} />
+                      </div>
+                      <span className="text-[11px] text-gray-400">
+                        {Math.round(it.confidence * 100)}%
+                      </span>
+                    </div>
+                  </td>
+                  <td className={td}>
+                    <span className={it.valid ? 'text-gray-300' : 'text-red-400'}>
+                      {it.evidence || '（无依据）'}
+                    </span>
+                    {!it.valid && (
+                      <span className="ml-1 text-[10px] text-red-400">invalid·不可确认</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {watchOpen && watch && (
+        <div className="mt-3 border border-border rounded-lg p-3 bg-surface-3/40">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold">同步设置（同步范围即授权范围）</h3>
+            <div className="flex gap-2">
+              <button className={btn} onClick={saveWatch} disabled={busy === 'watch'}>保存</button>
+              <button className={btn} onClick={() => setWatchOpen(false)}>取消</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] text-gray-500 mb-1">授权群聊 chat_id（每行一个）</div>
+              <textarea className="w-full h-24 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info"
+                value={watchChats} onChange={e => setWatchChats(e.target.value)}
+                placeholder="oc_xxxxxxxx" />
+            </div>
+            <div>
+              <div className="text-[11px] text-gray-500 mb-1">授权文档 token（每行一个）</div>
+              <textarea className="w-full h-24 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info"
+                value={watchDocs} onChange={e => setWatchDocs(e.target.value)}
+                placeholder="FBxodQkaJoUicrxdk67cUkbhnwc" />
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-gray-500">
+            妙记同步窗口 {watch.minutes_days} 天 · 群聊窗口 {watch.chat_days} 天（在 feishu_watch.yaml 中调整）
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

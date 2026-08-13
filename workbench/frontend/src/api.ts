@@ -1542,3 +1542,37 @@ export const knowledgeApi = {
       body: JSON.stringify({ rating }),
     }),
 };
+// ── 飞书材料池（飞书知识图谱一期 T-912/T-915）──
+export interface FeishuWatch {
+  chats: { chat_id: string; name?: string }[];
+  docs: { token: string; url?: string }[];
+  minutes_days: number;
+  chat_days: number;
+}
+
+export interface FeishuReviewItem {
+  src: string;
+  dst: string;
+  confidence: number;
+  evidence: string;
+  valid: boolean;
+  status: 'pending' | 'confirmed' | 'rejected';
+  suggested_by: string;
+  suggested_at: string;
+}
+
+export const feishuPoolApi = {
+  getWatch: () => request<FeishuWatch>('/feishu-pool/watch'),
+  putWatch: (cfg: FeishuWatch) =>
+    request<FeishuWatch>('/feishu-pool/watch', { method: 'PUT', body: JSON.stringify(cfg) }),
+  syncNow: () =>
+    request<{ docs: number; minutes: number; chats: number; errors: string[] }>(
+      '/feishu-pool/sync', { method: 'POST' }),
+  reviewQueue: () => request<{ items: FeishuReviewItem[] }>('/feishu-pool/review-queue'),
+  confirm: (pairs: [string, string][]) =>
+    request<{ confirmed: number; skipped: number }>(
+      '/feishu-pool/review/confirm', { method: 'POST', body: JSON.stringify({ pairs }) }),
+  reject: (pairs: [string, string][]) =>
+    request<{ rejected: number; skipped: number }>(
+      '/feishu-pool/review/reject', { method: 'POST', body: JSON.stringify({ pairs }) }),
+};

@@ -7,6 +7,7 @@ import {
   type MaterialItem,
   type MaterialTopic,
 } from '../api';
+import FeishuReviewPanel from '../components/FeishuReviewPanel';
 
 const STATUS_COLOR: Record<string, string> = {
   uploaded: 'text-blue-400',
@@ -201,6 +202,9 @@ export default function MaterialsPanel() {
           <pre className="text-[11px] text-gray-400 bg-surface-3 rounded p-3 max-h-80 overflow-auto whitespace-pre-wrap">{packText}</pre>
         </div>
       )}
+
+      {/* 飞书知识图谱一期 T-915：飞书材料→FR 关联复核（人拍板闸门） */}
+      <FeishuReviewPanel />
     </div>
   );
 }
