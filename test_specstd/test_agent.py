@@ -251,6 +251,14 @@ class TestEvents:
 # ══════════════════════════════════════════════════════════
 
 class TestRuntime:
+    @pytest.fixture(autouse=True)
+    def _isolate_db_config(self, monkeypatch):
+        """隔离真实 DB 的 model_config，避免环境数据污染 mock 测试（离线可靠）。"""
+        monkeypatch.setattr(
+            LLMClient, "_load_db_config",
+            staticmethod(lambda model_id="": {}),
+        )
+
     def test_mock_run(self):
         """mock 模式运行核心循环。"""
         llm = LLMClient(base_url="")

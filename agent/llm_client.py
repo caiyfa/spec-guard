@@ -31,14 +31,13 @@ class LLMClient:
     """OpenAI 兼容的大模型客户端。"""
 
     def __init__(self, base_url: str = "", api_key: str = "", model: str = "",
-                 timeout: float = 120, temperature: float = 0.7, model_id: str = ""):
+                 timeout: float = 120, model_id: str = ""):
         # 优先使用 model_id → 显式传入参数 → DB 默认模型 → 旧 llm_config → 环境变量
         db_cfg = self._load_db_config(model_id) if model_id else self._load_db_config()
         self.base_url = base_url or db_cfg.get("base_url") or os.environ.get("SG_LLM_BASE_URL", "")
         self.api_key = api_key or db_cfg.get("api_key") or os.environ.get("SG_LLM_API_KEY", "")
         self.model = model or db_cfg.get("model") or os.environ.get("SG_LLM_MODEL", "gpt-4o")
         self.timeout = float(db_cfg.get("timeout", "120")) if not timeout else timeout
-        self.temperature = float(db_cfg.get("temperature", "0.7")) if temperature == 0.7 else temperature
         # 模型能力 & 思考选项
         self.max_context_tokens = int(db_cfg.get("max_context_tokens") or 0)
         self.max_output_tokens = int(db_cfg.get("max_output_tokens") or 0)

@@ -156,7 +156,7 @@ function DbTab() {
 // ══════════════════════════════════════════════════════════
 
 const EMPTY_MODEL: Omit<ModelConfig, 'id' | 'is_default' | 'created_at' | 'updated_at'> = {
-  name: '', base_url: '', api_key: '', model: '', timeout: '120', temperature: '0.7',
+  name: '', base_url: '', api_key: '', model: '', timeout: '120',
   max_context_tokens: '', max_output_tokens: '', thinking_enabled: 'false', reasoning_effort: '',
 };
 
@@ -297,7 +297,6 @@ function ModelsTab() {
               <Field label="API Key" value={editForm.api_key} onChange={(v) => setEditForm(p => ({ ...p, api_key: v }))} type="password" placeholder="sk-xxx" />
               <Field label="Model" value={editForm.model} onChange={(v) => setEditForm(p => ({ ...p, model: v }))} placeholder="deepseek-v4-flash" />
               <Field label="Timeout (s)" value={editForm.timeout} onChange={(v) => setEditForm(p => ({ ...p, timeout: v }))} placeholder="120" />
-              <Field label="Temperature" value={editForm.temperature} onChange={(v) => setEditForm(p => ({ ...p, temperature: v }))} placeholder="0.7" />
               <Field label="上下文窗口" value={editForm.max_context_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_context_tokens: v }))} placeholder="1048576" />
               <Field label="最大输出" value={editForm.max_output_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_output_tokens: v }))} placeholder="262144" />
               {/* 思考开关 */}
@@ -351,7 +350,7 @@ function ModelsTab() {
 function _toForm(m: ModelConfig) {
   return {
     name: m.name, base_url: m.base_url, api_key: m.api_key, model: m.model,
-    timeout: m.timeout, temperature: m.temperature,
+    timeout: m.timeout,
     max_context_tokens: m.max_context_tokens, max_output_tokens: m.max_output_tokens,
     thinking_enabled: m.thinking_enabled, reasoning_effort: m.reasoning_effort,
   };
