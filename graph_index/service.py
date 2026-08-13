@@ -226,8 +226,10 @@ def panorama_l2(store: GraphStore, module: str, feature: str) -> dict:
 
 
 def backlink(store: GraphStore, node_id: str) -> dict:
-    """计算型反向链接：covered_by / modified_by / decided_by / referenced_by（只读）。"""
-    result = {"covered_by": [], "modified_by": [], "decided_by": [], "referenced_by": []}
+    """计算型反向链接：covered_by / modified_by / decided_by / referenced_by
+    / mentioned_by（飞书知识图谱一期追加；只读不落盘）。"""
+    result = {"covered_by": [], "modified_by": [], "decided_by": [],
+              "referenced_by": [], "mentioned_by": []}
     edges = store.list_edges_by_node(node_id)
     for e in edges:
         if e["edge_type"] == "covers" and e["dst"] == node_id:
@@ -243,6 +245,8 @@ def backlink(store: GraphStore, node_id: str) -> dict:
             result["decided_by"].append(e["src"])
         elif e["edge_type"] == "references" and e["dst"] == node_id:
             result["referenced_by"].append(e["src"])
+        elif e["edge_type"] == "mentions" and e["dst"] == node_id:
+            result["mentioned_by"].append(e["src"])
     for key in result:
         result[key] = sorted(set(result[key]))
     return result

@@ -81,6 +81,8 @@ def compute_source_fingerprint(workspace_root: Path, scenarios_root: Path,
         ("sf_changes", _dir_snapshot(Path(workspace_root) / SPECFLOW_CHANGES)),
         ("scenarios", _dir_snapshot(Path(scenarios_root))),
         ("spq", _file_sha12(Path(sg_root) / "feedback" / "ledger.json")),
+        # 飞书知识图谱一期：共享区事实源（topics/material_links/materials 副本）
+        ("feishu", _dir_snapshot(Path(workspace_root) / ".specguard" / "feishu")),
     ]
     for sub in (REPORTS_SUBDIR, PLANS_SUBDIR):
         d = Path(workspace_root) / ".specguard" / sub
@@ -278,6 +280,107 @@ def _delta_contains_frs(delta_dir: Path) -> list[str]:
         except Exception:
             pass
     return sorted(set(frs))
+
+
+# ══════════════════════════════════════════════════════════
+# 飞书材料派生段（飞书知识图谱一期）
+# ══════════════════════════════════════════════════════════
+
+def _topic_line_ranges(text: str) -> dict:
+    """topics.yaml 每个话题的行区间（- id: tp:xxx 行 → 下一话题前一行，1 基）。"""
+    lines = text.splitlines()
+    matches: list[tuple[int, str]] = []
+    for i, line in enumerate(lines):
+        m = re.match(r"^\s*-\s*id:\s*(\S+)\s*$", line)
+        if m:
+            matches.append((i, m.group(1)))
+    ranges: dict = {}
+    for idx, (line_no, tid) in enumerate(matches):
+        end = matches[idx + 1][0] - 1 if idx + 1 < len(matches) else len(lines) - 1
+        ranges[tid] = [line_no + 1, end + 1]
+    return ranges
+
+
+def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
+    """飞书材料派生段（共享区事实源 → 节点/边；只读，绝不回写）。
+
+    源数据：{ws}/.specguard/feishu/
+    - materials/fd-*.md / fm-*.json → feishu_doc / feishu_minutes 节点
+    - topics.yaml → topic 节点
+    - material_links.yaml（仅 status=confirmed）→ mentions 边（src/dst 均须已存在）
+    """
+    from specflow.feishu_pool.paths import shared_dirs
+    workspace_root = Path(workspace_root)
+    shared = shared_dirs(workspace_root)
+    if not shared["root"].is_dir():
+        return
+
+    # 1. 材料节点（fd/fm，扫描共享区 materials/ 副本）
+    mat_dir = shared["materials"]
+    if mat_dir.is_dir():
+        for f in sorted(mat_dir.iterdir()):
+            if not f.is_file():
+                continue
+            if f.suffix == ".md" and f.stem.startswith("fd-"):
+                node_id, ntype = f"fd:{f.stem[3:]}", "feishu_doc"
+            elif f.suffix == ".json" and f.stem.startswith("fm-"):
+                node_id, ntype = f"fm:{f.stem[3:]}", "feishu_minutes"
+            else:
+                continue
+            rel = str(f.relative_to(workspace_root)).replace("\\", "/")
+            store.upsert_node(
+                id=node_id, node_type=ntype, title=f.stem,
+                attrs={"sha": _file_sha12(f)},
+                source_ref={"file": rel, "line_range": [1, 1]},
+                commit=False)
+
+    # 2. 话题节点（topics.yaml 全量条目）
+    topics_yaml = shared["topics_yaml"]
+    if topics_yaml.is_file():
+        try:
+            text = topics_yaml.read_text(encoding="utf-8")
+            raw = yaml.safe_load(text) or {}
+        except Exception:
+            text, raw = "", {}
+        ranges = _topic_line_ranges(text)
+        rel = str(topics_yaml.relative_to(workspace_root)).replace("\\", "/")
+        for t in raw.get("topics") or []:
+            if not isinstance(t, dict):
+                continue
+            tid = str(t.get("id", ""))
+            if not tid:
+                continue
+            store.upsert_node(
+                id=tid, node_type="topic", title=str(t.get("title") or tid),
+                attrs={"summary": str(t.get("summary") or ""),
+                       "message_count": int(t.get("message_count") or 0),
+                       "window": t.get("window") or [],
+                       "participants_count": int(t.get("participants_count") or 0)},
+                source_ref={"file": rel, "line_range": ranges.get(tid, [1, 1])},
+                commit=False)
+
+    # 3. mentions 边（仅 confirmed；src/dst 均须已存在，断链不建边）
+    links_yaml = shared["links_yaml"]
+    if links_yaml.is_file():
+        try:
+            raw = yaml.safe_load(links_yaml.read_text(encoding="utf-8")) or {}
+        except Exception:
+            raw = {}
+        for l in raw.get("links") or []:
+            if not isinstance(l, dict) or l.get("status") != "confirmed":
+                continue
+            src, dst = str(l.get("src", "")), str(l.get("dst", ""))
+            if not src or not dst:
+                continue
+            if store.get_node(src) is None or store.get_node(dst) is None:
+                continue
+            store.upsert_edge(
+                src=src, dst=dst, edge_type="mentions",
+                attrs={"confidence": l.get("confidence", 0),
+                       "evidence": str(l.get("evidence") or ""),
+                       "confirmed_by": str(l.get("confirmed_by") or ""),
+                       "confirmed_at": str(l.get("confirmed_at") or "")},
+                commit=False)
 
 
 # ══════════════════════════════════════════════════════════
@@ -506,6 +609,9 @@ def build_index(workspace_root: Path, index_path: Path,
                 if sid in scenarios:
                     store.upsert_edge(src=spq_id, dst=sid, edge_type="feedback",
                                       commit=False)
+
+        # ── 6.5 飞书材料（飞书知识图谱一期：共享区事实源派生）──
+        _build_feishu_nodes(store, workspace_root)
 
         # ── 7. 指纹落库 + 提交事务 ──
         fingerprint = compute_source_fingerprint(workspace_root, scenarios_root, sg_root)

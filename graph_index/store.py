@@ -17,14 +17,15 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-# 节点类型枚举（M11 §4.1，M10 §4.1 谱系口径）
+# 节点类型枚举（M11 §4.1，M10 §4.1 谱系口径；飞书知识图谱一期追加飞书三类）
 NODE_TYPES = ("module", "feature", "fr", "ac", "scenario", "delta",
-              "plan", "run", "spq", "decision", "external_ref", "interview")
+              "plan", "run", "spq", "decision", "external_ref", "interview",
+              "feishu_doc", "feishu_minutes", "topic")
 
-# 边类型枚举（M10 §4.2 谱系视角）
+# 边类型枚举（M10 §4.2 谱系视角；飞书知识图谱一期追加 mentions）
 EDGE_TYPES = ("covers", "depends_on", "contains", "produces", "decides",
               "references", "locks", "derives", "schedules", "executes",
-              "verifies", "feedback", "archives", "relates")
+              "verifies", "feedback", "archives", "relates", "mentions")
 
 # 节点 → 谱系阶段（M10 §4.1）
 STAGE_BY_TYPE = {
@@ -38,6 +39,9 @@ STAGE_BY_TYPE = {
     "plan": "test",
     "run": "test",
     "spq": "feedback",
+    "feishu_doc": "req",
+    "feishu_minutes": "req",
+    "topic": "req",
 }
 
 _DDL = """

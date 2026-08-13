@@ -580,3 +580,69 @@ class TestLineageCheck:
         lineage_check.run_checks(fake_ws["ws"], fake_ws["index"], write_output=True)
         second = json.loads(target.read_text(encoding="utf-8"))
         assert [w for w in first["warnings"]] == [w for w in second["warnings"]]
+
+
+# ══════════════════════════════════════════════════════════
+# 飞书知识图谱一期 T3：飞书材料派生段（feishu_doc/feishu_minutes/topic + mentions）
+# ══════════════════════════════════════════════════════════
+
+class TestFeishuNodes:
+    def _add_feishu_facts(self, fake_ws):
+        """共享区事实源 fixture：topics.yaml + material_links.yaml + materials/。"""
+        fe = fake_ws["ws"] / ".specguard" / "feishu"
+        (fe / "materials").mkdir(parents=True)
+        (fe / "materials" / "fd-tokABC.md").write_text("# PRD 导出\n", encoding="utf-8")
+        (fe / "topics.yaml").write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:3f9a2c-0807-01\n    title: 导出权限讨论\n"
+            "    summary: 按 corpCode 过滤\n    chat_sha8: 3f9a2c\n"
+            "    window: ['2026-08-07T14:00', '2026-08-07T15:30']\n"
+            "    message_count: 23\n    participants_count: 4\n"
+            "    source: chats/3f9a2c/20260807.md\n", encoding="utf-8")
+        (fe / "material_links.yaml").write_text(
+            "version: 1\nlinks:\n"
+            "  - src: fd:tokABC\n    dst: FR-012\n    edge: mentions\n"
+            "    confidence: 0.9\n    evidence: 级联删除\n"
+            "    status: confirmed\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-13T10:00:00'\n"
+            "  - src: tp:3f9a2c-0807-01\n    dst: FR-012\n    edge: mentions\n"
+            "    confidence: 0.8\n    evidence: 权限过滤\n"
+            "    status: confirmed\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-13T10:01:00'\n", encoding="utf-8")
+
+    def test_feishu_nodes_and_mentions_edges(self, fake_ws):
+        self._add_feishu_facts(fake_ws)
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            doc = store.get_node("fd:tokABC")
+            assert doc["node_type"] == "feishu_doc" and doc["stage"] == "req"
+            tp = store.get_node("tp:3f9a2c-0807-01")
+            assert tp["node_type"] == "topic"
+            assert tp["attrs"]["message_count"] == 23
+            edges = [e for e in store.list_edges("mentions") if e["dst"] == "FR-012"]
+            assert {e["src"] for e in edges} == {"fd:tokABC", "tp:3f9a2c-0807-01"}
+            bl = service.backlink(store, "FR-012")
+            assert "fd:tokABC" in bl.get("mentioned_by", [])
+
+    def test_rejected_link_not_in_graph(self, fake_ws):
+        self._add_feishu_facts(fake_ws)
+        fe = fake_ws["ws"] / ".specguard" / "feishu"
+        (fe / "material_links.yaml").write_text(
+            "version: 1\nlinks:\n"
+            "  - src: fd:tokABC\n    dst: FR-012\n    edge: mentions\n"
+            "    confidence: 0.9\n    evidence: x\n    status: rejected\n"
+            "    confirmed_by: u1\n    confirmed_at: '2026-08-13T10:00:00'\n",
+            encoding="utf-8")
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            assert store.list_edges("mentions") == []
+
+    def test_feishu_facts_change_triggers_stale(self, fake_ws):
+        _build(fake_ws)
+        st = service.status(fake_ws["ws"], scenarios_root=fake_ws["scenarios"],
+                            sg_root=fake_ws["root"])
+        assert st["stale"] is False
+        self._add_feishu_facts(fake_ws)   # 新增事实源 → 指纹失配
+        st = service.status(fake_ws["ws"], scenarios_root=fake_ws["scenarios"],
+                            sg_root=fake_ws["root"])
+        assert st["stale"] is True
