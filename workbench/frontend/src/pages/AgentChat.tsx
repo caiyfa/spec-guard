@@ -1179,7 +1179,12 @@ function PushDeltaSection() {
 
   useEffect(() => {
     settingsApi.getGitConfig()
-      .then(r => setHasToken(r.has_token))
+      .then(r => {
+        setHasToken(r.has_token);
+        // 已有配置时预填（name/email 为空的推送到弹窗必填）
+        setDlgName(r.name || '');
+        setDlgEmail(r.email || '');
+      })
       .catch(() => setHasToken(false));
   }, []);
 
@@ -1209,6 +1214,8 @@ function PushDeltaSection() {
   };
 
   const handleTokenSave = async () => {
+    if (!dlgName.trim()) { setDlgError('user.name 必填'); return; }
+    if (!dlgEmail.trim()) { setDlgError('user.email 必填'); return; }
     if (!dlgToken.trim()) { setDlgError('token 必填'); return; }
     setSaving(true);
     setDlgError('');
@@ -1253,12 +1260,12 @@ function PushDeltaSection() {
             <div className="text-sm font-medium text-gray-200 mb-2">🐙 配置 Git 推送 token</div>
             <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
               首次推送需要配置 HTTPS Personal Access Token。参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。
-              token 加密存储，仅用于推送远端。
+              token 加密存储，仅用于推送远端。commit 时使用 user.name / user.email 作为提交身份。
             </p>
             <div className="space-y-2 mb-2">
-              <Field label="user.name" value={dlgName} onChange={setDlgName} placeholder="Zhang San" />
-              <Field label="user.email" value={dlgEmail} onChange={setDlgEmail} placeholder="zhangsan@example.com" />
-              <Field label="token (HTTPS PAT)" value={dlgToken} onChange={setDlgToken}
+              <Field label="user.name *" value={dlgName} onChange={setDlgName} placeholder="Zhang San" />
+              <Field label="user.email *" value={dlgEmail} onChange={setDlgEmail} placeholder="zhangsan@example.com" />
+              <Field label="token (HTTPS PAT) *" value={dlgToken} onChange={setDlgToken}
                 placeholder="ghp_xxx..." type="password" />
             </div>
             {dlgError && <div className="text-[11px] text-red-400 mb-2">❌ {dlgError}</div>}
