@@ -1200,6 +1200,7 @@ function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
   const unpushed = data?.unpushed || [];
   const ahead = data?.ahead || 0;
   const behind = data?.behind || 0;
+  const rebaseInProgress = data?.rebase_in_progress || false;
 
   const doPush = async () => {
     setPushing(true);
@@ -1260,6 +1261,15 @@ function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
         )}
       </div>
 
+      {/* rebase 中断警告（上次 pull --rebase 冲突未解决，推送被拦截） */}
+      {rebaseInProgress && (
+        <div className="text-[10px] rounded bg-red-900/30 text-red-300 px-2 py-1.5 leading-relaxed">
+          ⚠️ 检测到未完成的 rebase（上次推送的 pull --rebase 冲突中断）。
+          请先在终端处理：解决冲突后 <code className="font-mono">git rebase --continue</code>，
+          或 <code className="font-mono">git rebase --abort</code> 放弃 rebase 回到原始状态。
+        </div>
+      )}
+
       {/* 未推送提交列表 */}
       {unpushed.length === 0 ? (
         <div className="text-[11px] text-gray-600 text-center py-6">
@@ -1294,9 +1304,9 @@ function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
           ))}
 
           {/* 推送按钮 */}
-          <button onClick={handlePushClick} disabled={pushing}
+          <button onClick={handlePushClick} disabled={pushing || rebaseInProgress}
             className="w-full px-3 py-2 rounded bg-info text-white text-sm hover:bg-info/90 disabled:opacity-40">
-            {pushing ? '推送中…' : `🚀 推送 ${unpushed.length} 个提交到远端`}
+            {pushing ? '推送中…' : rebaseInProgress ? '🚫 rebase 中断中，请先处理冲突' : `🚀 推送 ${unpushed.length} 个提交到远端`}
           </button>
         </>
       )}

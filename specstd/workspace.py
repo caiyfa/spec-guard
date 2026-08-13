@@ -824,21 +824,26 @@ def git_log(name: Optional[str] = None, limit: int = 50) -> dict:
 
     commits = _parse_git_log(out)
 
+    # rebase 中断检测：HEAD detached 时 @{u} 引用解析失败，ahead/behind/unpushed 不可靠
+    rebase_in_progress = (path / ".git" / "rebase-merge").exists() or \
+                         (path / ".git" / "rebase-apply").exists()
+
     # ahead/behind 与未推送提交（相对上游分支 @{u}）
     ahead = behind = 0
     unpushed: list[dict] = []
-    rc, ab_out = _git_run(
-        ["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"], path)
-    if rc == 0 and ab_out.strip():
-        parts = ab_out.split()
-        if len(parts) >= 2:
-            ahead, behind = int(parts[0]), int(parts[1])
-    if ahead > 0:
-        rc, u_out = _git_run(
-            ["git", "log", "-n", str(min(ahead, limit)), "--name-status",
-             f"--pretty=format:{fmt}", "@{u}..HEAD"], path)
-        if rc == 0:
-            unpushed = _parse_git_log(u_out)
+    if not rebase_in_progress:
+        rc, ab_out = _git_run(
+            ["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"], path)
+        if rc == 0 and ab_out.strip():
+            parts = ab_out.split()
+            if len(parts) >= 2:
+                ahead, behind = int(parts[0]), int(parts[1])
+        if ahead > 0:
+            rc, u_out = _git_run(
+                ["git", "log", "-n", str(min(ahead, limit)), "--name-status",
+                 f"--pretty=format:{fmt}", "@{u}..HEAD"], path)
+            if rc == 0:
+                unpushed = _parse_git_log(u_out)
 
     return {
         "ok": True,
@@ -850,6 +855,7 @@ def git_log(name: Optional[str] = None, limit: int = 50) -> dict:
         "ahead": ahead,
         "behind": behind,
         "unpushed": unpushed,
+        "rebase_in_progress": rebase_in_progress,
     }
 
 

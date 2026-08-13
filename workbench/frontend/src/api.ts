@@ -519,6 +519,7 @@ export interface GitLogResponse {
   ahead?: number;      // 相对上游分支领先提交数（待推送）
   behind?: number;     // 相对上游分支落后提交数（待拉取）
   unpushed?: GitCommit[];  // 未推送提交列表（@{u}..HEAD，分叉状态下可靠）
+  rebase_in_progress?: boolean;  // rebase 中断中（冲突未解决，推送被拦截）
 }
 
 // ── Agent 对话 ──

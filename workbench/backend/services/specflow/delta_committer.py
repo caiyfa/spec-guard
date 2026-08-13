@@ -236,6 +236,14 @@ def push_delta(workspace: str = "", delta_id: str = "",
     if not _is_git_repo(root):
         return {"ok": False, "error": f"工作区 {root.name!r} 不是 git 仓库，无法推送"}
 
+    # 前置检查：rebase 中断状态（上次 pull --rebase 冲突未解决）——
+    # 此时 HEAD detached，@{u}..HEAD 会报 'HEAD does not point to a branch'，
+    # 若不拦截会误判为「无未推送提交」
+    if (root / ".git" / "rebase-merge").exists() or (root / ".git" / "rebase-apply").exists():
+        return {"ok": False, "error": "检测到未完成的 rebase（上次 pull --rebase 冲突中断）。"
+                "请先在终端处理：解决冲突后 git rebase --continue，"
+                "或 git rebase --abort 放弃 rebase 回到原始状态", "rebase_in_progress": True}
+
     # 获取远端 URL 判断协议
     code, remote_url = _git_run(["git", "remote", "get-url", "origin"], root)
     if code != 0:
@@ -244,12 +252,11 @@ def push_delta(workspace: str = "", delta_id: str = "",
     if url_stripped.startswith("git@") or url_stripped.startswith("ssh://"):
         return {"ok": False, "error": "远端为 SSH 协议，不支持 PAT token。请改用 HTTPS remote 或配置 SSH key"}
 
-    # 检查未推送提交（@{u}..HEAD）
+    # 检查未推送提交（@{u}..HEAD）；失败不静默——HEAD detached/引用异常时明确报错
     code, unpushed_log = _git_run(
         ["git", "log", "--oneline", "@{u}..HEAD"], root)
     if code != 0:
-        # 无上游分支或首次推送
-        unpushed_log = ""
+        return {"ok": False, "error": f"无法检测未推送提交（HEAD 异常或 rebase 中断）: {unpushed_log[:200]}"}
     unpushed_lines = [ln for ln in unpushed_log.splitlines() if ln.strip()]
     if not unpushed_lines:
         return {"ok": False, "error": "当前分支无未推送提交（全部已同步远端）", "ahead": 0}
