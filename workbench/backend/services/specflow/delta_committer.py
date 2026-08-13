@@ -93,11 +93,14 @@ def commit_delta_changes(workspace: str = "", delta_id: str = "",
                          message: str = "", emp_no: str = "") -> dict:
     """受限提交 changes/{delta_id}/ 起草区变更（git add + commit，不 push）。
 
+    emp_no 非空时读取用户配置的 git 身份覆盖提交者（-c user.name/email），
+    不修改仓库级 git config。
+
     Args:
         workspace: 工作区名（空 = 当前激活）
         delta_id: delta 代号（如 0817）
         message: commit message（空 = 自动生成；自定义须以 {type}: 前缀）
-        emp_no: 操作人工号（空 = 取请求上下文，再空 = 跳过审计）
+        emp_no: 操作人工号（空 = 取请求上下文，再空 = 跳过审计与身份覆盖）
 
     Returns:
         {"ok": bool, "error"?: str, "commit"?: str, "files"?: list[str],
@@ -156,8 +159,22 @@ def commit_delta_changes(workspace: str = "", delta_id: str = "",
         return {"ok": False, "error": "暂存区无 changes/{delta_id}/ 内容"
                 "（全部变更可能都是 .bak/排除项）"}
 
-    # commit（不 push）
-    code, out = _git_run(["git", "commit", "-m", msg], root)
+    # 读取用户 git 身份覆盖，不修改仓库级 config
+    identity_args = []
+    if emp:
+        try:
+            from services import git_config as _gc
+            cfg = _gc.get_git_config(emp)
+            if cfg.get("name"):
+                identity_args.extend(["-c", f"user.name={cfg['name']}"])
+            if cfg.get("email"):
+                identity_args.extend(["-c", f"user.email={cfg['email']}"])
+        except Exception:
+            pass
+
+    # commit（带身份覆盖）
+    commit_cmd = ["git"] + identity_args + ["commit", "-m", msg]
+    code, out = _git_run(commit_cmd, root)
     if code != 0:
         return {"ok": False, "error": f"git commit 失败: {out[:300]}"}
 
@@ -165,10 +182,85 @@ def commit_delta_changes(workspace: str = "", delta_id: str = "",
     _audit(emp, "commit_delta_changes", f"changes/{delta_id}/",
            detail=f"files={len(files)} message={msg}")
 
+    note = "已本地提交"
+    has_push_token = False
+    if emp:
+        try:
+            from services import git_config as _gc
+            cfg = _gc.get_git_config(emp)
+            has_push_token = cfg.get("has_token", False)
+        except Exception:
+            pass
+    if has_push_token:
+        note += "，可推送远端（🚀）"
+    else:
+        note += "，未 push——远端推送请在 spec 仓库侧手动执行"
+
     return {
         "ok": True,
         "commit": out,
         "files": files,
         "message": msg,
-        "note": "已本地提交，未 push——远端推送请在 spec 仓库侧手动执行",
+        "note": note,
+        "can_push": has_push_token,
+    }
+
+
+def push_delta(workspace: str = "", delta_id: str = "",
+               token: str = "", emp_no: str = "") -> dict:
+    """推送 changes/{delta_id}/ 提交到远端（git push）。
+
+    使用 HTTPS PAT token 注入认证（git credential.helper 临时注入，不修改
+    remote URL 与 credential 配置）。前置 pull --rebase 防冲突。
+
+    Args:
+        workspace: 工作区名（空 = 当前激活）
+        delta_id: delta 代号（如 0817）
+        token: HTTPS Personal Access Token（git_config 解码后传入）
+        emp_no: 操作人工号（审计）
+
+    Returns:
+        {"ok": bool, "error"?: str, "output"?: str, "note": str}
+    """
+    emp = emp_no or get_context_emp_no() or ""
+
+    if not delta_id:
+        return {"ok": False, "error": "缺少 delta_id 参数"}
+    if not token:
+        return {"ok": False, "error": "未配置 git token——请在系统设置＞Git 配置中设置 HTTPS PAT"}
+
+    root = get_workspace_root(workspace)
+    if root is None:
+        return {"ok": False, "error": "工作区不可用（未激活或不存在）"}
+
+    if not _is_git_repo(root):
+        return {"ok": False, "error": f"工作区 {root.name!r} 不是 git 仓库，无法推送"}
+
+    # 获取远端 URL 判断协议
+    code, remote_url = _git_run(["git", "remote", "get-url", "origin"], root)
+    if code != 0:
+        return {"ok": False, "error": f"获取远端地址失败: {remote_url[:200]}"}
+    url_stripped = remote_url.strip()
+    if url_stripped.startswith("git@") or url_stripped.startswith("ssh://"):
+        return {"ok": False, "error": "远端为 SSH 协议，不支持 PAT token。请改用 HTTPS remote 或配置 SSH key"}
+
+    # git pull --rebase 先拉远端变更防冲突
+    code, out = _git_run(["git", "pull", "--rebase", "--autostash"], root, timeout=60)
+    if code != 0:
+        return {"ok": False, "error": f"git pull --rebase 失败，请先手动解决冲突: {out[:300]}"}
+
+    # git push：用 credential.helper 临时注入 token（不修改 remote URL / credential 配置）
+    helper_script = f"!f() {{ echo username=token; echo password={token}; }}; f"
+    code, out = _git_run(
+        ["git", "-c", f"credential.helper={helper_script}", "push"], root, timeout=60)
+    if code != 0:
+        return {"ok": False, "error": f"git push 失败: {out[:500]}"}
+
+    _audit(emp, "push_delta", f"changes/{delta_id}/",
+           detail=f"remote: {url_stripped}")
+
+    return {
+        "ok": True,
+        "output": out,
+        "note": "已推送到远端",
     }

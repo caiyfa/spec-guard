@@ -53,14 +53,32 @@ TOOLS = [
                     "前置门禁：该 delta conformance 校验无 ERROR、未冻结才允许提交；"
                     "提交范围仅限 changes/{delta_id}/（排除 .bak 与 FREEZE.yaml），基线/归档不可达；"
                     "message 为空自动生成 'feat: delta {代号} 文档更新'，自定义须以 {type}: 前缀开头"
-                    "（feat/fix/docs/refactor/test/chore）。提交停留在本地仓库，远端推送由人在 spec "
-                    "仓库侧手动完成。仅在用户明确确认提交后调用。",
+                    "（feat/fix/docs/refactor/test/chore）。commit 时自动读取用户配置的 git 身份覆盖提交者"
+                    "（user.name/email），不修改仓库级 config。返回结果含 can_push 标记——如已配置"
+                    "git token 可调用 push_delta 推送远端。",
         inputSchema={
             "type": "object",
             "properties": {
                 "delta_id": {"type": "string", "description": "delta 代号（如 0817）"},
                 "message": {"type": "string",
                              "description": "commit message（可选；空 = 自动生成）"},
+                "workspace": {"type": "string",
+                              "description": "工作区名（可选，默认当前激活工作区）"},
+            },
+            "required": ["delta_id"],
+        },
+    ),
+    Tool(
+        name="push_delta",
+        description="推送 changes/{delta_id}/ 提交到远端（git push）。"
+                    "使用用户配置的 HTTPS PAT token 注入认证（git credential.helper 临时注入，"
+                    "不修改 remote URL 与 credential 配置）。前置 git pull --rebase --autostash"
+                    "防冲突；仅支持 HTTPS remote（SSH remote 不支持 PAT token）。"
+                    "前置条件：已 commit（can_push=true）且已在系统设置＞Git 配置中设置 token。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "delta_id": {"type": "string", "description": "delta 代号（如 0817）"},
                 "workspace": {"type": "string",
                               "description": "工作区名（可选，默认当前激活工作区）"},
             },
@@ -75,6 +93,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_write_delta_doc(arguments)
     elif name == "commit_delta_changes":
         return _handle_commit_delta_changes(arguments)
+    elif name == "push_delta":
+        return _handle_push_delta(arguments)
     return []
 
 
@@ -106,4 +126,23 @@ def _handle_commit_delta_changes(arguments: dict) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=json.dumps({
             "ok": False, "error": f"提交异常: {e}",
+        }, ensure_ascii=False, indent=2))]
+
+
+def _handle_push_delta(arguments: dict) -> list[TextContent]:
+    try:
+        from services.specflow.delta_committer import push_delta
+        from services import git_config
+        from specstd.workspace import get_context_emp_no
+        emp = get_context_emp_no() or ""
+        token = git_config.get_decrypted_token(emp) if emp else ""
+        result = push_delta(
+            workspace=str(arguments.get("workspace", "") or ""),
+            delta_id=str(arguments.get("delta_id", "") or ""),
+            token=token, emp_no=emp,
+        )
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+    except Exception as e:
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error": f"推送异常: {e}",
         }, ensure_ascii=False, indent=2))]

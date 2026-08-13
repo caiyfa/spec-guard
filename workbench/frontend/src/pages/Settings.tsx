@@ -9,13 +9,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { referenceApi, modelApi, settingsApi } from '../api';
 import type { ModelConfig } from '../api';
 
-type Tab = 'db' | 'models' | 'audit' | 'run';
+type Tab = 'db' | 'models' | 'audit' | 'run' | 'git';
 
 const TAB_LABELS: Record<Tab, string> = {
   db: '🗄 数据库',
   models: '🧠 模型配置',
   audit: '🔍 审计',
   run: '▶ 执行',
+  git: '🐙 Git 配置',
 };
 
 export default function Settings() {
@@ -47,6 +48,7 @@ export default function Settings() {
         {tab === 'models' && <ModelsTab />}
         {tab === 'audit' && <AuditTab />}
         {tab === 'run' && <RunTab />}
+        {tab === 'git' && <GitTab />}
       </div>
     </div>
   );
@@ -468,6 +470,71 @@ function AuditTab() {
           <p>· 开启：Agent 写审计报告成功后自动更新基线，无需手动标记。</p>
         </div>
         {msg && <p className={`text-[11px] mt-2 ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// Tab 5: Git 配置（多用户隔离，token 加密存储）
+// ══════════════════════════════════════════════════════════
+
+function GitTab() {
+  const [gitName, setGitName] = useState('');
+  const [gitEmail, setGitEmail] = useState('');
+  const [gitToken, setGitToken] = useState('');
+  const [hasToken, setHasToken] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    settingsApi.getGitConfig().then(r => {
+      setGitName(r.name || '');
+      setGitEmail(r.email || '');
+      setHasToken(r.has_token || false);
+    }).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const r = await settingsApi.saveGitConfig({
+        name: gitName, email: gitEmail, token: gitToken,
+      });
+      setHasToken(r.has_token);
+      setGitToken('');  // 清空密码输入框（已加密存储）
+      setMessage(r.has_token ? '✅ 已保存，token 已加密存储' : '✅ 已保存');
+    } catch (e: any) {
+      setMessage(`❌ 保存失败: ${e.message || ''}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl p-1">
+      <div className="rounded-md border border-border bg-surface-3 p-4">
+        <h3 className="text-sm font-medium text-gray-200 mb-1">🐙 Git 远端推送配置</h3>
+        <p className="text-[11px] text-gray-500 mb-3">
+          配置后，提交 delta 起草区后可以一键推送到远端仓库。
+          参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。
+          token 使用 Fernet 加密存储（同模型 api_key 方案），仅用于推送不落地远程 URL。
+        </p>
+        <div className="space-y-2">
+          <Field label="user.name" value={gitName} onChange={setGitName} placeholder="Zhang San" />
+          <Field label="user.email" value={gitEmail} onChange={setGitEmail} placeholder="zhangsan@example.com" />
+          <Field label="token (HTTPS PAT)" value={gitToken} onChange={setGitToken}
+            placeholder={hasToken ? '已配置（不修改请留空）' : 'ghp_xxx...'} type="password" />
+        </div>
+        <div className="text-[10px] text-gray-600 mt-1">
+          {hasToken ? '✅ 已配置 token（重新输入可覆盖）' : '未配置 token——推送到远端需要 HTTPS PAT'}
+        </div>
+        <button onClick={handleSave} disabled={saving}
+          className="mt-3 px-3 py-1.5 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
+          {saving ? '保存中…' : '💾 保存'}
+        </button>
+        {message && <p className={`text-[11px] mt-2 ${message.startsWith('✅') ? 'text-pass' : 'text-fail'}`}>{message}</p>}
       </div>
     </div>
   );

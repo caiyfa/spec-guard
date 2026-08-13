@@ -8,6 +8,8 @@ from services.spec_validator import (
     list_deltas, get_current_delta, run_spec_validation,
     read_validation_report, validate_test_cases,
 )
+from services.specflow.delta_committer import commit_delta_changes, push_delta
+from services import git_config
 
 router = APIRouter(prefix="/api/spec", tags=["spec-validation"])
 
@@ -101,4 +103,25 @@ def api_commit_delta_changes(
     )
     if not result.get("ok"):
         raise HTTPException(status_code=403, detail=result.get("error", "提交被拒绝"))
+    return result
+
+
+@router.post("/changes/{delta_id}/push")
+def api_push_delta(
+    delta_id: str,
+    user=Depends(require_role("admin", "product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """推送 changes/{delta_id}/ 起草区提交到远端（git push）。
+
+    使用用户配置的 git token（加密存储的 HTTPS PAT）注入认证信息。
+    前置门禁：该 delta 存在未提交变更时拒绝（必须先 commit）。
+    """
+    token = git_config.get_decrypted_token(user.emp_no)
+    result = push_delta(
+        workspace=workspace, delta_id=delta_id,
+        token=token, emp_no=user.emp_no,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "推送被拒绝"))
     return result

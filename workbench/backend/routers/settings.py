@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.auth import require_role
-from services import llm_config, model_config
+from services import llm_config, model_config, git_config
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -108,6 +108,26 @@ def probe_model(mid: str, body: ModelProbeBody = None, user=Depends(require_role
         api_key=api_key,
         model=model_name,
         timeout=timeout,
+    )
+
+
+class GitConfigBody(BaseModel):
+    name: str = ""
+    email: str = ""
+    token: str = ""
+
+
+@router.get("/git-config")
+def get_git_config(user=Depends(require_role("admin", "tester", "product"))):
+    """获取当前用户的 git 配置（token 脱敏，has_token 标记是否已配置）。"""
+    return git_config.get_git_config(user.emp_no)
+
+
+@router.put("/git-config")
+def save_git_config(body: GitConfigBody, user=Depends(require_role("admin", "tester", "product"))):
+    """保存当前用户的 git 配置。token 含 *** 时视为未修改（脱敏回传保护）。"""
+    return git_config.save_git_config(
+        emp_no=user.emp_no, name=body.name, email=body.email, token=body.token,
     )
 
 

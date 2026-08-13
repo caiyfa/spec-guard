@@ -1098,13 +1098,15 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
 }
 
 // 更新足迹面板（写型工具 doc_write 汇聚，点击打开文件 / 对比 .bak）
-function WritingPanel({ items, onOpen, onDiff, onAskAgent, onRefresh }: {
+function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatch, onRefresh }: {
   items: DocWriteItem[];
   onOpen: (item: DocWriteItem) => void;
   onDiff: (item: DocWriteItem) => void;
   onAskAgent?: (item: DocWriteItem) => void;
+  onAskAgentBatch?: (items: DocWriteItem[]) => void;
   onRefresh?: () => void;
 }) {
+  const failed = items.filter(i => i.verdict === 'REJECT' || i.verdict === 'ERROR');
   if (items.length === 0) {
     return (
       <div className="px-2 py-2">
@@ -1127,6 +1129,13 @@ function WritingPanel({ items, onOpen, onDiff, onAskAgent, onRefresh }: {
     <div className="px-2 py-2 space-y-1.5">
       <div className="flex items-center px-1">
         <div className="text-xs font-medium text-gray-300 flex-1">✏️ 更新足迹（{items.length}）</div>
+        {failed.length > 0 && onAskAgentBatch && (
+          <button onClick={() => onAskAgentBatch(failed)}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-warn/20 text-warn hover:bg-warn/30 mr-1"
+            title="把全部失败文件的原因带进对话，Agent 依次读取修复">
+            🤖 批量修复（{failed.length}）
+          </button>
+        )}
         {onRefresh && (
           <button onClick={onRefresh} className="text-[10px] text-gray-500 hover:text-info transition-colors px-1"
             title="重新加载更新足迹">↻</button>
@@ -1624,7 +1633,7 @@ interface FileTab {
   hunks?: DocHunk[];  // T-511：阅读足迹打开时携带的使用位置（行区间定位+高亮）
 }
 
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onRefreshWritingFeed }: {
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -1653,6 +1662,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
   onOpenDocWrite: (item: DocWriteItem) => void;
   onOpenDiff: (item: DocWriteItem) => void;
   onAskAgentFix?: (item: DocWriteItem) => void;
+  onAskAgentBatch?: (items: DocWriteItem[]) => void;
   onRefreshWritingFeed?: () => void;
 }) {
   const isFileTab = activeTab.startsWith('file:');
@@ -1729,7 +1739,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {activeTab === 'drafts' && (
           <>
             {/* S0.6 分区①：更新足迹（写型工具 doc_write 汇聚，只读） */}
-            <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onRefresh={onRefreshWritingFeed} />
+            <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onAskAgentBatch={onAskAgentBatch} onRefresh={onRefreshWritingFeed} />
             {/* 分区②：草稿产物操作卡（评审闭环：查看/校验/试跑/入库/废弃） */}
             <div className="px-1 pt-2 pb-1 text-xs font-medium text-gray-300 border-t border-border">
               📝 草稿产物（Agent 会话内评审）
@@ -2888,6 +2898,23 @@ export default function AgentChat() {
     );
   }, []);
 
+  // S0.6：批量修复全部失败文件——合并所有 ❌ 的 path + findings 一次注入
+  const askAgentBatch = useCallback((items: DocWriteItem[]) => {
+    const lines = items.map(item => {
+      const target = item.path || item.ref || item.label;
+      const reasons = (item.findings || [])
+        .slice(0, 5)  // 每个文件最多带 5 条，防止消息过长
+        .map(f => `    - ${f.level || ''}${f.rule ? ` ${f.rule}` : ''}: ${f.message}`)
+        .join('\n');
+      return `- ${target}：\n${reasons}`;
+    }).join('\n');
+    setQuickText(
+      `以下文件 conformance 校验失败，请逐个读取分析并修复：\n${lines}\n` +
+      `请依次读取每个文件分析失败原因，写入修复后的内容（write_delta_doc），` +
+      `直至全部校验通过。`
+    );
+  }, []);
+
   // 会话内 write_draft 内容映射（大段 md 代码块 → 落盘文件匹配，产物卡片去重用）
   const draftContents = useMemo(() => {
     const map = new Map<string, string>();
@@ -3401,7 +3428,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onRefreshWritingFeed={handleRefreshWriting} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} />
           </>
         )}
       </div>

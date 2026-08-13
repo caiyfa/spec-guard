@@ -573,6 +573,14 @@ export const settingsApi = {
       method: 'POST',
       body: JSON.stringify({ auto_update: autoUpdate }),
     }),
+  // S0.6: git 配置（多用户隔离，token 加密存储）
+  getGitConfig: () =>
+    request<{ name: string; email: string; has_token: boolean }>('/settings/git-config'),
+  saveGitConfig: (body: { name: string; email: string; token: string }) =>
+    request<{ ok: boolean; has_token: boolean }>('/settings/git-config', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
 };
 
 // ── 多模型配置 ──
