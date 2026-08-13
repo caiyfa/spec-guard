@@ -9,6 +9,7 @@ from services.spec_validator import (
     read_validation_report, validate_test_cases,
 )
 from services.specflow.delta_committer import commit_delta_changes, push_delta
+from services.specflow import rebase_resolver
 from services import git_config
 
 router = APIRouter(prefix="/api/spec", tags=["spec-validation"])
@@ -123,4 +124,76 @@ def api_push_delta(
     )
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error", "推送被拒绝"))
+    return result
+
+
+# ══════════════════════════════════════════════════════════
+# rebase 中断界面化恢复（检测 → 冲突展示 → 三选解决 → 完成/放弃）
+# ══════════════════════════════════════════════════════════
+
+@router.get("/rebase/status")
+def api_rebase_status(
+    user=Depends(require_role("admin", "product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """rebase 中断状态 + 冲突文件列表（含每文件冲突段数）。"""
+    return rebase_resolver.get_rebase_status(workspace)
+
+
+@router.get("/rebase/conflict")
+def api_rebase_conflict(
+    path: str,
+    user=Depends(require_role("admin", "product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """读取冲突文件的冲突段（ours/theirs 分段展示）。"""
+    result = rebase_resolver.get_conflict_detail(workspace, path)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "读取失败"))
+    return result
+
+
+class RebaseResolveBody(BaseModel):
+    path: str
+    resolution: str            # ours / theirs / smart / custom
+    merged_content: str = ""   # resolution=custom 时的合并内容
+
+
+@router.post("/rebase/resolve")
+def api_rebase_resolve(
+    body: RebaseResolveBody,
+    user=Depends(require_role("admin", "product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """解决单个文件冲突（ours/theirs/smart/custom）并 git add。"""
+    result = rebase_resolver.resolve_conflict(
+        workspace=workspace, path=body.path, resolution=body.resolution,
+        merged_content=body.merged_content, emp_no=user.emp_no,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "解决失败"))
+    return result
+
+
+@router.post("/rebase/abort")
+def api_rebase_abort(
+    user=Depends(require_role("admin", "product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """放弃 rebase（git rebase --abort）：回到 rebase 前状态。"""
+    result = rebase_resolver.abort_rebase(workspace, emp_no=user.emp_no)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "操作失败"))
+    return result
+
+
+@router.post("/rebase/continue")
+def api_rebase_continue(
+    user=Depends(require_role("admin", "product")),
+    workspace: str = Depends(resolve_workspace),
+):
+    """完成 rebase（git rebase --continue）：前置校验无未解决冲突。"""
+    result = rebase_resolver.continue_rebase(workspace, emp_no=user.emp_no)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "操作失败"))
     return result
