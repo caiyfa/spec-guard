@@ -22,6 +22,7 @@ import ReadingPanel from '../components/ReadingPanel';
 import type { DocReadItem } from '../components/ReadingPanel';
 import GateDockPanel from './GateDockPanel';
 import GateCardView, { GateExecCard } from '../components/GateCardView';
+import { FocusGraphTab } from '../components/FocusGraph';
 
 interface ChatReference {
   type: 'info_pack' | 'file' | 'draft';
@@ -2060,6 +2061,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {scenarioMeta && tabBtn('pack', `📦 信息包(${scenarioMeta.info_pack.length})`)}
         {tabBtn('drafts', `📝 更新与产物(${writingFeed.length + draftFiles.length})`)}
         {tabBtn('deps', '🕸 依赖图')}
+        {tabBtn('focus', '◎ 图谱')}
         {tabBtn('history', '📜 提交历史')}
         {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
         {onToggleMaximize && (
@@ -2093,6 +2095,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {activeTab === 'gates' && (
           <GateDockPanel sessionId={sessionId} onAskAgent={onAskAgentGuide || (() => {})} onError={onError} />
         )}
+        {activeTab === 'focus' && <FocusGraphTab />}
         {activeTab === 'reading' && (
           <ReadingPanel items={readingFeed} onOpen={onOpenDocRead} onRefresh={onRefreshReadingFeed} />
         )}

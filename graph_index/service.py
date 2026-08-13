@@ -252,6 +252,47 @@ def backlink(store: GraphStore, node_id: str) -> dict:
     return result
 
 
+def focus_subgraph(store: GraphStore, node_id: str, depth: int = 2) -> dict:
+    """焦点子图：以 node_id 为中心的 N 跳邻居（双向、不限边类型，BFS 分层确定性）。
+
+    飞书知识图谱一期 T-915：供对话侧栏焦点子图/网状镜头局部视图。
+    与 trace 的区别：trace 沿谱系方向投影成链，focus_subgraph 全向扩散成子图。
+
+    Raises:
+        KeyError: 中心节点不存在
+    """
+    depth = max(1, min(int(depth or 2), 3))   # 护栏：最深 3 跳
+    start = store.get_node(node_id)
+    if start is None:
+        raise KeyError(f"节点不存在: {node_id}")
+
+    seen: set = {node_id}
+    frontier = [node_id]
+    edges_out: list[dict] = []
+    for _ in range(depth):
+        next_frontier = []
+        for current in frontier:
+            for e in store.list_edges_by_node(current):
+                other = e["dst"] if e["src"] == current else e["src"]
+                edges_out.append({"src": e["src"], "dst": e["dst"],
+                                  "edge_type": e["edge_type"],
+                                  "attrs": e.get("attrs") or {}})
+                if other not in seen:
+                    seen.add(other)
+                    next_frontier.append(other)
+        frontier = next_frontier
+
+    nodes = []
+    for nid in sorted(seen):
+        n = store.get_node(nid)
+        if n:
+            nodes.append(n)
+    # 边去重（同一 (src,dst,edge_type) 可能从两端各收一次）
+    uniq = {(e["src"], e["dst"], e["edge_type"]): e for e in edges_out}
+    edges = [uniq[k] for k in sorted(uniq)]
+    return {"root": node_id, "depth": depth, "nodes": nodes, "edges": edges}
+
+
 def query(workspace_root: Path, level: str = "L0", module: str = "",
           feature: str = "", node_id: str = "",
           scenarios_root: Optional[Path] = None,

@@ -646,3 +646,25 @@ class TestFeishuNodes:
         st = service.status(fake_ws["ws"], scenarios_root=fake_ws["scenarios"],
                             sg_root=fake_ws["root"])
         assert st["stale"] is True
+
+    def test_focus_subgraph_n_hops(self, fake_ws):
+        self._add_feishu_facts(fake_ws)
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            sub = service.focus_subgraph(store, "FR-012", depth=2)
+            ids = {n["id"] for n in sub["nodes"]}
+            assert "FR-012" in ids
+            assert "fd:tokABC" in ids and "tp:3f9a2c-0807-01" in ids
+            assert "IA-VOID-001" in ids                  # covers 边邻居（1 跳）
+            assert any(e["edge_type"] == "mentions" for e in sub["edges"])
+            assert sub["root"] == "FR-012" and sub["depth"] == 2
+            # 节点带渲染所需字段
+            fr = next(n for n in sub["nodes"] if n["id"] == "FR-012")
+            assert fr["node_type"] == "fr" and "title" in fr
+
+    def test_focus_subgraph_missing_node(self, fake_ws):
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            import pytest as _pt
+            with _pt.raises(KeyError):
+                service.focus_subgraph(store, "FR-999")

@@ -1342,6 +1342,8 @@ export const graphApi = {
     request<GraphL2>(`/graph/panorama/${encodeURIComponent(module)}/${encodeURIComponent(feature)}`),
   backlink: (nodeId: string) =>
     request<{ node: GraphNode; backlink: GraphBacklink }>(`/graph/backlink/${encodeURIComponent(nodeId)}`),
+  focus: (nodeId: string, depth = 2) =>
+    request<FocusGraphResp>(`/graph/focus?node_id=${encodeURIComponent(nodeId)}&depth=${depth}`),
   rebuild: () => request<{ nodes: number; edges: number; source_fingerprint: string; built_at: string }>('/graph/rebuild', { method: 'POST' }),
   source: (file: string, line = 0) =>
     request<GraphSourceFile>(`/graph/source?file=${encodeURIComponent(file)}&line=${line}`),
@@ -1559,6 +1561,30 @@ export interface FeishuReviewItem {
   status: 'pending' | 'confirmed' | 'rejected';
   suggested_by: string;
   suggested_at: string;
+}
+
+// ── 图谱焦点子图（飞书知识图谱一期 T-915）──
+export interface FocusGraphNode {
+  id: string;
+  node_type: string;
+  stage: string;
+  title: string;
+  attrs: Record<string, any>;
+  source_ref?: { file: string; line_range: [number, number] } | null;
+}
+
+export interface FocusGraphEdge {
+  src: string;
+  dst: string;
+  edge_type: string;
+  attrs: Record<string, any>;
+}
+
+export interface FocusGraphResp {
+  root: string;
+  depth: number;
+  nodes: FocusGraphNode[];
+  edges: FocusGraphEdge[];
 }
 
 export const feishuPoolApi = {

@@ -115,6 +115,27 @@ def graph_backlink(
         return {"node": node, "backlink": service.backlink(store, node_id)}
 
 
+@router.get("/focus")
+def graph_focus(
+    node_id: str,
+    depth: int = 2,
+    user: CurrentUser = Depends(get_current_user),
+    workspace: str = Depends(resolve_workspace),
+):
+    """焦点子图（飞书知识图谱一期 T-915）：以 node_id 为中心的 N 跳邻居
+    （双向 BFS，depth ≤ 3 护栏）。纯读，全角色可看。"""
+    from graph_index import service
+    root = _workspace_root(workspace)
+    service.ensure_fresh(root)
+    from graph_index.service import index_path
+    from graph_index.store import GraphStore
+    with GraphStore(index_path(root)) as store:
+        try:
+            return service.focus_subgraph(store, node_id, depth=depth)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"节点不存在: {node_id}")
+
+
 @router.get("/source")
 def graph_source(
     file: str,
