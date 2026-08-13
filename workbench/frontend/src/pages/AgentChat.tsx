@@ -1150,13 +1150,32 @@ function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatch, onRe
   );
 }
 
+// Field 通用输入组件（从 Settings.tsx 复用，AgentChat 未定义）
+function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
+    </div>
+  );
+}
+
 // 🚀 推送远端——delta 起草区已 git commit 后的一键推送入口（需先在 Settings 配置 git token）
 function PushDeltaSection() {
-  const navigate = useNavigate();
   const [deltaId, setDeltaId] = useState('');
   const [hasToken, setHasToken] = useState<boolean | null>(null);  // null=检查中
   const [pushing, setPushing] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  // 补 token 弹窗
+  const [showTokenDialog, setShowTokenDialog] = useState(false);
+  const [dlgName, setDlgName] = useState('');
+  const [dlgEmail, setDlgEmail] = useState('');
+  const [dlgToken, setDlgToken] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [dlgError, setDlgError] = useState('');
 
   useEffect(() => {
     settingsApi.getGitConfig()
@@ -1164,7 +1183,7 @@ function PushDeltaSection() {
       .catch(() => setHasToken(false));
   }, []);
 
-  const handlePush = async () => {
+  const doPush = async () => {
     if (!deltaId.trim()) return;
     setPushing(true);
     setResult(null);
@@ -1178,33 +1197,82 @@ function PushDeltaSection() {
     }
   };
 
+  const handlePushClick = () => {
+    if (!deltaId.trim()) return;
+    if (hasToken) {
+      doPush();
+    } else {
+      // 未配置 token → 弹出补全窗口，保存后自动推送
+      setShowTokenDialog(true);
+      setDlgError('');
+    }
+  };
+
+  const handleTokenSave = async () => {
+    if (!dlgToken.trim()) { setDlgError('token 必填'); return; }
+    setSaving(true);
+    setDlgError('');
+    try {
+      await settingsApi.saveGitConfig({ name: dlgName, email: dlgEmail, token: dlgToken });
+      setHasToken(true);
+      setShowTokenDialog(false);
+      // 保存 token 后直接推送
+      doPush();
+    } catch (e: any) {
+      setDlgError(e.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="rounded-lg border border-border bg-surface-2/70 p-2 mt-2">
       <div className="text-[11px] font-medium text-gray-300 mb-1">🚀 推送远端</div>
-      {hasToken === null ? (
-        <div className="text-[10px] text-gray-600">检测 git 配置…</div>
-      ) : hasToken ? (
-        <div className="flex items-center gap-1.5">
-          <input value={deltaId} onChange={e => setDeltaId(e.target.value)}
-            placeholder="delta 代号（如 0817）"
-            className="flex-1 bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono text-gray-200 placeholder-gray-600" />
-          <button onClick={handlePush} disabled={pushing || !deltaId.trim()}
-            className="px-2 py-1 rounded bg-info text-white text-[11px] hover:bg-info/90 disabled:opacity-40 flex-shrink-0">
-            {pushing ? '推送中…' : '🚀 推送'}
-          </button>
-        </div>
-      ) : (
-        <div className="text-[10px] text-gray-600 leading-relaxed">
-          🐙 推送到远端需要 HTTPS PAT，
-          <button onClick={() => navigate('/settings')} className="text-info hover:underline">去设置 → Git 配置</button>
-        </div>
-      )}
+      <div className="flex items-center gap-1.5">
+        <input value={deltaId} onChange={e => setDeltaId(e.target.value)}
+          placeholder="delta 代号（如 0817）"
+          className="flex-1 bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono text-gray-200 placeholder-gray-600" />
+        <button onClick={handlePushClick} disabled={pushing || !deltaId.trim()}
+          className="px-2 py-1 rounded bg-info text-white text-[11px] hover:bg-info/90 disabled:opacity-40 flex-shrink-0">
+          {pushing ? '推送中…' : '🚀 推送'}
+        </button>
+      </div>
       {result && (
         <div className={`mt-1.5 text-[10px] rounded px-1.5 py-1 ${result.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
           {result.ok ? '✅ ' : '❌ '}{result.msg}
         </div>
       )}
       <div className="text-[9px] text-gray-600 mt-1">先 commit（Agent 会自动做），再推送。只支持 HTTPS remote。</div>
+
+      {/* 补 token 弹窗（未配置时点击推送触发，保存后自动推送） */}
+      {showTokenDialog && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+          onClick={() => !saving && setShowTokenDialog(false)}>
+          <div className="bg-surface-2 border border-border rounded-xl p-4 w-[440px] max-w-[92vw] shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="text-sm font-medium text-gray-200 mb-2">🐙 配置 Git 推送 token</div>
+            <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+              首次推送需要配置 HTTPS Personal Access Token。参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。
+              token 加密存储，仅用于推送远端。
+            </p>
+            <div className="space-y-2 mb-2">
+              <Field label="user.name" value={dlgName} onChange={setDlgName} placeholder="Zhang San" />
+              <Field label="user.email" value={dlgEmail} onChange={setDlgEmail} placeholder="zhangsan@example.com" />
+              <Field label="token (HTTPS PAT)" value={dlgToken} onChange={setDlgToken}
+                placeholder="ghp_xxx..." type="password" />
+            </div>
+            {dlgError && <div className="text-[11px] text-red-400 mb-2">❌ {dlgError}</div>}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowTokenDialog(false)} disabled={saving}
+                className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-sm disabled:opacity-40">取消</button>
+              <button onClick={handleTokenSave} disabled={saving}
+                className="px-3 py-1.5 rounded bg-info text-white text-sm disabled:opacity-40">
+                {saving ? '保存并推送…' : '保存并推送'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2949,18 +3017,18 @@ export default function AgentChat() {
     setDiffItem(item);
   }, []);
 
-  // S0.6：让 Agent 修复——失败文件 + 原因（findings）注入对话输入框，
-  // Agent 收到后读取相关文件定位并继续更新（用户确认后发送）
+  // S0.6：让 Agent 修复——失败文件 + 原因（findings）直接发送，不经过输入框确认
   const askAgentFix = useCallback((item: DocWriteItem) => {
     const findings = (item.findings || [])
       .map(f => `- ${f.level || ''}${f.rule ? ` ${f.rule}` : ''}: ${f.message}`)
       .join('\n');
     const target = item.path || item.ref || item.label;
-    setQuickText(
+    handleSend(
       `请修复 ${target} 的 conformance 校验失败：\n${findings}\n` +
-      `请先读取相关文件分析失败原因，再继续更新（写入后校验 verdict 随结果返回）。`
+      `请先读取相关文件分析失败原因，再继续更新（写入后校验 verdict 随结果返回）。`,
+      [],
     );
-  }, []);
+  }, [handleSend]);
 
   // S0.6：批量修复全部失败文件——合并所有 ❌ 的 path + findings 一次注入
   const askAgentBatch = useCallback((items: DocWriteItem[]) => {
@@ -2972,15 +3040,16 @@ export default function AgentChat() {
         .join('\n');
       return `- ${target}：\n${reasons}`;
     }).join('\n');
-    setQuickText(
+    handleSend(
       `以下文件 conformance 校验失败（${items.length} 个）：\n${lines}\n` +
       `请按以下步骤处理：\n` +
       `1. 分析根因：读取各文件的失败原因，识别共同模式和关联性——多个文件是否因同一原因（如缺少公共文件）而失败？是否是写入顺序导致的中间状态（后续写入已补全）？\n` +
       `2. 制定计划：区分「真实缺陷需修复」与「中间状态需补写缺失文件」。列出写入顺序（如缺 proposal.md 就先写它）。\n` +
       `3. 按序执行：用 write_delta_doc 补写缺失文件或修复缺陷；每写入一个观察校验结果（verdict 随返回呈现）。` +
-      `先分析，后执行。不要不看原因就直接重写已有文件。`
+      `先分析，后执行。不要不看原因就直接重写已有文件。`,
+      [],
     );
-  }, []);
+  }, [handleSend]);
 
   // 撤回用户消息：移除该消息及之后全部内容，同时清空足迹（足迹=本轮运行依据）
   const handleRetract = useCallback((msgIdx: number) => {
