@@ -580,7 +580,8 @@ export interface ModelConfig {
   id: string;
   name: string;
   base_url: string;
-  api_key: string;
+  api_key: string; // 列表接口返回脱敏值；has_api_key 表示是否已配置
+  has_api_key?: boolean;
   model: string;
   timeout: string;
   max_context_tokens: string;

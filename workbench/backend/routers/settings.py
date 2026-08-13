@@ -98,9 +98,9 @@ def probe_model(mid: str, body: ModelProbeBody = None, user=Depends(require_role
     m = model_config.get_model(mid)
     if m is None:
         raise HTTPException(status_code=404, detail=f"模型不存在: {mid}")
-    # 表单值优先，回退到 DB 值
+    # 表单值优先，回退到 DB 值（脱敏值含 *** 视为未填，回退 DB 真实 key）
     base_url = (body.base_url if body and body.base_url else m["base_url"])
-    api_key = (body.api_key if body and body.api_key else m["api_key"])
+    api_key = (body.api_key if body and body.api_key and "***" not in body.api_key else m["api_key"])
     model_name = (body.model if body and body.model else m["model"])
     timeout = (body.timeout if body and body.timeout else 30)
     return llm_config.probe_connectivity(

@@ -46,6 +46,16 @@ def _ensure_table():
         """)
 
 
+def _is_key_unchanged(value) -> bool:
+    """判断 api_key 提交值是否为「未修改」占位（空 或 脱敏掩码），应跳过不覆盖。
+
+    前端列表接口返回脱敏 key（sk-a***bcde），若用户未改 key 就保存，
+    脱敏值会随表单回传——直接加密落库会覆盖真实 key（线上事故回归防护）。
+    """
+    s = str(value or "")
+    return s == "" or "***" in s
+
+
 def _next_id() -> str:
     """生成下一个模型 ID。"""
     _ensure_table()
@@ -74,7 +84,9 @@ def list_models() -> list[dict]:
     for r in rows:
         m = _row_to_dict(r)
         # 列表默认脱敏：先解密再 mask，兼容明文与密文
-        m["api_key"] = crypto.mask(crypto.decrypt(m.get("api_key", "")))
+        decrypted = crypto.decrypt(m.get("api_key", ""))
+        m["has_api_key"] = bool(decrypted)  # 前端占位符提示用（不回显脱敏值）
+        m["api_key"] = crypto.mask(decrypted)
         result.append(m)
     return result
 
@@ -158,6 +170,9 @@ def update_model(mid: str, data: dict) -> dict | None:
         if field in data:
             value = data[field]
             if field == "api_key":
+                if _is_key_unchanged(value):
+                    # 空值或脱敏占位 → 视为未修改，不覆盖已存密钥
+                    continue
                 value = crypto.encrypt(str(value))  # 加密存储
             sets.append(f"{field} = ?")
             values.append(str(value))

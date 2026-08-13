@@ -133,6 +133,33 @@ def test_model_config_update_encrypts(db):
     assert model_config.get_model(created["id"])["api_key"] == "sk-new-456"
 
 
+def test_model_config_update_skips_masked_key(db):
+    """脱敏值回传（前端未改 key 就保存）不覆盖真实 key——线上事故回归。"""
+    created = model_config.create_model(
+        {"name": "t", "api_key": "sk-real-key-999", "model": "gpt-4o"})
+    # 模拟前端把 list_models 的脱敏值（sk-r***-999）原样回传
+    model_config.update_model(created["id"], {"name": "改名", "api_key": "sk-r***-999"})
+    m = model_config.get_model(created["id"])
+    assert m["name"] == "改名"  # 其他字段正常更新
+    assert m["api_key"] == "sk-real-key-999"  # key 未被脱敏值覆盖
+
+
+def test_model_config_update_skips_empty_key(db):
+    """api_key 为空（前端未填）时不覆盖已存 key。"""
+    created = model_config.create_model(
+        {"name": "t", "api_key": "sk-real-key-999", "model": "gpt-4o"})
+    model_config.update_model(created["id"], {"api_key": ""})
+    assert model_config.get_model(created["id"])["api_key"] == "sk-real-key-999"
+
+
+def test_model_config_list_has_api_key_flag(db):
+    """list_models 带 has_api_key 标记（前端占位符提示用）。"""
+    model_config.create_model({"name": "t", "api_key": "sk-secret-123", "model": "gpt-4o"})
+    listed = model_config.list_models()
+    assert listed[0]["has_api_key"] is True
+    assert listed[0]["api_key"] == "sk-s***-123"  # 仍脱敏
+
+
 def test_migrate_plaintext_keys(db, monkeypatch):
     """迁移脚本把存量明文 key 加密，且幂等。"""
     # 手动插入明文 key（模拟存量数据）

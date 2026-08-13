@@ -155,15 +155,18 @@ function DbTab() {
 // Tab 2: 模型配置（多模型管理）
 // ══════════════════════════════════════════════════════════
 
-const EMPTY_MODEL: Omit<ModelConfig, 'id' | 'is_default' | 'created_at' | 'updated_at'> = {
+type ModelForm = Omit<ModelConfig, 'id' | 'is_default' | 'created_at' | 'updated_at'> & { has_api_key: boolean };
+
+const EMPTY_MODEL: ModelForm = {
   name: '', base_url: '', api_key: '', model: '', timeout: '120',
   max_context_tokens: '', max_output_tokens: '', thinking_enabled: 'false', reasoning_effort: '',
+  has_api_key: false,
 };
 
 function ModelsTab() {
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [editForm, setEditForm] = useState({ ...EMPTY_MODEL });
+  const [editForm, setEditForm] = useState<ModelForm>({ ...EMPTY_MODEL });
   const [msg, setMsg] = useState('');
   const [probing, setProbing] = useState(false);
   const [probeMsg, setProbeMsg] = useState('');
@@ -200,8 +203,8 @@ function ModelsTab() {
   const handleSave = async () => {
     if (!selectedId) return;
     try {
-      const m = await modelApi.update(selectedId, editForm);
-      setModels(prev => prev.map(x => x.id === selectedId ? m : x));
+      await modelApi.update(selectedId, editForm);
+      await loadModels(); // 响应含明文 key，不回写前端 state，重新拉取脱敏列表
       setMsg('✓ 已保存');
     } catch (e: any) { setMsg(`✗ ${e.message}`); }
   };
@@ -294,7 +297,7 @@ function ModelsTab() {
             <div className="grid grid-cols-3 gap-3">
               <Field label="名称" value={editForm.name} onChange={(v) => setEditForm(p => ({ ...p, name: v }))} placeholder="DeepSeek-V4" />
               <Field label="Base URL" value={editForm.base_url} onChange={(v) => setEditForm(p => ({ ...p, base_url: v }))} placeholder="https://api.deepseek.com" />
-              <Field label="API Key" value={editForm.api_key} onChange={(v) => setEditForm(p => ({ ...p, api_key: v }))} type="password" placeholder="sk-xxx" />
+              <Field label="API Key" value={editForm.api_key} onChange={(v) => setEditForm(p => ({ ...p, api_key: v }))} type="password" placeholder={editForm.has_api_key ? '已保存，留空则不修改' : 'sk-xxx'} />
               <Field label="Model" value={editForm.model} onChange={(v) => setEditForm(p => ({ ...p, model: v }))} placeholder="deepseek-v4-flash" />
               <Field label="Timeout (s)" value={editForm.timeout} onChange={(v) => setEditForm(p => ({ ...p, timeout: v }))} placeholder="120" />
               <Field label="上下文窗口" value={editForm.max_context_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_context_tokens: v }))} placeholder="1048576" />
@@ -347,12 +350,13 @@ function ModelsTab() {
   );
 }
 
-function _toForm(m: ModelConfig) {
+function _toForm(m: ModelConfig): ModelForm {
   return {
-    name: m.name, base_url: m.base_url, api_key: m.api_key, model: m.model,
+    name: m.name, base_url: m.base_url, api_key: '', model: m.model,
     timeout: m.timeout,
     max_context_tokens: m.max_context_tokens, max_output_tokens: m.max_output_tokens,
     thinking_enabled: m.thinking_enabled, reasoning_effort: m.reasoning_effort,
+    has_api_key: !!m.has_api_key,
   };
 }
 
