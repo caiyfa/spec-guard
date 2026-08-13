@@ -85,3 +85,85 @@ def test_sync_all_collects_errors(tmp_path):
         out = svc.sync_all(base)
     assert out["errors"] and "无权限" in out["errors"][0]   # 诚实呈现
     assert "docs" in out and "chats" in out                  # 不中断
+
+
+# ══════════════════════════════════════════════════════════
+# T-916：端到端贯通（全 mock：同步→聚类→建议→确认→图谱→焦点子图）
+# ══════════════════════════════════════════════════════════
+
+def test_e2e_pipeline(tmp_path):
+    from unittest.mock import MagicMock
+    from specflow.feishu_pool import link_suggest as ls
+    from specflow.feishu_pool import topic_cluster as tc
+    from specstd.anchors import scan_anchors
+    from services.specflow import feishu_review_service as rev
+    from graph_index.builder import build_index
+    from graph_index.service import focus_subgraph, index_path
+    from graph_index.store import GraphStore
+
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    (ws / "specs" / "inventory" / "grid-placement").mkdir(parents=True)
+    (ws / "specs" / "inventory" / "grid-placement" / "spec.md").write_text(
+        "### FR-012: 作废级联删除\n作废会话后级联删除人员。\n", encoding="utf-8")
+    scenarios = tmp_path / "scenarios"
+    scenarios.mkdir()
+
+    # ① 同步（mock lark 三通道）
+    svc.save_watch_config(emp, {"chats": [{"chat_id": "oc_abc"}],
+                                "docs": [{"token": "tokA"}],
+                                "minutes_days": 0, "chat_days": 1})
+
+    def _fake(args, timeout=90):
+        if "docs" in args:
+            return {"ok": True, "data": {"content": "作废会话后级联删除人员", "images": []}}
+        if "chat-messages-list" in " ".join(args):
+            return {"ok": True, "data": {"items": [
+                {"create_time_ms": "1691498400000", "sender_name": "张三",
+                 "msg_type": "text", "text": "作废会话后级联删除人员"}]}}
+        return {"ok": True, "data": {"items": []}}
+
+    with patch.object(svc, "_run_lark", side_effect=_fake):
+        out = svc.sync_all(emp)
+    assert out["docs"] == 1 and out["chats"] == 1
+
+    # ② 话题聚类（mock LLM；msg_range 取快照实际渲染时间戳）
+    import json as _json
+    chat_file = next((emp / "feishu_pool" / "chats").rglob("*.md"))
+    ts = chat_file.read_text(encoding="utf-8").split("]")[0] + "]"
+    llm = MagicMock()
+    llm.chat.return_value = {"content": _json.dumps({"topics": [{
+        "title": "级联删除讨论", "summary": "作废会话后级联删除人员",
+        "msg_range": [ts, ts], "participants_count": 1}]}, ensure_ascii=False)}
+    produced = tc.cluster_chat_snapshots(emp, llm)
+    assert len(produced) == 1
+    topic_id = produced[0]["id"]
+
+    # ③ 建边建议（mock LLM；evidence 为原文子串）
+    anchors = scan_anchors(ws)
+    llm2 = MagicMock()
+    llm2.chat.return_value = {"content": (
+        '{"links": [{"fr_id": "FR-012", "confidence": 0.9,'
+        ' "evidence": "作废会话后级联删除人员"}]}')}
+    doc_text = (emp / "feishu_pool" / "docs" / "fd-tokA.md").read_text(encoding="utf-8")
+    sug_doc = ls.suggest_links_for_material("fd:tokA", doc_text, anchors, llm2,
+                                            workspace_root=ws)
+    sug_tp = ls.suggest_links_for_material(topic_id, produced[0]["summary"],
+                                           anchors, llm2, workspace_root=ws)
+    assert len(sug_doc) == 1 and len(sug_tp) == 1
+
+    # ④ 入队 + 人拍板确认（提升共享区）
+    rev.enqueue_suggestions(emp, "u1", sug_doc + sug_tp)
+    out = rev.confirm_suggestions(emp, ws, "u1",
+                                  [("fd:tokA", "FR-012"), (topic_id, "FR-012")])
+    assert out["confirmed"] == 2
+
+    # ⑤ 图谱派生 + 焦点子图
+    build_index(ws, index_path(ws), scenarios_root=scenarios, sg_root=tmp_path)
+    with GraphStore(index_path(ws)) as store:
+        assert store.get_node("fd:tokA")["node_type"] == "feishu_doc"
+        assert store.get_node(topic_id)["node_type"] == "topic"
+        assert len(store.list_edges("mentions")) == 2
+        sub = focus_subgraph(store, "FR-012", depth=1)
+        ids = {n["id"] for n in sub["nodes"]}
+        assert {"fd:tokA", topic_id} <= ids

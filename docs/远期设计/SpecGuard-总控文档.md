@@ -3,7 +3,7 @@
 > **本文档是所有开发会话的唯一协调中心。任何开发会话开工前必须完整阅读 §1-§4，并按 §3 协议注册会话、认领任务、登记文件变更。**
 > 版本：v1.25 · 2026-08-14 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
 >
-> **v1.25 决策（2026-08-14，sess-feishu-graph，总控人指令）**：新增 §4.9「飞书知识图谱（面试素材溯源）」支线（T-910~T-916，依据《远期设计/SpecGuard-飞书知识图谱设计-面试素材溯源.md》+《upgrade-plans/2026-08-13-飞书知识图谱一期实施计划.md》）——飞书材料（文档/妙记/群聊话题）经「拉取落池→LLM建议→人工复核→图谱派生」接入 graph_index，面试官 trace_backward 自带证据链。铁律：LLM 不写图谱（建议→人拍板→落盘事实源→确定性派生）；私有/共享双区隔离（未确认材料永不出私有区）；与 GateDock 并行采批次 A（纯新建）/批次 B（改现有代码）分拆防撞。批次 A ✅（commit 11220d3：12 新建文件 26 用例，全量 1409 绿）；T-913 派生段 ✅ 待 commit。
+> **v1.25 决策（2026-08-14，sess-feishu-graph，总控人指令）**：新增 §4.9「飞书知识图谱（面试素材溯源）」支线（T-910~T-916，依据《远期设计/SpecGuard-飞书知识图谱设计-面试素材溯源.md》+《upgrade-plans/2026-08-13-飞书知识图谱一期实施计划.md》）——飞书材料（文档/妙记/群聊话题）经「拉取落池→LLM建议→人工复核→图谱派生」接入 graph_index，面试官 trace_backward 自带证据链。铁律：LLM 不写图谱（建议→人拍板→落盘事实源→确定性派生）；私有/共享双区隔离（未确认材料永不出私有区）；与 GateDock 并行采批次 A（纯新建）/批次 B（改现有代码）分拆防撞。批次 A ✅（commit 11220d3：12 新建文件 26 用例，全量 1409 绿）；T-913 派生段 ✅ 待 commit。**收口（2026-08-14）**：T-910~T-916 全量交付——批次 B 五笔 commit（af7fada 派生段+登记 / 1c89d14 接线 / 3e32e89 复核面板 / 98612da 焦点子图 / 0871641 网状镜头）；全量 1551 绿 + release_check PASS + 前端 build 通过；一期收口待笔 e2e+文档随本登记提交。
 >
 > **v1.24 决策（2026-08-13，sess-gatedock-dev，总控人指令）**：§4.8 GateDock 二期（T-901）+ 三期（T-902）全量交付——① MCP 只读工具 `gate_dock_status`（runtime 注入 `_session_id` 特权参数，RBAC 分级纯读）+ 前端 `gate-card`/`gate-exec` 围栏渲染（AgentChat 消息流内嵌可操作卡片，复用 GateCardView 组件）+ skills 推卡话术（gate-dock-guide.md，L1/L2/L3 分档接管）；② L3 代执行白名单硬编码（material_include/material_exclude/topic_confirm 三可逆低危 action），GateExecCard 用户确认才执行，白名单外确定性拒绝；③ 测试 MCP 6 例 + 全量 1399 全绿 + 前端 build + release_check PASS。
 >
@@ -234,9 +234,9 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-911 | 图谱-提炼 | LLM 话题聚类 + 建边建议 + 替身文本 | specflow/feishu_pool（topic_cluster/link_suggest/captions） | 话题增量归并保 id 稳定（图谱不依赖 LLM 复现）；三重防幻觉（锚点存在性/evidence 子串/rejected 过滤）；替身文本拼装纯文本模型透明；10 用例 | T-910 | 已完成 | sess-feishu-graph | P0 ✅ 2026-08-14（commit 11220d3） |
 | T-912 | 图谱-采集闸门 | 拉取入库 + 复核服务 | lark_cli + feishu_sync_service + feishu_review_service + routers/feishu_pool | watch 配置即显式授权载体；三通道只读拉取（错误诚实入 errors）；复核队列 emp 隔离；确认提升共享区/拒绝工作区留痕；invalid 不可确认；10 用例 | T-911 | 已完成 | sess-feishu-graph | P0 ✅ 2026-08-14（commit 11220d3；路由文件新建未挂 main.py，挂载在 T-914） |
 | T-913 | 图谱-派生 | graph_index 飞书派生段 | graph_index store/builder/service | feishu_doc/feishu_minutes/topic 节点 + mentions 边（仅 confirmed、断链不建边）；共享区事实源纳入 source_fingerprint；backlink 增 mentioned_by；3 用例 + 删库重建一致性回归全绿 | T-912 | 已完成 | sess-feishu-graph | P0 ✅ 2026-08-14（32 用例全绿，待 commit） |
-| T-914 | 图谱-接线 | main.py 挂路由 + feishu_fetch 复用切换 | workbench main.py + mcp_server/tools/feishu_fetch.py | feishu_pool 路由挂载（watch/sync/复核五端点生效）；feishu_fetch 改 import specflow.feishu_pool.lark_cli（29 用例回归） | T-912/T-913 | 进行中 | sess-feishu-graph | P0 |
-| T-915 | 图谱-呈现 | 复核面板 + 双层视图前端 | MaterialsPanel/api.ts/AgentChat/GraphPanorama + graph.py（focus/network） | 材料页签关联复核面板（置信度条+批量确认/拒绝）；/api/graph/focus N 跳子图 + AgentChat 侧栏；全景第 4 镜头网状（elkjs 力导向零新增依赖，500 节点护栏） | T-913 | 未认领 | | P1 |
-| T-916 | 图谱-收口 | e2e 贯通 + 发布门禁 | 全链路 | mock e2e（同步→聚类→建议→确认→建图→子图）；真实环境面试官链路验证；全量回归 + release_check 全 PASS；设计文档状态已实施 | T-915 | 未认领 | | P0 |
+| T-914 | 图谱-接线 | main.py 挂路由 + feishu_fetch 复用切换 | workbench main.py + mcp_server/tools/feishu_fetch.py | feishu_pool 路由挂载（watch/sync/复核五端点生效）；feishu_fetch 改 import specflow.feishu_pool.lark_cli（29 用例回归） | T-912/T-913 | 已完成 | sess-feishu-graph | P0 ✅ 2026-08-14（commit 1c89d14：main.py import+include_router 挂载；feishu_fetch 内联封装删除改 import；test_non_win_command_prefix 等 2 例 patch 目标随迁移修正；44 用例全绿） |
+| T-915 | 图谱-呈现 | 复核面板 + 双层视图前端 | MaterialsPanel/api.ts/AgentChat/GraphPanorama + graph.py（focus/network） | 材料页签关联复核面板（置信度条+批量确认/拒绝）；/api/graph/focus N 跳子图 + AgentChat 侧栏；全景第 4 镜头网状（elkjs 力导向零新增依赖，500 节点护栏） | T-913 | 已完成 | sess-feishu-graph | P1 ✅ 2026-08-14（三笔：3e32e89 复核面板 FeishuReviewPanel + api.ts；98612da focus_subgraph 端点 + AgentChat「◎ 图谱」页签 FocusGraph；0871641 network_view + elk force 网状镜头 NetworkGraph + GraphPanorama 第 4 镜头；35 图谱用例全绿 + 前端 build 通过） |
+| T-916 | 图谱-收口 | e2e 贯通 + 发布门禁 | 全链路 | mock e2e（同步→聚类→建议→确认→建图→子图）；真实环境面试官链路验证；全量回归 + release_check 全 PASS；设计文档状态已实施 | T-915 | 已完成 | sess-feishu-graph | P0 ✅ 2026-08-14：test_e2e_pipeline 六段贯通（mock lark/LLM：同步→聚类→建议→确认→build_index→focus_subgraph 含 fd/tp 节点与 mentions 边）；全量 1551 用例全绿 + release_check 全 PASS；设计文档 v1.1 已实施（§5.3 rejected 口径修订为共享区留痕） |
 
 ---
 
@@ -441,7 +441,22 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_graph_index.py | sess-feishu-graph | 2026-08-14 | 176c77d59602 | 304b8c38f5ce | 已完成 | T-913：TestFeishuNodes 3 例 |
 | docs/远期设计/SpecGuard-飞书知识图谱设计-面试素材溯源.md | sess-feishu-graph | 2026-08-14 | NEW | 35a82e984324 | 已完成 | 设计定稿（d5a4142） |
 | docs/upgrade-plans/2026-08-13-飞书知识图谱一期实施计划.md | sess-feishu-graph | 2026-08-14 | NEW | 29da3e3b5717 | 已完成 | 实施计划+批次 A/B 执行序（ad11696） |
-| docs/远期设计/SpecGuard-总控文档.md | sess-feishu-graph | 2026-08-14 | 918a20f96c61 | 03fd47bfd8b0 | 已完成 | v1.25：§4.9 任务块+§5 会话+§6 登记 |
+| workbench/backend/main.py | sess-feishu-graph | 2026-08-14 | — | 8ba9c7bcf36d | 已完成 | T-914：feishu_pool 路由挂载（1c89d14） |
+| mcp_server/tools/feishu_fetch.py | sess-feishu-graph | 2026-08-14 | — | 0047c5e25e40 | 已完成 | T-914：复用 lark_cli 统一封装（1c89d14） |
+| test_specstd/test_feishu_fetch.py | sess-feishu-graph | 2026-08-14 | — | 9841616cbe4c | 已完成 | T-914：patch 目标随迁移修正（1c89d14） |
+| workbench/frontend/src/api.ts | sess-feishu-graph | 2026-08-14 | — | 8cb1e087ccf1 | 已完成 | T-915：feishuPoolApi+graphApi.focus/network（3e32e89/98612da/0871641） |
+| workbench/frontend/src/components/FeishuReviewPanel.tsx | sess-feishu-graph | 2026-08-14 | NEW | c82e85045496 | 已完成 | T-915：关联复核面板（3e32e89） |
+| workbench/frontend/src/pages/MaterialsPanel.tsx | sess-feishu-graph | 2026-08-14 | — | 1958c72d5a16 | 已完成 | T-915：挂载复核面板（3e32e89） |
+| graph_index/service.py | sess-feishu-graph | 2026-08-14 | — | 31c9344877f1 | 已完成 | T-915：focus_subgraph+network_view（98612da/0871641） |
+| workbench/backend/routers/graph.py | sess-feishu-graph | 2026-08-14 | — | 094d006c9b38 | 已完成 | T-915：/focus 端点+lens=network（98612da/0871641） |
+| workbench/frontend/src/components/FocusGraph.tsx | sess-feishu-graph | 2026-08-14 | NEW | 776bd858f98a | 已完成 | T-915：焦点子图组件（98612da） |
+| workbench/frontend/src/pages/AgentChat.tsx | sess-feishu-graph | 2026-08-14 | — | 484db7dccb0e | 已完成 | T-915：「◎ 图谱」页签（98612da） |
+| workbench/frontend/src/utils/elkLayout.ts | sess-feishu-graph | 2026-08-14 | — | fc2c9de4843f | 已完成 | T-915：layoutNetworkByELK 力导向（0871641） |
+| workbench/frontend/src/components/NetworkGraph.tsx | sess-feishu-graph | 2026-08-14 | NEW | d1bd15e09015 | 已完成 | T-915：网状全景组件（0871641） |
+| workbench/frontend/src/pages/GraphPanorama.tsx | sess-feishu-graph | 2026-08-14 | — | e7934063b4cc | 已完成 | T-915：第 4 镜头接入（0871641） |
+| test_specstd/test_graph_index.py | sess-feishu-graph | 2026-08-14 | — | abbddcbb86ac | 已完成 | T-915：focus/network 用例（98612da/0871641） |
+| test_specstd/test_feishu_sync.py | sess-feishu-graph | 2026-08-14 | — | 233703329b5c | 已完成 | T-916：e2e 贯通（收口笔） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-feishu-graph | 2026-08-14 | 918a20f96c61 | 4e09855feb68 | 已完成 | v1.25：§4.9 任务块+§5 会话+§6 登记+收口状态 |
 | | | | | | | |
 
 ## 7. 冲突与异常处理
