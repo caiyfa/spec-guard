@@ -293,6 +293,33 @@ def focus_subgraph(store: GraphStore, node_id: str, depth: int = 2) -> dict:
     return {"root": node_id, "depth": depth, "nodes": nodes, "edges": edges}
 
 
+_NETWORK_NODE_LIMIT = 500   # 网状镜头性能护栏：超过则只回 L0 聚合
+
+
+def network_view(store: GraphStore) -> dict:
+    """网状镜头全量投影（飞书知识图谱一期 T-915）。
+
+    全量节点+边（排序输出，确定性）；节点数 >_NETWORK_NODE_LIMIT 时
+    truncated=True 且只回模块聚合节点 + L0 耦合边（前端退回聚合态渲染）。
+    """
+    total = store.count_nodes()
+    if total > _NETWORK_NODE_LIMIT:
+        l0 = panorama_l0(store)
+        mod_nodes = []
+        for m, info in l0["l0mods"].items():
+            mod_nodes.append({"id": f"mod:{m}", "node_type": "module",
+                              "stage": "", "title": m,
+                              "attrs": {"fr_count": info["fr_count"]},
+                              "source_ref": None})
+        edges = [{"src": f"mod:{e['a']}", "dst": f"mod:{e['b']}",
+                  "edge_type": "couples", "attrs": {"w": e["w"]}}
+                 for e in l0["l0edges"]]
+        return {"truncated": True, "total_nodes": total,
+                "nodes": mod_nodes, "edges": edges}
+    return {"truncated": False, "total_nodes": total,
+            "nodes": store.list_nodes(), "edges": store.list_edges()}
+
+
 def query(workspace_root: Path, level: str = "L0", module: str = "",
           feature: str = "", node_id: str = "",
           scenarios_root: Optional[Path] = None,

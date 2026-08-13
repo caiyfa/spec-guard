@@ -112,3 +112,37 @@ export async function layoutDagByELK(nodes: Array<{ id: string }>, edges: Edge[]
 
   return normalized;
 }
+
+/** 力导向布局（飞书知识图谱一期 T-915 网状镜头）：elk force 算法，零新增依赖。
+ *  节点小尺寸（网状全景密度高），坐标原点归一。 */
+export async function layoutNetworkByELK(
+  nodes: Array<{ id: string }>, edges: Edge[],
+): Promise<Map<string, { x: number; y: number }>> {
+  const graph = {
+    id: 'specguard-network',
+    layoutOptions: {
+      'elk.algorithm': 'force',
+      'elk.spacing.nodeNode': '55',
+      'elk.force.iterations': '300',
+      'elk.separateConnectedComponents': 'true',
+      'elk.spacing.componentComponent': '80',
+    } as Record<string, string>,
+    children: nodes.map((n) => ({ id: n.id, width: 170, height: 44 })),
+    edges: edges.map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] })),
+  };
+  const layouted = await (await getELK()).layout(graph);
+  const result = new Map<string, { x: number; y: number }>();
+  let minX = Infinity;
+  let minY = Infinity;
+  (layouted.children || []).forEach((child: ElkChildShape) => {
+    result.set(child.id, { x: child.x ?? 0, y: child.y ?? 0 });
+    minX = Math.min(minX, child.x ?? 0);
+    minY = Math.min(minY, child.y ?? 0);
+  });
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return result;
+  const normalized = new Map<string, { x: number; y: number }>();
+  result.forEach((pos, id) => {
+    normalized.set(id, { x: pos.x - minX, y: pos.y - minY });
+  });
+  return normalized;
+}

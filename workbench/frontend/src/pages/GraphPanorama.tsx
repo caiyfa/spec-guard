@@ -13,19 +13,22 @@ import {
   type GraphSnapshot,
   type GraphDiff,
 } from '../api';
+import NetworkGraph from '../components/NetworkGraph';
 
-type Lens = 'topic' | 'debt' | 'map';
+type Lens = 'topic' | 'debt' | 'map' | 'network';
 
 const LENSES: { key: Lens; label: string; hint: string }[] = [
   { key: 'topic', label: '🧭 面试选题', hint: 'delta 活跃功能点优先进入下轮面试议题' },
   { key: 'debt', label: '🧊 测试债地图', hint: '健康分 <80 标 ❄，无场景新功能点虚线描边' },
   { key: 'map', label: '🗺 系统概览', hint: '模块耦合强度，服务新人 onboarding' },
+  { key: 'network', label: '🕸 网状全景', hint: '全量节点力导向网状（含飞书材料/话题；橙色虚线=mentions 人工复核关联），>500 节点自动聚合' },
 ];
 
 const LENS_COLOR: Record<Lens, string> = {
   topic: 'border-purple-500/60',
   debt: 'border-cyan-500/60',
   map: 'border-gray-500/60',
+  network: 'border-amber-500/60',
 };
 
 // M-03：展示文案长度守卫
@@ -73,8 +76,9 @@ export default function GraphPanorama() {
     }
   };
 
-  // ── L0 加载 ──
+  // ── L0 加载（network 镜头走 NetworkGraph 自取数，不经 panoramaL0）──
   useEffect(() => {
+    if (lens === 'network') return;
     graphApi.panoramaL0(lens).then(setL0).catch(e => setError(String(e)));
   }, [lens]);
 
@@ -292,8 +296,11 @@ export default function GraphPanorama() {
         </>)}
       </div>
 
+      {/* ── 网状全景（T-915 第 4 镜头：力导向全量节点网状）── */}
+      {lens === 'network' && <NetworkGraph />}
+
       {/* ── L0 模块星团 ── */}
-      {!module && l0 && (
+      {lens !== 'network' && !module && l0 && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {Object.entries(l0.l0mods).map(([mod, m]) => (

@@ -52,11 +52,21 @@ def panorama_l0(
     user: CurrentUser = Depends(get_current_user),
     workspace: str = Depends(resolve_workspace),
 ):
-    """L0 系统星座图（模块节点 + 耦合边 + 镜头着色属性）。"""
+    """L0 系统星座图（模块节点 + 耦合边 + 镜头着色属性）。
+
+    lens=network（飞书知识图谱一期 T-915）：网状镜头全量节点+边投影
+    （>500 节点护栏只回模块聚合）。纯读，全角色可看。
+    """
     from graph_index import service
     root = _workspace_root(workspace)
     if level.upper() != "L0":
         raise HTTPException(status_code=400, detail="L0 端点仅支持 level=L0")
+    if lens == "network":
+        service.ensure_fresh(root)
+        from graph_index.service import index_path
+        from graph_index.store import GraphStore
+        with GraphStore(index_path(root)) as store:
+            return service.network_view(store)
     data = service.query(root, level="L0")
     data["lens"] = lens
     data["era"] = era or "current"

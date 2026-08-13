@@ -668,3 +668,15 @@ class TestFeishuNodes:
             import pytest as _pt
             with _pt.raises(KeyError):
                 service.focus_subgraph(store, "FR-999")
+
+    def test_network_view_full_projection(self, fake_ws):
+        self._add_feishu_facts(fake_ws)
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            view = service.network_view(store)
+            types = {n["node_type"] for n in view["nodes"]}
+            assert {"fr", "scenario", "feishu_doc", "topic"} <= types
+            assert view["truncated"] is False
+            # 确定性：节点按 id 排序
+            ids = [n["id"] for n in view["nodes"]]
+            assert ids == sorted(ids)

@@ -1344,6 +1344,8 @@ export const graphApi = {
     request<{ node: GraphNode; backlink: GraphBacklink }>(`/graph/backlink/${encodeURIComponent(nodeId)}`),
   focus: (nodeId: string, depth = 2) =>
     request<FocusGraphResp>(`/graph/focus?node_id=${encodeURIComponent(nodeId)}&depth=${depth}`),
+  network: () =>
+    request<NetworkViewResp>('/graph/panorama?level=L0&lens=network'),
   rebuild: () => request<{ nodes: number; edges: number; source_fingerprint: string; built_at: string }>('/graph/rebuild', { method: 'POST' }),
   source: (file: string, line = 0) =>
     request<GraphSourceFile>(`/graph/source?file=${encodeURIComponent(file)}&line=${line}`),
@@ -1583,6 +1585,13 @@ export interface FocusGraphEdge {
 export interface FocusGraphResp {
   root: string;
   depth: number;
+  nodes: FocusGraphNode[];
+  edges: FocusGraphEdge[];
+}
+
+export interface NetworkViewResp {
+  truncated: boolean;
+  total_nodes: number;
   nodes: FocusGraphNode[];
   edges: FocusGraphEdge[];
 }
