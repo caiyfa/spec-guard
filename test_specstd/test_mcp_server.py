@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 86  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）
+        assert len(ALL_TOOLS) == 88  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -107,6 +107,8 @@ class TestToolRegistration:
                      "lookup_external_ref",
                      "dev_context_by_zt_ref", "dev_context_by_anchor",
                      "dev_context_by_fr",
+                     # 编号重排能力（2：FR 引用搜索 + FR 编号双右锚解析校验）
+                     "search_spec_files", "parse_fr_id",
                      }
         assert names == expected
 
