@@ -11,7 +11,7 @@ import '@xyflow/react/dist/style.css';
 import ScenarioNode from '../components/ScenarioNode';
 import { layoutDagByELK } from '../utils/elkLayout';
 import { useJsTokens } from '../theme';
-import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi } from '../api';
+import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi, settingsApi, specApi } from '../api';
 import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData } from '../api';
 import SessionTree from '../components/SessionTree';
 import TodoPanel from '../components/TodoPanel';
@@ -1150,6 +1150,65 @@ function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatch, onRe
   );
 }
 
+// 🚀 推送远端——delta 起草区已 git commit 后的一键推送入口（需先在 Settings 配置 git token）
+function PushDeltaSection() {
+  const navigate = useNavigate();
+  const [deltaId, setDeltaId] = useState('');
+  const [hasToken, setHasToken] = useState<boolean | null>(null);  // null=检查中
+  const [pushing, setPushing] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    settingsApi.getGitConfig()
+      .then(r => setHasToken(r.has_token))
+      .catch(() => setHasToken(false));
+  }, []);
+
+  const handlePush = async () => {
+    if (!deltaId.trim()) return;
+    setPushing(true);
+    setResult(null);
+    try {
+      const r = await specApi.pushDelta(deltaId.trim());
+      setResult({ ok: r.ok, msg: r.note || r.error || (r.ok ? '推送成功' : '推送失败') });
+    } catch (e: any) {
+      setResult({ ok: false, msg: e.message || '推送异常' });
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-2/70 p-2 mt-2">
+      <div className="text-[11px] font-medium text-gray-300 mb-1">🚀 推送远端</div>
+      {hasToken === null ? (
+        <div className="text-[10px] text-gray-600">检测 git 配置…</div>
+      ) : hasToken ? (
+        <div className="flex items-center gap-1.5">
+          <input value={deltaId} onChange={e => setDeltaId(e.target.value)}
+            placeholder="delta 代号（如 0817）"
+            className="flex-1 bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono text-gray-200 placeholder-gray-600" />
+          <button onClick={handlePush} disabled={pushing || !deltaId.trim()}
+            className="px-2 py-1 rounded bg-info text-white text-[11px] hover:bg-info/90 disabled:opacity-40 flex-shrink-0">
+            {pushing ? '推送中…' : '🚀 推送'}
+          </button>
+        </div>
+      ) : (
+        <div className="text-[10px] text-gray-600 leading-relaxed">
+          🐙 推送到远端需要 HTTPS PAT，
+          <button onClick={() => navigate('/settings')} className="text-info hover:underline">去设置 → Git 配置</button>
+        </div>
+      )}
+      {result && (
+        <div className={`mt-1.5 text-[10px] rounded px-1.5 py-1 ${result.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+          {result.ok ? '✅ ' : '❌ '}{result.msg}
+        </div>
+      )}
+      <div className="text-[9px] text-gray-600 mt-1">先 commit（Agent 会自动做），再推送。只支持 HTTPS remote。</div>
+    </div>
+  );
+}
+
 // ── 草稿产物区（K-xxx：草稿评审融合进 Agent 对话——写入草稿后直接在右侧校验/试跑/入库） ──
 interface DraftCardState {
   validate?: ValidateReport;
@@ -1407,6 +1466,9 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
           </div>
         );
       })}
+
+      {/* 🚀 推送远端（delta 起草区已 git commit 后的一键推送入口） */}
+      <PushDeltaSection />
 
       {/* 入库弹窗（模块选择 + 覆盖勾选 + 冲突预检提示） */}
       {dialog.open && (
