@@ -404,8 +404,8 @@ export const specApi = {
     }),
   report: (path: string) => request<{ path: string; content: string }>(`/spec/report?path=${encodeURIComponent(path)}`),
   validateTestCases: () => request<TestCaseValidationResult>('/spec/validate-testcases'),
-  pushDelta: (deltaId: string) =>
-    request<{ ok: boolean; output?: string; error?: string; note?: string }>(`/spec/changes/${deltaId}/push`, { method: 'POST' }),
+  pushBranch: () =>
+    request<{ ok: boolean; output?: string; error?: string; note?: string; ahead?: number; commits?: string[] }>('/spec/push', { method: 'POST' }),
 };
 
 // ── 参考信息（编辑器快速引用） ──

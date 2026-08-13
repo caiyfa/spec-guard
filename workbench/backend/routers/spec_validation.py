@@ -106,20 +106,19 @@ def api_commit_delta_changes(
     return result
 
 
-@router.post("/changes/{delta_id}/push")
+@router.post("/push")
 def api_push_delta(
-    delta_id: str,
     user=Depends(require_role("admin", "product")),
     workspace: str = Depends(resolve_workspace),
 ):
-    """推送 changes/{delta_id}/ 起草区提交到远端（git push）。
+    """推送当前分支未推送提交到远端（git push）。
 
-    使用用户配置的 git token（加密存储的 HTTPS PAT）注入认证信息。
-    前置门禁：该 delta 存在未提交变更时拒绝（必须先 commit）。
+    分支级操作（不依赖 delta_id）：推送 @{u}..HEAD 全部本地提交。
+    使用用户配置的 git token（加密存储的 HTTPS PAT）注入认证。
     """
     token = git_config.get_decrypted_token(user.emp_no)
     result = push_delta(
-        workspace=workspace, delta_id=delta_id,
+        workspace=workspace, delta_id="",
         token=token, emp_no=user.emp_no,
     )
     if not result.get("ok"):

@@ -12,7 +12,7 @@ import ScenarioNode from '../components/ScenarioNode';
 import { layoutDagByELK } from '../utils/elkLayout';
 import { useJsTokens } from '../theme';
 import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi, settingsApi, specApi } from '../api';
-import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData } from '../api';
+import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData, GitLogResponse } from '../api';
 import SessionTree from '../components/SessionTree';
 import TodoPanel from '../components/TodoPanel';
 import type { StructuredTodo } from '../components/TodoPanel';
@@ -1163,13 +1163,15 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
   );
 }
 
-// 🚀 推送远端——delta 起草区已 git commit 后的一键推送入口（需先在 Settings 配置 git token）
-function PushDeltaSection() {
-  const [deltaId, setDeltaId] = useState('');
-  const [hasToken, setHasToken] = useState<boolean | null>(null);  // null=检查中
+// 📜 提交历史——未推送提交列表 + 一键推送（分支级，不依赖 delta_id）
+function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
+  const [data, setData] = useState<GitLogResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [pushing, setPushing] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
-  // 补 token 弹窗
+  const [pushResult, setPushResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  // token 弹窗（未配置时推送触发补全）
+  const [hasToken, setHasToken] = useState<boolean | null>(null);
   const [showTokenDialog, setShowTokenDialog] = useState(false);
   const [dlgName, setDlgName] = useState('');
   const [dlgEmail, setDlgEmail] = useState('');
@@ -1177,37 +1179,49 @@ function PushDeltaSection() {
   const [saving, setSaving] = useState(false);
   const [dlgError, setDlgError] = useState('');
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    workspaceApi.gitLog(50)
+      .then(r => setData(r))
+      .catch((e: any) => onError(e.message || '加载提交历史失败'))
+      .finally(() => setLoading(false));
     settingsApi.getGitConfig()
       .then(r => {
         setHasToken(r.has_token);
-        // 已有配置时预填（name/email 为空的推送到弹窗必填）
         setDlgName(r.name || '');
         setDlgEmail(r.email || '');
       })
       .catch(() => setHasToken(false));
-  }, []);
+  }, [onError]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // 未推送提交：remote_head 出现在本地历史中的位置之前的都是未推送
+  const unpushed = useMemo(() => {
+    if (!data) return [];
+    const idx = data.commits.findIndex(c => data.remote_head && c.sha.startsWith(data.remote_head));
+    return idx >= 0 ? data.commits.slice(0, idx) : data.commits;
+  }, [data]);
+  const diverged = data ? (data.remote_head && !data.commits.some(c => c.sha.startsWith(data.remote_head))) : false;
 
   const doPush = async () => {
-    if (!deltaId.trim()) return;
     setPushing(true);
-    setResult(null);
+    setPushResult(null);
     try {
-      const r = await specApi.pushDelta(deltaId.trim());
-      setResult({ ok: r.ok, msg: r.note || r.error || (r.ok ? '推送成功' : '推送失败') });
+      const r = await specApi.pushBranch();
+      setPushResult({ ok: r.ok, msg: r.note || r.error || (r.ok ? '推送成功' : '推送失败') });
+      if (r.ok) load();  // 推送成功后刷新列表
     } catch (e: any) {
-      setResult({ ok: false, msg: e.message || '推送异常' });
+      setPushResult({ ok: false, msg: e.message || '推送异常' });
     } finally {
       setPushing(false);
     }
   };
 
   const handlePushClick = () => {
-    if (!deltaId.trim()) return;
     if (hasToken) {
       doPush();
     } else {
-      // 未配置 token → 弹出补全窗口，保存后自动推送
       setShowTokenDialog(true);
       setDlgError('');
     }
@@ -1223,8 +1237,7 @@ function PushDeltaSection() {
       await settingsApi.saveGitConfig({ name: dlgName, email: dlgEmail, token: dlgToken });
       setHasToken(true);
       setShowTokenDialog(false);
-      // 保存 token 后直接推送
-      doPush();
+      doPush();  // 保存后直接推送
     } catch (e: any) {
       setDlgError(e.message || '保存失败');
     } finally {
@@ -1232,26 +1245,72 @@ function PushDeltaSection() {
     }
   };
 
+  if (loading) return <div className="text-[11px] text-gray-600 text-center py-8">加载中…</div>;
+  if (!data) return <div className="text-[11px] text-gray-600 text-center py-8">加载失败</div>;
+
   return (
-    <div className="rounded-lg border border-border bg-surface-2/70 p-2 mt-2">
-      <div className="text-[11px] font-medium text-gray-300 mb-1">🚀 推送远端</div>
-      <div className="flex items-center gap-1.5">
-        <input value={deltaId} onChange={e => setDeltaId(e.target.value)}
-          placeholder="delta 代号（如 0817）"
-          className="flex-1 bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono text-gray-200 placeholder-gray-600" />
-        <button onClick={handlePushClick} disabled={pushing || !deltaId.trim()}
-          className="px-2 py-1 rounded bg-info text-white text-[11px] hover:bg-info/90 disabled:opacity-40 flex-shrink-0">
-          {pushing ? '推送中…' : '🚀 推送'}
-        </button>
+    <div className="px-2 py-2 space-y-2">
+      {/* 分支状态行 */}
+      <div className="px-1 text-xs font-medium text-gray-300">
+        📜 提交历史（{data.branch}）
+        {data.synced ? (
+          <span className="ml-1.5 text-[10px] text-green-400">✅ 已全部同步</span>
+        ) : (
+          <span className="ml-1.5 text-[10px] text-warn">
+            {unpushed.length > 0 ? `⬆ ${unpushed.length} 待推送` : ''}
+            {diverged ? ' · ⚠️ 远端分叉（推送前自动 rebase）' : ''}
+          </span>
+        )}
       </div>
-      {result && (
-        <div className={`mt-1.5 text-[10px] rounded px-1.5 py-1 ${result.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
-          {result.ok ? '✅ ' : '❌ '}{result.msg}
+
+      {/* 未推送提交列表 */}
+      {unpushed.length === 0 ? (
+        <div className="text-[11px] text-gray-600 text-center py-6">
+          {data.synced ? '本地与远端完全同步' : '无未推送提交'}
+        </div>
+      ) : (
+        <>
+          {unpushed.map(c => (
+            <div key={c.sha} className="rounded-lg border border-border bg-surface-2/70 p-2">
+              <div className="flex items-center gap-1.5 cursor-pointer"
+                onClick={() => setExpanded(prev => ({ ...prev, [c.sha]: !prev[c.sha] }))}>
+                <span className="text-[10px] font-mono text-info">{c.short_sha}</span>
+                <span className="text-[11px] text-gray-200 truncate flex-1" title={c.message}>{c.message}</span>
+                <span className="text-[9px] text-gray-600 flex-shrink-0">{expanded[c.sha] ? '▲' : '▼'}</span>
+              </div>
+              <div className="text-[10px] text-gray-600 mt-0.5">
+                {c.author} · {c.date.slice(0, 16).replace('T', ' ')}
+              </div>
+              {expanded[c.sha] && (
+                <div className="mt-1.5 space-y-0.5">
+                  {c.files.map((f, i) => (
+                    <div key={i} className="text-[10px] font-mono text-gray-500 flex items-center gap-1">
+                      <span className={
+                        f.status === 'A' ? 'text-green-400' : f.status === 'D' ? 'text-red-400' : 'text-yellow-400'
+                      }>{f.status}</span>
+                      <span className="truncate">{f.path}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* 推送按钮 */}
+          <button onClick={handlePushClick} disabled={pushing}
+            className="w-full px-3 py-2 rounded bg-info text-white text-sm hover:bg-info/90 disabled:opacity-40">
+            {pushing ? '推送中…' : `🚀 推送 ${unpushed.length} 个提交到远端`}
+          </button>
+        </>
+      )}
+
+      {pushResult && (
+        <div className={`text-[10px] rounded px-1.5 py-1 ${pushResult.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+          {pushResult.ok ? '✅ ' : '❌ '}{pushResult.msg}
         </div>
       )}
-      <div className="text-[9px] text-gray-600 mt-1">先 commit（Agent 会自动做），再推送。只支持 HTTPS remote。</div>
 
-      {/* 补 token 弹窗（未配置时点击推送触发，保存后自动推送） */}
+      {/* 补 token 弹窗 */}
       {showTokenDialog && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
           onClick={() => !saving && setShowTokenDialog(false)}>
@@ -1541,9 +1600,6 @@ function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
           </div>
         );
       })}
-
-      {/* 🚀 推送远端（delta 起草区已 git commit 后的一键推送入口） */}
-      <PushDeltaSection />
 
       {/* 入库弹窗（模块选择 + 覆盖勾选 + 冲突预检提示） */}
       {dialog.open && (
@@ -1839,6 +1895,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {scenarioMeta && tabBtn('pack', `📦 信息包(${scenarioMeta.info_pack.length})`)}
         {tabBtn('drafts', `📝 更新与产物(${writingFeed.length + draftFiles.length})`)}
         {tabBtn('deps', '🕸 依赖图')}
+        {tabBtn('history', '📜 提交历史')}
         {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
         {onToggleMaximize && (
           <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
@@ -1888,6 +1945,9 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         )}
         {activeTab === 'deps' && (
           <DepGraphPanel draftFiles={draftFiles} onError={onError} />
+        )}
+        {activeTab === 'history' && (
+          <HistoryPanel onError={onError} />
         )}
         {activeFile && (
           <div className="h-full min-h-0 flex flex-col">
@@ -3559,6 +3619,10 @@ export default function AgentChat() {
               {writingFeed.length + sessionDrafts.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{writingFeed.length + sessionDrafts.length}</span>
               )}
+            </button>
+            <button onClick={() => expandSideTo('history')} title="提交历史 / 推送远端"
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+              📜
             </button>
             {scenarioMeta && (
               <button onClick={() => expandSideTo('pack')} title={`信息包（${scenarioMeta.info_pack.length}）`}

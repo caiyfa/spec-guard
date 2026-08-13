@@ -208,24 +208,24 @@ def commit_delta_changes(workspace: str = "", delta_id: str = "",
 
 def push_delta(workspace: str = "", delta_id: str = "",
                token: str = "", emp_no: str = "") -> dict:
-    """推送 changes/{delta_id}/ 提交到远端（git push）。
+    """推送当前分支未推送提交到远端（git push）。
 
+    分支级操作（不依赖 delta_id）：推送 @{u}..HEAD 之间的全部本地提交。
     使用 HTTPS PAT token 注入认证（git credential.helper 临时注入，不修改
-    remote URL 与 credential 配置）。前置 pull --rebase 防冲突。
+    remote URL 与 credential 配置）。前置 pull --rebase --autostash 防冲突。
 
     Args:
         workspace: 工作区名（空 = 当前激活）
-        delta_id: delta 代号（如 0817）
+        delta_id: 可选，仅用于审计记录（不传不校验）
         token: HTTPS Personal Access Token（git_config 解码后传入）
         emp_no: 操作人工号（审计）
 
     Returns:
-        {"ok": bool, "error"?: str, "output"?: str, "note": str}
+        {"ok": bool, "error"?: str, "output"?: str, "note": str,
+         "ahead"?: int, "commits"?: list}
     """
     emp = emp_no or get_context_emp_no() or ""
 
-    if not delta_id:
-        return {"ok": False, "error": "缺少 delta_id 参数"}
     if not token:
         return {"ok": False, "error": "未配置 git token——请在系统设置＞Git 配置中设置 HTTPS PAT"}
 
@@ -244,6 +244,16 @@ def push_delta(workspace: str = "", delta_id: str = "",
     if url_stripped.startswith("git@") or url_stripped.startswith("ssh://"):
         return {"ok": False, "error": "远端为 SSH 协议，不支持 PAT token。请改用 HTTPS remote 或配置 SSH key"}
 
+    # 检查未推送提交（@{u}..HEAD）
+    code, unpushed_log = _git_run(
+        ["git", "log", "--oneline", "@{u}..HEAD"], root)
+    if code != 0:
+        # 无上游分支或首次推送
+        unpushed_log = ""
+    unpushed_lines = [ln for ln in unpushed_log.splitlines() if ln.strip()]
+    if not unpushed_lines:
+        return {"ok": False, "error": "当前分支无未推送提交（全部已同步远端）", "ahead": 0}
+
     # git pull --rebase 先拉远端变更防冲突
     code, out = _git_run(["git", "pull", "--rebase", "--autostash"], root, timeout=60)
     if code != 0:
@@ -256,11 +266,13 @@ def push_delta(workspace: str = "", delta_id: str = "",
     if code != 0:
         return {"ok": False, "error": f"git push 失败: {out[:500]}"}
 
-    _audit(emp, "push_delta", f"changes/{delta_id}/",
-           detail=f"remote: {url_stripped}")
+    _audit(emp, "push_delta", f"changes/{delta_id}/" if delta_id else "branch",
+           detail=f"ahead={len(unpushed_lines)} remote: {url_stripped}")
 
     return {
         "ok": True,
         "output": out,
-        "note": "已推送到远端",
+        "note": f"已推送 {len(unpushed_lines)} 个提交到远端",
+        "ahead": len(unpushed_lines),
+        "commits": unpushed_lines,
     }
