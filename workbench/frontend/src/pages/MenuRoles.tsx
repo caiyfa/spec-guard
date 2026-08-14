@@ -242,8 +242,9 @@ function GrantsTab({ roles, menus, flash, setError }: {
   }, [roles, selRole]);
   useEffect(() => { if (selRole) loadRole(selRole); }, [selRole, loadRole]);
 
-  const toggle = (key: string, isSystem: boolean) => {
+  const toggle = (key: string, isSystem: boolean, isPublic: boolean) => {
     if (isSystem && selRole === 'admin') return; // 系统保底：admin 不可取消
+    if (isPublic) return;                        // 公开菜单：登录即用，无需授权
     setChecked(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
@@ -276,17 +277,18 @@ function GrantsTab({ roles, menus, flash, setError }: {
                 <div key={g.menu_key}>
                   <label className="flex items-center gap-2 text-sm text-gray-300">
                     <input type="checkbox" checked={allChecked}
-                      onChange={() => items.forEach(i => toggle(i.menu_key, !!i.is_system))} />
+                      onChange={() => items.forEach(i => toggle(i.menu_key, !!i.is_system, !!i.is_public))} />
                     {g.icon} {g.label}
                   </label>
                   <div className="ml-5 pl-3 border-l border-border/50 space-y-1">
                     {items.map(i => (
                       <label key={i.menu_key} className="flex items-center gap-2 text-xs text-gray-400">
                         <input type="checkbox" checked={checked.has(i.menu_key)}
-                          disabled={i.is_system && selRole === 'admin'}
-                          onChange={() => toggle(i.menu_key, !!i.is_system)} />
+                          disabled={(i.is_system && selRole === 'admin') || !!i.is_public}
+                          onChange={() => toggle(i.menu_key, !!i.is_system, !!i.is_public)} />
                         {i.label}
                         {i.is_system && <span className="text-[10px] bg-purple-900/50 text-purple-300 rounded px-1">系统保底</span>}
+                        {i.is_public && <span className="text-[10px] bg-green-900/50 text-green-300 rounded px-1">公开 · 登录即用</span>}
                       </label>
                     ))}
                   </div>

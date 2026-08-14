@@ -76,12 +76,12 @@ def test_user_has_menu_and_menus_for_user(db):
         c.execute("DELETE FROM role_menus WHERE role_key='admin'")
     assert rbac_store.user_has_menu(["admin"], "menu-users", db)
     assert not rbac_store.user_has_menu(["admin"], "menu-graph", db)
-    # 可见树：visible=0 与无授权不返回；分组无可见子项不返回
+    # 可见树：visible=0 与无授权不返回；公开菜单恒含；分组无可见子项不返回
     rbac_store.set_role_menus("tester", ["menu-plans", "menu-run", "menu-schedules"], db)
     groups = rbac_store.menus_for_user(["tester"], db)
-    assert len(groups) == 2  # 场景（plans）+ 执行（run/schedules）
     labels = [g["label"] for g in groups]
-    assert "场景" in labels and "执行" in labels
+    assert "场景" in labels and "执行" in labels      # 授权分组
+    assert "Agent" in labels                           # 公开菜单分组恒含（首页对话）
     plan_item = next(i for g in groups if g["label"] == "场景" for i in g["items"] if i["to"] == "/plans")
     assert plan_item["label"] == "场景管理"
 
@@ -98,3 +98,23 @@ def test_set_roles_accepts_custom_role(db):
     # 非法角色仍拒绝
     with pytest.raises(ValueError):
         user_store.set_roles("u9", ["ghost-role"], "u9", db)
+
+
+def test_public_menu_always_accessible(db):
+    """公开菜单（menu-agent）：无需任何角色/授权，登录即可访问（首页免权）。"""
+    assert rbac_store.user_has_menu([], "menu-agent", db)          # 无角色也放行
+    assert rbac_store.user_has_menu(["viewer"], "menu-agent", db)
+    assert not rbac_store.user_has_menu([], "menu-plans", db)      # 非公开菜单仍拦截
+    # 可见树：无授权用户也恒含对话菜单
+    groups = rbac_store.menus_for_user([], db)
+    agent = next(g for g in groups if g["label"] == "Agent")
+    assert any(i["to"] == "/agent" for i in agent["items"])
+
+
+def test_seed_dashboard_path_migrated(db):
+    """存量库迁移：menu-dashboard path 由 / 改为 /dashboard（首页让位给对话页）。"""
+    m = rbac_store.get_menu("menu-dashboard", db)
+    assert m["path"] == "/dashboard"
+    # 幂等：重复 init 不破坏
+    rbac_store.init_db(db)
+    assert rbac_store.get_menu("menu-dashboard", db)["path"] == "/dashboard"

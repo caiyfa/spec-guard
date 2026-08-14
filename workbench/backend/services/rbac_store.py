@@ -21,6 +21,8 @@ _LOCK = threading.RLock()
 
 # 系统保护菜单：admin 授权不可移除（自举保底，防管理员锁死）
 SYSTEM_MENUS = ("menu-menu-manage", "menu-users")
+# 公开菜单：登录即用，无需任何角色/菜单授权（首页对话页免权）
+PUBLIC_MENUS = ("menu-agent",)
 # 内置角色：不可删、key 不可改
 BUILTIN_ROLES = ("admin", "tester", "viewer", "product")
 ROLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
@@ -30,7 +32,7 @@ MENU_KEY_RE = re.compile(r"^(group|menu)-[a-z0-9-]{1,63}$")
 # (menu_key, label, icon, path, parent_key, sort, visible, is_system)
 SEED_MENUS: list[tuple] = [
     ("group-overview", "总览", "📊", "", "", 0, 1, 0),
-    ("menu-dashboard", "仪表盘", "", "/", "group-overview", 0, 1, 0),
+    ("menu-dashboard", "仪表盘", "", "/dashboard", "group-overview", 0, 1, 0),
     ("menu-graph", "全景图谱", "", "/graph", "group-overview", 1, 1, 0),
     ("menu-lineage", "血缘链", "", "/lineage", "group-overview", 2, 1, 0),
     ("group-workspace", "工作区", "🗂", "", "", 1, 1, 0),
@@ -136,6 +138,10 @@ def init_db(db_path: Path | None = None):
         if conn.execute("SELECT COUNT(*) c FROM role_menus").fetchone()["c"] == 0:
             conn.executemany(
                 "INSERT INTO role_menus (role_key,menu_key) VALUES (?,?)", SEED_ROLE_MENUS)
+        # 存量迁移（幂等）：首页让位给对话页，仪表盘改挂 /dashboard
+        conn.execute(
+            "UPDATE menus SET path='/dashboard', updated_at=? WHERE menu_key='menu-dashboard' AND path='/'",
+            (_now(),))
 
 
 def _ensure_audit(conn: sqlite3.Connection):
@@ -154,7 +160,9 @@ def _audit(conn: sqlite3.Connection, emp_no: str, action: str, target: str, deta
 
 def _row_menu(row: sqlite3.Row) -> dict:
     return {k: row[k] for k in ("menu_key", "label", "icon", "path", "parent_key",
-                                "sort", "visible", "is_system")}
+                                "sort", "visible", "is_system")} | {
+        "is_public": row["menu_key"] in PUBLIC_MENUS,
+    }
 
 
 # ── 菜单 ──
@@ -319,7 +327,10 @@ def set_role_menus(role_key: str, menu_keys: list[str], db_path: Path | None = N
 
 
 def user_has_menu(role_keys: list[str], menu_key: str, db_path: Path | None = None) -> bool:
-    """守卫用：角色集任一授权即通过；admin 对 is_system 菜单恒通过（双保险）。"""
+    """守卫用：角色集任一授权即通过；admin 对 is_system 菜单恒通过（双保险）；
+    公开菜单（PUBLIC_MENUS）登录即放行（无需任何授权）。"""
+    if menu_key in PUBLIC_MENUS:
+        return True
     if not role_keys:
         return False
     if "admin" in role_keys:
@@ -335,7 +346,7 @@ def user_has_menu(role_keys: list[str], menu_key: str, db_path: Path | None = No
 
 
 def menus_for_user(role_keys: list[str], db_path: Path | None = None) -> list[dict]:
-    """当前用户可见菜单树（侧边栏渲染）：授权并集 ∩ visible=1，分组无可见子项不返回。
+    """当前用户可见菜单树（侧边栏渲染）：授权并集 ∪ 公开菜单 ∩ visible=1，分组无可见子项不返回。
 
     授权针对菜单项（分组本身不参与授权）；分组只要有被授权的可见子项即显示。
     返回 [{"label","icon","items":[{"to","label","end"}]}]，单子项分组仍为 group（前端现有逻辑处理）。

@@ -173,6 +173,7 @@ export interface MenuRecord {
   sort: number;
   visible: boolean;
   is_system: boolean;
+  is_public: boolean;  // 公开菜单：登录即用，无需授权（首页对话）
 }
 export interface RoleRecord {
   role_key: string;
@@ -550,8 +551,11 @@ export const workspaceApi = {
   list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
   registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
     request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),
-  registerGit: (body: { name: string; url: string; system: string; branch?: string }) =>
+  registerGit: (body: { name: string; url: string; system: string; branch?: string; clone_dir?: string }) =>
     request<any>('/workspace/register-git', { method: 'POST', body: JSON.stringify(body) }),
+  browseDir: (path: string) =>
+    request<{ ok: boolean; current: string; parent: string | null; entries: { name: string; path: string }[]; error?: string }>(
+      `/workspace/browse-dir?path=${encodeURIComponent(path)}`),
   activate: (name: string) =>
     request<{ ok: boolean; active: string }>('/workspace/activate', { method: 'POST', body: JSON.stringify({ name }) }),
   unregister: (name: string) =>

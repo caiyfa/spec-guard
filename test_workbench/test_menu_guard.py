@@ -104,15 +104,25 @@ def test_guard_push_belongs_to_agent_menu(db, monkeypatch):
     assert status == 200  # 有 agent 权限即可 push
 
 
-def test_guard_spec_push_denied_without_agent_menu(db, monkeypatch):
-    user_store.upsert_user("u1", "u1", db)
-    user_store.set_roles("u1", ["tester"], "u1", db)
-    rbac_store.set_role_menus("tester", ["menu-spec"], db)  # 有合规校验但无 agent
+def test_guard_agent_public_without_any_grant(db, monkeypatch):
+    """首页免权：登录用户无任何菜单授权，agent 对话 API 与 push 也放行；审计仍拦。"""
+    user_store.upsert_user("ad1", "ad1", db)  # 先占位 admin（否则 u1 首登自动提权）
+    user_store.upsert_user("u1", "u1", db)    # u1 默认 viewer，无任何菜单授权
     monkeypatch.setenv("SG_AUTH_MODE", "mock")
     mw = menu_guard.MenuGuardMiddleware(DummyApp())
-    status, body = _run(mw, _scope("/api/spec/push", "mock-u1"))
-    assert status == 403
-    assert "对话" in body and "menu-agent" in body  # 明确提示缺 agent 菜单
+    assert _run(mw, _scope("/api/agent/chat", "mock-u1"))[0] == 200   # 公开菜单放行
+    assert _run(mw, _scope("/api/spec/push", "mock-u1"))[0] == 200    # agent 页操作放行
+    assert _run(mw, _scope("/api/agent/audit", "mock-u1"))[0] == 403  # 审计非公开仍拦
+    assert _run(mw, _scope("/api/plans", "mock-u1"))[0] == 403        # 非公开仍拦
+
+
+def test_guard_spec_push_is_public_since_agent_public(db, monkeypatch):
+    """push 归属 agent 菜单，agent 为公开菜单后 push 对登录用户免权（原 403 语义作废）。"""
+    user_store.upsert_user("ad1", "ad1", db)
+    user_store.upsert_user("u1", "u1", db)
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    assert _run(mw, _scope("/api/spec/push", "mock-u1"))[0] == 200
 
 
 def test_guard_whitelist_and_unbound(db, monkeypatch):

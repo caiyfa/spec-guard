@@ -144,7 +144,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
     if (current) setExpandedGroups(prev => prev.has(current.label) ? prev : new Set([current.label]));
   }, [location.pathname, navTree]);
 
-  const noPadding = location.pathname === '/agent';
+  const noPadding = location.pathname === '/agent' || location.pathname === '/';
   const visibleGroups = navTree;
 
   // 路由守卫：当前 path 不在可见菜单（含隐藏 Redirect 目标）→ 无权限页
@@ -318,7 +318,10 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         ) : (
           <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              {/* 首页 = Agent 对话页（登录即用，无需菜单授权）；原仪表盘移至 /dashboard */}
+              <Route path="/" element={<AgentChat />} />
+              <Route path="/agent" element={<AgentChat />} />  {/* 兼容旧链接 */}
+              <Route path="/dashboard" element={<Dashboard />} />  {/* 仪表盘（原首页） */}
               <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
               <Route path="/lineage" element={<LineageStory />} />  {/* T-073：血缘链审计追溯 */}
               <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
@@ -332,7 +335,6 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/run" element={<RunControl />} />
               <Route path="/dag" element={<DagEditor />} />
               <Route path="/history" element={<History />} />
-              <Route path="/agent" element={<AgentChat />} />
               <Route path="/drafts" element={<Drafts />} />
               {/* /scenario-create 已合并到 /plans */}
               <Route path="/scenario-create" element={<RedirectToPlans />} />
