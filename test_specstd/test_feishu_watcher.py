@@ -163,3 +163,65 @@ class TestBackgroundSingleton:
             fw.stop_background()
             fw.stop_background()                            # 幂等：重复停止安全
             assert fw._WATCHER is None
+
+
+# ══════════════════════════════════════════════════════════
+# T-923：e2e 贯通（事件 NDJSON → 节流 → 重拉落池 → 聚类 → 建议入队）
+# ══════════════════════════════════════════════════════════
+
+def test_e2e_event_to_review_queue(tmp_path):
+    from services.specflow import feishu_sync_service as svc
+    from services.specflow import feishu_review_service as rev
+    from specflow.feishu_pool import link_suggest as ls
+    from specflow.feishu_pool import topic_cluster as tc
+
+    _mk_user(tmp_path, "u1")
+    events = [{"chat_id": "oc_a", "event_id": "e1"},
+              {"chat_id": "oc_a", "event_id": "e2"}]   # 同群两事件 → 节流一次重拉
+
+    def _fake_lark(args, timeout=90):
+        return {"ok": True, "data": {"items": [
+            {"create_time_ms": "1691498400000", "sender_name": "张三",
+             "msg_type": "text", "text": "作废会话后级联删除人员"}]}}
+
+    with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
+         patch.object(fw, "_token_valid", return_value=True), \
+         patch.object(fw.FeishuWatcher, "_spawn",
+                      new=lambda self, k, i: _FakeProc(events)), \
+         patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
+         patch.object(fw, "THROTTLE_SECONDS", 60), \
+         patch.object(svc, "_run_lark", side_effect=_fake_lark):
+        w = fw.FeishuWatcher(tmp_path)
+        w.start()
+        time.sleep(0.3)
+        w.stop()
+
+    # 事件触发重拉落池（真实 sync_chat 被调）
+    emp = tmp_path / ".specflow" / "u1"
+    chat_files = list((emp / "feishu_pool" / "chats").rglob("*.md"))
+    assert len(chat_files) == 1
+    assert "级联删除" in chat_files[0].read_text(encoding="utf-8")
+
+    # 落池 → 聚类 → 建议入复核队列（mock LLM）
+    import json as _json
+    llm = MagicMock()
+    ts = chat_files[0].read_text(encoding="utf-8").split("]")[0] + "]"
+    llm.chat.return_value = {"content": _json.dumps({"topics": [{
+        "title": "级联删除", "summary": "作废会话后级联删除人员",
+        "msg_range": [ts, ts], "participants_count": 1}]}, ensure_ascii=False)}
+    produced = tc.cluster_chat_snapshots(emp, llm)
+    assert len(produced) == 1
+
+    anchors = {"FR-012": MagicMock(title="作废级联删除", module="inventory",
+                                   feature="grid-placement", ac_ids=[])}
+    llm2 = MagicMock()
+    llm2.chat.return_value = {"content": _json.dumps({"links": [{
+        "fr_id": "FR-012", "confidence": 0.88,
+        "evidence": "作废会话后级联删除人员"}]}, ensure_ascii=False)}
+    sug = ls.suggest_links_for_material(
+        produced[0]["id"], produced[0]["summary"], anchors, llm2,
+        workspace_root=tmp_path / "ws")
+    assert len(sug) == 1
+    rev.enqueue_suggestions(emp, "u1", sug)
+    queue = rev.list_queue(emp)
+    assert queue[0]["status"] == "pending" and queue[0]["dst"] == "FR-012"
