@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge, feishu_pool, rbac
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge, feishu_pool, rbac, quality
 from services.auth import get_current_user
 from services import user_store, rbac_store
 from services.menu_guard import MenuGuardMiddleware
@@ -50,9 +50,11 @@ class WorkspaceContextMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] in ("http", "websocket"):
+            from urllib.parse import unquote
             from specstd.workspace import set_context_workspace, reset_context_workspace
             headers = dict(scope.get("headers") or [])
-            raw = headers.get(b"x-sg-workspace", b"").decode().strip()
+            # 前端 encodeURIComponent 编码后入 header（中文名），此处 unquote 还原
+            raw = unquote(headers.get(b"x-sg-workspace", b"").decode()).strip()
             token = set_context_workspace(raw or None)
             try:
                 await self.app(scope, receive, send)
@@ -161,6 +163,7 @@ app.include_router(audit.router, dependencies=[Depends(get_current_user)])
 app.include_router(knowledge.router, dependencies=[Depends(get_current_user)])
 app.include_router(feishu_pool.router, dependencies=[Depends(get_current_user)])
 app.include_router(rbac.router)  # RBAC 菜单/角色/授权（守卫在 MenuGuardMiddleware）
+app.include_router(quality.router, dependencies=[Depends(get_current_user)])  # 质量中心（2026-08-14 基线可视化）
 
 
 @app.get("/api/health")

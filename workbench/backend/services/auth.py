@@ -24,6 +24,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from urllib.parse import unquote
 
 import httpx
 from fastapi import Depends, HTTPException, Request, WebSocket
@@ -265,7 +266,7 @@ async def optional_workspace(
     user: CurrentUser = Depends(get_current_user),
 ) -> str:
     """非强制工作区解析：header > 用户默认 > 空串（不 403，执行触发等场景用）。"""
-    name = request.headers.get("X-SG-Workspace", "").strip()
+    name = unquote(request.headers.get("X-SG-Workspace", "")).strip()
     if not name:
         db_user = user_store.get_user(user.emp_no) or {}
         name = (db_user.get("default_workspace") or "").strip()
@@ -276,11 +277,12 @@ async def resolve_workspace(
     request: Request,
     user: CurrentUser = Depends(get_current_user),
 ) -> str:
-    """解析请求工作区：X-SG-Workspace header > 用户默认工作区 > 403。
+    """解析请求工作区：X-SG-Workspace header（前端 encodeURIComponent 编码，此处 unquote 还原）
+    > 用户默认工作区 > 403。
 
     非 admin 用户必须已被授权该工作区（workspace_grants）。
     """
-    name = request.headers.get("X-SG-Workspace", "").strip()
+    name = unquote(request.headers.get("X-SG-Workspace", "")).strip()
     if not name:
         db_user = user_store.get_user(user.emp_no) or {}
         name = (db_user.get("default_workspace") or "").strip()

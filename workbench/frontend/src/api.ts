@@ -25,6 +25,11 @@ function handleUnauthorized() {
   }
 }
 
+// X-SG-Workspace 值编码：HTTP header 仅允许 ISO-8859-1 字节，中文等工作区名必须
+// encodeURIComponent 编码后才能入 header（后端 unquote 对称还原），否则 fetch 直接
+// 抛 "String contains non-ISO-8859-1 code point"。无条件编码保证与后端解码无歧义。
+export const encodeWorkspaceHeader = (ws: string): string => encodeURIComponent(ws);
+
 // 鉴权请求包装器（带 token + 工作区头；页面内直用，替代裸 fetch）
 export const apiRequest = request;
 
@@ -39,7 +44,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (ws) headers['X-SG-Workspace'] = ws;
+  if (ws) headers['X-SG-Workspace'] = encodeWorkspaceHeader(ws);
   const res = await fetch(`${BASE}${path}`, { headers, ...options });
   if (res.status === 401) {
     handleUnauthorized();
@@ -67,7 +72,7 @@ export async function uploadFiles<T>(path: string, files: File[], fields?: Recor
   const ws = session.getWorkspace();
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (ws) headers['X-SG-Workspace'] = ws;
+  if (ws) headers['X-SG-Workspace'] = encodeWorkspaceHeader(ws);
   const fd = new FormData();
   for (const f of files) fd.append(files.length > 1 ? 'files' : 'file', f);
   if (fields) for (const [k, v] of Object.entries(fields)) fd.append(k, v);
