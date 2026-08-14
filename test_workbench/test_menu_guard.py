@@ -62,6 +62,10 @@ def test_match_rules(db):
     assert menu_guard.menu_key_for_path("/api/plans/PP-001") == "menu-plans"
     assert menu_guard.menu_key_for_path("/api/agent/audit") == "menu-audit"  # 前两段精确优先
     assert menu_guard.menu_key_for_path("/api/agent/chat") == "menu-agent"
+    # spec 前缀细分：push 归 agent（仅 AgentChat 页调用），其余归合规校验
+    assert menu_guard.menu_key_for_path("/api/spec/push") == "menu-agent"
+    assert menu_guard.menu_key_for_path("/api/spec/validate") == "menu-spec"
+    assert menu_guard.menu_key_for_path("/api/spec/deltas") == "menu-spec"
     assert menu_guard.menu_key_for_path("/api/health") is None
     assert menu_guard.menu_key_for_path("/api/feishu-pool/x") is None  # 未绑定放行
 
@@ -84,6 +88,31 @@ def test_guard_deny_without_grant(db, monkeypatch):
     status, body = _run(mw, _scope("/api/plans", "mock-u1"))
     assert status == 403
     assert "无权限" in body
+    # 403 必须明确缺失的菜单（label + key + 开通路径），拒绝空泛提示
+    assert "场景管理" in body and "menu-plans" in body
+    assert "菜单管理 → 角色授权" in body
+
+
+def test_guard_push_belongs_to_agent_menu(db, monkeypatch):
+    """AgentChat 页的 push 操作只要求 agent 菜单授权，不依赖合规校验菜单。"""
+    user_store.upsert_user("u1", "u1", db)
+    user_store.set_roles("u1", ["tester"], "u1", db)
+    rbac_store.set_role_menus("tester", ["menu-agent"], db)  # 仅有 agent 授权
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    status, _ = _run(mw, _scope("/api/spec/push", "mock-u1"))
+    assert status == 200  # 有 agent 权限即可 push
+
+
+def test_guard_spec_push_denied_without_agent_menu(db, monkeypatch):
+    user_store.upsert_user("u1", "u1", db)
+    user_store.set_roles("u1", ["tester"], "u1", db)
+    rbac_store.set_role_menus("tester", ["menu-spec"], db)  # 有合规校验但无 agent
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    status, body = _run(mw, _scope("/api/spec/push", "mock-u1"))
+    assert status == 403
+    assert "对话" in body and "menu-agent" in body  # 明确提示缺 agent 菜单
 
 
 def test_guard_whitelist_and_unbound(db, monkeypatch):

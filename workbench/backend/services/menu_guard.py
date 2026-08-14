@@ -50,6 +50,7 @@ API_MENU_BINDINGS: dict[str, str] = {
 # 前两段精确前缀（优先于第一段）
 API_MENU_BINDINGS_EXACT: dict[str, str] = {
     "agent/audit": "menu-audit",  # 实测 audit.py 前缀 /api/agent/audit
+    "spec/push": "menu-agent",    # push 仅 AgentChat 页调用（specApi.pushBranch），归属 agent 而非合规校验
 }
 
 WHITELIST_PREFIXES = ("health", "auth")
@@ -104,7 +105,7 @@ class MenuGuardMiddleware:
             return
         menu = rbac_store.get_menu(menu_key)
         if not menu or not menu["visible"]:
-            await self._deny(send)
+            await self._deny(send, menu_key)
             return
         # 认证：失败透传（路由层负责 401）
         token = _extract_bearer_token(scope)
@@ -119,14 +120,21 @@ class MenuGuardMiddleware:
         user = user_store.get_user(emp_no) or {}
         roles = user.get("roles") or []
         if not rbac_store.user_has_menu(roles, menu_key):
-            await self._deny(send)
+            await self._deny(send, menu_key)
             return
         await self.app(scope, receive, send)
 
     @staticmethod
-    async def _deny(send):
-        body = json.dumps({"detail": "无权限访问该页面，请联系管理员开通"},
-                          ensure_ascii=False).encode()
+    async def _deny(send, menu_key: str = ""):
+        """403 响应：明确缺失的菜单授权（label + key + 开通路径），避免空泛提示。"""
+        if menu_key:
+            menu = rbac_store.get_menu(menu_key)
+            label = menu["label"] if menu else menu_key
+            detail = (f"无权限: 需要「{label}」（{menu_key}）菜单授权，"
+                      f"请联系管理员在「菜单管理 → 角色授权」中开通")
+        else:
+            detail = "无权限访问，请联系管理员开通"
+        body = json.dumps({"detail": detail}, ensure_ascii=False).encode()
         await send({
             "type": "http.response.start",
             "status": 403,
