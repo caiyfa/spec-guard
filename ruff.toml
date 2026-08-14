@@ -1,0 +1,14 @@
+target-version = "py314"
+line-length = 120
+extend-exclude = ["reports", "drafts", "specstd/workspaces", "agent/sessions", "workbench/frontend"]
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
+ignore = ["E501"]
+
+[lint.flake8-bugbear]
+# FastAPI 惯用法：依赖注入默认值（= Depends(...) 等）不是 B008 真阳性
+extend-immutable-calls = [
+    "fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body",
+    "fastapi.Header", "fastapi.Cookie", "fastapi.Form", "fastapi.File",
+]

@@ -1,0 +1,16 @@
+{
+  "threshold": 100,
+  "reporters": ["consoleFull"],
+  "minTokens": 80,
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/__pycache__/**",
+    "reports/**",
+    "drafts/**",
+    "**/.specguard/**",
+    "specstd/workspaces/**",
+    "workbench/backend/data/**",
+    "agent/sessions/**"
+  ]
+}

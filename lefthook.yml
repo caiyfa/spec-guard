@@ -1,0 +1,10 @@
+# lefthook.yml — git hooks 即代码；克隆后需 npx lefthook install 一次
+# 策略：lint 类工具处于报告模式（基线报告见 docs/质量基线/），清零前不进 pre-commit；
+# pre-push 挂不依赖存量基线的两道门禁，失败即拒绝推送。
+pre-push:
+  parallel: false
+  commands:
+    release-gate:
+      run: python release_check.py
+    engine-offline-tests:
+      run: python -m pytest test_suites/test_engine_modes.py test_engine -q

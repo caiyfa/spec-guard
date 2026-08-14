@@ -1,0 +1,5 @@
+# 开发工具链（生产部署不安装；serve-prod 仅需 requirements.txt）
+ruff>=0.14
+pytest-cov>=6.0
+hypothesis>=6.140
+vulture>=2.14

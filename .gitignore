@@ -8,6 +8,11 @@ venv/
 # ── Node / 前端 ──
 node_modules/
 workbench/frontend/dist/
+workbench/frontend/coverage/
+
+# ── 覆盖率数据（pytest-cov，本地产物）──
+.coverage
+htmlcov/
 
 # ── 运行产物（勿提交）──
 # 各工作区的 .specguard/ 有独立 .gitignore（忽略 reports/drafts，保留 plans/info_packs）

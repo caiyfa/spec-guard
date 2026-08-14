@@ -1,0 +1,13 @@
+{
+  "name": "specguard-repo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hooks:install": "lefthook install",
+    "dup:scan": "jscpd scenarios engine specstd agent mcp_server workbench/backend workbench/frontend/src"
+  },
+  "devDependencies": {
+    "jscpd": "^5.0.15",
+    "lefthook": "^2.1.10"
+  }
+}
