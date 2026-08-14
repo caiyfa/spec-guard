@@ -1,0 +1,127 @@
+"""菜单守卫中间件单测：直接构造 ASGI scope 调用（不依赖 FastAPI TestClient）。"""
+import asyncio
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / ".." / "workbench" / "backend"))
+
+from services import menu_guard, rbac_store, user_store  # noqa: E402
+
+
+@pytest.fixture
+def db(tmp_path, monkeypatch):
+    p = tmp_path / "rbac.db"
+    rbac_store.init_db(p)
+    user_store.init_db(p)
+    # 三个模块的默认库全部指向临时库（隔离，不碰 workbench.db）
+    monkeypatch.setattr(rbac_store, "DB_PATH", p)
+    monkeypatch.setattr(user_store, "DB_PATH", p)
+    return p
+
+
+class DummyApp:
+    """透传 ASGI app：记录是否被调用。"""
+
+    def __init__(self):
+        self.called = False
+
+    async def __call__(self, scope, receive, send):
+        self.called = True
+        await send({"type": "http.response.start", "status": 200,
+                    "headers": [(b"content-type", b"text/plain")]})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+
+def _scope(path: str, token: str = ""):
+    headers = [(b"authorization", f"Bearer {token}".encode())] if token else []
+    return {"type": "http", "path": path, "headers": headers, "query_string": b""}
+
+
+def _run(mw, scope):
+    """执行中间件并收集响应。"""
+    status = []
+    body = []
+
+    async def receive():
+        return {}
+
+    async def send(msg):
+        if msg["type"] == "http.response.start":
+            status.append(msg["status"])
+        elif msg["type"] == "http.response.body":
+            body.append(msg["body"])
+
+    asyncio.run(mw(scope, receive, send))
+    return status[0] if status else None, b"".join(body).decode()
+
+
+def test_match_rules(db):
+    assert menu_guard.menu_key_for_path("/api/plans") == "menu-plans"
+    assert menu_guard.menu_key_for_path("/api/plans/PP-001") == "menu-plans"
+    assert menu_guard.menu_key_for_path("/api/agent/audit") == "menu-audit"  # 前两段精确优先
+    assert menu_guard.menu_key_for_path("/api/agent/chat") == "menu-agent"
+    assert menu_guard.menu_key_for_path("/api/health") is None
+    assert menu_guard.menu_key_for_path("/api/feishu-pool/x") is None  # 未绑定放行
+
+
+def test_guard_allow_with_grant(db, monkeypatch):
+    rbac_store.set_role_menus("tester", ["menu-plans"], db)
+    user_store.upsert_user("u1", "u1", db)  # set_roles 仅 UPDATE，用户需先建档
+    user_store.set_roles("u1", ["tester"], "u1", db)
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    status, _ = _run(mw, _scope("/api/plans", "mock-u1"))
+    assert status == 200
+
+
+def test_guard_deny_without_grant(db, monkeypatch):
+    user_store.upsert_user("u1", "u1", db)
+    user_store.set_roles("u1", ["tester"], "u1", db)
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    status, body = _run(mw, _scope("/api/plans", "mock-u1"))
+    assert status == 403
+    assert "无权限" in body
+
+
+def test_guard_whitelist_and_unbound(db, monkeypatch):
+    user_store.upsert_user("u1", "u1", db)
+    user_store.set_roles("u1", ["tester"], "u1", db)
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    assert _run(mw, _scope("/api/health"))[0] == 200
+    assert _run(mw, _scope("/api/auth/config"))[0] == 200
+    assert _run(mw, _scope("/api/menus/me", "mock-u1"))[0] == 200
+    assert _run(mw, _scope("/api/feishu-pool/x", "mock-u1"))[0] == 200
+
+
+def test_guard_admin_system_menu_bootstrap(db, monkeypatch):
+    # 手删 admin 全部授权后，admin 访问系统菜单仍通过
+    import sqlite3
+    with sqlite3.connect(str(db)) as c:
+        c.execute("DELETE FROM role_menus WHERE role_key='admin'")
+    user_store.upsert_user("ad1", "ad1", db)
+    user_store.set_roles("ad1", ["admin"], "ad1", db)
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    assert _run(mw, _scope("/api/users", "mock-ad1"))[0] == 200   # menu-users is_system
+    assert _run(mw, _scope("/api/graph", "mock-ad1"))[0] == 403   # 非系统菜单仍拦
+
+
+def test_guard_ws_not_blocked(db):
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+
+    async def fake_receive():
+        return {}
+
+    async def fake_send(msg):
+        pass
+
+    async def run():
+        await mw({"type": "websocket", "path": "/api/agent/ws"},
+                 fake_receive, fake_send)
+        return mw.app.called
+
+    assert asyncio.run(run()) is True
