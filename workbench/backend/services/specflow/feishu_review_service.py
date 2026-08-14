@@ -116,6 +116,41 @@ def _promote_material(specflow_emp_base: Path, workspace_root: Path,
                     break
 
 
+def _find_active_ivs_for_fr(workspace: str, fr_id: str) -> list[dict]:
+    """FR 落在哪些进行中面试的议题范围（T-927：suggest_ivs 数据源）。
+
+    口径：sf_interviews 非终态（opened/frozen 均视为进行中）∩
+    sf_material_topics.fr_hints 含该 FR（JSON 子串匹配）。
+    """
+    try:
+        from services.specflow import sf_store
+        from specflow.materials import store as mat_store
+        ivs = sf_store.list_interviews_db(workspace=workspace)
+        active = [i for i in ivs
+                  if i.get("status") not in ("archived", "closed")]
+        if not active:
+            return []
+        out = []
+        for iv in active:
+            topics = mat_store.list_topics(
+                _connect_ro(), iv_id=iv["iv_id"], workspace=workspace)
+            for t in topics:
+                hints = t.get("fr_hints") or ""
+                if fr_id and fr_id in str(hints):
+                    out.append({"iv_id": iv["iv_id"],
+                                "title": iv.get("title", "")})
+                    break
+        return sorted(out, key=lambda x: x["iv_id"])
+    except Exception:
+        return []
+
+
+def _connect_ro():
+    """sf 库只读连接（与 materials_service._db_conn 同库）。"""
+    from services.specflow.sf_store import _connect
+    return _connect()
+
+
 def confirm_suggestions(specflow_emp_base: Path, workspace_root: Path,
                         emp_no: str, pairs: list[tuple]) -> dict:
     """批量确认：写共享区事实源 + 提升材料 + 队列置 confirmed。
@@ -124,6 +159,7 @@ def confirm_suggestions(specflow_emp_base: Path, workspace_root: Path,
     """
     items = _load_queue(specflow_emp_base)
     confirmed = skipped = 0
+    confirmed_dsts: list[str] = []
     for src, dst in pairs:
         item = _find_pending(items, src, dst)
         if item is None or not item.get("valid", True):
@@ -137,8 +173,17 @@ def confirm_suggestions(specflow_emp_base: Path, workspace_root: Path,
         item["status"] = "confirmed"
         item["confirmed_at"] = _now()
         confirmed += 1
+        confirmed_dsts.append(dst)
     _save_queue(specflow_emp_base, items)
-    return {"confirmed": confirmed, "skipped": skipped}
+    # T-927：确认成功的 dst FR → 进行中面试建议（可选入包，不自动）
+    suggest: dict = {}
+    if confirmed_dsts:
+        ws_name = Path(workspace_root).name
+        for dst in confirmed_dsts:
+            for iv in _find_active_ivs_for_fr(ws_name, dst):
+                suggest[iv["iv_id"]] = iv
+    return {"confirmed": confirmed, "skipped": skipped,
+            "suggest_ivs": [suggest[k] for k in sorted(suggest)]}
 
 
 def reject_suggestions(specflow_emp_base: Path, workspace_root: Path,

@@ -33,6 +33,9 @@ export default function FeishuReviewPanel() {
   const [watch, setWatch] = useState<FeishuWatch | null>(null);
   const [watchChats, setWatchChats] = useState('');
   const [watchDocs, setWatchDocs] = useState('');
+  // T-927：确认后可选入包（默认不勾，人拍板不绕闸门）
+  const [ivPrompt, setIvPrompt] = useState<{ iv_id: string; title: string }[]>([]);
+  const [ivChecked, setIvChecked] = useState<Set<string>>(new Set());
 
   const keyOf = (it: FeishuReviewItem) => `${it.src}||${it.dst}`;
 
@@ -102,6 +105,11 @@ export default function FeishuReviewPanel() {
       setNotice(`${action === 'confirm' ? '确认' : '拒绝'} ${n} 条`
         + (r.skipped ? `，跳过 ${r.skipped} 条（invalid/不存在）` : '')
         + (action === 'confirm' ? '，已提升共享区等待图谱重建' : '，已留痕防重复建议'));
+      // T-927：确认成功且有关联面试 → 弹层询问可选入包
+      if (action === 'confirm' && (r as any).suggest_ivs?.length) {
+        setIvPrompt((r as any).suggest_ivs);
+        setIvChecked(new Set());
+      }
       await load();
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
@@ -226,6 +234,41 @@ export default function FeishuReviewPanel() {
             })}
           </tbody>
         </table>
+      )}
+
+      {/* T-927：确认后可选入包弹层（默认不勾，人拍板不绕闸门） */}
+      {ivPrompt.length > 0 && (
+        <div className="mb-3 border border-info/40 rounded-lg p-3 bg-info/5">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-info">同时入包以下面试信息包？（默认不入包）</h3>
+            <button className="text-gray-500 hover:text-gray-300 text-xs" onClick={() => setIvPrompt([])}>✕</button>
+          </div>
+          <div className="space-y-1 mb-2">
+            {ivPrompt.map(iv => (
+              <label key={iv.iv_id} className="flex items-center gap-2 text-xs text-gray-300">
+                <input type="checkbox"
+                  checked={ivChecked.has(iv.iv_id)}
+                  onChange={() => setIvChecked(prev => {
+                    const next = new Set(prev);
+                    if (next.has(iv.iv_id)) next.delete(iv.iv_id); else next.add(iv.iv_id);
+                    return next;
+                  })} />
+                <span>{iv.iv_id} · {iv.title}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button className={btn} disabled={ivChecked.size === 0}
+              onClick={() => {
+                setNotice(`已记录入包意向（${ivChecked.size} 个面试）——请在材料管理页完成入包动作（飞书材料登记为 MAT 后可入包）`);
+                setIvPrompt([]);
+              }}>确认入包意向</button>
+            <button className={btn} onClick={() => setIvPrompt([])}>跳过</button>
+          </div>
+          <div className="mt-1.5 text-[10px] text-gray-500">
+            入包走 M03 原有人拍板端点；飞书材料需先在材料管理登记为 MAT 后才可入包
+          </div>
+        </div>
       )}
 
       {watchOpen && watch && (

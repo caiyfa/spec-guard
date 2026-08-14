@@ -97,3 +97,30 @@ def test_topic_promotion_writes_topics_yaml(tmp_path):
     topics = facts.load_topics(ws)
     assert topics[0]["id"] == "tp:3f9a2c-20260807-01"
     assert topics[0]["title"] == "导出权限"
+
+
+# ══════════════════════════════════════════════════════════
+# T-927：确认可选入包（suggest_ivs）
+# ══════════════════════════════════════════════════════════
+
+def test_confirm_returns_suggest_ivs(tmp_path):
+    from unittest.mock import patch
+    ws, emp = _prepare(tmp_path)
+    with patch.object(rev, "_find_active_ivs_for_fr", return_value=[
+            {"iv_id": "IV-001", "title": "导出功能面试"}]):
+        rev.enqueue_suggestions(emp, "u1", [{"src": "fd:tokA", "dst": "FR-012",
+            "confidence": 0.9, "evidence": "FR-012 提及", "valid": True,
+            "suggested_by": "u1"}])
+        out = rev.confirm_suggestions(emp, ws, "u1", [("fd:tokA", "FR-012")])
+    assert out["suggest_ivs"] == [{"iv_id": "IV-001", "title": "导出功能面试"}]
+
+
+def test_confirm_no_iv_returns_empty(tmp_path):
+    from unittest.mock import patch
+    ws, emp = _prepare(tmp_path)
+    with patch.object(rev, "_find_active_ivs_for_fr", return_value=[]):
+        rev.enqueue_suggestions(emp, "u1", [{"src": "fd:tokA", "dst": "FR-012",
+            "confidence": 0.9, "evidence": "FR-012 提及", "valid": True,
+            "suggested_by": "u1"}])
+        out = rev.confirm_suggestions(emp, ws, "u1", [("fd:tokA", "FR-012")])
+    assert out["suggest_ivs"] == []

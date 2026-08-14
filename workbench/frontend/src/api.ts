@@ -1681,7 +1681,8 @@ export const feishuPoolApi = {
       '/feishu-pool/sync', { method: 'POST' }),
   reviewQueue: () => request<{ items: FeishuReviewItem[] }>('/feishu-pool/review-queue'),
   confirm: (pairs: [string, string][]) =>
-    request<{ confirmed: number; skipped: number }>(
+    request<{ confirmed: number; skipped: number;
+              suggest_ivs?: { iv_id: string; title: string }[] }>(
       '/feishu-pool/review/confirm', { method: 'POST', body: JSON.stringify({ pairs }) }),
   reject: (pairs: [string, string][]) =>
     request<{ rejected: number; skipped: number }>(
