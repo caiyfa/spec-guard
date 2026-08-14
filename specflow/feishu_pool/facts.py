@@ -19,7 +19,7 @@ from specflow.feishu_pool.paths import shared_dirs
 _LINK_KEY_FIELDS = ("src", "dst", "edge", "confidence", "evidence",
                     "status", "confirmed_by", "confirmed_at")
 _TOPIC_KEY_FIELDS = ("id", "title", "summary", "chat_sha8", "window",
-                     "message_count", "participants_count", "source")
+                     "message_count", "participants_count", "source", "continues")
 
 
 def _now() -> str:

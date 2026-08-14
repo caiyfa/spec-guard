@@ -680,3 +680,34 @@ class TestFeishuNodes:
             # 确定性：节点按 id 排序
             ids = [n["id"] for n in view["nodes"]]
             assert ids == sorted(ids)
+
+    def test_evolves_edge_derived(self, fake_ws):
+        """T-926：topics.yaml continues → evolves 边（两端须均存在）。"""
+        fe = fake_ws["ws"] / ".specguard" / "feishu"
+        (fe / "materials").mkdir(parents=True)
+        (fe / "topics.yaml").write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:aaa-0807-01\n    title: 旧话题\n    summary: s1\n"
+            "    chat_sha8: aaa\n    window: ['2026-08-07T14:00', '2026-08-07T15:00']\n"
+            "    message_count: 5\n    participants_count: 2\n"
+            "    source: chats/aaa/20260807.md\n"
+            "  - id: tp:aaa-0808-01\n    title: 新话题\n    summary: s2\n"
+            "    chat_sha8: aaa\n    window: ['2026-08-08T10:00', '2026-08-08T11:00']\n"
+            "    message_count: 3\n    participants_count: 2\n"
+            "    source: chats/aaa/20260808.md\n    continues: tp:aaa-0807-01\n"
+            "  - id: tp:aaa-0809-01\n    title: 孤儿\n    summary: s3\n"
+            "    chat_sha8: aaa\n    window: ['2026-08-09T10:00', '2026-08-09T11:00']\n"
+            "    message_count: 1\n    participants_count: 1\n"
+            "    source: chats/aaa/20260809.md\n    continues: tp:ghost-不存在\n",
+            encoding="utf-8")
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            evolves = store.list_edges("evolves")
+            assert len(evolves) == 1
+            assert evolves[0]["src"] == "tp:aaa-0808-01"
+            assert evolves[0]["dst"] == "tp:aaa-0807-01"
+            # 幻觉 continues（ghost）不建边
+            assert all(e["dst"] != "tp:ghost-不存在" for e in evolves)
+            # trace 上游可追溯演进链
+            tr = service.trace(store, "tp:aaa-0808-01", direction="up")
+            assert "tp:aaa-0807-01" in {n["id"] for n in tr["path"]}

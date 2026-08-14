@@ -336,6 +336,8 @@ def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
 
     # 2. 话题节点（topics.yaml 全量条目）
     topics_yaml = shared["topics_yaml"]
+    topic_ids: set = set()
+    topic_continues: list = []
     if topics_yaml.is_file():
         try:
             text = topics_yaml.read_text(encoding="utf-8")
@@ -350,6 +352,10 @@ def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
             tid = str(t.get("id", ""))
             if not tid:
                 continue
+            topic_ids.add(tid)
+            cont = str(t.get("continues") or "")
+            if cont:
+                topic_continues.append((tid, cont))
             store.upsert_node(
                 id=tid, node_type="topic", title=str(t.get("title") or tid),
                 attrs={"summary": str(t.get("summary") or ""),
@@ -358,6 +364,11 @@ def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
                        "participants_count": int(t.get("participants_count") or 0)},
                 source_ref={"file": rel, "line_range": ranges.get(tid, [1, 1])},
                 commit=False)
+        # 2.5 演进边（三期 T-926：continues 两端均须已存在）
+        for new_id, old_id in sorted(topic_continues):
+            if new_id in topic_ids and old_id in topic_ids:
+                store.upsert_edge(src=new_id, dst=old_id, edge_type="evolves",
+                                  commit=False)
 
     # 3. mentions 边（仅 confirmed；src/dst 均须已存在，断链不建边）
     links_yaml = shared["links_yaml"]

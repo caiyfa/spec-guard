@@ -22,10 +22,10 @@ NODE_TYPES = ("module", "feature", "fr", "ac", "scenario", "delta",
               "plan", "run", "spq", "decision", "external_ref", "interview",
               "feishu_doc", "feishu_minutes", "topic")
 
-# 边类型枚举（M10 §4.2 谱系视角；飞书知识图谱一期追加 mentions）
+# 边类型枚举（M10 §4.2 谱系视角；飞书一期 mentions；三期 evolves）
 EDGE_TYPES = ("covers", "depends_on", "contains", "produces", "decides",
               "references", "locks", "derives", "schedules", "executes",
-              "verifies", "feedback", "archives", "relates", "mentions")
+              "verifies", "feedback", "archives", "relates", "mentions", "evolves")
 
 # 节点 → 谱系阶段（M10 §4.1）
 STAGE_BY_TYPE = {

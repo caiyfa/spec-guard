@@ -31,10 +31,26 @@ _PROMPT = """你是话题聚类助手。阅读以下群聊记录（每行格式�
 2. 每个话题给出：title（≤20字）、summary（≤80字结论摘要）、
    msg_range（该话题首条与末条消息的时间戳，格式 ["[HH:MM]", "[HH:MM]"]）、
    participants_count（参与人数）
-3. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
+3. 若某话题是近期已有话题的延续讨论，附 continues: "已有话题id"（只能从下面清单选，禁止编造）：
+{existing_topics}
+4. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
 
 群聊记录（{day}）：
 {content}"""
+
+
+_NO_EXISTING = "（无）"
+
+
+def _existing_topics_digest(existing: list[dict], chat_sha8: str) -> str:
+    """近 7 天同群已有话题清单（T-926 演进链判定依据，注入 prompt）。"""
+    rows = []
+    for t in existing:
+        if t.get("chat_sha8") != chat_sha8:
+            continue
+        summary = str(t.get("summary", ""))[:80]
+        rows.append(f"- {t.get('id')} | {t.get('title')} | {summary}")
+    return "\n".join(rows) if rows else _NO_EXISTING
 
 
 def last_errors() -> list[str]:
@@ -167,8 +183,9 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                 continue
             content = md_file.read_text(encoding="utf-8")
             try:
-                resp = llm.chat([{"role": "user", "content":
-                                  _PROMPT.format(day=day, content=content)}])
+                resp = llm.chat([{"role": "user", "content": _PROMPT.format(
+                    day=day, content=content,
+                    existing_topics=_existing_topics_digest(existing, chat_sha8))}])
                 raw_topics = _parse_llm_json(str(resp.get("content", "")))
             except Exception as e:
                 _LAST_ERRORS.append(f"{chat_sha8}/{day}: LLM 聚类失败: {e}")
@@ -184,6 +201,10 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                     "participants_count": int(rt.get("participants_count") or 0),
                     "source": f"chats/{chat_sha8}/{day}.md",
                 }
+                # T-926：演进链——continues 必须存在于已有话题清单（防幻觉校验）
+                cont = str(rt.get("continues") or "")
+                if cont and any(t.get("id") == cont for t in existing):
+                    candidate["continues"] = cont
                 merged = _merge_one(existing, chat_sha8, day, candidate)
                 if merged.get("id") not in {t.get("id") for t in existing}:
                     existing.append(merged)

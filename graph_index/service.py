@@ -360,7 +360,7 @@ def node_stage(node_type: str) -> str:
 _TRACE_UP_SIDE = {
     "covers": "dst", "contains": "src", "produces": "src", "decides": "src",
     "references": "src", "schedules": "dst", "executes": "dst",
-    "feedback": "dst", "depends_on": "src",
+    "feedback": "dst", "depends_on": "src", "mentions": "src", "evolves": "dst",
 }
 
 
