@@ -1,0 +1,50 @@
+Unused files (1)
+src/pages/LarkBinding.tsx
+Unused dependencies (2)
+@types/js-yaml  package.json:18:6
+recharts        package.json:30:6
+Unused exports (14)
+uploadFile           function  src/api.ts:60:23                      
+uploadFiles          function  src/api.ts:65:23                      
+larkApi                        src/api.ts:1542:14                    
+getFileIcon          function  src/components/FileTree.tsx:43:17     
+default              function  src/components/FocusGraph.tsx:23:25   
+GATE_EXEC_ACTIONS              src/components/GateCardView.tsx:211:14
+THEME_CHANGED_EVENT            src/theme.ts:11:14                    
+getThemeId           function  src/theme.ts:33:17                    
+getThemeMeta         function  src/theme.ts:38:17                    
+JS_THEME_TOKENS                src/theme.ts:100:14                   
+getJsTokens          function  src/theme.ts:129:17                   
+getBg                function  src/theme.ts:170:17                   
+getRailDot           function  src/theme.ts:222:17                   
+getPinnedBg          function  src/theme.ts:252:17                   
+Unused exported types (25)
+NavMenuItem             interface  src/api.ts:157:18 
+DagEdge                 interface  src/api.ts:239:18 
+RunStats                interface  src/api.ts:277:18 
+PreflightGap            interface  src/api.ts:297:18 
+PreflightScenario       interface  src/api.ts:305:18 
+ImportPreviewFile       interface  src/api.ts:387:18 
+RunQueueItem            interface  src/api.ts:404:18 
+SpecFinding             interface  src/api.ts:459:18 
+GitFileChange           interface  src/api.ts:584:18 
+LLMConfig               interface  src/api.ts:643:18 
+ValidateFinding         interface  src/api.ts:729:18 
+CoverageLaneItem        interface  src/api.ts:794:18 
+TrialRunRecord          interface  src/api.ts:912:18 
+InfoPackEntry           interface  src/api.ts:933:18 
+PackFreshnessFile       interface  src/api.ts:940:18 
+LifecycleTimelineEvent  interface  src/api.ts:1084:18
+GraphNodeRef            interface  src/api.ts:1316:18
+GraphL2Fr               interface  src/api.ts:1347:18
+GraphL2Scenario         interface  src/api.ts:1357:18
+LineageEdge             interface  src/api.ts:1451:18
+LarkStatus              interface  src/api.ts:1521:18
+LarkLoginResult         interface  src/api.ts:1531:18
+GlossaryEntry           interface  src/api.ts:1564:18
+FocusGraphNode          interface  src/api.ts:1645:18
+FocusGraphEdge          interface  src/api.ts:1654:18
+Configuration hints (3)
+src/**/*.test.{ts,tsx}    knip.json  Remove from ignore                                           
+src/main.tsx              knip.json  Remove redundant entry pattern                               
+.css                      knip.json  Compiled extension excluded by project (imports not followed)

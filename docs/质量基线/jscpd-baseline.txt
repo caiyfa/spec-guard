@@ -1,0 +1,1272 @@
+
+> dup:scan
+> jscpd scenarios engine specstd agent mcp_server workbench/backend workbench/frontend/src
+
+Using config from .jscpd.json
+[1mClone found (python)[22m
+ - tools\attribution.py [12:1 - 22:41]
+   tools\compliance.py [11:1 - 21:41]
+[90m  12 │ [39mimport sys
+[90m  13 │ [39mfrom pathlib import Path
+[90m  14 │ [39m
+[90m  15 │ [39mfrom mcp.types import Tool, TextContent
+[90m  16 │ [39m
+[90m  17 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  18 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  19 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  20 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  21 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  22 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  11 │ [39mimport sys
+[90m  12 │ [39mfrom pathlib import Path
+[90m  13 │ [39m
+[90m  14 │ [39mfrom mcp.types import Tool, TextContent
+[90m  15 │ [39m
+[90m  16 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  17 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  19 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  20 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  21 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+
+[1mClone found (python)[22m
+ - tools\compliance.py [7:50 - 25:14]
+   tools\delta_doc_writer.py [11:81 - 29:14]
+[90m   7 │ [39m  → validate → promote_draft(replace=true)）。
+[90m   8 │ [39m"""
+[90m   9 │ [39m
+[90m  10 │ [39mimport json
+[90m  11 │ [39mimport sys
+[90m  12 │ [39mfrom pathlib import Path
+[90m  13 │ [39m
+[90m  14 │ [39mfrom mcp.types import Tool, TextContent
+[90m  15 │ [39m
+[90m  16 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  17 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  19 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  20 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  21 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  22 │ [39m
+[90m  23 │ [39mTOOLS = [
+[90m  24 │ [39m    Tool(
+[90m  25 │ [39m        name="scan_compliance",
+[90m  11 │ [39mREST（PUT /api/spec/changes/{delta}、POST .../commit）与 MCP 共用服务层。
+[90m  12 │ [39m"""
+[90m  13 │ [39m
+[90m  14 │ [39mimport json
+[90m  15 │ [39mimport sys
+[90m  16 │ [39mfrom pathlib import Path
+[90m  17 │ [39m
+[90m  18 │ [39mfrom mcp.types import Tool, TextContent
+[90m  19 │ [39m
+[90m  20 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  21 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  22 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  23 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  24 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  25 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  26 │ [39m
+[90m  27 │ [39mTOOLS = [
+[90m  28 │ [39m    Tool(
+[90m  29 │ [39m        name="write_delta_doc",
+
+[1mClone found (python)[22m
+ - tools\compliance.py [8:1 - 25:14]
+   tools\coverage.py [5:1 - 22:14]
+[90m   8 │ [39m"""
+[90m   9 │ [39m
+[90m  10 │ [39mimport json
+[90m  11 │ [39mimport sys
+[90m  12 │ [39mfrom pathlib import Path
+[90m  13 │ [39m
+[90m  14 │ [39mfrom mcp.types import Tool, TextContent
+[90m  15 │ [39m
+[90m  16 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  17 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  19 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  20 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  21 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  22 │ [39m
+[90m  23 │ [39mTOOLS = [
+[90m  24 │ [39m    Tool(
+[90m  25 │ [39m        name="scan_compliance",
+[90m   5 │ [39m"""
+[90m   6 │ [39m
+[90m   7 │ [39mimport json
+[90m   8 │ [39mimport sys
+[90m   9 │ [39mfrom pathlib import Path
+[90m  10 │ [39m
+[90m  11 │ [39mfrom mcp.types import Tool, TextContent
+[90m  12 │ [39m
+[90m  13 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  14 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  15 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  16 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  17 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  19 │ [39m
+[90m  20 │ [39mTOOLS = [
+[90m  21 │ [39m    Tool(
+[90m  22 │ [39m        name="query_coverage_gaps",
+
+[1mClone found (python)[22m
+ - tools\compliance.py [8:1 - 21:41]
+   tools\registry_query.py [5:1 - 18:41]
+[90m   8 │ [39m"""
+[90m   9 │ [39m
+[90m  10 │ [39mimport json
+[90m  11 │ [39mimport sys
+[90m  12 │ [39mfrom pathlib import Path
+[90m  13 │ [39m
+[90m  14 │ [39mfrom mcp.types import Tool, TextContent
+[90m  15 │ [39m
+[90m  16 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  17 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  19 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  20 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  21 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m   5 │ [39m"""
+[90m   6 │ [39m
+[90m   7 │ [39mimport json
+[90m   8 │ [39mimport sys
+[90m   9 │ [39mfrom pathlib import Path
+[90m  10 │ [39m
+[90m  11 │ [39mfrom mcp.types import Tool, TextContent
+[90m  12 │ [39m
+[90m  13 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  14 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  15 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  16 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  17 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+
+[1mClone found (python)[22m
+ - tools\compliance.py [8:1 - 23:6]
+   tools\validator.py [5:1 - 20:5]
+[90m   8 │ [39m"""
+[90m   9 │ [39m
+[90m  10 │ [39mimport json
+[90m  11 │ [39mimport sys
+[90m  12 │ [39mfrom pathlib import Path
+[90m  13 │ [39m
+[90m  14 │ [39mfrom mcp.types import Tool, TextContent
+[90m  15 │ [39m
+[90m  16 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  17 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  19 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  20 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  21 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  22 │ [39m
+[90m  23 │ [39mTOOLS = [
+[90m   5 │ [39m"""
+[90m   6 │ [39m
+[90m   7 │ [39mimport json
+[90m   8 │ [39mimport sys
+[90m   9 │ [39mfrom pathlib import Path
+[90m  10 │ [39m
+[90m  11 │ [39mfrom mcp.types import Tool, TextContent
+[90m  12 │ [39m
+[90m  13 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  14 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  15 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  16 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  17 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  19 │ [39m
+[90m  20 │ [39mfrom specstd.anchors import resolve_covers, scan_anchors  # noqa: E402
+
+[1mClone found (python)[22m
+ - tools\coverage.py [4:102 - 22:14]
+   tools\fabrication.py [4:105 - 22:14]
+[90m   4 │ [39m  coverage.query_gaps: Agent 侧查询覆盖缺口三态与建议顺序（与 REST 同一服务实现）
+[90m   5 │ [39m"""
+[90m   6 │ [39m
+[90m   7 │ [39mimport json
+[90m   8 │ [39mimport sys
+[90m   9 │ [39mfrom pathlib import Path
+[90m  10 │ [39m
+[90m  11 │ [39mfrom mcp.types import Tool, TextContent
+[90m  12 │ [39m
+[90m  13 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  14 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  15 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  16 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  17 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  19 │ [39m
+[90m  20 │ [39mTOOLS = [
+[90m  21 │ [39m    Tool(
+[90m  22 │ [39m        name="query_coverage_gaps",
+[90m   4 │ [39m  fabrication.fabricate_data: 数据制造编排（复用优先 + data_contract 骨架 + 数据校验器）
+[90m   5 │ [39m"""
+[90m   6 │ [39m
+[90m   7 │ [39mimport json
+[90m   8 │ [39mimport sys
+[90m   9 │ [39mfrom pathlib import Path
+[90m  10 │ [39m
+[90m  11 │ [39mfrom mcp.types import Tool, TextContent
+[90m  12 │ [39m
+[90m  13 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  14 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  15 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  16 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  17 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  19 │ [39m
+[90m  20 │ [39mTOOLS = [
+[90m  21 │ [39m    Tool(
+[90m  22 │ [39m        name="fabricate_data",
+
+[1mClone found (python)[22m
+ - tools\draft_writer.py [206:80 - 216:4]
+   tools\draft_writer.py [236:70 - 246:4]
+[90m 206 │ [39m                                             skip_gate=skip_gate, emp_no=emp_no)
+[90m 207 │ [39m        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+[90m 208 │ [39m    except Exception as e:
+[90m 209 │ [39m        code = getattr(e, "code", "error")
+[90m 210 │ [39m        detail = getattr(e, "detail", None)
+[90m 211 │ [39m        return [TextContent(type="text", text=json.dumps({
+[90m 212 │ [39m            "ok": False, "error_code": code, "error": str(e), **(detail or {}),
+[90m 213 │ [39m        }, ensure_ascii=False, indent=2))]
+[90m 214 │ [39m
+[90m 215 │ [39m
+[90m 216 │ [39mdef _handle_promote_draft(arguments: dict) -> list[TextContent]:
+[90m 236 │ [39m                                       emp_no=emp_no, replace=replace)
+[90m 237 │ [39m        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+[90m 238 │ [39m    except Exception as e:
+[90m 239 │ [39m        code = getattr(e, "code", "error")
+[90m 240 │ [39m        detail = getattr(e, "detail", None)
+[90m 241 │ [39m        return [TextContent(type="text", text=json.dumps({
+[90m 242 │ [39m            "ok": False, "error_code": code, "error": str(e), **(detail or {}),
+[90m 243 │ [39m        }, ensure_ascii=False, indent=2))]
+[90m 244 │ [39m
+[90m 245 │ [39m
+[90m 246 │ [39mdef _backup_draft(filename: str):
+
+[1mClone found (python)[22m
+ - tools\open\quality_query.py [86:30 - 95:48]
+   tools\open\quality_query.py [100:26 - 109:48]
+[90m  86 │ [39mdef _handle_get_coverage_gaps(args: dict) -> list[TextContent]:
+[90m  87 │ [39m    module = str(args.get("module") or "").strip()
+[90m  88 │ [39m    root, ws_name = resolve_workspace_root(str(args.get("workspace") or ""))
+[90m  89 │ [39m    if root is None:
+[90m  90 │ [39m        return _render({"ok": False, "error": "工作区不可用（未激活或不存在）"})
+[90m  91 │ [39m    try:
+[90m  92 │ [39m        from workbench.backend.services import coverage_gaps
+[90m  93 │ [39m        data = coverage_gaps.compute_coverage(module)
+[90m  94 │ [39m    except Exception as e:
+[90m  95 │ [39m        return _render({"ok": False, "error": f"覆盖缺口计算失败: {e}"})
+[90m 100 │ [39mdef _handle_get_test_debt(args: dict) -> list[TextContent]:
+[90m 101 │ [39m    module = str(args.get("module") or "").strip()
+[90m 102 │ [39m    root, ws_name = resolve_workspace_root(str(args.get("workspace") or ""))
+[90m 103 │ [39m    if root is None:
+[90m 104 │ [39m        return _render({"ok": False, "error": "工作区不可用（未激活或不存在）"})
+[90m 105 │ [39m    try:
+[90m 106 │ [39m        from workbench.backend.services import coverage_gaps
+[90m 107 │ [39m        data = coverage_gaps.compute_coverage(module)
+[90m 108 │ [39m    except Exception as e:
+[90m 109 │ [39m        return _render({"ok": False, "error": f"测试债计算失败: {e}"})
+
+[1mClone found (python)[22m
+ - tools\open\specflow_refs.py [246:25 - 253:80]
+   tools\open\specflow_refs.py [336:31 - 343:80]
+[90m 246 │ [39mdef _handle_get_proposal(args: dict) -> list[TextContent]:
+[90m 247 │ [39m    delta_id = str(args.get("delta_id", "") or "").strip()
+[90m 248 │ [39m    root, ws_name = resolve_workspace_root(str(args.get("workspace") or ""))
+[90m 249 │ [39m    if root is None:
+[90m 250 │ [39m        return _render({"ok": False, "error": "工作区不可用（未激活或不存在）"})
+[90m 251 │ [39m    d = delta_dir(root, delta_id)
+[90m 252 │ [39m    if d is None:
+[90m 253 │ [39m        return _render({"ok": False, "error": f"delta {delta_id!r} 不存在"})
+[90m 336 │ [39mdef _handle_get_delta_contract(args: dict) -> list[TextContent]:
+[90m 337 │ [39m    delta_id = str(args.get("delta_id", "") or "").strip()
+[90m 338 │ [39m    root, ws_name = resolve_workspace_root(str(args.get("workspace") or ""))
+[90m 339 │ [39m    if root is None:
+[90m 340 │ [39m        return _render({"ok": False, "error": "工作区不可用（未激活或不存在）"})
+[90m 341 │ [39m    d = delta_dir(root, delta_id)
+[90m 342 │ [39m    if d is None:
+[90m 343 │ [39m        return _render({"ok": False, "error": f"delta {delta_id!r} 不存在"})
+
+[1mClone found (python)[22m
+ - tools\registry_query.py [11:1 - 20:33]
+   tools\scenario_tools.py [18:1 - 27:33]
+[90m  11 │ [39mfrom mcp.types import Tool, TextContent
+[90m  12 │ [39m
+[90m  13 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  14 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  15 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  16 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  17 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  18 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  19 │ [39m
+[90m  20 │ [39mfrom services.format_spec import get_tool_catalog  # noqa: E402
+[90m  18 │ [39mfrom mcp.types import Tool, TextContent
+[90m  19 │ [39m
+[90m  20 │ [39mSG_ROOT = Path(__file__).resolve().parent.parent.parent
+[90m  21 │ [39mif str(SG_ROOT) not in sys.path:
+[90m  22 │ [39m    sys.path.insert(0, str(SG_ROOT))
+[90m  23 │ [39mBACKEND_DIR = SG_ROOT / "workbench" / "backend"
+[90m  24 │ [39mif str(BACKEND_DIR) not in sys.path:
+[90m  25 │ [39m    sys.path.insert(0, str(BACKEND_DIR))
+[90m  26 │ [39m
+[90m  27 │ [39mfrom services.format_spec import get_next_scenario_id  # noqa: E402
+
+[1mClone found (yaml)[22m
+ - employee\person-profile\PP-RC-005.yaml [17:24 - 37:4]
+   employee\person-profile\PP-SNAP-001.yaml [17:16 - 37:4]
+[90m  17 │ [39m  related_ac: [AC-002, AC-004]
+[90m  18 │ [39m
+[90m  19 │ [39m# ─────────── 机器读层 ───────────
+[90m  20 │ [39mdepends_on: []
+[90m  21 │ [39mflow:
+[90m  22 │ [39m  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+[90m  23 │ [39m  - call:
+[90m  24 │ [39m      as: default
+[90m  25 │ [39m      method: GET
+[90m  26 │ [39m      path: /api/employee/profile
+[90m  27 │ [39m      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+[90m  28 │ [39m      save: resp_global
+[90m  29 │ [39m  - call:
+[90m  30 │ [39m      as: default
+[90m  31 │ [39m      method: GET
+[90m  32 │ [39m      path: /api/employee/profile
+[90m  33 │ [39m      params: {empNo: "{{emp.no}}", activityId: "{{emp.activity_id}}", resourceCode: "{{env.resource_code}}"}
+[90m  34 │ [39m      save: resp
+[90m  35 │ [39mverify:
+[90m  36 │ [39m  - status: {eq: 200}
+[90m     … 1 more lines[39m
+[90m  17 │ [39m  related_ac: [AC-004]
+[90m  18 │ [39m
+[90m  19 │ [39m# ─────────── 机器读层 ───────────
+[90m  20 │ [39mdepends_on: []
+[90m  21 │ [39mflow:
+[90m  22 │ [39m  - tool: {use: select_emp, with: {role: snapshot_rich}, save: emp}
+[90m  23 │ [39m  - call:
+[90m  24 │ [39m      as: default
+[90m  25 │ [39m      method: GET
+[90m  26 │ [39m      path: /api/employee/profile
+[90m  27 │ [39m      params: {empNo: "{{emp.no}}", resourceCode: "{{env.resource_code}}"}
+[90m  28 │ [39m      save: resp_global
+[90m  29 │ [39m  - call:
+[90m  30 │ [39m      as: default
+[90m  31 │ [39m      method: GET
+[90m  32 │ [39m      path: /api/employee/profile
+[90m  33 │ [39m      params: {empNo: "{{emp.no}}", activityId: "{{emp.activity_id}}", resourceCode: "{{env.resource_code}}"}
+[90m  34 │ [39m      save: resp
+[90m  35 │ [39mverify:
+[90m  36 │ [39m  - status: {eq: 200}
+[90m     … 1 more lines[39m
+
+[1mClone found (yaml)[22m
+ - evaluation\eval-360\EV-IMP-001.yaml [24:85 - 57:23]
+   evaluation\eval-360\EV-IMP-002.yaml [23:89 - 56:23]
+[90m  24 │ [39m  - tool: {use: oss_upload, with: {file: "test-data/step4/eval360-empty-scores.xlsx"}, save: up}
+[90m  25 │ [39m  - call:
+[90m  26 │ [39m      method: POST
+[90m  27 │ [39m      path: /api/data-io/import/excel/task/submit
+[90m  28 │ [39m      json:
+[90m  29 │ [39m        bizType: "step4Import"
+[90m  30 │ [39m        fileKey: "{{up.ossKey}}"
+[90m  31 │ [39m        bizParam:
+[90m  32 │ [39m          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+[90m  33 │ [39m          resourceCode: "TDM_INV_OPERATION"
+[90m  34 │ [39m      save: submit
+[90m  35 │ [39m  - poll:
+[90m  36 │ [39m      call:
+[90m  37 │ [39m        method: GET
+[90m  38 │ [39m        path: /api/data-io/import/task/result
+[90m  39 │ [39m        params: {taskNo: "{{submit.json.data.taskNo}}"}
+[90m  40 │ [39m      until:
+[90m  41 │ [39m        - json: {path: "$.data.finished", eq: true}
+[90m  42 │ [39m      interval_ms: 2000
+[90m  43 │ [39m      timeout_ms: 120000
+[90m     … 14 more lines[39m
+[90m  23 │ [39m  - tool: {use: oss_upload, with: {file: "test-data/step4/eval360-required-missing.xlsx"}, save: up}
+[90m  24 │ [39m  - call:
+[90m  25 │ [39m      method: POST
+[90m  26 │ [39m      path: /api/data-io/import/excel/task/submit
+[90m  27 │ [39m      json:
+[90m  28 │ [39m        bizType: "step4Import"
+[90m  29 │ [39m        fileKey: "{{up.ossKey}}"
+[90m  30 │ [39m        bizParam:
+[90m  31 │ [39m          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+[90m  32 │ [39m          resourceCode: "TDM_INV_OPERATION"
+[90m  33 │ [39m      save: submit
+[90m  34 │ [39m  - poll:
+[90m  35 │ [39m      call:
+[90m  36 │ [39m        method: GET
+[90m  37 │ [39m        path: /api/data-io/import/task/result
+[90m  38 │ [39m        params: {taskNo: "{{submit.json.data.taskNo}}"}
+[90m  39 │ [39m      until:
+[90m  40 │ [39m        - json: {path: "$.data.finished", eq: true}
+[90m  41 │ [39m      interval_ms: 2000
+[90m  42 │ [39m      timeout_ms: 120000
+[90m     … 14 more lines[39m
+
+[1mClone found (yaml)[22m
+ - evaluation\eval-360\EV-IMP-001.yaml [24:85 - 63:26]
+   inventory\grid-placement\GP-IMP-001.yaml [26:84 - 65:26]
+[90m  24 │ [39m  - tool: {use: oss_upload, with: {file: "test-data/step4/eval360-empty-scores.xlsx"}, save: up}
+[90m  25 │ [39m  - call:
+[90m  26 │ [39m      method: POST
+[90m  27 │ [39m      path: /api/data-io/import/excel/task/submit
+[90m  28 │ [39m      json:
+[90m  29 │ [39m        bizType: "step4Import"
+[90m  30 │ [39m        fileKey: "{{up.ossKey}}"
+[90m  31 │ [39m        bizParam:
+[90m  32 │ [39m          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+[90m  33 │ [39m          resourceCode: "TDM_INV_OPERATION"
+[90m  34 │ [39m      save: submit
+[90m  35 │ [39m  - poll:
+[90m  36 │ [39m      call:
+[90m  37 │ [39m        method: GET
+[90m  38 │ [39m        path: /api/data-io/import/task/result
+[90m  39 │ [39m        params: {taskNo: "{{submit.json.data.taskNo}}"}
+[90m  40 │ [39m      until:
+[90m  41 │ [39m        - json: {path: "$.data.finished", eq: true}
+[90m  42 │ [39m      interval_ms: 2000
+[90m  43 │ [39m      timeout_ms: 120000
+[90m     … 20 more lines[39m
+[90m  26 │ [39m  - tool: {use: oss_upload, with: {file: "test-data/step4/grid-position-valid.xlsx"}, save: up}
+[90m  27 │ [39m  - call:
+[90m  28 │ [39m      method: POST
+[90m  29 │ [39m      path: /api/data-io/import/excel/task/submit
+[90m  30 │ [39m      json:
+[90m  31 │ [39m        bizType: "step4Import"
+[90m  32 │ [39m        fileKey: "{{up.ossKey}}"
+[90m  33 │ [39m        bizParam:
+[90m  34 │ [39m          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+[90m  35 │ [39m          resourceCode: "TDM_INV_OPERATION"
+[90m  36 │ [39m      save: submit
+[90m  37 │ [39m  - poll:
+[90m  38 │ [39m      call:
+[90m  39 │ [39m        method: GET
+[90m  40 │ [39m        path: /api/data-io/import/task/result
+[90m  41 │ [39m        params: {taskNo: "{{submit.json.data.taskNo}}"}
+[90m  42 │ [39m      until:
+[90m  43 │ [39m        - json: {path: "$.data.finished", eq: true}
+[90m  44 │ [39m      interval_ms: 2000
+[90m  45 │ [39m      timeout_ms: 120000
+[90m     … 20 more lines[39m
+
+[1mClone found (yaml)[22m
+ - evaluation\eval-360\EV-IMP-001.yaml [24:85 - 63:26]
+   inventory\grid-placement\GP-IMP-002.yaml [21:91 - 60:26]
+[90m  24 │ [39m  - tool: {use: oss_upload, with: {file: "test-data/step4/eval360-empty-scores.xlsx"}, save: up}
+[90m  25 │ [39m  - call:
+[90m  26 │ [39m      method: POST
+[90m  27 │ [39m      path: /api/data-io/import/excel/task/submit
+[90m  28 │ [39m      json:
+[90m  29 │ [39m        bizType: "step4Import"
+[90m  30 │ [39m        fileKey: "{{up.ossKey}}"
+[90m  31 │ [39m        bizParam:
+[90m  32 │ [39m          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+[90m  33 │ [39m          resourceCode: "TDM_INV_OPERATION"
+[90m  34 │ [39m      save: submit
+[90m  35 │ [39m  - poll:
+[90m  36 │ [39m      call:
+[90m  37 │ [39m        method: GET
+[90m  38 │ [39m        path: /api/data-io/import/task/result
+[90m  39 │ [39m        params: {taskNo: "{{submit.json.data.taskNo}}"}
+[90m  40 │ [39m      until:
+[90m  41 │ [39m        - json: {path: "$.data.finished", eq: true}
+[90m  42 │ [39m      interval_ms: 2000
+[90m  43 │ [39m      timeout_ms: 120000
+[90m     … 20 more lines[39m
+[90m  21 │ [39m  - tool: {use: oss_upload, with: {file: "test-data/step4/grid-position-out-of-range.xlsx"}, save: up}
+[90m  22 │ [39m  - call:
+[90m  23 │ [39m      method: POST
+[90m  24 │ [39m      path: /api/data-io/import/excel/task/submit
+[90m  25 │ [39m      json:
+[90m  26 │ [39m        bizType: "step4Import"
+[90m  27 │ [39m        fileKey: "{{up.ossKey}}"
+[90m  28 │ [39m        bizParam:
+[90m  29 │ [39m          sessionId: "{{IS-PREP-002.session.json.data.id}}"
+[90m  30 │ [39m          resourceCode: "TDM_INV_OPERATION"
+[90m  31 │ [39m      save: submit
+[90m  32 │ [39m  - poll:
+[90m  33 │ [39m      call:
+[90m  34 │ [39m        method: GET
+[90m  35 │ [39m        path: /api/data-io/import/task/result
+[90m  36 │ [39m        params: {taskNo: "{{submit.json.data.taskNo}}"}
+[90m  37 │ [39m      until:
+[90m  38 │ [39m        - json: {path: "$.data.finished", eq: true}
+[90m  39 │ [39m      interval_ms: 2000
+[90m  40 │ [39m      timeout_ms: 120000
+[90m     … 20 more lines[39m
+
+[1mClone found (yaml)[22m
+ - inventory\inventory-session\IS-PREP-002.yaml [31:11 - 66:20]
+   inventory\inventory-session\IS-PREP-003.yaml [30:11 - 65:20]
+[90m  31 │ [39m          corp_code: "1002"
+[90m  32 │ [39m          corp_name: "远东租赁"
+[90m  33 │ [39m          inv_date: "2026-07-22"
+[90m  34 │ [39m  - call:
+[90m  35 │ [39m      method: POST
+[90m  36 │ [39m      path: /api/system/activities
+[90m  37 │ [39m      json:
+[90m  38 │ [39m        activityName: "{{activity_name}}"
+[90m  39 │ [39m        activityType: "CURRENT"
+[90m  40 │ [39m        inventoryDate: "{{inv_date}}"
+[90m  41 │ [39m        resourceCode: "TDM_INV_ACTIVITY"
+[90m  42 │ [39m        platformList:
+[90m  43 │ [39m          - {corpCode: "{{corp_code}}", corpName: "{{corp_name}}"}
+[90m  44 │ [39m      save: activity
+[90m  45 │ [39m  - call:
+[90m  46 │ [39m      method: PUT
+[90m  47 │ [39m      path: "/api/system/activities/{{activity.json.data.id}}/start"
+[90m  48 │ [39m      json: {resourceCode: "TDM_INV_ACTIVITY"}
+[90m  49 │ [39m      save: act_start
+[90m  50 │ [39m  - call:
+[90m     … 16 more lines[39m
+[90m  30 │ [39m          corp_code: "1002"
+[90m  31 │ [39m          corp_name: "远东租赁"
+[90m  32 │ [39m          inv_date: "2026-07-22"
+[90m  33 │ [39m  - call:
+[90m  34 │ [39m      method: POST
+[90m  35 │ [39m      path: /api/system/activities
+[90m  36 │ [39m      json:
+[90m  37 │ [39m        activityName: "{{activity_name}}"
+[90m  38 │ [39m        activityType: "CURRENT"
+[90m  39 │ [39m        inventoryDate: "{{inv_date}}"
+[90m  40 │ [39m        resourceCode: "TDM_INV_ACTIVITY"
+[90m  41 │ [39m        platformList:
+[90m  42 │ [39m          - {corpCode: "{{corp_code}}", corpName: "{{corp_name}}"}
+[90m  43 │ [39m      save: activity
+[90m  44 │ [39m  - call:
+[90m  45 │ [39m      method: PUT
+[90m  46 │ [39m      path: "/api/system/activities/{{activity.json.data.id}}/start"
+[90m  47 │ [39m      json: {resourceCode: "TDM_INV_ACTIVITY"}
+[90m  48 │ [39m      save: act_start
+[90m  49 │ [39m  - call:
+[90m     … 16 more lines[39m
+
+[1mClone found (python)[22m
+ - routers\agent.py [53:90 - 80:18]
+   routers\agent.py [123:101 - 150:18]
+[90m  53 │ [39m    生成阅读卡片，同文件去重合并 hunks（模拟前端 doc_read 汇聚逻辑）。
+[90m  54 │ [39m    """
+[90m  55 │ [39m    items: list[dict] = []
+[90m  56 │ [39m    key_idx: dict[str, int] = {}
+[90m  57 │ [39m
+[90m  58 │ [39m    for i, msg in enumerate(messages):
+[90m  59 │ [39m        if msg.get("role") != "assistant":
+[90m  60 │ [39m            continue
+[90m  61 │ [39m        tcs = msg.get("tool_calls") or []
+[90m  62 │ [39m        if not tcs:
+[90m  63 │ [39m            continue
+[90m  64 │ [39m        # 收集本轮 tool 结果
+[90m  65 │ [39m        results = {}
+[90m  66 │ [39m        j = i + 1
+[90m  67 │ [39m        while j < len(messages) and messages[j].get("role") == "tool":
+[90m  68 │ [39m            cid = messages[j].get("tool_call_id", "")
+[90m  69 │ [39m            results[cid] = messages[j].get("content", "")
+[90m  70 │ [39m            j += 1
+[90m  71 │ [39m        for tc in tcs:
+[90m  72 │ [39m            fn = tc.get("function", {})
+[90m     … 8 more lines[39m
+[90m 123 │ [39m    生成更新卡片，同文件去重合并 hunks + 累计更新次数（模拟前端汇聚逻辑）。
+[90m 124 │ [39m    """
+[90m 125 │ [39m    items: list[dict] = []
+[90m 126 │ [39m    key_idx: dict[str, int] = {}
+[90m 127 │ [39m
+[90m 128 │ [39m    for i, msg in enumerate(messages):
+[90m 129 │ [39m        if msg.get("role") != "assistant":
+[90m 130 │ [39m            continue
+[90m 131 │ [39m        tcs = msg.get("tool_calls") or []
+[90m 132 │ [39m        if not tcs:
+[90m 133 │ [39m            continue
+[90m 134 │ [39m        # 收集本轮 tool 结果
+[90m 135 │ [39m        results = {}
+[90m 136 │ [39m        j = i + 1
+[90m 137 │ [39m        while j < len(messages) and messages[j].get("role") == "tool":
+[90m 138 │ [39m            cid = messages[j].get("tool_call_id", "")
+[90m 139 │ [39m            results[cid] = messages[j].get("content", "")
+[90m 140 │ [39m            j += 1
+[90m 141 │ [39m        for tc in tcs:
+[90m 142 │ [39m            fn = tc.get("function", {})
+[90m     … 8 more lines[39m
+
+[1mClone found (python)[22m
+ - routers\agent.py [80:33 - 88:53]
+   routers\agent.py [150:34 - 158:53]
+[90m  80 │ [39m            evt = build_doc_read(fn.get("name", ""), args_raw, result_text, 0)
+[90m  81 │ [39m            if evt is None:
+[90m  82 │ [39m                continue
+[90m  83 │ [39m            key = evt.get("path") or evt.get("ref") or f"{evt['tool']}:unknown"
+[90m  84 │ [39m            card = {
+[90m  85 │ [39m                "key": key, "tool": evt["tool"], "ref": evt.get("ref", ""),
+[90m  86 │ [39m                "path": evt.get("path"), "turn": 0, "size": evt.get("size", 0),
+[90m  87 │ [39m                "excerpt": evt.get("excerpt", ""), "label": evt.get("label", ""),
+[90m  88 │ [39m                "thinking": evt.get("thinking", ""),
+[90m 150 │ [39m            evt = build_doc_write(fn.get("name", ""), args_raw, result_text, 0)
+[90m 151 │ [39m            if evt is None:
+[90m 152 │ [39m                continue
+[90m 153 │ [39m            key = evt.get("path") or evt.get("ref") or f"{evt['tool']}:unknown"
+[90m 154 │ [39m            card = {
+[90m 155 │ [39m                "key": key, "tool": evt["tool"], "ref": evt.get("ref", ""),
+[90m 156 │ [39m                "path": evt.get("path"), "turn": 0, "size": evt.get("size", 0),
+[90m 157 │ [39m                "excerpt": evt.get("excerpt", ""), "label": evt.get("label", ""),
+[90m 158 │ [39m                "thinking": evt.get("thinking", ""),
+
+[1mClone found (python)[22m
+ - routers\reference.py [350:69 - 360:25]
+   routers\reference.py [398:60 - 408:25]
+[90m 350 │ [39m    """提取单个场景的产出详情：title/doc/saves/produces"""
+[90m 351 │ [39m    scenarios_dir = SG_ROOT / "scenarios"
+[90m 352 │ [39m    for dirpath, _dirs, filenames in os.walk(scenarios_dir):
+[90m 353 │ [39m        for fn in filenames:
+[90m 354 │ [39m            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+[90m 355 │ [39m                continue
+[90m 356 │ [39m            path = os.path.join(dirpath, fn)
+[90m 357 │ [39m            with open(path, "r", encoding="utf-8") as f:
+[90m 358 │ [39m                raw = yaml.safe_load(f) or {}
+[90m 359 │ [39m            if raw.get("id") != scenario_id:
+[90m 360 │ [39m                continue
+[90m 398 │ [39m    """某场景依赖的上游场景产出的可用变量"""
+[90m 399 │ [39m    scenarios_dir = SG_ROOT / "scenarios"
+[90m 400 │ [39m    for dirpath, _dirs, filenames in os.walk(scenarios_dir):
+[90m 401 │ [39m        for fn in filenames:
+[90m 402 │ [39m            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+[90m 403 │ [39m                continue
+[90m 404 │ [39m            path = os.path.join(dirpath, fn)
+[90m 405 │ [39m            with open(path, "r", encoding="utf-8") as f:
+[90m 406 │ [39m                raw = yaml.safe_load(f) or {}
+[90m 407 │ [39m            if raw.get("id") != scenario_id:
+[90m 408 │ [39m                continue
+
+[1mClone found (python)[22m
+ - services\agent_session_store.py [18:1 - 35:16]
+   services\scheduler.py [30:1 - 47:16]
+[90m  18 │ [39mBACKEND_DIR = Path(__file__).resolve().parent.parent
+[90m  19 │ [39mDATA_DIR = BACKEND_DIR / "data"
+[90m  20 │ [39mDB_PATH = DATA_DIR / "workbench.db"
+[90m  21 │ [39m
+[90m  22 │ [39m_LOCK = threading.RLock()
+[90m  23 │ [39m
+[90m  24 │ [39m
+[90m  25 │ [39mdef _now() -> str:
+[90m  26 │ [39m    return datetime.now().isoformat(timespec="seconds")
+[90m  27 │ [39m
+[90m  28 │ [39m
+[90m  29 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  30 │ [39m    path = db_path or DB_PATH
+[90m  31 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  32 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  33 │ [39m    conn.row_factory = sqlite3.Row
+[90m  34 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  35 │ [39m    return conn
+[90m  30 │ [39mBACKEND_DIR = Path(__file__).resolve().parent.parent
+[90m  31 │ [39mDATA_DIR = BACKEND_DIR / "data"
+[90m  32 │ [39mDB_PATH = DATA_DIR / "workbench.db"
+[90m  33 │ [39m
+[90m  34 │ [39m_LOCK = threading.RLock()
+[90m  35 │ [39m
+[90m  36 │ [39m
+[90m  37 │ [39mdef _now() -> str:
+[90m  38 │ [39m    return datetime.now().isoformat(timespec="seconds")
+[90m  39 │ [39m
+[90m  40 │ [39m
+[90m  41 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  42 │ [39m    path = db_path or DB_PATH
+[90m  43 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  44 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  45 │ [39m    conn.row_factory = sqlite3.Row
+[90m  46 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  47 │ [39m    return conn
+
+[1mClone found (python)[22m
+ - services\agent_session_store.py [22:1 - 42:35]
+   services\user_store.py [27:1 - 45:35]
+[90m  22 │ [39m_LOCK = threading.RLock()
+[90m  23 │ [39m
+[90m  24 │ [39m
+[90m  25 │ [39mdef _now() -> str:
+[90m  26 │ [39m    return datetime.now().isoformat(timespec="seconds")
+[90m  27 │ [39m
+[90m  28 │ [39m
+[90m  29 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  30 │ [39m    path = db_path or DB_PATH
+[90m  31 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  32 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  33 │ [39m    conn.row_factory = sqlite3.Row
+[90m  34 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  35 │ [39m    return conn
+[90m  36 │ [39m
+[90m  37 │ [39m
+[90m  38 │ [39mdef init_db(db_path: Path | None = None):
+[90m  39 │ [39m    """建表（幂等）。"""
+[90m  40 │ [39m    with _LOCK, _connect(db_path) as conn:
+[90m  41 │ [39m        conn.executescript("""
+[90m     … 1 more lines[39m
+[90m  27 │ [39m_LOCK = threading.RLock()
+[90m  28 │ [39mdef _now() -> str:
+[90m  29 │ [39m    return datetime.now().isoformat(timespec="seconds")
+[90m  30 │ [39m
+[90m  31 │ [39m
+[90m  32 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  33 │ [39m    path = db_path or DB_PATH
+[90m  34 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  35 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  36 │ [39m    conn.row_factory = sqlite3.Row
+[90m  37 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  38 │ [39m    return conn
+[90m  39 │ [39m
+[90m  40 │ [39m
+[90m  41 │ [39mdef init_db(db_path: Path | None = None):
+[90m  42 │ [39m    """建表（幂等）。"""
+[90m  43 │ [39m    with _LOCK, _connect(db_path) as conn:
+[90m  44 │ [39m        conn.executescript("""
+[90m  45 │ [39m        CREATE TABLE IF NOT EXISTS users (
+
+[1mClone found (python)[22m
+ - services\agent_session_store.py [26:55 - 39:7]
+   services\rbac_store.py [85:55 - 98:7]
+[90m  26 │ [39m    return datetime.now().isoformat(timespec="seconds")
+[90m  27 │ [39m
+[90m  28 │ [39m
+[90m  29 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  30 │ [39m    path = db_path or DB_PATH
+[90m  31 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  32 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  33 │ [39m    conn.row_factory = sqlite3.Row
+[90m  34 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  35 │ [39m    return conn
+[90m  36 │ [39m
+[90m  37 │ [39m
+[90m  38 │ [39mdef init_db(db_path: Path | None = None):
+[90m  39 │ [39m    """建表（幂等）。"""
+[90m  85 │ [39m    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+[90m  86 │ [39m
+[90m  87 │ [39m
+[90m  88 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  89 │ [39m    path = db_path or DB_PATH
+[90m  90 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  91 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  92 │ [39m    conn.row_factory = sqlite3.Row
+[90m  93 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  94 │ [39m    return conn
+[90m  95 │ [39m
+[90m  96 │ [39m
+[90m  97 │ [39mdef init_db(db_path: Path | None = None):
+[90m  98 │ [39m    """建表（幂等）+ 种子（表空时写入）。"""
+
+[1mClone found (python)[22m
+ - services\coverage_gaps.py [279:5 - 295:4]
+   services\coverage_gaps.py [370:5 - 386:4]
+[90m 279 │ [39m    try:
+[90m 280 │ [39m        from specstd.workspace import get_workspace_root
+[90m 281 │ [39m        ws = get_workspace_root()
+[90m 282 │ [39m        if not ws:
+[90m 283 │ [39m            return ""
+[90m 284 │ [39m        import yaml as _yaml
+[90m 285 │ [39m        for manifest in sorted((ws / "changes").rglob("delta.manifest.yaml")):
+[90m 286 │ [39m            data = _yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+[90m 287 │ [39m            ops = data.get("operations") or []
+[90m 288 │ [39m            if any(op.get("fr") == fr_id for op in ops):
+[90m 289 │ [39m                return manifest.parent.name
+[90m 290 │ [39m    except Exception:
+[90m 291 │ [39m        pass
+[90m 292 │ [39m    return ""
+[90m 293 │ [39m
+[90m 294 │ [39m
+[90m 295 │ [39mdef _draft_gates_brief(draft_id: str) -> dict:
+[90m 370 │ [39m    try:
+[90m 371 │ [39m        from specstd.workspace import get_workspace_root
+[90m 372 │ [39m        ws = get_workspace_root()
+[90m 373 │ [39m        if not ws:
+[90m 374 │ [39m            return ""
+[90m 375 │ [39m        import yaml as _yaml
+[90m 376 │ [39m        for manifest in sorted((ws / "changes").rglob("delta.manifest.yaml")):
+[90m 377 │ [39m            data = _yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+[90m 378 │ [39m            ops = data.get("operations") or []
+[90m 379 │ [39m            if any(op.get("fr") == fr_id for op in ops):
+[90m 380 │ [39m                return manifest.parent.name
+[90m 381 │ [39m    except Exception:
+[90m 382 │ [39m        pass
+[90m 383 │ [39m    return ""
+[90m 384 │ [39m
+[90m 385 │ [39m
+[90m 386 │ [39mdef build_next_batch(frs: list[str], source_delta: str = "") -> dict:
+
+[1mClone found (python)[22m
+ - services\draft_gates.py [69:5 - 90:7]
+   services\ledger_store.py [124:5 - 145:7]
+[90m  69 │ [39m    try:
+[90m  70 │ [39m        from specstd.workspace import get_active_workspace
+[90m  71 │ [39m        info = get_active_workspace()
+[90m  72 │ [39m        if info is None:
+[90m  73 │ [39m            return ""
+[90m  74 │ [39m        name = info.get("name") if isinstance(info, dict) else getattr(info, "name", "")
+[90m  75 │ [39m        return str(name or "")
+[90m  76 │ [39m    except Exception:
+[90m  77 │ [39m        return ""
+[90m  78 │ [39m
+[90m  79 │ [39m
+[90m  80 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m  81 │ [39m    path = db_path or DB_PATH
+[90m  82 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m  83 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m  84 │ [39m    conn.row_factory = sqlite3.Row
+[90m  85 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m  86 │ [39m    return conn
+[90m  87 │ [39m
+[90m  88 │ [39m
+[90m     … 2 more lines[39m
+[90m 124 │ [39m    try:
+[90m 125 │ [39m        from specstd.workspace import get_active_workspace
+[90m 126 │ [39m        info = get_active_workspace()
+[90m 127 │ [39m        if info is None:
+[90m 128 │ [39m            return ""
+[90m 129 │ [39m        name = info.get("name") if isinstance(info, dict) else getattr(info, "name", "")
+[90m 130 │ [39m        return str(name or "")
+[90m 131 │ [39m    except Exception:
+[90m 132 │ [39m        return ""
+[90m 133 │ [39m
+[90m 134 │ [39m
+[90m 135 │ [39mdef _connect(db_path: Path | None = None) -> sqlite3.Connection:
+[90m 136 │ [39m    path = db_path or DB_PATH
+[90m 137 │ [39m    path.parent.mkdir(parents=True, exist_ok=True)
+[90m 138 │ [39m    conn = sqlite3.connect(str(path), timeout=10)
+[90m 139 │ [39m    conn.row_factory = sqlite3.Row
+[90m 140 │ [39m    conn.execute("PRAGMA journal_mode=WAL")
+[90m 141 │ [39m    return conn
+[90m 142 │ [39m
+[90m 143 │ [39m
+[90m     … 2 more lines[39m
+
+[1mClone found (python)[22m
+ - services\execution_index.py [51:9 - 63:46]
+   services\experience_store.py [91:9 - 103:46]
+[90m  51 │ [39m        detail = {}
+[90m  52 │ [39m        case_file = case.get("file") or ""
+[90m  53 │ [39m        case_path = None
+[90m  54 │ [39m        if case_file:
+[90m  55 │ [39m            case_path = reports_root / run_id / case_file
+[90m  56 │ [39m            if not case_path.is_file():
+[90m  57 │ [39m                case_path = reports_root / run_id / "cases" / Path(case_file).name
+[90m  58 │ [39m        if case_path and case_path.is_file():
+[90m  59 │ [39m            try:
+[90m  60 │ [39m                detail = json.loads(case_path.read_text(encoding="utf-8"))
+[90m  61 │ [39m            except Exception:
+[90m  62 │ [39m                detail = {}
+[90m  63 │ [39m        failure = detail.get("failure") or {}
+[90m  91 │ [39m        detail = {}
+[90m  92 │ [39m        case_file = case.get("file") or ""
+[90m  93 │ [39m        case_path = None
+[90m  94 │ [39m        if case_file:
+[90m  95 │ [39m            case_path = reports_root / run_id / case_file
+[90m  96 │ [39m            if not case_path.is_file():
+[90m  97 │ [39m                case_path = reports_root / run_id / "cases" / Path(case_file).name
+[90m  98 │ [39m        if case_path and case_path.is_file():
+[90m  99 │ [39m            try:
+[90m 100 │ [39m                detail = json.loads(case_path.read_text(encoding="utf-8"))
+[90m 101 │ [39m            except Exception:
+[90m 102 │ [39m                detail = {}
+[90m 103 │ [39m        failure = detail.get("failure") or {}
+
+[1mClone found (python)[22m
+ - services\failure_index.py [55:9 - 64:54]
+   services\ledger_store.py [230:5 - 239:50]
+[90m  55 │ [39m        case_file = case.get("file") or ""
+[90m  56 │ [39m        case_path = None
+[90m  57 │ [39m        if case_file:
+[90m  58 │ [39m            case_path = reports_root / run_id / case_file
+[90m  59 │ [39m            if not case_path.is_file():
+[90m  60 │ [39m                case_path = reports_root / run_id / "cases" / Path(case_file).name
+[90m  61 │ [39m        if case_path and case_path.is_file():
+[90m  62 │ [39m            try:
+[90m  63 │ [39m                detail = json.loads(case_path.read_text(encoding="utf-8"))
+[90m  64 │ [39m                failure = detail.get("failure") or {}
+[90m 230 │ [39m    case_file = case.get("file") or ""
+[90m 231 │ [39m    case_path = None
+[90m 232 │ [39m    if case_file:
+[90m 233 │ [39m        case_path = reports_root / run_id / case_file
+[90m 234 │ [39m        if not case_path.is_file():
+[90m 235 │ [39m            case_path = reports_root / run_id / "cases" / Path(case_file).name
+[90m 236 │ [39m    if case_path and case_path.is_file():
+[90m 237 │ [39m        try:
+[90m 238 │ [39m            detail = json.loads(case_path.read_text(encoding="utf-8"))
+[90m 239 │ [39m            failure = detail.get("failure") or {}
+
+[1mClone found (python)[22m
+ - services\format_spec.py [125:5 - 137:30]
+   services\format_spec.py [159:5 - 171:30]
+[90m 125 │ [39m    def _chapter(chapter: str) -> str:
+[90m 126 │ [39m        out: list[str] = []
+[90m 127 │ [39m        capture = False
+[90m 128 │ [39m        for line in lines:
+[90m 129 │ [39m            m = _re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+[90m 130 │ [39m            if m:
+[90m 131 │ [39m                if capture and len(m.group(1)) <= 3:
+[90m 132 │ [39m                    break
+[90m 133 │ [39m                if not capture and m.group(2).startswith(chapter):
+[90m 134 │ [39m                    capture = True
+[90m 135 │ [39m            if capture:
+[90m 136 │ [39m                out.append(line)
+[90m 137 │ [39m        return "\n".join(out)
+[90m 159 │ [39m    def _chapter(chapter: str) -> str:
+[90m 160 │ [39m        out: list[str] = []
+[90m 161 │ [39m        capture = False
+[90m 162 │ [39m        for line in lines:
+[90m 163 │ [39m            m = _re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+[90m 164 │ [39m            if m:
+[90m 165 │ [39m                if capture and len(m.group(1)) <= 3:
+[90m 166 │ [39m                    break
+[90m 167 │ [39m                if not capture and m.group(2).startswith(chapter):
+[90m 168 │ [39m                    capture = True
+[90m 169 │ [39m            if capture:
+[90m 170 │ [39m                out.append(line)
+[90m 171 │ [39m        return "\n".join(out)
+
+[1mClone found (python)[22m
+ - services\preflight.py [228:5 - 239:42]
+   services\preflight.py [334:5 - 345:42]
+[90m 228 │ [39m    for dirpath, _dirs, filenames in os.walk(root):
+[90m 229 │ [39m        for fn in sorted(filenames):
+[90m 230 │ [39m            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+[90m 231 │ [39m                continue
+[90m 232 │ [39m            p = Path(dirpath) / fn
+[90m 233 │ [39m            try:
+[90m 234 │ [39m                raw = _load_yaml(p)
+[90m 235 │ [39m            except Exception:
+[90m 236 │ [39m                continue
+[90m 237 │ [39m            sid = raw.get("id")
+[90m 238 │ [39m            if sid:
+[90m 239 │ [39m                scenarios[str(sid)] = raw
+[90m 334 │ [39m    for dirpath, _dirs, filenames in os.walk(root):
+[90m 335 │ [39m        for fn in sorted(filenames):
+[90m 336 │ [39m            if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
+[90m 337 │ [39m                continue
+[90m 338 │ [39m            p = Path(dirpath) / fn
+[90m 339 │ [39m            try:
+[90m 340 │ [39m                raw = _load_yaml(p)
+[90m 341 │ [39m            except Exception:
+[90m 342 │ [39m                continue
+[90m 343 │ [39m            sid = raw.get("id")
+[90m 344 │ [39m            if sid:
+[90m 345 │ [39m                scenarios[str(sid)] = raw
+
+[1mClone found (python)[22m
+ - services\zentao\client.py [151:33 - 164:65]
+   services\zentao\client.py [225:36 - 238:65]
+[90m 151 │ [39m            "title": story_title,
+[90m 152 │ [39m            "spec": body,
+[90m 153 │ [39m            "category": "feature",
+[90m 154 │ [39m        }
+[90m 155 │ [39m        result, stdout, stderr = _run_with_retry(
+[90m 156 │ [39m            lambda: client.story_create(data), "story_create")
+[90m 157 │ [39m        if result is None:
+[90m 158 │ [39m            sf_refs_store.update_job(job["job_id"], status="failed",
+[90m 159 │ [39m                                     stderr=stderr)
+[90m 160 │ [39m            return sf_refs_store.get_job(job["job_id"])
+[90m 161 │ [39m        story = result.get("story", result)
+[90m 162 │ [39m        story_id = str(story.get("id", ""))
+[90m 163 │ [39m        sf_refs_store.update_job(job["job_id"], status="succeeded",
+[90m 164 │ [39m                                 zt_ref=story_id, stdout=stdout)
+[90m 225 │ [39m            "title": draft["title"],
+[90m 226 │ [39m            "spec": body,
+[90m 227 │ [39m            "category": "feature",
+[90m 228 │ [39m        }
+[90m 229 │ [39m        result, stdout, stderr = _run_with_retry(
+[90m 230 │ [39m            lambda: client.story_create(data), "story_create")
+[90m 231 │ [39m        if result is None:
+[90m 232 │ [39m            sf_refs_store.update_job(job["job_id"], status="failed",
+[90m 233 │ [39m                                     stderr=stderr)
+[90m 234 │ [39m            return sf_refs_store.get_job(job["job_id"])
+[90m 235 │ [39m        story = result.get("story", result)
+[90m 236 │ [39m        story_id = str(story.get("id", ""))
+[90m 237 │ [39m        sf_refs_store.update_job(job["job_id"], status="succeeded",
+[90m 238 │ [39m                                 zt_ref=story_id, stdout=stdout)
+
+[1mClone found (python)[22m
+ - services\zentao\client.py [341:59 - 360:63]
+   services\zentao\client.py [394:24 - 412:63]
+[90m 341 │ [39m            "product": int(product_id) if product_id else _resolve_product(
+[90m 342 │ [39m                get_zentao_config()["product"]),
+[90m 343 │ [39m            "title": title,
+[90m 344 │ [39m            "steps": steps,
+[90m 345 │ [39m            "severity": severity or 3,
+[90m 346 │ [39m        }
+[90m 347 │ [39m        if story_id:
+[90m 348 │ [39m            data["story"] = story_id
+[90m 349 │ [39m        cfg = get_zentao_config()
+[90m 350 │ [39m        client = ZenTaoClient(base_url=cfg["base_url"], token=cfg["token"])
+[90m 351 │ [39m        result, stdout, stderr = _run_with_retry(
+[90m 352 │ [39m            lambda: client.bug_create(data), "bug_create")
+[90m 353 │ [39m        if result is None:
+[90m 354 │ [39m            sf_refs_store.update_job(job["job_id"], status="failed",
+[90m 355 │ [39m                                     stderr=stderr)
+[90m 356 │ [39m            return sf_refs_store.get_job(job["job_id"])
+[90m 357 │ [39m        bug = result.get("bug", result)
+[90m 358 │ [39m        bug_id = str(bug.get("id", ""))
+[90m 359 │ [39m        sf_refs_store.update_job(job["job_id"], status="succeeded",
+[90m 360 │ [39m                                 zt_ref=bug_id, stdout=stdout)
+[90m 394 │ [39m            "product": _resolve_product(get_zentao_config()["product"]),
+[90m 395 │ [39m            "title": title,
+[90m 396 │ [39m            "steps": steps,
+[90m 397 │ [39m            "severity": severity or 3,
+[90m 398 │ [39m        }
+[90m 399 │ [39m        if story_id:
+[90m 400 │ [39m            data["story"] = story_id
+[90m 401 │ [39m        cfg = get_zentao_config()
+[90m 402 │ [39m        client = ZenTaoClient(base_url=cfg["base_url"], token=cfg["token"])
+[90m 403 │ [39m        result, stdout, stderr = _run_with_retry(
+[90m 404 │ [39m            lambda: client.bug_create(data), "bug_create")
+[90m 405 │ [39m        if result is None:
+[90m 406 │ [39m            sf_refs_store.update_job(job["job_id"], status="failed",
+[90m 407 │ [39m                                     stderr=stderr)
+[90m 408 │ [39m            return sf_refs_store.get_job(job["job_id"])
+[90m 409 │ [39m        bug = result.get("bug", result)
+[90m 410 │ [39m        bug_id = str(bug.get("id", ""))
+[90m 411 │ [39m        sf_refs_store.update_job(job["job_id"], status="succeeded",
+[90m 412 │ [39m                                 zt_ref=bug_id, stdout=stdout)
+
+[1mClone found (tsx)[22m
+ - pages\AdminUsers.tsx [25:25 - 37:5]
+   pages\MenuRoles.tsx [19:23 - 31:5]
+[90m  25 │ [39m      setAudit(a.entries);
+[90m  26 │ [39m      setRoles(r.roles);
+[90m  27 │ [39m    } catch (e: any) {
+[90m  28 │ [39m      setError(e.message || '加载失败');
+[90m  29 │ [39m    }
+[90m  30 │ [39m  }, []);
+[90m  31 │ [39m
+[90m  32 │ [39m  useEffect(() => { refresh(); }, [refresh]);
+[90m  33 │ [39m
+[90m  34 │ [39m  const flash = (text: string) => {
+[90m  35 │ [39m    setMessage(text);
+[90m  36 │ [39m    setTimeout(() => setMessage(''), 2000);
+[90m  37 │ [39m  };
+[90m  19 │ [39m      setMenus(m.menus);
+[90m  20 │ [39m      setRoles(r.roles);
+[90m  21 │ [39m    } catch (e: any) {
+[90m  22 │ [39m      setError(e.message || '加载失败');
+[90m  23 │ [39m    }
+[90m  24 │ [39m  }, []);
+[90m  25 │ [39m
+[90m  26 │ [39m  useEffect(() => { refresh(); }, [refresh]);
+[90m  27 │ [39m
+[90m  28 │ [39m  const flash = (text: string) => {
+[90m  29 │ [39m    setMessage(text);
+[90m  30 │ [39m    setTimeout(() => setMessage(''), 2000);
+[90m  31 │ [39m  };
+
+[1mClone found (tsx)[22m
+ - pages\AgentChat.tsx [1176:10 - 1192:2]
+   pages\Settings.tsx [538:13 - 557:2]
+[90m1176 │ [39m      ))}
+[90m1177 │ [39m    </div>
+[90m1178 │ [39m  );
+[90m1179 │ [39m}
+[90m1180 │ [39m
+[90m1181 │ [39m// Field 通用输入组件（从 Settings.tsx 复用，AgentChat 未定义）
+[90m1182 │ [39mfunction Field({ label, value, onChange, type = 'text', placeholder = '' }: {
+[90m1183 │ [39m  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+[90m1184 │ [39m}) {
+[90m1185 │ [39m  return (
+[90m1186 │ [39m    <div>
+[90m1187 │ [39m      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+[90m1188 │ [39m      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+[90m1189 │ [39m        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
+[90m1190 │ [39m    </div>
+[90m1191 │ [39m  );
+[90m1192 │ [39m}
+[90m 538 │ [39m      </div>
+[90m 539 │ [39m    </div>
+[90m 540 │ [39m  );
+[90m 541 │ [39m}
+[90m 542 │ [39m
+[90m 543 │ [39m// ══════════════════════════════════════════════════════════
+[90m 544 │ [39m// 通用组件
+[90m 545 │ [39m// ══════════════════════════════════════════════════════════
+[90m 546 │ [39m
+[90m 547 │ [39mfunction Field({ label, value, onChange, type = 'text', placeholder = '' }: {
+[90m 548 │ [39m  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+[90m 549 │ [39m}) {
+[90m 550 │ [39m  return (
+[90m 551 │ [39m    <div>
+[90m 552 │ [39m      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+[90m 553 │ [39m      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+[90m 554 │ [39m        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
+[90m 555 │ [39m    </div>
+[90m 556 │ [39m  );
+[90m 557 │ [39m}
+
+[1mClone found (tsx)[22m
+ - pages\AgentChat.tsx [2847:11 - 2858:54]
+   pages\AgentChat.tsx [2886:11 - 2897:54]
+[90m2847 │ [39m          const old = prev[idx];
+[90m2848 │ [39m          const mergedHunks = [...old.hunks];
+[90m2849 │ [39m          for (const h of hunks) {
+[90m2850 │ [39m            if (!mergedHunks.some(o => o.start === h.start && o.end === h.end && o.title === h.title)) {
+[90m2851 │ [39m              mergedHunks.push(h);
+[90m2852 │ [39m            }
+[90m2853 │ [39m          }
+[90m2854 │ [39m          const next = [...prev];
+[90m2855 │ [39m          const updated = {
+[90m2856 │ [39m            ...old, turn: event.turn ?? old.turn, size: event.size ?? old.size,
+[90m2857 │ [39m            excerpt: event.excerpt || old.excerpt, label: event.label || old.label,
+[90m2858 │ [39m            thinking: event.thinking || old.thinking, hunks: mergedHunks, reads: old.reads + 1,
+[90m2886 │ [39m          const old = prev[idx];
+[90m2887 │ [39m          const mergedHunks = [...old.hunks];
+[90m2888 │ [39m          for (const h of hunks) {
+[90m2889 │ [39m            if (!mergedHunks.some(o => o.start === h.start && o.end === h.end && o.title === h.title)) {
+[90m2890 │ [39m              mergedHunks.push(h);
+[90m2891 │ [39m            }
+[90m2892 │ [39m          }
+[90m2893 │ [39m          const next = [...prev];
+[90m2894 │ [39m          const updated = {
+[90m2895 │ [39m            ...old, turn: event.turn ?? old.turn, size: event.size ?? old.size,
+[90m2896 │ [39m            excerpt: event.excerpt || old.excerpt, label: event.label || old.label,
+[90m2897 │ [39m            thinking: event.thinking || old.thinking,
+
+[1mClone found (tsx)[22m
+ - pages\DagEditor.tsx [352:30 - 367:8]
+   pages\DagEditor.tsx [383:30 - 398:8]
+[90m 352 │ [39m    for (const sid of targets) {
+[90m 353 │ [39m      try {
+[90m 354 │ [39m        const r = await scenariosApi.suggestDeps(sid);
+[90m 355 │ [39m        for (const sug of r.suggestions || []) {
+[90m 356 │ [39m          try {
+[90m 357 │ [39m            await scenariosApi.editDep(sid, {
+[90m 358 │ [39m              action: 'add', dep_id: sug.dep_id, mode: 'shared',
+[90m 359 │ [39m              note: `${sug.confidence} ${sug.kind}`,
+[90m 360 │ [39m            });
+[90m 361 │ [39m            added++;
+[90m 362 │ [39m          } catch { /* 环校验等拒绝单条，继续 */ }
+[90m 363 │ [39m        }
+[90m 364 │ [39m      } catch { /* 单个场景失败不阻断批量 */ }
+[90m 365 │ [39m    }
+[90m 366 │ [39m    setError(added
+[90m 367 │ [39m      ? `批量采纳完成：${added} 条依赖已添加`
+[90m 383 │ [39m    for (const sid of orphans) {
+[90m 384 │ [39m      try {
+[90m 385 │ [39m        const r = await scenariosApi.suggestDeps(sid);
+[90m 386 │ [39m        for (const sug of r.suggestions || []) {
+[90m 387 │ [39m          try {
+[90m 388 │ [39m            await scenariosApi.editDep(sid, {
+[90m 389 │ [39m              action: 'add', dep_id: sug.dep_id, mode: 'shared',
+[90m 390 │ [39m              note: `${sug.confidence} ${sug.kind}`,
+[90m 391 │ [39m            });
+[90m 392 │ [39m            added++;
+[90m 393 │ [39m          } catch { /* 单条拒绝继续 */ }
+[90m 394 │ [39m        }
+[90m 395 │ [39m      } catch { /* 单个场景失败不阻断 */ }
+[90m 396 │ [39m    }
+[90m 397 │ [39m    setError(added
+[90m 398 │ [39m      ? `孤节点补全完成：扫描 ${orphans.length} 个无上游场景，采纳 ${added} 条依赖`
+
+[1mClone found (tsx)[22m
+ - pages\DagEditor.tsx [677:19 - 689:39]
+   pages\Drafts.tsx [482:23 - 494:39]
+[90m 677 │ [39m                )}
+[90m 678 │ [39m                <ul className="space-y-1">
+[90m 679 │ [39m                  {suggestions.map((s, i) => (
+[90m 680 │ [39m                    <li key={i} className="flex items-center gap-2 text-xs">
+[90m 681 │ [39m                      <span className={`px-1 py-0.5 rounded ${
+[90m 682 │ [39m                        s.confidence === 'high' ? 'bg-pass/20 text-pass' : 'bg-warn/20 text-warn'
+[90m 683 │ [39m                      }`}>{s.confidence === 'high' ? '高置信' : '中置信'}</span>
+[90m 684 │ [39m                      <span className="font-mono text-gray-200">{s.dep_id}</span>
+[90m 685 │ [39m                      <span className="text-gray-500 truncate flex-1" title={s.reason}>
+[90m 686 │ [39m                        {s.dep_title || s.reason}
+[90m 687 │ [39m                      </span>
+[90m 688 │ [39m                      <button
+[90m 689 │ [39m                        onClick={() => handleAcceptSuggestion(s)}
+[90m 482 │ [39m                </div>
+[90m 483 │ [39m                <ul className="space-y-1">
+[90m 484 │ [39m                  {suggestions.map((s, i) => (
+[90m 485 │ [39m                    <li key={i} className="flex items-center gap-2 text-xs">
+[90m 486 │ [39m                      <span className={`px-1 py-0.5 rounded ${
+[90m 487 │ [39m                        s.confidence === 'high' ? 'bg-pass/20 text-pass' : 'bg-warn/20 text-warn'
+[90m 488 │ [39m                      }`}>{s.confidence === 'high' ? '高置信' : '中置信'}</span>
+[90m 489 │ [39m                      <span className="font-mono text-gray-200">{s.dep_id}</span>
+[90m 490 │ [39m                      <span className="text-gray-500 truncate flex-1" title={s.reason}>
+[90m 491 │ [39m                        {s.dep_title || s.reason}
+[90m 492 │ [39m                      </span>
+[90m 493 │ [39m                      <button
+[90m 494 │ [39m                        onClick={() => handleAcceptDep(s)}
+
+[1mClone found (tsx)[22m
+ - pages\MaterialsPanel.tsx [31:38 - 43:8]
+   pages\ScoreFreezePanel.tsx [40:59 - 52:8]
+[90m  31 │ [39m  const [busy, setBusy] = useState('');
+[90m  32 │ [39m
+[90m  33 │ [39m  const flash = (fn: () => void) => { setError(''); setNotice(''); fn(); };
+[90m  34 │ [39m
+[90m  35 │ [39m  const loadInterviews = async () => {
+[90m  36 │ [39m    try {
+[90m  37 │ [39m      const { interviews } = await specflowApi.listInterviews();
+[90m  38 │ [39m      setInterviews(interviews);
+[90m  39 │ [39m      if (interviews.length > 0 && !selIv) setSelIv(interviews[0].iv_id);
+[90m  40 │ [39m    } catch (e: any) { setError(e.message); }
+[90m  41 │ [39m  };
+[90m  42 │ [39m
+[90m  43 │ [39m  const loadMaterials = async (ivId: string) => {
+[90m  40 │ [39m  const [freezeAllowed, setFreezeAllowed] = useState(false);
+[90m  41 │ [39m
+[90m  42 │ [39m  const flash = (fn: () => void) => { setError(''); setNotice(''); fn(); };
+[90m  43 │ [39m
+[90m  44 │ [39m  const loadInterviews = async () => {
+[90m  45 │ [39m    try {
+[90m  46 │ [39m      const { interviews } = await specflowApi.listInterviews();
+[90m  47 │ [39m      setInterviews(interviews);
+[90m  48 │ [39m      if (interviews.length > 0 && !selIv) setSelIv(interviews[0].iv_id);
+[90m  49 │ [39m    } catch (e: any) { setError(e.message); }
+[90m  50 │ [39m  };
+[90m  51 │ [39m
+[90m  52 │ [39m  const loadScores = async (ivId: string) => {
+
+[1mClone found (tsx)[22m
+ - pages\MaterialsPanel.tsx [114:56 - 124:26]
+   pages\ScoreFreezePanel.tsx [150:61 - 160:26]
+[90m 114 │ [39m        <div className="flex flex-wrap items-end gap-3">
+[90m 115 │ [39m          <div className="w-72">
+[90m 116 │ [39m            <span className={label}>面试（IV-xxx）</span>
+[90m 117 │ [39m            <select className={input} value={selIv} onChange={e => setSelIv(e.target.value)}>
+[90m 118 │ [39m              <option value="">— 选择面试 —</option>
+[90m 119 │ [39m              {interviews.map(iv => (
+[90m 120 │ [39m                <option key={iv.iv_id} value={iv.iv_id}>{iv.iv_id} · {iv.title}</option>
+[90m 121 │ [39m              ))}
+[90m 122 │ [39m            </select>
+[90m 123 │ [39m          </div>
+[90m 124 │ [39m          <div className="w-64">
+[90m 150 │ [39m        <div className="flex flex-wrap items-end gap-3 mb-3">
+[90m 151 │ [39m          <div className="w-72">
+[90m 152 │ [39m            <span className={label}>面试（IV-xxx）</span>
+[90m 153 │ [39m            <select className={input} value={selIv} onChange={e => setSelIv(e.target.value)}>
+[90m 154 │ [39m              <option value="">— 选择面试 —</option>
+[90m 155 │ [39m              {interviews.map(iv => (
+[90m 156 │ [39m                <option key={iv.iv_id} value={iv.iv_id}>{iv.iv_id} · {iv.title}</option>
+[90m 157 │ [39m              ))}
+[90m 158 │ [39m            </select>
+[90m 159 │ [39m          </div>
+[90m 160 │ [39m          <div className="flex-1 min-w-[280px]">
+
+[90m┌────────────┬────────────────┬─────────────┬──────────────┬──────────────┬──────────────────┬───────────────────┐[39m
+[90m│[39m[31m Format     [39m[90m│[39m[31m Files analyzed [39m[90m│[39m[31m Total lines [39m[90m│[39m[31m Total tokens [39m[90m│[39m[31m Clones found [39m[90m│[39m[31m Duplicated lines [39m[90m│[39m[31m Duplicated tokens [39m[90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m css        [90m│[39m 3              [90m│[39m 493         [90m│[39m 5512         [90m│[39m 0            [90m│[39m 0 (0.00%)        [90m│[39m 0 (0.00%)         [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m markdown   [90m│[39m 13             [90m│[39m 751         [90m│[39m 7404         [90m│[39m 0            [90m│[39m 0 (0.00%)        [90m│[39m 0 (0.00%)         [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m python     [90m│[39m 155            [90m│[39m 39271       [90m│[39m 239189       [90m│[39m 24           [90m│[39m 334 (0.85%)      [90m│[39m 2526 (1.06%)      [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m tsx        [90m│[39m 53             [90m│[39m 17955       [90m│[39m 145683       [90m│[39m 7            [90m│[39m 88 (0.49%)       [90m│[39m 762 (0.52%)       [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m typescript [90m│[39m 7              [90m│[39m 2239        [90m│[39m 17395        [90m│[39m 0            [90m│[39m 0 (0.00%)        [90m│[39m 0 (0.00%)         [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m yaml       [90m│[39m 30             [90m│[39m 1192        [90m│[39m 7883         [90m│[39m 5            [90m│[39m 166 (13.93%)     [90m│[39m 809 (10.26%)      [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m [1mTotal:[22m     [90m│[39m 261            [90m│[39m 61901       [90m│[39m 423066       [90m│[39m 36           [90m│[39m 588 (0.95%)      [90m│[39m 4097 (0.97%)      [90m│[39m
+[90m└────────────┴────────────────┴─────────────┴──────────────┴──────────────┴──────────────────┴───────────────────┘[39m
+[90mFound 36 clones.[39m
+[90mtime: 203.403ms[39m
+
+[90m💡 Auto-refactor with AI: [1m[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring[90m[22m
+[90m🎩 New: Gangsta Agents — discipline your AI coding → gangsta.page[39m
+[90m💖 Support jscpd project → https://opencollective.com/jscpd[39m

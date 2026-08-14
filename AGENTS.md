@@ -154,6 +154,16 @@ python -m pytest test_specstd -v          # 合规/锚点/指纹/工作区/agent
 # ── 发布门禁 ──
 python release_check.py                   # 格式/环/契约指纹校验，全 PASS 才允许入库
 
+# ── 质量工具（报告模式，规则见「质量基线与顺手修复」）──
+cd workbench/frontend && npm run lint     # oxlint 前端 lint（存量报告见 docs/质量基线/）
+cd workbench/frontend && npm run test     # vitest 前端单测（--coverage 出覆盖率）
+npm run dup:scan                          # jscpd 全仓查重（仓库根，只报告不卡关）
+ruff check --statistics                   # Python lint 分布（ruff check 看明细）
+cd workbench/frontend && npx knip         # 前端死代码/幽灵依赖
+python -m pytest test_engine --cov=engine --cov-report=term-missing    # 引擎覆盖率
+python -m pytest test_specstd --cov=specstd --cov-report=term-missing  # specstd 覆盖率（全套件有 94 个存量 error，见质量基线 README）
+npx lefthook install                      # 克隆后一次性：装 git hooks（pre-push 门禁）
+
 # ── 工作台 ──
 pwsh start-workbench.ps1                  # 本地开发（后端 :9100 --reload 热重载 + 前端 :5173，依赖自检，幂等）
 pwsh start-workbench.ps1 -NoBrowser       # 同上，不自动开浏览器
@@ -175,7 +185,8 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 
 **环境依赖**：
 - Python 3.14（`pytest` `requests` `pymysql` `pyyaml` `fastapi` `uvicorn` `jsonpath-ng` `httpx` `mcp`；后端额外 `websockets` `watchfiles`）
-- Node 18+（前端）
+- Python 开发工具链（生产不装）：`pip install -r requirements-dev.txt`（ruff/hypothesis/pytest-cov/vulture；pypi 超时加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`）
+- Node 18+（前端构建）；前端测试/lint 需 Node 20+（vitest 4 要求，24 实测可用）
 - 联网场景需可达 SIT 网关 + SIT MySQL；DB 密码自动回退读 `~/.qoder/skills/devops/scripts/.env.devops`，可用环境变量 `SG_DB_PASSWORD` / `SG_SSO_PASSWORD` 覆盖。
 
 ---
@@ -198,6 +209,17 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - **引擎能力变更三同步**（强制）：新增步骤类型/断言器/语法时，必须 ① 更新 `format_spec.py` 规范文档 ② 递增其版本号 ③ 更新 `contracts_baseline.json`——格式规范是 Agent 生成用例的唯一依据，文档滞后 = 能力不可用。
 - 引擎改动后必跑离线自测（`engine_modes` + `test_engine`），全绿再跑联网场景。
 - 测试计划只能由 delta 导入生成，禁止手动新建（落盘在各工作区的 `.specguard/plans/`）。
+
+---
+
+## 质量基线与顺手修复（Boy Scout Rule）
+
+**规则**：任何会话修改某个文件时，先查 `docs/质量基线/` 的对应报告——若该文件有记录在案的问题（lint error、未使用导出、查重热点），顺手修复；修完重跑对应命令刷新报告数字。不追求一次性清零，只要求「碰过的文件变得更好」。批量 `--fix` 属大改动，何时做由总控人拍板。
+
+- **报告目录**：`docs/质量基线/`（README.md 是索引 + 判读结论 + 复现命令；`*-baseline.txt` 是工具原始输出，快照会过期，以复跑为准）
+- **基线摘要**（2026-08-14 首批）：oxlint 8 errors / 3100 warnings（60 文件，errors 优先清）；ruff 1331 项（F 类 175 F401 + 28 F841 是真 bug 信号）；knip 1 死文件 + 2 幽灵依赖；jscpd 36 处克隆（YAML 场景库 13.93% 是主要热点）；vulture 8 行；覆盖率 engine 46% / specstd 87%。另发现 `test_specstd` 全套件 94 个存量 error（隔离污染，与工具链无关，详见报告 README）
+- **门禁状态**：pre-push 已挂 `release_check.py` + 离线测试（lefthook，约 15s，`git push --no-verify` 可紧急跳过）；lint 类处于**报告模式**不进 pre-commit——某工具报告清零后，再把它以 `glob + {staged_files}` 形式加进 `lefthook.yml` 的 pre-commit（ratchet：新代码必须干净，旧代码慢慢还）
+- **修复纪律**：只限机械/语义保持类修复（删未使用导入、调整导入排序等）；任何行为变更走正常评审；不确定是否误报时保留并在报告 README 记录疑点
 
 ---
 

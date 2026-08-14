@@ -1,0 +1,48 @@
+408	I001  	[*] unsorted-imports
+175	F401  	[-] unused-import
+156	UP045 	[*] non-pep604-annotation-optional
+117	B904  	[ ] raise-without-from-inside-except
+ 81	E402  	[ ] module-import-not-at-top-of-file
+ 70	UP015 	[*] redundant-open-modes
+ 63	B008  	[ ] function-call-in-default-argument
+ 50	SIM105	[ ] suppressible-exception
+ 37	W292  	[*] missing-newline-at-end-of-file
+ 28	F841  	[ ] unused-variable
+ 15	E741  	[ ] ambiguous-variable-name
+ 14	UP037 	[*] quoted-annotation
+ 11	B007  	[ ] unused-loop-control-variable
+ 10	SIM108	[ ] if-else-block-instead-of-if-exp
+  9	UP017 	[*] datetime-timezone-utc
+  8	B023  	[ ] function-uses-loop-variable
+  8	C416  	[ ] unnecessary-comprehension
+  8	F541  	[*] f-string-missing-placeholders
+  7	F821  	[ ] undefined-name
+  6	UP012 	[*] unnecessary-encode-utf8
+  4	B905  	[ ] zip-without-explicit-strict
+  4	SIM102	[ ] collapsible-if
+  3	C401  	[ ] unnecessary-generator-set
+  3	E702  	[ ] multiple-statements-on-one-line-semicolon
+  3	UP035 	[*] deprecated-import
+  3	W293  	[-] blank-line-with-whitespace
+  2	B005  	[ ] strip-with-multi-characters
+  2	C420  	[*] unnecessary-dict-comprehension-for-iterable
+  2	E401  	[*] multiple-imports-on-one-line
+  2	E713  	[*] not-in-test
+  2	SIM115	[ ] open-file-with-context-handler
+  2	SIM118	[ ] in-dict-keys
+  2	UP009 	[*] utf8-encoding-declaration
+  2	UP034 	[*] extraneous-parentheses
+  2	UP041 	[*] timeout-error-alias
+  2	UP042 	[ ] replace-str-enum
+  1	B009  	[*] get-attr-with-constant
+  1	B017  	[ ] assert-raises-exception
+  1	B039  	[ ] mutable-contextvar-default
+  1	F811  	[*] redefined-while-unused
+  1	SIM103	[ ] needless-bool
+  1	SIM114	[*] if-with-same-arms
+  1	SIM117	[*] multiple-with-statements
+  1	SIM212	[ ] if-expr-with-twisted-arms
+  1	SIM300	[*] yoda-conditions
+  1	W291  	[ ] trailing-whitespace
+Found 1331 errors.
+[*] 869 fixable with the `--fix` option (116 hidden fixes can be enabled with the `--unsafe-fixes` option).

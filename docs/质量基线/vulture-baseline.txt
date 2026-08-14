@@ -1,0 +1,8 @@
+engine\scenario_runner.py:17: unused import 'CAT_UPSTREAM' (90% confidence)
+specstd\anchors.py:17: unused import 'DeltaOperation' (90% confidence)
+specstd\anchors.py:17: unused import 'FR_INLINE_RE' (90% confidence)
+specstd\workspace.py:130: unused variable 'exc_info' (100% confidence)
+workbench\backend\routers\auth.py:13: unused import 'uac_login_url' (90% confidence)
+workbench\backend\services\runner.py:16: unused import 'signal' (90% confidence)
+workbench\backend\services\specflow\freeze_gate.py:217: unused variable 'archive_by' (100% confidence)
+workbench\backend\services\zentao\client.py:21: unused import 'ZenTaoAPIError' (90% confidence)
