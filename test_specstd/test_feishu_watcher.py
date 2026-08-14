@@ -137,3 +137,29 @@ class TestConsumeLoop:
             time.sleep(0.4)
             w.stop()
         assert len(calls) >= 2                  # 崩溃后重启过
+
+
+# ══════════════════════════════════════════════════════════
+# T-919：模块级单例（main.py startup/shutdown 接线）
+# ══════════════════════════════════════════════════════════
+
+class TestBackgroundSingleton:
+    def teardown_method(self):
+        fw.stop_background()
+
+    def test_start_skip_without_user(self, tmp_path):
+        assert fw.start_background(tmp_path) is False   # 无配置用户静默跳过
+        assert fw._WATCHER is None
+
+    def test_start_stop_idempotent(self, tmp_path):
+        _mk_user(tmp_path, "u1")
+        with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
+             patch.object(fw, "_token_valid", return_value=True), \
+             patch.object(fw.FeishuWatcher, "_spawn",
+                          new=lambda self, k, i: _FakeProc([])), \
+             patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None):
+            assert fw.start_background(tmp_path) is True
+            assert fw.start_background(tmp_path) is False   # 幂等：重复启动跳过
+            fw.stop_background()
+            fw.stop_background()                            # 幂等：重复停止安全
+            assert fw._WATCHER is None

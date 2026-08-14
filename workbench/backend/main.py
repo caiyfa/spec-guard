@@ -93,6 +93,9 @@ def _startup():
     # T-082: MCP 调用审计表初始化
     from services import audit_store
     audit_store.ensure_tables()
+    # T-919（飞书知识图谱二期）：事件监听托管——单用户守卫，未配置静默跳过
+    from services.specflow import feishu_watcher
+    feishu_watcher.start_background(SG_ROOT)
 
 
 @app.on_event("shutdown")
@@ -100,6 +103,9 @@ def _shutdown():
     # I-2: 停止定时任务调度器
     from services.scheduler import shutdown_scheduler
     shutdown_scheduler()
+    # T-919：watcher 优雅停（关 stdin → EOF 优雅退出，禁 kill -9）
+    from services.specflow import feishu_watcher
+    feishu_watcher.stop_background()
 
 
 def _migrate_legacy_sessions():
