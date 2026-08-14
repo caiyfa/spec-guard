@@ -188,3 +188,72 @@ def sync_recent_docs(specflow_emp_base: Path, days: int = 1) -> dict:
         except Exception as e:
             out["errors"].append(f"doc {token}: {e}")
     return out
+
+
+# ══════════════════════════════════════════════════════════
+# 材料池总览页服务函数（三期 T-929，只读 + caption 人工补写）
+# ══════════════════════════════════════════════════════════
+
+def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
+    """材料池清单（三通道快照：id/类型/文件/sha/大小/mtime，时间倒序）。"""
+    from specflow.feishu_pool.paths import pool_dirs
+    pool = pool_dirs(specflow_emp_base)
+    items: list[dict] = []
+    for sub, prefix, ntype, ext in (("docs", "fd-", "feishu_doc", ".md"),
+                                    ("minutes", "fm-", "feishu_minutes", ".json")):
+        d = pool[sub]
+        if not d.is_dir():
+            continue
+        for f in sorted(d.glob(f"{prefix}*{ext}")):
+            items.append({
+                "id": f"{prefix[:-1]}:{f.stem[len(prefix):]}",
+                "type": ntype, "file": f.name,
+                "sha": pool_store.sha12(f.read_text(encoding="utf-8",
+                                                    errors="replace")),
+                "size": f.stat().st_size, "mtime": f.stat().st_mtime,
+            })
+    chats_root = pool["chats"]
+    if chats_root.is_dir():
+        for f in sorted(chats_root.rglob("*.md")):
+            items.append({
+                "id": f"chat:{f.parent.name}/{f.stem}", "type": "chat",
+                "file": f"{f.parent.name}/{f.name}",
+                "sha": pool_store.sha12(f.read_text(encoding="utf-8",
+                                                    errors="replace")),
+                "size": f.stat().st_size, "mtime": f.stat().st_mtime,
+            })
+    items.sort(key=lambda i: -i["mtime"])
+    return items
+
+
+def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
+    """话题清单：候选（私有区）+ 已确认（共享区）。"""
+    import yaml
+    from specflow.feishu_pool import facts
+    from specflow.feishu_pool.paths import pool_dirs
+    cand_path = pool_dirs(specflow_emp_base)["root"] / "_candidate_topics.yaml"
+    candidates: list[dict] = []
+    if cand_path.is_file():
+        try:
+            raw = yaml.safe_load(cand_path.read_text(encoding="utf-8")) or {}
+            candidates = [t for t in (raw.get("topics") or [])
+                          if isinstance(t, dict)]
+        except Exception:
+            candidates = []
+    return {"candidates": candidates,
+            "confirmed": facts.load_topics(workspace_root)}
+
+
+def update_image_caption(specflow_emp_base: Path, material_stem: str,
+                         placeholder: str, caption: str) -> dict:
+    """图片 caption 人工补写（复核兜底环节；by=manual）。"""
+    from specflow.feishu_pool import captions as cap_mod
+    from specflow.feishu_pool.paths import pool_dirs
+    pool = pool_dirs(specflow_emp_base)
+    for sub in ("docs", "chats", "minutes"):
+        cand = pool[sub]
+        if not cand.is_dir():
+            continue
+        for f in cand.rglob(f"{material_stem}.imgmap.json"):
+            return cap_mod.update_caption(f, placeholder, caption, by="manual")
+    raise KeyError(f"材料 imgmap 不存在: {material_stem}")

@@ -1690,4 +1690,37 @@ export const feishuPoolApi = {
   transcribe: () =>
     request<{ status: string; reason?: string; done: number; failed: number; total: number }>(
       '/feishu-pool/transcribe', { method: 'POST' }),
+  // ── T-929 材料池总览页 ──
+  poolMaterials: () =>
+    request<{ items: FeishuPoolMaterial[] }>('/feishu-pool/materials'),
+  poolTopics: () =>
+    request<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>('/feishu-pool/topics'),
+  watcherStatus: () =>
+    request<{ running: boolean; count: number;
+             watchers: { emp: string; started_at: string; events_received: number;
+                         last_event_at: string }[] }>('/feishu-pool/watcher-status'),
+  updateCaption: (material: string, placeholder: string, caption: string) =>
+    request('/feishu-pool/caption', { method: 'POST',
+      body: JSON.stringify({ material, placeholder, caption }) }),
 };
+
+export interface FeishuPoolMaterial {
+  id: string;
+  type: 'feishu_doc' | 'feishu_minutes' | 'chat';
+  file: string;
+  sha: string;
+  size: number;
+  mtime: number;
+}
+
+export interface FeishuTopic {
+  id: string;
+  title: string;
+  summary: string;
+  chat_sha8: string;
+  window: [string, string];
+  message_count: number;
+  participants_count: number;
+  source: string;
+  continues?: string;
+}

@@ -124,3 +124,51 @@ def transcribe(user: CurrentUser = Depends(get_current_user),
     from specflow.feishu_pool import captions
     llm = LLMClient(model_id="vision")
     return captions.transcribe_images(_sf_base(), llm_vision=llm)
+
+
+# ══════════════════════════════════════════════════════════
+# T-929：材料池总览页端点（只读 + caption 人工补写）
+# ══════════════════════════════════════════════════════════
+
+@router.get("/materials")
+def pool_materials(user: CurrentUser = Depends(get_current_user),
+                   workspace: str = Depends(resolve_workspace)):
+    """材料池清单（三通道快照，时间倒序）。纯读。"""
+    return {"items": sync_svc.list_pool_materials(_sf_base())}
+
+
+@router.get("/topics")
+def pool_topics(user: CurrentUser = Depends(get_current_user),
+                workspace: str = Depends(resolve_workspace)):
+    """话题清单（候选=私有区 / 已确认=共享区）。纯读。"""
+    return sync_svc.list_pool_topics(_sf_base(), _ws_root())
+
+
+@router.get("/watcher-status")
+def watcher_status(user: CurrentUser = Depends(get_current_user),
+                   workspace: str = Depends(resolve_workspace)):
+    """监听状态（注册表内存快照；未启动 → running=false）。纯读。"""
+    from services.specflow import feishu_watcher as fw
+    reg = fw.get_registry()
+    if reg is None:
+        return {"running": False, "count": 0, "watchers": []}
+    st = reg.status()
+    return {"running": True, **st}
+
+
+class CaptionUpdate(BaseModel):
+    material: str        # 材料 stem（如 fd-tokA）
+    placeholder: str     # 图片#N
+    caption: str
+
+
+@router.post("/caption")
+def update_caption_ep(body: CaptionUpdate,
+                      user: CurrentUser = Depends(get_current_user),
+                      workspace: str = Depends(resolve_workspace)):
+    """图片 caption 人工补写（复核兜底；by=manual）。"""
+    try:
+        return sync_svc.update_image_caption(
+            _sf_base(), body.material, body.placeholder, body.caption)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))

@@ -21,6 +21,7 @@ import Login from './pages/Login';
 import AdminUsers from './pages/AdminUsers';
 import ZentaoPanel from './pages/ZentaoPanel';
 import MaterialsPanel from './pages/MaterialsPanel';
+import FeishuPool from './pages/FeishuPool';
 import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
@@ -327,6 +328,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
               <Route path="/spec" element={<SpecValidation />} />
               <Route path="/materials" element={<MaterialsPanel />} />
+              <Route path="/feishu-pool" element={<FeishuPool />} />  {/* T-929：飞书材料池总览 */}
               <Route path="/scores" element={<ScoreFreezePanel />} />
               <Route path="/zentao" element={<ZentaoPanel />} />
               <Route path="/plans" element={<Scenarios />} />

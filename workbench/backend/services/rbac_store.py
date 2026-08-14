@@ -46,6 +46,7 @@ SEED_MENUS: list[tuple] = [
     ("group-requirement", "需求", "📋", "", "", 2, 1, 0),
     ("menu-spec", "合规校验", "", "/spec", "group-requirement", 0, 1, 0),
     ("menu-materials", "材料管理", "", "/materials", "group-requirement", 1, 1, 0),
+    ("menu-feishu-pool", "飞书材料池", "", "/feishu-pool", "group-requirement", 4, 1, 0),
     ("menu-scores", "评分与冻结", "", "/scores", "group-requirement", 2, 1, 0),
     ("menu-zentao", "禅道集成", "", "/zentao", "group-requirement", 3, 1, 0),
     ("group-scenario", "场景", "🧩", "", "", 3, 1, 0),
@@ -142,6 +143,11 @@ def init_db(db_path: Path | None = None):
         conn.execute(
             "UPDATE menus SET path='/dashboard', updated_at=? WHERE menu_key='menu-dashboard' AND path='/'",
             (_now(),))
+        # 存量迁移（幂等）：飞书材料池菜单（T-929）
+        conn.execute(
+            "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
+            " VALUES ('menu-feishu-pool','飞书材料池','','/feishu-pool','group-requirement',4,1,0,?,?)",
+            (_now(), _now()))
 
 
 def _ensure_audit(conn: sqlite3.Connection):
