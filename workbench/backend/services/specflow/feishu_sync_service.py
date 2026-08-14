@@ -161,3 +161,30 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None) -> dict:
         except Exception as e:
             out["errors"].append(f"chat {chat.get('chat_id', '?')}: {e}")
     return out
+
+
+def sync_recent_docs(specflow_emp_base: Path, days: int = 1) -> dict:
+    """文档增量轮询（二期 T-922，F4）：drive +search 近 N 天编辑 ∩ watch.docs 授权清单 → 交集落池。
+
+    CLI 事件目录无 docs 域（一期实测缺口）——文档新鲜度由本日级轮询补齐；
+    未授权文档绝不落池（授权清单即边界）。
+    """
+    cfg = load_watch_config(specflow_emp_base)
+    authorized = {str(d.get("token", "")) for d in cfg.get("docs") or []}
+    out = {"docs": 0, "errors": []}
+    if not authorized:
+        return out
+    found = _run_lark(["drive", "+search", "--as", "user", "--query", "",
+                       "--edited-since", f"{days}d", "--doc-types", "docx",
+                       "--sort", "edit_time", "--page-size", "20"])
+    items = (found.get("data") or {}).get("items") or []
+    for it in items:
+        token = str(it.get("token") or it.get("obj_token") or "")
+        if not token or token not in authorized:
+            continue
+        try:
+            sync_doc(specflow_emp_base, token, url=str(it.get("url") or ""))
+            out["docs"] += 1
+        except Exception as e:
+            out["errors"].append(f"doc {token}: {e}")
+    return out

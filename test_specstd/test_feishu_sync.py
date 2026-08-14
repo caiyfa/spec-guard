@@ -87,6 +87,27 @@ def test_sync_all_collects_errors(tmp_path):
     assert "docs" in out and "chats" in out                  # 不中断
 
 
+def test_sync_recent_docs_intersection(tmp_path):
+    """T-922：drive +search 近1天编辑 ∩ watch.docs 授权清单 → 仅交集落池。"""
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [], "minutes_days": 0, "chat_days": 1,
+                                 "docs": [{"token": "tokAuth"}]})
+    found = {"ok": True, "data": {"items": [
+        {"token": "tokAuth", "title": "授权内文档"},
+        {"token": "tokOther", "title": "未授权文档"}]}}
+
+    def _fake(args, timeout=90):
+        if "+search" in args:
+            return found
+        return {"ok": True, "data": {"content": "正文", "images": []}}
+
+    with patch.object(svc, "_run_lark", side_effect=_fake):
+        out = svc.sync_recent_docs(base, days=1)
+    assert out["docs"] == 1                                    # tokOther 被交集过滤
+    assert (base / "feishu_pool" / "docs" / "fd-tokAuth.md").is_file()
+    assert not (base / "feishu_pool" / "docs" / "fd-tokOther.md").exists()
+
+
 # ══════════════════════════════════════════════════════════
 # T-916：端到端贯通（全 mock：同步→聚类→建议→确认→图谱→焦点子图）
 # ══════════════════════════════════════════════════════════

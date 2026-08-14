@@ -104,10 +104,24 @@ class FeishuWatcher:
             return False
         self._stop.clear()
         self._catch_up()
+        self._schedule_doc_poll()
         for key, identity in EVENT_KEYS:
             self._launch(key, identity)
         log.info("feishu_watcher 已启动（emp=%s，%d 路事件）", self.emp, len(EVENT_KEYS))
         return True
+
+    def _schedule_doc_poll(self):
+        """T-922：文档日级轮询 job（APScheduler 直接挂，不落 jobs 表——表属 plan 语义）。"""
+        try:
+            from services.scheduler import get_scheduler
+            from services.specflow import feishu_sync_service as svc
+            emp_base = self.sg_root / ".specflow" / self.emp
+            get_scheduler().add_job(
+                svc.sync_recent_docs, args=[emp_base], kwargs={"days": 1},
+                trigger="cron", hour=7, minute=0,
+                id=f"feishu-docs-{self.emp}", replace_existing=True)
+        except Exception as e:
+            log.warning("feishu_watcher 文档轮询 job 挂载失败（不阻断监听）: %s", e)
 
     def stop(self):
         """优雅停：先关 stdin（EOF 触发优雅退出），10s 超时再 terminate。禁 kill。"""
