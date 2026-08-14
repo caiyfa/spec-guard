@@ -86,6 +86,19 @@ def resolve_watch_user(sg_root: Path) -> str | None:
 # 托管器
 # ══════════════════════════════════════════════════════════
 
+def chat_proofread_job(emp_base_str: str):
+    """每日群聊校对重拉 job（模块级——APScheduler 需可序列化 callable，禁闭包）。"""
+    from services.specflow import feishu_sync_service as svc
+    emp_base = Path(emp_base_str)
+    cfg = svc.load_watch_config(emp_base)
+    day = datetime.now().strftime("%Y%m%d")
+    for chat in cfg.get("chats") or []:
+        try:
+            svc.sync_chat(emp_base, str(chat.get("chat_id", "")), day)
+        except Exception as ce:
+            log.warning("校对重拉失败 %s: %s", chat.get("chat_id"), ce)
+
+
 class FeishuWatcher:
     def __init__(self, sg_root: Path):
         self.sg_root = Path(sg_root)
@@ -129,23 +142,16 @@ class FeishuWatcher:
             log.warning("feishu_watcher 文档轮询 job 挂载失败（不阻断监听）: %s", e)
 
     def _schedule_chat_proofread(self):
-        """T-925：每日 03:00 群聊校对重拉（覆盖写——撤回/编辑/直写丢漏对齐飞书侧）。"""
+        """T-925：每日 03:00 群聊校对重拉（覆盖写——撤回/编辑/直写丢漏对齐飞书侧）。
+
+        job callable 必须模块级（APScheduler 序列化限制）——闭包会炸 startup。
+        """
         try:
             from services.scheduler import get_scheduler
             emp_base = self.sg_root / ".specflow" / self.emp
-
-            def _job():
-                from services.specflow import feishu_sync_service as svc
-                cfg = svc.load_watch_config(emp_base)
-                day = datetime.now().strftime("%Y%m%d")
-                for chat in cfg.get("chats") or []:
-                    try:
-                        svc.sync_chat(emp_base, str(chat.get("chat_id", "")), day)
-                    except Exception as ce:
-                        log.warning("校对重拉失败 %s: %s", chat.get("chat_id"), ce)
-
             get_scheduler().add_job(
-                _job, trigger="cron", hour=3, minute=0,
+                chat_proofread_job, args=[str(emp_base)],
+                trigger="cron", hour=3, minute=0,
                 id=f"feishu-proofread-{self.emp}", replace_existing=True)
         except Exception as e:
             log.warning("feishu_watcher 校对 job 挂载失败（不阻断监听）: %s", e)

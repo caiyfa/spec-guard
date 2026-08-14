@@ -291,3 +291,101 @@ class TestRegistry:
         assert st["watchers"][0]["emp"] == "u1"
         assert "started_at" in st["watchers"][0]
         fw.stop_background()
+
+
+# ══════════════════════════════════════════════════════════
+# T-928：三期 e2e 贯通（多用户事件→直写→聚类 continues→图谱 evolves→确认 suggest_ivs）
+# ══════════════════════════════════════════════════════════
+
+def test_p3_e2e_pipeline(tmp_path):
+    from services.specflow import feishu_review_service as rev
+    from specflow.feishu_pool import facts, link_suggest as ls
+    from specflow.feishu_pool import pool_store, topic_cluster as tc
+    from graph_index.builder import build_index
+    from graph_index.service import index_path
+    from graph_index.store import GraphStore
+
+    # 多用户注册表启动（u1/u2 均拉起）
+    _mk_user(tmp_path, "u1")
+    _mk_user(tmp_path, "u2")
+    with patch.object(fw, "_token_valid", return_value=True), \
+         patch.object(fw.FeishuWatcher, "start", return_value=True):
+        reg = fw.WatcherRegistry(tmp_path)
+        started = reg.start_all()
+    assert sorted(started) == ["u1", "u2"]
+
+    # u1 事件直写落池（模拟 watcher 直写路径）
+    emp = tmp_path / ".specflow" / "u1"
+    events = [
+        {"chat_id": "oc_a", "event_id": "e1", "sender_id": "ou_x",
+         "create_time": "1691498400000", "message_type": "text",
+         "content": "作废会话后级联删除人员"},
+        {"chat_id": "oc_a", "event_id": "e2", "sender_id": "ou_x",
+         "create_time": "1691498460000", "message_type": "text",
+         "content": "下午继续讨论权限过滤"},
+    ]
+    with patch.object(pool_store, "_resolve_sender", return_value="张三"):
+        w = fw.FeishuWatcher(tmp_path)
+        w.emp = "u1"
+        for ev in events:
+            w._direct_write_chat(ev)
+    chat_files = list((emp / "feishu_pool" / "chats").rglob("*.md"))
+    assert len(chat_files) == 1
+
+    # 预置昨日话题 → 今日聚类 LLM 判延续（continues）
+    import json as _json
+    cand = emp / "feishu_pool" / "_candidate_topics.yaml"
+    cand.write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:9b9e9d-20260813-01\n    title: 级联删除\n"
+        "    summary: 作废级联删除人员\n    chat_sha8: 9b9e9d\n"
+        "    window: ['2026-08-13T14:00', '2026-08-13T14:30']\n"
+        "    message_count: 2\n    participants_count: 1\n"
+        "    source: chats/9b9e9d/20260813.md\n", encoding="utf-8")
+    ts = chat_files[0].read_text(encoding="utf-8").split("]")[0] + "]"
+    llm = MagicMock()
+    llm.chat.return_value = {"content": _json.dumps({"topics": [{
+        "title": "级联删除续谈", "summary": "作废会话后级联删除人员",
+        "continues": "tp:9b9e9d-20260813-01",
+        "msg_range": [ts, ts], "participants_count": 1}]}, ensure_ascii=False)}
+    produced = tc.cluster_chat_snapshots(emp, llm)
+    assert produced[0].get("continues") == "tp:9b9e9d-20260813-01"
+
+    # 复核确认 → 共享区（话题含 continues 提升）+ suggest_ivs
+    ws = tmp_path / "ws"
+    (ws / ".specguard").mkdir(parents=True)
+    (ws / "specs" / "inventory" / "grid-placement").mkdir(parents=True)
+    (ws / "specs" / "inventory" / "grid-placement" / "spec.md").write_text(
+        "### FR-012: 作废级联删除\n作废会话后级联删除人员。\n", encoding="utf-8")
+    llm2 = MagicMock()
+    llm2.chat.return_value = {"content": _json.dumps({"links": [{
+        "fr_id": "FR-012", "confidence": 0.9,
+        "evidence": "作废会话后级联删除人员"}]}, ensure_ascii=False)}
+    anchors = {"FR-012": MagicMock(title="作废级联删除", module="inventory",
+                                   feature="grid-placement", ac_ids=[])}
+    # 旧话题先确认入共享区（演进链两端均须在图中）
+    facts.upsert_topic(ws, {"id": "tp:9b9e9d-20260813-01", "title": "级联删除",
+                            "summary": "作废级联删除人员", "chat_sha8": "9b9e9d",
+                            "window": ["2026-08-13T14:00", "2026-08-13T14:30"],
+                            "message_count": 2, "participants_count": 1,
+                            "source": "chats/9b9e9d/20260813.md"})
+    sug = ls.suggest_links_for_material(
+        produced[0]["id"], produced[0]["summary"], anchors, llm2, workspace_root=ws)
+    rev.enqueue_suggestions(emp, "u1", sug)
+    with patch.object(rev, "_find_active_ivs_for_fr",
+                      return_value=[{"iv_id": "IV-001", "title": "导出面试"}]):
+        out = rev.confirm_suggestions(emp, ws, "u1",
+                                      [(produced[0]["id"], "FR-012")])
+    assert out["confirmed"] == 1
+    assert out["suggest_ivs"][0]["iv_id"] == "IV-001"
+
+    # 图谱：evolves 边 + mentions 边同图
+    build_index(ws, index_path(ws), scenarios_root=tmp_path / "scenarios",
+                sg_root=tmp_path)
+    with GraphStore(index_path(ws)) as store:
+        evolves = store.list_edges("evolves")
+        assert any(e["src"] == produced[0]["id"]
+                   and e["dst"] == "tp:9b9e9d-20260813-01" for e in evolves)
+        mentions = store.list_edges("mentions")
+        assert any(e["src"] == produced[0]["id"] and e["dst"] == "FR-012"
+                   for e in mentions)
