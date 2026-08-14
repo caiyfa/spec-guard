@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.6.0"
-SPEC_UPDATED = "2026-08-13"
+SPEC_VERSION = "2.7.0"
+SPEC_UPDATED = "2026-08-14"
 SPEC_CHANGELOG = [
+    ("2.7.0", "2026-08-14", "FR 编号解析升级为注册表锚定（方案 B，迭代名完全自由）：右锚流水 + 左锚功能注册表最长匹配（specs/{模块}/{功能}/ 目录）+ 中段迭代可含 '-'（2026-08-17/sprint-23 合法）；迭代代号约束收敛为文件系统安全底线，conformance STRUCT 同步；schema.py parse_fr_delta_id 必须携带 known_features"),
     ("2.6.0", "2026-08-13", "FR 编号迭代命名限制落地（specstd，方案 A 终版双右锚解析）：迭代代号禁止含 '-'（字母/数字/下划线开头可含 '.'，S24/v2.5/2026Q3 合法），conformance STRUCT 强制；schema.py 新增 ITER_CODE_RE / FR_DELTA_ID_RE / parse_fr_delta_id"),
     ("2.5.0", "2026-08-07", "新增引擎内建断言器 schema_match（结构断言 fuzzy-match-lite，T-501）：#string/#number/#boolean/#null 类型标记、## 可选键、#[] 数组模式、键集严格嵌套递归；oracle 参数化形式调用，语法层零变更"),
     ("2.4.0", "2026-08-05", "归一化场景类型：废弃 test_type 字段（unit/scenario 二分抹除，统一为场景），删除 T2/T3 校验，T5 孤例规则改通用（无 depends_on 且非 prep 标签 → 疑似孤例）"),
@@ -203,9 +204,11 @@ def generate_format_spec_product() -> str:
         f"- **AC（Acceptance Criteria）**：二值化（通过/不通过），对应一个或多个 FR{NL}"
         f"- **FR 编号**：基线 `FR-{序号}`（模块内唯一）；delta 新增 `FR-{功能}-{迭代}-{流水号}`{NL}"
         f"   （如 FR-person-profile-0817-001），全局唯一、永久保留（编号即溯源）。{NL}"
-        f"   功能=模块目录名（可含 `-`，同前缀子模块如 person-search / person-search-v2 共存无歧义）；{NL}"
-        f"   流水=恒 3 位数字；迭代=delta 代号——**禁止含 `-`**（字母/数字/下划线开头、可含 `.`：{NL}"
-        f"   0817/S24/v2.5 合法，`2026-08-17` 非法请转写 `2026_08_17`），conformance STRUCT 强制校验{NL}"
+        f"   功能=模块目录名（specs/{模块}/{功能}/ 第二级，注册表锚定最长匹配，{NL}"
+        f"   同前缀子模块如 person-search / person-search-v2 共存无歧义）；{NL}"
+        f"   流水=恒 3 位数字（最右段）；迭代=delta 代号（changes/{代号}/ 目录名，{NL}"
+        f"   **完全自由可含 `-`**：2026-08-17/sprint-23/v2.5 均合法，仅禁路径分隔符、{NL}"
+        f"   空白与 Windows 保留字符，且不能以 '.' 开头——conformance STRUCT 强制校验{NL}"
         f"- **covers 锚点**：场景 YAML 的 `doc.covers` 引用 FR 编号，{NL}"
         f"  是场景与需求的强制关联（场景测试引擎据此做覆盖分析）{NL}"
         f"- **Delta 更新**：用 `[delta:代号]` 标记每条 FR 的变更来源{NL}{NL}"

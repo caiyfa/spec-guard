@@ -2,8 +2,8 @@
 
 工具：
 1. search_spec_files — 工作区内文本搜索（只读），用于编号重排的替换点定位与残留自检
-2. parse_fr_id — FR-{功能}-{迭代}-{流水} 双右锚解析 + 迭代代号白名单 +
-   工作区功能注册表校验（功能名来自 specs/{module}/{feature}/ 第二级目录）
+2. parse_fr_id — FR-{功能}-{迭代}-{流水} 注册表锚定解析（右锚流水 + 左锚功能注册表最长匹配
+   + 中段迭代自由）+ 迭代代号文件系统安全底线校验（功能名来自 specs/{module}/{feature}/ 第二级目录）
 """
 
 import asyncio
@@ -147,26 +147,28 @@ class TestParseFrId:
         assert r["ok"] is False
         assert "基线" in r["error"] or "格式" in r["error"]
 
-    def test_dashed_iter_rejected_by_registry(self, repo):
-        """迭代含 '-'（FR-feature1-2026-08-17-001）：func 吸进碎片后不命中注册表 → 拒绝。"""
+    def test_dashed_iter_supported(self, repo):
+        """核心能力：迭代含 '-'（FR-feature1-2026-08-17-001）可正常解析。"""
         from mcp_server.tools import spec_search
         r = _call(spec_search, "parse_fr_id", {"fr_id": "FR-feature1-2026-08-17-001"})
-        assert r["ok"] is False
-        assert r.get("checks", {}).get("func_registered") is False
-        assert "功能" in r["error"] or "注册" in r["error"]
+        assert r["ok"] is True
+        assert r["func"] == "feature1"
+        assert r["iter"] == "2026-08-17"
+        assert r["seq"] == "001"
 
     def test_illegal_iter_code(self, repo):
-        """迭代代号字符非法（含空格等）→ iter_code_legal=False。"""
+        """迭代代号字符非法（含空格/路径字符）→ iter_code_legal=False。"""
         from mcp_server.tools import spec_search
-        r = _call(spec_search, "parse_fr_id",
-                  {"fr_id": "FR-feature1-delta001-001", "check_iter": "sp rint"})
-        assert r["ok"] is False
-        assert r["checks"]["iter_code_legal"] is False
+        for bad in ("sp rint", "a/b"):
+            r = _call(spec_search, "parse_fr_id",
+                      {"fr_id": "FR-feature1-delta001-001", "check_iter": bad})
+            assert r["ok"] is False
+            assert r["checks"]["iter_code_legal"] is False, f"{bad} 应非法"
 
     def test_free_form_iter_accepted(self, repo):
-        """自由迭代名 S24/v2.5/2026Q3 均可解析。"""
+        """自由迭代名 S24/v2.5/2026Q3/sprint-23 均可解析。"""
         from mcp_server.tools import spec_search
-        for it in ("S24", "v2.5", "2026Q3"):
+        for it in ("S24", "v2.5", "2026Q3", "sprint-23"):
             r = _call(spec_search, "parse_fr_id", {"fr_id": f"FR-feature1-{it}-001"})
             assert r["ok"] is True and r["iter"] == it, f"{it} 应可解析"
 

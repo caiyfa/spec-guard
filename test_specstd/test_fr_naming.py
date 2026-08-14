@@ -1,10 +1,12 @@
-"""FR-{功能}-{迭代}-{流水} 命名规范测试（方案 A 终版：双右锚 + 迭代命名限制）。
+"""FR-{功能}-{迭代}-{流水} 命名规范测试（方案 B：注册表锚定解析 + 迭代名自由）。
 
 规范要点：
-- 流水恒为最右段 \\d{3}、迭代恒为右起第二段（单段，禁 '-'），
-  功能名为剩余前缀整体左取——功能名任意含 '-'、前缀重叠免疫
-- 迭代代号白名单：字母/数字/点/下划线，禁 '-'（S24/v2.5/2026Q3 合法，
-  2026-08-17 非法）——delta 目录创建与 conformance 双点强制
+- 解析 = 右锚流水（最右 \\d{3} 定宽）+ 左锚功能注册表（specs/{模块}/{功能}/ 目录名，
+  最长匹配）+ 中段迭代完全自由（含 '-'、'.'、'_'、中文等）
+- 迭代代号（changes/{代号}/ 目录名）只受文件系统安全底线约束：
+  禁路径分隔符/空白/Windows 保留字符，首字符禁 '.'（防隐藏目录/穿越）；
+  2026-08-17、sprint-23、v2.5 均合法
+- 基线编号 FR-001 不在解析范围；解析必须携带功能注册表（known_features）
 """
 
 import shutil
@@ -25,87 +27,104 @@ from specstd.conformance import check_conformance  # noqa: E402
 
 from test_specstd.helpers import create_valid_workspace  # noqa: E402
 
+# 模拟功能注册表（真实工作区 specs/{module}/{feature}/ 的二级目录名集合）
+_FEATURES = {"person-profile", "person-search", "person-search-v2",
+             "eval-360", "exp-tag", "history-inventory"}
+
 
 class TestParseFrDeltaId:
-    """delta FR 编号的命名分组解析（双右锚）。"""
+    """注册表锚定解析。"""
 
     def test_plain_date_iter(self):
         """常规日期迭代：FR-person-profile-0817-001 正确拆三段。"""
-        r = parse_fr_delta_id("FR-person-profile-0817-001")
+        r = parse_fr_delta_id("FR-person-profile-0817-001", known_features=_FEATURES)
         assert r == {"func": "person-profile", "iter": "0817", "seq": "001"}
 
-    def test_func_prefix_overlap_immune(self):
-        """功能名前缀重叠免疫：person-search 与 person-search-v2 共存不歧义。"""
-        r1 = parse_fr_delta_id("FR-person-search-0817-001")
-        r2 = parse_fr_delta_id("FR-person-search-v2-0817-001")
-        assert r1["func"] == "person-search"
-        assert r2["func"] == "person-search-v2"
-        assert r1["iter"] == r2["iter"] == "0817"
+    def test_dashed_iter_supported(self):
+        """核心能力：迭代名含 '-' 完全支持——2026-08-17 / sprint-23 不再被劈开。"""
+        r = parse_fr_delta_id("FR-eval-360-2026-08-17-001", known_features=_FEATURES)
+        assert r == {"func": "eval-360", "iter": "2026-08-17", "seq": "001"}
+        r2 = parse_fr_delta_id("FR-exp-tag-sprint-23-001", known_features=_FEATURES)
+        assert r2 == {"func": "exp-tag", "iter": "sprint-23", "seq": "001"}
+
+    def test_func_prefix_overlap_longest_match(self):
+        """同前缀子模块：最长匹配——person-search-v2 完整命中而非拆给 person-search。"""
+        r = parse_fr_delta_id("FR-person-search-v2-0817-001", known_features=_FEATURES)
+        assert r == {"func": "person-search-v2", "iter": "0817", "seq": "001"}
+        r2 = parse_fr_delta_id("FR-person-search-0817-001", known_features=_FEATURES)
+        assert r2 == {"func": "person-search", "iter": "0817", "seq": "001"}
 
     def test_func_with_digits(self):
-        """功能名含数字：FR-eval-360-0817-001 的 360 不被误判为迭代。"""
-        r = parse_fr_delta_id("FR-eval-360-0817-001")
+        """功能名含数字：eval-360 的 360 不误判为迭代。"""
+        r = parse_fr_delta_id("FR-eval-360-0817-001", known_features=_FEATURES)
         assert r == {"func": "eval-360", "iter": "0817", "seq": "001"}
 
     def test_iter_free_form(self):
-        """迭代名自由（除 '-'）：S24 / v2.5 / 2026Q3 / hongbao 均可解析。"""
-        assert parse_fr_delta_id("FR-eval-360-S24-001")["iter"] == "S24"
-        assert parse_fr_delta_id("FR-eval-360-v2.5-001")["iter"] == "v2.5"
-        assert parse_fr_delta_id("FR-eval-360-2026Q3-001")["iter"] == "2026Q3"
-        assert parse_fr_delta_id("FR-eval-360-hongbao-001")["iter"] == "hongbao"
+        """迭代名自由形态：S24 / v2.5 / 2026Q3 / hongbao / 点横线混合均可解析。"""
+        for it in ("S24", "v2.5", "2026Q3", "hongbao", "2026_08_17"):
+            r = parse_fr_delta_id(f"FR-exp-tag-{it}-001", known_features=_FEATURES)
+            assert r is not None and r["iter"] == it, f"{it} 应可解析"
 
     def test_baseline_fr_not_matched(self):
         """基线编号 FR-001 不是 delta 格式，返回 None。"""
-        assert parse_fr_delta_id("FR-001") is None
+        assert parse_fr_delta_id("FR-001", known_features=_FEATURES) is None
 
     def test_malformed_not_matched(self):
-        """非法形态（流水非 3 位数字 / 缺段）返回 None。"""
-        assert parse_fr_delta_id("FR-exp-tag-0817-01") is None
-        assert parse_fr_delta_id("FR-exp-tag-0817") is None
-        assert parse_fr_delta_id("FR-0817-001") is None  # 缺功能段
+        """非法形态（流水非 3 位数字 / 缺段 / 缺功能名）返回 None。"""
+        assert parse_fr_delta_id("FR-exp-tag-0817-01", known_features=_FEATURES) is None
+        assert parse_fr_delta_id("FR-exp-tag-0817", known_features=_FEATURES) is None
+        assert parse_fr_delta_id("FR-0817-001", known_features=_FEATURES) is None  # 缺功能段
 
-    def test_known_features_rejects_dashed_iter(self):
-        """迭代含 '-' 时功能段会吸进碎片——注册表校验拒绝（如 eval-360-2026-08）。"""
-        features = {"eval-360", "exp-tag"}
-        assert parse_fr_delta_id(
-            "FR-eval-360-2026-08-17-001", known_features=features) is None
-        # 同一编号在无注册表时为 best-effort 解析（形态合法），
-        # 防线在 delta 目录代号白名单（changes/2026-08-17/ 会被 STRUCT 拒绝）
-        assert parse_fr_delta_id("FR-eval-360-2026-08-17-001") is not None
-        # 注册表内合法功能正常解析
-        assert parse_fr_delta_id(
-            "FR-eval-360-S24-001", known_features=features)["func"] == "eval-360"
+    def test_missing_iter_segment(self):
+        """迭代段缺失（FR-eval-360-001）：rest 无 '功能-' 前缀结构 → None。"""
+        assert parse_fr_delta_id("FR-eval-360-001", known_features=_FEATURES) is None
+
+    def test_requires_registry(self):
+        """无注册表（known_features=None）无法确定功能边界 → None（解析必须带注册表）。"""
+        assert parse_fr_delta_id("FR-eval-360-0817-001") is None
+        assert parse_fr_delta_id("FR-person-profile-0817-001") is None
+
+    def test_unregistered_func_rejected(self):
+        """功能名不在注册表 → None（迭代碎片会被整体留在 iter 段，func 必须命中）。"""
+        assert parse_fr_delta_id("FR-no-such-feat-0817-001", known_features=_FEATURES) is None
+        assert parse_fr_delta_id("FR-eval-360-0817-001", known_features={"exp-tag"}) is None
 
 
-class TestIterCodeWhitelist:
-    """迭代代号字符集白名单。"""
+class TestIterCodeSafety:
+    """迭代代号文件系统安全底线（替代原白名单——含 '-' 完全合法）。"""
 
-    @pytest.mark.parametrize("code", ["0817", "S24", "v2.5", "2026Q3", "hongbao", "sprint_3"])
+    @pytest.mark.parametrize("code", [
+        "0817", "S24", "v2.5", "2026Q3", "hongbao", "sprint_3",
+        "2026-08-17", "sprint-23", "tag-enhancement", "2026_08_17",
+    ])
     def test_legal_codes(self, code):
-        assert ITER_CODE_RE.match(code), f"{code} 应合法"
+        assert ITER_CODE_RE.match(code), f"{code} 应合法（含 '-' 允许）"
 
-    @pytest.mark.parametrize("code", ["2026-08-17", "sprint-23", "delta-001", "sp rint", "", "0817/1"])
+    @pytest.mark.parametrize("code", [
+        "a/b", "a\\b", "a:b", "a?b", 'a"b', "a<b", "a>b", "a|b", "a*b",
+        "..", ".hidden", "sp rint", "a\tb", "",
+    ])
     def test_illegal_codes(self, code):
-        assert not ITER_CODE_RE.match(code), f"{code} 应非法（含 '-' 或非法字符）"
+        assert not ITER_CODE_RE.match(code), f"{code} 应非法（路径/空白/保留字符/点开头）"
 
 
 class TestConformanceDeltaCode:
-    """conformance 对 delta 目录代号的强制校验（STRUCT）。"""
+    """conformance 对 delta 目录代号的强制校验（安全底线语义）。"""
 
-    def test_dashed_delta_code_rejected(self, tmp_path):
-        """changes/2026-08-17/ 应报 STRUCT ERROR（迭代代号禁 '-'）。"""
+    def test_dashed_delta_code_accepted(self, tmp_path):
+        """核心反转：changes/2026-08-17/ 合法，不再报代号类 ERROR。"""
         ws = create_valid_workspace(tmp_path / "ws-dash")
         shutil.move(str(ws / "changes" / "delta001"), str(ws / "changes" / "2026-08-17"))
         report = check_conformance(ws, "test-dash")
-        struct_errors = [
+        code_errors = [
             f for f in report.findings
             if f.rule == RuleName.STRUCT.value and f.level == RuleLevel.ERROR.value
-            and "2026-08-17" in f.message
+            and "代号" in f.message
         ]
-        assert struct_errors, "含 '-' 的 delta 代号应报 STRUCT ERROR"
+        assert not code_errors, f"含 '-' 代号应合法: {[f.to_dict() for f in code_errors]}"
 
     def test_legal_delta_code_passes(self, tmp_path):
-        """changes/S24/ 等合法代号不报代号类 STRUCT ERROR。"""
+        """changes/S24/ 等自由代号不报代号类 STRUCT ERROR。"""
         ws = create_valid_workspace(tmp_path / "ws-legal")
         shutil.move(str(ws / "changes" / "delta001"), str(ws / "changes" / "S24"))
         report = check_conformance(ws, "test-legal")
@@ -115,6 +134,18 @@ class TestConformanceDeltaCode:
             and "代号" in f.message
         ]
         assert not code_errors, f"合法代号不应报代号错误: {[f.to_dict() for f in code_errors]}"
+
+    def test_hidden_dir_rejected(self, tmp_path):
+        """changes/.hidden/ 首字符为点 → STRUCT ERROR。"""
+        ws = create_valid_workspace(tmp_path / "ws-hidden")
+        (ws / "changes" / ".hidden").mkdir()
+        report = check_conformance(ws, "test-hidden")
+        code_errors = [
+            f for f in report.findings
+            if f.rule == RuleName.STRUCT.value and f.level == RuleLevel.ERROR.value
+            and "代号" in f.message and ".hidden" in f.message
+        ]
+        assert code_errors, "点开头的隐藏目录应报代号错误"
 
     def test_valid_workspace_still_passes(self, tmp_path):
         """合规样例（delta001）保持全 PASS。"""

@@ -201,14 +201,15 @@ def _check_delta(report: ConformanceReport, delta_dir: Path):
     """检查单个 delta 目录的全部规则。"""
     delta_code = delta_dir.name
 
-    # STRUCT — delta 代号字符集（迭代命名限制：字母/数字/下划线开头，可含 '.'，禁 '-'；
-    # 迭代代号是 FR-{功能}-{迭代}-{流水} 双右锚解析的结构前提，含 '-' 则解析歧义不可判）
+    # STRUCT — delta 代号文件系统安全底线（迭代名自由：可含 '-' 如 2026-08-17；
+    # 仅禁路径分隔符/空白/Windows 保留字符/点开头——FR-{功能}-{迭代}-{流水} 的
+    # 解析由功能注册表锚定（schema.parse_fr_delta_id），不再依赖代号字符集）
     if not ITER_CODE_RE.match(delta_code):
         report.add(
             RuleName.STRUCT.value, RuleLevel.ERROR.value,
-            f"delta 代号 '{delta_code}' 非法：迭代代号只允许字母/数字/下划线开头、可含 '.'，"
-            f"禁止含 '-'（如 2026-08-17 请转写为 2026_08_17 或 20260817）——"
-            f"'-' 是 FR-{{功能}}-{{迭代}}-{{流水}} 编号的层级分隔符，代号含 '-' 会导致编号不可解析",
+            f"delta 代号 '{delta_code}' 非法：只禁路径分隔符（/ \\）、空白、"
+            f"Windows 保留字符（: * ? \" < > |）且不能以 '.' 开头——"
+            f"迭代名可含 '-'（如 2026-08-17、sprint-23 均合法）",
             path=f"{DIR_CHANGES}/{delta_code}",
             detail={"delta_code": delta_code},
         )

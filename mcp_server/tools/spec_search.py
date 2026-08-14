@@ -3,9 +3,9 @@
 工具：
   search_spec_files: 工作区内文本搜索（只读）——编号重排的替换点定位与残留自检；
       字面模式自动加标识符边界（搜 FR-001 不误中 FR-0010），regex=true 原样使用
-  parse_fr_id: FR-{功能}-{迭代}-{流水} 双右锚解析（specstd.schema.parse_fr_delta_id）
-      + 迭代代号白名单校验 + 工作区功能注册表校验（specs/{module}/{feature}/ 二级目录名）；
-      编号重排后验证新编号结构合法、功能名已注册、迭代代号未越界
+  parse_fr_id: FR-{功能}-{迭代}-{流水} 注册表锚定解析（specstd.schema.parse_fr_delta_id）
+      + 迭代代号文件系统安全底线校验（含 '-' 合法）+ 工作区功能注册表校验（specs/{module}/{feature}/ 二级目录名）；
+      编号重排后验证新编号结构合法、功能名已注册、迭代代号安全
 
 只读红线：两工具均无写副作用。
 """
@@ -21,7 +21,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-from specstd.schema import ITER_CODE_RE, parse_fr_delta_id  # noqa: E402
+from specstd.schema import ITER_CODE_RE, FR_DELTA_ID_RE, parse_fr_delta_id  # noqa: E402
 from specstd.workspace import get_active_workspace, safe_resolve  # noqa: E402
 
 # 只搜索文本型 spec 文件
@@ -52,16 +52,16 @@ TOOLS = [
     Tool(
         name="parse_fr_id",
         description="解析并校验 delta FR 编号（FR-{功能}-{迭代}-{流水}，如 FR-person-profile-0817-001）。"
-                    "双右锚解析：流水=最右 3 位数字段、迭代=右起第二段、功能=剩余前缀整体；"
-                    "校验功能名已注册（specs/{模块}/{功能}/ 目录）、迭代代号合法"
-                    "（字母/数字/下划线开头可含 '.'，禁止 '-'）。"
+                    "注册表锚定解析：流水=最右 3 位数字段（右锚）、功能=功能注册表最长匹配"
+                    "（specs/{模块}/{功能}/ 目录，左锚）、迭代=中段剩余完全自由（可含 '-' 如"
+                    "2026-08-17/sprint-23，仅禁路径字符/空白）；校验功能名已注册、迭代代号安全。"
                     "编号重排后验证新编号结构合法必用；check_iter 参数可单独校验一个迭代代号。",
         inputSchema={
             "type": "object",
             "properties": {
                 "fr_id": {"type": "string", "description": "待解析的 FR 编号"},
                 "check_iter": {"type": "string",
-                               "description": "可选：单独校验一个迭代代号字符集（起草新 delta 前用）"},
+                               "description": "可选：单独校验一个迭代代号（起草新 delta 前用；可含 '-'）"},
             },
             "required": ["fr_id"],
         },
@@ -183,7 +183,13 @@ def _handle_parse_fr_id(arguments: dict) -> list[TextContent]:
             {"ok": False, "error": "缺少 fr_id 参数"}, ensure_ascii=False))]
 
     ws = get_active_workspace()
-    features = _feature_registry(ws.root) if ws else set()
+    if not ws:
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False,
+            "error": "无激活的工作区——注册表锚定解析需要功能注册表（specs/{模块}/{功能}/ 目录）"
+                     "确定功能边界，请先激活工作区",
+        }, ensure_ascii=False, indent=2))]
+    features = _feature_registry(ws.root)
 
     checks: dict = {}
     # 单独校验迭代代号（起草新 delta 前的代号合法性确认）
@@ -192,8 +198,8 @@ def _handle_parse_fr_id(arguments: dict) -> list[TextContent]:
         if not checks["iter_code_legal"]:
             return [TextContent(type="text", text=json.dumps({
                 "ok": False, "checks": checks,
-                "error": f"迭代代号 '{check_iter}' 非法：字母/数字/下划线开头、可含 '.'，禁止 '-'"
-                         "（如 2026-08-17 请转写 2026_08_17）",
+                "error": f"迭代代号 '{check_iter}' 非法：禁路径分隔符/空白/Windows 保留字符"
+                         "（: * ? \" < > |）且不能以 '.' 开头——迭代名可含 '-'（如 2026-08-17 合法）",
             }, ensure_ascii=False, indent=2))]
 
     # 基线编号快速识别（FR-001 形态不属于 delta 解析范围）
@@ -204,34 +210,31 @@ def _handle_parse_fr_id(arguments: dict) -> list[TextContent]:
                      "FR-{功能}-{迭代}-{流水}；基线编号永久保留、不参与重排",
         }, ensure_ascii=False, indent=2))]
 
-    parsed = parse_fr_delta_id(fr_id, known_features=features or None)
+    parsed = parse_fr_delta_id(fr_id, known_features=features)
     if parsed is None:
         # 区分失败原因：形态非法 vs 功能名未注册
-        morph = parse_fr_delta_id(fr_id)
+        morph = FR_DELTA_ID_RE.match(fr_id)
         if morph is None:
             return [TextContent(type="text", text=json.dumps({
                 "ok": False,
                 "error": f"'{fr_id}' 不符合 delta 编号形态 FR-{{功能}}-{{迭代}}-{{流水}}"
-                         "（功能小写字母/数字/横线，迭代无横线，流水 3 位数字）",
+                         "（流水恒为最右 3 位数字）",
             }, ensure_ascii=False, indent=2))]
-        checks = {"format_delta": True, "func_registered": False,
-                  "iter_code_legal": bool(ITER_CODE_RE.match(morph["iter"]))}
-        hint = ""
-        if features:
-            hint = f"当前工作区已注册功能: {', '.join(sorted(features)[:20])}"
+        hint = f"当前工作区已注册功能: {', '.join(sorted(features)[:20])}" if features else ""
         return [TextContent(type="text", text=json.dumps({
-            "ok": False, "checks": checks,
-            "error": f"功能名 '{morph['func']}' 未在当前工作区注册"
-                     "（若迭代代号含 '-'，其碎片会被吸入功能段导致此错——迭代代号禁止 '-'）",
+            "ok": False,
+            "checks": {"format_delta": True, "func_registered": False},
+            "error": f"功能名未在当前工作区注册（编号 '{fr_id}' 的功能段需命中 "
+                     "specs/{模块}/{功能}/ 目录名，最长匹配）",
             **({"hint": hint} if hint else {}),
         }, ensure_ascii=False, indent=2))]
 
     checks = {
         "format_delta": True,
-        "func_registered": True if features else None,
+        "func_registered": True,
         "iter_code_legal": bool(ITER_CODE_RE.match(parsed["iter"])),
     }
-    ok = checks["iter_code_legal"] and checks["func_registered"] is not False
+    ok = checks["iter_code_legal"]
     result = {
         "ok": ok,
         "fr_id": fr_id,
@@ -239,6 +242,6 @@ def _handle_parse_fr_id(arguments: dict) -> list[TextContent]:
         "checks": checks,
     }
     if not checks["iter_code_legal"]:
-        result["error"] = (f"迭代代号 '{parsed['iter']}' 非法：禁止 '-'，"
-                           "只允许字母/数字/下划线开头、可含 '.'")
+        result["error"] = (f"迭代代号 '{parsed['iter']}' 非法：禁路径分隔符/空白/Windows 保留字符"
+                           "且不能以 '.' 开头——可含 '-'（如 2026-08-17 合法）")
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
