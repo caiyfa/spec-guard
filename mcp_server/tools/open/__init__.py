@@ -18,8 +18,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-# 工作区名称白名单（与 specstd.workspace 同口径，防路径穿越）
-_WORKSPACE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+# 工作区名称校验复用 specstd.workspace 黑名单口径（防路径穿越）
 
 
 def resolve_workspace_root(name: str = "") -> tuple[Optional[Path], str]:
@@ -28,12 +27,13 @@ def resolve_workspace_root(name: str = "") -> tuple[Optional[Path], str]:
     Returns:
         (root, workspace_name)；不可用时 (None, "")。
     """
-    from specstd.workspace import get_active_workspace, get_context_workspace, get_workspace
+    from specstd.workspace import (_validate_name, get_active_workspace,
+                                 get_context_workspace, get_workspace)
 
     ws_name = (name or "").strip()
     info = None
     if ws_name:
-        if not _WORKSPACE_NAME_RE.match(ws_name):
+        if _validate_name(ws_name) is not None:
             return None, ""
         info = get_workspace(ws_name)
     else:

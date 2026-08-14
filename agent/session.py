@@ -15,7 +15,6 @@ from typing import Optional
 
 # V11 修复：session_id 白名单（时间戳_uuidhex 格式），防路径穿越写
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
-WORKSPACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
 def _validate_session_id(session_id: str):
@@ -25,8 +24,9 @@ def _validate_session_id(session_id: str):
 
 
 def _validate_workspace(workspace: str):
-    """workspace 名称非法时抛 ValueError。"""
-    if workspace and not WORKSPACE_RE.match(workspace):
+    """workspace 名称非法时抛 ValueError（黑名单口径，复用 specstd.workspace）。"""
+    from specstd.workspace import _validate_name
+    if workspace and _validate_name(workspace) is not None:
         raise ValueError(f"非法 workspace: {workspace!r}")
 
 

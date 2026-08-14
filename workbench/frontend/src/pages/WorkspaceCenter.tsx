@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router';
 import { workspaceApi, session, WORKSPACE_CHANGED_EVENT, type WorkspaceInfo } from '../api';
 import FileTree from '../components/FileTree';
 import FileViewer from '../components/FileViewer';
+import DirectoryPicker from '../components/DirectoryPicker';
 import type { FlatFile } from '../components/FileTree';
 
 export default function WorkspaceCenter({ role }: { role: string }) {
@@ -47,6 +48,8 @@ export default function WorkspaceCenter({ role }: { role: string }) {
   const [regSystem, setRegSystem] = useState('tdm');
   const [regBranch, setRegBranch] = useState('main');
   const [regSpecguardPath, setRegSpecguardPath] = useState('');
+  const [regCloneDir, setRegCloneDir] = useState(''); // git 型：自定义克隆落点（可选）
+  const [pickerFor, setPickerFor] = useState<'local' | 'git' | null>(null); // 目录选择弹窗目标
   const [submitting, setSubmitting] = useState(false);
 
   const selectedRef = useRef(selected);
@@ -165,13 +168,13 @@ export default function WorkspaceCenter({ role }: { role: string }) {
         }
       } else {
         if (!regUrl) { setError('请输入 git URL'); return; }
-        const result = await workspaceApi.registerGit({ name: regName, url: regUrl, system: regSystem, branch: regBranch, specguard_path: regSpecguardPath || undefined } as any);
+        const result = await workspaceApi.registerGit({ name: regName, url: regUrl, system: regSystem, branch: regBranch, specguard_path: regSpecguardPath || undefined, clone_dir: regCloneDir || undefined } as any);
         if (!result.ok) {
           setError(result.error || '注册失败');
           if (result.report) setConformance(result.report);
         } else {
           setSuccess(`工作区 ${regName} 克隆成功`);
-          setRegName(''); setRegUrl(''); setRegSpecguardPath('');
+          setRegName(''); setRegUrl(''); setRegSpecguardPath(''); setRegCloneDir('');
           load();
         }
       }
@@ -298,11 +301,18 @@ export default function WorkspaceCenter({ role }: { role: string }) {
             <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="工作区名称" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
             <input value={regSystem} onChange={e => setRegSystem(e.target.value)} placeholder="系统标识 (tdm)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
             {regType === 'local' ? (
-              <input value={regPath} onChange={e => setRegPath(e.target.value)} placeholder="本地路径 (D:/work/spec-tdm)" className="col-span-2 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+              <div className="col-span-2 flex gap-2">
+                <input value={regPath} onChange={e => setRegPath(e.target.value)} placeholder="本地路径 (D:/work/spec-tdm)" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                <button onClick={() => setPickerFor('local')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
+              </div>
             ) : (
               <>
                 <input value={regUrl} onChange={e => setRegUrl(e.target.value)} placeholder="Git URL" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
                 <input value={regBranch} onChange={e => setRegBranch(e.target.value)} placeholder="分支 (main)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                <div className="col-span-2 flex gap-2">
+                  <input value={regCloneDir} onChange={e => setRegCloneDir(e.target.value)} placeholder="克隆目录（可选，默认 {specguard}/workspaces/_clones/{名称}）" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  <button onClick={() => setPickerFor('git')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
+                </div>
               </>
             )}
             <input value={regSpecguardPath} onChange={e => setRegSpecguardPath(e.target.value)} placeholder=".specguard 目录位置（可选，默认 {工作区}/.specguard/）" className="col-span-2 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
@@ -312,6 +322,17 @@ export default function WorkspaceCenter({ role }: { role: string }) {
           </button>
         </div>
       )}
+
+      {/* 目录选择弹窗（本地路径 / 克隆落点） */}
+      <DirectoryPicker
+        open={pickerFor !== null}
+        title={pickerFor === 'git' ? '选择克隆目录（可选，留空用默认落点）' : '选择本地文件夹'}
+        onSelect={p => {
+          if (pickerFor === 'git') setRegCloneDir(p); else setRegPath(p);
+          setPickerFor(null);
+        }}
+        onClose={() => setPickerFor(null)}
+      />
 
       {/* 合规报告（admin） */}
       {isAdmin && loadingConformance && <div className="text-center text-gray-500 text-sm py-2 flex-shrink-0">校验中...</div>}

@@ -4,6 +4,7 @@
   GET    /api/workspace/list            列出工作区
   POST   /api/workspace/register-local  注册本地工作区
   POST   /api/workspace/register-git    注册 git 工作区
+  GET    /api/workspace/browse-dir      浏览服务器目录（admin 选路径用）
   POST   /api/workspace/activate        激活工作区
   DELETE /api/workspace/{name}          注销工作区
   POST   /api/workspace/conformance     合规校验
@@ -13,6 +14,7 @@
   GET    /api/workspace/active          获取当前激活工作区
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -59,6 +61,7 @@ class RegisterGitBody(BaseModel):
     branch: str = "main"
     activate: bool = True
     specguard_path: str = ""  # F-1-3: .specguard 目录自定义位置
+    clone_dir: str = ""  # 自定义克隆落点（可选，必须绝对路径；留空用 _clones/{name}）
     # 同上：合规校验不可被客户端跳过（V2 修复）
 
 
@@ -131,7 +134,8 @@ def api_register_git(body: RegisterGitBody,
                      admin: CurrentUser = Depends(require_role("admin"))):
     """注册 git 工作区（克隆仓库，合规校验强制执行）。"""
     result = register_git(body.name, body.url, body.system, body.branch,
-                          activate=body.activate, run_conformance=True)
+                          activate=body.activate, run_conformance=True,
+                          clone_dir=body.clone_dir)
     if result.get("ok"):
         user_store.audit(admin.emp_no, "register_workspace", body.name, "git")
         # K-007: 建立初始 spec 签名基线（此后 spec 变更才可被检测，避免新注册误路由 audit）
@@ -148,6 +152,51 @@ def api_register_git(body: RegisterGitBody,
             except Exception:
                 pass  # 自定义路径初始化失败不阻塞注册
     return result
+
+
+@router.get("/browse-dir")
+def api_browse_dir(path: str = "",
+                   admin: CurrentUser = Depends(require_role("admin"))):
+    """浏览服务器目录（admin 专属，注册工作区选择路径用，纯读）。
+
+    path 为空 → 根视图：Windows 返回磁盘驱动器列表，其他平台返回文件系统根。
+    只返回子目录（不含文件），隐藏目录（. 开头）过滤。
+    """
+    if not path.strip():
+        if os.name == "nt":
+            import string
+            drives = []
+            for letter in string.ascii_uppercase:
+                root = f"{letter}:\\"
+                if Path(root).exists():
+                    drives.append({"name": root, "path": root})
+            return {"ok": True, "current": "", "parent": None, "entries": drives}
+        root = Path("/")
+        try:
+            children = sorted(root.iterdir())
+        except OSError:
+            return {"ok": False, "error": "无权限访问: /"}
+        entries = [{"name": c.name, "path": str(c)}
+                   for c in children if c.is_dir() and not c.name.startswith(".")]
+        return {"ok": True, "current": "/", "parent": None, "entries": entries}
+
+    try:
+        target = Path(path).resolve()
+    except OSError as e:
+        return {"ok": False, "error": f"路径非法: {path} ({e})"}
+    if not target.is_dir():
+        return {"ok": False, "error": f"目录不存在: {path}"}
+    try:
+        children = sorted(target.iterdir())
+    except OSError:
+        return {"ok": False, "error": f"无权限访问: {path}"}
+    entries = [
+        {"name": c.name, "path": str(c)}
+        for c in children
+        if c.is_dir() and not c.name.startswith(".")
+    ]
+    parent = str(target.parent) if target.parent != target else None
+    return {"ok": True, "current": str(target), "parent": parent, "entries": entries}
 
 
 @router.post("/activate", dependencies=[Depends(require_role("admin"))])

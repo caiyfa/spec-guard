@@ -36,8 +36,12 @@ WORKSPACES_DIR = SPECSTD_DIR / "workspaces"             # specstd/workspaces/
 REGISTRY_PATH = WORKSPACES_DIR / "registry.yaml"        # 注册表
 CLONES_DIR = WORKSPACES_DIR / "_clones"                # git 型克隆落点
 
-# 工作区名称白名单：字母开头，仅字母/数字/下划线/连字符（防路径穿越，V1 修复）
-WORKSPACE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+# 工作区名称黑名单（V1 修复）：拒绝路径分隔符/穿越与控制字符，放行中文等
+# 任意 Unicode——工作区名本质是注册表 key，仅 git 克隆落点 _clones/{name} 拼目录
+_WORKSPACE_NAME_BAD = re.compile(r'[\\/\x00-\x1f<>:"|?*]')
+_WINDOWS_RESERVED = {"CON", "PRN", "AUX", "NUL",
+                     *[f"COM{i}" for i in range(1, 10)],
+                     *[f"LPT{i}" for i in range(1, 10)]}
 
 # 注册表读写锁（V17 修复：并发请求防写坏）
 _REGISTRY_LOCK = threading.RLock()
@@ -86,10 +90,20 @@ def get_context_workspace() -> Optional[str]:
 
 
 def _validate_name(name: str) -> Optional[str]:
-    """校验工作区名称合法性。返回错误消息，合法时返回 None。"""
-    if not name or not WORKSPACE_NAME_RE.match(name):
-        return (f"工作区名称非法: {name!r}（须字母开头，仅含字母/数字/下划线/连字符，"
-                f"长度 1-64）")
+    """校验工作区名称合法性（黑名单式：防路径穿越，放行中文等任意字符）。
+
+    拒绝：空串/前后空白、"."/".."、路径分隔符（/ \\）、控制字符、Windows 非法
+    目录字符（<>:"|?*）与保留名（CON/PRN/AUX/NUL/COM1-9/LPT1-9）、结尾点、
+    超长（>128）。返回错误消息，合法时返回 None。
+    """
+    if not name or name != name.strip():
+        return f"工作区名称非法: {name!r}"
+    if len(name) > 128:
+        return f"工作区名称非法: {name!r}（长度超限）"
+    if name in (".", "..") or _WORKSPACE_NAME_BAD.search(name):
+        return f"工作区名称非法: {name!r}（含路径穿越或非法字符）"
+    if name.endswith(".") or name.split(".")[0].upper() in _WINDOWS_RESERVED:
+        return f"工作区名称非法: {name!r}"
     return None
 
 
@@ -102,6 +116,25 @@ def _clone_path_for(name: str) -> Path:
     except ValueError:
         raise ValueError(f"克隆路径越界（工作区名称非法）: {name!r}")
     return target
+
+
+def _rmtree_force(path: Path) -> None:
+    """强制删除目录树（Windows 下 git 对象文件只读，普通 rmtree 静默失败）。
+
+    onexc 回调先解除只读再重试（Python 3.12+ onexc，onerror 已移除）。
+    注意：onexc 的 path 参数是 str（非 Path），须用 os.chmod。
+    """
+    import shutil
+    import stat
+
+    def _onexc(func, p, exc_info):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:
+            pass
+
+    shutil.rmtree(path, onexc=_onexc)
 
 
 # ══════════════════════════════════════════════════════════
@@ -124,7 +157,11 @@ class WorkspaceInfo:
     def root(self) -> Path:
         """工作区根路径。"""
         if self.source_type == "git":
-            return SG_ROOT / self.local_path if self.local_path else CLONES_DIR / self.name
+            if self.local_path:
+                p = Path(self.local_path)
+                # 自定义克隆落点存绝对路径，默认 _clones/ 存相对路径（向后兼容）
+                return p if p.is_absolute() else SG_ROOT / p
+            return CLONES_DIR / self.name
         return Path(self.source_path)
 
     def to_dict(self) -> dict:
@@ -251,15 +288,18 @@ def unregister(name: str) -> bool:
         return False
 
     info = WorkspaceInfo.from_dict(name, ws_dict[name])
-    # git 型：删除克隆目录（删除前断言目标在 _clones/ 之内）
+    # git 型：删除克隆目录——仅限 SpecGuard 自管落点（_clones/ 内）；
+    # 自定义落点只注销注册表、不删目录（防误删用户数据）
     if info.source_type == "git" and info.local_path:
+        clone_path = Path(info.local_path)
+        if not clone_path.is_absolute():
+            clone_path = SG_ROOT / clone_path
         try:
-            clone_path = _clone_path_for(name)
+            clone_path.resolve().relative_to(CLONES_DIR.resolve())
         except ValueError:
-            clone_path = None
+            clone_path = None  # 自定义落点：不删
         if clone_path and clone_path.exists():
-            import shutil
-            shutil.rmtree(clone_path, ignore_errors=True)
+            _rmtree_force(clone_path)
 
     del ws_dict[name]
     registry["workspaces"] = ws_dict
@@ -324,23 +364,31 @@ def register_local(name: str, path: str, system: str,
 # ══════════════════════════════════════════════════════════
 
 def register_git(name: str, url: str, system: str, branch: str = "main",
-                 activate: bool = True, run_conformance: bool = True) -> dict:
-    """注册 git 工作区（克隆仓库到 _clones/）。
+                 activate: bool = True, run_conformance: bool = True,
+                 clone_dir: str = "") -> dict:
+    """注册 git 工作区（克隆仓库）。
 
+    clone_dir 非空时克隆到自定义目录（必须绝对路径），留空克隆到
+    _clones/{name}（SpecGuard 自管）。
+    自定义落点安全边界：绝不清理已有目录（防误删用户数据）——目录已存在
+    且非空时由 git clone 拒绝并原样报错。
     git 认证走系统 git 凭据管理器，SpecGuard 不存储任何凭据。
     """
     name_err = _validate_name(name)
     if name_err:
         return {"ok": False, "error": name_err}
-    try:
-        clone_path = _clone_path_for(name)
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-
-    # 如果克隆目录已存在，先清理
-    if clone_path.exists():
-        import shutil
-        shutil.rmtree(clone_path, ignore_errors=True)
+    if clone_dir:
+        if not Path(clone_dir).is_absolute():
+            return {"ok": False, "error": f"克隆目录必须是绝对路径: {clone_dir}"}
+        clone_path = Path(clone_dir).resolve()
+    else:
+        try:
+            clone_path = _clone_path_for(name)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        # 默认落点（SpecGuard 自管）：残留目录先清理
+        if clone_path.exists():
+            _rmtree_force(clone_path)
 
     # 执行 git clone（`--` 终止选项解析，防 url 以 `-` 开头造成选项注入）
     try:
@@ -369,7 +417,7 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
             info = WorkspaceInfo(
                 name=name, system=system, source_type="git",
                 source_url=url, branch=branch,
-                local_path=str(clone_path.relative_to(SG_ROOT)),
+                local_path=str(clone_path) if clone_dir else str(clone_path.relative_to(SG_ROOT)),
                 last_commit=last_commit,
             )
             registry = _load_registry()
@@ -379,8 +427,8 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
             return {"ok": False, "error": "合规校验未通过（存在 ERROR）",
                     "report": report.to_dict(), "workspace": info.to_dict()}
 
-    # 注册
-    local_rel = str(clone_path.relative_to(SG_ROOT))
+    # 注册：默认落点存相对路径，自定义落点存绝对路径
+    local_rel = str(clone_path) if clone_dir else str(clone_path.relative_to(SG_ROOT))
     info = WorkspaceInfo(
         name=name, system=system, source_type="git",
         source_url=url, branch=branch,

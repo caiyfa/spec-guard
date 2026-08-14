@@ -28,13 +28,24 @@ class TestV1WorkspaceNameTraversal:
 
     def test_validate_name_rules(self):
         from specstd.workspace import _validate_name
+        # 路径穿越/分隔符 → 拒绝
         assert _validate_name("../../engine") is not None
         assert _validate_name("a/b") is not None
         assert _validate_name("a\\b") is not None
         assert _validate_name("..") is not None
+        assert _validate_name(".") is not None
         assert _validate_name("") is not None
+        # Windows 非法目录字符/保留名/结尾点 → 拒绝
+        assert _validate_name("a: b") is not None
+        assert _validate_name('a"b') is not None
+        assert _validate_name("CON") is not None
+        assert _validate_name("x.") is not None
+        assert _validate_name("x ") is not None
+        # 合法：ASCII 常规名 + 中文等 Unicode
         assert _validate_name("tdm") is None
         assert _validate_name("spec-pbs_2") is None
+        assert _validate_name("人才发展") is None
+        assert _validate_name("人才发展-2026") is None
 
     def test_register_local_evil_name(self, tmp_path, monkeypatch):
         import specstd.workspace as wsm
@@ -394,6 +405,14 @@ class TestV11V13IdGuards:
         sid = sm.create()
         sm.save(sid, [{"role": "user", "content": "你好"}])
         assert sm.load(sid)[0]["content"] == "你好"
+
+    def test_session_workspace_chinese_name(self, tmp_path):
+        """中文工作区名可作为会话目录（黑名单口径放行 Unicode）。"""
+        from agent.session import SessionManager
+        sm = SessionManager(tmp_path, workspace="人才发展")
+        sid = sm.create()
+        sm.save(sid, [{"role": "user", "content": "x"}])
+        assert (tmp_path / "人才发展" / f"{sid}.jsonl").is_file()
 
     def test_run_id_traversal_rejected(self):
         import asyncio
