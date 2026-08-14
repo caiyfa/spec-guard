@@ -109,6 +109,7 @@ class FeishuWatcher:
         self._started_at = datetime.now().isoformat(timespec="seconds")
         self._catch_up()
         self._schedule_doc_poll()
+        self._schedule_chat_proofread()
         for key, identity in EVENT_KEYS:
             self._launch(key, identity)
         log.info("feishu_watcher 已启动（emp=%s，%d 路事件）", self.emp, len(EVENT_KEYS))
@@ -126,6 +127,28 @@ class FeishuWatcher:
                 id=f"feishu-docs-{self.emp}", replace_existing=True)
         except Exception as e:
             log.warning("feishu_watcher 文档轮询 job 挂载失败（不阻断监听）: %s", e)
+
+    def _schedule_chat_proofread(self):
+        """T-925：每日 03:00 群聊校对重拉（覆盖写——撤回/编辑/直写丢漏对齐飞书侧）。"""
+        try:
+            from services.scheduler import get_scheduler
+            emp_base = self.sg_root / ".specflow" / self.emp
+
+            def _job():
+                from services.specflow import feishu_sync_service as svc
+                cfg = svc.load_watch_config(emp_base)
+                day = datetime.now().strftime("%Y%m%d")
+                for chat in cfg.get("chats") or []:
+                    try:
+                        svc.sync_chat(emp_base, str(chat.get("chat_id", "")), day)
+                    except Exception as ce:
+                        log.warning("校对重拉失败 %s: %s", chat.get("chat_id"), ce)
+
+            get_scheduler().add_job(
+                _job, trigger="cron", hour=3, minute=0,
+                id=f"feishu-proofread-{self.emp}", replace_existing=True)
+        except Exception as e:
+            log.warning("feishu_watcher 校对 job 挂载失败（不阻断监听）: %s", e)
 
     def stop(self):
         """优雅停：先关 stdin（EOF 触发优雅退出），10s 超时再 terminate。禁 kill。"""
@@ -236,13 +259,38 @@ class FeishuWatcher:
         self._events_received += 1
         self._last_event_at = datetime.now().isoformat(timespec="seconds")
         if event_key == "im.message.receive_v1":
-            chat_id = ev.get("chat_id", "")
-            if chat_id:
-                self._throttled(f"chat:{chat_id}", kind="chat", chat_id=chat_id)
+            self._direct_write_chat(ev)          # T-925：IM 直写（秒级）
         elif event_key in ("minutes.minute.generated_v1", "vc.note.generated_v1"):
             token = ev.get("minute_token") or ev.get("note_token") or ""
             if token:
                 self._throttled(f"minutes:{token}", kind="minutes", token=token)
+
+    def _direct_write_chat(self, ev: dict):
+        """IM 事件直写（T-925）：event_id 去重 → 渲染行 → append 快照。
+
+        撤回/编辑无 CLI 事件，由每日校对重拉兜底（设计 §4.3）。
+        """
+        from specflow.feishu_pool import pool_store
+        event_id = str(ev.get("event_id") or "")
+        chat_id = str(ev.get("chat_id") or "")
+        if not chat_id:
+            return
+        emp_base = self.sg_root / ".specflow" / self.emp
+        if event_id and not pool_store.mark_event_seen(emp_base, event_id):
+            return                              # 重复事件不双写
+        ms = int(ev.get("create_time") or 0)
+        ts = datetime.fromtimestamp(ms / 1000) if ms else datetime.now()
+        sender = pool_store.sender_display(emp_base, str(ev.get("sender_id") or ""))
+        msg_type = str(ev.get("message_type") or "text")
+        if msg_type == "text":
+            body = str(ev.get("content") or "")
+        elif msg_type == "image":
+            body = "[图片]"                     # 直写占位（imgmap 由校对重拉补齐）
+        else:
+            body = f"[{msg_type}消息]"
+        pool_store.append_chat_lines(
+            emp_base, chat_id, ts.strftime("%Y%m%d"),
+            [f"[{ts.strftime('%H:%M')}] {sender}: {body}"])
 
     def _throttled(self, key: str, **pull_kw):
         now = time.time()

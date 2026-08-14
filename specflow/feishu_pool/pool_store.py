@@ -70,3 +70,86 @@ def load_imgmap(specflow_emp_base: Path, stem_file: Path) -> dict:
         return json.loads(imgmap_path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+# ══════════════════════════════════════════════════════════
+# 事件直写原语（三期 T-925，F6）
+# ══════════════════════════════════════════════════════════
+
+import time as _time
+
+_SEEN_EVENTS_TTL = 7 * 86400   # event_id 去重表 TTL（7 天滚动）
+
+
+def append_chat_lines(specflow_emp_base: Path, chat_id: str, day: str,
+                      lines: list[str]) -> Path:
+    """群聊快照追加写（事件直写主路径；与 sync_chat 覆盖写互补）。"""
+    cs8 = chat_sha8(chat_id)
+    d = pool_dirs(specflow_emp_base)["chats"] / cs8
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{day}.md"
+    with open(f, "a", encoding="utf-8") as fh:
+        for line in lines:
+            fh.write(line.rstrip("\n") + "\n")
+    return f
+
+
+def _seen_path(specflow_emp_base: Path) -> Path:
+    return pool_dirs(specflow_emp_base)["root"] / "_seen_events.json"
+
+
+def mark_event_seen(specflow_emp_base: Path, event_id: str) -> bool:
+    """event_id 去重：首次见 → 登记返回 True；已见 → False（重复事件不双写）。"""
+    path = _seen_path(specflow_emp_base)
+    seen: dict = {}
+    if path.is_file():
+        try:
+            seen = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            seen = {}
+    now = _time.time()
+    # TTL 滚动清理
+    seen = {k: v for k, v in seen.items()
+            if isinstance(v, (int, float)) and now - v < _SEEN_EVENTS_TTL}
+    if event_id in seen:
+        return False
+    seen[event_id] = now
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(seen, ensure_ascii=False), encoding="utf-8")
+    return True
+
+
+def _senders_path(specflow_emp_base: Path) -> Path:
+    return pool_dirs(specflow_emp_base)["root"] / "_senders.json"
+
+
+def _resolve_sender(open_id: str) -> str:
+    """lark-cli 通讯录解析 open_id → 显示名（失败返回空串，调用方兜底）。"""
+    from specflow.feishu_pool.lark_cli import _run_lark
+    try:
+        payload = _run_lark(["contact", "+get-user", "--user-id", open_id,
+                             "--as", "user"])
+        data = payload.get("data") or {}
+        return str(data.get("name") or data.get("nickname") or "")
+    except Exception:
+        return ""
+
+
+def sender_display(specflow_emp_base: Path, open_id: str) -> str:
+    """open_id → 显示名（_senders.json 缓存；解析失败回退尾 6 位）。"""
+    path = _senders_path(specflow_emp_base)
+    cache: dict = {}
+    if path.is_file():
+        try:
+            cache = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            cache = {}
+    if open_id in cache:
+        return cache[open_id]
+    name = _resolve_sender(open_id)
+    if not name:
+        name = f"…{open_id[-6:]}"
+    cache[open_id] = name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    return name

@@ -122,3 +122,42 @@ class TestCaptions:
         assert saved["图片#1"]["caption"] == "人工补写：权限矩阵图"
         assert saved["图片#1"]["caption_by"] == "manual"
         assert saved["图片#1"]["status"] == "done"
+
+
+# ══════════════════════════════════════════════════════════
+# T-925：事件直写原语（append_chat_lines / 去重 / 发送人缓存）
+# ══════════════════════════════════════════════════════════
+
+class TestDirectWrite:
+    def test_append_chat_lines_format(self, tmp_path):
+        emp = tmp_path / ".specflow" / "u1"
+        pool_store.append_chat_lines(
+            emp, "oc_abc", "20260814",
+            ["[20:40] 张三: 直写消息一", "[20:41] 李四: 直写消息二"])
+        pool_store.append_chat_lines(emp, "oc_abc", "20260814",
+                                     ["[20:42] 张三: 追加"])
+        f = next((emp / "feishu_pool" / "chats").rglob("20260814.md"))
+        text = f.read_text(encoding="utf-8")
+        assert "直写消息一" in text and "追加" in text
+        assert text.count("\n[20:") >= 2           # 追加非覆盖
+
+    def test_event_dedup(self, tmp_path):
+        emp = tmp_path / ".specflow" / "u1"
+        assert pool_store.mark_event_seen(emp, "e1") is True
+        assert pool_store.mark_event_seen(emp, "e1") is False   # 重复事件不双写
+
+    def test_sender_name_fallback(self, tmp_path):
+        from unittest.mock import patch as _patch
+        emp = tmp_path / ".specflow" / "u1"
+        with _patch.object(pool_store, "_resolve_sender", return_value=""):
+            name = pool_store.sender_display(emp, "ou_abcdef123456")
+        assert name == "…123456"                   # 解析失败用 open_id 尾 6 位
+
+    def test_sender_name_cached(self, tmp_path):
+        from unittest.mock import patch as _patch
+        emp = tmp_path / ".specflow" / "u1"
+        with _patch.object(pool_store, "_resolve_sender", return_value="张三") as m:
+            n1 = pool_store.sender_display(emp, "ou_abc")
+            n2 = pool_store.sender_display(emp, "ou_abc")
+        assert n1 == "张三" and n2 == "张三"
+        assert m.call_count == 1                     # 第二次命中缓存不再解析

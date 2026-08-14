@@ -77,27 +77,36 @@ _ONE_KEY = [("im.message.receive_v1", "bot")]
 
 
 class TestConsumeLoop:
-    def test_throttle_merges_same_chat(self, tmp_path):
+    def test_im_event_direct_write(self, tmp_path):
+        """T-925：IM 事件直写（二期节流重拉语义已被直写替代）。"""
         _mk_user(tmp_path, "u1")
-        events = [{"chat_id": "oc_a", "event_id": "e1"},
-                  {"chat_id": "oc_a", "event_id": "e2"},
-                  {"chat_id": "oc_b", "event_id": "e3"}]
-        pulled = []
+        events = [{"chat_id": "oc_a", "event_id": "e1", "sender_id": "ou_x1",
+                   "create_time": "1691498400000", "message_type": "text",
+                   "content": "直写一"},
+                  {"chat_id": "oc_a", "event_id": "e2", "sender_id": "ou_x1",
+                   "create_time": "1691498460000", "message_type": "text",
+                   "content": "直写二"},
+                  {"chat_id": "oc_a", "event_id": "e1", "sender_id": "ou_x1",
+                   "create_time": "1691498400000", "message_type": "text",
+                   "content": "直写一"}]   # 重复 event_id → 不双写
+        from specflow.feishu_pool import pool_store
         with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
              patch.object(fw, "_token_valid", return_value=True), \
              patch.object(fw.FeishuWatcher, "_spawn",
                           new=lambda self, k, i: _FakeProc(events)), \
-             patch.object(fw.FeishuWatcher, "_trigger_pull",
-                          new=lambda self, **kw: pulled.append(kw)), \
              patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
-             patch.object(fw, "THROTTLE_SECONDS", 60):
+             patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
+             patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+             patch.object(pool_store, "_resolve_sender", return_value="张三"):
             w = fw.FeishuWatcher(tmp_path)
             w.start()
             time.sleep(0.3)
             w.stop()
-        chats = [p for p in pulled if p.get("kind") == "chat"]
-        # oc_a 两事件节流合并为 1 次重拉，oc_b 1 次
-        assert len(chats) == 2
+        emp = tmp_path / ".specflow" / "u1"
+        chat_file = next((emp / "feishu_pool" / "chats").rglob("*.md"))
+        text = chat_file.read_text(encoding="utf-8")
+        assert "直写一" in text and "直写二" in text
+        assert text.count("直写一") == 1            # 去重生效
 
     def test_graceful_stop_closes_stdin_first(self, tmp_path):
         _mk_user(tmp_path, "u1")
@@ -177,27 +186,28 @@ def test_e2e_event_to_review_queue(tmp_path):
     from specflow.feishu_pool import topic_cluster as tc
 
     _mk_user(tmp_path, "u1")
-    events = [{"chat_id": "oc_a", "event_id": "e1"},
-              {"chat_id": "oc_a", "event_id": "e2"}]   # 同群两事件 → 节流一次重拉
+    events = [{"chat_id": "oc_a", "event_id": "e1", "sender_id": "ou_x1",
+               "create_time": "1691498400000", "message_type": "text",
+               "content": "作废会话后级联删除人员"},
+              {"chat_id": "oc_a", "event_id": "e2", "sender_id": "ou_x1",
+               "create_time": "1691498460000", "message_type": "text",
+               "content": "下午继续讨论权限过滤"}]
 
-    def _fake_lark(args, timeout=90):
-        return {"ok": True, "data": {"items": [
-            {"create_time_ms": "1691498400000", "sender_name": "张三",
-             "msg_type": "text", "text": "作废会话后级联删除人员"}]}}
-
+    from specflow.feishu_pool import pool_store
     with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
          patch.object(fw, "_token_valid", return_value=True), \
          patch.object(fw.FeishuWatcher, "_spawn",
                       new=lambda self, k, i: _FakeProc(events)), \
          patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
-         patch.object(fw, "THROTTLE_SECONDS", 60), \
-         patch.object(svc, "_run_lark", side_effect=_fake_lark):
+         patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+         patch.object(pool_store, "_resolve_sender", return_value="张三"):
         w = fw.FeishuWatcher(tmp_path)
         w.start()
         time.sleep(0.3)
         w.stop()
 
-    # 事件触发重拉落池（真实 sync_chat 被调）
+    # 事件直写落池（T-925 直写路径）
     emp = tmp_path / ".specflow" / "u1"
     chat_files = list((emp / "feishu_pool" / "chats").rglob("*.md"))
     assert len(chat_files) == 1
