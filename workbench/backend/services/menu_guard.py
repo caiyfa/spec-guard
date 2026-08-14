@@ -44,6 +44,7 @@ API_MENU_BINDINGS: dict[str, str] = {
     "zentao": "menu-zentao",
     "materials": "menu-materials",
     "scores": "menu-scores",
+    "quality": "menu-quality",
     # feishu-pool / data-fab 无对应菜单，暂放行（设计文档注明待核对）
 }
 
