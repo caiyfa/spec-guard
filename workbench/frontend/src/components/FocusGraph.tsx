@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ReactFlow, Background, type Node, type Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { graphApi, type FocusGraphResp } from '../api';
+import { extractLastAnchor } from '../utils/focusAnchor';
 
 const TYPE_COLOR: Record<string, string> = {
   fr: '#38bdf8', ac: '#22d3ee', scenario: '#34d399', decision: '#fbbf24',
@@ -138,18 +139,28 @@ export default function FocusGraph({ nodeId, depth = 2, height = 360 }: Props) {
   );
 }
 
-/** AgentChat 侧栏「◎ 图谱」页签容器：焦点输入 + 深度选择 + FocusGraph 渲染。 */
-export function FocusGraphTab() {
+/** AgentChat 侧栏「◎ 图谱」页签容器：焦点输入 + 深度选择 + FocusGraph 渲染。
+ *  T-921：messages 传入时自动检测最近消息最后提及的锚点；手动输入优先可覆盖。 */
+export function FocusGraphTab({ messages = [] }: { messages?: { role: string; content: string }[] }) {
   const [input, setInput] = useState('');
   const [nodeId, setNodeId] = useState('');
   const [depth, setDepth] = useState(2);
+  const [manual, setManual] = useState(false);
   const inputCls = 'flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info';
+
+  // T-921：消息锚点自动焦点（手动输入过则以手动为准）
+  useEffect(() => {
+    if (manual) return;
+    const anchor = extractLastAnchor(messages);
+    if (anchor) setNodeId(anchor);
+  }, [messages, manual]);
+
   return (
     <div className="p-2">
       <div className="flex items-center gap-1.5 mb-2">
         <input className={inputCls} value={input} onChange={e => setInput(e.target.value)}
           placeholder="FR-xxx / tp:xxx / fd:xxx"
-          onKeyDown={e => e.key === 'Enter' && setNodeId(input.trim())} />
+          onKeyDown={e => { if (e.key === 'Enter') { setManual(true); setNodeId(input.trim()); } }} />
         <select className="bg-surface-3 border border-border rounded px-1.5 py-1 text-xs text-gray-300"
           value={depth} onChange={e => setDepth(Number(e.target.value))}>
           <option value={1}>1 跳</option>
@@ -157,12 +168,12 @@ export function FocusGraphTab() {
           <option value={3}>3 跳</option>
         </select>
         <button className="px-2.5 py-1 rounded text-xs bg-info/15 text-info hover:bg-info/25"
-          onClick={() => setNodeId(input.trim())}>查看</button>
+          onClick={() => { setManual(true); setNodeId(input.trim()); }}>查看</button>
       </div>
       {nodeId
         ? <FocusGraph nodeId={nodeId} depth={depth} height={420} />
         : <div className="text-[11px] text-gray-500 px-1 py-4 text-center">
-            输入节点 ID（如 FR-001）查看其关联子图——飞书材料/话题沿 mentions 边可见
+            对话中提及 FR/话题/材料锚点时自动显示其子图；也可手动输入节点 ID
           </div>}
     </div>
   );

@@ -2095,7 +2095,7 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
         {activeTab === 'gates' && (
           <GateDockPanel sessionId={sessionId} onAskAgent={onAskAgentGuide || (() => {})} onError={onError} />
         )}
-        {activeTab === 'focus' && <FocusGraphTab />}
+        {activeTab === 'focus' && <FocusGraphTab messages={messages} />}
         {activeTab === 'reading' && (
           <ReadingPanel items={readingFeed} onOpen={onOpenDocRead} onRefresh={onRefreshReadingFeed} />
         )}
