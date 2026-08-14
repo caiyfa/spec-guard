@@ -328,11 +328,11 @@ def _parse_jscpd(data: dict) -> dict:
                 st["errors"] += 1
     formats: dict[str, dict] = {}
     for fmt, body in stats_src.items():
-        total = (body or {}).get("total") or {}
-        if total.get("clones"):
+        # formats.<fmt> 为扁平结构（实测：{clones, duplicatedLines, percentage, ...}）
+        if body and body.get("clones"):
             formats[fmt] = {
-                "clones": total.get("clones", 0),
-                "percentage": total.get("percentage", 0),
+                "clones": body.get("clones", 0),
+                "percentage": body.get("percentage", 0),
             }
     grand = ((data.get("statistics") or {}).get("total") or {})
     return {

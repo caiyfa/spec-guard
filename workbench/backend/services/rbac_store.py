@@ -66,6 +66,8 @@ SEED_MENUS: list[tuple] = [
     ("group-feedback", "反哺", "🔄", "", "", 6, 1, 0),
     ("menu-feedback", "反哺闭环", "", "/feedback", "group-feedback", 0, 1, 0),
     ("menu-notify", "通知配置", "", "/notify", "group-feedback", 1, 1, 0),
+    ("group-quality", "质量", "🛡️", "", "", 7, 1, 0),
+    ("menu-quality", "质量中心", "", "/quality", "group-quality", 0, 1, 0),
 ]
 
 SEED_ROLES: list[tuple] = [
@@ -147,6 +149,15 @@ def init_db(db_path: Path | None = None):
         conn.execute(
             "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
             " VALUES ('menu-feishu-pool','飞书材料池','','/feishu-pool','group-requirement',4,1,0,?,?)",
+            (_now(), _now()))
+        # 存量迁移（幂等）：质量中心菜单（2026-08-14 基线可视化；admin/tester 可见）
+        conn.execute(
+            "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
+            " VALUES ('group-quality','质量','🛡️','','',7,1,0,?,?)",
+            (_now(), _now()))
+        conn.execute(
+            "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
+            " VALUES ('menu-quality','质量中心','','/quality','group-quality',0,1,0,?,?)",
             (_now(), _now()))
 
 

@@ -77,3 +77,6 @@ _lark_auth_qr.png
 
 # ── 测试产物（不入库）──
 workbench/workbench/
+
+# ── Windows NUL 设备（git 误报为 untracked 文件，实为设备不存在）──
+nul
