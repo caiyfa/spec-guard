@@ -1,7 +1,9 @@
 # SpecGuard Vision · 开发总控文档
 
 > **本文档是所有开发会话的唯一协调中心。任何开发会话开工前必须完整阅读 §1-§4，并按 §3 协议注册会话、认领任务、登记文件变更。**
-> 版本：v1.26 · 2026-08-14 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+> 版本：v1.27 · 2026-08-14 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+>
+> **v1.27 决策（2026-08-14，sess-feishu-graph，总控人指令）**：§4.9 飞书知识图谱支线三期任务登记（T-924~T-929，依据《三期设计-多用户编排与演进追踪》+《三期实施计划》）——多用户监听编排（WatcherRegistry 配置驱动启停+软上限+状态落盘，二期单用户守卫退役）+ IM 事件直写（秒级，每日校对重拉兜底撤回/编辑）+ 话题演进链（LLM 判延续 continues→evolves 边）+ 确认可选入包（默认不勾不绕人拍板）。二期 T-917~T-923 已 ✅（6301847）。
 >
 > **v1.26 决策（2026-08-14，sess-feishu-graph，总控人指令）**：§4.9 飞书知识图谱支线二期任务登记（T-917~T-923，依据《二期设计-事件监听与智能增强》+《二期实施计划》）——采集层升级事件驱动常驻监听（FeishuWatcher 托管 3 路 consume，单用户守卫三态/5min 节流重拉/关 stdin 优雅停/退避重启）+ 视觉转述（增量自动+存量手动）+ 消息锚点自动焦点 + 文档日级轮询补位。一期 T-910~T-916 已 ✅（bb7d3d8）。**收口（2026-08-14）**：二期 T-917~T-923 全量交付（7580fc3 watcher / 5119dbe 接线 / 7189fd0 转述 / fddc272 自动焦点 / d3a6ea4 轮询）；全量 1564 绿 + release_check PASS + 前端 build 通过。
 >
@@ -246,6 +248,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-921 | 图谱二期-焦点 | 消息锚点自动焦点 | utils/focusAnchor.ts + FocusGraph/AgentChat | 最近消息最后提及锚点（FR/AC/tp/fd/fm）自动渲染；手动输入优先可覆盖；tsc build 通过 | T-916 | 已完成 | sess-feishu-graph | P1 ✅ 2026-08-14（fddc272：extractLastAnchor 纯函数 + FocusGraphTab messages 接线） |
 | T-922 | 图谱二期-轮询 | 文档日级轮询补位 | feishu_sync_service.sync_recent_docs + watcher 挂 job | drive +search --edited-since 1d ∩ watch.docs 授权清单交集落池（未授权不进池）；APScheduler 每日 job 不落 jobs 表；1 用例 | T-919 | 已完成 | sess-feishu-graph | P1 ✅ 2026-08-14（d3a6ea4：交集过滤用例 + watcher cron 挂载） |
 | T-923 | 图谱二期-收口 | e2e + 发布门禁 | 全链路 | 事件 NDJSON→节流→重拉→聚类→建议入队全 mock 贯通；全量回归 + release_check PASS；设计 v1.1 已实施 | T-918/T-920/T-921/T-922 | 已完成 | sess-feishu-graph | P0 ✅ 2026-08-14：test_e2e_event_to_review_queue 贯通（事件→节流一次重拉→落池→聚类→建议 pending 入队）；全量 1564 绿 + release_check PASS；设计 v1.1 |
+| T-924 | 图谱三期-编排 | 多用户监听注册表 | feishu_watcher.py + feishu_pool 路由 | WatcherRegistry（{emp: watcher} 内存表+watchers.json 落盘）；配置驱动启停（保存 watch 拉起/删除停）；软上限 50 告警；二期单用户守卫退役为 resolve_watch_users；4 用例 | T-923 | 未认领 | | P0 |
+| T-925 | 图谱三期-直写 | IM 事件直写+校对重拉 | pool_store（append_chat_lines/去重/发送人缓存）+ watcher 分流 | IM 事件内容直写快照（秒级，event_id 去重 7 天 TTL）；发送人 open_id→名缓存（失败尾 6 位）；每日 03:00 全量校对覆盖（撤回/编辑/丢漏对齐飞书侧）；minutes/vc 保持节流重拉；3 用例 | T-924 | 未认领 | | P0 |
+| T-926 | 图谱三期-演进 | 话题跨天演进链 | topic_cluster + facts + graph_index（store/builder/service） | 聚类 prompt 注入近 7 天同群话题清单，LLM 判延续出 continues；防幻觉校验（continues 须在清单）；graph_index 加 evolves 边+trace 上游追溯；3 用例 | T-923 | 未认领 | | P1 |
+| T-927 | 图谱三期-入包 | 确认可选入包 | feishu_review_service + FeishuReviewPanel + api.ts | confirm 响应带 suggest_ivs（FR∈进行中面试议题范围）；前端弹层勾选默认不勾；勾选=确认+入包两动作一次人拍板（走 M03 原端点不新增写通道）；2 用例 + build | T-923 | 未认领 | | P1 |
+| T-928 | 图谱三期-收口 | e2e + 发布门禁 | 全链路 | 多用户事件→直写→校对→聚类（continues）→确认（suggest_ivs）全 mock 贯通；全量回归+release_check PASS；设计 v1.1 | T-924~T-927 | 未认领 | | P0 |
 
 ---
 
@@ -255,7 +262,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 |---|---|---|---|---|
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23/v1.24 归档编排 | T-900 + T-901 + T-902 + 归档瘦身 | 2026-08-13 | T-900 一期 ✅（commit 23a4c60）→ T-901 二期 ✅ + T-902 三期 ✅（MCP 工具 + 围栏渲染 + 白名单代执行 + skills 话术）；总控 v1.23 归档瘦身 + v1.24 二三期完成收口 |
-| sess-feishu-graph | 飞书知识图谱施工（面试素材溯源） | T-910 ~ T-916（一期✅）→ T-917 ~ T-923（二期） | 2026-08-14 | 一期批次 A（11220d3）+ 批次 B（af7fada~bb7d3d8）全量收口；二期事件监听/转述/自动焦点/轮询开工 |
+| sess-feishu-graph | 飞书知识图谱施工（面试素材溯源） | T-910 ~ T-923（一/二期✅）→ T-924 ~ T-929（三期） | 2026-08-14 | 一期批次 A/B + 二期事件监听/转述/自动焦点/轮询全量收口；三期多用户编排/直写/演进链/入包登记 |
 | | | | | |
 
 ---
@@ -469,6 +476,9 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | docs/远期设计/SpecGuard-飞书知识图谱二期设计-事件监听与智能增强.md | sess-feishu-graph | 2026-08-14 | NEW | 72c391148d1e | 已完成 | 二期设计定稿（64ccc29） |
 | docs/upgrade-plans/2026-08-14-飞书知识图谱二期实施计划.md | sess-feishu-graph | 2026-08-14 | NEW | c49b3ff25b2c | 已完成 | 二期计划 Task0-7（64ccc29） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-feishu-graph | 2026-08-14 | 58b09aab4c31 | 4130088d3b1e | 已完成 | v1.26：二期任务登记 |
+| docs/远期设计/SpecGuard-飞书知识图谱三期设计-多用户编排与演进追踪.md | sess-feishu-graph | 2026-08-14 | NEW | abd732b1b17c | 已完成 | 三期设计定稿 |
+| docs/upgrade-plans/2026-08-14-飞书知识图谱三期实施计划.md | sess-feishu-graph | 2026-08-14 | NEW | cc3f67739ddc | 已完成 | 三期计划 Task0-5 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-feishu-graph | 2026-08-14 | 09e02ad565f8 | 22b97172b1f7 | 已完成 | v1.27：三期任务登记 |
 | workbench/backend/services/specflow/feishu_watcher.py | sess-feishu-graph | 2026-08-14 | NEW | 718acf84e977 | 已完成 | T-917~T-919/T-922：watcher 托管器（7580fc3/d3a6ea4） |
 | test_specstd/test_feishu_watcher.py | sess-feishu-graph | 2026-08-14 | NEW | c254d34a0e3a | 已完成 | T-917~T-919/T-923：watcher 用例 9 例 |
 | workbench/backend/main.py | sess-feishu-graph | 2026-08-14 | — | 773886894a6e | 已完成 | T-919：watcher 挂载（5119dbe） |
