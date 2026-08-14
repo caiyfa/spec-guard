@@ -1610,4 +1610,7 @@ export const feishuPoolApi = {
   reject: (pairs: [string, string][]) =>
     request<{ rejected: number; skipped: number }>(
       '/feishu-pool/review/reject', { method: 'POST', body: JSON.stringify({ pairs }) }),
+  transcribe: () =>
+    request<{ status: string; reason?: string; done: number; failed: number; total: number }>(
+      '/feishu-pool/transcribe', { method: 'POST' }),
 };

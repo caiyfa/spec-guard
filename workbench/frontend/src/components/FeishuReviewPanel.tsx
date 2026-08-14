@@ -80,6 +80,16 @@ export default function FeishuReviewPanel() {
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
+  const handleTranscribe = async () => {
+    setBusy('transcribe'); setError(''); setNotice('');
+    try {
+      const r = await feishuPoolApi.transcribe();
+      setNotice(r.status === 'skipped'
+        ? `已跳过：${r.reason || '未配置 vision 模型'}`
+        : `图片转述完成：${r.done} 成功 / ${r.failed} 失败 / 共 ${r.total}`);
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
   const handleBatch = async (action: 'confirm' | 'reject') => {
     if (selected.size === 0) return;
     setBusy(action); setError(''); setNotice('');
@@ -135,6 +145,9 @@ export default function FeishuReviewPanel() {
         <div className="flex items-center gap-2">
           <button className={btn} onClick={handleSync} disabled={busy === 'sync'}>
             {busy === 'sync' ? '同步中…' : '立即同步'}
+          </button>
+          <button className={btn} onClick={handleTranscribe} disabled={busy === 'transcribe'}>
+            {busy === 'transcribe' ? '转述中…' : '🖼 转述图片'}
           </button>
           <button className={btn} onClick={openWatch}>同步设置</button>
         </div>

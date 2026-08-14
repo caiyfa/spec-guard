@@ -93,3 +93,22 @@ def review_reject(body: ReviewPairs,
     from services.specflow import feishu_review_service as rev_svc
     pairs = [(p[0], p[1]) for p in body.pairs if len(p) == 2]
     return rev_svc.reject_suggestions(_sf_base(), _ws_root(), user.emp_no, pairs)
+
+
+@router.post("/transcribe")
+def transcribe(user: CurrentUser = Depends(get_current_user),
+               workspace: str = Depends(resolve_workspace)):
+    """存量手动转述（T-920）：扫当前用户材料池全部 pending 图片走 vision 模型。
+
+    未配置 vision 模型（model_configs 无 model_id=vision）→ skipped 不报错。
+    """
+    from services import model_config
+    m = model_config.get_model("vision")
+    if not m:
+        return {"status": "skipped",
+                "reason": "未配置 vision 模型（设置页 model_configs 加 model_id=vision）",
+                "done": 0, "failed": 0, "total": 0}
+    from agent.llm_client import LLMClient
+    from specflow.feishu_pool import captions
+    llm = LLMClient(model_id="vision")
+    return captions.transcribe_images(_sf_base(), llm_vision=llm)

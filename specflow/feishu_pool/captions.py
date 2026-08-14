@@ -60,13 +60,105 @@ def update_caption(imgmap_path: Path, placeholder: str, caption: str,
     return imgmap[placeholder]
 
 
-def transcribe_images(specflow_emp_base: Path, llm_vision=None) -> dict:
-    """视觉转述作业（二期接口预留，一期不实现）。
+def _iter_pending(specflow_emp_base: Path) -> list:
+    """扫描材料池全部 imgmap 的 pending 条目 [(imgmap_path, placeholder, media_key)]。"""
+    from specflow.feishu_pool.paths import pool_dirs
+    out = []
+    pool = pool_dirs(specflow_emp_base)
+    for sub in ("docs", "chats", "minutes"):
+        d = pool[sub]
+        if not d.is_dir():
+            continue
+        for f in sorted(d.rglob("*.imgmap.json")):
+            try:
+                imgmap = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            for ph, item in imgmap.items():
+                if item.get("status") == "pending":
+                    out.append((f, ph, str(item.get("media_key") or "")))
+    return out
 
-    一期部署不保证多模态模型——llm_vision 为 None 时直接跳过（不阻塞管线）。
-    二期接 vision 模型：扫描 imgmap 中 status=pending 条目，下载图片 →
-    视觉模型生成 caption → update_caption(by="vision_llm") 回填。
+
+def _download_image(media_key: str) -> bytes:
+    """按 media_key 下载图片二进制（lark-cli 只读；二期实装点）。
+
+    docs +media-download（文档图）/ im +messages-resources-download（消息图）。
+    统一从 lark_cli.run_lark 走（返回含 base64/文件路径的 payload，
+    实测结构以 lark-cli 返回为准微调）。
+    """
+    import base64
+    from specflow.feishu_pool.lark_cli import _run_lark
+    payload = _run_lark(["docs", "+media-download", "--media-key", media_key,
+                         "--as", "user"])
+    data = payload.get("data") or {}
+    if data.get("base64"):
+        return base64.b64decode(data["base64"])
+    if data.get("file"):
+        return Path(data["file"]).read_bytes()
+    raise ValueError(f"media-download 返回无二进制内容: {media_key}")
+
+
+def _mark_failed(imgmap_path: Path, placeholder: str, error: str):
+    """失败诚实落盘（status=failed + error，可人工改 caption 兜底）。"""
+    imgmap_path = Path(imgmap_path)
+    try:
+        imgmap = json.loads(imgmap_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    if placeholder in imgmap:
+        imgmap[placeholder]["status"] = "failed"
+        imgmap[placeholder]["error"] = error[:200]
+        imgmap_path.write_text(json.dumps(imgmap, ensure_ascii=False, indent=2),
+                               encoding="utf-8")
+
+
+def transcribe_images(specflow_emp_base: Path, llm_vision=None,
+                      recent_only_days: int = 0) -> dict:
+    """视觉转述作业（二期 T-920 实装）。
+
+    扫描材料池 imgmap 的 pending 条目：下载图片 → base64 → vision LLM
+    生成 ≤60 字业务描述 → update_caption(by=\"vision_llm\") 回填。
+
+    Args:
+        llm_vision: 视觉模型 LLMClient（None = 未配置 → skipped 不阻塞管线）
+        recent_only_days: >0 时只处理近 N 天修改的 imgmap（增量自动转用）；
+                          0 = 全部（存量手动转用）
+
+    Returns:
+        {status: skipped|done, done, failed, total}
     """
     if llm_vision is None:
-        return {"status": "skipped", "reason": "未配置视觉模型（一期接口预留）"}
-    raise NotImplementedError("二期接入视觉模型转述")
+        return {"status": "skipped", "reason": "未配置视觉模型",
+                "done": 0, "failed": 0, "total": 0}
+    import base64
+    import time as _time
+    pendings = _iter_pending(specflow_emp_base)
+    if recent_only_days > 0:
+        cutoff = _time.time() - recent_only_days * 86400
+        pendings = [p for p in pendings
+                    if p[0].stat().st_mtime >= cutoff]
+    done = failed = 0
+    for imgmap_path, ph, media_key in pendings:
+        try:
+            if not media_key:
+                raise ValueError("imgmap 缺 media_key（可能为占位符扫描产物）")
+            raw = _download_image(media_key)
+            b64 = base64.b64encode(raw).decode("ascii")
+            resp = llm_vision.chat([{"role": "user", "content": [
+                {"type": "text", "text": "用不超过60字描述这张图的业务内容"
+                                           "（架构图/表格/截图的关键信息），"
+                                           "直接给描述文本，不要前缀"},
+                {"type": "image_url",
+                 "image_url": {"url": f"data:image/png;base64,{b64}"}},
+            ]}])
+            caption = str(resp.get("content", "")).strip()
+            if not caption:
+                raise ValueError("vision 模型返回空描述")
+            update_caption(imgmap_path, ph, caption, by="vision_llm")
+            done += 1
+        except Exception as e:
+            _mark_failed(imgmap_path, ph, str(e))
+            failed += 1
+    return {"status": "done", "done": done, "failed": failed,
+            "total": len(pendings)}
