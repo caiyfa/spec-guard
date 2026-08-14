@@ -94,15 +94,19 @@ class FeishuWatcher:
         self._threads: list[threading.Thread] = []
         self._stop = threading.Event()
         self._last_pull: dict[str, float] = {}
+        self._started_at = ""
+        self._events_received = 0
+        self._last_event_at = ""
 
     # ── 生命周期 ──
 
-    def start(self) -> bool:
-        """启动监听（守卫不满足 → False 静默/告警）。"""
-        self.emp = resolve_watch_user(self.sg_root)
+    def start(self, emp: str = "") -> bool:
+        """启动监听（emp 指定用户；空则走守卫解析；不满足 → False）。"""
+        self.emp = emp or resolve_watch_user(self.sg_root)
         if not self.emp:
             return False
         self._stop.clear()
+        self._started_at = datetime.now().isoformat(timespec="seconds")
         self._catch_up()
         self._schedule_doc_poll()
         for key, identity in EVENT_KEYS:
@@ -141,6 +145,12 @@ class FeishuWatcher:
                     proc.terminate()
                 except Exception:
                     pass
+
+    def stats(self) -> dict:
+        """运行状态（T-924 注册表/T-929 状态端点用）。"""
+        return {"started_at": self._started_at,
+                "events_received": self._events_received,
+                "last_event_at": self._last_event_at}
 
     def _catch_up(self):
         """启动 catch-up：全量补拉一次（补离线窗口；幂等覆盖写）。"""
@@ -223,6 +233,8 @@ class FeishuWatcher:
     # ── 事件 → 节流 → 重拉 ──
 
     def _on_event(self, event_key: str, ev: dict):
+        self._events_received += 1
+        self._last_event_at = datetime.now().isoformat(timespec="seconds")
         if event_key == "im.message.receive_v1":
             chat_id = ev.get("chat_id", "")
             if chat_id:
@@ -253,31 +265,120 @@ class FeishuWatcher:
             log.warning("feishu_watcher 重拉失败 %s: %s", kw, e)
 
 
+def resolve_watch_users(sg_root: Path) -> list[str]:
+    """多用户枚举（T-924）：全部「watch 配置 + token 有效」用户的 emp_no 列表。"""
+    root = Path(sg_root)
+    lark_root = root / ".lark-cli"
+    if not lark_root.is_dir():
+        return []
+    cands = []
+    for d in sorted(lark_root.iterdir()):
+        if not d.is_dir():
+            continue
+        if (root / ".specflow" / d.name / "feishu_watch.yaml").is_file():
+            cands.append(d.name)
+    return [e for e in cands if _token_valid(root, e)]
+
+
 # ══════════════════════════════════════════════════════════
-# 模块级单例（main.py startup/shutdown 接线用）
+# 多用户注册表（三期 T-924）
 # ══════════════════════════════════════════════════════════
 
-_WATCHER: FeishuWatcher | None = None
+MAX_WATCHERS = 50   # 软上限：超出 WARN 拒绝新启动
+
+
+class WatcherRegistry:
+    """多用户监听注册表：{emp: FeishuWatcher} + 配置驱动启停 + 状态落盘。"""
+
+    def __init__(self, sg_root: Path):
+        self.sg_root = Path(sg_root)
+        self.watchers: dict[str, FeishuWatcher] = {}
+
+    def start_all(self) -> list[str]:
+        """启动全部满足条件的用户（软上限内），返回成功启动的 emp 列表。"""
+        started = []
+        for emp in resolve_watch_users(self.sg_root):
+            if len(self.watchers) >= MAX_WATCHERS:
+                log.warning("feishu_watcher 达软上限 %d，跳过 %s", MAX_WATCHERS, emp)
+                break
+            if self.start_user(emp):
+                started.append(emp)
+        return started
+
+    def start_user(self, emp: str) -> bool:
+        """启动单用户监听（幂等：已在跑跳过）。"""
+        if emp in self.watchers:
+            return False
+        if len(self.watchers) >= MAX_WATCHERS:
+            log.warning("feishu_watcher 达软上限 %d，拒绝启动 %s", MAX_WATCHERS, emp)
+            return False
+        w = FeishuWatcher(self.sg_root)
+        if not w.start(emp=emp):
+            return False
+        self.watchers[emp] = w
+        return True
+
+    def stop_user(self, emp: str) -> bool:
+        """停止单用户监听（幂等：未在跑跳过）。"""
+        w = self.watchers.pop(emp, None)
+        if w is None:
+            return False
+        w.stop()
+        return True
+
+    def stop_all(self):
+        for emp in list(self.watchers):
+            self.stop_user(emp)
+
+    def status(self) -> dict:
+        """内存状态快照（事件计数等取自各 watcher.stats）。"""
+        return {"count": len(self.watchers),
+                "watchers": [{"emp": emp, **w.stats()} for emp, w
+                             in sorted(self.watchers.items())]}
+
+    def persist_status(self, workspace_root: Path) -> Path:
+        """状态落盘 {ws}/.specguard/feishu/watchers.json（管理可查）。"""
+        path = Path(workspace_root) / ".specguard" / "feishu" / "watchers.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.status(), ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+        return path
+
+
+# ══════════════════════════════════════════════════════════
+# 模块级单例（main.py startup/shutdown 接线用；三期起走注册表）
+# ══════════════════════════════════════════════════════════
+
+_REGISTRY: WatcherRegistry | None = None
 
 
 def start_background(sg_root: Path) -> bool:
-    """启动全局 watcher（幂等：已启动/守卫不满足则跳过）。"""
-    global _WATCHER
-    if _WATCHER is not None:
+    """启动全局注册表并拉起全部满足条件的用户（幂等）。
+
+    注册表常驻创建（无满足用户时为空注册表）——后续 PUT watch 配置
+    可经 get_registry().start_user(emp) 动态拉起（T-924 配置驱动启停）。
+    Returns: 是否有 watcher 被启动（注册表本身总是就绪）。
+    """
+    global _REGISTRY
+    if _REGISTRY is not None:
         return False
-    w = FeishuWatcher(sg_root)
-    if not w.start():
-        return False
-    _WATCHER = w
-    return True
+    reg = WatcherRegistry(sg_root)
+    started = reg.start_all()
+    _REGISTRY = reg
+    return bool(started)
 
 
 def stop_background():
-    """停止全局 watcher（幂等）。"""
-    global _WATCHER
-    if _WATCHER is None:
+    """停止全局注册表（幂等）。"""
+    global _REGISTRY
+    if _REGISTRY is None:
         return
     try:
-        _WATCHER.stop()
+        _REGISTRY.stop_all()
     finally:
-        _WATCHER = None
+        _REGISTRY = None
+
+
+def get_registry() -> WatcherRegistry | None:
+    """取全局注册表（watcher-status 端点用；未启动返回 None）。"""
+    return _REGISTRY

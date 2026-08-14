@@ -60,7 +60,19 @@ def get_watch(user: CurrentUser = Depends(get_current_user),
 def put_watch(cfg: WatchConfig,
               user: CurrentUser = Depends(get_current_user),
               workspace: str = Depends(resolve_workspace)):
-    return sync_svc.save_watch_config(_sf_base(), cfg.model_dump())
+    saved = sync_svc.save_watch_config(_sf_base(), cfg.model_dump())
+    # T-924 配置驱动启停：保存配置即尝试拉起该用户监听（幂等；失败不阻断保存）
+    watcher_state = "skipped"
+    try:
+        from specstd.workspace import get_context_emp_no
+        from services.specflow import feishu_watcher as fw
+        reg = fw.get_registry()
+        emp = get_context_emp_no() or ""
+        if reg is not None and emp:
+            watcher_state = "started" if reg.start_user(emp) else "skipped"
+    except Exception:
+        watcher_state = "failed"
+    return {**saved, "watcher": watcher_state}
 
 
 @router.post("/sync")

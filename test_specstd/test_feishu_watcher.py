@@ -149,7 +149,8 @@ class TestBackgroundSingleton:
 
     def test_start_skip_without_user(self, tmp_path):
         assert fw.start_background(tmp_path) is False   # 无配置用户静默跳过
-        assert fw._WATCHER is None
+        assert fw._REGISTRY is not None                  # T-924：注册表常驻（空）
+        assert fw._REGISTRY.status()["count"] == 0
 
     def test_start_stop_idempotent(self, tmp_path):
         _mk_user(tmp_path, "u1")
@@ -162,7 +163,7 @@ class TestBackgroundSingleton:
             assert fw.start_background(tmp_path) is False   # 幂等：重复启动跳过
             fw.stop_background()
             fw.stop_background()                            # 幂等：重复停止安全
-            assert fw._WATCHER is None
+            assert fw._REGISTRY is None
 
 
 # ══════════════════════════════════════════════════════════
@@ -225,3 +226,58 @@ def test_e2e_event_to_review_queue(tmp_path):
     rev.enqueue_suggestions(emp, "u1", sug)
     queue = rev.list_queue(emp)
     assert queue[0]["status"] == "pending" and queue[0]["dst"] == "FR-012"
+
+
+# ══════════════════════════════════════════════════════════
+# T-924：WatcherRegistry 多用户编排
+# ══════════════════════════════════════════════════════════
+
+class TestRegistry:
+    def teardown_method(self):
+        fw.stop_background()
+
+    def test_multi_users_all_started(self, tmp_path):
+        _mk_user(tmp_path, "u1")
+        _mk_user(tmp_path, "u2")
+        with patch.object(fw, "_token_valid", return_value=True), \
+             patch.object(fw.FeishuWatcher, "start", return_value=True):
+            reg = fw.WatcherRegistry(tmp_path)
+            started = reg.start_all()
+        assert sorted(started) == ["u1", "u2"]        # 二期 >1 告警不启动已退役
+        assert reg.status()["count"] == 2
+
+    def test_soft_cap_rejects_overflow(self, tmp_path):
+        for i in range(5):
+            _mk_user(tmp_path, f"u{i:02d}")
+        with patch.object(fw, "_token_valid", return_value=True), \
+             patch.object(fw.FeishuWatcher, "start", return_value=True), \
+             patch.object(fw, "MAX_WATCHERS", 3):
+            reg = fw.WatcherRegistry(tmp_path)
+            started = reg.start_all()
+        assert len(started) == 3                      # 软上限拒绝超出
+        assert reg.status()["count"] == 3
+
+    def test_start_stop_user_idempotent(self, tmp_path):
+        _mk_user(tmp_path, "u1")
+        with patch.object(fw, "_token_valid", return_value=True), \
+             patch.object(fw.FeishuWatcher, "start", return_value=True), \
+             patch.object(fw.FeishuWatcher, "stop", return_value=None):
+            reg = fw.WatcherRegistry(tmp_path)
+            assert reg.start_user("u1") is True
+            assert reg.start_user("u1") is False      # 幂等：已在跑跳过
+            assert reg.stop_user("u1") is True
+            assert reg.stop_user("u1") is False      # 幂等：未在跑跳过
+
+    def test_status_persisted(self, tmp_path):
+        _mk_user(tmp_path, "u1")
+        with patch.object(fw, "_token_valid", return_value=True), \
+             patch.object(fw.FeishuWatcher, "start", return_value=True):
+            reg = fw.WatcherRegistry(tmp_path)
+            reg.start_all()
+        ws = tmp_path / "ws"
+        st_path = reg.persist_status(ws)
+        import json as _j
+        st = _j.loads(st_path.read_text(encoding="utf-8"))
+        assert st["watchers"][0]["emp"] == "u1"
+        assert "started_at" in st["watchers"][0]
+        fw.stop_background()
