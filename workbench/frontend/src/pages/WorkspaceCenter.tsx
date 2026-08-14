@@ -237,24 +237,31 @@ export default function WorkspaceCenter({ role }: { role: string }) {
         {workspaces.length === 0 ? (
           <div className="text-center text-gray-600 text-sm py-4">暂无工作区{isAdmin ? '，点击右上角「注册工作区」接入' : ''}</div>
         ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
             {workspaces.map(ws => (
               <div
                 key={ws.name}
                 onClick={() => handleSelect(ws.name)}
-                className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer ${
+                className={`p-2.5 rounded-lg border cursor-pointer transition-colors ${
                   selected === ws.name ? 'border-info bg-info/5' : 'border-border bg-surface-1 hover:border-gray-600'
                 }`}
               >
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm text-gray-300">{ws.name}</span>
-                  {selected === ws.name && <span className="text-[10px] text-info ml-2">当前</span>}
-                  {active === ws.name && <span className="text-[10px] text-green-500 ml-1">全局激活</span>}
-                  <span className="text-xs text-gray-600 ml-2">{ws.system}</span>
-                  <span className="text-xs text-gray-600 ml-2">{ws.source.type === 'git' ? 'git' : 'local'}</span>
-                  {ws.last_commit && <span className="text-xs text-gray-600 ml-2">commit: {ws.last_commit}</span>}
+                {/* 卡片头：名称 + 状态徽标 */}
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-sm text-gray-300 font-medium truncate">{ws.name}</span>
+                  {selected === ws.name && <span className="px-1.5 py-0.5 rounded text-[10px] bg-info/20 text-info flex-shrink-0">当前</span>}
+                  {active === ws.name && <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-900/30 text-green-400 flex-shrink-0">全局激活</span>}
                 </div>
-                <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                {/* 元信息行 */}
+                <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-2 min-w-0">
+                  <span className="px-1 py-0.5 rounded bg-surface-3 flex-shrink-0">{ws.system}</span>
+                  <span className={`px-1 py-0.5 rounded flex-shrink-0 ${ws.source.type === 'git' ? 'bg-info/10 text-info/80' : 'bg-surface-3 text-gray-500'}`}>
+                    {ws.source.type === 'git' ? 'git' : 'local'}
+                  </span>
+                  {ws.last_commit && <span className="font-mono truncate">commit: {ws.last_commit}</span>}
+                </div>
+                {/* 操作按钮行 */}
+                <div className="flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
                   {ws.source.type === 'git' && (
                     <button
                       onClick={() => { handleSelect(ws.name); navigate('/workspace/git-log'); }}
