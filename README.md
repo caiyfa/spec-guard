@@ -315,8 +315,17 @@ pwsh serve-prod.ps1 -UacBase 'http://ha.fehorizon.com/femsp/uac'  # 生产环境
 
 - **uvicorn 必须 workers=1**：RunManager 全局单例 + SQLite，多 worker 会破坏执行队列与共享状态
 - 执行并发模型为**全局 FIFO 队列**（running 时触发自动排队，完成后自动消费）
-- 数据文件 `workbench/backend/data/workbench.db`（用户/授权/审计/队列，勿提交）
+- 数据文件 `workbench/backend/data/workbench.db`（用户/授权/审计/队列/菜单，勿提交）
 - 工作区治理：admin 注册 → 授权开通给用户 → 用户在顶栏选择器预选（可设个人默认）
+
+## 菜单与角色授权（RBAC）
+
+- 菜单树入库可配置（admin 默认仅「菜单管理 + 用户管理」，其余菜单由管理员在「菜单管理 → 角色授权」页签勾选开通）
+- 自定义角色：管理员可新增/删除角色（内置 admin/tester/viewer/product 不可删），用户可被赋予任意角色组合
+- 前后端双控：菜单授权同时控制侧边栏可见性与后端 API 访问（无权限直接输 URL 返回 403）
+- 系统保护菜单（菜单管理/用户管理）：admin 的授权不可取消（自举保底）
+- 逃生通道：admin 被锁死时直接改 SQLite——
+  `sqlite3 workbench/backend/data/workbench.db "INSERT OR IGNORE INTO role_menus (role_key, menu_key) VALUES ('admin','menu-menu-manage')"`
 
 ---
 
