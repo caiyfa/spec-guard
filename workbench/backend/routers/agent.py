@@ -11,11 +11,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
-from services.auth import CurrentUser, get_current_user, require_role, require_role_ws
+from services.auth import CurrentUser, get_current_user, get_current_user_ws
 
-# Agent 能力整体对 tester+ 开放（viewer 无此菜单，后端同样拦截）。
+# Agent 能力对全部登录用户开放（首页免权决策 2026-08-14：菜单层 PUBLIC_MENUS + 业务层登录即可）。
 # 注意：本路由含 WebSocket 端点，Request 型依赖在 WS 上无法注入，
-# 因此角色门禁放在端点级（HTTP 用 require_role，WS 用 require_role_ws）。
+# 因此认证放在端点级（HTTP 用 get_current_user，WS 用 get_current_user_ws）。
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 # 确保仓库根在 sys.path
@@ -398,7 +398,7 @@ def _find_session_owner(session_id: str) -> str:
 # ══════════════════════════════════════════════════════════
 
 @router.get("/purposes")
-def list_purposes_api(user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+def list_purposes_api(user: CurrentUser = Depends(get_current_user)):
     """T-012/T-013：当前用户可见用途清单（角色集合并集过滤；多用途用户多卡）。"""
     purposes = visible_purposes(user.roles)
     return {"purposes": [{
@@ -413,7 +413,7 @@ def list_purposes_api(user: CurrentUser = Depends(require_role("admin", "tester"
 
 
 @router.post("/sessions")
-def create_session(body: dict, user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+def create_session(body: dict, user: CurrentUser = Depends(get_current_user)):
     """T-010：创建会话——唯一可写 purpose 的入口（创建期锁定，不可中途变更）。
 
     入参：{purpose, workspace, title?}
@@ -456,7 +456,7 @@ def create_session(body: dict, user: CurrentUser = Depends(require_role("admin",
 @router.patch("/sessions/{session_id}")
 def patch_session(session_id: str, body: dict,
                   workspace: str = "",
-                  user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+                  user: CurrentUser = Depends(get_current_user)):
     """T-010：改标题/归档；请求体含 purpose → 409（用途创建即锁定）。"""
     try:
         _validate_session_id(session_id)
@@ -485,7 +485,7 @@ def patch_session(session_id: str, body: dict,
 @router.post("/sessions/batch-archive")
 def batch_archive_sessions(body: dict,
                            workspace: str = "",
-                           user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+                           user: CurrentUser = Depends(get_current_user)):
     """批量归档/恢复会话（T-010 扩展）：owner 权限——每个用户只管理自己创建的会话，admin 无越权。
 
     入参：{session_ids: [...], archived: bool}
@@ -521,7 +521,7 @@ def batch_archive_sessions(body: dict,
 
 @router.get("/sessions")
 def list_sessions(workspace: str = "", purpose: str = "", include_archived: int = 0,
-                  user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+                  user: CurrentUser = Depends(get_current_user)):
     """列出会话：owner 权限——每个用户只列出自己创建的会话（admin 无聚合特权，他人会话不出现在列表中）。
 
     支持按工作区/用途筛选；默认不含已归档会话。
@@ -539,7 +539,7 @@ def list_sessions(workspace: str = "", purpose: str = "", include_archived: int 
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(get_current_user)):
     """获取会话详情（本人会话；admin 可查全部）。支持工作区子目录。
 
     M3 修复：product 加入读取权限（多角色扩展遗漏——product 能建会话却读不到自己历史）。
@@ -599,7 +599,7 @@ def _generate_session_title(llm: LLMClient, messages: list[dict]) -> str:
 
 
 @router.get("/sessions/{session_id}/export")
-def export_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+def export_session(session_id: str, workspace: str = "", user: CurrentUser = Depends(get_current_user)):
     """导出会话为 JSON（元数据 + 消息 + 指标），便于排查问题。M3：product 可导出本人会话。"""
     try:
         _validate_session_id(session_id)
@@ -621,7 +621,7 @@ def export_session(session_id: str, workspace: str = "", user: CurrentUser = Dep
 
 @router.post("/cancel/{session_id}")
 async def cancel_agent(session_id: str,
-                       user: CurrentUser = Depends(require_role("admin", "tester", "product"))):
+                       user: CurrentUser = Depends(get_current_user)):
     """T-402：取消指定会话的当前运行（真打断）。
 
     设置运行时 cancellation 标志 → 当前轮次 tool 执行完即停止，不再推进下一轮，
@@ -652,7 +652,7 @@ async def cancel_agent(session_id: str,
 
 @router.websocket("/ws")
 async def agent_ws(websocket: WebSocket,
-                   _user: CurrentUser = Depends(require_role_ws("admin", "tester", "product"))):
+                   _user: CurrentUser = Depends(get_current_user_ws)):
     """WebSocket 实时对话（WS 专用角色依赖；token 经 query 参数传入）。
 
     前端发送：{"message": "用户消息", "session_id": "可选会话ID"}

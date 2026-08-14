@@ -117,8 +117,8 @@ class TestPurposeLoader:
         # tester+product（一人多用途）：两卡
         p_both = {p.id for p in visible_purposes(["tester", "product"])}
         assert p_both == {"requirement_interview", "test_workbench"}
-        # viewer：无任何用途
-        assert visible_purposes(["viewer"]) == []
+        # viewer：2026-08-14 首页免权——测试工作台登录即用（产品工作台仍限 product+）
+        assert {p.id for p in visible_purposes(["viewer"])} == {"test_workbench"}
 
 
 # ══════════════════════════════════════════════════════════

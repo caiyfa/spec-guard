@@ -317,15 +317,16 @@ class TestWebSocketAuth:
             msg = ws.receive_json()
             assert msg["type"] == "status"
 
-    def test_agent_ws_role_gate(self, client):
+    def test_agent_ws_open_to_all_logged_in(self, client):
         h_admin = _login(client, "90000001")
         h_viewer = _login(client, "90000002")  # 非首用户 → viewer
         admin_token = h_admin["Authorization"].split(" ", 1)[1]
         viewer_token = h_viewer["Authorization"].split(" ", 1)[1]
-        # viewer 被拒（tester+ 门禁）
-        with pytest.raises(Exception):
-            with client.websocket_connect(f"/api/agent/ws?token={viewer_token}"):
-                pass
+        # 2026-08-14 首页免权：viewer 也可连接（不再 tester+ 门禁）
+        with client.websocket_connect(f"/api/agent/ws?token={viewer_token}") as ws:
+            ws.send_json({"message": "ping", "purpose": "test_workbench"})
+            msg = ws.receive_json()
+            assert msg["type"] == "state" and msg.get("status") == "started"
         # admin 可连接并收到 started 事件（T-010：新建会话必须带用途，未选使命被拒）
         with client.websocket_connect(f"/api/agent/ws?token={admin_token}") as ws:
             ws.send_json({"message": "ping", "purpose": "test_workbench"})
@@ -538,12 +539,13 @@ class TestAgentCancel:
         r = client.post("/api/agent/cancel/test_sid")
         assert r.status_code == 401
 
-    def test_cancel_requires_tester_role(self, client):
-        """viewer 角色无权调用 cancel。"""
+    def test_cancel_open_to_all_logged_in(self, client):
+        """2026-08-14 首页免权：viewer 不再被角色门禁拦，进入业务逻辑（无活跃运行 → 404）。"""
         _login(client, "90000001")  # admin（首用户）
         h_viewer = _login(client, "90000002")  # viewer
         r = client.post("/api/agent/cancel/test_sid", headers=h_viewer)
-        assert r.status_code == 403
+        assert r.status_code == 404  # 通过门禁后：该会话没有活跃的运行
+        assert r.json()["detail"] == "该会话没有活跃的运行"
 
     def test_cancel_active_run(self, client):
         """有活跃运行时 cancel 返回 200。"""

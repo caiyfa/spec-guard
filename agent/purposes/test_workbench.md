@@ -4,7 +4,7 @@ title: 测试工作台
 icon: 🧪
 color: test
 chips: [全量测试工具, 统一提示词, 草稿/计划面板]
-roles: [admin, tester]
+roles: [admin, tester, viewer]  # 2026-08-14 首页免权：viewer 登录即用测试工作台
 tools: []
 panels: [draft, plan, history, report]
 description: 契约驱动场景测试工作台——生成/验证/编排场景，DAG 依赖管理，执行与失败归因，草稿经三闸入库。
