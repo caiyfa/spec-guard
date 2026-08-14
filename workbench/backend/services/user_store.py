@@ -25,8 +25,6 @@ DB_PATH = DATA_DIR / "workbench.db"
 VALID_ROLES = ("admin", "tester", "viewer", "product")
 
 _LOCK = threading.RLock()
-
-
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -221,13 +219,18 @@ def set_role(emp_no: str, role: str, actor: str, db_path: Path | None = None) ->
 
 
 def set_roles(emp_no: str, roles: list[str], actor: str, db_path: Path | None = None) -> bool:
-    """设置角色集（v1.8 多角色）：逗号分隔写入 roles 列，主角色同步 role 列。"""
+    """设置角色集（v1.8 多角色）：逗号分隔写入 roles 列，主角色同步 role 列。
+
+    RBAC 扩展：除内置 VALID_ROLES 外，已注册的自定义角色（rbac_store.roles 表）也可赋给用户。
+    """
+    from services import rbac_store
+
     roles = [r.strip() for r in roles if r.strip()]
     if not roles:
         raise ValueError("角色集不能为空")
     for r in roles:
-        if r not in VALID_ROLES:
-            raise ValueError(f"非法角色: {r}（应为 {VALID_ROLES}）")
+        if r not in VALID_ROLES and not rbac_store.role_exists(r, db_path):
+            raise ValueError(f"非法角色: {r}（应为 {VALID_ROLES} 或已注册的自定义角色）")
     with _LOCK, _connect(db_path) as conn:
         cur = conn.execute(
             "UPDATE users SET roles = ?, role = ? WHERE emp_no = ?",

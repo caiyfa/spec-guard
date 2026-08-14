@@ -43,6 +43,7 @@ def me(request: Request, user: CurrentUser = Depends(get_current_user)):
         "emp_no": user.emp_no,
         "name": user.name,
         "role": user.role,
+        "roles": user.roles,          # 新增：多角色数组（前端徽标/权限用）
         "default_workspace": db_user.get("default_workspace", ""),
         "auth_mode": actual_auth_mode,
     }

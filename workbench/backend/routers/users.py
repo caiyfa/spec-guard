@@ -33,14 +33,18 @@ def list_all_users(admin: CurrentUser = Depends(require_role("admin"))):
 
 
 class RoleBody(BaseModel):
-    role: str  # admin / tester / viewer
+    role: str = ""              # 兼容存量单值
+    roles: list[str] | None = None  # v1.8 多角色（优先）
 
 
 @router.put("/{emp_no}/role")
 def change_role(emp_no: str, body: RoleBody,
                 admin: CurrentUser = Depends(require_role("admin"))):
+    target = body.roles if body.roles is not None else ([body.role] if body.role else [])
+    if not target:
+        raise HTTPException(status_code=400, detail="角色不能为空")
     try:
-        ok = user_store.set_role(emp_no, body.role, admin.emp_no)
+        ok = user_store.set_roles(emp_no, target, admin.emp_no)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not ok:

@@ -3,10 +3,35 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 # 添加仓库根到 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
+
+
+# ══════════════════════════════════════════════════════════
+# RBAC 菜单守卫豁免（2026-08-14 菜单管理上线后新增）
+# ══════════════════════════════════════════════════════════
+# test_specstd 不测工作台菜单授权（专项测试在 test_workbench/test_menu_guard.py）；
+# RBAC 全新配置策略下测试用户无菜单授权，菜单守卫会 403 拦截所有 API——
+# 这里在测试会话内把守卫降级为透传，保证存量 REST 测试语义不变。
+
+@pytest.fixture(autouse=True)
+def _bypass_menu_guard(monkeypatch):
+    backend = SG_ROOT / "workbench" / "backend"
+    if str(backend) not in sys.path:
+        sys.path.insert(0, str(backend))
+    try:
+        from services.menu_guard import MenuGuardMiddleware
+    except ImportError:
+        return  # 守卫未实现时无需豁免
+
+    async def _passthrough(self, scope, receive, send):
+        await self.app(scope, receive, send)
+
+    monkeypatch.setattr(MenuGuardMiddleware, "__call__", _passthrough)
 
 
 # ══════════════════════════════════════════════════════════

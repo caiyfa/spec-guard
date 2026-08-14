@@ -21,9 +21,10 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge, feishu_pool
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge, feishu_pool, rbac
 from services.auth import get_current_user
-from services import user_store
+from services import user_store, rbac_store
+from services.menu_guard import MenuGuardMiddleware
 
 app = FastAPI(
     title="SpecGuard Workbench API",
@@ -62,11 +63,14 @@ class WorkspaceContextMiddleware:
 
 
 app.add_middleware(WorkspaceContextMiddleware)
+# RBAC 菜单守卫（前后端双控后端侧）：按 API path 匹配菜单授权，无权限 403
+app.add_middleware(MenuGuardMiddleware)
 
 # 启动初始化：建表 + 清理上一生命周期遗留的 running 队列项 + 旧会话迁移 + 启动调度器
 @app.on_event("startup")
 def _startup():
     user_store.init_db()
+    rbac_store.init_db()  # RBAC 三表 + 幂等种子（全新配置：仅 admin 保底两条授权）
     # K-xxx：业务台账投影层建表（场景/草稿/运行/会话台账，文件仍是真相源）
     from services import ledger_store
     ledger_store.ensure_tables()
@@ -156,6 +160,7 @@ app.include_router(agent_skills.router, dependencies=[Depends(get_current_user)]
 app.include_router(audit.router, dependencies=[Depends(get_current_user)])
 app.include_router(knowledge.router, dependencies=[Depends(get_current_user)])
 app.include_router(feishu_pool.router, dependencies=[Depends(get_current_user)])
+app.include_router(rbac.router)  # RBAC 菜单/角色/授权（守卫在 MenuGuardMiddleware）
 
 
 @app.get("/api/health")
