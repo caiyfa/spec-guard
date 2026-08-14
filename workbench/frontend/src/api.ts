@@ -88,6 +88,7 @@ export interface CurrentUser {
   emp_no: string;
   name: string;
   role: 'admin' | 'tester' | 'viewer' | 'product';
+  roles?: string[];  // v1.8 多角色集（RBAC：菜单授权按角色集并集）
   default_workspace: string;
   auth_mode: 'uac' | 'mock';
 }
@@ -108,6 +109,7 @@ export interface UserItem {
   emp_no: string;
   name: string;
   role: string;
+  roles: string[];  // v1.8 多角色集
   default_workspace: string;
   created_at: string;
   last_login_at: string;
@@ -128,6 +130,11 @@ export const usersApi = {
       method: 'PUT',
       body: JSON.stringify({ role }),
     }),
+  setRoles: (emp_no: string, roles: string[]) =>
+    request<{ ok: boolean }>(`/users/${encodeURIComponent(emp_no)}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ roles }),
+    }),
   grants: () => request<{ grants: GrantItem[] }>('/users/grants'),
   grant: (emp_no: string, workspace_name: string) =>
     request<{ ok: boolean }>(`/users/${encodeURIComponent(emp_no)}/grants`, {
@@ -144,6 +151,71 @@ export const usersApi = {
       body: JSON.stringify({ workspace_name }),
     }),
   auditLog: (limit = 100) => request<{ entries: any[] }>(`/users/audit-log?limit=${limit}`),
+};
+
+// ── 菜单 / 角色 RBAC ──
+export interface NavMenuItem {
+  to: string;
+  label: string;
+  end?: boolean;
+}
+export interface NavGroup {
+  label: string;
+  icon: string;
+  items: NavMenuItem[];
+}
+export interface MenuRecord {
+  menu_key: string;
+  label: string;
+  icon: string;
+  path: string;
+  parent_key: string;
+  sort: number;
+  visible: boolean;
+  is_system: boolean;
+}
+export interface RoleRecord {
+  role_key: string;
+  label: string;
+  is_builtin: boolean;
+  sort: number;
+}
+
+export const menusApi = {
+  me: () => request<{ groups: NavGroup[] }>('/menus/me'),
+  list: () => request<{ menus: MenuRecord[] }>('/menus'),
+  create: (body: Partial<MenuRecord>) =>
+    request<{ ok: boolean }>('/menus', { method: 'POST', body: JSON.stringify(body) }),
+  update: (menu_key: string, body: Partial<MenuRecord>) =>
+    request<{ ok: boolean }>(`/menus/${encodeURIComponent(menu_key)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  remove: (menu_key: string) =>
+    request<{ ok: boolean }>(`/menus/${encodeURIComponent(menu_key)}`, { method: 'DELETE' }),
+};
+
+export const rolesApi = {
+  list: () => request<{ roles: RoleRecord[] }>('/roles'),
+  create: (role_key: string, label: string, sort = 0) =>
+    request<{ ok: boolean }>('/roles', {
+      method: 'POST',
+      body: JSON.stringify({ role_key, label, sort }),
+    }),
+  update: (role_key: string, label: string, sort = 0) =>
+    request<{ ok: boolean }>(`/roles/${encodeURIComponent(role_key)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ label, sort }),
+    }),
+  remove: (role_key: string) =>
+    request<{ ok: boolean }>(`/roles/${encodeURIComponent(role_key)}`, { method: 'DELETE' }),
+  getMenus: (role_key: string) =>
+    request<{ menu_keys: string[] }>(`/roles/${encodeURIComponent(role_key)}/menus`),
+  setMenus: (role_key: string, menu_keys: string[]) =>
+    request<{ ok: boolean }>(`/roles/${encodeURIComponent(role_key)}/menus`, {
+      method: 'PUT',
+      body: JSON.stringify({ menu_keys }),
+    }),
 };
 
 // ── 场景管理 ──

@@ -1,19 +1,14 @@
 // 用户与工作区授权管理（admin 专属）：用户角色 + 工作区授权 + 审计日志
 
 import { useCallback, useEffect, useState } from 'react';
-import { usersApi, workspaceApi } from '../api';
-import type { UserItem, GrantItem, WorkspaceInfo } from '../api';
-
-const ROLES = [
-  { value: 'admin', label: '管理员' },
-  { value: 'tester', label: '测试' },
-  { value: 'viewer', label: '只读' },
-];
+import { usersApi, workspaceApi, rolesApi } from '../api';
+import type { UserItem, GrantItem, WorkspaceInfo, RoleRecord } from '../api';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [grants, setGrants] = useState<GrantItem[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
+  const [roles, setRoles] = useState<RoleRecord[]>([]);  // RBAC：角色源动态化（内置 + 自定义）
   const [audit, setAudit] = useState<any[]>([]);
   const [tab, setTab] = useState<'users' | 'audit'>('users');
   const [error, setError] = useState('');
@@ -21,13 +16,14 @@ export default function AdminUsers() {
 
   const refresh = useCallback(async () => {
     try {
-      const [u, g, w, a] = await Promise.all([
-        usersApi.list(), usersApi.grants(), workspaceApi.list(), usersApi.auditLog(50),
+      const [u, g, w, a, r] = await Promise.all([
+        usersApi.list(), usersApi.grants(), workspaceApi.list(), usersApi.auditLog(50), rolesApi.list(),
       ]);
       setUsers(u.users);
       setGrants(g.grants);
       setWorkspaces(w.workspaces);
       setAudit(a.entries);
+      setRoles(r.roles);
     } catch (e: any) {
       setError(e.message || '加载失败');
     }
@@ -40,10 +36,11 @@ export default function AdminUsers() {
     setTimeout(() => setMessage(''), 2000);
   };
 
-  const handleRole = async (empNo: string, role: string) => {
+  const handleSetRoles = async (empNo: string, nextRoles: string[]) => {
+    if (nextRoles.length === 0) { setError('用户至少保留一个角色'); return; }
     try {
-      await usersApi.setRole(empNo, role);
-      flash(`已更新 ${empNo} 角色为 ${role}`);
+      await usersApi.setRoles(empNo, nextRoles);
+      flash(`已更新 ${empNo} 角色`);
       await refresh();
     } catch (e: any) {
       setError(e.message);
@@ -113,16 +110,38 @@ export default function AdminUsers() {
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-sm text-gray-200 font-medium">{u.name || u.emp_no}</span>
                 <span className="text-xs text-gray-500 font-mono">{u.emp_no}</span>
-                <select
-                  value={u.role}
-                  onChange={e => handleRole(u.emp_no, e.target.value)}
-                  className="bg-surface-1 border border-border rounded px-2 py-0.5 text-xs text-gray-300"
-                >
-                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
                 <span className="text-[10px] text-gray-600 ml-auto">
                   默认工作区: {u.default_workspace || '—'} · 最近登录: {u.last_login_at || '—'}
                 </span>
+              </div>
+              {/* 多角色 chips（RBAC：内置 + 自定义角色多选） */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-gray-500">角色:</span>
+                {(u.roles ?? []).map(r => {
+                  const rl = roles.find(x => x.role_key === r);
+                  return (
+                    <span key={r} className="inline-flex items-center gap-1 text-xs bg-info/10 text-info rounded px-2 py-0.5">
+                      {rl?.label || r}
+                      <button onClick={() => handleSetRoles(u.emp_no, (u.roles ?? []).filter(x => x !== r))}
+                        className="text-red-400 hover:text-red-300" title="移除角色">×</button>
+                    </span>
+                  );
+                })}
+                {(u.roles ?? []).length === 0 && <span className="text-xs text-gray-600">（无）</span>}
+                <select
+                  value=""
+                  onChange={e => {
+                    if (e.target.value) handleSetRoles(u.emp_no, [...(u.roles ?? []), e.target.value]);
+                    e.target.value = '';
+                  }}
+                  className="bg-surface-1 border border-border rounded px-1.5 py-0.5 text-xs text-gray-400"
+                >
+                  <option value="">＋ 添加角色…</option>
+                  {roles.filter(r => !(u.roles ?? []).includes(r.role_key)).map(r => (
+                    <option key={r.role_key} value={r.role_key}>{r.label} ({r.role_key})</option>
+                  ))}
+                </select>
+                <a href="/menu-roles" className="text-[10px] text-gray-600 hover:text-gray-400 underline ml-auto">角色管理 →</a>
               </div>
               {/* 工作区授权 */}
               <div className="flex flex-wrap items-center gap-1.5">

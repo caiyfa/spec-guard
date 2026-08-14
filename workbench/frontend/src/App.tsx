@@ -26,104 +26,20 @@ import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
 import Knowledge from './pages/Knowledge';  // T-509：知识维护页（一页三区）
 import Skills from './pages/Skills';
+import MenuRoles from './pages/MenuRoles';
 import GraphPanorama from './pages/GraphPanorama';
 import LineageStory from './pages/LineageStory';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
-import { authApi, session } from './api';
-import type { CurrentUser } from './api';
+import { authApi, session, menusApi } from './api';
+import type { CurrentUser, NavGroup } from './api';
 import { removeCookie } from './utils/cookie';
 
-const ALL = ['admin', 'tester', 'viewer', 'product'];
-const TESTER_UP = ['admin', 'tester'];
-const PRODUCT_UP = ['admin', 'tester', 'product'];
-const ADMIN_ONLY = ['admin'];
-
-// ── 菜单结构：一级分组 > 二级菜单项，按工作流排序 ──
-interface NavItem {
-  to: string;
-  label: string;
-  end?: boolean;
-  roles: string[];
-}
-
-interface NavGroup {
-  label: string;
-  icon: string;
-  items: NavItem[];
-}
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: '总览',
-    icon: '📊',
-    items: [
-      { to: '/', label: '仪表盘', end: true, roles: ALL },
-      { to: '/graph', label: '全景图谱', roles: ALL },  // T-071：P-A 图谱支路
-      { to: '/lineage', label: '血缘链', roles: ALL },  // T-073：审计追溯 Q1/Q2
-    ],
-  },
-  {
-    label: '工作区',
-    icon: '🗂',
-    items: [
-      // K-009：原「工作区管理」+「文档中心」合并为工作区中心，全角色可见（页内按角色显隐操作）
-      { to: '/workspace', label: '工作区中心', roles: ALL },
-      { to: '/knowledge', label: '知识', roles: TESTER_UP },  // T-509：词条/叙事/经验一页三区
-      { to: '/env-config', label: '环境配置', roles: ADMIN_ONLY },  // T-306：环境信息独立维护
-      { to: '/settings', label: '系统设置', roles: ADMIN_ONLY },
-      { to: '/admin-users', label: '用户管理', roles: ADMIN_ONLY },
-      { to: '/audit', label: '审计日志', roles: ADMIN_ONLY },  // T-082：MCP 调用审计
-    ],
-  },
-  {
-    label: '需求',
-    icon: '📋',
-    items: [
-      { to: '/spec', label: '合规校验', roles: ALL },
-      { to: '/materials', label: '材料管理', roles: ALL },
-      { to: '/scores', label: '评分与冻结', roles: ALL },
-      { to: '/zentao', label: '禅道集成', roles: ALL },
-    ],
-  },
-  {
-    label: '场景',
-    icon: '🧩',
-    items: [
-      { to: '/lifecycle', label: '测试生命周期', roles: ALL },  // K-xxx：台账聚合的完整生命周期监控
-      { to: '/coverage', label: '覆盖缺口', roles: ALL },       // T-060：三态泳道 + 生成下一批
-      { to: '/plans', label: '场景管理', roles: TESTER_UP },
-      { to: '/dag', label: 'DAG 编排', roles: ALL },
-    ],
-  },
-  {
-    label: 'Agent',
-    icon: '🤖',
-    items: [
-      { to: '/agent', label: '对话', roles: PRODUCT_UP },
-      { to: '/drafts', label: '草稿评审', roles: TESTER_UP },
-      { to: '/skills', label: '技能', roles: ALL },
-    ],
-  },
-  {
-    label: '执行',
-    icon: '▶️',
-    items: [
-      { to: '/run', label: '测试执行', roles: TESTER_UP },
-      { to: '/schedules', label: '定时任务', roles: TESTER_UP },
-      { to: '/history', label: '执行记录', roles: ALL },
-      { to: '/attribution', label: '失败归因', roles: ALL },
-    ],
-  },
-  {
-    label: '反哺',
-    icon: '🔄',
-    items: [
-      { to: '/feedback', label: '反哺闭环', roles: TESTER_UP },
-      { to: '/notify', label: '通知配置', roles: TESTER_UP },
-    ],
-  },
-];
+// 隐藏 Redirect 路由的目标菜单（允许访问时按目标校验）
+const REDIRECT_TARGETS: Record<string, string> = {
+  '/scenario-create': '/plans',
+  '/spec-center': '/workspace',
+};
 
 const ROLE_LABEL: Record<string, string> = {
   admin: '管理员',
@@ -131,14 +47,6 @@ const ROLE_LABEL: Record<string, string> = {
   viewer: '只读',
   product: '产品',
 };
-
-// 过滤掉当前角色无权限的分组/菜单项
-function filterNavGroups(role: string): NavGroup[] {
-  return NAV_GROUPS.map(g => ({
-    ...g,
-    items: g.items.filter(i => i.roles.includes(role)),
-  })).filter(g => g.items.length > 0);
-}
 
 export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -212,17 +120,41 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
   const [drawerOpen, setDrawerOpen] = useState(() => {
     return localStorage.getItem('sg_drawer_open') !== 'false';
   });
+  // RBAC：登录后拉取当前用户可见菜单树（动态渲染 + 路由守卫数据源）
+  const [navTree, setNavTree] = useState<NavGroup[]>([]);
+  const [navLoaded, setNavLoaded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
-    // 默认展开当前路由所在分组
-    const groups = filterNavGroups(user.role);
-    const current = groups.find(g =>
-      g.items.some(i => i.to === location.pathname || (i.to !== '/' && location.pathname.startsWith(i.to)))
-    );
-    return new Set(current ? [current.label] : []);
+    // 默认展开当前路由所在分组（navTree 就绪后重新计算）
+    return new Set();
   });
 
+  useEffect(() => {
+    menusApi.me()
+      .then(r => setNavTree(r.groups))
+      .catch(() => setNavTree([]))
+      .finally(() => setNavLoaded(true));
+  }, []);
+
+  // 路由变化时默认展开当前路由所在分组（不重复拉菜单树）
+  useEffect(() => {
+    if (!navTree.length) return;
+    const current = navTree.find(g =>
+      g.items.some(i => i.to === location.pathname || (i.to !== '/' && location.pathname.startsWith(i.to)))
+    );
+    if (current) setExpandedGroups(prev => prev.has(current.label) ? prev : new Set([current.label]));
+  }, [location.pathname, navTree]);
+
   const noPadding = location.pathname === '/agent';
-  const visibleGroups = filterNavGroups(user.role);
+  const visibleGroups = navTree;
+
+  // 路由守卫：当前 path 不在可见菜单（含隐藏 Redirect 目标）→ 无权限页
+  const allowedPaths = new Set(navTree.flatMap(g => g.items.map(i => i.to)));
+  const effectivePath = REDIRECT_TARGETS[location.pathname] ?? location.pathname;
+  const pathAllowed =
+    allowedPaths.has(effectivePath) ||
+    allowedPaths.has(effectivePath.replace(/\/$/, '')) ||
+    (effectivePath !== '/' && [...allowedPaths].some(p => p !== '/' && effectivePath.startsWith(p)));
+  const noAccess = navLoaded && !pathAllowed;
 
   const toggleDrawer = () => {
     const next = !drawerOpen;
@@ -362,7 +294,11 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               : user.role === 'tester' ? 'bg-info/15 text-info'
               : user.role === 'product' ? 'bg-amber-900/50 text-amber-300'
               : 'bg-gray-700 text-gray-400'
-            }`}>{ROLE_LABEL[user.role] || user.role}</span>
+            }`}
+              title={(user.roles ?? []).join(', ')}>
+              {ROLE_LABEL[user.role] || user.role}
+              {(user.roles ?? []).length > 1 ? ` +${user.roles.length - 1}` : ''}
+            </span>
             <button
               onClick={onLogout}
               className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
@@ -372,42 +308,51 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
           </div>
         </header>
 
-        {/* 主内容区 */}
-        <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
-            <Route path="/lineage" element={<LineageStory />} />  {/* T-073：血缘链审计追溯 */}
-            <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
-            <Route path="/spec" element={<SpecValidation />} />
-            <Route path="/materials" element={<MaterialsPanel />} />
-            <Route path="/scores" element={<ScoreFreezePanel />} />
-            <Route path="/zentao" element={<ZentaoPanel />} />
-            <Route path="/plans" element={<Scenarios />} />
-            <Route path="/coverage" element={<CoveragePanel />} />
-            <Route path="/knowledge" element={<Knowledge />} />  {/* T-509：知识维护页 */}
-            <Route path="/run" element={<RunControl />} />
-            <Route path="/dag" element={<DagEditor />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/agent" element={<AgentChat />} />
-            <Route path="/drafts" element={<Drafts />} />
-            {/* /scenario-create 已合并到 /plans */}
-            <Route path="/scenario-create" element={<RedirectToPlans />} />
-            {/* K-009：/spec-center 已合并到 /workspace（工作区中心） */}
-            <Route path="/spec-center" element={<RedirectToWorkspace />} />
-            <Route path="/attribution" element={<Attribution />} />
-            <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />
-            <Route path="/workspace/git-log" element={<GitLog />} />  {/* git 提交历史（SourceTree 风格） */}
-            <Route path="/feedback" element={<Feedback />} />
-            <Route path="/notify" element={<NotifyConfigs />} />
-                        <Route path="/schedules" element={<Schedules />} />
-            <Route path="/admin-users" element={<AdminUsers />} />
-            <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
-            <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
-            <Route path="/skills" element={<Skills />} />  {/* T-080：Skill 注册表 */}
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </main>
+        {/* 主内容区：无权限时渲染占位页（RBAC 路由守卫） */}
+        {noAccess ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500">
+            <span className="text-5xl">🔒</span>
+            <p className="text-sm">无权限访问该页面，请联系管理员开通菜单授权</p>
+            <NavLink to="/" className="text-xs text-info hover:underline">返回仪表盘</NavLink>
+          </div>
+        ) : (
+          <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
+              <Route path="/lineage" element={<LineageStory />} />  {/* T-073：血缘链审计追溯 */}
+              <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
+              <Route path="/spec" element={<SpecValidation />} />
+              <Route path="/materials" element={<MaterialsPanel />} />
+              <Route path="/scores" element={<ScoreFreezePanel />} />
+              <Route path="/zentao" element={<ZentaoPanel />} />
+              <Route path="/plans" element={<Scenarios />} />
+              <Route path="/coverage" element={<CoveragePanel />} />
+              <Route path="/knowledge" element={<Knowledge />} />  {/* T-509：知识维护页 */}
+              <Route path="/run" element={<RunControl />} />
+              <Route path="/dag" element={<DagEditor />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/agent" element={<AgentChat />} />
+              <Route path="/drafts" element={<Drafts />} />
+              {/* /scenario-create 已合并到 /plans */}
+              <Route path="/scenario-create" element={<RedirectToPlans />} />
+              {/* K-009：/spec-center 已合并到 /workspace（工作区中心） */}
+              <Route path="/spec-center" element={<RedirectToWorkspace />} />
+              <Route path="/attribution" element={<Attribution />} />
+              <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />
+              <Route path="/workspace/git-log" element={<GitLog />} />  {/* git 提交历史（SourceTree 风格） */}
+              <Route path="/feedback" element={<Feedback />} />
+              <Route path="/notify" element={<NotifyConfigs />} />
+              <Route path="/schedules" element={<Schedules />} />
+              <Route path="/admin-users" element={<AdminUsers />} />
+              <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
+              <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
+              <Route path="/skills" element={<Skills />} />  {/* T-080：Skill 注册表 */}
+              <Route path="/menu-roles" element={<MenuRoles />} />  {/* RBAC：菜单管理 + 角色授权 */}
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </main>
+        )}
       </div>
     </div>
   );
