@@ -236,8 +236,8 @@ class SessionManager:
                     continue
                 msg = json.loads(line)
                 msg_type = msg.get("_type")
-                if msg_type in ("metrics", "session_meta", "todo_list"):
-                    continue  # 跳过纯元数据行和待办行
+                if msg_type in ("metrics", "session_meta", "todo_list", "error"):
+                    continue  # 跳过纯元数据行、待办行与错误行（error 行无 role，混入会破坏消息链）
                 if msg_type == "compaction_summary":
                     # G3-1: 保留压缩摘要为 system 消息，去掉 _type 字段
                     msg = {k: v for k, v in msg.items() if k != "_type"}

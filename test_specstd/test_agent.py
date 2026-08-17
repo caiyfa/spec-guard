@@ -139,6 +139,21 @@ class TestSession:
         sm = SessionManager(tmp_path / "sessions")
         assert sm.load("nonexistent") is None
 
+    def test_load_skips_error_rows(self, tmp_path):
+        """load() 跳过 record_error 写入的 _type=error 行。
+
+        error 行无 role 字段，混入消息链会破坏 LLM 调用与前端渲染
+        （regression: WS 断连/run 异常后恢复会话曾把 error 行当消息加载）。
+        """
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [{"role": "user", "content": "x"}])
+        sm.record_error(sid, "boom", error_type="TestError")
+        msgs = sm.load(sid)
+        assert len(msgs) == 1
+        assert msgs[0]["role"] == "user"
+        assert not any(m.get("_type") == "error" for m in msgs)
+
     def test_list_sessions(self, tmp_path):
         """列出会话。"""
         sm = SessionManager(tmp_path / "sessions")

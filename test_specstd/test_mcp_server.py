@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 90  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）+ gate_dock_status 1（T-901 GateDock 对话操作台，纯读）
+        assert len(ALL_TOOLS) == 91  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）+ gate_dock_status 1（T-901 GateDock 对话操作台，纯读）+ reset_draft_area 1（草稿区重置工具）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -62,6 +62,7 @@ class TestToolRegistration:
                      "promote_draft",  # H-3/H-4: meta 工具；K-015: promote_draft
                      "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
                      "promote_drafts",  # K-021⑥: 批量入库
+                     "reset_draft_area",  # 草稿区重置
                      "edit_dependency",  # K-027: DAG 依赖边编排
                      "suggest_deps",  # K-046: 依赖建议（确定性引擎）
                      "list_failures", "list_executions", "read_run_log",  # K-052: 失败索引 + 全量执行台账
@@ -494,6 +495,24 @@ class TestDraftWriter:
         assert data["action"] == "patch"
         # 清理
         (drafts_dir() / "test-patch.yaml").unlink(missing_ok=True)
+
+    def test_reset_draft_area(self, workspace):
+        """reset_draft_area 在激活工作区下可用。
+
+        regression: get_active_workspace() 返回 WorkspaceInfo 对象非 dict，
+        原 `.get("name")` 写法必抛 AttributeError（会话内三次工具异常的根因）。
+        """
+        _call(draft_writer, "write_draft", {
+            "filename": "test-reset.yaml",
+            "content": "id: RESET-ME\n",
+        })
+        assert (drafts_dir() / "test-reset.yaml").exists()
+        result = _call(draft_writer, "reset_draft_area", {})
+        data = json.loads(result[0].text)
+        assert data["ok"] is True
+        assert data["workspace"] == "test-mcp"
+        assert data["yaml_deleted"] >= 1
+        assert not (drafts_dir() / "test-reset.yaml").exists()
 
 
 # ══════════════════════════════════════════════════════════

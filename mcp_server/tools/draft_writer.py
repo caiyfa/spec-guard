@@ -2,6 +2,10 @@
 
 工具：
   write_draft: 写入草稿（drafts/ 限定 + 禁覆盖 + patch 模式）
+  undo_draft: 从 .bak 备份恢复草稿
+  promote_draft: 单份草稿入库
+  promote_drafts: 批量草稿入库
+  reset_draft_area: 重置草稿区状态（清空草稿/回收站/元数据/DB 记录）
 """
 
 import contextvars
@@ -170,6 +174,16 @@ TOOLS = [
             "required": ["module"]
         }
     ),
+    Tool(
+        name="reset_draft_area",
+        description="重置草稿区状态：清空当前工作区所有草稿文件、回收站、元数据、三闸与台账记录。"
+                    "操作不可逆（已入库场景不受影响），调用前请用户确认。",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    ),
 ]
 
 
@@ -182,6 +196,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return _handle_promote_draft(arguments)
     elif name == "promote_drafts":
         return _handle_promote_drafts(arguments)
+    elif name == "reset_draft_area":
+        return _handle_reset_draft_area(arguments)
     return []
 
 
@@ -356,4 +372,71 @@ def _handle_undo_draft(arguments: dict) -> list[TextContent]:
         "ok": True, "action": "undo",
         "path": _rel_path(draft_path),
         "restored_from": f"{filename}.bak",
+    }, ensure_ascii=False, indent=2))]
+
+
+def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
+    """重置草稿区状态：清空当前工作区所有草稿文件、回收站、元数据、三闸与台账。"""
+    try:
+        drafts_root = _drafts_root()
+    except RuntimeError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False, "error": str(e),
+        }, ensure_ascii=False, indent=2))]
+
+    try:
+        from specstd.workspace import get_active_workspace
+    except Exception:
+        get_active_workspace = None
+
+    # get_active_workspace() 返回 WorkspaceInfo 对象（dataclass，.name 属性），非 dict
+    ws = ""
+    if get_active_workspace:
+        try:
+            info = get_active_workspace()
+            ws = info.name if info else ""
+        except Exception:
+            ws = ""
+    stats = {"yaml_deleted": 0, "bak_deleted": 0, "trash_deleted": 0}
+
+    # 1. 删除 .yaml / .yml / .bak
+    if drafts_root.is_dir():
+        for f in list(drafts_root.glob("*.yaml")) + list(drafts_root.glob("*.yml")):
+            f.unlink(missing_ok=True)
+            stats["yaml_deleted"] += 1
+        for f in list(drafts_root.glob("*.bak")):
+            f.unlink(missing_ok=True)
+            stats["bak_deleted"] += 1
+
+        # 2. 重置 _meta.json
+        meta_path = drafts_root / "_meta.json"
+        if meta_path.is_file():
+            meta_path.write_text("{}\n", encoding="utf-8")
+
+        # 3. 清空 _trash/
+        trash = drafts_root / "_trash"
+        if trash.is_dir():
+            for f in list(trash.glob("*")):
+                if f.is_file():
+                    f.unlink(missing_ok=True)
+                    stats["trash_deleted"] += 1
+
+    # 4. 删除 DB 三闸记录
+    try:
+        from services import draft_gates
+        if ws:
+            draft_gates.delete_workspace_gates(ws)
+    except Exception:
+        pass
+
+    # 5. 删除 DB 草稿台账
+    try:
+        from services import ledger_store
+        if ws:
+            ledger_store.clear_drafts(ws)
+    except Exception:
+        pass
+
+    return [TextContent(type="text", text=json.dumps({
+        "ok": True, "workspace": ws, **stats,
     }, ensure_ascii=False, indent=2))]
