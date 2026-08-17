@@ -677,8 +677,39 @@ async def agent_ws(websocket: WebSocket,
     _ws_ctx_token = set_context_workspace(_ws_query_workspace or None)
 
     try:
+        _idle_heartbeat_tick = 0
         while True:
-            data = await websocket.receive_json()
+            try:
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=20.0)
+            except asyncio.TimeoutError:
+                # K-xxx: 空闲期心跳——等待用户消息期间保持连接活跃，
+                # 防止代理/NAT 超时断连，同时让前端检测到连接存活
+                _idle_heartbeat_tick += 1
+                # 每 20s 发一次心跳（每轮超时就发，防止累计误差）；
+                # 发送失败（异常类型随 uvicorn WS 实现而异）= 连接已死
+                try:
+                    await websocket.send_json({"type": "heartbeat"})
+                except Exception:
+                    raise WebSocketDisconnect(code=1006)
+                continue
+            except json.JSONDecodeError:
+                # 非 JSON 消息：忽略（不中断连接）
+                continue
+            except Exception:
+                # K-xxx: uvicorn WS 实现断连时抛 ConnectionClosed/RuntimeError 等
+                # （非 WebSocketDisconnect）——统一转为断连语义，走 WebSocketDisconnect
+                # 分支（不写 error 行到会话 JSONL）
+                raise WebSocketDisconnect(code=1006)
+
+            # 处理协议级消息（ping/pong）
+            msg_type = data.get("type", "")
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+
+            # 重置空闲心跳计数（收到有效消息说明连接正常）
+            _idle_heartbeat_tick = 0
+
             message = data.get("message", "")
             session_id = data.get("session_id", "")
             max_turns = data.get("max_turns", 12)
@@ -742,11 +773,12 @@ async def agent_ws(websocket: WebSocket,
             except Exception:
                 pass
 
-            # K-015: 同会话并发写防护（另一连接/标签页正在执行同一会话时拒绝）
+            # K-015: 同会话并发写防护（另一连接/标签页正在执行同一会话时拒绝）。
+            # K-xxx: 断连不打断后台 run 后，重连重发命中此性是正常现象——提示稍候
             if _run_in_progress(sid):
                 await websocket.send_json({
                     "type": "error",
-                    "message": "该会话正在执行中，请等待当前执行完成（或点击停止后再发送）",
+                    "message": "该会话仍在后台执行上一条消息（断连不打断，完成后自动落盘），请稍候重试或点击停止后再发送",
                 })
                 continue
 
@@ -803,34 +835,54 @@ async def agent_ws(websocket: WebSocket,
             _ACTIVE_RUNS[sid] = run_task  # K-015: 登记活跃 run（并发防护）
             try:
                 heartbeat_tick = 0
+                ws_broken = False  # K-xxx: WS 断连后不再取消 run——继续执行并落盘
                 while True:
                     if run_task.done() and queue.empty():
                         break
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=0.2)
-                        await websocket.send_json(event)
-                        heartbeat_tick = 0  # 有事件输出，重置心跳
+                        if not ws_broken:
+                            try:
+                                await websocket.send_json(event)
+                                heartbeat_tick = 0  # 有事件输出，重置心跳
+                            except Exception:
+                                # 连接已死（异常类型随 uvicorn WS 实现而异）——转入 detach
+                                ws_broken = True
                     except asyncio.TimeoutError:
                         heartbeat_tick += 1
-                        if heartbeat_tick >= 50:  # 10 秒无事件（0.2s × 50）
+                        if heartbeat_tick >= 50 and not ws_broken:  # 10 秒无事件（0.2s × 50）
                             # TCP 半开连接防护：定期 heartbeat 保持代理/NAT 不超时断连，
-                            # 同时让前端知道后端仍活着；send_json 若失败说明连接已断，异常上抛退出循环
-                            await websocket.send_json({"type": "heartbeat"})
+                            # 同时让前端知道后端仍活着；send 失败说明连接已死，转入 detach
+                            try:
+                                await websocket.send_json({"type": "heartbeat"})
+                            except Exception:
+                                ws_broken = True
                             heartbeat_tick = 0
+                        continue
+                    except (WebSocketDisconnect, RuntimeError):
+                        # K-xxx: 页面 reload（vite dev 重启强制刷新）/断网——连接已死但 run 不取消：
+                        # 继续执行并写完会话 JSONL，重连/刷新后恢复会话可读到完整回复。
+                        # 主动打断走 POST /cancel/{sid}（T-402 真打断保留）。
+                        # 事件丢弃（接收方已不存在），仅排空 queue 等 run 结束。
+                        ws_broken = True
                         continue
                 messages = await run_task  # 运行异常在此抛出，进外层 except
             finally:
                 _ACTIVE_RUNS.pop(sid, None)
                 _ACTIVE_RUNTIMES.pop(sid, None)
 
-            # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送
-            await websocket.send_json({
-                "type": "done",
-                "session_id": sid,
-                "messages": messages,
-                "stats": llm.get_stats(),
-                "title": "",
-            })
+            # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送。
+            # K-xxx: WS 已断（detach 完成）时发送失败是预期——静默跳过，消息已落盘，恢复会话可见
+            try:
+                await websocket.send_json({
+                    "type": "done",
+                    "session_id": sid,
+                    "messages": messages,
+                    "stats": llm.get_stats(),
+                    "title": "",
+                })
+            except Exception:
+                pass
 
             # G4: 新会话标题异步生成（不阻塞 done 事件）
             if is_new_session and messages:
@@ -849,7 +901,9 @@ async def agent_ws(websocket: WebSocket,
                 asyncio.create_task(_gen_title())
 
     except WebSocketDisconnect:
-        # T-xxx：WS 断连取消活跃运行（防 ghost run —— LLM/工具继续执行写同一 JSONL 致文件交织损坏）
+        # K-xxx: run 执行期间的断连已在事件推送循环内 detach 化（不取消、跑完落盘），
+        # 走到这里的断连均处于 receive 等待阶段（无活跃 run）。以下取消逻辑仅作兑底
+        # （防未来新增路径遗漏；正常情况下 run_task 已 done，取消为空转）。
         if 'run_task' in dir() and run_task and not run_task.done():
             run_task.cancel()
         if 'runtime' in dir() and runtime:

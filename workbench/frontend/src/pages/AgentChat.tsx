@@ -2142,6 +2142,7 @@ const _store = {
   ws: null as WebSocket | null,
   mounted: false,
   buffer: [] as any[],
+  everConnected: false,  // K-xxx: 是否建立过连接（区分首连与重连，重连触发增量补拉）
   // 会话状态快照
   messages: [] as ChatMessage[],
   loading: false,
@@ -2697,6 +2698,8 @@ export default function AgentChat() {
   const autoSentRef = useRef(false);
   const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
   const lastEventTimeRef = useRef(Date.now());  // TCP 半开连接防护：最后收到事件的时间
+  const sessionIdRef = useRef('');  // K-xxx: WS onopen 重连补拉需要最新 sessionId（避开闭包过期）
+  const wsPingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);  // WS 健康检测定时器
   const currentWorkspace = session.getWorkspace();
 
   // ── 多轮会话导航（置顶栏 + 用户消息定位图标列）──
@@ -2730,6 +2733,7 @@ export default function AgentChat() {
 
   // T-010 扩展：批量归档/恢复（后端只处理本人会话，非本人跳过）
   const [notice, setNotice] = useState('');  // 绿色成功提示（区别于红色错误）
+  const [reconnecting, setReconnecting] = useState(false);  // WS 自动重连中（非错误，低入侵提示）
   const handleBatchArchive = useCallback(async (ids: string[], archived: boolean) => {
     try {
       const r = await agentApi.batchArchive(ids, archived, currentWorkspace);
@@ -2769,6 +2773,7 @@ export default function AgentChat() {
 
   // 同步状态到模块存储（跨导航保持）
   useEffect(() => { _store.messages = messages; }, [messages]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { _store.loading = loading; }, [loading]);
   useEffect(() => { _store.sessionId = sessionId; }, [sessionId]);
   useEffect(() => { _store.sessionTitle = sessionTitle; }, [sessionTitle]);
@@ -2971,8 +2976,25 @@ export default function AgentChat() {
         _store.wsState = 'open';
         if (_store.mounted) {
           setWsState('open');
+          setReconnecting(false);
           setError(prev => prev.startsWith('连接已断开') ? '' : prev);
         }
+        // K-xxx: 重连成功后增量补拉——断连期间后端 run 可能已继续执行并落盘（断连不打断），
+        // 页面未刷新时本地 messages 缺尾部回复，静默拉取补齐（只多不少才替换）。
+        // 2.5s 延迟：给后台落盘留窗口；拉取失败不影响现有显示。
+        if (_store.everConnected && sessionIdRef.current) {
+          const sid = sessionIdRef.current;
+          const wsp = session.getWorkspace();
+          window.setTimeout(async () => {
+            try {
+              const r = await agentApi.getSession(sid, wsp);
+              const msgs = r.messages || [];
+              setMessages(prev => (msgs.length > prev.length ? msgs : prev));
+              setSessionsVersion(v => v + 1);
+            } catch { /* 静默 */ }
+          }, 2500);
+        }
+        _store.everConnected = true;
       };
       ws.onclose = () => {
         _store.wsState = 'closed';
@@ -2983,12 +3005,21 @@ export default function AgentChat() {
           // 此前 onclose 只改状态不重连，handleSend 静默丢弃消息（「一直没响应」主因之一）
           setLoading(false);
           setStreamingText('');
-          if (reconnectAttemptsRef.current < 5) {
+          if (reconnectAttemptsRef.current < 3) {
+            // 前 3 次用低入侵的 reconnecting 状态（非红色错误栏）
+            setReconnecting(true);
+            const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 10000);
+            reconnectAttemptsRef.current += 1;
+            window.setTimeout(() => { if (_store.mounted) setWsReconnect(v => v + 1); }, delay);
+          } else if (reconnectAttemptsRef.current < 5) {
+            // 第 4-5 次：升级为 error 提示
             setError('连接已断开，正在自动重连…');
+            setReconnecting(false);
             const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 10000);
             reconnectAttemptsRef.current += 1;
             window.setTimeout(() => { if (_store.mounted) setWsReconnect(v => v + 1); }, delay);
           } else {
+            setReconnecting(false);
             setError('连接已断开，自动重连失败——请刷新页面或检查后端服务');
           }
         }
@@ -3067,12 +3098,55 @@ export default function AgentChat() {
       if (idle > 30000) {  // 30 秒无任何事件（3 个心跳周期）——判定连接断开
         setLoading(false);
         setStreamingText('');
-        setError('连接已断开，正在自动重连…');
+        setReconnecting(true);
         setWsReconnect(v => v + 1);
       }
     }, 5000);  // 每 5 秒检查
     return () => clearInterval(timer);
   }, [loading]);
+
+  // K-xxx: WS 前台健康检测——WS 打开时每 30s 发 ping，检测半开连接
+  // 同时发起 idle 检测：连续 60s 无任何事件判定断连
+  useEffect(() => {
+    if (wsState !== 'open') {
+      // WS 未打开时清除定时器
+      if (wsPingIntervalRef.current) {
+        clearInterval(wsPingIntervalRef.current);
+        wsPingIntervalRef.current = null;
+      }
+      return;
+    }
+    // 每 30s 检测空闲 + 发 ping 保活
+    wsPingIntervalRef.current = setInterval(() => {
+      const idle = Date.now() - lastEventTimeRef.current;
+      if (idle > 60000) {
+        // 60s 无任何事件——判定连接断开（空闲期只有后端心跳 /20s 和 uvicorn ping/20s）
+        // 不触发 loading（不在 run 中），直接静默重连
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          // 主动关闭旧连接，触发 onclose → 自动重连
+          (ws as any)._intentional = false;  // 确保 onclose 走重连逻辑
+          ws.close();
+        }
+        return;
+      }
+      // 发 ping 探测（后端只占用了 receive_json 消息队列，不阻塞）
+      try {
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      } catch {
+        // 静默失败，await onclose 触发重连
+      }
+    }, 30000);
+    return () => {
+      if (wsPingIntervalRef.current) {
+        clearInterval(wsPingIntervalRef.current);
+        wsPingIntervalRef.current = null;
+      }
+    };
+  }, [wsState]);
 
   // 发送消息
   // 返回是否真正发出——ChatInput 据此决定清空输入框（发送被拒时保留草稿）
@@ -3114,7 +3188,8 @@ export default function AgentChat() {
       return false;
     }
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      setError('连接已断开，正在尝试重连…（消息未发送，重连后请重发）');
+      setReconnecting(true);
+      setError('连接已断开，消息未发送，重连后请重发');
       reconnectAttemptsRef.current = 0;
       setWsReconnect(v => v + 1);
       return false;
@@ -3745,6 +3820,12 @@ export default function AgentChat() {
                 <div className="mb-3 ml-1 border-l-2 border-border/50 pl-3 py-0.5">
                   <MarkdownText content={streamingText} />
                   <span className="inline-block w-2 h-3.5 bg-info/70 animate-pulse rounded-sm" />
+                </div>
+              )}
+              {reconnecting && (
+                <div className="bg-yellow-900/20 border border-yellow-700/30 rounded p-1.5 mb-2 flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+                  <span className="text-yellow-300 text-xs">连接已断开，正在自动重连…</span>
                 </div>
               )}
               {error && (
