@@ -42,6 +42,7 @@ def _ws_root():
 class WatchConfig(BaseModel):
     chats: list[dict] = []
     docs: list[dict] = []
+    users: list[dict] = []          # 用户监听维度（open_id/name/scopes）
     minutes_days: int = 30
     chat_days: int = 7
 
@@ -172,3 +173,30 @@ def update_caption_ep(body: CaptionUpdate,
             _sf_base(), body.material, body.placeholder, body.caption)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ══════════════════════════════════════════════════════════
+# 选择器数据源（同步设置弹层；全部只读 --as user，失败记 errors 不抛 500）
+# ══════════════════════════════════════════════════════════
+
+@router.get("/chats")
+def list_chats(user: CurrentUser = Depends(get_current_user),
+               workspace: str = Depends(resolve_workspace)):
+    """我的群聊列表（群聊选择器数据源；p2p 项前端置灰）。纯读。"""
+    return sync_svc.list_my_chats()
+
+
+@router.get("/users")
+def find_users(query: str = "",
+               user: CurrentUser = Depends(get_current_user),
+               workspace: str = Depends(resolve_workspace)):
+    """通讯录用户搜索（query 为空 → 空列表）。纯读。"""
+    return sync_svc.search_users(query)
+
+
+@router.get("/user-docs")
+def find_user_docs(open_id: str, query: str = "",
+                   user: CurrentUser = Depends(get_current_user),
+                   workspace: str = Depends(resolve_workspace)):
+    """按用户搜文档（应用侧 owner 过滤）。纯读。"""
+    return sync_svc.search_user_docs(open_id, query)

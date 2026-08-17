@@ -29,7 +29,7 @@ def _mk_user(root: Path, emp: str, with_watch=True):
         sf = root / ".specflow" / emp
         sf.mkdir(parents=True)
         (sf / "feishu_watch.yaml").write_text(
-            "chats: []\ndocs: []\n", encoding="utf-8")
+            "chats:\n  - chat_id: oc_a\ndocs: []\n", encoding="utf-8")
 
 
 class TestSingleUserGuard:
@@ -97,6 +97,7 @@ class TestConsumeLoop:
              patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
              patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
              patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+             patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
              patch.object(pool_store, "_resolve_sender", return_value="张三"):
             w = fw.FeishuWatcher(tmp_path)
             w.start()
@@ -201,6 +202,7 @@ def test_e2e_event_to_review_queue(tmp_path):
          patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
          patch.object(pool_store, "_resolve_sender", return_value="张三"):
         w = fw.FeishuWatcher(tmp_path)
         w.start()
@@ -236,6 +238,79 @@ def test_e2e_event_to_review_queue(tmp_path):
     rev.enqueue_suggestions(emp, "u1", sug)
     queue = rev.list_queue(emp)
     assert queue[0]["status"] == "pending" and queue[0]["dst"] == "FR-012"
+
+
+def test_direct_write_drops_unauthorized_chat(tmp_path):
+    """未授权 chat 的消息不直写（D5）。"""
+    _mk_user(tmp_path, "u1")   # fixture 授权 oc_a
+    events = [{"chat_id": "oc_other", "event_id": "e1", "sender_id": "ou_x1",
+               "create_time": "1691498400000", "message_type": "text",
+               "content": "未授权群消息"}]
+    from specflow.feishu_pool import pool_store
+    with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
+         patch.object(fw, "_token_valid", return_value=True), \
+         patch.object(fw.FeishuWatcher, "_spawn",
+                      new=lambda self, k, i: _FakeProc(events)), \
+         patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None):
+        w = fw.FeishuWatcher(tmp_path)
+        w.start()
+        time.sleep(0.3)
+        w.stop()
+    emp = tmp_path / ".specflow" / "u1"
+    assert list((emp / "feishu_pool" / "chats").rglob("*.md")) == []
+
+
+def test_direct_write_group_sender_filter(tmp_path):
+    """group_sender 过滤：命中 sender 直写 / 未命中丢弃（D4，仅直写）。"""
+    root = tmp_path
+    (root / ".lark-cli" / "u1").mkdir(parents=True)
+    (root / ".lark-cli" / "u1" / "config.json").write_text("{}", encoding="utf-8")
+    sf = root / ".specflow" / "u1"
+    sf.mkdir(parents=True)
+    (sf / "feishu_watch.yaml").write_text(
+        "chats:\n  - chat_id: oc_a\ndocs: []\n"
+        "users:\n  - open_id: ou_x1\n    name: 张三\n"
+        "    scopes: [group_sender]\n", encoding="utf-8")
+    events = [{"chat_id": "oc_a", "event_id": "e1", "sender_id": "ou_x1",
+               "create_time": "1691498400000", "message_type": "text",
+               "content": "关注人的消息"},
+              {"chat_id": "oc_a", "event_id": "e2", "sender_id": "ou_y",
+               "create_time": "1691498460000", "message_type": "text",
+               "content": "其他人的消息"}]
+    from specflow.feishu_pool import pool_store
+    with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
+         patch.object(fw, "_token_valid", return_value=True), \
+         patch.object(fw.FeishuWatcher, "_spawn",
+                      new=lambda self, k, i: _FakeProc(events)), \
+         patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
+         patch.object(pool_store, "_resolve_sender", return_value="张三"):
+        w = fw.FeishuWatcher(tmp_path)
+        w.start()
+        time.sleep(0.3)
+        w.stop()
+    chat_files = list((sf / "feishu_pool" / "chats").rglob("*.md"))
+    assert len(chat_files) == 1
+    content = chat_files[0].read_text(encoding="utf-8")
+    assert "关注人的消息" in content
+    assert "其他人的消息" not in content
+
+
+def test_user_materials_job_calls_sync(tmp_path):
+    """模块级 job：委托 sync_user_materials（APScheduler 可序列化铁律）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    emp.mkdir(parents=True)
+    called = []
+    with patch("services.specflow.feishu_sync_service.sync_user_materials",
+               side_effect=lambda b: called.append(b)
+               or {"minutes": 0, "docs": 0, "errors": []}):
+        fw.user_materials_job(str(emp))
+    assert called == [emp]
 
 
 # ══════════════════════════════════════════════════════════

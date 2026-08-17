@@ -36,7 +36,45 @@ def test_watch_config_roundtrip(tmp_path):
 
 def test_watch_config_default_when_missing(tmp_path):
     loaded = svc.load_watch_config(tmp_path / ".specflow" / "u1")
-    assert loaded == {"chats": [], "docs": [], "minutes_days": 30, "chat_days": 7}
+    assert loaded == {"chats": [], "docs": [], "users": [],
+                      "minutes_days": 30, "chat_days": 7}
+
+
+def test_watch_users_roundtrip(tmp_path):
+    """watch v2：users 维度读写（open_id/name/scopes）。"""
+    base = tmp_path / ".specflow" / "u1"
+    cfg = {"chats": [{"chat_id": "oc_abc"}],
+           "docs": [{"token": "FBxod"}],
+           "users": [{"open_id": "ou_a", "name": "张三",
+                      "scopes": ["group_sender", "minutes"]}],
+           "minutes_days": 30, "chat_days": 7}
+    svc.save_watch_config(base, cfg)
+    loaded = svc.load_watch_config(base)
+    assert loaded["users"][0]["open_id"] == "ou_a"
+    assert loaded["users"][0]["scopes"] == ["group_sender", "minutes"]
+
+
+def test_watch_users_legacy_config_default(tmp_path):
+    """旧配置（无 users 字段）加载自动补齐 users: []。"""
+    base = tmp_path / ".specflow" / "u1"
+    base.mkdir(parents=True)
+    (base / "feishu_watch.yaml").write_text(
+        "chats: []\ndocs: []\nminutes_days: 30\nchat_days: 7\n", encoding="utf-8")
+    loaded = svc.load_watch_config(base)
+    assert loaded["users"] == []
+
+
+def test_watch_users_scopes_filtered_and_dedup(tmp_path):
+    """scopes 非法值丢弃；空 open_id 丢弃；按 open_id 去重（后写覆盖）。"""
+    base = tmp_path / ".specflow" / "u1"
+    cfg = {"users": [{"open_id": "ou_a", "name": "张三",
+                      "scopes": ["group_sender", "bogus"]},
+                     {"open_id": "", "name": "空", "scopes": ["docs"]},
+                     {"open_id": "ou_a", "name": "张三2", "scopes": ["docs"]}]}
+    saved = svc.save_watch_config(base, cfg)
+    assert len(saved["users"]) == 1
+    assert saved["users"][0]["name"] == "张三2"
+    assert saved["users"][0]["scopes"] == ["docs"]
 
 
 def test_sync_doc_to_pool(tmp_path):
@@ -106,6 +144,74 @@ def test_sync_recent_docs_intersection(tmp_path):
     assert out["docs"] == 1                                    # tokOther 被交集过滤
     assert (base / "feishu_pool" / "docs" / "fd-tokAuth.md").is_file()
     assert not (base / "feishu_pool" / "docs" / "fd-tokOther.md").exists()
+
+
+def test_sync_minutes_owner_ids_passthrough(tmp_path):
+    """sync_minutes：owner_ids 透传 --owner-ids（None → me 保持现状）。"""
+    base = tmp_path / ".specflow" / "u1"
+    calls = []
+
+    def fake(args, timeout=90):
+        calls.append(args)
+        if args[:2] == ["minutes", "+search"]:
+            return {"ok": True, "data": {"items": [
+                {"minute_token": "obcn1", "url": "u"}]}}
+        return {"ok": True, "data": {"summary": "s"}}
+
+    with patch.object(svc, "_run_lark", side_effect=fake):
+        svc.sync_minutes(base, days=30, owner_ids=["ou_a", "ou_b"])
+        svc.sync_minutes(base, days=30)
+    assert calls[0][calls[0].index("--owner-ids") + 1] == "ou_a,ou_b"
+    assert calls[2][calls[2].index("--owner-ids") + 1] == "me"
+
+
+def test_sync_user_materials_minutes_branch(tmp_path):
+    """sync_user_materials：scopes 含 minutes 的用户按其 open_id 拉妙记落池。"""
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [], "docs": [],
+                                 "users": [{"open_id": "ou_a", "name": "张三",
+                                            "scopes": ["minutes"]}],
+                                 "minutes_days": 30, "chat_days": 7})
+    calls = []
+
+    def fake(args, timeout=90):
+        calls.append(args)
+        if args[:2] == ["minutes", "+search"]:
+            return {"ok": True, "data": {"items": [
+                {"minute_token": "obcn1", "url": "u"}]}}
+        return {"ok": True, "data": {"summary": "s"}}
+
+    with patch.object(svc, "_run_lark", side_effect=fake):
+        out = svc.sync_user_materials(base)
+    assert out["minutes"] == 1 and out["errors"] == []
+    assert any("--owner-ids" in c and "ou_a" in c for c in calls)
+    assert (base / "feishu_pool" / "minutes" / "fm-obcn1.json").is_file()
+
+
+def test_sync_user_docs_owner_filter(tmp_path):
+    """用户文档轮询：docs +search 结果按 owner_id 应用侧过滤后落池。"""
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [], "docs": [],
+                                 "users": [{"open_id": "ou_a", "name": "张三",
+                                            "scopes": ["docs"]}],
+                                 "minutes_days": 30, "chat_days": 7})
+
+    def fake(args, timeout=90):
+        if args[:2] == ["docs", "+search"]:
+            return {"ok": True, "data": {"results": [
+                {"title_highlighted": "张三的文档",
+                 "result_meta": {"owner_id": "ou_a", "token": "tokA",
+                                 "url": "uA", "doc_types": "DOCX"}},
+                {"title_highlighted": "别人的文档",
+                 "result_meta": {"owner_id": "ou_b", "token": "tokB",
+                                 "url": "uB", "doc_types": "DOCX"}}]}}
+        return {"ok": True, "data": {"content": "# 文档\n"}}
+
+    with patch.object(svc, "_run_lark", side_effect=fake):
+        out = svc.sync_user_materials(base)
+    assert out["docs"] == 1 and out["errors"] == []
+    assert (base / "feishu_pool" / "docs" / "fd-tokA.md").is_file()
+    assert not (base / "feishu_pool" / "docs" / "fd-tokB.md").exists()
 
 
 # ══════════════════════════════════════════════════════════

@@ -99,6 +99,14 @@ def chat_proofread_job(emp_base_str: str):
             log.warning("校对重拉失败 %s: %s", chat.get("chat_id"), ce)
 
 
+def user_materials_job(emp_base_str: str):
+    """每日用户材料轮询 job（模块级——APScheduler 需可序列化 callable，禁闭包）。"""
+    from services.specflow import feishu_sync_service as svc
+    out = svc.sync_user_materials(Path(emp_base_str))
+    if out.get("errors"):
+        log.warning("用户材料轮询部分失败: %s", out["errors"])
+
+
 class FeishuWatcher:
     def __init__(self, sg_root: Path):
         self.sg_root = Path(sg_root)
@@ -123,6 +131,7 @@ class FeishuWatcher:
         self._catch_up()
         self._schedule_doc_poll()
         self._schedule_chat_proofread()
+        self._schedule_user_materials()
         for key, identity in EVENT_KEYS:
             self._launch(key, identity)
         log.info("feishu_watcher 已启动（emp=%s，%d 路事件）", self.emp, len(EVENT_KEYS))
@@ -155,6 +164,21 @@ class FeishuWatcher:
                 id=f"feishu-proofread-{self.emp}", replace_existing=True)
         except Exception as e:
             log.warning("feishu_watcher 校对 job 挂载失败（不阻断监听）: %s", e)
+
+    def _schedule_user_materials(self):
+        """每日 08:00 用户材料轮询（错开 07:00 文档轮询 / 03:00 群聊校对）。
+
+        job callable 必须模块级（APScheduler 序列化限制）——闭包会炸 startup。
+        """
+        try:
+            from services.scheduler import get_scheduler
+            emp_base = self.sg_root / ".specflow" / self.emp
+            get_scheduler().add_job(
+                user_materials_job, args=[str(emp_base)],
+                trigger="cron", hour=8, minute=0,
+                id=f"feishu-user-materials-{self.emp}", replace_existing=True)
+        except Exception as e:
+            log.warning("feishu_watcher 用户材料轮询 job 挂载失败（不阻断监听）: %s", e)
 
     def stop(self):
         """优雅停：先关 stdin（EOF 触发优雅退出），10s 超时再 terminate。禁 kill。"""
@@ -275,6 +299,8 @@ class FeishuWatcher:
         """IM 事件直写（T-925）：event_id 去重 → 渲染行 → append 快照。
 
         撤回/编辑无 CLI 事件，由每日校对重拉兜底（设计 §4.3）。
+        授权校验 + 发送人过滤（设计 D4/D5）：仅授权 chat 且（配置了
+        group_sender 时）命中发送人的消息才直写；校对重拉全量不受过滤影响。
         """
         from specflow.feishu_pool import pool_store
         event_id = str(ev.get("event_id") or "")
@@ -282,6 +308,9 @@ class FeishuWatcher:
         if not chat_id:
             return
         emp_base = self.sg_root / ".specflow" / self.emp
+        if not self._authorized_for_direct_write(
+                emp_base, chat_id, str(ev.get("sender_id") or "")):
+            return
         if event_id and not pool_store.mark_event_seen(emp_base, event_id):
             return                              # 重复事件不双写
         ms = int(ev.get("create_time") or 0)
@@ -297,6 +326,31 @@ class FeishuWatcher:
         pool_store.append_chat_lines(
             emp_base, chat_id, ts.strftime("%Y%m%d"),
             [f"[{ts.strftime('%H:%M')}] {sender}: {body}"])
+
+    def _authorized_for_direct_write(self, emp_base: Path, chat_id: str,
+                                     sender_id: str) -> bool:
+        """直写授权校验（配置即时读取，保存即生效，无需重启子进程——D1）。
+
+        1. chat_id 须在 watch.chats 授权清单内（D5：兑现同步范围即授权范围；
+           p2p 事件 chat_id 天然不在清单，兼容 D2 私聊不做）；
+        2. G = scopes 含 group_sender 的 users open_id 集合——G 非空时
+           sender_id 须 ∈ G（D4：仅直写过滤，校对全量覆盖）。
+        配置读取异常 → 放行并 warning（不打断事件循环，校对重拉兜底）。
+        """
+        try:
+            from services.specflow import feishu_sync_service as svc
+            cfg = svc.load_watch_config(emp_base)
+        except Exception as e:
+            log.warning("feishu_watcher 读 watch 配置失败，放行直写: %s", e)
+            return True
+        authorized = {str(c.get("chat_id", "")) for c in cfg.get("chats") or []}
+        if chat_id not in authorized:
+            return False
+        senders = {str(u.get("open_id", "")) for u in cfg.get("users") or []
+                   if "group_sender" in (u.get("scopes") or [])}
+        if senders and sender_id not in senders:
+            return False
+        return True
 
     def _throttled(self, key: str, **pull_kw):
         now = time.time()
