@@ -120,6 +120,16 @@ class TestPurposeLoader:
         # viewer：2026-08-14 首页免权——测试工作台登录即用（产品工作台仍限 product+）
         assert {p.id for p in visible_purposes(["viewer"])} == {"test_workbench"}
 
+    def test_panels_values_align_tab_registry(self):
+        """T-931：panels 值对齐前端 TAB_REGISTRY 页签 id（通用页签不声明、
+        未实现页签不声明——∩语义下声明了也不渲染，但保持声明面干净）。"""
+        from agent.purpose_loader import load_purpose, clear_cache
+        clear_cache()
+        req = load_purpose("requirement_interview")
+        assert req is not None and req.panels == ["pack", "focus", "materials"]
+        tw = load_purpose("test_workbench")
+        assert tw is not None and tw.panels == ["deps", "history"]
+
 
 # ══════════════════════════════════════════════════════════
 # T-011: 三层交集白名单

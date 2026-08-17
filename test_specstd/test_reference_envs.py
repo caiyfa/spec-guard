@@ -73,20 +73,20 @@ class TestEnvEndpoints:
         双保险（经验包 2026-08-02-测试污染生产配置）：monkeypatch 目标必须与 main
         同模块实例（from routers import reference），且真实 env.sit.yaml 的 mtime
         不得变化——monkeypatch 失效会立即红而非静默污染生产配置。
+        T-306 多系统改造后保存路径经 _env_file → _SYSTEMS_ROOT/{system}/config
+        解析，patch 点从 SYSTEMS_TDM 常量改为 _SYSTEMS_ROOT（旧 patch 失效已
+        导致过一次真实配置被覆盖，git checkout 恢复）。
         """
         from routers import reference  # 与 main 同一模块实例（BACKEND_DIR sys.path）
-        real_env = reference.SYSTEMS_TDM / "config" / "env.sit.yaml"
+        real_env = reference._SYSTEMS_ROOT / "tdm" / "config" / "env.sit.yaml"
         real_mtime = real_env.stat().st_mtime_ns if real_env.is_file() else None
-        target = tmp_path / "config"
-        target.mkdir(parents=True)
-        monkeypatch.setattr(reference, "SYSTEMS_TDM", tmp_path)
-        assert reference.SYSTEMS_TDM == tmp_path, "monkeypatch 未生效（模块实例不一致）"
-        (tmp_path / "config").mkdir(exist_ok=True)
+        monkeypatch.setattr(reference, "_SYSTEMS_ROOT", tmp_path)
+        assert reference._SYSTEMS_ROOT == tmp_path, "monkeypatch 未生效（模块实例不一致）"
 
         r = client.put("/api/reference/env-config?env=sit", json={"raw": "accounts:\n  default: {ad: u1, emp_no: '90000001'}\n"})
         assert r.status_code == 200
         assert r.json()["ok"] is True
-        saved = (tmp_path / "config" / "env.sit.yaml").read_text(encoding="utf-8")
+        saved = (tmp_path / "tdm" / "config" / "env.sit.yaml").read_text(encoding="utf-8")
         assert "default" in saved
         # mtime 守卫：真实配置未被写
         if real_mtime is not None:
@@ -94,7 +94,7 @@ class TestEnvEndpoints:
 
     def test_save_rejects_bad_yaml(self, client, tmp_path, monkeypatch):
         from routers import reference  # 与 main 同一模块实例（BACKEND_DIR sys.path）
-        monkeypatch.setattr(reference, "SYSTEMS_TDM", tmp_path)
+        monkeypatch.setattr(reference, "_SYSTEMS_ROOT", tmp_path)
         r = client.put("/api/reference/env-config?env=sit", json={"raw": "a: [unclosed"})
         assert r.status_code == 200
         assert r.json()["ok"] is False
@@ -122,7 +122,7 @@ class TestSharedScope:
         from routers import reference
         shared_dir = tmp_path / "_shared" / "config"
         monkeypatch.setattr(reference, "_SHARED_CONFIG_DIR", shared_dir)
-        monkeypatch.setattr(reference, "SYSTEMS_TDM", tmp_path / "systems" / "tdm")
+        monkeypatch.setattr(reference, "_SYSTEMS_ROOT", tmp_path / "systems")
         r = client.put("/api/reference/env-config?env=sit&scope=shared",
                        json={"raw": "sso:\n  domain: http://shared.example.com\n"})
         assert r.status_code == 200

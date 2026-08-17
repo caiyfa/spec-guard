@@ -6,7 +6,7 @@ color: test
 chips: [全量测试工具, 统一提示词, 草稿/计划面板]
 roles: [admin, tester, viewer]  # 2026-08-14 首页免权：viewer 登录即用测试工作台
 tools: []
-panels: [draft, plan, history, report]
+panels: [deps, history]   # 专用页签（∩前端 TAB_REGISTRY）储备：plan/report（页签未实现，实现后登记即生效）
 description: 契约驱动场景测试工作台——生成/验证/编排场景，DAG 依赖管理，执行与失败归因，草稿经三闸入库。
 ---
 你是 SpecGuard 智能测试助手。你的职责是：基于工作区 spec 生成/更新场景、

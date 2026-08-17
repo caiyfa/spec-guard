@@ -1991,7 +1991,21 @@ interface FileTab {
   hunks?: DocHunk[];  // T-511：阅读足迹打开时携带的使用位置（行区间定位+高亮）
 }
 
-function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, onAskAgentGuide }: {
+// T-932：页签注册表（页签 id 单一事实源）——通用页签所有 purpose 恒显，
+// 专用页签由 purpose 的 panels 声明驱动（∩ 本注册表，未知 id 静默忽略）。
+// materials 页签随 T-933 实现（panels 已声明，注册表补行即生效）。
+const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[] = [
+  { id: 'todos',   label: '📋 待办',       scope: 'universal' },
+  { id: 'gates',   label: '🎛 操作台',     scope: 'universal' },
+  { id: 'reading', label: '📖 阅读',       scope: 'universal' },
+  { id: 'drafts',  label: '📝 更新与产物', scope: 'universal' },
+  { id: 'pack',    label: '📦 信息包',     scope: 'purpose' },
+  { id: 'focus',   label: '◎ 图谱',        scope: 'purpose' },
+  { id: 'deps',    label: '🕸 依赖图',     scope: 'purpose' },
+  { id: 'history', label: '📜 提交历史',   scope: 'purpose' },
+];
+
+function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, onAskAgentGuide, purposePanels }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -2024,9 +2038,28 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
   onRefreshWritingFeed?: () => void;
   sessionId: string;  // GateDock：操作台按会话反查面试上下文（sf_interviews 绑定）
   onAskAgentGuide?: (card: GateCard) => void;  // GateDock：「🤖 帮我」L1 引导
+  purposePanels?: string[];  // T-932：当前 purpose 声明的专用页签 id（未声明 → 仅通用集）
 }) {
   const isFileTab = activeTab.startsWith('file:');
   const activeFile = isFileTab ? fileTabs.find(t => `file:${t.path}` === activeTab) : null;
+
+  // T-932：装配——通用恒显 + purpose 声明的专用（∩ 注册表）；pack 保持信息包存在才显
+  const purposePanelSet = new Set(purposePanels || []);
+  const visibleTabs = SIDE_TABS
+    .filter(t => t.scope === 'universal' || purposePanelSet.has(t.id))
+    .filter(t => t.id !== 'pack' || !!scenarioMeta);
+  const labelOf = (id: string) => {
+    if (id === 'reading' && readingFeed.length > 0) return `📖 阅读(${readingFeed.length})`;
+    if (id === 'drafts') return `📝 更新与产物(${writingFeed.length + draftFiles.length})`;
+    if (id === 'pack' && scenarioMeta) return `📦 信息包(${scenarioMeta.info_pack.length})`;
+    return SIDE_TABS.find(t => t.id === id)?.label || id;
+  };
+  // 活动页签被装配隐藏（如切方向后专用页签不再可见）→ 回落到待办
+  useEffect(() => {
+    const hidden = SIDE_TABS.find(t =>
+      t.id === activeTab && t.scope === 'purpose' && !purposePanelSet.has(t.id));
+    if (hidden) onSelectTab('todos');
+  }, [activeTab, purposePanels, onSelectTab]);
 
   const tabBtn = (id: string, label: string, closable = false, path = '') => (
     <button
@@ -2053,16 +2086,9 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
     <div
       className="flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col min-h-0"
       style={{ width }}
-    >      {/* 页签条（K-032：参考编辑器页签样式） */}
+    >      {/* 页签条（K-032：参考编辑器页签样式；T-932 注册表装配） */}
       <div className="flex items-center border-b border-border overflow-x-auto flex-shrink-0">
-        {tabBtn('todos', '📋 待办')}
-        {tabBtn('gates', '🎛 操作台')}
-        {tabBtn('reading', readingFeed.length > 0 ? `📖 阅读(${readingFeed.length})` : '📖 阅读')}
-        {scenarioMeta && tabBtn('pack', `📦 信息包(${scenarioMeta.info_pack.length})`)}
-        {tabBtn('drafts', `📝 更新与产物(${writingFeed.length + draftFiles.length})`)}
-        {tabBtn('deps', '🕸 依赖图')}
-        {tabBtn('focus', '◎ 图谱')}
-        {tabBtn('history', '📜 提交历史')}
+        {visibleTabs.map(t => tabBtn(t.id, labelOf(t.id)))}
         {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
         {onToggleMaximize && (
           <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
@@ -2594,7 +2620,7 @@ export default function AgentChat() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsVersion, setSessionsVersion] = useState(0);
   // T-010: 用途选择（使命卡片）
-  const [purposes, setPurposes] = useState<{ id: string; title: string; icon: string; color: string; chips: string[]; description: string }[]>([]);
+  const [purposes, setPurposes] = useState<{ id: string; title: string; icon: string; color: string; chips: string[]; description: string; panels: string[] }[]>([]);
   const [showPurposePicker, setShowPurposePicker] = useState(false);
   const [pickedPurpose, setPickedPurpose] = useState(() => localStorage.getItem('sg_picked_purpose') || '');
   const [models, setModels] = useState<ModelConfig[]>([]);
@@ -3916,7 +3942,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} onAskAgentGuide={askAgentGuide} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} />
           </>
         )}
       </div>
