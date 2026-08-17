@@ -266,8 +266,8 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| T-931 | 装配-对齐 | purposes panels 值对齐真实页签 id | agent/purposes/*.md + test_agent.py | 两 purpose md panels 改 [pack,focus,materials]/[deps,history]（旧值入储备注释）；loader 解析+端点透出断言 | — | 未认领 | | |
-| T-932 | 装配-前端 | SidePanel 页签注册表 + purpose 装配 | AgentChat.tsx | TAB_REGISTRY 通用/专用分层；选测试方向 pack/focus/materials 隐藏、deps/history 保留；未声明 panels 仅通用集（兼容）；build | T-931 | 未认领 | | |
+| T-931 | 装配-对齐 | purposes panels 值对齐真实页签 id | agent/purposes/*.md + test_purpose.py | 两 purpose md panels 改 [pack,focus,materials]/[deps,history]（旧值入储备注释）；loader 解析+端点透出断言 | — | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-17（42c851a：test_panels_values_align_tab_registry 用例 + 102 绿） |
+| T-932 | 装配-前端 | SidePanel 页签注册表 + purpose 装配 | AgentChat.tsx | TAB_REGISTRY 通用/专用分层；选测试方向 pack/focus/materials 隐藏、deps/history 保留；未声明 panels 仅通用集（兼容）；活动页签被隐藏回落待办；build | T-931 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-17（42c851a：SIDE_TABS 注册表 + purposePanels prop + 隐藏回落 useEffect；materials 页签随 T-933 补注册表行即生效；顺手修复 test_reference_envs patch 点——多系统改造后保存走 _env_file/_SYSTEMS_ROOT，旧 SYSTEMS_TDM patch 失效曾致真实 env.sit.yaml 被覆盖，已 git checkout 恢复+patch 点迁移+mtime 守卫验证） |
 | T-933 | 材料-上传 | 对话内材料上传 + 引用类型扩展 | AgentChat.tsx + api.ts | 📎 入口走 S3 既有上传端点；上传成功挂 reference 卡片（ChatReference 扩 'material'）随消息进 references；「材料」页签列会话引用材料（标题/状态/摘要）；build | T-932 | 未认领 | | |
 | T-934 | 材料-读取 | read_material MCP 工具 + 白名单登记 | mcp_server/tools/specflow_pack.py + purposes md | summary/topics/raw 三视图 + raw 分页；requirement_interview tools 登记；MCP 用例 ≥3 | — | 未认领 | | |
 | T-935 | 收口 | e2e + 全量回归 | test_specstd + 前端 | 上传→引用→read_material 贯通（mock）；全量回归 + release_check + build | T-931~T-934 | 未认领 | | |
@@ -282,7 +282,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23/v1.24 归档编排 | T-900 + T-901 + T-902 + 归档瘦身 | 2026-08-13 | T-900 一期 ✅（commit 23a4c60）→ T-901 二期 ✅ + T-902 三期 ✅（MCP 工具 + 围栏渲染 + 白名单代执行 + skills 话术）；总控 v1.23 归档瘦身 + v1.24 二三期完成收口 |
 | sess-feishu-graph | 飞书知识图谱施工（面试素材溯源） | T-910 ~ T-923（一/二期✅）→ T-924 ~ T-929（三期✅） | 2026-08-14 | 一期批次 A/B + 二期事件监听/转述/自动焦点/轮询全量收口；三期多用户编排/直写/演进链/入包收口 |
-| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层已收口（aefd802/e4633a2/b1d15ff）；§4.10 专项设计已定稿登记，T-931~T-935 待排期开发，T-936 储备 |
+| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配已交付（42c851a：选方向面板随 purpose 变化）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
 | | | | | |
 
 ---
@@ -298,6 +298,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
 | docs/远期设计/SpecGuard-AgentChat材料工作流与purpose面板装配专项设计.md | sess-agentchat-material | 2026-08-17 | NEW | fcd7c6055d45 | 已完成 | §4.10 专项设计定稿（T-931~T-936 拆解 + D1-D6 决策：页签注册表装配/上传链路复用 S3/read_material 工具/MaterialsPanel 不删） |
+| agent/purposes/requirement_interview.md | sess-agentchat-material | 2026-08-17 | — | d27cfa18e450 | 已完成 | T-931：panels 对齐真实页签 id（[pack,focus,materials]，旧值入储备注释） |
+| agent/purposes/test_workbench.md | sess-agentchat-material | 2026-08-17 | — | 6c1652b5f242 | 已完成 | T-931：panels 对齐（[deps,history]） |
+| test_specstd/test_purpose.py | sess-agentchat-material | 2026-08-17 | — | 4f973acdac98 | 已完成 | T-931：panels 值断言用例 |
+| test_specstd/test_reference_envs.py | sess-agentchat-material | 2026-08-17 | — | 5ded3b3dff1e | 已完成 | 顺手修复：多系统改造后 patch 点迁移 SYSTEMS_TDM→_SYSTEMS_ROOT（旧 patch 失效曾污染真实 env.sit.yaml，已恢复+守卫验证） |
+| workbench/frontend/src/pages/AgentChat.tsx | sess-agentchat-material | 2026-08-17 | — | 961c92ee762c | 已完成 | T-932：SIDE_TABS 页签注册表 + purposePanels 装配 + 隐藏回落 |
 | docs/引擎升级建议-第三批-对标开源引擎评估.md | sess-master | 2026-08-07 | 477f8c866bf4 | 07f403994fe0 | 已完成 | 补写 v2 复核修正与施工规格（§六） |
 | docs/远期设计/verifier/runs/2026-08-07T-task-sync-v1.md | sess-master | 2026-08-07 | NEW | 571ec4a458a1 | 已完成 | 原型更新验收运行记录：屏完整性/ID 抽查/node --check 全 PASS；截图项本环境未执行已注明；28功能/298FR 口径存疑留待复核 |
 | docs/远期设计/verifier/runs/2026-08-07T-s1-plain-v1.md | sess-master | 2026-08-07 | NEW | 91ce655d4c20 | 已完成 | S1 改写验收运行记录：屏完整性/新增内容/node --check 全 PASS；截图项未执行已注明 |
