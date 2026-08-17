@@ -57,7 +57,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 ├── release_check.py              # 发布门禁（格式/环/契约指纹/DRIFT 仲裁）
 ├── migrate_format_2.py           # 格式 2.0 迁移器（文本外科手术，非 round-trip）
 ├── requirements.txt              # Python 依赖（含 mcp/jsonpath-ng/httpx）
-├── start-workbench.ps1           # 本地开发一键启动（后端:9100 --reload + 前端:5173）
+├── start-workbench.ps1           # 本地开发一键启动（后端:9100 默认无热重载 + 前端:5173；-Reload 显式开启热重载）
 ├── serve-prod.ps1                # 生产部署（单端口 :9100 UAC SSO）
 │
 ├── engine/                       # 通用引擎【冻结层 · 语义改动需评审】
@@ -165,10 +165,11 @@ python -m pytest test_specstd --cov=specstd --cov-report=term-missing  # specstd
 npx lefthook install                      # 克隆后一次性：装 git hooks（pre-push 门禁）
 
 # ── 工作台 ──
-pwsh start-workbench.ps1                  # 本地开发（后端 :9100 --reload 热重载 + 前端 :5173，依赖自检，幂等）
+pwsh start-workbench.ps1                  # 本地开发（后端 :9100 默认无热重载 + 前端 :5173，依赖自检，幂等）
 pwsh start-workbench.ps1 -NoBrowser       # 同上，不自动开浏览器
+pwsh start-workbench.ps1 -Reload          # 显式开启后端热重载（改代码自动重启，WS 聊天会断连重连）
 pwsh serve-prod.ps1                       # 生产部署（前端构建 + 单端口 :9100 UAC SSO，workers=1 不可改）
-cd workbench/backend && uvicorn main:app --reload --port 9100   # 后端单独
+cd workbench/backend && uvicorn main:app --reload --ws-ping-interval 30 --ws-ping-timeout 120 --port 9100   # 后端单独（仅调试用，聊天 WS 会断连）
 cd workbench/frontend && npm install && npm run dev             # 前端单独（:5173）
 cd workbench/frontend && npm run build                          # 前端构建（tsc + vite，产物 dist/）
 

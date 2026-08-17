@@ -289,8 +289,10 @@ specguard/
 
 ```powershell
 pwsh start-workbench.ps1
-# 后端 :9100（SG_AUTH_MODE=mock）+ 前端 :5173（热更新）
+# 后端 :9100（SG_AUTH_MODE=mock，默认无热重载——改后端代码需重跑本脚本，WS 聊天不受影响）
+# 前端 :5173（热更新）
 # 浏览器打开 http://localhost:5173 → mock 登录页输工号直接登录
+# 需要后端热重载时加 -Reload（改代码自动重启，但 WS 聊天会断连重连）
 ```
 
 ### 生产模式（服务器部署）
