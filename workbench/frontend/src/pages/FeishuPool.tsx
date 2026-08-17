@@ -8,6 +8,7 @@ import {
   type FeishuPoolMaterial,
   type FeishuTopic,
 } from '../api';
+import FeishuWatchSettings from '../components/FeishuWatchSettings';
 
 type Tab = 'materials' | 'topics' | 'images';
 
@@ -57,7 +58,18 @@ export default function FeishuPool() {
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
+  const syncNow = async () => {
+    setBusy('sync'); setError(''); setNotice('');
+    try {
+      const r = await feishuPoolApi.syncNow();
+      setNotice(`同步完成：文档 ${r.docs} / 妙记 ${r.minutes} / 群聊 ${r.chats}`
+        + (r.errors.length ? `；${r.errors.length} 条失败（诚实呈现）` : ''));
+      loadMaterials(); loadTopics();
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
+  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
   const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
   const tabBtn = (id: Tab, label: string) => (
@@ -74,7 +86,13 @@ export default function FeishuPool() {
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-bold">🪺 飞书材料池</h1>
-        <div className="text-[11px] text-gray-500">同步/复核在「材料管理」页签 · 本页为总览只读 + 替身补写</div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500">为 agent 对话提供背景信息源 · 复核建边在「材料管理」页</span>
+          <button className={btn} onClick={syncNow} disabled={busy === 'sync'}>
+            {busy === 'sync' ? '同步中…' : '⇩ 立即同步'}
+          </button>
+          <FeishuWatchSettings onSaved={loadWatcher} />
+        </div>
       </div>
 
       {/* 状态卡条 */}
@@ -107,11 +125,11 @@ export default function FeishuPool() {
       {tab === 'materials' && (
         <div className={card}>
           {materials.length === 0 ? (
-            <div className="text-xs text-gray-500">材料池为空——到「材料管理 → 关联复核 → 同步设置」配置授权范围后「立即同步」</div>
+            <div className="text-xs text-gray-500">材料池为空——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr><th className={th}>类型</th><th className={th}>材料</th><th className={th}>指纹</th><th className={th}>大小</th><th className={th}>更新时间</th></tr>
+                <tr><th className={th}>类型</th><th className={th}>标题 / 摘要</th><th className={th}>大小</th><th className={th}>更新时间</th></tr>
               </thead>
               <tbody>
                 {materials.map(m => (
@@ -121,9 +139,11 @@ export default function FeishuPool() {
                         {TYPE_BADGE[m.type]?.label || m.type}
                       </span>
                     </td>
-                    <td className={td}><code className="text-[11px]">{m.id}</code>
-                      <div className="text-[10px] text-gray-600">{m.file}</div></td>
-                    <td className={td}><code className="text-[11px]">{m.sha}</code></td>
+                    <td className={td}>
+                      <div className="text-gray-200">{m.title || m.id}</div>
+                      {m.summary && <div className="text-[11px] text-gray-500 truncate max-w-[420px]">{m.summary}</div>}
+                      <div className="text-[10px] text-gray-600">{m.id} · {m.sha}</div>
+                    </td>
                     <td className={td}>{(m.size / 1024).toFixed(1)} KB</td>
                     <td className={td}>{fmtTime(m.mtime)}</td>
                   </tr>
@@ -174,7 +194,7 @@ export default function FeishuPool() {
         <div className={card}>
           <h2 className="text-sm font-semibold mb-2">图片替身文本（人工补写兜底）</h2>
           <div className="text-[11px] text-gray-500 mb-3">
-            输入材料 stem（如 fd-tokA）与占位符（如 图片#1）补写替身文本；视觉模型转述走「材料管理 → 🖼 转述图片」
+            输入材料 stem（如 fd-tokA）与占位符（如 图片#1）补写替身文本；新入池图片由 watcher 异步自动转述，存量手动转述在「材料管理 → 🖼 转述图片」
           </div>
           <CaptionEditor busy={busy} captionEdit={captionEdit}
             setCaptionEdit={setCaptionEdit} onSave={saveCaption}

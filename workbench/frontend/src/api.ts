@@ -524,19 +524,19 @@ export const referenceApi = {
   upstreamVars: (id: string) => request<UpstreamVar[]>(`/reference/upstream-vars/${id}`),
   scenarioDetail: (id: string) => request<ScenarioDetail>(`/reference/scenario-detail/${id}`),
   yamlFormatSpecMd: () => request<{ content: string }>('/reference/yaml-format-spec-md'),
-  // T-306/T-309：环境配置独立菜单——环境列表（系统层 + 共享通用层）+ 按环境/配置层读写
+  // T-306/T-309：环境配置独立菜单——环境列表（全系统 + 共享通用层）+ 按系统/环境/配置层读写
   envs: () =>
-    request<{ system: string; envs: EnvEntry[]; shared_envs: EnvEntry[]; current: string }>('/reference/envs'),
-  envConfig: (env = 'sit', scope: 'system' | 'shared' = 'system') =>
-    request<{ raw: string; parsed: Record<string, unknown>; env: string; scope: string; exists: boolean }>(
-      `/reference/env-config?env=${encodeURIComponent(env)}&scope=${scope}`),
-  saveEnvConfig: (raw: string, env = 'sit', scope: 'system' | 'shared' = 'system') =>
-    request<{ ok: boolean; env: string; scope: string }>(`/reference/env-config?env=${encodeURIComponent(env)}&scope=${scope}`, {
+    request<{ system: string; envs: EnvEntry[]; shared_envs: EnvEntry[]; current: string; systems: SystemInfo[] }>('/reference/envs'),
+  envConfig: (env = 'sit', scope: 'system' | 'shared' = 'system', system = 'tdm') =>
+    request<{ raw: string; parsed: Record<string, unknown>; env: string; scope: string; system: string; exists: boolean }>(
+      `/reference/env-config?env=${encodeURIComponent(env)}&scope=${scope}&system=${encodeURIComponent(system)}`),
+  saveEnvConfig: (raw: string, env = 'sit', scope: 'system' | 'shared' = 'system', system = 'tdm') =>
+    request<{ ok: boolean; env: string; scope: string; system: string }>(`/reference/env-config?env=${encodeURIComponent(env)}&scope=${scope}&system=${encodeURIComponent(system)}`, {
       method: 'PUT',
       body: JSON.stringify({ raw }),
     }),
-  testDb: (env = 'sit') =>
-    request<{ ok: boolean; message?: string; error?: string }>(`/reference/test-db?env=${encodeURIComponent(env)}`, { method: 'POST' }),
+  testDb: (env = 'sit', system = 'tdm') =>
+    request<{ ok: boolean; message?: string; error?: string }>(`/reference/test-db?env=${encodeURIComponent(env)}&system=${encodeURIComponent(system)}`, { method: 'POST' }),
 };
 
 // ── 工作区管理 ──
@@ -552,8 +552,16 @@ export interface WorkspaceInfo {
   last_commit: string;
 }
 
+export interface SystemInfo {
+  name: string;
+  envs: string[];
+  default_env: string;
+  accounts: string[];
+}
+
 export const workspaceApi = {
   list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
+  systems: () => request<{ systems: SystemInfo[] }>('/workspace/systems'),
   registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
     request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),
   registerGit: (body: { name: string; url: string; system: string; branch?: string; clone_dir?: string }) =>
@@ -1628,11 +1636,29 @@ export const knowledgeApi = {
     }),
 };
 // ── 飞书材料池（飞书知识图谱一期 T-912/T-915）──
+export interface FeishuWatchUser {
+  open_id: string;
+  name?: string;
+  scopes: string[];   // 'group_sender' | 'minutes' | 'docs'
+}
+
 export interface FeishuWatch {
   chats: { chat_id: string; name?: string }[];
-  docs: { token: string; url?: string }[];
+  docs: { token: string; url?: string; owner_open_id?: string }[];
+  users: FeishuWatchUser[];
   minutes_days: number;
   chat_days: number;
+}
+
+export interface FeishuChatItem {
+  chat_id: string; name: string; chat_mode: string; peer_open_id?: string;
+}
+export interface FeishuUserItem {
+  open_id: string; name: string; email: string; department: string;
+}
+export interface FeishuUserDocItem {
+  token: string; title: string; url: string; doc_type: string;
+  owner_id: string; owner_name: string;
 }
 
 export interface FeishuReviewItem {
@@ -1707,12 +1733,24 @@ export const feishuPoolApi = {
   updateCaption: (material: string, placeholder: string, caption: string) =>
     request('/feishu-pool/caption', { method: 'POST',
       body: JSON.stringify({ material, placeholder, caption }) }),
+  // ── 选择器数据源（同步设置弹层）──
+  listChats: () =>
+    request<{ items: FeishuChatItem[]; errors: string[] }>('/feishu-pool/chats'),
+  searchUsers: (query: string) =>
+    request<{ items: FeishuUserItem[]; errors: string[] }>(
+      `/feishu-pool/users?query=${encodeURIComponent(query)}`),
+  searchUserDocs: (openId: string, query = '') =>
+    request<{ items: FeishuUserDocItem[]; errors: string[] }>(
+      `/feishu-pool/user-docs?open_id=${encodeURIComponent(openId)}`
+      + `&query=${encodeURIComponent(query)}`),
 };
 
 export interface FeishuPoolMaterial {
   id: string;
   type: 'feishu_doc' | 'feishu_minutes' | 'chat';
   file: string;
+  title?: string;
+  summary?: string;
   sha: string;
   size: number;
   mtime: number;

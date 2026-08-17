@@ -3,7 +3,8 @@
 // 同步范围即授权范围（watch 配置 = 显式授权载体）。
 
 import { useEffect, useMemo, useState } from 'react';
-import { feishuPoolApi, type FeishuReviewItem, type FeishuWatch } from '../api';
+import { feishuPoolApi, type FeishuReviewItem } from '../api';
+import FeishuWatchSettings from './FeishuWatchSettings';
 
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   'fd:': { label: '文档', cls: 'bg-sky-500/15 text-sky-400' },
@@ -29,10 +30,6 @@ export default function FeishuReviewPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
-  const [watchOpen, setWatchOpen] = useState(false);
-  const [watch, setWatch] = useState<FeishuWatch | null>(null);
-  const [watchChats, setWatchChats] = useState('');
-  const [watchDocs, setWatchDocs] = useState('');
   // T-927：确认后可选入包（默认不勾，人拍板不绕闸门）
   const [ivPrompt, setIvPrompt] = useState<{ iv_id: string; title: string }[]>([]);
   const [ivChecked, setIvChecked] = useState<Set<string>>(new Set());
@@ -114,33 +111,6 @@ export default function FeishuReviewPanel() {
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
-  const openWatch = async () => {
-    try {
-      const w = await feishuPoolApi.getWatch();
-      setWatch(w);
-      setWatchChats((w.chats || []).map(c => c.chat_id).join('\n'));
-      setWatchDocs((w.docs || []).map(d => d.token).join('\n'));
-      setWatchOpen(true);
-    } catch (e: any) { setError(e.message); }
-  };
-
-  const saveWatch = async () => {
-    if (!watch) return;
-    setBusy('watch'); setError('');
-    try {
-      const cfg: FeishuWatch = {
-        ...watch,
-        chats: watchChats.split('\n').map(s => s.trim()).filter(Boolean)
-          .map(id => ({ chat_id: id })),
-        docs: watchDocs.split('\n').map(s => s.trim()).filter(Boolean)
-          .map(token => ({ token })),
-      };
-      await feishuPoolApi.putWatch(cfg);
-      setNotice('同步范围已保存（即授权范围）');
-      setWatchOpen(false);
-    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
-  };
-
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
@@ -157,7 +127,7 @@ export default function FeishuReviewPanel() {
           <button className={btn} onClick={handleTranscribe} disabled={busy === 'transcribe'}>
             {busy === 'transcribe' ? '转述中…' : '🖼 转述图片'}
           </button>
-          <button className={btn} onClick={openWatch}>同步设置</button>
+          <FeishuWatchSettings />
         </div>
       </div>
       {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
@@ -267,35 +237,6 @@ export default function FeishuReviewPanel() {
           </div>
           <div className="mt-1.5 text-[10px] text-gray-500">
             入包走 M03 原有人拍板端点；飞书材料需先在材料管理登记为 MAT 后才可入包
-          </div>
-        </div>
-      )}
-
-      {watchOpen && watch && (
-        <div className="mt-3 border border-border rounded-lg p-3 bg-surface-3/40">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold">同步设置（同步范围即授权范围）</h3>
-            <div className="flex gap-2">
-              <button className={btn} onClick={saveWatch} disabled={busy === 'watch'}>保存</button>
-              <button className={btn} onClick={() => setWatchOpen(false)}>取消</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="text-[11px] text-gray-500 mb-1">授权群聊 chat_id（每行一个）</div>
-              <textarea className="w-full h-24 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info"
-                value={watchChats} onChange={e => setWatchChats(e.target.value)}
-                placeholder="oc_xxxxxxxx" />
-            </div>
-            <div>
-              <div className="text-[11px] text-gray-500 mb-1">授权文档 token（每行一个）</div>
-              <textarea className="w-full h-24 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info"
-                value={watchDocs} onChange={e => setWatchDocs(e.target.value)}
-                placeholder="FBxodQkaJoUicrxdk67cUkbhnwc" />
-            </div>
-          </div>
-          <div className="mt-2 text-[11px] text-gray-500">
-            妙记同步窗口 {watch.minutes_days} 天 · 群聊窗口 {watch.chat_days} 天（在 feishu_watch.yaml 中调整）
           </div>
         </div>
       )}
