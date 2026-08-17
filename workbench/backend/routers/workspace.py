@@ -39,6 +39,16 @@ from services.auth import (  # noqa: E402
     CurrentUser, get_current_user, require_role, resolve_workspace,
 )
 from services import user_store  # noqa: E402
+from services.systems_catalog import list_systems, validate_system  # noqa: E402
+
+
+# ══════════════════════════════════════════════════════════
+# 系统标识（适配包）校验（枚举实现见 services.systems_catalog）
+# ══════════════════════════════════════════════════════════
+
+def _validate_system(body_system: str) -> None:
+    """系统标识硬校验（见 services.systems_catalog.validate_system）。"""
+    validate_system(body_system)
 
 
 # ══════════════════════════════════════════════════════════
@@ -105,10 +115,17 @@ def api_get_active():
     return {"active": ws.to_dict()}
 
 
+@router.get("/systems")
+def api_list_systems(user: CurrentUser = Depends(get_current_user)):
+    """枚举可用被测系统适配包（注册表单选择框数据源）。"""
+    return {"systems": list_systems()}
+
+
 @router.post("/register-local")
 def api_register_local(body: RegisterLocalBody,
                        admin: CurrentUser = Depends(require_role("admin"))):
     """注册本地文件夹工作区（合规校验强制执行，任一 ERROR 拒绝接入）。"""
+    _validate_system(body.system)
     result = register_local(body.name, body.path, body.system,
                             activate=body.activate, run_conformance=True)
     if result.get("ok"):
@@ -133,6 +150,7 @@ def api_register_local(body: RegisterLocalBody,
 def api_register_git(body: RegisterGitBody,
                      admin: CurrentUser = Depends(require_role("admin"))):
     """注册 git 工作区（克隆仓库，合规校验强制执行）。"""
+    _validate_system(body.system)
     result = register_git(body.name, body.url, body.system, body.branch,
                           activate=body.activate, run_conformance=True,
                           clone_dir=body.clone_dir)

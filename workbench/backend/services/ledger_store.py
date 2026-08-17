@@ -610,6 +610,13 @@ def set_draft_status(filename: str, status: str, module: str = "",
             (status, module, now, filename, ws))
 
 
+def clear_drafts(workspace: str = "", db_path: Path | None = None):
+    """删除指定工作区的草稿台账全部记录（草稿区重置时调用）。"""
+    ws = workspace or _active_workspace()
+    with _LOCK, _connect(db_path) as conn:
+        conn.execute("DELETE FROM drafts WHERE workspace = ?", (ws,))
+
+
 # ══════════════════════════════════════════════════════════
 # Agent 会话台账（agent_sessions）——session.save 投影
 # ══════════════════════════════════════════════════════════

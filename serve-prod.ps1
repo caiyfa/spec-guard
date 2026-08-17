@@ -101,7 +101,7 @@ if (Test-Port $Port) {
     Write-Host "[启动] 生产服务  http://0.0.0.0:$Port  (SG_AUTH_MODE=uac, workers=1)" -ForegroundColor Green
     Start-Process pwsh -ArgumentList @(
         '-NoExit', '-Command',
-        "Set-Location '$BackendDir'; `$env:SG_AUTH_MODE='uac'; `$env:SG_UAC_BASE='$UacBase'; python -m uvicorn main:app --host 0.0.0.0 --port $Port --workers 1"
+        "Set-Location '$BackendDir'; `$env:SG_AUTH_MODE='uac'; `$env:SG_UAC_BASE='$UacBase'; python -m uvicorn main:app --host 0.0.0.0 --port $Port --workers 1 --ws-ping-interval 30 --ws-ping-timeout 120"
     ) -WindowStyle Normal
 }
 

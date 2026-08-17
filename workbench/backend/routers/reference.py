@@ -207,48 +207,59 @@ def ref_env_vars():
 # ── 环境配置读写 ──────────────────────────────────────────
 
 _ENV_GLOB = "env.*.yaml"
-_SHARED_CONFIG_DIR = SYSTEMS_TDM.parent / "_shared" / "config"   # systems/_shared/config（跨系统通用层，T-309）
+_SYSTEMS_ROOT = SG_ROOT / "systems"
+_SHARED_CONFIG_DIR = _SYSTEMS_ROOT / "_shared" / "config"  # systems/_shared/config（跨系统通用层，T-309）
 
 
-def _env_file(env: str, scope: str = "system") -> Path:
-    """按环境名与配置层定位文件：
+def _check_system(system: str) -> None:
+    """系统标识硬校验（实现见 services.systems_catalog.validate_system）。"""
+    from services.systems_catalog import validate_system
+    validate_system(system)
+
+
+def _env_file(env: str, scope: str = "system", system: str = "tdm") -> Path:
+    """按环境名、配置层与系统标识定位文件：
     scope=system → systems/{system}/config/env.{env}.yaml
-    scope=shared → systems/_shared/config/env.{env}.yaml（跨系统通用）
+    scope=shared → systems/_shared/config/env.{env}.yaml（跨系统通用，与 system 无关）
     """
     name = (env or "sit").strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
         raise HTTPException(status_code=400, detail=f"环境名非法: {env}")
     if scope not in ("system", "shared"):
         raise HTTPException(status_code=400, detail=f"scope 非法: {scope}（仅支持 system/shared）")
-    base = _SHARED_CONFIG_DIR if scope == "shared" else SYSTEMS_TDM / "config"
+    base = _SHARED_CONFIG_DIR if scope == "shared" else _SYSTEMS_ROOT / system / "config"
     return base / f"env.{name}.yaml"
 
 
 @router.get("/envs")
 def list_envs():
-    """T-306/T-309：可用环境列表（系统层 + 共享通用层）。
+    """T-306/T-309：可用环境列表（全系统 + 共享通用层）。
 
     systems/{system}/config/env.*.yaml 为系统专属；systems/_shared/config/env.*.yaml
-    为跨系统通用（共享打底，系统覆盖）。
+    为跨系统通用（共享打底，系统覆盖）。systems 字段为全系统枚举（注册/切换数据源）。
     """
-    files = sorted((SYSTEMS_TDM / "config").glob(_ENV_GLOB))
+    from services.systems_catalog import list_systems as _catalog_systems
+    files = sorted((_SYSTEMS_ROOT / "tdm" / "config").glob(_ENV_GLOB))
     envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in files]
     shared_files = sorted(_SHARED_CONFIG_DIR.glob(_ENV_GLOB)) if _SHARED_CONFIG_DIR.is_dir() else []
     shared_envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in shared_files]
     return {"system": "tdm", "envs": envs, "shared_envs": shared_envs,
-            "current": envs[0]["name"] if envs else "sit"}
+            "current": envs[0]["name"] if envs else "sit",
+            "systems": _catalog_systems()}
 
 
 @router.get("/env-config")
-def get_env_config(env: str = "sit", scope: str = "system"):
+def get_env_config(env: str = "sit", scope: str = "system", system: str = "tdm"):
     """读取环境配置（YAML 原文 + 结构化；scope=system 系统专属 / scope=shared 共享通用）"""
-    env_file = _env_file(env, scope)
+    if scope == "system":
+        _check_system(system)
+    env_file = _env_file(env, scope, system)
     if not env_file.is_file():
-        return {"raw": "", "parsed": {}, "env": env, "scope": scope, "exists": False}
+        return {"raw": "", "parsed": {}, "env": env, "scope": scope, "system": system, "exists": False}
     with open(env_file, "r", encoding="utf-8") as f:
         raw = f.read()
     parsed = yaml.safe_load(raw) or {}
-    return {"raw": raw, "parsed": parsed, "env": env, "scope": scope, "exists": True}
+    return {"raw": raw, "parsed": parsed, "env": env, "scope": scope, "system": system, "exists": True}
 
 
 class EnvConfigBody(BaseModel):
@@ -256,25 +267,28 @@ class EnvConfigBody(BaseModel):
 
 
 @router.put("/env-config", dependencies=[Depends(require_role("admin"))])
-def save_env_config(body: EnvConfigBody, env: str = "sit", scope: str = "system"):
+def save_env_config(body: EnvConfigBody, env: str = "sit", scope: str = "system", system: str = "tdm"):
     """保存环境配置（校验 YAML 语法后写入；scope=system / shared）"""
+    if scope == "system":
+        _check_system(system)
     try:
         parsed = yaml.safe_load(body.raw)
     except yaml.YAMLError as e:
         return {"ok": False, "error": f"YAML 语法错误: {e}"}
     if not isinstance(parsed, dict):
         return {"ok": False, "error": "配置必须是 YAML 对象"}
-    env_file = _env_file(env, scope)
+    env_file = _env_file(env, scope, system)
     env_file.parent.mkdir(parents=True, exist_ok=True)
     with open(env_file, "w", encoding="utf-8") as f:
         f.write(body.raw)
-    return {"ok": True, "env": env, "scope": scope}
+    return {"ok": True, "env": env, "scope": scope, "system": system}
 
 
 @router.post("/test-db", dependencies=[Depends(require_role("admin"))])
-def test_db_connection(env: str = "sit"):
+def test_db_connection(env: str = "sit", system: str = "tdm"):
     """测试数据库连接（读取 env.{env}.yaml + devops 凭据回退）"""
-    env_file = _env_file(env)
+    _check_system(system)
+    env_file = _env_file(env, system=system)
     if not env_file.is_file():
         return {"ok": False, "error": f"env.{env}.yaml 不存在"}
     with open(env_file, "r", encoding="utf-8") as f:

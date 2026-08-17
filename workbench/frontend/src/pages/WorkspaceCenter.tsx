@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { workspaceApi, session, WORKSPACE_CHANGED_EVENT, type WorkspaceInfo } from '../api';
+import { workspaceApi, session, WORKSPACE_CHANGED_EVENT, type WorkspaceInfo, type SystemInfo } from '../api';
 import FileTree from '../components/FileTree';
 import FileViewer from '../components/FileViewer';
 import DirectoryPicker from '../components/DirectoryPicker';
@@ -46,6 +46,7 @@ export default function WorkspaceCenter({ role }: { role: string }) {
   const [regPath, setRegPath] = useState('');
   const [regUrl, setRegUrl] = useState('');
   const [regSystem, setRegSystem] = useState('tdm');
+  const [systems, setSystems] = useState<SystemInfo[]>([]); // 注册选择框数据源（系统适配包枚举）
   const [regBranch, setRegBranch] = useState('main');
   const [regSpecguardPath, setRegSpecguardPath] = useState('');
   const [regCloneDir, setRegCloneDir] = useState(''); // git 型：自定义克隆落点（可选）
@@ -112,6 +113,19 @@ export default function WorkspaceCenter({ role }: { role: string }) {
   }, [handleSelect]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 拉取可用系统适配包（注册选择框数据源）；当前值不在列表时落到第一个可用项
+  useEffect(() => {
+    workspaceApi.systems()
+      .then(r => {
+        setSystems(r.systems);
+        setRegSystem(prev => {
+          const names = r.systems.map(s => s.name);
+          return names.includes(prev) ? prev : (names[0] || '');
+        });
+      })
+      .catch(() => { /* 枚举失败不阻断页面，保留手输降级 */ });
+  }, []);
 
   // 顶栏选择器切换 → 联动重载
   useEffect(() => {
@@ -306,7 +320,21 @@ export default function WorkspaceCenter({ role }: { role: string }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="工作区名称" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-            <input value={regSystem} onChange={e => setRegSystem(e.target.value)} placeholder="系统标识 (tdm)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+            {systems.length > 0 ? (
+              <select value={regSystem} onChange={e => setRegSystem(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300">
+                {systems.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+              </select>
+            ) : (
+              <input value={regSystem} onChange={e => setRegSystem(e.target.value)} placeholder="系统标识 (tdm)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+            )}
+            {(() => {
+              const cur = systems.find(s => s.name === regSystem);
+              return cur ? (
+                <div className="col-span-2 text-[11px] text-gray-500 bg-surface-2/50 rounded px-2 py-1">
+                  环境: {cur.envs.join(', ') || '无'} · 账号别名: {cur.accounts.join(', ') || '无'}
+                </div>
+              ) : null;
+            })()}
             {regType === 'local' ? (
               <div className="col-span-2 flex gap-2">
                 <input value={regPath} onChange={e => setRegPath(e.target.value)} placeholder="本地路径 (D:/work/spec-tdm)" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />

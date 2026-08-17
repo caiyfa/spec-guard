@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
-import { referenceApi, type EnvEntry } from '../api';
+import { referenceApi, type SystemInfo } from '../api';
 import { useJsTokens } from '../theme';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -30,14 +30,15 @@ function KV({ k, v }: { k: string; v: string }) {
 
 type Scope = 'system' | 'shared';
 
-const SCOPE_LABELS: Record<Scope, { label: string; hint: string }> = {
-  system: { label: '本系统配置', hint: 'systems/tdm/config/env.{env}.yaml（网关/账号池/资源码，系统专属）' },
-  shared: { label: '通用配置', hint: 'systems/_shared/config/env.{env}.yaml（跨系统复用，如集团 SSO）' },
+const SCOPE_LABELS: Record<Scope, { label: string; hint: (sys: string) => string }> = {
+  system: { label: '本系统配置', hint: (sys) => `systems/${sys}/config/env.{env}.yaml（网关/账号池/资源码，系统专属）` },
+  shared: { label: '通用配置', hint: () => 'systems/_shared/config/env.{env}.yaml（跨系统复用，如集团 SSO）' },
 };
 
 export default function EnvironmentConfig() {
   const tokens = useJsTokens();
-  const [envs, setEnvs] = useState<EnvEntry[]>([]);
+  const [systems, setSystems] = useState<SystemInfo[]>([]);
+  const [currentSystem, setCurrentSystem] = useState('tdm');
   const [sharedEnvNames, setSharedEnvNames] = useState<string[]>([]);
   const [currentEnv, setCurrentEnv] = useState('sit');
   const [scope, setScope] = useState<Scope>('system');
@@ -48,35 +49,48 @@ export default function EnvironmentConfig() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // 环境列表（系统层 + 共享通用层）
+  // 当前系统的环境列表（来自全系统枚举）
+  const sysEnvs = systems.find((s) => s.name === currentSystem)?.envs || [];
+  const sysAccounts = systems.find((s) => s.name === currentSystem)?.accounts || [];
+
+  // 系统列表 + 共享通用层（跨系统只有一份，与当前系统无关）
   useEffect(() => {
     referenceApi.envs().then((r) => {
-      setEnvs(r.envs);
+      setSystems(r.systems);
       setSharedEnvNames(r.shared_envs.map((e) => e.name));
+      setCurrentSystem((prev) => r.systems.some((s) => s.name === prev) ? prev : (r.systems[0]?.name || prev));
       setCurrentEnv(r.current);
     }).catch(() => {});
   }, []);
 
-  // 切换环境/配置层 → 加载配置
-  const loadEnv = useCallback((env: string, sc: Scope) => {
+  // 切换环境/配置层/系统 → 加载配置
+  const loadEnv = useCallback((env: string, sc: Scope, sys: string) => {
     setCurrentEnv(env);
     setScope(sc);
+    setCurrentSystem(sys);
     setLoading(true);
     setMsg('');
-    referenceApi.envConfig(env, sc)
+    referenceApi.envConfig(env, sc, sys)
       .then((r) => { setRaw(r.raw); setParsed(r.parsed); setExists(r.exists); })
       .catch(() => setMsg('✗ 加载失败'))
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { loadEnv(currentEnv, scope); }, [loadEnv]);
+  // 切换系统 → 落到该系统的首个环境
+  const switchSystem = (sys: string) => {
+    const firstEnv = systems.find((s) => s.name === sys)?.envs?.[0] || 'sit';
+    loadEnv(firstEnv, scope, sys);
+  };
+
+  // 初始加载（系统/环境/配置层任一变化时由显式调用触发，此处仅首次挂载）
+  useEffect(() => { loadEnv(currentEnv, scope, currentSystem); }, [loadEnv]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
     setSaving(true);
     setMsg('');
     try {
-      const r = await referenceApi.saveEnvConfig(raw, currentEnv, scope);
-      setMsg(`✓ 已保存（${r.scope === 'shared' ? '共享通用' : '本系统'} env.${r.env}.yaml）`);
+      const r = await referenceApi.saveEnvConfig(raw, currentEnv, scope, currentSystem);
+      setMsg(`✓ 已保存（${r.scope === 'shared' ? '共享通用' : `${r.system} 本系统`} env.${r.env}.yaml）`);
     } catch (e: unknown) {
       setMsg(`✗ ${e instanceof Error ? e.message : '保存失败'}`);
     } finally {
@@ -92,10 +106,19 @@ export default function EnvironmentConfig() {
     <div className="h-full flex flex-col space-y-3">
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">🌐 环境配置</h2>
+        {/* 系统选择：被测系统适配包（systems/{system}/config/） */}
+        <select
+          value={currentSystem}
+          onChange={(e) => switchSystem(e.target.value)}
+          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+          title="切换被测系统（systems/{system}/config/）">
+          {systems.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          {systems.length === 0 && <option value="tdm">tdm</option>}
+        </select>
         {/* T-309：配置层切换——通用（共享文件）vs 本系统 */}
         <div className="flex rounded border border-border overflow-hidden text-xs">
           {(Object.keys(SCOPE_LABELS) as Scope[]).map((sc) => (
-            <button key={sc} onClick={() => loadEnv(currentEnv, sc)}
+            <button key={sc} onClick={() => loadEnv(currentEnv, sc, currentSystem)}
               className={`px-2.5 py-1 ${scope === sc ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
               {SCOPE_LABELS[sc].label}
             </button>
@@ -103,20 +126,20 @@ export default function EnvironmentConfig() {
         </div>
         <select
           value={currentEnv}
-          onChange={(e) => loadEnv(e.target.value, scope)}
+          onChange={(e) => loadEnv(e.target.value, scope, currentSystem)}
           className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
           title="切换环境（env.{env}.yaml）">
-          {envs.map((e) => <option key={e.name} value={e.name}>{e.name}</option>)}
-          {scope === 'shared' && sharedEnvNames.filter((n) => !envs.some((e) => e.name === n))
+          {sysEnvs.map((n) => <option key={n} value={n}>{n}</option>)}
+          {scope === 'shared' && sharedEnvNames.filter((n) => !sysEnvs.includes(n))
             .map((n) => <option key={n} value={n}>{n}</option>)}
-          {envs.length === 0 && sharedEnvNames.length === 0 && <option value="sit">sit</option>}
+          {sysEnvs.length === 0 && sharedEnvNames.length === 0 && <option value="sit">sit</option>}
         </select>
         <button onClick={save} disabled={saving}
           className="px-3 py-1 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-50">
           💾 保存
         </button>
         {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
-        <span className="ml-auto text-[10px] text-gray-600">{SCOPE_LABELS[scope].hint}</span>
+        <span className="ml-auto text-[10px] text-gray-600">{SCOPE_LABELS[scope].hint(currentSystem)}</span>
       </div>
 
       {!exists && (
@@ -140,7 +163,7 @@ export default function EnvironmentConfig() {
         {/* 结构化预览 */}
         <div className="w-[280px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
           <div className="px-3 py-2 border-b border-border text-xs font-medium bg-surface-2">
-            {SCOPE_LABELS[scope].label}预览（env.{currentEnv}）
+            {SCOPE_LABELS[scope].label}预览（{currentSystem} · env.{currentEnv}）
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs text-gray-400">
             {scope === 'system' ? (
@@ -160,6 +183,10 @@ export default function EnvironmentConfig() {
                       v={info.type === 'internal' ? 'internal token' : `${info.ad || ''} / ${info.emp_no || ''}`} />
                   ))}
                   {Object.keys(accounts).length === 0 && <div className="text-gray-600">（未配置）</div>}
+                </Section>
+                <Section title="可用环境">
+                  <KV k="envs" v={sysEnvs.join(', ')} />
+                  <KV k="账号别名" v={sysAccounts.join(', ')} />
                 </Section>
               </>
             ) : (

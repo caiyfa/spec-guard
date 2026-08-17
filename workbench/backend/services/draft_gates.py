@@ -314,6 +314,13 @@ def source_delta_of(draft_id: str, db_path: Path | None = None) -> str:
     return row["source_delta"] if row else ""
 
 
+def delete_workspace_gates(workspace: str, db_path: Path | None = None):
+    """删除指定工作区的全部三闸记录（草稿区重置时调用）。"""
+    with _LOCK, _connect(db_path) as conn:
+        conn.execute(
+            "DELETE FROM sg_draft_gates WHERE workspace = ?", (workspace,))
+
+
 def set_draft_status_keep_gates(filename: str, status: str, module: str = "",
                                 db_path: Path | None = None):
     """草稿台账状态更新（对齐 ledger_store.set_draft_status 语义，兼容调用）。"""

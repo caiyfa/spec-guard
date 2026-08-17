@@ -11,6 +11,7 @@
   POST   /api/drafts/{filename}/trial-run   草稿试跑（K-046，与 MCP run_scenario 同一语义）
   POST   /api/drafts/{filename}/promote     入库：校验 → 移动 → 基线更新 → 发布门禁（失败回滚）
   POST   /api/drafts/{filename}/discard     废弃（移入 drafts/_trash/）
+  POST   /api/drafts/reset                 重置草稿区状态（清空草稿/回收站/元数据/DB 记录）
 
 安全约束（与架构 D5 一致）：
 - 仅 drafts/ 目录可读可写；filename 禁止路径分隔符与 ..
@@ -527,3 +528,61 @@ def discard_draft(filename: str):
     except Exception:
         pass
     return {"ok": True, "trashed_to": str(target.relative_to(get_workspace_root() or SG_ROOT)).replace("\\", "/")}
+
+
+@router.post("/reset", dependencies=[Depends(require_role("admin", "tester"))])
+def reset_draft_area():
+    """重置草稿区状态：清空草稿、回收站、元数据、DB 三闸与台账。
+
+    操作范围（仅当前工作区私有草稿区）：
+    - 删除 drafts/ 下所有 .yaml / .bak 文件
+    - 清空 _trash/ 回收站
+    - 重置 _meta.json 为空
+    - 删除 sg_draft_gates 中当前工作区的记录
+    - 删除 ledger_store drafts 表中当前工作区的记录
+    """
+    from specstd.workspace import get_active_workspace
+    from services import draft_gates, ledger_store
+    from services.auth import current_emp_no
+    from services import user_store
+
+    drafts_root = _drafts_root()
+    ws = (get_active_workspace() or {}).get("name", "") if get_active_workspace else ""
+
+    stats = {"yaml_deleted": 0, "bak_deleted": 0, "trash_deleted": 0}
+
+    # 1. 删除 drafts/ 下所有 .yaml 和 .bak
+    if drafts_root.is_dir():
+        for f in list(drafts_root.glob("*.yaml")) + list(drafts_root.glob("*.yml")):
+            f.unlink(missing_ok=True)
+            stats["yaml_deleted"] += 1
+        for f in list(drafts_root.glob("*.bak")):
+            f.unlink(missing_ok=True)
+            stats["bak_deleted"] += 1
+
+        # 2. 清空 _meta.json
+        meta_path = drafts_root / "_meta.json"
+        if meta_path.is_file():
+            meta_path.write_text("{}\n", encoding="utf-8")
+
+        # 3. 清空 _trash/
+        trash = drafts_root / "_trash"
+        if trash.is_dir():
+            for f in list(trash.glob("*")):
+                if f.is_file():
+                    f.unlink(missing_ok=True)
+                    stats["trash_deleted"] += 1
+
+    # 4. 删除 DB 三闸记录
+    if ws:
+        draft_gates.delete_workspace_gates(ws)
+
+    # 5. 删除 DB 草稿台账
+    if ws:
+        ledger_store.clear_drafts(ws)
+
+    user_store.audit(current_emp_no(), "reset_draft_area",
+                     f"重置草稿区：{stats['yaml_deleted']} yaml, "
+                     f"{stats['bak_deleted']} bak, {stats['trash_deleted']} trash")
+
+    return {"ok": True, "workspace": ws, **stats}

@@ -206,4 +206,5 @@ def spa_fallback(full_path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9100)
+    # ws_ping_timeout 调大到 120s（默认 20s），LLM 生成长回复期间不因协议层 ping timeout 断连
+    uvicorn.run(app, host="0.0.0.0", port=9100, ws_ping_interval=30, ws_ping_timeout=120)
