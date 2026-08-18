@@ -272,6 +272,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-934 | 材料-读取 | read_material MCP 工具 + 白名单登记 | mcp_server/tools/specflow_pack.py + purposes md | summary/topics/raw 三视图 + raw 分页；requirement_interview tools 登记；MCP 用例 ≥3 | — | 未认领 | | |
 | T-935 | 收口 | e2e + 全量回归 | test_specstd + 前端 | 上传→引用→read_material 贯通（mock）；全量回归 + release_check + build | T-931~T-934 | 未认领 | | |
 | T-936 | 储备 | MaterialsPanel 瘦身评估 | — | 对话链路验收后评估入包闸门/六区重组去向，总控人拍板 | T-935 验收 | 储备 | | 触发制，不认领 |
+| T-937 | 体验修复 | 同步设置体验：弹层秒开+去 ID 手填+链接解析 | 同步设置前后端 | 依据《superpowers/specs/2026-08-18-同步设置体验修复-design.md》：①弹层立即渲染+数据并行填充；②list_my_chats 60s TTL 缓存；③群聊/文档手填 textarea 删除（失败重试/裸 token 透传兼容）；④文档用户下拉改搜索框+快捷标签；⑤resolve-doc 端点（docx 本地解析/wiki node-get 取 obj_token+title；实测定案：非 wiki 文档 node-get 404 需分流） | T-930 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（17 绿含 9 新用例；真实 wiki 链接端到端验证 obj_token+title 返回；release_check PASS；前端 build/oxlint 0 error） |
 
 ---
 
@@ -282,7 +283,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23/v1.24 归档编排 | T-900 + T-901 + T-902 + 归档瘦身 | 2026-08-13 | T-900 一期 ✅（commit 23a4c60）→ T-901 二期 ✅ + T-902 三期 ✅（MCP 工具 + 围栏渲染 + 白名单代执行 + skills 话术）；总控 v1.23 归档瘦身 + v1.24 二三期完成收口 |
 | sess-feishu-graph | 飞书知识图谱施工（面试素材溯源） | T-910 ~ T-923（一/二期✅）→ T-924 ~ T-929（三期✅） | 2026-08-14 | 一期批次 A/B + 二期事件监听/转述/自动焦点/轮询全量收口；三期多用户编排/直写/演进链/入包收口 |
-| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配已交付（42c851a：选方向面板随 purpose 变化）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
+| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验修复（2026-08-18：弹层秒开/去 ID 手填/resolve-doc 链接解析）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
 | | | | | |
 
 ---
@@ -298,6 +299,12 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
 | docs/远期设计/SpecGuard-AgentChat材料工作流与purpose面板装配专项设计.md | sess-agentchat-material | 2026-08-17 | NEW | fcd7c6055d45 | 已完成 | §4.10 专项设计定稿（T-931~T-936 拆解 + D1-D6 决策：页签注册表装配/上传链路复用 S3/read_material 工具/MaterialsPanel 不删） |
+| docs/superpowers/specs/2026-08-18-同步设置体验修复-design.md | sess-agentchat-material | 2026-08-18 | NEW | 9f11b2e2081a | 已完成 | T-937 设计定稿（D1-D5：弹层秒开/手填删除/下拉搜索化/resolve-doc 链接解析/回显统一） |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-agentchat-material | 2026-08-18 | 8fcc290f8e23 | 570ed4eb2caf | 已完成 | T-937：resolve_doc_link + list_my_chats TTL 缓存；顺手修两处存量 I001 import 排序 |
+| workbench/backend/routers/feishu_pool.py | sess-agentchat-material | 2026-08-18 | 53b96f440edc | 5d8bb8b8d5a5 | 已完成 | T-937：GET /resolve-doc 端点 |
+| workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-agentchat-material | 2026-08-18 | ba9f1dd39ca0 | 7feaa6ece80e | 已完成 | T-937：弹层秒开+去手填+链接解析+下拉搜索化 |
+| workbench/frontend/src/api.ts | sess-agentchat-material | 2026-08-18 | f6024828da85 | d22167b6cef3 | 已完成 | T-937：resolveDoc API + docs title 字段 |
+| test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 2af36733d7ad | 936e000972fb | 已完成 | T-937：resolve_doc_link 6 用例 + 缓存 3 用例 |
 | agent/purposes/requirement_interview.md | sess-agentchat-material | 2026-08-17 | — | d27cfa18e450 | 已完成 | T-931：panels 对齐真实页签 id（[pack,focus,materials]，旧值入储备注释） |
 | agent/purposes/test_workbench.md | sess-agentchat-material | 2026-08-17 | — | 6c1652b5f242 | 已完成 | T-931：panels 对齐（[deps,history]） |
 | test_specstd/test_purpose.py | sess-agentchat-material | 2026-08-17 | — | 4f973acdac98 | 已完成 | T-931：panels 值断言用例 |
