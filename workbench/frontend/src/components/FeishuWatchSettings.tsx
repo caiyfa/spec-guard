@@ -37,7 +37,11 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopAuthPoll = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);   // 兼容 timeout/interval id（同一 id 池）
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
   };
   useEffect(() => stopAuthPoll, []);   // 组件卸载清理轮询
 
@@ -68,16 +72,16 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
         setAuthPending(r);
         if (r.verification_url) window.open(r.verification_url, '_blank');
         stopAuthPoll();
-        pollRef.current = setInterval(async () => {
-          try {
-            if (r.device_code) {
-              const c = await feishuPoolApi.authComplete(r.device_code);
-              if (c.phase === 'completed') { await onAuthDone(); return; }
-            }
-            const s = await larkStatus();
-            if (s.bound) await onAuthDone();
-          } catch { /* 轮询失败忽略，下轮重试 */ }
-        }, 3000);
+        // 递归 setTimeout（非 setInterval）：complete 后端随 CLI 阻塞可达 15s，
+        // 固定间隔会堆积请求（用户实锄轮询不生效的成因之一）——上一轮
+        // 检测返回后再排下一轮，天然串行。
+        const tick = async () => {
+          const done = await checkAuthOnce(r.device_code);
+          if (!done && pollRef.current !== null) {
+            pollRef.current = setTimeout(tick, 1000) as unknown as typeof pollRef.current;
+          }
+        };
+        pollRef.current = setTimeout(tick, 1500) as unknown as typeof pollRef.current;
         setTimeout(() => stopAuthPoll(), 180000);
       } else if (r.phase === 'completed') {
         await onAuthDone();
@@ -85,6 +89,27 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
         setError(r.error || '发起授权失败');
       }
     } catch (e: any) { setError(e.message); }
+  };
+
+  // 单次检测：complete（CLI poll，用户完成后立即返回）→ 兜底 status。
+  // 手动「已完成授权」按钮与自动轮询共用。返回是否已完成。
+  const checkAuthOnce = async (deviceCode?: string): Promise<boolean> => {
+    try {
+      if (deviceCode) {
+        const c = await feishuPoolApi.authComplete(deviceCode);
+        if (c.phase === 'completed') { await onAuthDone(); return true; }
+      }
+      const s = await larkStatus();
+      if (s.bound) { await onAuthDone(); return true; }
+    } catch { /* 单次失败忽略 */ }
+    return false;
+  };
+
+  const manualCheckAuth = async () => {
+    if (!authPending) return;
+    setNotice('正在检测授权状态…');
+    const done = await checkAuthOnce(authPending.device_code);
+    if (!done) setNotice('尚未检测到授权完成——请确认手机上已点「同意授权」后再试');
   };
 
   const onAuthDone = async () => {
@@ -265,9 +290,12 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   <div className="min-w-0 text-[11px] break-all">
                     <a href={authPending.verification_url} target="_blank" rel="noreferrer"
                       className="text-info hover:underline">{authPending.verification_url}</a>
-                    <div className="text-gray-500 mt-1">授权完成后本页自动检测并重新加载群聊（每 3 秒轮询，最长 3 分钟）</div>
-                    <button className={`${btn} mt-2`} onClick={() => { stopAuthPoll(); setAuthPending(null); }}>
-                      取消授权流程</button>
+                    <div className="text-gray-500 mt-1">扫码同意后自动检测（自动检测中…）；若长时间未跳转，点下方按钮手动确认</div>
+                    <div className="flex gap-2 mt-2">
+                      <button className={btn} onClick={manualCheckAuth}>✓ 我已完成授权，立即检测</button>
+                      <button className={btn} onClick={() => { stopAuthPoll(); setAuthPending(null); }}>
+                        取消授权流程</button>
+                    </div>
                   </div>
                 </div>
               </div>

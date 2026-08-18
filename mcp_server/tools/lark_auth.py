@@ -25,7 +25,7 @@ import sys
 import threading
 from pathlib import Path
 
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(SG_ROOT) not in sys.path:
@@ -145,6 +145,7 @@ def _make_qr_data_uri(url: str) -> str:
     try:
         import base64
         import io
+
         import segno
 
         buf = io.BytesIO()
@@ -284,7 +285,12 @@ def do_login_complete(emp_no: str, device_code: str) -> dict:
                                 timeout=15, json_output=False)
         except ValueError as e:
             text = str(e)
-            if "超时" in text or "timeout" in text.lower():
+            # T-942 补丁：CLI poll 未完成时返回 ok:false（authorization_pending
+            # / expired_token 等）→ 识别为 pending 而非 error（用户扫码中是正常态；
+            # 误判 error 会让前端轮询链条无感中断）
+            low = text.lower()
+            if ("超时" in text or "timeout" in low or "pending" in low
+                    or "authorization_pending" in low):
                 return {"phase": "pending", "hint": "用户尚未完成授权，请稍后重试"}
             return {"phase": "error", "error": text[:300]}
         status = do_status(emp_no) if payload.get("ok") else {}
