@@ -277,6 +277,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-939 | 体验修复 | 材料原文查看+图片直出：点材料看原文，图片内嵌展示 | 材料池前后端 | ①GET /material-content（docs/chats 原文，minutes 可读化+raw；附 imgmap）；②GET /material-image 代理（media_key→docs +media-download 复用 captions._download_image +磁盘缓存）；③前端详情弹层 react-markdown 渲染+[图片#N]替换内嵌图；④「图片替身」页签重构「图片描述」卡片流（缩略图+状态+描述编辑），删手输 stem/占位符编辑器；文案人话化（替身文本→图片描述） | T-938 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（27 绿含 7 新用例 + 补丁 1c90b83：list_pool_materials 的 file 改带目录前缀相对路径——裸文件名致详情弹层全部报非法路径，用户实测反馈 5 分钟闭环；TestClient 端到端冒烟全通；前端 build+oxlint 0 error；顺手修 feishu_pool I001×3+B904） |
 | T-940 | 体验修复 | 监听用户视图+材料按人切换+飞书原文直链 | 材料池前后端 | ①落盘 meta sidecar（fd/fm-*.meta.json：owner_open_id/owner_name/source_url/title；owner 由 sync 调用方已知，minutes +search 实测无结构化 owner_id 仅 meta_data.app_link）；②list_pool_materials 返 source_url/owner；③前端监听范围卡（watch users×scopes/授权群/文档数+就近维护入口）；④材料清单按监听用户下拉筛选（产出物归人，群聊不归人）；⑤行内主行动「飞书原文↗」外链，本地快照降为次要（用户不信任 JSON 快照真实性） | T-939 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（76 绿含 4 新用例：meta sidecar/单 owner 落盘/list 返 meta+sidecar 不当材料；前端 build+oxlint 0 error；release_check PASS；存量材料无 meta 诚实降级空串，重新同步即有归属） |
 | T-941 | 体验修复 | 同步设置去重+授权错误人话化+文档搜索解耦 | 同步设置前后端 | ①删监听范围卡内同步设置入口（T-940 误加，嵌套致弹层变小窗；只留右上唯一入口）；②missing_scope 错误识别包装（人话前缀+透传修复命令，实测缺 contactuser:search）；③新增全局文档名搜索 search_docs/docs-search 端点（不过滤 owner，与按用户检索两条独立路径+粘贴链接解析共存） | T-940 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（80 绿含 4 新用例：全局搜不过滤 owner/空 query 短路/missing_scope 包装/选择器 errors 人话化；build+oxlint 0 error；release_check PASS；注：群聊/用户加载失败根因是飞书 token 缺 scope，需按错误内 hint 重新授权——代码侧已人话化透传） |
+| T-942 | 体验修复 | 授权闭环接入同步设置弹层（用户接触不到服务器） | 同步设置前端 + 错误文案 | 复用既有链路（lark_binding REST 五端点/larkApi/LarkAuth do_login 两阶段+segno 二维码）：①弹层内嵌授权块——未绑定→「绑定飞书」/缺权限→「重新授权（--domain all 全域）」；②弹层内展示二维码+链接+3s 轮询 complete→完成后自动重载群聊；③_friendly_lark_error 文案改指向弹层内操作（不再让用户去部署机执行命令） | T-941 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（34 绿+build+oxlint 0 error；后端零新增端点全复用 T-703 链路；未绑定分支文案同接） |
 
 ---
 
@@ -287,7 +288,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23/v1.24 归档编排 | T-900 + T-901 + T-902 + 归档瘦身 | 2026-08-13 | T-900 一期 ✅（commit 23a4c60）→ T-901 二期 ✅ + T-902 三期 ✅（MCP 工具 + 围栏渲染 + 白名单代执行 + skills 话术）；总控 v1.23 归档瘦身 + v1.24 二三期完成收口 |
 | sess-feishu-graph | 飞书知识图谱施工（面试素材溯源） | T-910 ~ T-923（一/二期✅）→ T-924 ~ T-929（三期✅） | 2026-08-14 | 一期批次 A/B + 二期事件监听/转述/自动焦点/轮询全量收口；三期多用户编排/直写/演进链/入包收口 |
-| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937~T-941（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验（b002749）；T-938 群聊后台预热（cdf8d6e）；T-939 材料原文+图片直出（f66330b+1c90b83）；T-940 监听用户视图+按人切换+飞书直链（4a7f656）；T-941 同步设置去重+错误人话化+搜索解耦（871d64c）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
+| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937~T-942（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验（b002749）；T-938 群聊后台预热（cdf8d6e）；T-939 材料原文+图片直出（f66330b+1c90b83）；T-940 监听用户视图+按人切换+飞书直链（4a7f656）；T-941 同步设置去重+错误人话化+搜索解耦（871d64c）；T-942 授权闭环入弹层（006c5c2）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
 | | | | | |
 
 ---
@@ -330,7 +331,9 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-agentchat-material | 2026-08-18 | 7feaa6ece80e | 96a59ec09b85 | 已完成 | T-941：文档区三独立路径（按名搜置顶/按用户/粘链接）+ mergeDocResults 统一 |
 | workbench/frontend/src/pages/FeishuPool.tsx | sess-agentchat-material | 2026-08-18 | be32778b10c8 | 15c0d0a59e54 | 已完成 | T-941：删监听范围卡内同步设置入口（提示文案指向右上） |
 | workbench/frontend/src/api.ts | sess-agentchat-material | 2026-08-18 | 802519233d80 | c49a2bfbf364 | 已完成 | T-941：searchDocs API |
-| test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 988569618cc5 | d5338e17a4a3 | 已完成 | T-941：search_docs/错误包装 4 用例 |
+| test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 988569618cc5 | 2752d304d5cc | 已完成 | T-941+T-942：search_docs/错误包装 4 用例；文案断言改指向弹层内授权 |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-agentchat-material | 2026-08-18 | 44b382926c5b | 5cf53f3982ed | 已完成 | T-942：_friendly_lark_error 文案指向弹层内授权操作+未绑定分支 |
+| workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-agentchat-material | 2026-08-18 | 96a59ec09b85 | c79d66899165 | 已完成 | T-942：弹层内嵌授权块（状态/发起/二维码+3s轮询/完成自动重载群聊） |
 | agent/purposes/requirement_interview.md | sess-agentchat-material | 2026-08-17 | — | d27cfa18e450 | 已完成 | T-931：panels 对齐真实页签 id（[pack,focus,materials]，旧值入储备注释） |
 | agent/purposes/test_workbench.md | sess-agentchat-material | 2026-08-17 | — | 6c1652b5f242 | 已完成 | T-931：panels 对齐（[deps,history]） |
 | test_specstd/test_purpose.py | sess-agentchat-material | 2026-08-17 | — | 4f973acdac98 | 已完成 | T-931：panels 值断言用例 |
