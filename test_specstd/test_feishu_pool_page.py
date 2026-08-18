@@ -394,7 +394,7 @@ def test_cluster_once_no_text_model(monkeypatch):
 
 
 def test_cluster_once_with_text_model(monkeypatch):
-    """已配置 text 模型 → cluster_chat_snapshots 被调（LLM 客户端注入）。"""
+    """已配置 text 模型 → cluster_chat_snapshots 被调（T-946：带按群窗口+默认7天）。"""
     called = {}
 
     class _FakeLLM:
@@ -405,10 +405,19 @@ def test_cluster_once_with_text_model(monkeypatch):
     monkeypatch.setattr("agent.llm_client.LLMClient", _FakeLLM)
     monkeypatch.setattr(
         "specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
-        lambda base, llm, days=None: called.setdefault("args", (base, llm)) or [])
+        lambda base, llm, days=None, chat_windows=None, default_days=0:
+            called.update(args=(base, llm), windows=chat_windows,
+                          default=default_days) or [])
+    monkeypatch.setattr(svc, "load_watch_config", lambda base: {
+        "chats": [{"chat_id": "oc_a", "topic_days": 30},
+                  {"chat_id": "oc_b"}],          # 缺省 7
+        "docs": [], "users": [], "minutes_days": 30, "chat_days": 7})
+    from specflow.feishu_pool.pool_store import chat_sha8
     svc._cluster_once(Path("/tmp/emp"))
     assert called["model_id"] == "text"
     assert called["args"][0] == Path("/tmp/emp")
+    assert called["default"] == 7
+    assert called["windows"] == {chat_sha8("oc_a"): 30, chat_sha8("oc_b"): 7}
 
 
 def test_cluster_once_error_swallowed(monkeypatch):

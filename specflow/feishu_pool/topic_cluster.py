@@ -84,15 +84,15 @@ def _save_candidates(specflow_emp_base: Path, topics: list[dict]):
 
 def _next_seq(existing: list[dict], chat_sha8: str, day: str) -> int:
     """当日该群已有话题的最大 seq + 1。"""
+    import contextlib
+
     prefix = f"tp:{chat_sha8}-{day}-"
     seq = 0
     for t in existing:
         tid = str(t.get("id", ""))
         if tid.startswith(prefix):
-            try:
+            with contextlib.suppress(ValueError):
                 seq = max(seq, int(tid.rsplit("-", 1)[1]))
-            except ValueError:
-                pass
     return seq + 1
 
 
@@ -154,17 +154,29 @@ def _merge_one(existing: list[dict], chat_sha8: str, day: str,
 
 
 def cluster_chat_snapshots(specflow_emp_base: Path, llm,
-                           days: list[str] | None = None) -> list[dict]:
+                           days: list[str] | None = None,
+                           chat_windows: dict[str, int] | None = None,
+                           default_days: int = 0) -> list[dict]:
     """聚类私有区群聊快照，候选话题归并写回 _candidate_topics.yaml。
+
+    分片语义：按「群 × 天」逐文件独立聚类（天然分片，单文件单次 LLM 调用，
+    消息级由 prompt 指导忽略噪音）。
 
     Args:
         specflow_emp_base: .specflow/{emp} 根
         llm: LLMClient（chat(messages) -> {"content": str}）
-        days: 只处理这些日期（None = 全部快照）
+        days: 只处理这些日期（None = 不限，叠加窗口过滤）
+        chat_windows: T-946 按群配置 {chat_sha8: 窗口天数}——0=该群关闭
+            话题生成；缺省键回退 default_days
+        default_days: T-946 默认时效窗口（近 N 天的快照才聚类，过期数据
+            不提取；<=0 = 不限，向后兼容）
 
     Returns:
         本次新增/修订的话题列表（含稳定 id）
     """
+    from datetime import date as _date
+    from datetime import timedelta as _td
+
     global _LAST_ERRORS
     _LAST_ERRORS = []
     chats_root = pool_dirs(specflow_emp_base)["chats"]
@@ -173,12 +185,29 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
     if not chats_root.is_dir():
         return produced
 
+    def _cutoff(win_days: int) -> str:
+        """窗口下限日期（yyyymmdd）；win_days<=0 不限返回 ""。"""
+        if win_days <= 0:
+            return ""
+        return (_date.today() - _td(days=win_days)).strftime("%Y%m%d")
+
     for chat_dir in sorted(chats_root.iterdir()):
         if not chat_dir.is_dir():
             continue
         chat_sha8 = chat_dir.name
+        # T-946 窗口解析：显式配置（chat_windows 含键）<=0 = 关闭该群；
+        # 未配置回退 default_days（<=0 = 不限，向后兼容）。
+        if chat_windows and chat_sha8 in chat_windows:
+            win = int(chat_windows[chat_sha8])
+            if win <= 0:
+                continue                  # 该群显式关闭话题生成
+        else:
+            win = default_days
+        cutoff = _cutoff(win)
         for md_file in sorted(chat_dir.glob("*.md")):
             day = md_file.stem
+            if cutoff and day < cutoff:
+                continue                      # T-946：时效窗口外过期不提取
             if days and day not in days:
                 continue
             content = md_file.read_text(encoding="utf-8")

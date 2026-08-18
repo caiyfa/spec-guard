@@ -213,7 +213,11 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None) -> dict:
 
 
 def _cluster_once(emp_base: Path) -> None:
-    """单次聚类（可同步测试）：text 模型未配置→跳过；异常吞掉只记日志。"""
+    """单次聚类（可同步测试）：text 模型未配置→跳过；异常吞掉只记日志。
+
+    T-946：从 watch 配置构造按群窗口——chats[].topic_days（缺省 7：只聚
+    近 7 天快照；0=该群关闭）；未入 watch 的历史群回退默认 7 天（过期
+    数据不提取，控制 LLM 成本）。"""
     try:
         from services import model_config
         m = model_config.get_model("text")
@@ -222,7 +226,17 @@ def _cluster_once(emp_base: Path) -> None:
             return
         from agent.llm_client import LLMClient
         from specflow.feishu_pool import topic_cluster as tc
-        tc.cluster_chat_snapshots(emp_base, LLMClient(model_id="text"))
+        from specflow.feishu_pool.pool_store import chat_sha8
+        chat_windows = {}
+        for c in (load_watch_config(emp_base).get("chats") or []):
+            cid = str(c.get("chat_id", ""))
+            if cid:
+                try:
+                    chat_windows[chat_sha8(cid)] = int(c.get("topic_days", 7) or 0)
+                except (TypeError, ValueError):
+                    chat_windows[chat_sha8(cid)] = 7
+        tc.cluster_chat_snapshots(emp_base, LLMClient(model_id="text"),
+                                  chat_windows=chat_windows, default_days=7)
     except Exception as e:
         log.warning("话题聚类失败（不阻断同步）: %s", e)
 

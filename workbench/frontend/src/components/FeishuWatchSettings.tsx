@@ -14,6 +14,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   const [watch, setWatch] = useState<FeishuWatch | null>(null);
   const [chatSelList, setChatSelList] = useState<FeishuChatItem[]>([]);
   const [chatSel, setChatSel] = useState<Set<string>>(new Set());
+  const [chatTopicDays, setChatTopicDays] = useState<Record<string, number>>({});
   const [chatsLoading, setChatsLoading] = useState(false);
   const [chatsFullLoaded, setChatsFullLoaded] = useState(false);
   const [chatFilter, setChatFilter] = useState('');
@@ -129,6 +130,12 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
       setWatch(w);
       setWatchUsers(w.users || []);
       setChatSel(new Set((w.chats || []).map(c => c.chat_id)));
+      // T-946：按群话题窗口回显（缺省 7）
+      const days: Record<string, number> = {};
+      (w.chats || []).forEach(c => {
+        days[c.chat_id] = Number(c.topic_days ?? 7) || 0;
+      });
+      setChatTopicDays(days);
       // docs 回显到勾选列表（title 可读呈现；不再 textarea 裸 token 回显）
       const docs = (w.docs || []).map(d => ({
         token: d.token, title: d.title || '', url: d.url || '',
@@ -173,7 +180,10 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
         .forEach(c => { if (!chatMap.has(c.chat_id)) chatMap.set(c.chat_id, { chat_id: c.chat_id, name: c.name }); });
       const cfg: FeishuWatch = {
         ...watch,
-        chats: [...chatMap.values()],
+        chats: [...chatMap.values()].map(c => ({
+          ...c,
+          topic_days: chatTopicDays[c.chat_id] ?? 7,   // T-946：按群话题窗口
+        })),
         docs: docSelList.filter(d => docSel.has(d.token)).map(d => ({
           token: d.token,
           url: d.url || undefined,
@@ -414,6 +424,20 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                           }} />
                         <span className="text-gray-200 truncate">{c.name || c.chat_id}</span>
                         <code className="text-[10px] text-gray-600">{c.chat_id}</code>
+                        {chatSel.has(c.chat_id) && (
+                          <span className="ml-auto flex items-center gap-1 shrink-0 text-[10px] text-gray-500">
+                            话题
+                            <input type="number" min={0} max={365}
+                              className="w-12 bg-surface-3 border border-border rounded px-1 py-0.5 text-[10px] text-gray-300 outline-none focus:border-info"
+                              value={chatTopicDays[c.chat_id] ?? 7}
+                              onChange={e => setChatTopicDays(prev => ({
+                                ...prev,
+                                [c.chat_id]: Math.max(0, Number(e.target.value) || 0),
+                              }))}
+                              title="只聚近 N 天快照生成话题；0=该群不生成" />
+                            天
+                          </span>
+                        )}
                       </label>
                     ))}
                     {chatSelList.filter(c => c.chat_mode !== 'p2p').length > 0

@@ -1645,7 +1645,7 @@ export interface FeishuWatchUser {
 }
 
 export interface FeishuWatch {
-  chats: { chat_id: string; name?: string }[];
+  chats: { chat_id: string; name?: string; topic_days?: number }[];
   docs: { token: string; url?: string; owner_open_id?: string; title?: string }[];
   users: FeishuWatchUser[];
   minutes_days: number;

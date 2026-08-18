@@ -277,29 +277,14 @@ export default function FeishuPool() {
           {topics.candidates.length === 0 && <div className="text-xs text-gray-500 mb-3">暂无</div>}
           <div className="space-y-2 mb-4">
             {topics.candidates.map(t => (
-              <div key={t.id} className="p-2 rounded border border-border bg-surface-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-200 font-medium">{t.title}</span>
-                  <code className="text-[10px] text-gray-500">{t.id}</code>
-                  {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续 {t.continues}</span>}
-                  <span className="ml-auto text-[10px] text-gray-500">{t.message_count} 条 · {t.participants_count} 人</span>
-                </div>
-                <p className="text-gray-400 mt-1">{t.summary}</p>
-              </div>
+              <TopicCard key={t.id} topic={t} confirmed={false} />
             ))}
           </div>
           <h2 className="text-sm font-semibold mb-2">已确认话题（已入共享图谱，{topics.confirmed.length}）</h2>
           {topics.confirmed.length === 0 && <div className="text-xs text-gray-500">暂无</div>}
           <div className="space-y-2">
             {topics.confirmed.map(t => (
-              <div key={t.id} className="p-2 rounded border border-green-500/30 bg-green-900/10 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-200 font-medium">{t.title}</span>
-                  <code className="text-[10px] text-gray-500">{t.id}</code>
-                  {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续 {t.continues}</span>}
-                </div>
-                <p className="text-gray-400 mt-1">{t.summary}</p>
-              </div>
+              <TopicCard key={t.id} topic={t} confirmed />
             ))}
           </div>
         </div>
@@ -360,6 +345,69 @@ export default function FeishuPool() {
               </>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 话题卡片（T-946）：摘要 + 「查看原文」展开——拉快照全文按 window 起止时间
+// 切出消息片段，审核时直接对照原始聊天记录（话题↔原文直接关联）。
+function TopicCard({ topic: t, confirmed }: { topic: FeishuTopic; confirmed: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [lines, setLines] = useState<string[] | null>(null);
+  const [err, setErr] = useState('');
+
+  const loadSource = async () => {
+    if (lines !== null) return;
+    try {
+      const d = await feishuPoolApi.materialContent(t.source);
+      if (!d.ok) throw new Error(d.error);
+      // window: ['YYYY-MM-DDTHH:MM', ...] → 按起止 HH:MM 切 [HH:MM] 行
+      const start = (t.window?.[0] || '').slice(11, 16);
+      const end = (t.window?.[1] || '').slice(11, 16);
+      const all = (d.content || '').split('\n').filter(l => /^\[\d{2}:\d{2}\]/.test(l));
+      const sliced = all.filter(l => {
+        const hm = l.slice(1, 6);
+        if (start && end) return hm >= start && hm <= end;
+        return true;
+      });
+      setLines(sliced.length ? sliced : all.slice(0, 50));
+    } catch (e: any) { setErr(e.message); }
+  };
+
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next) void loadSource();
+  };
+
+  const box = confirmed
+    ? 'p-2 rounded border border-green-500/30 bg-green-900/10 text-xs'
+    : 'p-2 rounded border border-border bg-surface-3 text-xs';
+  return (
+    <div className={box}>
+      <div className="flex items-center gap-2">
+        <span className="text-gray-200 font-medium">{t.title}</span>
+        <code className="text-[10px] text-gray-500">{t.id}</code>
+        {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续 {t.continues}</span>}
+        <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500">
+          {t.message_count} 条 · {t.participants_count} 人
+          <button className="text-info hover:underline" onClick={toggle}>
+            {expanded ? '收起原文' : '查看原文'}
+          </button>
+        </span>
+      </div>
+      <p className="text-gray-400 mt-1">{t.summary}</p>
+      {expanded && (
+        <div className="mt-2 border-t border-border pt-2">
+          {err && <div className="text-[11px] text-red-400">原文加载失败：{err}</div>}
+          {lines === null && !err && <div className="text-[11px] text-gray-500">原文加载中…</div>}
+          {lines !== null && (
+            <pre className="max-h-48 overflow-auto text-[10px] text-gray-400 leading-relaxed
+              bg-surface-3 border border-border rounded p-2 whitespace-pre-wrap">{lines.join('\n')}</pre>
+          )}
+          <div className="text-[10px] text-gray-600 mt-1">来源：{t.source}（{t.window?.[0] || '—'} ~ {t.window?.[1] || '—'}）</div>
         </div>
       )}
     </div>

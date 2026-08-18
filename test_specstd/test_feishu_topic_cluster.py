@@ -4,8 +4,10 @@
 - 群聊快照 → 候选话题（id 规范 tp:{chat_sha8}-{yyyymmdd}-{seq}）
 - 增量归并：标题相似 + 同窗 → 沿用旧 id（图谱重建不依赖 LLM 复现）
 - LLM 输出非 JSON → 记 error 跳过（诚实呈现不中断）
+- T-946：时效窗口（过期快照不聚）+ 按群配置（chat_windows 覆盖/关闭）
 """
 
+from datetime import date, timedelta
 from unittest.mock import MagicMock
 
 import yaml
@@ -28,6 +30,54 @@ def _llm_returning(payload: str):
     llm = MagicMock()
     llm.chat.return_value = {"content": payload}
     return llm
+
+
+_OK_PAYLOAD = ('{"topics": [{"title": "导出权限过滤",'
+               ' "summary": "按 corpCode 过滤",'
+               ' "msg_range": ["[14:00]", "[14:01]"], "participants_count": 2}]}')
+
+
+def test_cluster_window_filters_expired_days(tmp_path):
+    """T-946：时效窗口——default_days=7 时，8 天前的快照过期不聚，今日正常。"""
+    emp = _make_emp(tmp_path)
+    chat_dir = emp / "feishu_pool" / "chats" / "3f9a2c"
+    today = date.today().strftime("%Y%m%d")
+    old = (date.today() - timedelta(days=8)).strftime("%Y%m%d")
+    (chat_dir / f"{today}.md").write_text("[14:00] 张三: 今日话题\n", encoding="utf-8")
+    (chat_dir / f"{old}.md").write_text("[14:00] 张三: 过期话题\n", encoding="utf-8")
+    llm = _llm_returning(_OK_PAYLOAD)
+    tc.cluster_chat_snapshots(emp, llm, default_days=7)
+    # LLM 只被窗口内文件调用（今日/7 天内；8 天前 old 与旧 20260807 被过滤）。
+    # call 形状：chat([messages]) → c[0][0] 是 messages 列表，首条 dict 取 content。
+    prompts = [c[0][0][0]["content"] for c in llm.chat.call_args_list]
+    assert any(today in p for p in prompts)
+    assert not any(old in p for p in prompts)
+    assert not any("20260807" in p for p in prompts)
+
+
+def test_cluster_chat_disabled_via_windows(tmp_path):
+    """T-946：按群配置——chat_windows[sha]=0 关闭该群话题生成。"""
+    emp = _make_emp(tmp_path)
+    llm = _llm_returning(_OK_PAYLOAD)
+    tc.cluster_chat_snapshots(emp, llm, days=["20260807"],
+                              chat_windows={"3f9a2c": 0}, default_days=7)
+    llm.chat.assert_not_called()      # 该群关闭 → 零 LLM 调用
+
+
+def test_cluster_per_chat_window_overrides_default(tmp_path):
+    """T-946：per-chat 窗口覆盖 default——群 A 窗口 30 含 10 天前文件，群 B 默认 7 不含。"""
+    emp = tmp_path / ".specflow" / "u1"
+    for sha, in (("aaaaaa",), ("bbbbbb",)):
+        d = emp / "feishu_pool" / "chats" / sha
+        d.mkdir(parents=True)
+        old10 = (date.today() - timedelta(days=10)).strftime("%Y%m%d")
+        (d / f"{old10}.md").write_text("[14:00] 张三: 十天前\n", encoding="utf-8")
+    llm = _llm_returning(_OK_PAYLOAD)
+    tc.cluster_chat_snapshots(emp, llm,
+                              chat_windows={"aaaaaa": 30, "bbbbbb": 7},
+                              default_days=7)
+    # 群 aaaaaa（窗口 30 含 10 天前）被聚类；群 bbbbbb（窗口 7）10 天前过期被过滤
+    assert llm.chat.call_count == 1
 
 
 def test_cluster_produces_candidate_topics(tmp_path):
