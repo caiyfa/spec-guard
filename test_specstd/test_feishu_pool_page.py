@@ -355,3 +355,101 @@ def test_lark_env_emp_injection():
     env = lark_cli._lark_env("90000001")
     assert env["USERPROFILE"].replace("\\", "/").endswith(".lark-cli/90000001")
     assert lark_cli._lark_env("") == {}
+
+
+# ══════════════════════════════════════════════════════════
+# T-939：材料原文读取（详情弹层）+ 图片字节代理（内嵌展示）
+# ══════════════════════════════════════════════════════════
+
+
+def test_read_material_content_doc_with_imgmap(tmp_path):
+    """doc：原文 + imgmap 条目列表（前端 [图片#N] 内嵌与描述编辑共用）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool_store.save_doc_snapshot(
+        emp, "tokA", "# 标题\n\n正文 [图片#1]\n",
+        imgmap={"图片#1": {"media_key": "mk1", "caption": "架构图",
+                           "caption_by": "vision_llm", "status": "done"}})
+    out = svc.read_material_content(emp, "docs/fd-tokA.md")
+    assert out["ok"] is True
+    assert out["type"] == "feishu_doc"
+    assert "# 标题" in out["content"]
+    assert out["images"] == [{"placeholder": "图片#1", "media_key": "mk1",
+                              "caption": "架构图", "caption_by": "vision_llm",
+                              "status": "done"}]
+
+
+def test_read_material_content_minutes_readable(tmp_path):
+    """minutes：可读化文本（title/summary）+ raw JSON 附带（折叠展示）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool_store.save_minutes_snapshot(
+        emp, "obcn1", {"minutes": [
+            {"title": "评审会", "artifacts": {"summary": "讨论导出"}}]})
+    out = svc.read_material_content(emp, "minutes/fm-obcn1.json")
+    assert out["ok"] is True and out["type"] == "feishu_minutes"
+    assert "评审会" in out["content"] and "讨论导出" in out["content"]
+    assert "minutes" in out["raw"]
+
+
+def test_read_material_content_chat(tmp_path):
+    emp = tmp_path / ".specflow" / "u1"
+    saved = pool_store.save_chat_snapshot(
+        emp, "oc_a", "20260818", "[10:00] 张三: hi\n")
+    out = svc.read_material_content(emp, saved["file"])
+    assert out["ok"] is True and out["type"] == "chat"
+    assert "张三: hi" in out["content"]
+    assert out["images"] == []
+
+
+def test_read_material_content_rejects_traversal(tmp_path):
+    """路径白名单 + 防穿越（私有区文件不外泄）。"""
+    for bad in ["../evil.md", "other/x.md", "docs/../../evil.md",
+                "docs/fd-x.exe", "", "docs/"]:
+        out = svc.read_material_content(tmp_path, bad)
+        assert out["ok"] is False, bad
+
+
+def test_read_material_content_not_found(tmp_path):
+    out = svc.read_material_content(tmp_path / ".specflow" / "u1",
+                                    "docs/fd-none.md")
+    assert out["ok"] is False
+
+
+_PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16     # PNG 魔数
+
+
+def test_fetch_material_image_with_cache(tmp_path, monkeypatch):
+    """图片代理：下载 → 磁盘缓存 → 二次命中零下载。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool_store.save_doc_snapshot(
+        emp, "tokA", "x",
+        imgmap={"图片#1": {"media_key": "mk1", "caption": "",
+                           "caption_by": "none", "status": "pending"}})
+    calls: list = []
+
+    def fake_dl(media_key):
+        calls.append(media_key)
+        return _PNG
+    monkeypatch.setattr(svc, "_download_image", fake_dl)
+    r1 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#1")
+    assert r1["ok"] is True and r1["data"] == _PNG
+    assert r1["mime"] == "image/png"
+    r2 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#1")
+    assert calls == ["mk1"]                  # 二次走缓存
+    assert r2["data"] == _PNG
+
+
+def test_fetch_material_image_rejects(tmp_path):
+    """无 media_key（占位符扫描产物）/未知占位符 → 明确错误。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool_store.save_doc_snapshot(
+        emp, "tokA", "x",
+        imgmap={"图片#1": {"media_key": "mk1", "caption": "",
+                           "caption_by": "none", "status": "pending"},
+                "图片#2": {"media_key": "", "caption": "",
+                           "caption_by": "none", "status": "pending"}})
+    out = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#2")
+    assert out["ok"] is False and "media_key" in out["error"]
+    out2 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#9")
+    assert out2["ok"] is False
+    out3 = svc.fetch_material_image(emp, "../evil", "图片#1")
+    assert out3["ok"] is False

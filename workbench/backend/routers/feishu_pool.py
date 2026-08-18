@@ -17,8 +17,8 @@ RBAC 与 specflow 路由同级（登录即可，角色在依赖注入层控制�
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
-
 from services.auth import CurrentUser, get_current_user, resolve_workspace
 from services.specflow import feishu_sync_service as sync_svc
 
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/feishu-pool", tags=["feishu-pool"],
 
 
 def _sf_base():
-    from specstd.workspace import specflow_dir, get_context_emp_no
+    from specstd.workspace import get_context_emp_no, specflow_dir
     return specflow_dir(emp=get_context_emp_no() or "")
 
 
@@ -65,8 +65,9 @@ def put_watch(cfg: WatchConfig,
     # T-924 配置驱动启停：保存配置即尝试拉起该用户监听（幂等；失败不阻断保存）
     watcher_state = "skipped"
     try:
-        from specstd.workspace import get_context_emp_no
         from services.specflow import feishu_watcher as fw
+
+        from specstd.workspace import get_context_emp_no
         reg = fw.get_registry()
         emp = get_context_emp_no() or ""
         if reg is not None and emp:
@@ -172,7 +173,7 @@ def update_caption_ep(body: CaptionUpdate,
         return sync_svc.update_image_caption(
             _sf_base(), body.material, body.placeholder, body.caption)
     except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from None
 
 
 # ══════════════════════════════════════════════════════════
@@ -207,3 +208,22 @@ def resolve_doc(input: str, user: CurrentUser = Depends(get_current_user),
                 workspace: str = Depends(resolve_workspace)):
     """文档链接/token → 文档标识（T-937 粘贴解析：docx 本地/wiki node-get）。纯读。"""
     return sync_svc.resolve_doc_link(input)
+
+
+@router.get("/material-content")
+def material_content(file: str,
+                     user: CurrentUser = Depends(get_current_user),
+                     workspace: str = Depends(resolve_workspace)):
+    """材料原文读取（详情弹层；docs/chats 原文、minutes 可读化+raw、附 imgmap）。纯读。"""
+    return sync_svc.read_material_content(_sf_base(), file)
+
+
+@router.get("/material-image")
+def material_image(file: str, ph: str,
+                   user: CurrentUser = Depends(get_current_user),
+                   workspace: str = Depends(resolve_workspace)):
+    """图片字节代理（前端 <img> 直连；media_key 下载 + 磁盘缓存）。纯读。"""
+    out = sync_svc.fetch_material_image(_sf_base(), file, ph)
+    if not out.get("ok"):
+        raise HTTPException(status_code=404, detail=out.get("error", "图片不存在"))
+    return Response(content=out["data"], media_type=out["mime"])

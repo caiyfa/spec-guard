@@ -1,12 +1,18 @@
-// 飞书材料池总览页（飞书知识图谱三期 T-929）：
+// 飞书材料池总览页（飞书知识图谱三期 T-929；T-939 体验重构）：
 // 状态卡条（watcher 运行/事件数/最近事件）+ 三页签：
-// ① 材料池清单 ② 话题清单（候选/已确认/演进链） ③ 图片替身（pending/failed + caption 手改）
+// ① 材料池清单（点击行看原文，图片内嵌直出）
+// ② 话题清单（候选/已确认/演进链）
+// ③ 图片描述（按材料分组：缩略图 + 转述状态 + 描述编辑；T-939 重构，
+//    替代旧「图片替身」手输 stem/占位符编辑器）
 
 import { useCallback, useEffect, useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   feishuPoolApi,
   type FeishuPoolMaterial,
   type FeishuTopic,
+  type FeishuMaterialContent,
 } from '../api';
 import FeishuWatchSettings from '../components/FeishuWatchSettings';
 
@@ -18,9 +24,38 @@ const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   chat: { label: '群聊', cls: 'bg-amber-500/15 text-amber-400' },
 };
 
+const IMG_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: '待转述', cls: 'bg-amber-500/15 text-amber-400' },
+  done: { label: '已转述', cls: 'bg-green-500/15 text-green-400' },
+  failed: { label: '转述失败', cls: 'bg-red-500/15 text-red-400' },
+};
+
 function fmtTime(ts: number) {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false });
+}
+
+// 材料 file（docs/fd-tokA.md）→ 配套 imgmap 路径（docs/fd-tokA.imgmap.json）
+function imgmapOfFile(file: string) {
+  return file.replace(/\.md$/, '').replace(/\.json$/, '') + '.imgmap.json';
+}
+
+// 图片字节并发拉取（Authorization header 不能走 <img src>，fetch blob → objectURL）
+async function loadImages(file: string, images: { placeholder: string; media_key?: string }[]) {
+  const urls: Record<string, string> = {};
+  await Promise.all(images.filter(i => i.media_key).map(async i => {
+    try {
+      const blob = await feishuPoolApi.fetchMaterialImageBlob(imgmapOfFile(file), i.placeholder);
+      urls[i.placeholder] = URL.createObjectURL(blob);
+    } catch { /* 单图失败保留占位符，不阻断整体 */ }
+  }));
+  return urls;
+}
+
+// [图片#N] → 内嵌 markdown 图片（有 objectURL）或失败标注
+function inlineImages(content: string, imgUrls: Record<string, string>) {
+  return content.replace(/\[(图片#\d+)\]/g, (_m, ph: string) =>
+    imgUrls[ph] ? `![${ph}](${imgUrls[ph]})` : `*（${ph} 图片暂不可见）*`);
 }
 
 export default function FeishuPool() {
@@ -30,7 +65,7 @@ export default function FeishuPool() {
   const [watcher, setWatcher] = useState<any>(null);
   const [materials, setMaterials] = useState<FeishuPoolMaterial[]>([]);
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
-  const [captionEdit, setCaptionEdit] = useState<Record<string, string>>({});
+  const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null; imgUrls: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState('');
 
   const loadWatcher = useCallback(() => {
@@ -46,16 +81,15 @@ export default function FeishuPool() {
   useEffect(() => { loadWatcher(); loadMaterials(); loadTopics(); },
     [loadWatcher, loadMaterials, loadTopics]);
 
-  const saveCaption = async (material: string, placeholder: string) => {
-    const key = `${material}||${placeholder}`;
-    const caption = (captionEdit[key] || '').trim();
-    if (!caption) return;
-    setBusy(key); setError(''); setNotice('');
+  const openDetail = async (m: FeishuPoolMaterial) => {
+    setError('');
+    setDetail({ m, data: null, imgUrls: {} });
     try {
-      await feishuPoolApi.updateCaption(material, placeholder, caption);
-      setNotice(`已保存 ${material} ${placeholder} 的替身文本（manual）`);
-      setCaptionEdit(prev => ({ ...prev, [key]: '' }));
-    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+      const d = await feishuPoolApi.materialContent(m.file);
+      if (!d.ok) throw new Error(d.error || '材料读取失败');
+      const urls = await loadImages(m.file, d.images || []);
+      setDetail({ m, data: d, imgUrls: urls });
+    } catch (e: any) { setError(e.message); setDetail(null); }
   };
 
   const syncNow = async () => {
@@ -78,9 +112,6 @@ export default function FeishuPool() {
       {label}
     </button>
   );
-
-  // 图片页签数据：含 imgmap 的材料（pending/failed 替身条目的编辑入口）
-  const imgMaterials = materials.filter(m => m.type !== 'chat');
 
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
@@ -118,10 +149,10 @@ export default function FeishuPool() {
       <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
         {tabBtn('materials', `📦 材料池（${materials.length}）`)}
         {tabBtn('topics', `💬 话题（${topics.candidates.length + topics.confirmed.length}）`)}
-        {tabBtn('images', '🖼 图片替身')}
+        {tabBtn('images', '🖼 图片描述')}
       </div>
 
-      {/* 页签 1：材料池清单 */}
+      {/* 页签 1：材料池清单（行点击看原文） */}
       {tab === 'materials' && (
         <div className={card}>
           {materials.length === 0 ? (
@@ -129,11 +160,11 @@ export default function FeishuPool() {
           ) : (
             <table className="w-full">
               <thead>
-                <tr><th className={th}>类型</th><th className={th}>标题 / 摘要</th><th className={th}>大小</th><th className={th}>更新时间</th></tr>
+                <tr><th className={th}>类型</th><th className={th}>标题 / 摘要</th><th className={th}>大小</th><th className={th}>更新时间</th><th className={th}></th></tr>
               </thead>
               <tbody>
                 {materials.map(m => (
-                  <tr key={m.id}>
+                  <tr key={m.id} className="cursor-pointer hover:bg-surface-3/60" onClick={() => openDetail(m)}>
                     <td className={td}>
                       <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[m.type]?.cls || ''}`}>
                         {TYPE_BADGE[m.type]?.label || m.type}
@@ -146,6 +177,7 @@ export default function FeishuPool() {
                     </td>
                     <td className={td}>{(m.size / 1024).toFixed(1)} KB</td>
                     <td className={td}>{fmtTime(m.mtime)}</td>
+                    <td className={td}><span className="text-[11px] text-info">查看原文 →</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -189,61 +221,169 @@ export default function FeishuPool() {
         </div>
       )}
 
-      {/* 页签 3：图片替身补写 */}
+      {/* 页签 3：图片描述（按材料分组卡片流；T-939 重构） */}
       {tab === 'images' && (
-        <div className={card}>
-          <h2 className="text-sm font-semibold mb-2">图片替身文本（人工补写兜底）</h2>
-          <div className="text-[11px] text-gray-500 mb-3">
-            输入材料 stem（如 fd-tokA）与占位符（如 图片#1）补写替身文本；新入池图片由 watcher 异步自动转述，存量手动转述在「材料管理 → 🖼 转述图片」
+        <ImagePanel materials={materials.filter(m => m.type === 'feishu_doc')} />
+      )}
+
+      {/* 材料详情弹层（原文 + 图片内嵌） */}
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+          onClick={() => setDetail(null)}>
+          <div className="w-[860px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">
+                {detail.m.title || detail.m.id}
+                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[detail.m.type]?.cls}`}>
+                  {TYPE_BADGE[detail.m.type]?.label}
+                </span>
+              </h3>
+              <button className={btn} onClick={() => setDetail(null)}>关闭</button>
+            </div>
+            {!detail.data ? (
+              <div className="py-10 text-center text-xs text-gray-500">原文加载中…</div>
+            ) : (
+              <>
+                <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
+                  [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
+                  <Markdown remarkPlugins={[remarkGfm]}>
+                    {inlineImages(detail.data.content, detail.imgUrls)}
+                  </Markdown>
+                </div>
+                {detail.data.type === 'feishu_minutes' && detail.data.raw && (
+                  <details className="mt-3">
+                    <summary className="text-[11px] text-gray-500 cursor-pointer">原始 JSON</summary>
+                    <pre className="mt-2 max-h-64 overflow-auto text-[10px] text-gray-500
+                      bg-surface-3 border border-border rounded p-2">{detail.data.raw}</pre>
+                  </details>
+                )}
+                {(detail.data.images || []).some(i => i.caption) && (
+                  <div className="mt-3 border-t border-border pt-2 space-y-1">
+                    <div className="text-[11px] text-gray-500">图片描述（供 agent 检索用）：</div>
+                    {detail.data.images.filter(i => i.caption).map(i => (
+                      <div key={i.placeholder} className="text-[11px] text-gray-400">
+                        <span className="text-gray-600">{i.placeholder}</span> {i.caption}
+                        <span className="ml-1 text-gray-600">（{i.caption_by === 'manual' ? '人工' : 'AI 转述'}）</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          <CaptionEditor busy={busy} captionEdit={captionEdit}
-            setCaptionEdit={setCaptionEdit} onSave={saveCaption}
-            materials={imgMaterials} />
         </div>
       )}
     </div>
   );
 }
 
-function CaptionEditor({ busy, captionEdit, setCaptionEdit, onSave, materials }: {
-  busy: string;
-  captionEdit: Record<string, string>;
-  setCaptionEdit: (fn: (p: Record<string, string>) => Record<string, string>) => void;
-  onSave: (material: string, placeholder: string) => void;
-  materials: FeishuPoolMaterial[];
-}) {
-  const [material, setMaterial] = useState('');
-  const [placeholder, setPlaceholder] = useState('');
-  const key = `${material}||${placeholder}`;
+// 图片描述面板：材料下拉 → 图片卡片流（缩略图 + 状态 + 描述编辑）
+function ImagePanel({ materials }: { materials: FeishuPoolMaterial[] }) {
+  const [file, setFile] = useState('');
+  const [data, setData] = useState<FeishuMaterialContent | null>(null);
+  const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    if (!file) { setData(null); return; }
+    let revoked = false;
+    const prev = imgUrls;
+    feishuPoolApi.materialContent(file).then(async d => {
+      if (!d.ok) throw new Error(d.error);
+      const urls = await loadImages(file, d.images || []);
+      if (revoked) return;
+      setData(d); setImgUrls(urls); setEdits({}); setError('');
+    }).catch(e => setError(String(e?.message || e)));
+    return () => {
+      revoked = true;
+      Object.values(prev).forEach(u => URL.revokeObjectURL(u));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file]);
+
+  const saveCaption = async (placeholder: string) => {
+    const caption = (edits[placeholder] || '').trim();
+    if (!caption || !data) return;
+    const stem = file.replace(/^docs\//, '').replace(/\.imgmap\.json$/, '').replace(/\.md$/, '');
+    setBusy(placeholder); setError(''); setNotice('');
+    try {
+      await feishuPoolApi.updateCaption(stem, placeholder, caption);
+      setNotice(`已保存 ${placeholder} 的图片描述`);
+      setEdits(prev => ({ ...prev, [placeholder]: '' }));
+      const d = await feishuPoolApi.materialContent(file);
+      if (d.ok) setData(d);
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
+
   return (
-    <div className="flex items-end gap-2 flex-wrap">
-      <div>
-        <div className="text-[11px] text-gray-500 mb-1">材料 stem</div>
-        <select className={input} value={material} onChange={e => setMaterial(e.target.value)}>
-          <option value="">— 选择 —</option>
-          {materials.map(m => (
-            <option key={m.id} value={m.file.replace(/\.(md|json)$/, '')}>{m.file}</option>
-          ))}
-        </select>
+    <div className="bg-surface-2 border border-border rounded-lg p-4 mb-4">
+      <h2 className="text-sm font-semibold mb-1">图片描述（AI 自动转述，人工可改）</h2>
+      <div className="text-[11px] text-gray-500 mb-3">
+        新入池图片由监听自动转述；此页查看各材料图片原文并修订描述（描述供 agent 检索图片内容）
       </div>
-      <div>
-        <div className="text-[11px] text-gray-500 mb-1">占位符</div>
-        <input className={`${input} w-28`} value={placeholder} placeholder="图片#1"
-          onChange={e => setPlaceholder(e.target.value)} />
-      </div>
-      <div className="flex-1 min-w-60">
-        <div className="text-[11px] text-gray-500 mb-1">替身文本（≤60 字业务描述）</div>
-        <input className={`${input} w-full`} value={captionEdit[key] || ''}
-          placeholder="架构图：AgentChat → 图谱服务 → SQLite……"
-          onChange={e => setCaptionEdit(prev => ({ ...prev, [key]: e.target.value }))} />
-      </div>
-      <button
-        className="px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40"
-        disabled={!material || !placeholder || !(captionEdit[key] || '').trim() || busy === key}
-        onClick={() => onSave(material, placeholder)}>
-        {busy === key ? '保存中…' : '保存替身'}
-      </button>
+      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
+      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {materials.length === 0 ? (
+        <div className="text-xs text-gray-500">暂无含图片的文档材料</div>
+      ) : (
+        <>
+          <select className={`${input} mb-3`} value={file} onChange={e => setFile(e.target.value)}>
+            <option value="">— 选择材料 —</option>
+            {materials.map(m => (
+              <option key={m.id} value={m.file}>{m.title || m.id}（{m.file}）</option>
+            ))}
+          </select>
+          {data && (
+            <div className="grid grid-cols-1 gap-3">
+              {(data.images || []).length === 0 && (
+                <div className="text-xs text-gray-500">该材料无图片</div>
+              )}
+              {data.images.map(img => (
+                <div key={img.placeholder} className="flex gap-3 p-2 rounded border border-border bg-surface-3">
+                  {imgUrls[img.placeholder] ? (
+                    <img src={imgUrls[img.placeholder]} alt={img.placeholder}
+                      className="w-40 h-28 object-contain rounded border border-border bg-black/30" />
+                  ) : (
+                    <div className="w-40 h-28 flex items-center justify-center rounded border border-border
+                      bg-black/30 text-[10px] text-gray-600">{img.media_key ? '加载失败' : '无原图'}</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${IMG_STATUS[img.status || 'pending']?.cls || ''}`}>
+                        {IMG_STATUS[img.status || 'pending']?.label || img.status}
+                      </span>
+                      <span className="text-[10px] text-gray-600">{img.placeholder}</span>
+                      {img.caption && (
+                        <span className="text-[10px] text-gray-500 truncate">
+                          当前：{img.caption}（{img.caption_by === 'manual' ? '人工' : 'AI 转述'}）
+                        </span>
+                      )}
+                      {img.error && <span className="text-[10px] text-red-400" title={img.error}>失败原因 ⓘ</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      <input className={`${input} flex-1`} value={edits[img.placeholder] || ''}
+                        placeholder={img.caption ? '修订描述…' : '补写图片描述（≤60 字业务描述）'}
+                        onChange={e => setEdits(prev => ({ ...prev, [img.placeholder]: e.target.value }))} />
+                      <button className={btn}
+                        disabled={!(edits[img.placeholder] || '').trim() || busy === img.placeholder}
+                        onClick={() => saveCaption(img.placeholder)}>
+                        {busy === img.placeholder ? '保存中…' : '保存'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

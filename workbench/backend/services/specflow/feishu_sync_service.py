@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -402,6 +403,110 @@ def update_image_caption(specflow_emp_base: Path, material_stem: str,
         for f in cand.rglob(f"{material_stem}.imgmap.json"):
             return cap_mod.update_caption(f, placeholder, caption, by="manual")
     raise KeyError(f"材料 imgmap 不存在: {material_stem}")
+
+
+# ══════════════════════════════════════════════════════════
+# T-939：材料原文读取 + 图片字节代理（详情弹层）
+# ══════════════════════════════════════════════════════════
+
+# 材料相对路径白名单：docs|minutes|chats 前缀 + md|json 扩展（防私有区外泄）
+_MATERIAL_FILE_RE = re.compile(
+    r"^(docs|minutes|chats)/[A-Za-z0-9_\-./]+\.(md|json)$")
+
+_IMG_MIME = ((b"\x89PNG", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
+             (b"GIF8", "image/gif"))
+
+
+def _safe_material_path(specflow_emp_base: Path, rel_file: str) -> Path | None:
+    """材料相对路径安全解析（白名单前缀 + resolve 防穿越；非法返回 None）。"""
+    rel = (rel_file or "").strip()
+    if not _MATERIAL_FILE_RE.fullmatch(rel):
+        return None
+    base = (specflow_emp_base / "feishu_pool").resolve()
+    p = (base / rel).resolve()
+    try:
+        p.relative_to(base)
+    except ValueError:
+        return None
+    return p
+
+
+def read_material_content(specflow_emp_base: Path, rel_file: str) -> dict:
+    """材料原文读取（详情弹层数据源；纯读私有区）。
+
+    - docs/chats → 原文文本（markdown）
+    - minutes → 可读化文本（title/summary）+ raw JSON（前端折叠展示）
+    - docs 附带 imgmap 条目列表（前端 [图片#N] 内嵌图与描述编辑共用）
+    """
+    p = _safe_material_path(specflow_emp_base, rel_file)
+    if p is None:
+        return {"ok": False, "error": f"非法材料路径: {rel_file}"}
+    if not p.is_file():
+        return {"ok": False, "error": f"材料不存在: {rel_file}"}
+    out: dict = {"ok": True, "file": rel_file, "images": []}
+    if rel_file.startswith("minutes/"):
+        out["type"] = "feishu_minutes"
+        out["raw"] = p.read_text(encoding="utf-8", errors="replace")
+        title, summary = _minutes_title_summary(p)
+        out["content"] = (f"# {title}\n\n{summary}" if title or summary
+                          else out["raw"])
+    else:
+        out["type"] = "chat" if rel_file.startswith("chats/") else "feishu_doc"
+        out["content"] = p.read_text(encoding="utf-8", errors="replace")
+    if rel_file.startswith("docs/"):
+        imgmap_path = p.with_suffix(".imgmap.json")
+        if imgmap_path.is_file():
+            try:
+                m = json.loads(imgmap_path.read_text(encoding="utf-8"))
+                out["images"] = [
+                    {"placeholder": k, **(v if isinstance(v, dict) else {})}
+                    for k, v in m.items()]
+            except Exception:
+                out["images"] = []
+    return out
+
+
+def _download_image(media_key: str) -> bytes:
+    """下载图片字节（复用 captions 同源链路：docs +media-download）。"""
+    from specflow.feishu_pool.captions import _download_image as _dl
+    return _dl(media_key)
+
+
+def fetch_material_image(specflow_emp_base: Path, imgmap_file: str,
+                         placeholder: str) -> dict:
+    """图片字节代理（前端 <img src> 直连）：imgmap 条目 media_key →
+
+    下载 → 磁盘缓存（_imgcache/{sha16}.bin，同图只下载一次）→
+    {ok, data(bytes), mime（魔数推断，缺省 png）}。纯读 + 材料目录内缓存。
+    """
+    p = _safe_material_path(specflow_emp_base, imgmap_file)
+    if p is None or not p.is_file():
+        return {"ok": False, "error": f"imgmap 不存在: {imgmap_file}"}
+    try:
+        m = json.loads(p.read_text(encoding="utf-8"))
+        entry = m.get(placeholder) or {}
+    except Exception:
+        return {"ok": False, "error": f"imgmap 解析失败: {imgmap_file}"}
+    if not isinstance(entry, dict):
+        return {"ok": False, "error": f"imgmap 条目非法: {placeholder}"}
+    media_key = str(entry.get("media_key", "") or "")
+    if not media_key:
+        return {"ok": False,
+                "error": f"{placeholder} 无 media_key（占位符扫描产物，无法取图）"}
+    cache = (p.parent / "_imgcache"
+             / f"{hashlib.sha256(media_key.encode('utf-8')).hexdigest()[:16]}.bin")
+    if cache.is_file():
+        data = cache.read_bytes()
+    else:
+        try:
+            data = _download_image(media_key)
+        except Exception as e:
+            return {"ok": False, "error": f"图片下载失败: {e}"}
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(data)
+    mime = next((v for magic, v in _IMG_MIME if data.startswith(magic)),
+                "image/png")
+    return {"ok": True, "data": data, "mime": mime}
 
 
 # ══════════════════════════════════════════════════════════

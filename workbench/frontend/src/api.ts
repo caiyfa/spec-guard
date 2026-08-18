@@ -1664,6 +1664,14 @@ export interface FeishuResolvedDoc {
   token: string; title?: string; url?: string;
   doc_type?: string; owner_open_id?: string;
 }
+export interface FeishuMaterialImage {
+  placeholder: string; media_key?: string; caption?: string;
+  caption_by?: string; status?: string; error?: string;
+}
+export interface FeishuMaterialContent {
+  ok: boolean; file: string; type: string; content: string;
+  raw?: string; images: FeishuMaterialImage[]; error?: string;
+}
 
 export interface FeishuReviewItem {
   src: string;
@@ -1750,6 +1758,20 @@ export const feishuPoolApi = {
 resolveDoc: (input: string) =>
   request<{ ok: boolean; items?: FeishuResolvedDoc[]; error?: string }>(
     `/feishu-pool/resolve-doc?input=${encodeURIComponent(input)}`),
+materialContent: (file: string) =>
+  request<FeishuMaterialContent>(
+    `/feishu-pool/material-content?file=${encodeURIComponent(file)}`),
+// 图片字节需 Authorization header（<img src> 无法携带）——fetch blob → objectURL 渲染
+fetchMaterialImageBlob: async (imgmapFile: string, ph: string): Promise<Blob> => {
+  const token = session.getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const r = await fetch(
+    `/api/feishu-pool/material-image?file=${encodeURIComponent(imgmapFile)}`
+    + `&ph=${encodeURIComponent(ph)}`, { headers });
+  if (!r.ok) throw new Error(`图片加载失败（${r.status}）`);
+  return r.blob();
+},
 };
 
 export interface FeishuPoolMaterial {
