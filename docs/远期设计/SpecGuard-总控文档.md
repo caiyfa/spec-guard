@@ -273,6 +273,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-935 | 收口 | e2e + 全量回归 | test_specstd + 前端 | 上传→引用→read_material 贯通（mock）；全量回归 + release_check + build | T-931~T-934 | 未认领 | | |
 | T-936 | 储备 | MaterialsPanel 瘦身评估 | — | 对话链路验收后评估入包闸门/六区重组去向，总控人拍板 | T-935 验收 | 储备 | | 触发制，不认领 |
 | T-937 | 体验修复 | 同步设置体验：弹层秒开+去 ID 手填+链接解析 | 同步设置前后端 | 依据《superpowers/specs/2026-08-18-同步设置体验修复-design.md》：①弹层立即渲染+数据并行填充；②list_my_chats 60s TTL 缓存；③群聊/文档手填 textarea 删除（失败重试/裸 token 透传兼容）；④文档用户下拉改搜索框+快捷标签；⑤resolve-doc 端点（docx 本地解析/wiki node-get 取 obj_token+title；实测定案：非 wiki 文档 node-get 404 需分流） | T-930 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（17 绿含 9 新用例；真实 wiki 链接端到端验证 obj_token+title 返回；release_check PASS；前端 build/oxlint 0 error） |
+| T-938 | 体验修复 | 群聊列表后台预热：弹层打开秒出 | watcher + lark_cli + sync 服务 | ①chats_warmup_job（interval 5min + 启动即预热）；②list_my_chats 改 stale-while-revalidate（有缓存立即返，过期返旧值+stale 标记+后台刷新线程）；③_run_lark 加可选 emp 参数（USERPROFILE=.lark-cli/{emp} 注入，修多用户身份共享隐患） | T-937 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（78 绿含 5 新用例；真实环境实测：首次 CLI 6.2s→缓存命中 0.0000s/stale 0.0004s+后台刷新闭环；release_check PASS；顺手修 lark_cli B904×3+watcher SIM105+测试文件 E741/F401×2/I001×2） |
 
 ---
 
@@ -283,7 +284,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-gatedock-dev | GateDock 对话操作台施工 + 总控 v1.23/v1.24 归档编排 | T-900 + T-901 + T-902 + 归档瘦身 | 2026-08-13 | T-900 一期 ✅（commit 23a4c60）→ T-901 二期 ✅ + T-902 三期 ✅（MCP 工具 + 围栏渲染 + 白名单代执行 + skills 话术）；总控 v1.23 归档瘦身 + v1.24 二三期完成收口 |
 | sess-feishu-graph | 飞书知识图谱施工（面试素材溯源） | T-910 ~ T-923（一/二期✅）→ T-924 ~ T-929（三期✅） | 2026-08-14 | 一期批次 A/B + 二期事件监听/转述/自动焦点/轮询全量收口；三期多用户编排/直写/演进链/入包收口 |
-| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验修复（2026-08-18：弹层秒开/去 ID 手填/resolve-doc 链接解析）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
+| sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937/T-938（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验修复（2026-08-18：弹层秒开/去 ID 手填/resolve-doc 链接解析）；T-938 群聊后台预热+stale 缓存+CLI 身份隔离（2026-08-18）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
 | | | | | |
 
 ---
@@ -305,6 +306,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-agentchat-material | 2026-08-18 | ba9f1dd39ca0 | 7feaa6ece80e | 已完成 | T-937：弹层秒开+去手填+链接解析+下拉搜索化 |
 | workbench/frontend/src/api.ts | sess-agentchat-material | 2026-08-18 | f6024828da85 | d22167b6cef3 | 已完成 | T-937：resolveDoc API + docs title 字段 |
 | test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 2af36733d7ad | 936e000972fb | 已完成 | T-937：resolve_doc_link 6 用例 + 缓存 3 用例 |
+| specflow/feishu_pool/lark_cli.py | sess-agentchat-material | 2026-08-18 | b5e07a19d065 | a67dae7f0b01 | 已完成 | T-938：_run_lark 可选 emp 参数（USERPROFILE 身份隔离）；顺手修 B904×3 |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-agentchat-material | 2026-08-18 | 570ed4eb2caf | 226f15899c58 | 已完成 | T-938：list_my_chats stale-while-revalidate + _fetch/_refresh 拆分 |
+| workbench/backend/services/specflow/feishu_watcher.py | sess-agentchat-material | 2026-08-18 | fb247c9969ad | 4b99f053c4fb | 已完成 | T-938：chats_warmup_job + _schedule_chats_warmup（interval 5min + next_run_time 即首跑）；顺手修 SIM105 |
+| test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 936e000972fb | 0f16922ca25e | 已完成 | T-938：stale/explicit emp/_lark_env 三用例；存量 fake 签名补 emp 参数 |
+| test_specstd/test_feishu_watcher.py | sess-agentchat-material | 2026-08-18 | 22f75c2a9d7a | a9fb78a59f71 | 已完成 | T-938：预热 job 两用例 + 存量 5 处 patch 行补齐；顺手修 E741/F401×2/I001×2 |
 | agent/purposes/requirement_interview.md | sess-agentchat-material | 2026-08-17 | — | d27cfa18e450 | 已完成 | T-931：panels 对齐真实页签 id（[pack,focus,materials]，旧值入储备注释） |
 | agent/purposes/test_workbench.md | sess-agentchat-material | 2026-08-17 | — | 6c1652b5f242 | 已完成 | T-931：panels 对齐（[deps,history]） |
 | test_specstd/test_purpose.py | sess-agentchat-material | 2026-08-17 | — | 4f973acdac98 | 已完成 | T-931：panels 值断言用例 |
