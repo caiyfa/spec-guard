@@ -82,3 +82,6 @@ workbench/workbench/
 nul
 
 .superpowers/
+
+# 仓库根意外落盘的私有区运行产物（正常应在各工作区 .specguard/ 下）
+.specflow/
