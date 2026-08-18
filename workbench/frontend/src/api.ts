@@ -1748,8 +1748,9 @@ export const feishuPoolApi = {
     request('/feishu-pool/caption', { method: 'POST',
       body: JSON.stringify({ material, placeholder, caption }) }),
   // ── 选择器数据源（同步设置弹层）──
-  listChats: () =>
-    request<{ items: FeishuChatItem[]; errors: string[] }>('/feishu-pool/chats'),
+  listChats: (limit = 0) =>
+    request<{ items: FeishuChatItem[]; errors: string[]; stale?: boolean }>(
+      `/feishu-pool/chats${limit > 0 ? `?limit=${limit}` : ''}`),
   searchUsers: (query: string) =>
     request<{ items: FeishuUserItem[]; errors: string[] }>(
       `/feishu-pool/users?query=${encodeURIComponent(query)}`),

@@ -579,35 +579,58 @@ def _friendly_lark_error(e: Exception) -> str:
 
 
 def _fetch_my_chats(key: str) -> dict:
-    """同步拉取并写缓存（key 即 emp，透传 _run_lark 身份隔离）。失败不缓存。
+    """全量拉取并写缓存（key 即 emp，透传 _run_lark 身份隔离）。失败不缓存。
 
     实测定案（2026-08-18，CLI 1.0.85）：①--types 不接受逗号多值
-    （报 invalid_argument "p2p group"）——拆 group/p2p 两次调用合并；
-    ②响应字段为 data.chats（非 items）。T-943 随手修（群聊空列表真凶）。"""
+    （报 invalid_argument "p2p group"）——单值 group；②响应字段为
+    data.chats（非 items）；③T-944：单聊本期不支持不显示——只拉
+    group（顺带全量耗时减半）。p2p 兼容字段保留（旧缓存/防御解析）。"""
     out: dict = {"items": [], "errors": []}
-    seen: set[str] = set()
-    for types in ("group", "p2p"):
-        try:
-            payload = _run_lark(["im", "+chat-list", "--as", "user",
-                                 "--types", types, "--sort", "active_time",
-                                 "--page-all"], emp=key)
-        except Exception as e:
-            out["errors"].append(_friendly_lark_error(e))
+    try:
+        payload = _run_lark(["im", "+chat-list", "--as", "user",
+                             "--types", "group", "--sort", "active_time",
+                             "--page-all"], emp=key)
+    except Exception as e:
+        out["errors"].append(_friendly_lark_error(e))
+        return out
+    data = payload.get("data") or {}
+    for it in (data.get("chats") or data.get("items") or []):
+        chat_id = str(it.get("chat_id", ""))
+        if not chat_id:
             continue
-        data = payload.get("data") or {}
-        for it in (data.get("chats") or data.get("items") or []):
-            chat_id = str(it.get("chat_id", ""))
-            if not chat_id or chat_id in seen:
-                continue
-            seen.add(chat_id)
-            out["items"].append({
-                "chat_id": chat_id,
-                "name": str(it.get("name", "") or ""),
-                "chat_mode": str(it.get("chat_mode", types) or types),
-                "peer_open_id": str(it.get("p2p_target_id", "") or ""),
-            })
+        out["items"].append({
+            "chat_id": chat_id,
+            "name": str(it.get("name", "") or ""),
+            "chat_mode": str(it.get("chat_mode", "group") or "group"),
+            "peer_open_id": str(it.get("p2p_target_id", "") or ""),
+        })
     if not out["errors"]:
         _chats_cache[key] = (_now() + _CHATS_CACHE_TTL, out)
+    return out
+
+
+def _fetch_my_chats_quick(key: str, limit: int) -> dict:
+    """快速预览（T-944）：单页 --page-size N（按活跃排序=最近活跃群），
+    无 page-all 不翻页——秒出；不读/写缓存（预览不污染全量缓存）。"""
+    out: dict = {"items": [], "errors": []}
+    try:
+        payload = _run_lark(["im", "+chat-list", "--as", "user",
+                             "--types", "group", "--sort", "active_time",
+                             "--page-size", str(limit)], emp=key)
+    except Exception as e:
+        out["errors"].append(_friendly_lark_error(e))
+        return out
+    data = payload.get("data") or {}
+    for it in (data.get("chats") or data.get("items") or []):
+        chat_id = str(it.get("chat_id", ""))
+        if not chat_id:
+            continue
+        out["items"].append({
+            "chat_id": chat_id,
+            "name": str(it.get("name", "") or ""),
+            "chat_mode": "group",
+            "peer_open_id": str(it.get("p2p_target_id", "") or ""),
+        })
     return out
 
 
@@ -629,15 +652,15 @@ def _refresh_chats_async(key: str) -> None:
                      name=f"feishu-chats-refresh-{key}").start()
 
 
-def list_my_chats(emp: str = "") -> dict:
-    """我的群聊列表：im +chat-list --as user --types p2p,group。
-    p2p 项附带 peer_open_id（前端置灰——本期不做私聊监听，设计 D2）。
+def list_my_chats(emp: str = "", limit: int = 0) -> dict:
+    """我的群聊列表（group only，T-944 单聊不显示）。
 
-    T-937：同工号 TTL 内存缓存；失败结果不缓存（重试即时生效）。
-    T-938：① emp 显式参数（预热 job 传入；缺省 contextvar）；②身份隔离
-    （emp 透传 _run_lark 的 USERPROFILE 注入，多用户各见其群）；
-    ③ stale-while-revalidate——有缓存立即返回，过期返旧值（stale=True）
-    并后台刷新，绝不现场等 CLI。"""
+    limit>0：快速预览路径（单页最近活跃 N 群，秒出，不碰缓存）——
+    供弹层首屏先行渲染，全量随后台预热/二次全量调用补齐。
+    limit=0：stale-while-revalidate（有缓存立即返，过期返旧值+后台刷新）。"""
+    if limit and limit > 0:
+        key = (emp or "").strip() or _chats_cache_key()
+        return _fetch_my_chats_quick(key, limit)
     key = (emp or "").strip() or _chats_cache_key()
     hit = _chats_cache.get(key)
     if hit:

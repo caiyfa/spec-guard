@@ -225,10 +225,11 @@ def update_caption_ep(body: CaptionUpdate,
 # ══════════════════════════════════════════════════════════
 
 @router.get("/chats")
-def list_chats(user: CurrentUser = Depends(get_current_user),
+def list_chats(limit: int = 0,
+               user: CurrentUser = Depends(get_current_user),
                workspace: str = Depends(resolve_workspace)):
-    """我的群聊列表（群聊选择器数据源；p2p 项前端置灰）。纯读。"""
-    return sync_svc.list_my_chats()
+    """我的群聊列表（group only；limit>0 快速预览最近活跃 N 群）。纯读。"""
+    return sync_svc.list_my_chats(limit=limit)
 
 
 @router.get("/users")

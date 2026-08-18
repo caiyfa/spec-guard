@@ -1,10 +1,7 @@
 // FeishuWatchSettings.tsx — 飞书同步设置（监听范围配置）共享组件。
-// 自包含按钮+弹层：群聊勾选 / 用户搜索+scopes / 按用户搜文档（搜索选人）/ 链接粘贴解析。
-// 历史挂在 FeishuReviewPanel（T-915）；抽出共享供材料池页与关联复核页复用
-// ——同步范围即授权范围（watch 配置 = 显式授权载体），保存即拉起监听（T-924）。
-// T-937 体验修复：①弹层秒开（立即渲染+骨架，watch/群聊列表并行加载，不再串行阻塞）；
-// ②去 ID 手填（群聊失败→重试；文档粘贴链接自动解析，裸 token 仍兼容）；
-// ③文档检索目标改为通讯录搜索+已配置快捷标签（不再要求先加监听人）。
+// T-944 分 tab（群聊/监听用户/监听文档）降信息密度：①群聊先加载最近
+// 活跃 10 群秒出、后台继续取全量，搜索为前端本地过滤；②单聊本期不支持
+// 不显示；③授权块/保存栏常显不受 tab 切换影响。授权闭环见 T-942 注释。
 
 import { useEffect, useRef, useState } from 'react';
 import { feishuPoolApi, type FeishuWatch,
@@ -13,10 +10,13 @@ import { feishuPoolApi, type FeishuWatch,
 
 export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'chats' | 'users' | 'docs'>('chats');
   const [watch, setWatch] = useState<FeishuWatch | null>(null);
   const [chatSelList, setChatSelList] = useState<FeishuChatItem[]>([]);
   const [chatSel, setChatSel] = useState<Set<string>>(new Set());
   const [chatsLoading, setChatsLoading] = useState(false);
+  const [chatsFullLoaded, setChatsFullLoaded] = useState(false);
+  const [chatFilter, setChatFilter] = useState('');
   const [watchUsers, setWatchUsers] = useState<FeishuWatchUser[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<FeishuUserItem[]>([]);
@@ -50,14 +50,16 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   // ── 弹层秒开：点击立即渲染骨架，数据并行加载填充 ──
   const openWatch = () => {
     setError(''); setNotice('');
+    setTab('chats');
     setWatch(null); setChatSelList([]); setChatSel(new Set());
+    setChatsFullLoaded(false); setChatFilter('');
     setWatchUsers([]); setUserResults([]);
     setDocOwner(null); setDocUserResults([]); setDocSelList([]); setDocSel(new Set());
     setLinkInput(''); setNameQuery('');
     setAuthPending(null);
     setOpen(true);
     void loadWatch();
-    void loadChats();
+    void loadChatsQuick();     // T-944：先出最近活跃 10 群，全量后台补齐
     larkStatus().then(setAuthStatus).catch(() => setAuthStatus(null));
   };
 
@@ -137,11 +139,24 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     } catch (e: any) { setError(e.message); }
   };
 
+  // T-944：快速预览（最近活跃 10 群，秒出）→ 后台继续全量，全量到后本地搜索覆盖全部群。
+  // 缓存命中时全量接口也是秒回，两次请求代价可接受；quick 失败静默由全量兑底。
+  const loadChatsQuick = async () => {
+    setChatsLoading(true);
+    try {
+      const r = await feishuPoolApi.listChats(10);
+      if ((r.items || []).length > 0 && !chatsFullLoaded) setChatSelList(r.items || []);
+    } catch { /* 快速失败静默，全量兑底 */ }
+    finally { setChatsLoading(false); }
+    void loadChats();
+  };
+
   const loadChats = async () => {
     setChatsLoading(true);
     try {
       const r = await feishuPoolApi.listChats();
       setChatSelList(r.items || []);
+      setChatsFullLoaded(true);
       if (r.errors?.length) setError(`群聊列表加载：${r.errors.join('；')}`);
     } catch (e: any) { setError(`群聊列表加载失败：${e.message}`); }
     finally { setChatsLoading(false); }
@@ -347,38 +362,74 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             {!watch ? (
               <div className="py-10 text-center text-xs text-gray-500">配置加载中…</div>
             ) : (
+              <div>
+              {/* T-944 分 tab：降信息密度；单聊不显示；群聊本地搜索 */}
+              <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
+                {([['chats', '💬 授权群聊'], ['users', '👤 监听用户'], ['docs', '📄 监听文档']] as const)
+                  .map(([id, label]) => (
+                    <button key={id} onClick={() => setTab(id)}
+                      className={`px-3 py-1.5 rounded text-xs ${tab === id ? 'bg-info/15 text-info font-medium' : 'text-gray-400 hover:text-gray-200'}`}>
+                      {label}{id === 'chats' && chatSel.size > 0 ? `（${chatSel.size}）` : ''}
+                      {id === 'users' && watchUsers.length > 0 ? `（${watchUsers.length}）` : ''}
+                      {id === 'docs' && docSel.size > 0 ? `（${docSel.size}）` : ''}
+                    </button>
+                  ))}
+              </div>
               <div className="grid grid-cols-1 gap-3">
-                {/* 群聊区：列表勾选（CLI 加载；失败重试，不提供手填） */}
+                {/* Tab 1 群聊：最近活跃先行 + 本地搜索 + 后台全量补齐；单聊不显示 */}
+                {tab === 'chats' && (
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-1">
-                    授权群聊（勾选我的群聊；单聊本期不支持监听）</div>
-                  <div className="max-h-36 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
-                    {chatsLoading
-                      && <div className="text-[11px] text-gray-500">群聊列表加载中（飞书 CLI）…</div>}
+                  <div className="flex items-center gap-2 mb-1">
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                      value={chatFilter} onChange={e => setChatFilter(e.target.value)}
+                      placeholder="搜索群名（本地过滤，已加载全部群后可搜全部）" />
+                    <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                      {chatsLoading ? '加载中…' : `${chatSelList.length} 群${chatsFullLoaded ? '' : '（后台同步全部中…）'}`}
+                    </span>
+                    {!chatsFullLoaded && !chatsLoading && (
+                      <button className={btn} onClick={() => void loadChats()}>拉取全部</button>
+                    )}
+                  </div>
+                  <div className="max-h-56 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
+                    {chatsLoading && chatSelList.length === 0
+                      && <div className="text-[11px] text-gray-500">群聊列表加载中（最近活跃优先）…</div>}
                     {!chatsLoading && chatSelList.length === 0
                       && <div className="flex items-center gap-2 text-[11px] text-gray-600">
                         群聊列表为空（或加载失败）
-                        <button className={btn} onClick={loadChats}>重试</button>
+                        <button className={btn} onClick={() => void loadChatsQuick()}>重试</button>
                       </div>}
-                    {chatSelList.map(c => (
-                      <label key={c.chat_id}
-                        className={`flex items-center gap-2 text-xs ${c.chat_mode === 'p2p' ? 'opacity-40' : 'cursor-pointer'}`}>
-                        <input type="checkbox" disabled={c.chat_mode === 'p2p'}
+                    {chatSelList
+                      .filter(c => c.chat_mode !== 'p2p')            // T-944：单聊不显示
+                      .filter(c => !chatFilter.trim()
+                        || (c.name || '').includes(chatFilter.trim())
+                        || c.chat_id.includes(chatFilter.trim()))
+                      .map(c => (
+                      <label key={c.chat_id} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input type="checkbox"
                           checked={chatSel.has(c.chat_id)}
                           onChange={e => {
                             const next = new Set(chatSel);
                             if (e.target.checked) next.add(c.chat_id); else next.delete(c.chat_id);
                             setChatSel(next);
                           }} />
-                        <span className="text-gray-200">{c.name || c.chat_id}</span>
-                        <code className="text-[10px] text-gray-600">
-                          {c.chat_id}{c.chat_mode === 'p2p' ? ' · 单聊' : ''}</code>
+                        <span className="text-gray-200 truncate">{c.name || c.chat_id}</span>
+                        <code className="text-[10px] text-gray-600">{c.chat_id}</code>
                       </label>
                     ))}
+                    {chatSelList.filter(c => c.chat_mode !== 'p2p').length > 0
+                      && chatFilter.trim()
+                      && chatSelList.filter(c => c.chat_mode !== 'p2p'
+                        && ((c.name || '').includes(chatFilter.trim())
+                          || c.chat_id.includes(chatFilter.trim()))).length === 0 && (
+                      <div className="text-[11px] text-gray-600">
+                        当前已加载的群中无匹配{chatsFullLoaded ? '' : '——后台同步全部群后可搜全部，或点「拉取全部」'}</div>
+                    )}
                   </div>
                 </div>
+                )}
 
-                {/* 用户区：搜索选择 + scopes */}
+                {/* Tab 2 用户：搜索选择 + scopes */}
+                {tab === 'users' && (
                 <div>
                   <div className="text-[11px] text-gray-500 mb-1">监听用户（群消息按发送人过滤 / 用户产出妙记 / 用户产出文档）</div>
                   <div className="flex gap-2 mb-1.5">
@@ -421,8 +472,10 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                     </div>
                   )}
                 </div>
+                )}
 
-                {/* 文档区：三条独立路径（按名搜/按用户/粘链接）+ 勾选清单 */}
+                {/* Tab 3 文档：三条独立路径（按名搜/按用户/粘链接）+ 勾选清单 */}
+                {tab === 'docs' && (
                 <div>
                   <div className="text-[11px] text-gray-500 mb-1">
                     添加监听文档（三条独立路径任选：按文档名搜 / 按用户检索 / 粘贴链接）</div>
@@ -504,6 +557,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                     </div>
                   )}
                 </div>
+                )}
+              </div>
               </div>
             )}
 
