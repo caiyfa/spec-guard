@@ -164,6 +164,50 @@ class CaptionUpdate(BaseModel):
     caption: str
 
 
+class AuthLoginBody(BaseModel):
+    scope: str = ""      # 缺省 --domain all 全域（T-942：一次授权补齐）
+
+
+class AuthCompleteBody(BaseModel):
+    device_code: str = ""
+
+
+# ── T-942：飞书授权闭环（登录即可，无菜单门槛）──
+# 注：settings 路径的 lark_binding 端点被「系统设置」菜单 RBAC 拦截且未挂载，
+# 材料池场景（普通用户）不可达——授权端点直接挂在 feishu-pool 前缀下。
+# 底层复用 mcp_server.tools.lark_auth（两阶段 device flow + segno 二维码）。
+
+
+@router.get("/auth/status")
+def feishu_auth_status(user: CurrentUser = Depends(get_current_user),
+                        workspace: str = Depends(resolve_workspace)):
+    """当前用户飞书绑定状态（未绑定→弹层内引导授权）。"""
+    from mcp_server.tools.lark_auth import do_status
+    try:
+        return do_status(user.emp_no)
+    except Exception as e:   # noqa: BLE001 状态查询失败不阻断授权入口
+        return {"bound": False, "identity": "", "identity_name": "",
+                "open_id": "", "scopes": [], "error": str(e)[:200]}
+
+
+@router.post("/auth/login")
+def feishu_auth_login(body: AuthLoginBody,
+                      user: CurrentUser = Depends(get_current_user),
+                      workspace: str = Depends(resolve_workspace)):
+    """发起飞书两阶段授权（返回 verification_url + 二维码 + device_code）。"""
+    from mcp_server.tools.lark_auth import do_login
+    return do_login(user.emp_no, body.scope)
+
+
+@router.post("/auth/complete")
+def feishu_auth_complete(body: AuthCompleteBody,
+                         user: CurrentUser = Depends(get_current_user),
+                         workspace: str = Depends(resolve_workspace)):
+    """device flow 收尾：用户扫码后以 device_code 完成授权。"""
+    from mcp_server.tools.lark_auth import do_login_complete
+    return do_login_complete(user.emp_no, body.device_code)
+
+
 @router.post("/caption")
 def update_caption_ep(body: CaptionUpdate,
                       user: CurrentUser = Depends(get_current_user),

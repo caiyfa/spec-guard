@@ -7,7 +7,7 @@
 // ③文档检索目标改为通讯录搜索+已配置快捷标签（不再要求先加监听人）。
 
 import { useEffect, useRef, useState } from 'react';
-import { feishuPoolApi, larkApi, type FeishuWatch,
+import { feishuPoolApi, type FeishuWatch,
         type FeishuWatchUser, type FeishuChatItem, type FeishuUserItem,
         type FeishuUserDocItem, type LarkStatus, type LarkLoginResult } from '../api';
 
@@ -54,14 +54,16 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     setOpen(true);
     void loadWatch();
     void loadChats();
-    larkApi.status().then(setAuthStatus).catch(() => setAuthStatus(null));
+    larkStatus().then(setAuthStatus).catch(() => setAuthStatus(null));
   };
+
+  const larkStatus = () => feishuPoolApi.authStatus();   // feishu-pool 前缀（登录即可，无菜单门槛）
 
   // T-942：弹层内发起授权（--domain all 全域一次补齐）→ 二维码 + 轮询 → 自动重载
   const startAuth = async () => {
     setError(''); setNotice('');
     try {
-      const r = await larkApi.login();
+      const r = await feishuPoolApi.authLogin();
       if (r.phase === 'waiting') {
         setAuthPending(r);
         if (r.verification_url) window.open(r.verification_url, '_blank');
@@ -69,10 +71,10 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
         pollRef.current = setInterval(async () => {
           try {
             if (r.device_code) {
-              const c = await larkApi.complete(r.device_code);
+              const c = await feishuPoolApi.authComplete(r.device_code);
               if (c.phase === 'completed') { await onAuthDone(); return; }
             }
-            const s = await larkApi.status();
+            const s = await larkStatus();
             if (s.bound) await onAuthDone();
           } catch { /* 轮询失败忽略，下轮重试 */ }
         }, 3000);
@@ -89,7 +91,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     stopAuthPoll();
     setAuthPending(null);
     setNotice('飞书授权完成，正在重新加载群聊列表…');
-    setAuthStatus(await larkApi.status().catch(() => null));
+    setAuthStatus(await larkStatus().catch(() => null));
     setChatsLoading(true);
     await loadChats();
   };
@@ -296,7 +298,10 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 <button className="text-gray-500 hover:text-gray-300" onClick={startAuth}>重新授权</button>
               </div>
             )}
-            {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
+            {/* 授权类错误不在红框重复显示（顶部黄横幅已给提示与按钮） */}
+            {error && !/授权缺少权限|未绑定/.test(error) && (
+              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>
+            )}
             {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
 
             {!watch ? (

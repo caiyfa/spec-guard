@@ -1758,6 +1758,14 @@ export const feishuPoolApi = {
 searchDocs: (query: string) =>
   request<{ items: FeishuUserDocItem[]; errors: string[] }>(
     `/feishu-pool/docs-search?query=${encodeURIComponent(query)}`),
+// T-942：授权闭环（挂 feishu-pool 前缀登录即可——settings 路径被菜单 RBAC 拦且未挂载）
+authStatus: () => request<LarkStatus>('/feishu-pool/auth/status'),
+authLogin: (scope = '') => request<LarkLoginResult>('/feishu-pool/auth/login', {
+  method: 'POST', body: JSON.stringify({ scope }),
+}),
+authComplete: (deviceCode: string) => request<LarkLoginResult>('/feishu-pool/auth/complete', {
+  method: 'POST', body: JSON.stringify({ device_code: deviceCode }),
+}),
 resolveDoc: (input: string) =>
   request<{ ok: boolean; items?: FeishuResolvedDoc[]; error?: string }>(
     `/feishu-pool/resolve-doc?input=${encodeURIComponent(input)}`),

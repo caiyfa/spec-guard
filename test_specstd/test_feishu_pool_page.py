@@ -567,14 +567,13 @@ def test_search_docs_empty_query_shortcircuit():
 
 
 def test_missing_scope_error_friendly():
-    """missing_scope → 人话前缀指向弹层内重新授权（T-942 闭环）；其余原样。"""
+    """授权类错误 → 纯人话一句（不拼 lark-cli 技术原文，用户实锄只要提示）；其余原样。"""
     raw = ('lark-cli 调用失败: {"error": {"subtype": "missing_scope", '
            '"message": "missing required scope(s): contactuser:search"}}')
     msg = svc._friendly_lark_error(ValueError(raw))
-    assert "重新授权" in msg and "飞书授权缺少权限" in msg
-    assert "contactuser:search" in msg
+    assert msg == "飞书授权缺少权限——请点击弹层顶部「重新授权」补全后重试"
     unbound = svc._friendly_lark_error(ValueError("飞书认证未就绪：请先执行 lark-cli auth login"))
-    assert "绑定飞书" in unbound
+    assert msg != unbound and "绑定飞书" in unbound
     assert svc._friendly_lark_error(ValueError("网络超时")) == "网络超时"
 
 
@@ -586,5 +585,4 @@ def test_search_users_missing_scope_friendly():
                           '"missing required scope(s): contactuser:search"}')):
         out = svc.search_users("张三")
     assert out["items"] == []
-    assert "飞书授权缺少权限" in out["errors"][0]
-    assert "contactuser:search" in out["errors"][0]
+    assert out["errors"] == ["飞书授权缺少权限——请点击弹层顶部「重新授权」补全后重试"]
