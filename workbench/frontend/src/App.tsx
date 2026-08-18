@@ -9,6 +9,7 @@ import History from './pages/History';
 import Settings from './pages/Settings';
 import SpecValidation from './pages/SpecValidation';
 import AgentChat from './pages/AgentChat';
+import Home from './pages/Home';
 import Attribution from './pages/Attribution';
 import CoveragePanel from './pages/CoveragePanel';
 import WorkspaceCenter from './pages/WorkspaceCenter';
@@ -41,6 +42,9 @@ const REDIRECT_TARGETS: Record<string, string> = {
   '/scenario-create': '/plans',
   '/spec-center': '/workspace',
 };
+
+// 免权页面（登录即用，无需菜单授权）：路由守卫直接放行
+const PUBLIC_PATHS = ['/'];
 
 const ROLE_LABEL: Record<string, string> = {
   admin: '管理员',
@@ -129,12 +133,15 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
     return new Set();
   });
 
-  useEffect(() => {
+  const [navError, setNavError] = useState(false);
+  const loadNav = () => {
+    setNavError(false);
     menusApi.me()
       .then(r => setNavTree(r.groups))
-      .catch(() => setNavTree([]))
+      .catch(() => { setNavTree([]); setNavError(true); })
       .finally(() => setNavLoaded(true));
-  }, []);
+  };
+  useEffect(() => { loadNav(); }, []);
 
   // 路由变化时默认展开当前路由所在分组（不重复拉菜单树）
   useEffect(() => {
@@ -145,13 +152,14 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
     if (current) setExpandedGroups(prev => prev.has(current.label) ? prev : new Set([current.label]));
   }, [location.pathname, navTree]);
 
-  const noPadding = location.pathname === '/agent' || location.pathname === '/';
+  const noPadding = location.pathname === '/agent';
   const visibleGroups = navTree;
 
   // 路由守卫：当前 path 不在可见菜单（含隐藏 Redirect 目标）→ 无权限页
   const allowedPaths = new Set(navTree.flatMap(g => g.items.map(i => i.to)));
   const effectivePath = REDIRECT_TARGETS[location.pathname] ?? location.pathname;
   const pathAllowed =
+    PUBLIC_PATHS.includes(effectivePath) ||
     allowedPaths.has(effectivePath) ||
     allowedPaths.has(effectivePath.replace(/\/$/, '')) ||
     (effectivePath !== '/' && [...allowedPaths].some(p => p !== '/' && effectivePath.startsWith(p)));
@@ -186,14 +194,29 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         style={{ width: drawerOpen ? '208px' : '0px', minWidth: 0 }}
         className="flex-shrink-0 bg-surface-2 border-r border-border flex flex-col overflow-hidden"
       >
-        {/* Logo 区 */}
-        <div className="p-4 border-b border-border flex-shrink-0">
+        {/* Logo 区（点击回首页） */}
+        <NavLink to="/" className="block p-4 border-b border-border flex-shrink-0 hover:bg-surface-3/50 transition-colors" title="返回首页">
           <h1 className="text-sm font-bold brand-gradient whitespace-nowrap">🛡 SpecGuard</h1>
           <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">场景测试与AI智能编排平台</p>
-        </div>
+        </NavLink>
 
         {/* 菜单区 */}
         <nav className="flex-1 p-1.5 overflow-y-auto">
+          {/* 静态首页入口（免权，不参与菜单授权） */}
+          <NavLink
+            to="/"
+            end
+            className={({ isActive: a }) =>
+              `flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors whitespace-nowrap mb-0.5 ${
+                a
+                  ? 'bg-info/10 text-info font-medium'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-surface-3'
+              }`
+            }
+          >
+            <span className="text-xs">🏠</span>
+            <span>首页</span>
+          </NavLink>
           {visibleGroups.map(group => {
             const isExpanded = expandedGroups.has(group.label);
             const isActive = isGroupActive(group);
@@ -314,14 +337,14 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500">
             <span className="text-5xl">🔒</span>
             <p className="text-sm">无权限访问该页面，请联系管理员开通菜单授权</p>
-            <NavLink to="/" className="text-xs text-info hover:underline">返回仪表盘</NavLink>
+            <NavLink to="/" className="text-xs text-info hover:underline">返回首页</NavLink>
           </div>
         ) : (
           <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
             <Routes>
-              {/* 首页 = Agent 对话页（登录即用，无需菜单授权）；原仪表盘移至 /dashboard */}
-              <Route path="/" element={<AgentChat />} />
-              <Route path="/agent" element={<AgentChat />} />  {/* 兼容旧链接 */}
+              {/* 首页 = Home（登录即用，免菜单权限，守卫 PUBLIC_PATHS 放行）；Agent 对话回到 /agent */}
+              <Route path="/" element={<Home user={user} navTree={navTree} navLoaded={navLoaded} navError={navError} onRetryNav={loadNav} />} />
+              <Route path="/agent" element={<AgentChat />} />
               <Route path="/dashboard" element={<Dashboard />} />  {/* 仪表盘（原首页） */}
               <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
               <Route path="/lineage" element={<LineageStory />} />  {/* T-073：血缘链审计追溯 */}
