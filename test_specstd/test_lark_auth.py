@@ -176,3 +176,72 @@ class TestWhitelist:
         assert "lark_auth_login" in names
         assert "lark_auth_status" in names
         assert "lark_execute" in names
+
+
+# ══════════════════════════════════════════════════════════
+# T-943：status 真实结构解析 + 必需 scope 缺失 + 审核中判定
+# 实测定案：auth status 输出 identities.user.scope 为空格分隔字符串
+# （旧代码读不存在的 data.scopes 数组→bound=true 但身份/scopes 恒空）。
+# 审核态识别：刚授权（30 分钟内）+ 必需 scope 仍缺失 → 审核中。
+# ══════════════════════════════════════════════════════════
+
+_AUTH_STATUS_PAYLOAD = {
+    "identities": {
+        "bot": {"status": "ready", "available": True},
+        "user": {
+            "status": "ready", "available": True,
+            "openId": "ou_x", "userName": "蔡云飞",
+            "tokenStatus": "valid",
+            "scope": "im:chat:read docs:document.content:read search:docs:read",
+        },
+    },
+}
+
+
+class TestStatusParseAndReviewing:
+    def _mk_user(self, tmp_path, monkeypatch, emp="u1"):
+        monkeypatch.setattr(lark_auth, "_LARK_DIR", tmp_path)
+        d = tmp_path / emp
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "token.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(lark_auth, "_run_lark",
+                            lambda e, a, **kw: _AUTH_STATUS_PAYLOAD)
+
+    def test_status_parses_real_structure(self, tmp_path, monkeypatch):
+        """真实结构 identities.user（scope 空格分隔）→ 身份/scopes 数组正确。"""
+        self._mk_user(tmp_path, monkeypatch)
+        st = lark_auth.do_status("u1")
+        assert st["bound"] is True
+        assert st["identity"] == "user"
+        assert st["identity_name"] == "蔡云飞"
+        assert st["open_id"] == "ou_x"
+        assert "im:chat:read" in st["scopes"]
+
+    def test_status_missing_and_reviewing(self, tmp_path, monkeypatch):
+        """缺 contactuser:search 等 → missing_scopes；刚授权 → reviewing=True（审核中）。"""
+        self._mk_user(tmp_path, monkeypatch)
+        lark_auth._mark_auth_done("u1")          # 刚授权完成（写 last_auth）
+        st = lark_auth.do_status("u1")
+        assert "contactuser:search" in st["missing_scopes"]
+        assert "minutes:minutes.search:read" in st["missing_scopes"]
+        assert st["reviewing"] is True
+
+    def test_status_missing_without_recent_auth(self, tmp_path, monkeypatch):
+        """无近期授权 + 缺失 → reviewing=False（未授权全，非审核）。"""
+        self._mk_user(tmp_path, monkeypatch)
+        st = lark_auth.do_status("u1")
+        assert st["missing_scopes"] and st["reviewing"] is False
+
+    def test_status_all_required_present(self, tmp_path, monkeypatch):
+        """全量必需 scope → missing_scopes 空、reviewing=False。"""
+        payload = {"identities": {"user": {
+            "status": "ready", "available": True, "openId": "ou_x",
+            "userName": "n", "tokenStatus": "valid",
+            "scope": " ".join(lark_auth._REQUIRED_SCOPES)}}}
+        monkeypatch.setattr(lark_auth, "_LARK_DIR", tmp_path)
+        d = tmp_path / "u1"
+        d.mkdir(parents=True)
+        (d / "token.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(lark_auth, "_run_lark", lambda e, a, **kw: payload)
+        st = lark_auth.do_status("u1")
+        assert st["missing_scopes"] == [] and st["reviewing"] is False

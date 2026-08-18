@@ -1539,6 +1539,8 @@ export interface LarkStatus {
   scopes: string[];
   config_dir: string;
   error?: string;
+  missing_scopes?: string[];   // T-943：必需 scope 缺失清单（材料池链路）
+  reviewing?: boolean;          // T-943：刚授权仍缺 → 管理员审核中
 }
 
 export interface LarkLoginResult {

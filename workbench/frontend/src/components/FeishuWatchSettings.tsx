@@ -315,6 +315,18 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 <span className="text-red-400">⚠ 飞书账号未绑定（群聊/用户/文档搜索不可用）</span>
                 <button className={btn} onClick={startAuth}>绑定飞书</button>
               </div>
+            ) : authStatus?.bound && (authStatus.reviewing || (authStatus.missing_scopes?.length)) ? (
+              // T-943：已绑定但必需 scope 缺失——刚授权→审核中；否则引导重新授权
+              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs flex-wrap">
+                <span className="text-amber-300">
+                  {authStatus.reviewing
+                    ? `⏳ ${authStatus.identity_name}：授权已提交，${authStatus.missing_scopes?.length} 项权限管理员审核中（审核通过后自动生效，稍后重试即可）`
+                    : `⚠ ${authStatus.identity_name}：已绑定但缺 ${authStatus.missing_scopes?.length} 项权限，重新授权一次补全`}
+                </span>
+                {authStatus.reviewing
+                  ? <button className={btn} onClick={() => onAuthDone()}>审核通过后点此刷新</button>
+                  : <button className={btn} onClick={startAuth}>重新授权</button>}
+              </div>
             ) : authStatus?.bound ? (
               <div className="mb-2 text-[11px] text-gray-600 flex items-center gap-2">
                 <span className="text-green-500">●</span> 飞书已绑定：{authStatus.identity_name}

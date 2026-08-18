@@ -37,6 +37,20 @@ _LOCK_CREATE = threading.Lock()
 _USER_LOCKS: dict[str, threading.Lock] = {}
 _LARK_TIMEOUT = 90  # login 两阶段放宽
 
+# T-943：材料池链路必需 scope（缺失→对应功能不可用；刚授权仍缺→审核中）。
+# 名单来自 2026-08-18 实测 auth status 的 scope 全集逐一核对。
+_REQUIRED_SCOPES = (
+    "contactuser:search",            # 通讯录搜索（监听用户选择）
+    "im:chat:read",                  # 群聊列表
+    "docs:document.content:read",   # 文档正文
+    "docs:document.media:download",  # 图片下载（原文内嵌图）
+    "search:docs:read",              # 文档搜索
+    "wiki:node:read",                # wiki 链接解析
+    "minutes:minutes.search:read",   # 妙记检索
+    "minutes:minutes.artifacts:read",  # 妙记产物
+    "drive:file:download",           # 文档增量轮询
+)
+
 
 def _lark_command() -> list[str]:
     """返回 lark-cli 可执行命令前缀（Windows 需经 cmd /c 执行 .cmd 包装）。"""
@@ -164,60 +178,77 @@ def _make_qr_data_uri(url: str) -> str:
 def do_status(emp_no: str) -> dict:
     """查询当前用户的飞书 CLI 绑定状态。
 
+    T-943：按真实输出结构解析（identities.user.scope 为空格分隔字符串——
+    旧代码读不存在的 data.scopes 数组致身份/scopes 恒空）；
+    附 missing_scopes（必需清单 ∩ 已授权补集）与 reviewing
+    （刚授权 30 分钟内仍有缺失 → 敏感 scope 管理员审核未生效）。
+
     Returns:
-        dict with fields: bound, identity, identity_name, open_id, scopes, config_dir
-        未绑定时 bound=False，其他字段为空。
+        dict: bound/identity/identity_name/open_id/scopes/missing_scopes/
+              reviewing/config_dir；未绑定时 bound=False 其余为空。
     """
     lark_dir = _user_lark_dir(emp_no)
-    # 检查隔离目录下是否有 token json 文件（lark-cli 登录态）
-    has_token = any(f.name.endswith(".json") for f in lark_dir.rglob("*") if f.is_file())
+    base = {"bound": False, "identity": "", "identity_name": "",
+            "open_id": "", "scopes": [], "missing_scopes": list(_REQUIRED_SCOPES),
+            "reviewing": False, "config_dir": str(lark_dir)}
+    has_token = any(f.name.endswith(".json") for f in lark_dir.rglob("*")
+                    if f.is_file())
     if not has_token:
-        return {
-            "bound": False,
-            "identity": "",
-            "identity_name": "",
-            "open_id": "",
-            "scopes": [],
-            "config_dir": str(lark_dir),
-        }
+        return base
     try:
-        payload = _run_lark(emp_no, ["auth", "status", "--json"], json_output=False)
-        data = payload.get("data") or payload
-        bot_info = data.get("bot") or {}
-        user_info = data.get("user") or {}
-        scopes = data.get("scopes", [])
-        # 优先 user 身份
-        if user_info:
-            identity = "user"
-            identity_name = user_info.get("name", user_info.get("open_id", ""))
-            open_id = user_info.get("open_id", "")
-        elif bot_info:
-            identity = "bot"
-            identity_name = bot_info.get("name", bot_info.get("open_id", ""))
-            open_id = bot_info.get("open_id", "")
-        else:
-            identity = ""
-            identity_name = ""
-            open_id = ""
-        return {
-            "bound": True,
-            "identity": identity,
-            "identity_name": identity_name,
-            "open_id": open_id,
-            "scopes": scopes if isinstance(scopes, list) else [],
-            "config_dir": str(lark_dir),
-        }
+        payload = _run_lark(emp_no, ["auth", "status", "--json"],
+                            json_output=False)
     except ValueError as e:
-        # auth status 失败（如 token 过期/未登录）→ unbound
-        return {
-            "bound": False,
-            "identity": "",
-            "identity_name": "",
-            "open_id": "",
-            "scopes": [],
-            "config_dir": str(lark_dir),
-            "error": str(e),
-        }
+        return {**base, "error": str(e)}
+
+    identities = payload.get("identities") or {}
+    user = identities.get("user") or {}
+    bot = identities.get("bot") or {}
+    scopes = str(user.get("scope") or "").split()
+    if user.get("available") or user.get("status") == "ready":
+        identity, identity_name = "user", str(user.get("userName") or "")
+        open_id = str(user.get("openId") or "")
+    elif bot.get("available") or bot.get("status") == "ready":
+        identity, identity_name = "bot", str(bot.get("userName")
+                                              or bot.get("name") or "")
+        open_id = str(bot.get("openId") or "")
+    else:
+        identity = identity_name = open_id = ""
+    scope_set = set(scopes)
+    missing = [s for s in _REQUIRED_SCOPES if s not in scope_set]
+    reviewing = bool(missing) and _recently_authed(lark_dir)
+    return {"bound": True, "identity": identity,
+            "identity_name": identity_name, "open_id": open_id,
+            "scopes": scopes, "missing_scopes": missing,
+            "reviewing": reviewing, "config_dir": str(lark_dir)}
+
+
+def _mark_auth_done(emp_no: str) -> None:
+    """授权完成打点（审核中判定的依据；失败静默——状态增强不阻断主流程）。"""
+    import contextlib
+    import datetime as _dt
+
+    f = _user_lark_dir(emp_no) / "last_auth.json"
+    with contextlib.suppress(Exception):
+        f.write_text(json.dumps(
+            {"at": _dt.datetime.now(_dt.UTC).isoformat()},
+            ensure_ascii=False), encoding="utf-8")
+
+
+def _recently_authed(lark_dir: Path, within_minutes: int = 30) -> bool:
+    """30 分钟内完成过授权（last_auth.json 时间戳）。"""
+    import datetime as _dt
+
+    f = Path(lark_dir) / "last_auth.json"
+    if not f.is_file():
+        return False
+    try:
+        at = _dt.datetime.fromisoformat(
+            json.loads(f.read_text(encoding="utf-8"))["at"])
+        return (_dt.datetime.now(_dt.UTC)
+                - at).total_seconds() < within_minutes * 60
+    except Exception:
+        return False
 
 
 def do_login(emp_no: str, scope: str = "") -> dict:
@@ -254,6 +285,7 @@ def do_login(emp_no: str, scope: str = "") -> dict:
             # 可能已经登录成功（首次调用已授权）
             status = do_status(emp_no)
             if status.get("bound"):
+                _mark_auth_done(emp_no)
                 return {
                     "phase": "completed",
                     "identity": status.get("identity", ""),
@@ -297,6 +329,7 @@ def do_login_complete(emp_no: str, device_code: str) -> dict:
             return {"phase": "error", "error": text[:300]}
         status = do_status(emp_no) if payload.get("ok") else {}
         if status.get("bound"):
+            _mark_auth_done(emp_no)
             return {
                 "phase": "completed",
                 "identity": status.get("identity", ""),
