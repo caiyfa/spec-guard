@@ -8,11 +8,30 @@ _run_lark 原样迁移）。批次 A 只新建本文件；feishu_fetch.py 改为
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 _LARK_TIMEOUT = 90  # 秒（会议链路多跳，放宽）
+
+
+def _lark_cli_root() -> Path:
+    """仓库根下 .lark-cli 用户隔离目录（watcher _spawn/_token_valid 同一约定）。"""
+    return Path(__file__).resolve().parents[2] / ".lark-cli"
+
+
+def _lark_env(emp: str = "") -> dict:
+    """lark-cli 身份隔离 env（T-938）：非空 emp → USERPROFILE 指向该用户配置目录；
+
+    空 emp → 空 dict（subprocess env=None 继承父进程，与既有行为一致）。
+    """
+    if not emp:
+        return {}
+    env = dict(os.environ)
+    env["USERPROFILE"] = str(_lark_cli_root() / emp)
+    return env
 
 
 def _lark_command() -> list[str]:
@@ -23,8 +42,12 @@ def _lark_command() -> list[str]:
     return ["lark-cli"]
 
 
-def _run_lark(args: list[str], timeout: int = _LARK_TIMEOUT) -> dict:
+def _run_lark(args: list[str], timeout: int = _LARK_TIMEOUT, emp: str = "") -> dict:
     """执行 lark-cli 并解析 JSON 输出。
+
+    Args:
+        emp: 可选用户工号——非空时 USERPROFILE 注入 .lark-cli/{emp} 身份隔离
+            （多用户部署下各用户只见自己的群/文档）；空则继承进程身份（现状兼容）。
 
     Raises:
         ValueError: 认证未就绪/网络失败/输出非 JSON/命令超时（确定性错误）
@@ -33,11 +56,12 @@ def _run_lark(args: list[str], timeout: int = _LARK_TIMEOUT) -> dict:
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace", check=False)
+            encoding="utf-8", errors="replace", check=False,
+            env=(_lark_env(emp) or None))
     except subprocess.TimeoutExpired:
-        raise ValueError(f"lark-cli 调用超时（>{timeout}s）: {' '.join(args[:3])}")
+        raise ValueError(f"lark-cli 调用超时（>{timeout}s）: {' '.join(args[:3])}") from None
     except OSError as e:
-        raise ValueError(f"lark-cli 不可用: {e}（请确认已安装 npm 全局 lark-cli）")
+        raise ValueError(f"lark-cli 不可用: {e}（请确认已安装 npm 全局 lark-cli）") from e
 
     text = (proc.stdout or "") + (proc.stderr or "")
     # 认证未就绪（auth status ready 是调用前置）
@@ -46,7 +70,7 @@ def _run_lark(args: list[str], timeout: int = _LARK_TIMEOUT) -> dict:
     try:
         payload = json.loads(proc.stdout or "{}")
     except json.JSONDecodeError:
-        raise ValueError(f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}")
+        raise ValueError(f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}") from None
     if not payload.get("ok"):
         raise ValueError(f"lark-cli 调用失败: {text[:300]}")
     return payload

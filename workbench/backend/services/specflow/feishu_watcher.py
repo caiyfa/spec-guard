@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -107,6 +108,19 @@ def user_materials_job(emp_base_str: str):
         log.warning("用户材料轮询部分失败: %s", out["errors"])
 
 
+def chats_warmup_job(emp: str):
+    """群聊列表缓存预热 job（T-938，模块级——可序列化铁律）。
+
+    同步设置弹层打开即命中缓存秒出；emp 透传 list_my_chats 身份隔离
+    （USERPROFILE=.lark-cli/{emp}，与 _spawn/_token_valid 同约定）。
+    失败仅 log.warning（errors 通道），不炸 scheduler 线程。
+    """
+    from services.specflow import feishu_sync_service as svc
+    out = svc.list_my_chats(emp=emp)
+    if out.get("errors"):
+        log.warning("群聊列表预热失败 emp=%s: %s", emp, out["errors"])
+
+
 class FeishuWatcher:
     def __init__(self, sg_root: Path):
         self.sg_root = Path(sg_root)
@@ -132,6 +146,7 @@ class FeishuWatcher:
         self._schedule_doc_poll()
         self._schedule_chat_proofread()
         self._schedule_user_materials()
+        self._schedule_chats_warmup()
         for key, identity in EVENT_KEYS:
             self._launch(key, identity)
         log.info("feishu_watcher 已启动（emp=%s，%d 路事件）", self.emp, len(EVENT_KEYS))
@@ -180,6 +195,21 @@ class FeishuWatcher:
         except Exception as e:
             log.warning("feishu_watcher 用户材料轮询 job 挂载失败（不阻断监听）: %s", e)
 
+    def _schedule_chats_warmup(self):
+        """T-938：群聊列表缓存预热（interval 5min；next_run_time=now 启动即首跑）。
+
+        同步设置弹层打开即命中缓存秒出（stale-while-revalidate 兑底：
+        预热间隙打开返旧值 + 后台刷新）。job callable 模块级（序列化铁律）。
+        """
+        try:
+            from services.scheduler import get_scheduler
+            get_scheduler().add_job(
+                chats_warmup_job, args=[self.emp],
+                trigger="interval", minutes=5, next_run_time=datetime.now(),
+                id=f"feishu-chats-warmup-{self.emp}", replace_existing=True)
+        except Exception as e:
+            log.warning("feishu_watcher 群聊预热 job 挂载失败（不阻断监听）: %s", e)
+
     def stop(self):
         """优雅停：先关 stdin（EOF 触发优雅退出），10s 超时再 terminate。禁 kill。"""
         self._stop.set()
@@ -194,10 +224,8 @@ class FeishuWatcher:
             try:
                 proc.wait(timeout=max(0.1, deadline - time.time()))
             except Exception:
-                try:
+                with contextlib.suppress(Exception):
                     proc.terminate()
-                except Exception:
-                    pass
 
     def stats(self) -> dict:
         """运行状态（T-924 注册表/T-929 状态端点用）。"""

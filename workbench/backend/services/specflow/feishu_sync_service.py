@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -407,9 +408,12 @@ def update_image_caption(specflow_emp_base: Path, material_stem: str,
 # 选择器数据源（同步设置弹层；全部只读 --as user）
 # ══════════════════════════════════════════════════════════
 
-# T-937：list_my_chats 缓存（key=当前工号；条目 = (过期时间戳, 结果)）
+# T-937/T-938：list_my_chats 缓存（key=工号；条目 = (过期时间戳, 结果)）。
+# stale-while-revalidate：有缓存立即返回（过期返旧值 + stale 标记 + 后台刷新），
+# 配合 watcher chats_warmup_job（interval 5min）预热——弹层打开秒出，不等 CLI。
 _chats_cache: dict[str, tuple[float, dict]] = {}
 _CHATS_CACHE_TTL = 60.0
+_chats_refreshing: set[str] = set()
 
 
 def _now() -> float:
@@ -420,20 +424,14 @@ def _chats_cache_key() -> str:
     from specstd.workspace import get_context_emp_no
     return get_context_emp_no() or ""
 
-def list_my_chats() -> dict:
-    """我的群聊列表：im +chat-list --as user --types p2p,group。
-    p2p 项附带 peer_open_id（前端置灰——本期不做私聊监听，设计 D2）。
-    T-937：同工号 60s TTL 内存缓存（弹层秒开配套，反复打开不重复调 CLI）；
-    失败结果不缓存——重试即时生效。"""
-    key = _chats_cache_key()
-    hit = _chats_cache.get(key)
-    if hit and hit[0] > _now():
-        return hit[1]
+
+def _fetch_my_chats(key: str) -> dict:
+    """同步拉取并写缓存（key 即 emp，透传 _run_lark 身份隔离）。失败不缓存。"""
     out = {"items": [], "errors": []}
     try:
         payload = _run_lark(["im", "+chat-list", "--as", "user",
                              "--types", "p2p,group", "--sort", "active_time",
-                             "--page-all"])
+                             "--page-all"], emp=key)
     except Exception as e:
         out["errors"].append(str(e))
         return out
@@ -448,6 +446,43 @@ def list_my_chats() -> dict:
     if not out["errors"]:
         _chats_cache[key] = (_now() + _CHATS_CACHE_TTL, out)
     return out
+
+
+def _refresh_chats_async(key: str) -> None:
+    """过期缓存的后台刷新（daemon 线程；在选去重——同 key 并发只跑一个）。"""
+    if key in _chats_refreshing:
+        return
+    _chats_refreshing.add(key)
+
+    def _run():
+        try:
+            _fetch_my_chats(key)
+        except Exception:
+            pass                      # _fetch 内部已记 errors，这里只防线程外泄
+        finally:
+            _chats_refreshing.discard(key)
+
+    threading.Thread(target=_run, daemon=True,
+                     name=f"feishu-chats-refresh-{key}").start()
+
+
+def list_my_chats(emp: str = "") -> dict:
+    """我的群聊列表：im +chat-list --as user --types p2p,group。
+    p2p 项附带 peer_open_id（前端置灰——本期不做私聊监听，设计 D2）。
+
+    T-937：同工号 TTL 内存缓存；失败结果不缓存（重试即时生效）。
+    T-938：① emp 显式参数（预热 job 传入；缺省 contextvar）；②身份隔离
+    （emp 透传 _run_lark 的 USERPROFILE 注入，多用户各见其群）；
+    ③ stale-while-revalidate——有缓存立即返回，过期返旧值（stale=True）
+    并后台刷新，绝不现场等 CLI。"""
+    key = (emp or "").strip() or _chats_cache_key()
+    hit = _chats_cache.get(key)
+    if hit:
+        if hit[0] <= _now():
+            _refresh_chats_async(key)
+            return {**hit[1], "stale": True}
+        return hit[1]
+    return _fetch_my_chats(key)
 
 
 def search_users(query: str) -> dict:

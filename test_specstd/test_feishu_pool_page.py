@@ -98,7 +98,7 @@ def test_update_caption_endpoint_semantics(tmp_path):
 
 def test_list_my_chats(tmp_path):
     """群聊选择器数据源：chat_id/name/chat_mode 解析；p2p 附带 peer_open_id。"""
-    def fake(args, timeout=90):
+    def fake(args, timeout=90, emp=""):
         assert args[:2] == ["im", "+chat-list"]
         return {"ok": True, "data": {"items": [
             {"chat_id": "oc_a", "name": "需求群", "chat_mode": "group"},
@@ -111,6 +111,7 @@ def test_list_my_chats(tmp_path):
                                "chat_mode": "group", "peer_open_id": ""}
     assert out["items"][1]["chat_mode"] == "p2p"
     assert out["items"][1]["peer_open_id"] == "ou_x"
+    svc._chats_cache.clear()
 
 
 def test_search_users_empty_query_shortcircuit():
@@ -242,7 +243,7 @@ def test_list_my_chats_cache_hit():
     """同工号 TTL 内两次调用只打一次 CLI，结果一致。"""
     calls: list = []
 
-    def fake(args, timeout=90):
+    def fake(args, timeout=90, emp=""):
         calls.append(args)
         return {"ok": True, "data": {"items": [
             {"chat_id": "oc_a", "name": "需求群", "chat_mode": "group"}]}}
@@ -263,7 +264,7 @@ def test_list_my_chats_cache_no_cache_errors():
            {"ok": True, "data": {"items": [{"chat_id": "oc_a"}]}}]
     it = iter(seq)
 
-    def fake(args, timeout=90):
+    def fake(args, timeout=90, emp=""):
         v = next(it)
         if isinstance(v, Exception):
             raise v          # mock side_effect 仅对异常类自动 raise，实例需手动
@@ -282,7 +283,7 @@ def test_list_my_chats_cache_ttl_expiry(monkeypatch):
     """TTL 过期后重新调 CLI；不同工号不共享缓存。"""
     calls: list = []
 
-    def fake(args, timeout=90):
+    def fake(args, timeout=90, emp=""):
         calls.append(args)
         return {"ok": True, "data": {"items": [{"chat_id": "oc_a"}]}}
     clock = {"t": 1000.0}
@@ -296,3 +297,61 @@ def test_list_my_chats_cache_ttl_expiry(monkeypatch):
         assert len(calls) == 2
     finally:
         svc._chats_cache.clear()
+
+
+# ══════════════════════════════════════════════════════════
+# T-938：stale-while-revalidate + emp 身份隔离（后台预热配套）
+# ══════════════════════════════════════════════════════════
+
+
+def test_list_my_chats_stale_returns_old_and_triggers_refresh(monkeypatch):
+    """缓存过期：立即返回旧值（stale=True）+ 触发后台刷新，不等 CLI。"""
+    svc._chats_cache.clear()
+    monkeypatch.setattr(svc, "_chats_cache_key", lambda: "u1")
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(svc, "_now", lambda: clock["t"])
+    try:
+        with patch.object(svc, "_run_lark",
+                          side_effect=lambda a, timeout=90, emp="":
+                          {"ok": True, "data": {"items": [
+                              {"chat_id": "oc_old", "name": "旧群",
+                               "chat_mode": "group"}]}}):
+            fresh = svc.list_my_chats()
+        assert fresh["items"][0]["chat_id"] == "oc_old"
+        assert not fresh.get("stale")
+        clock["t"] += svc._CHATS_CACHE_TTL + 1            # 过期
+        with patch.object(svc, "_refresh_chats_async") as ref:
+            stale = svc.list_my_chats()
+        assert ref.call_count == 1
+        assert stale["items"][0]["chat_id"] == "oc_old"  # 旧值立即返回
+        assert stale.get("stale") is True
+    finally:
+        svc._chats_cache.clear()
+
+
+def test_list_my_chats_explicit_emp_separate_keys():
+    """显式 emp 参数：独立缓存 key，各自调 CLI（后台预热 job 传入）。"""
+    calls: list = []
+
+    def fake(args, timeout=90, emp=""):
+        calls.append(emp)
+        return {"ok": True, "data": {"items": [
+            {"chat_id": f"oc_{emp}", "name": "", "chat_mode": "group"}]}}
+    try:
+        with patch.object(svc, "_run_lark", side_effect=fake):
+            svc.list_my_chats(emp="uA")
+            svc.list_my_chats(emp="uB")
+            svc.list_my_chats(emp="uA")    # 命中缓存
+        assert calls == ["uA", "uB"]
+        assert svc._chats_cache["uA"][1]["items"][0]["chat_id"] == "oc_uA"
+    finally:
+        svc._chats_cache.clear()
+
+
+def test_lark_env_emp_injection():
+    """_run_lark emp 身份隔离：USERPROFILE → SG_ROOT/.lark-cli/{emp}
+    （watcher _spawn/_token_valid 同一约定）；空 emp → 不注入（现状兼容）。"""
+    from specflow.feishu_pool import lark_cli
+    env = lark_cli._lark_env("90000001")
+    assert env["USERPROFILE"].replace("\\", "/").endswith(".lark-cli/90000001")
+    assert lark_cli._lark_env("") == {}

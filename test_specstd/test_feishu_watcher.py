@@ -59,7 +59,7 @@ class _FakeProc:
         import io
         self.stderr = io.StringIO(f"[event] ready event_key={ready_key}\n")
         self.stdout = io.StringIO(
-            "".join(json.dumps(l, ensure_ascii=False) + "\n" for l in lines))
+            "".join(json.dumps(ev, ensure_ascii=False) + "\n" for ev in lines))
         self.stdin = MagicMock()
         self.returncode = None
 
@@ -98,6 +98,7 @@ class TestConsumeLoop:
              patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
              patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
              patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
+             patch.object(fw.FeishuWatcher, "_schedule_chats_warmup", new=lambda self: None), \
              patch.object(pool_store, "_resolve_sender", return_value="张三"):
             w = fw.FeishuWatcher(tmp_path)
             w.start()
@@ -181,8 +182,8 @@ class TestBackgroundSingleton:
 # ══════════════════════════════════════════════════════════
 
 def test_e2e_event_to_review_queue(tmp_path):
-    from services.specflow import feishu_sync_service as svc
     from services.specflow import feishu_review_service as rev
+
     from specflow.feishu_pool import link_suggest as ls
     from specflow.feishu_pool import topic_cluster as tc
 
@@ -203,6 +204,7 @@ def test_e2e_event_to_review_queue(tmp_path):
          patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chats_warmup", new=lambda self: None), \
          patch.object(pool_store, "_resolve_sender", return_value="张三"):
         w = fw.FeishuWatcher(tmp_path)
         w.start()
@@ -246,7 +248,6 @@ def test_direct_write_drops_unauthorized_chat(tmp_path):
     events = [{"chat_id": "oc_other", "event_id": "e1", "sender_id": "ou_x1",
                "create_time": "1691498400000", "message_type": "text",
                "content": "未授权群消息"}]
-    from specflow.feishu_pool import pool_store
     with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
          patch.object(fw, "_token_valid", return_value=True), \
          patch.object(fw.FeishuWatcher, "_spawn",
@@ -254,7 +255,8 @@ def test_direct_write_drops_unauthorized_chat(tmp_path):
          patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
-         patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None):
+         patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chats_warmup", new=lambda self: None):
         w = fw.FeishuWatcher(tmp_path)
         w.start()
         time.sleep(0.3)
@@ -289,6 +291,7 @@ def test_direct_write_group_sender_filter(tmp_path):
          patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
          patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chats_warmup", new=lambda self: None), \
          patch.object(pool_store, "_resolve_sender", return_value="张三"):
         w = fw.FeishuWatcher(tmp_path)
         w.start()
@@ -311,6 +314,23 @@ def test_user_materials_job_calls_sync(tmp_path):
                or {"minutes": 0, "docs": 0, "errors": []}):
         fw.user_materials_job(str(emp))
     assert called == [emp]
+
+
+def test_chats_warmup_job_calls_list():
+    """T-938 模块级预热 job：委托 list_my_chats(emp=...)（身份隔离 + 可序列化铁律）。"""
+    called = []
+    with patch("services.specflow.feishu_sync_service.list_my_chats",
+               side_effect=lambda emp="": called.append(emp)
+               or {"items": [], "errors": []}):
+        fw.chats_warmup_job("u1")
+    assert called == ["u1"]
+
+
+def test_chats_warmup_job_tolerates_errors():
+    """预热失败不抛（job 内 log.warning，不炸 scheduler 线程）。"""
+    with patch("services.specflow.feishu_sync_service.list_my_chats",
+               return_value={"items": [], "errors": ["认证未就绪"]}):
+        fw.chats_warmup_job("u1")   # 不应抛异常
 
 
 # ══════════════════════════════════════════════════════════
@@ -374,11 +394,13 @@ class TestRegistry:
 
 def test_p3_e2e_pipeline(tmp_path):
     from services.specflow import feishu_review_service as rev
-    from specflow.feishu_pool import facts, link_suggest as ls
-    from specflow.feishu_pool import pool_store, topic_cluster as tc
+
     from graph_index.builder import build_index
     from graph_index.service import index_path
     from graph_index.store import GraphStore
+    from specflow.feishu_pool import facts, pool_store
+    from specflow.feishu_pool import link_suggest as ls
+    from specflow.feishu_pool import topic_cluster as tc
 
     # 多用户注册表启动（u1/u2 均拉起）
     _mk_user(tmp_path, "u1")
