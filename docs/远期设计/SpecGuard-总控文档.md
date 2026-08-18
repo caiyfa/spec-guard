@@ -274,7 +274,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-936 | 储备 | MaterialsPanel 瘦身评估 | — | 对话链路验收后评估入包闸门/六区重组去向，总控人拍板 | T-935 验收 | 储备 | | 触发制，不认领 |
 | T-937 | 体验修复 | 同步设置体验：弹层秒开+去 ID 手填+链接解析 | 同步设置前后端 | 依据《superpowers/specs/2026-08-18-同步设置体验修复-design.md》：①弹层立即渲染+数据并行填充；②list_my_chats 60s TTL 缓存；③群聊/文档手填 textarea 删除（失败重试/裸 token 透传兼容）；④文档用户下拉改搜索框+快捷标签；⑤resolve-doc 端点（docx 本地解析/wiki node-get 取 obj_token+title；实测定案：非 wiki 文档 node-get 404 需分流） | T-930 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（17 绿含 9 新用例；真实 wiki 链接端到端验证 obj_token+title 返回；release_check PASS；前端 build/oxlint 0 error） |
 | T-938 | 体验修复 | 群聊列表后台预热：弹层打开秒出 | watcher + lark_cli + sync 服务 | ①chats_warmup_job（interval 5min + 启动即预热）；②list_my_chats 改 stale-while-revalidate（有缓存立即返，过期返旧值+stale 标记+后台刷新线程）；③_run_lark 加可选 emp 参数（USERPROFILE=.lark-cli/{emp} 注入，修多用户身份共享隐患） | T-937 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（78 绿含 5 新用例；真实环境实测：首次 CLI 6.2s→缓存命中 0.0000s/stale 0.0004s+后台刷新闭环；release_check PASS；顺手修 lark_cli B904×3+watcher SIM105+测试文件 E741/F401×2/I001×2） |
-| T-939 | 体验修复 | 材料原文查看+图片直出：点材料看原文，图片内嵌展示 | 材料池前后端 | ①GET /material-content（docs/chats 原文，minutes 可读化+raw；附 imgmap）；②GET /material-image 代理（media_key→docs +media-download 复用 captions._download_image +磁盘缓存）；③前端详情弹层 react-markdown 渲染+[图片#N]替换内嵌图；④「图片替身」页签重构「图片描述」卡片流（缩略图+状态+描述编辑），删手输 stem/占位符编辑器；文案人话化（替身文本→图片描述） | T-938 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（27 绿含 7 新用例：三类型内容/防穿越/图片代理缓存与拒绝；TestClient 端到端冒烟全通；前端 build+oxlint 0 error；顺手修 feishu_pool I001×3+B904） |
+| T-939 | 体验修复 | 材料原文查看+图片直出：点材料看原文，图片内嵌展示 | 材料池前后端 | ①GET /material-content（docs/chats 原文，minutes 可读化+raw；附 imgmap）；②GET /material-image 代理（media_key→docs +media-download 复用 captions._download_image +磁盘缓存）；③前端详情弹层 react-markdown 渲染+[图片#N]替换内嵌图；④「图片替身」页签重构「图片描述」卡片流（缩略图+状态+描述编辑），删手输 stem/占位符编辑器；文案人话化（替身文本→图片描述） | T-938 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（27 绿含 7 新用例 + 补丁 1c90b83：list_pool_materials 的 file 改带目录前缀相对路径——裸文件名致详情弹层全部报非法路径，用户实测反馈 5 分钟闭环；TestClient 端到端冒烟全通；前端 build+oxlint 0 error；顺手修 feishu_pool I001×3+B904） |
 
 ---
 
@@ -313,10 +313,10 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 936e000972fb | 0f16922ca25e | 已完成 | T-938：stale/explicit emp/_lark_env 三用例；存量 fake 签名补 emp 参数 |
 | test_specstd/test_feishu_watcher.py | sess-agentchat-material | 2026-08-18 | 22f75c2a9d7a | a9fb78a59f71 | 已完成 | T-938：预热 job 两用例 + 存量 5 处 patch 行补齐；顺手修 E741/F401×2/I001×2 |
 | workbench/backend/routers/feishu_pool.py | sess-agentchat-material | 2026-08-18 | 5d8bb8b8d5a5 | 40e037f28d0b | 已完成 | T-939：material-content / material-image 两端点；顺手修 I001×3+B904 |
-| workbench/backend/services/specflow/feishu_sync_service.py | sess-agentchat-material | 2026-08-18 | 226f15899c58 | 63e4fb04fae1 | 已完成 | T-939：read_material_content + fetch_material_image（白名单防穿越+磁盘缓存） |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-agentchat-material | 2026-08-18 | 226f15899c58 | 595418c95a5d | 已完成 | T-939：read_material_content + fetch_material_image（白名单防穿越+磁盘缓存）；补丁：list file 带目录前缀 |
 | workbench/frontend/src/pages/FeishuPool.tsx | sess-agentchat-material | 2026-08-18 | af74fd466c3d | deb3bdf32820 | 已完成 | T-939：详情弹层（react-markdown+图片内嵌）+图片描述卡片流重构 |
 | workbench/frontend/src/api.ts | sess-agentchat-material | 2026-08-18 | d22167b6cef3 | 8a7f1c06d487 | 已完成 | T-939：materialContent + fetchMaterialImageBlob（blob→objectURL，鉴权 header 兼容） |
-| test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 0f16922ca25e | d66d959b8a82 | 已完成 | T-939：内容三类型/防穿越/图片代理缓存与拒绝 7 用例 |
+| test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 0f16922ca25e | 9672a0e19890 | 已完成 | T-939：内容三类型/防穿越/图片代理缓存与拒绝 7 用例 + file 带前缀断言 |
 | agent/purposes/requirement_interview.md | sess-agentchat-material | 2026-08-17 | — | d27cfa18e450 | 已完成 | T-931：panels 对齐真实页签 id（[pack,focus,materials]，旧值入储备注释） |
 | agent/purposes/test_workbench.md | sess-agentchat-material | 2026-08-17 | — | 6c1652b5f242 | 已完成 | T-931：panels 对齐（[deps,history]） |
 | test_specstd/test_purpose.py | sess-agentchat-material | 2026-08-17 | — | 4f973acdac98 | 已完成 | T-931：panels 值断言用例 |
