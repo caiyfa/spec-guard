@@ -103,13 +103,17 @@ def test_update_caption_endpoint_semantics(tmp_path):
 # ══════════════════════════════════════════════════════════
 
 def test_list_my_chats(tmp_path):
-    """群聊选择器数据源：chat_id/name/chat_mode 解析；p2p 附带 peer_open_id。"""
+    """群聊选择器数据源：group/p2p 两次调用合并（CLI 1.0.85 --types 不收逗号）
+    + data.chats 字段解析（实测）；p2p 附带 peer_open_id。"""
     def fake(args, timeout=90, emp=""):
         assert args[:2] == ["im", "+chat-list"]
-        return {"ok": True, "data": {"items": [
-            {"chat_id": "oc_a", "name": "需求群", "chat_mode": "group"},
-            {"chat_id": "oc_p", "name": "", "chat_mode": "p2p",
-             "p2p_target_id": "ou_x"}]}}
+        types = args[args.index("--types") + 1]
+        assert types in ("group", "p2p")   # 单值（逗号多值 CLI 报错）
+        chats = ([{"chat_id": "oc_a", "name": "需求群", "chat_mode": "group"}]
+                 if types == "group" else
+                 [{"chat_id": "oc_p", "name": "", "chat_mode": "p2p",
+                   "p2p_target_id": "ou_x"}])
+        return {"ok": True, "data": {"chats": chats}}
     with patch.object(svc, "_run_lark", side_effect=fake):
         out = svc.list_my_chats()
     assert out["errors"] == []
@@ -251,23 +255,25 @@ def test_list_my_chats_cache_hit():
 
     def fake(args, timeout=90, emp=""):
         calls.append(args)
-        return {"ok": True, "data": {"items": [
+        return {"ok": True, "data": {"chats": [
             {"chat_id": "oc_a", "name": "需求群", "chat_mode": "group"}]}}
     try:
         with patch.object(svc, "_run_lark", side_effect=fake), \
              patch.object(svc, "_chats_cache_key", return_value="u1"):
             out1 = svc.list_my_chats()
             out2 = svc.list_my_chats()
-        assert len(calls) == 1
+        assert len(calls) == 2                     # 首拉 group+p2p 两次，二次走缓存
         assert out1 == out2 and out1["items"][0]["chat_id"] == "oc_a"
     finally:
         svc._chats_cache.clear()
 
 
 def test_list_my_chats_cache_no_cache_errors():
-    """失败结果不缓存——重试即时生效。"""
+    """失败结果不缓存——重试即时生效（任一 types 调用失败不阻断另一路）。"""
     seq = [ValueError("认证未就绪"),
-           {"ok": True, "data": {"items": [{"chat_id": "oc_a"}]}}]
+           {"ok": True, "data": {"chats": [{"chat_id": "oc_a"}]}},
+           {"ok": True, "data": {"chats": [{"chat_id": "oc_a"}]}},
+           {"ok": True, "data": {"chats": []}}]
     it = iter(seq)
 
     def fake(args, timeout=90, emp=""):
@@ -278,8 +284,8 @@ def test_list_my_chats_cache_no_cache_errors():
     try:
         with patch.object(svc, "_run_lark", side_effect=fake), \
              patch.object(svc, "_chats_cache_key", return_value="u1"):
-            out1 = svc.list_my_chats()   # 失败
-            out2 = svc.list_my_chats()   # 重试成功
+            out1 = svc.list_my_chats()   # group 失败 / p2p 成功 → 不缓存
+            out2 = svc.list_my_chats()   # 全部成功
         assert out1["errors"] and out2["items"]
     finally:
         svc._chats_cache.clear()
@@ -291,7 +297,7 @@ def test_list_my_chats_cache_ttl_expiry(monkeypatch):
 
     def fake(args, timeout=90, emp=""):
         calls.append(args)
-        return {"ok": True, "data": {"items": [{"chat_id": "oc_a"}]}}
+        return {"ok": True, "data": {"chats": [{"chat_id": "oc_a"}]}}
     clock = {"t": 1000.0}
     monkeypatch.setattr(svc, "_now", lambda: clock["t"])
     try:
@@ -300,7 +306,7 @@ def test_list_my_chats_cache_ttl_expiry(monkeypatch):
             svc.list_my_chats()
             clock["t"] += svc._CHATS_CACHE_TTL + 1   # 越过 TTL
             svc.list_my_chats()
-        assert len(calls) == 2
+        assert len(calls) == 4                    # 两轮×group+p2p 各一次
     finally:
         svc._chats_cache.clear()
 
@@ -341,15 +347,16 @@ def test_list_my_chats_explicit_emp_separate_keys():
 
     def fake(args, timeout=90, emp=""):
         calls.append(emp)
-        return {"ok": True, "data": {"items": [
-            {"chat_id": f"oc_{emp}", "name": "", "chat_mode": "group"}]}}
+        return {"ok": True, "data": {"chats": [
+            {"chat_id": f"oc_{emp}_{calls.count(emp)}", "name": "",
+             "chat_mode": "group"}]}}
     try:
         with patch.object(svc, "_run_lark", side_effect=fake):
             svc.list_my_chats(emp="uA")
             svc.list_my_chats(emp="uB")
             svc.list_my_chats(emp="uA")    # 命中缓存
-        assert calls == ["uA", "uB"]
-        assert svc._chats_cache["uA"][1]["items"][0]["chat_id"] == "oc_uA"
+        assert calls == ["uA", "uA", "uB", "uB"]  # 每人首拉 group+p2p 各一次
+        assert svc._chats_cache["uA"][1]["items"][0]["chat_id"].startswith("oc_uA_")
     finally:
         svc._chats_cache.clear()
 

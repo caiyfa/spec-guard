@@ -579,23 +579,33 @@ def _friendly_lark_error(e: Exception) -> str:
 
 
 def _fetch_my_chats(key: str) -> dict:
-    """同步拉取并写缓存（key 即 emp，透传 _run_lark 身份隔离）。失败不缓存。"""
-    out = {"items": [], "errors": []}
-    try:
-        payload = _run_lark(["im", "+chat-list", "--as", "user",
-                             "--types", "p2p,group", "--sort", "active_time",
-                             "--page-all"], emp=key)
-    except Exception as e:
-        out["errors"].append(_friendly_lark_error(e))
-        return out
-    items = (payload.get("data") or {}).get("items") or []
-    for it in items:
-        out["items"].append({
-            "chat_id": str(it.get("chat_id", "")),
-            "name": str(it.get("name", "") or ""),
-            "chat_mode": str(it.get("chat_mode", "group") or "group"),
-            "peer_open_id": str(it.get("p2p_target_id", "") or ""),
-        })
+    """同步拉取并写缓存（key 即 emp，透传 _run_lark 身份隔离）。失败不缓存。
+
+    实测定案（2026-08-18，CLI 1.0.85）：①--types 不接受逗号多值
+    （报 invalid_argument "p2p group"）——拆 group/p2p 两次调用合并；
+    ②响应字段为 data.chats（非 items）。T-943 随手修（群聊空列表真凶）。"""
+    out: dict = {"items": [], "errors": []}
+    seen: set[str] = set()
+    for types in ("group", "p2p"):
+        try:
+            payload = _run_lark(["im", "+chat-list", "--as", "user",
+                                 "--types", types, "--sort", "active_time",
+                                 "--page-all"], emp=key)
+        except Exception as e:
+            out["errors"].append(_friendly_lark_error(e))
+            continue
+        data = payload.get("data") or {}
+        for it in (data.get("chats") or data.get("items") or []):
+            chat_id = str(it.get("chat_id", ""))
+            if not chat_id or chat_id in seen:
+                continue
+            seen.add(chat_id)
+            out["items"].append({
+                "chat_id": chat_id,
+                "name": str(it.get("name", "") or ""),
+                "chat_mode": str(it.get("chat_mode", types) or types),
+                "peer_open_id": str(it.get("p2p_target_id", "") or ""),
+            })
     if not out["errors"]:
         _chats_cache[key] = (_now() + _CHATS_CACHE_TTL, out)
     return out
