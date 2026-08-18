@@ -567,12 +567,17 @@ def _chats_cache_key() -> str:
 
 
 def _friendly_lark_error(e: Exception) -> str:
-    """CLI 错误人话化（T-941）：missing_scope → 授权缺失前缀
-    （原文保留——含 lark-cli hint 的修复命令，用户可依命令重新授权）。"""
+    """CLI 错误人话化（T-941/T-942）：missing_scope → 授权缺失前缀
+    （指向弹层内「重新授权」操作——用户接触不到服务器，授权在工作台内闭环；
+    原文保留便于排查）。"""
     msg = str(e)
     if "missing_scope" in msg or "missing required scope" in msg:
         return ("飞书授权缺少权限（当前 token 未授权该域），"
-                f"请在部署机按 hint 重新授权后重试。原文：{msg}")
+                "请点击本弹层顶部「重新授权」补全权限后重试。原文："
+                f"{msg}")
+    if "认证未就绪" in msg or "not logged in" in msg:
+        return ("飞书账号未绑定，请点击本弹层顶部「绑定飞书」完成授权。"
+                f"原文：{msg}")
     return msg
 
 

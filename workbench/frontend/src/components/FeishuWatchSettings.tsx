@@ -6,10 +6,10 @@
 // ②去 ID 手填（群聊失败→重试；文档粘贴链接自动解析，裸 token 仍兼容）；
 // ③文档检索目标改为通讯录搜索+已配置快捷标签（不再要求先加监听人）。
 
-import { useState } from 'react';
-import { feishuPoolApi, type FeishuWatch,
+import { useEffect, useRef, useState } from 'react';
+import { feishuPoolApi, larkApi, type FeishuWatch,
         type FeishuWatchUser, type FeishuChatItem, type FeishuUserItem,
-        type FeishuUserDocItem } from '../api';
+        type FeishuUserDocItem, type LarkStatus, type LarkLoginResult } from '../api';
 
 export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -31,6 +31,15 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // T-942：飞书授权闭环（用户接触不到服务器——未绑定/缺权限在弹层内直接授权）
+  const [authStatus, setAuthStatus] = useState<LarkStatus | null>(null);
+  const [authPending, setAuthPending] = useState<LarkLoginResult | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopAuthPoll = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+  useEffect(() => stopAuthPoll, []);   // 组件卸载清理轮询
 
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
@@ -41,9 +50,48 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     setWatchUsers([]); setUserResults([]);
     setDocOwner(null); setDocUserResults([]); setDocSelList([]); setDocSel(new Set());
     setLinkInput(''); setNameQuery('');
+    setAuthPending(null);
     setOpen(true);
     void loadWatch();
     void loadChats();
+    larkApi.status().then(setAuthStatus).catch(() => setAuthStatus(null));
+  };
+
+  // T-942：弹层内发起授权（--domain all 全域一次补齐）→ 二维码 + 轮询 → 自动重载
+  const startAuth = async () => {
+    setError(''); setNotice('');
+    try {
+      const r = await larkApi.login();
+      if (r.phase === 'waiting') {
+        setAuthPending(r);
+        if (r.verification_url) window.open(r.verification_url, '_blank');
+        stopAuthPoll();
+        pollRef.current = setInterval(async () => {
+          try {
+            if (r.device_code) {
+              const c = await larkApi.complete(r.device_code);
+              if (c.phase === 'completed') { await onAuthDone(); return; }
+            }
+            const s = await larkApi.status();
+            if (s.bound) await onAuthDone();
+          } catch { /* 轮询失败忽略，下轮重试 */ }
+        }, 3000);
+        setTimeout(() => stopAuthPoll(), 180000);
+      } else if (r.phase === 'completed') {
+        await onAuthDone();
+      } else {
+        setError(r.error || '发起授权失败');
+      }
+    } catch (e: any) { setError(e.message); }
+  };
+
+  const onAuthDone = async () => {
+    stopAuthPoll();
+    setAuthPending(null);
+    setNotice('飞书授权完成，正在重新加载群聊列表…');
+    setAuthStatus(await larkApi.status().catch(() => null));
+    setChatsLoading(true);
+    await loadChats();
   };
 
   const loadWatch = async () => {
@@ -199,9 +247,44 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
               <div className="flex gap-2">
                 <button className={btn} onClick={saveWatch}
                   disabled={busy === 'watch' || !watch}>保存</button>
-                <button className={btn} onClick={() => setOpen(false)}>取消</button>
+                <button className={btn} onClick={() => { stopAuthPoll(); setOpen(false); }}>取消</button>
               </div>
             </div>
+
+            {/* 飞书授权块（T-942：未绑定/缺权限在弹层内闭环，无需接触服务器） */}
+            {authPending ? (
+              <div className="mb-2 p-3 rounded border border-amber-500/40 bg-amber-500/5">
+                <div className="text-xs text-amber-300 mb-2">等待飞书授权完成…（用飞书 App 扫码，或打开授权链接）</div>
+                <div className="flex items-start gap-3">
+                  {authPending.qr_data_uri && (
+                    <img src={authPending.qr_data_uri} alt="飞书授权二维码"
+                      className="w-36 h-36 bg-white rounded p-1 shrink-0" />
+                  )}
+                  <div className="min-w-0 text-[11px] break-all">
+                    <a href={authPending.verification_url} target="_blank" rel="noreferrer"
+                      className="text-info hover:underline">{authPending.verification_url}</a>
+                    <div className="text-gray-500 mt-1">授权完成后本页自动检测并重新加载群聊（每 3 秒轮询，最长 3 分钟）</div>
+                    <button className={`${btn} mt-2`} onClick={() => { stopAuthPoll(); setAuthPending(null); }}>
+                      取消授权流程</button>
+                  </div>
+                </div>
+              </div>
+            ) : authStatus && !authStatus.bound ? (
+              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-xs">
+                <span className="text-red-400">⚠ 飞书账号未绑定（群聊/用户/文档搜索不可用）</span>
+                <button className={btn} onClick={startAuth}>绑定飞书</button>
+              </div>
+            ) : authStatus?.bound && /授权缺少权限|missing_scope/.test(error) ? (
+              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs">
+                <span className="text-amber-300">⚠ 当前授权缺少部分权限（{authStatus.identity_name}），重新授权一次补全全部域</span>
+                <button className={btn} onClick={startAuth}>重新授权</button>
+              </div>
+            ) : authStatus?.bound && (
+              <div className="mb-2 text-[11px] text-gray-600 flex items-center gap-2">
+                <span className="text-green-500">●</span> 飞书已绑定：{authStatus.identity_name}
+                <button className="text-gray-500 hover:text-gray-300" onClick={startAuth}>重新授权</button>
+              </div>
+            )}
             {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
             {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
 
