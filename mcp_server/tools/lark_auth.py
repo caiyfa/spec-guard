@@ -117,15 +117,17 @@ def _run_lark(emp_no: str, args: list[str], timeout: int = _LARK_TIMEOUT,
             cmd, capture_output=True, text=True, timeout=timeout,
             encoding="utf-8", errors="replace", check=False, env=env)
     except subprocess.TimeoutExpired:
-        raise ValueError(f"lark-cli 调用超时（>{timeout}s）: {' '.join(args[:3])}")
+        raise ValueError(
+            f"lark-cli 调用超时（>{timeout}s）: {' '.join(args[:3])}") from None
     except OSError as e:
-        raise ValueError(f"lark-cli 不可用: {e}")
+        raise ValueError(f"lark-cli 不可用: {e}") from e
 
     text = (proc.stdout or "") + (proc.stderr or "")
     try:
         payload = json.loads(proc.stdout or "{}")
     except json.JSONDecodeError:
-        raise ValueError(f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}")
+        raise ValueError(
+            f"lark-cli 输出非 JSON（rc={proc.returncode}）: {text[:300]}") from None
     if payload.get("ok") is False:
         raise ValueError(f"lark-cli 调用失败: {text[:300]}")
     return payload
@@ -306,12 +308,12 @@ def do_login_complete(emp_no: str, device_code: str) -> dict:
 
 def do_logout(emp_no: str) -> dict:
     """解绑当前用户的飞书 CLI 身份。"""
+    import contextlib
+
     with _user_lock(emp_no):
-        try:
+        # 未登录状态也算成功
+        with contextlib.suppress(ValueError):
             _run_lark(emp_no, ["auth", "logout", "--yes", "--json"], json_output=False)
-        except ValueError:
-            # 未登录状态也算成功
-            pass
         return {"ok": True}
 
 
