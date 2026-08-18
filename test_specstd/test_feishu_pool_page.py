@@ -30,6 +30,12 @@ def test_list_pool_materials(tmp_path):
     doc = next(i for i in items if i["type"] == "feishu_doc")
     assert doc["id"] == "fd:tokA" and len(doc["sha"]) == 12
     assert doc["mtime"] > 0
+    # T-939 补丁：file 必须是带目录前缀的相对路径（material-content 白名单 /
+    # 前端 imgmapOfFile 推导都依赖；曾因裸文件名致详情弹层全部报非法路径）
+    fm = {i["type"]: i for i in items}
+    assert fm["feishu_doc"]["file"] == "docs/fd-tokA.md"
+    assert fm["feishu_minutes"]["file"] == "minutes/fm-obcn1.json"
+    assert fm["chat"]["file"].startswith("chats/")
 
 
 def test_list_pool_materials_title_summary(tmp_path):

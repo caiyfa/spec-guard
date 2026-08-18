@@ -348,7 +348,7 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
                 title, summary = _minutes_title_summary(f)
             items.append({
                 "id": f"{prefix[:-1]}:{f.stem[len(prefix):]}",
-                "type": ntype, "file": f.name,
+                "type": ntype, "file": f"{sub}/{f.name}",   # 带目录前缀（T-939：material-content 白名单/前端 imgmap 推导依赖）
                 "title": title, "summary": summary[:80],
                 "sha": pool_store.sha12(content),
                 "size": f.stat().st_size, "mtime": f.stat().st_mtime,
@@ -361,7 +361,7 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
                 title = chat_names.get(f.parent.name, "")
             items.append({
                 "id": f"chat:{f.parent.name}/{f.stem}", "type": "chat",
-                "file": f"{f.parent.name}/{f.name}",
+                "file": f"chats/{f.parent.name}/{f.name}",
                 "title": title or f.stem, "summary": summary[:80],
                 "sha": pool_store.sha12(f.read_text(encoding="utf-8",
                                                     errors="replace")),
