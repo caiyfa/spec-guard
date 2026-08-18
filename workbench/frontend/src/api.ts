@@ -1644,7 +1644,7 @@ export interface FeishuWatchUser {
 
 export interface FeishuWatch {
   chats: { chat_id: string; name?: string }[];
-  docs: { token: string; url?: string; owner_open_id?: string }[];
+  docs: { token: string; url?: string; owner_open_id?: string; title?: string }[];
   users: FeishuWatchUser[];
   minutes_days: number;
   chat_days: number;
@@ -1659,6 +1659,10 @@ export interface FeishuUserItem {
 export interface FeishuUserDocItem {
   token: string; title: string; url: string; doc_type: string;
   owner_id: string; owner_name: string;
+}
+export interface FeishuResolvedDoc {
+  token: string; title?: string; url?: string;
+  doc_type?: string; owner_open_id?: string;
 }
 
 export interface FeishuReviewItem {
@@ -1743,6 +1747,9 @@ export const feishuPoolApi = {
     request<{ items: FeishuUserDocItem[]; errors: string[] }>(
       `/feishu-pool/user-docs?open_id=${encodeURIComponent(openId)}`
       + `&query=${encodeURIComponent(query)}`),
+resolveDoc: (input: string) =>
+  request<{ ok: boolean; items?: FeishuResolvedDoc[]; error?: string }>(
+    `/feishu-pool/resolve-doc?input=${encodeURIComponent(input)}`),
 };
 
 export interface FeishuPoolMaterial {

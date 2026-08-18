@@ -1,7 +1,10 @@
 // FeishuWatchSettings.tsx — 飞书同步设置（监听范围配置）共享组件。
-// 自包含按钮+弹层：群聊勾选 / 用户搜索+scopes / 按用户搜文档。
+// 自包含按钮+弹层：群聊勾选 / 用户搜索+scopes / 按用户搜文档（搜索选人）/ 链接粘贴解析。
 // 历史挂在 FeishuReviewPanel（T-915）；抽出共享供材料池页与关联复核页复用
 // ——同步范围即授权范围（watch 配置 = 显式授权载体），保存即拉起监听（T-924）。
+// T-937 体验修复：①弹层秒开（立即渲染+骨架，watch/群聊列表并行加载，不再串行阻塞）；
+// ②去 ID 手填（群聊失败→重试；文档粘贴链接自动解析，裸 token 仍兼容）；
+// ③文档检索目标改为通讯录搜索+已配置快捷标签（不再要求先加监听人）。
 
 import { useState } from 'react';
 import { feishuPoolApi, type FeishuWatch,
@@ -11,64 +14,81 @@ import { feishuPoolApi, type FeishuWatch,
 export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false);
   const [watch, setWatch] = useState<FeishuWatch | null>(null);
-  const [watchChats, setWatchChats] = useState('');
-  const [watchDocs, setWatchDocs] = useState('');
   const [chatSelList, setChatSelList] = useState<FeishuChatItem[]>([]);
   const [chatSel, setChatSel] = useState<Set<string>>(new Set());
+  const [chatsLoading, setChatsLoading] = useState(false);
   const [watchUsers, setWatchUsers] = useState<FeishuWatchUser[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<FeishuUserItem[]>([]);
-  const [docOwner, setDocOwner] = useState('');
+  const [docOwner, setDocOwner] = useState<{ open_id: string; name: string } | null>(null);
+  const [docUserQuery, setDocUserQuery] = useState('');
+  const [docUserResults, setDocUserResults] = useState<FeishuUserItem[]>([]);
   const [docQuery, setDocQuery] = useState('');
   const [docSelList, setDocSelList] = useState<FeishuUserDocItem[]>([]);
   const [docSel, setDocSel] = useState<Set<string>>(new Set());
+  const [linkInput, setLinkInput] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
-  const openWatch = async () => {
+  // ── 弹层秒开：点击立即渲染骨架，数据并行加载填充 ──
+  const openWatch = () => {
     setError(''); setNotice('');
+    setWatch(null); setChatSelList([]); setChatSel(new Set());
+    setWatchUsers([]); setUserResults([]);
+    setDocOwner(null); setDocUserResults([]); setDocSelList([]); setDocSel(new Set());
+    setLinkInput('');
+    setOpen(true);
+    void loadWatch();
+    void loadChats();
+  };
+
+  const loadWatch = async () => {
     try {
       const w = await feishuPoolApi.getWatch();
       setWatch(w);
-      setWatchChats((w.chats || []).map(c => c.chat_id).join('\n'));
-      setWatchDocs((w.docs || []).map(d => d.token).join('\n'));
       setWatchUsers(w.users || []);
-      // 群聊选择器数据源（失败诚实呈现，不阻断弹层）
-      try {
-        const r = await feishuPoolApi.listChats();
-        setChatSelList(r.items || []);
-        setChatSel(new Set((w.chats || []).map(c => c.chat_id)));
-        if (r.errors?.length) setError(`群聊列表加载：${r.errors.join('；')}`);
-      } catch (e: any) { setError(`群聊列表加载失败：${e.message}`); }
-      setUserResults([]); setDocSelList([]); setDocSel(new Set());
-      setOpen(true);
+      setChatSel(new Set((w.chats || []).map(c => c.chat_id)));
+      // docs 回显到勾选列表（title 可读呈现；不再 textarea 裸 token 回显）
+      const docs = (w.docs || []).map(d => ({
+        token: d.token, title: d.title || '', url: d.url || '',
+        doc_type: '', owner_id: d.owner_open_id || '', owner_name: '',
+      }));
+      setDocSelList(docs);
+      setDocSel(new Set(docs.map(d => d.token)));
     } catch (e: any) { setError(e.message); }
+  };
+
+  const loadChats = async () => {
+    setChatsLoading(true);
+    try {
+      const r = await feishuPoolApi.listChats();
+      setChatSelList(r.items || []);
+      if (r.errors?.length) setError(`群聊列表加载：${r.errors.join('；')}`);
+    } catch (e: any) { setError(`群聊列表加载失败：${e.message}`); }
+    finally { setChatsLoading(false); }
   };
 
   const saveWatch = async () => {
     if (!watch) return;
     setBusy('watch'); setError('');
     try {
-      // 手填兜底 + 勾选合并去重（勾选优先带 name/owner 标注）
+      // 已配置项保留（CLI 列表未覆盖到时防丢）+ 勾选列表合并，勾选为准
       const chatMap = new Map<string, { chat_id: string; name?: string }>();
+      (watch.chats || []).forEach(c => { if (chatSel.has(c.chat_id)) chatMap.set(c.chat_id, c); });
       chatSelList.filter(c => chatSel.has(c.chat_id))
-        .forEach(c => chatMap.set(c.chat_id, { chat_id: c.chat_id, name: c.name }));
-      watchChats.split('\n').map(s => s.trim()).filter(Boolean)
-        .forEach(id => { if (!chatMap.has(id)) chatMap.set(id, { chat_id: id }); });
-      const docMap = new Map<string,
-        { token: string; url?: string; owner_open_id?: string }>();
-      docSelList.filter(d => docSel.has(d.token))
-        .forEach(d => docMap.set(d.token,
-          { token: d.token, url: d.url, owner_open_id: d.owner_id }));
-      watchDocs.split('\n').map(s => s.trim()).filter(Boolean)
-        .forEach(t => { if (!docMap.has(t)) docMap.set(t, { token: t }); });
+        .forEach(c => { if (!chatMap.has(c.chat_id)) chatMap.set(c.chat_id, { chat_id: c.chat_id, name: c.name }); });
       const cfg: FeishuWatch = {
         ...watch,
         chats: [...chatMap.values()],
-        docs: [...docMap.values()],
+        docs: docSelList.filter(d => docSel.has(d.token)).map(d => ({
+          token: d.token,
+          url: d.url || undefined,
+          owner_open_id: d.owner_id || undefined,
+          title: d.title || undefined,
+        })),
         users: watchUsers,
       };
       await feishuPoolApi.putWatch(cfg);
@@ -102,21 +122,58 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     }));
   };
 
+  // ── 文档检索目标：通讯录搜索（任意用户）或已配置快捷标签 ──
+  const searchDocUsers = async () => {
+    if (!docUserQuery.trim()) return;
+    setBusy('doc-user-search'); setError('');
+    try {
+      const r = await feishuPoolApi.searchUsers(docUserQuery.trim());
+      setDocUserResults(r.items || []);
+      if (r.errors?.length) setError(r.errors.join('；'));
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
   const searchUserDocs = async () => {
     if (!docOwner) { setError('请先选择要检索的用户'); return; }
     setBusy('doc-search'); setError('');
     try {
-      const r = await feishuPoolApi.searchUserDocs(docOwner, docQuery.trim());
-      setDocSelList(r.items || []);
+      const r = await feishuPoolApi.searchUserDocs(docOwner.open_id, docQuery.trim());
+      setDocSelList(prev => {
+        const map = new Map(prev.map(d => [d.token, d]));
+        (r.items || []).forEach(d => map.set(d.token, d));
+        return [...map.values()];
+      });
       if (r.errors?.length) setError(r.errors.join('；'));
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
+
+  // ── 链接粘贴解析：docx/wiki 链接或裸 token → 勾选列表 ──
+  const resolveLink = async () => {
+    const v = linkInput.trim();
+    if (!v) return;
+    setBusy('resolve'); setError('');
+    try {
+      const r = await feishuPoolApi.resolveDoc(v);
+      const item = r.items?.[0];
+      if (!r.ok || !item) { setError(r.error || '解析失败'); return; }
+      setDocSelList(prev => prev.some(d => d.token === item.token) ? prev : [...prev, {
+        token: item.token, title: item.title || '', url: item.url || '',
+        doc_type: item.doc_type || '', owner_id: item.owner_open_id || '',
+        owner_name: '',
+      }]);
+      setDocSel(prev => new Set(prev).add(item.token));
+      setLinkInput('');
+      setNotice(`已加入监听：${item.title || item.token}`);
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  const docQuickUsers = watchUsers.filter(u => u.scopes.includes('docs'));
 
   return (
     <>
       <button className={btn} onClick={openWatch}>⚙ 同步设置</button>
 
-      {open && watch && (
+      {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
           onClick={() => setOpen(false)}>
           <div className="w-[720px] max-w-[92vw] border border-border rounded-lg p-4 bg-surface-2"
@@ -124,129 +181,169 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold">同步设置（同步范围即授权范围 · 保存即拉起监听）</h3>
               <div className="flex gap-2">
-                <button className={btn} onClick={saveWatch} disabled={busy === 'watch'}>保存</button>
+                <button className={btn} onClick={saveWatch}
+                  disabled={busy === 'watch' || !watch}>保存</button>
                 <button className={btn} onClick={() => setOpen(false)}>取消</button>
               </div>
             </div>
             {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
             {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
 
-            <div className="grid grid-cols-1 gap-3">
-              {/* 群聊区：列表勾选 + 手填兜底 */}
-              <div>
-                <div className="text-[11px] text-gray-500 mb-1">授权群聊（勾选我的群聊；单聊本期不支持监听）</div>
-                <div className="max-h-36 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
-                  {chatSelList.length === 0
-                    && <div className="text-[11px] text-gray-600">群聊列表为空（或未认证）</div>}
-                  {chatSelList.map(c => (
-                    <label key={c.chat_id}
-                      className={`flex items-center gap-2 text-xs ${c.chat_mode === 'p2p' ? 'opacity-40' : 'cursor-pointer'}`}>
-                      <input type="checkbox" disabled={c.chat_mode === 'p2p'}
-                        checked={chatSel.has(c.chat_id)}
-                        onChange={e => {
-                          const next = new Set(chatSel);
-                          if (e.target.checked) next.add(c.chat_id); else next.delete(c.chat_id);
-                          setChatSel(next);
-                        }} />
-                      <span className="text-gray-200">{c.name || c.chat_id}</span>
-                      <code className="text-[10px] text-gray-600">
-                        {c.chat_id}{c.chat_mode === 'p2p' ? ' · 单聊' : ''}</code>
-                    </label>
-                  ))}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-2 mb-1">手填补充（chat_id 每行一个，与勾选合并去重）</div>
-                <textarea className="w-full h-16 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info"
-                  value={watchChats} onChange={e => setWatchChats(e.target.value)}
-                  placeholder="oc_xxxxxxxx" />
-              </div>
-
-              {/* 用户区：搜索选择 + scopes */}
-              <div>
-                <div className="text-[11px] text-gray-500 mb-1">监听用户（群消息按发送人过滤 / 用户产出妙记 / 用户产出文档）</div>
-                <div className="flex gap-2 mb-1.5">
-                  <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
-                    value={userQuery} onChange={e => setUserQuery(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && searchUsers()}
-                    placeholder="姓名 / 邮箱关键词" />
-                  <button className={btn} onClick={searchUsers} disabled={busy === 'user-search'}>搜索</button>
-                </div>
-                {userResults.length > 0 && (
-                  <div className="max-h-28 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1 mb-1.5">
-                    {userResults.map(u => (
-                      <div key={u.open_id} className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-200">{u.name || u.open_id}</span>
-                        <span className="text-[10px] text-gray-600">
-                          {u.department}{u.email ? ` · ${u.email}` : ''}</span>
-                        <button className={btn} onClick={() => addUser(u)}
-                          disabled={watchUsers.some(w => w.open_id === u.open_id)}>添加</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {watchUsers.length > 0 && (
-                  <div className="bg-surface-3 border border-border rounded p-2 space-y-1">
-                    {watchUsers.map(u => (
-                      <div key={u.open_id} className="flex items-center gap-3 text-xs">
-                        <span className="text-gray-200 w-20 truncate">{u.name || u.open_id}</span>
-                        {([['group_sender', '群消息'], ['minutes', '妙记'], ['docs', '文档']] as const)
-                          .map(([s, label]) => (
-                            <label key={s} className="flex items-center gap-1 text-gray-400 cursor-pointer">
-                              <input type="checkbox" checked={u.scopes.includes(s)}
-                                onChange={() => toggleScope(u.open_id, s)} />{label}
-                            </label>
-                          ))}
-                        <button className="ml-auto text-[11px] text-red-400 hover:text-red-300"
-                          onClick={() => setWatchUsers(watchUsers.filter(w => w.open_id !== u.open_id))}>
-                          移除</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 文档区：按用户搜索 + 手填兜底 */}
-              <div>
-                <div className="text-[11px] text-gray-500 mb-1">
-                  按用户搜文档（召回 = 当前用户可见文档 ∩ 该用户产出）</div>
-                <div className="flex gap-2 mb-1.5">
-                  <select className="bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200"
-                    value={docOwner} onChange={e => setDocOwner(e.target.value)}>
-                    <option value="">选择用户</option>
-                    {watchUsers.filter(u => u.scopes.includes('docs')).map(u => (
-                      <option key={u.open_id} value={u.open_id}>{u.name || u.open_id}</option>
-                    ))}
-                  </select>
-                  <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
-                    value={docQuery} onChange={e => setDocQuery(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && searchUserDocs()}
-                    placeholder="关键词（可空）" />
-                  <button className={btn} onClick={searchUserDocs} disabled={busy === 'doc-search'}>搜索</button>
-                </div>
-                {docSelList.length > 0 && (
-                  <div className="max-h-28 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
-                    {docSelList.map(d => (
-                      <label key={d.token} className="flex items-center gap-2 text-xs cursor-pointer">
-                        <input type="checkbox" checked={docSel.has(d.token)}
+            {!watch ? (
+              <div className="py-10 text-center text-xs text-gray-500">配置加载中…</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {/* 群聊区：列表勾选（CLI 加载；失败重试，不提供手填） */}
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">
+                    授权群聊（勾选我的群聊；单聊本期不支持监听）</div>
+                  <div className="max-h-36 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
+                    {chatsLoading
+                      && <div className="text-[11px] text-gray-500">群聊列表加载中（飞书 CLI）…</div>}
+                    {!chatsLoading && chatSelList.length === 0
+                      && <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                        群聊列表为空（或加载失败）
+                        <button className={btn} onClick={loadChats}>重试</button>
+                      </div>}
+                    {chatSelList.map(c => (
+                      <label key={c.chat_id}
+                        className={`flex items-center gap-2 text-xs ${c.chat_mode === 'p2p' ? 'opacity-40' : 'cursor-pointer'}`}>
+                        <input type="checkbox" disabled={c.chat_mode === 'p2p'}
+                          checked={chatSel.has(c.chat_id)}
                           onChange={e => {
-                            const next = new Set(docSel);
-                            if (e.target.checked) next.add(d.token); else next.delete(d.token);
-                            setDocSel(next);
+                            const next = new Set(chatSel);
+                            if (e.target.checked) next.add(c.chat_id); else next.delete(c.chat_id);
+                            setChatSel(next);
                           }} />
-                        <span className="text-gray-200">{d.title || d.token}</span>
-                        <span className="text-[10px] text-gray-600">{d.doc_type} · {d.owner_name}</span>
+                        <span className="text-gray-200">{c.name || c.chat_id}</span>
+                        <code className="text-[10px] text-gray-600">
+                          {c.chat_id}{c.chat_mode === 'p2p' ? ' · 单聊' : ''}</code>
                       </label>
                     ))}
                   </div>
-                )}
-                <div className="text-[11px] text-gray-500 mt-2 mb-1">手填文档 token（每行一个，与勾选合并去重）</div>
-                <textarea className="w-full h-16 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info"
-                  value={watchDocs} onChange={e => setWatchDocs(e.target.value)}
-                  placeholder="FBxodQkaJoUicrxdk67cUkbhnwc" />
+                </div>
+
+                {/* 用户区：搜索选择 + scopes */}
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">监听用户（群消息按发送人过滤 / 用户产出妙记 / 用户产出文档）</div>
+                  <div className="flex gap-2 mb-1.5">
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                      value={userQuery} onChange={e => setUserQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && searchUsers()}
+                      placeholder="姓名 / 邮箱关键词" />
+                    <button className={btn} onClick={searchUsers} disabled={busy === 'user-search'}>搜索</button>
+                  </div>
+                  {userResults.length > 0 && (
+                    <div className="max-h-28 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1 mb-1.5">
+                      {userResults.map(u => (
+                        <div key={u.open_id} className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-200">{u.name || u.open_id}</span>
+                          <span className="text-[10px] text-gray-600">
+                            {u.department}{u.email ? ` · ${u.email}` : ''}</span>
+                          <button className={btn} onClick={() => addUser(u)}
+                            disabled={watchUsers.some(w => w.open_id === u.open_id)}>添加</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {watchUsers.length > 0 && (
+                    <div className="bg-surface-3 border border-border rounded p-2 space-y-1">
+                      {watchUsers.map(u => (
+                        <div key={u.open_id} className="flex items-center gap-3 text-xs">
+                          <span className="text-gray-200 w-20 truncate">{u.name || u.open_id}</span>
+                          {([['group_sender', '群消息'], ['minutes', '妙记'], ['docs', '文档']] as const)
+                            .map(([s, label]) => (
+                              <label key={s} className="flex items-center gap-1 text-gray-400 cursor-pointer">
+                                <input type="checkbox" checked={u.scopes.includes(s)}
+                                  onChange={() => toggleScope(u.open_id, s)} />{label}
+                              </label>
+                            ))}
+                          <button className="ml-auto text-[11px] text-red-400 hover:text-red-300"
+                            onClick={() => setWatchUsers(watchUsers.filter(w => w.open_id !== u.open_id))}>
+                            移除</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 文档区：检索目标搜索选人 + 按用户搜文档 + 链接粘贴解析 + 勾选清单 */}
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">
+                    添加监听文档（三条路径：按用户检索 / 粘贴链接解析 / 裸 token）</div>
+                  <div className="flex gap-2 mb-1.5">
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                      value={docUserQuery} onChange={e => setDocUserQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && searchDocUsers()}
+                      placeholder="按用户检索：先搜通讯录姓名" />
+                    <button className={btn} onClick={searchDocUsers}
+                      disabled={busy === 'doc-user-search'}>搜用户</button>
+                  </div>
+                  {docUserResults.length > 0 && (
+                    <div className="max-h-24 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1 mb-1.5">
+                      {docUserResults.map(u => (
+                        <div key={u.open_id} className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-200">{u.name || u.open_id}</span>
+                          <span className="text-[10px] text-gray-600">{u.department}</span>
+                          <button className={btn}
+                            onClick={() => { setDocOwner({ open_id: u.open_id, name: u.name }); setDocUserResults([]); }}>
+                            选为检索目标</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    {docOwner && (
+                      <span className="px-2 py-0.5 rounded bg-info/15 text-info text-[11px]">
+                        检索目标：{docOwner.name || docOwner.open_id}
+                        <button className="ml-1 text-gray-500 hover:text-gray-300"
+                          onClick={() => setDocOwner(null)}>×</button>
+                      </span>
+                    )}
+                    {docQuickUsers.map(u => (
+                      <button key={u.open_id}
+                        className={`px-2 py-0.5 rounded text-[11px] border border-border ${docOwner?.open_id === u.open_id ? 'bg-info/20 text-info' : 'text-gray-400 hover:text-gray-200'}`}
+                        onClick={() => setDocOwner({ open_id: u.open_id, name: u.name || u.open_id })}>
+                        {u.name || u.open_id}</button>
+                    ))}
+                    <input className="flex-1 min-w-[140px] bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                      value={docQuery} onChange={e => setDocQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && searchUserDocs()}
+                      placeholder="文档关键词（可空）" />
+                    <button className={btn} onClick={searchUserDocs}
+                      disabled={busy === 'doc-search' || !docOwner}>搜文档</button>
+                  </div>
+                  <div className="flex gap-2 mb-1.5">
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                      value={linkInput} onChange={e => setLinkInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && resolveLink()}
+                      placeholder="粘贴飞书云文档链接（/docx/ 或 /wiki/），token 自动解析" />
+                    <button className={btn} onClick={resolveLink}
+                      disabled={busy === 'resolve' || !linkInput.trim()}>解析</button>
+                  </div>
+                  {docSelList.length > 0 && (
+                    <div className="max-h-32 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
+                      {docSelList.map(d => (
+                        <label key={d.token} className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input type="checkbox" checked={docSel.has(d.token)}
+                            onChange={e => {
+                              const next = new Set(docSel);
+                              if (e.target.checked) next.add(d.token); else next.delete(d.token);
+                              setDocSel(next);
+                            }} />
+                          <span className="text-gray-200 truncate">{d.title || d.token}</span>
+                          {d.title && <code className="text-[10px] text-gray-600">{d.token.slice(0, 12)}…</code>}
+                          {d.owner_name && <span className="text-[10px] text-gray-600">{d.owner_name}</span>}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="mt-2 text-[11px] text-gray-500">
-              妙记同步窗口 {watch.minutes_days} 天 · 群聊窗口 {watch.chat_days} 天（在 feishu_watch.yaml 中调整）
+              妙记同步窗口 {watch?.minutes_days ?? '—'} 天 · 群聊窗口 {watch?.chat_days ?? '—'} 天（在 feishu_watch.yaml 中调整）
             </div>
           </div>
         </div>

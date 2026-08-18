@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
 import yaml
 
-from specflow.feishu_pool.lark_cli import _run_lark  # noqa: F401  (测试 patch 点)
 from specflow.feishu_pool import pool_store
+from specflow.feishu_pool.lark_cli import _run_lark  # noqa: F401  (测试 patch 点)
 
 _IMG_PLACEHOLDER_RE = re.compile(r"\[(图片#\d+)\]")
 
@@ -371,6 +372,7 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
 def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
     """话题清单：候选（私有区）+ 已确认（共享区）。"""
     import yaml
+
     from specflow.feishu_pool import facts
     from specflow.feishu_pool.paths import pool_dirs
     cand_path = pool_dirs(specflow_emp_base)["root"] / "_candidate_topics.yaml"
@@ -405,9 +407,28 @@ def update_image_caption(specflow_emp_base: Path, material_stem: str,
 # 选择器数据源（同步设置弹层；全部只读 --as user）
 # ══════════════════════════════════════════════════════════
 
+# T-937：list_my_chats 缓存（key=当前工号；条目 = (过期时间戳, 结果)）
+_chats_cache: dict[str, tuple[float, dict]] = {}
+_CHATS_CACHE_TTL = 60.0
+
+
+def _now() -> float:
+    return time.time()
+
+
+def _chats_cache_key() -> str:
+    from specstd.workspace import get_context_emp_no
+    return get_context_emp_no() or ""
+
 def list_my_chats() -> dict:
     """我的群聊列表：im +chat-list --as user --types p2p,group。
-    p2p 项附带 peer_open_id（前端置灰——本期不做私聊监听，设计 D2）。"""
+    p2p 项附带 peer_open_id（前端置灰——本期不做私聊监听，设计 D2）。
+    T-937：同工号 60s TTL 内存缓存（弹层秒开配套，反复打开不重复调 CLI）；
+    失败结果不缓存——重试即时生效。"""
+    key = _chats_cache_key()
+    hit = _chats_cache.get(key)
+    if hit and hit[0] > _now():
+        return hit[1]
     out = {"items": [], "errors": []}
     try:
         payload = _run_lark(["im", "+chat-list", "--as", "user",
@@ -424,6 +445,8 @@ def list_my_chats() -> dict:
             "chat_mode": str(it.get("chat_mode", "group") or "group"),
             "peer_open_id": str(it.get("p2p_target_id", "") or ""),
         })
+    if not out["errors"]:
+        _chats_cache[key] = (_now() + _CHATS_CACHE_TTL, out)
     return out
 
 
@@ -488,3 +511,51 @@ def search_user_docs(open_id: str, query: str = "") -> dict:
             "owner_name": str(meta.get("owner_name") or ""),
         })
     return out
+
+
+# 飞书云文档链接（host 含 feishu；typ=docx|wiki；token 末段捕获）
+_DOC_LINK_RE = r"https?://[A-Za-z0-9.-]*feishu[A-Za-z0-9.-]*/{typ}/([A-Za-z0-9]+)"
+
+
+def resolve_doc_link(input_str: str) -> dict:
+    """链接/token → 文档标识（T-937 粘贴解析；纯读）。
+
+    分流定案（2026-08-18 实测）：
+    - /docx/<tok> URL → 本地解析零 CLI（路径末段即 obj_token；title 缺省，
+      落池后材料池可读层 _md_title_summary 自然补标题）
+    - /wiki/<tok> URL → wiki +node-get（node_token ≠ obj_token 必须经 CLI；
+      返回 obj_token/title/owner；非 wiki 的普通云文档 404 故 docx 不走此通道）
+    - 裸 token → 本地透传（兼容旧习惯，零 CLI）
+    - minutes/base/sheets 等其他链接 → 明确错误（watch docs 仅云文档）
+    """
+    raw = (input_str or "").strip()
+    if not raw:
+        return {"ok": False, "error": "输入为空：粘贴云文档链接（/docx/ 或 /wiki/）或裸 token"}
+    url_clean = raw.split("?")[0].split("#")[0].rstrip("/")
+    m = re.search(_DOC_LINK_RE.format(typ="docx"), raw)
+    if m:
+        return {"ok": True, "items": [
+            {"token": m.group(1), "url": url_clean, "doc_type": "docx"}]}
+    m = re.search(_DOC_LINK_RE.format(typ="wiki"), raw)
+    if m:
+        try:
+            payload = _run_lark(["wiki", "+node-get", "--as", "user",
+                                 "--node-token", raw])
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        data = payload.get("data") or {}
+        token = str(data.get("obj_token", "")).strip()
+        if not token:
+            return {"ok": False, "error": f"node-get 未返回 obj_token: {payload}"}
+        return {"ok": True, "items": [{
+            "token": token,
+            "title": str(data.get("title", "") or ""),
+            "url": url_clean,
+            "doc_type": str(data.get("obj_type", "") or ""),
+            "owner_open_id": str(data.get("owner", "") or ""),
+        }]}
+    # 非 URL：裸 token 透传（单段字母数字）
+    if "://" not in raw and re.fullmatch(r"[A-Za-z0-9]+", raw):
+        return {"ok": True, "items": [{"token": raw}]}
+    return {"ok": False,
+            "error": "无法识别：监听文档仅支持飞书云文档（/docx/ 或 /wiki/）链接或裸 token"}

@@ -200,3 +200,10 @@ def find_user_docs(open_id: str, query: str = "",
                    workspace: str = Depends(resolve_workspace)):
     """按用户搜文档（应用侧 owner 过滤）。纯读。"""
     return sync_svc.search_user_docs(open_id, query)
+
+
+@router.get("/resolve-doc")
+def resolve_doc(input: str, user: CurrentUser = Depends(get_current_user),
+                workspace: str = Depends(resolve_workspace)):
+    """文档链接/token → 文档标识（T-937 粘贴解析：docx 本地/wiki node-get）。纯读。"""
+    return sync_svc.resolve_doc_link(input)

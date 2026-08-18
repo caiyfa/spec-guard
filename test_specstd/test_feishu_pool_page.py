@@ -15,6 +15,7 @@ for p in (str(SG_ROOT), str(BACKEND_DIR)):
         sys.path.insert(0, p)
 
 from services.specflow import feishu_sync_service as svc  # noqa: E402
+
 from specflow.feishu_pool import pool_store  # noqa: E402
 
 
@@ -152,3 +153,146 @@ def test_search_user_docs_owner_filter_and_error(tmp_path):
                       side_effect=ValueError("认证未就绪")):
         out2 = svc.search_user_docs("ou_a", "")
     assert out2["items"] == [] and out2["errors"]
+
+
+# ══════════════════════════════════════════════════════════
+# T-937：resolve_doc_link（链接/token → 文档标识）
+# 实测定案：wiki +node-get 仅适用于 wiki 节点（普通云文档 404），
+# docx 链接路径末段即 obj_token（本地解析零 CLI）。
+# ══════════════════════════════════════════════════════════
+
+_WIKI_URL = "https://fehorizon.feishu.cn/wiki/DLmdwrGg7i2caHkX9PtcFPa2nKh"
+
+
+def test_resolve_doc_link_wiki_url():
+    """wiki URL → wiki +node-get 解析 obj_token/title/owner（存 obj_token 非 node_token）。"""
+    def fake(args, timeout=90):
+        assert args[:2] == ["wiki", "+node-get"]
+        assert _WIKI_URL in args
+        return {"ok": True, "data": {
+            "node_token": "DLmdwrGg7i2caHkX9PtcFPa2nKh",
+            "obj_token": "HA5ldBzihoLR8bxi4eMcGcHWngg",
+            "obj_type": "docx", "title": "总裁面-0810-迭代-ERD",
+            "owner": "ou_owner1"}}
+    with patch.object(svc, "_run_lark", side_effect=fake):
+        out = svc.resolve_doc_link(_WIKI_URL)
+    assert out["ok"] is True
+    item = out["items"][0]
+    assert item["token"] == "HA5ldBzihoLR8bxi4eMcGcHWngg"   # obj_token
+    assert item["title"] == "总裁面-0810-迭代-ERD"
+    assert item["doc_type"] == "docx"
+    assert item["owner_open_id"] == "ou_owner1"
+    assert item["url"] == _WIKI_URL
+
+
+def test_resolve_doc_link_docx_url_local():
+    """docx URL → 本地解析（零 CLI；?query 剥离）。"""
+    calls: list = []
+    with patch.object(svc, "_run_lark",
+                      side_effect=lambda a, timeout=90: calls.append(a)):
+        out = svc.resolve_doc_link(
+            "https://fehorizon.feishu.cn/docx/NNSVdZKrBo3i09xG0BWcqSZNnzd?from=share")
+    assert calls == []
+    item = out["items"][0]
+    assert item["token"] == "NNSVdZKrBo3i09xG0BWcqSZNnzd"
+    assert item["url"].startswith("https://fehorizon.feishu.cn/docx/NNSV")
+
+
+def test_resolve_doc_link_bare_token():
+    """裸 token → 本地透传（兼容旧手填习惯；零 CLI）。"""
+    with patch.object(svc, "_run_lark", side_effect=AssertionError("不应调 CLI")):
+        out = svc.resolve_doc_link("FBxodQkaJoUicrxdk67cUkbhnwc")
+    assert out["ok"] is True
+    assert out["items"][0]["token"] == "FBxodQkaJoUicrxdk67cUkbhnwc"
+
+
+def test_resolve_doc_link_rejects_non_doc():
+    """minutes/base/非飞书域链接 → 明确错误（仅支持云文档 docx/wiki）。"""
+    with patch.object(svc, "_run_lark", side_effect=AssertionError("不应调 CLI")):
+        for bad in ["https://x.feishu.cn/minutes/obcn123",
+                    "https://x.feishu.cn/base/b1?table=tb1",
+                    "https://x.feishu.cn/sheets/s1",
+                    "https://example.com/docx/tokX",
+                    "带 空格 的输入"]:
+            out = svc.resolve_doc_link(bad)
+            assert out["ok"] is False, bad
+            assert "云文档" in out["error"], bad
+
+
+def test_resolve_doc_link_empty_input():
+    out = svc.resolve_doc_link("  ")
+    assert out["ok"] is False
+
+
+def test_resolve_doc_link_cli_error():
+    """node-get 失败（无权限/不存在）→ 错误诚实呈现。"""
+    with patch.object(svc, "_run_lark",
+                      side_effect=ValueError("lark-cli 调用失败: not found")):
+        out = svc.resolve_doc_link(_WIKI_URL)
+    assert out["ok"] is False
+    assert "not found" in out["error"]
+
+
+# ══════════════════════════════════════════════════════════
+# T-937：list_my_chats TTL 缓存（弹层秒开配套；同工号 60s 内不重复调 CLI）
+# ══════════════════════════════════════════════════════════
+
+
+def test_list_my_chats_cache_hit():
+    """同工号 TTL 内两次调用只打一次 CLI，结果一致。"""
+    calls: list = []
+
+    def fake(args, timeout=90):
+        calls.append(args)
+        return {"ok": True, "data": {"items": [
+            {"chat_id": "oc_a", "name": "需求群", "chat_mode": "group"}]}}
+    try:
+        with patch.object(svc, "_run_lark", side_effect=fake), \
+             patch.object(svc, "_chats_cache_key", return_value="u1"):
+            out1 = svc.list_my_chats()
+            out2 = svc.list_my_chats()
+        assert len(calls) == 1
+        assert out1 == out2 and out1["items"][0]["chat_id"] == "oc_a"
+    finally:
+        svc._chats_cache.clear()
+
+
+def test_list_my_chats_cache_no_cache_errors():
+    """失败结果不缓存——重试即时生效。"""
+    seq = [ValueError("认证未就绪"),
+           {"ok": True, "data": {"items": [{"chat_id": "oc_a"}]}}]
+    it = iter(seq)
+
+    def fake(args, timeout=90):
+        v = next(it)
+        if isinstance(v, Exception):
+            raise v          # mock side_effect 仅对异常类自动 raise，实例需手动
+        return v
+    try:
+        with patch.object(svc, "_run_lark", side_effect=fake), \
+             patch.object(svc, "_chats_cache_key", return_value="u1"):
+            out1 = svc.list_my_chats()   # 失败
+            out2 = svc.list_my_chats()   # 重试成功
+        assert out1["errors"] and out2["items"]
+    finally:
+        svc._chats_cache.clear()
+
+
+def test_list_my_chats_cache_ttl_expiry(monkeypatch):
+    """TTL 过期后重新调 CLI；不同工号不共享缓存。"""
+    calls: list = []
+
+    def fake(args, timeout=90):
+        calls.append(args)
+        return {"ok": True, "data": {"items": [{"chat_id": "oc_a"}]}}
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(svc, "_now", lambda: clock["t"])
+    try:
+        with patch.object(svc, "_run_lark", side_effect=fake), \
+             patch.object(svc, "_chats_cache_key", return_value="u1"):
+            svc.list_my_chats()
+            clock["t"] += svc._CHATS_CACHE_TTL + 1   # 越过 TTL
+            svc.list_my_chats()
+        assert len(calls) == 2
+    finally:
+        svc._chats_cache.clear()
