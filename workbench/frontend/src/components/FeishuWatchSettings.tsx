@@ -24,6 +24,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   const [docUserQuery, setDocUserQuery] = useState('');
   const [docUserResults, setDocUserResults] = useState<FeishuUserItem[]>([]);
   const [docQuery, setDocQuery] = useState('');
+  const [nameQuery, setNameQuery] = useState('');
   const [docSelList, setDocSelList] = useState<FeishuUserDocItem[]>([]);
   const [docSel, setDocSel] = useState<Set<string>>(new Set());
   const [linkInput, setLinkInput] = useState('');
@@ -39,7 +40,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     setWatch(null); setChatSelList([]); setChatSel(new Set());
     setWatchUsers([]); setUserResults([]);
     setDocOwner(null); setDocUserResults([]); setDocSelList([]); setDocSel(new Set());
-    setLinkInput('');
+    setLinkInput(''); setNameQuery('');
     setOpen(true);
     void loadWatch();
     void loadChats();
@@ -133,16 +134,31 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
+  // ── 按文档名全局搜索（T-941：与按用户检索解耦——无需选人，直接搜名字）──
+  const searchDocsByName = async () => {
+    if (!nameQuery.trim()) return;
+    setBusy('name-search'); setError('');
+    try {
+      const r = await feishuPoolApi.searchDocs(nameQuery.trim());
+      mergeDocResults(r.items || []);
+      if (r.errors?.length) setError(r.errors.join('；'));
+    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
+  };
+
+  const mergeDocResults = (items: FeishuUserDocItem[]) => {
+    setDocSelList(prev => {
+      const map = new Map(prev.map(d => [d.token, d]));
+      items.forEach(d => map.set(d.token, d));
+      return [...map.values()];
+    });
+  };
+
   const searchUserDocs = async () => {
     if (!docOwner) { setError('请先选择要检索的用户'); return; }
     setBusy('doc-search'); setError('');
     try {
       const r = await feishuPoolApi.searchUserDocs(docOwner.open_id, docQuery.trim());
-      setDocSelList(prev => {
-        const map = new Map(prev.map(d => [d.token, d]));
-        (r.items || []).forEach(d => map.set(d.token, d));
-        return [...map.values()];
-      });
+      mergeDocResults(r.items || []);
       if (r.errors?.length) setError(r.errors.join('；'));
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
@@ -267,17 +283,27 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   )}
                 </div>
 
-                {/* 文档区：检索目标搜索选人 + 按用户搜文档 + 链接粘贴解析 + 勾选清单 */}
+                {/* 文档区：三条独立路径（按名搜/按用户/粘链接）+ 勾选清单 */}
                 <div>
                   <div className="text-[11px] text-gray-500 mb-1">
-                    添加监听文档（三条路径：按用户检索 / 粘贴链接解析 / 裸 token）</div>
+                    添加监听文档（三条独立路径任选：按文档名搜 / 按用户检索 / 粘贴链接）</div>
+                  {/* 路径 A：按文档名全局搜索（无需选人） */}
+                  <div className="flex gap-2 mb-1.5">
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                      value={nameQuery} onChange={e => setNameQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && searchDocsByName()}
+                      placeholder="按文档名搜索（如：ERD 评审），结果带产出人标注" />
+                    <button className={btn} onClick={searchDocsByName}
+                      disabled={busy === 'name-search' || !nameQuery.trim()}>搜文档</button>
+                  </div>
+                  {/* 路径 B：按用户检索（选人 → 搜其产出） */}
                   <div className="flex gap-2 mb-1.5">
                     <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
                       value={docUserQuery} onChange={e => setDocUserQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && searchDocUsers()}
-                      placeholder="按用户检索：先搜通讯录姓名" />
+                      placeholder="按用户检索：搜通讯录姓名 → 选为检索目标" />
                     <button className={btn} onClick={searchDocUsers}
-                      disabled={busy === 'doc-user-search'}>搜用户</button>
+                      disabled={busy === 'doc-user-search' || !docUserQuery.trim()}>搜用户</button>
                   </div>
                   {docUserResults.length > 0 && (
                     <div className="max-h-24 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1 mb-1.5">

@@ -203,6 +203,14 @@ def find_user_docs(open_id: str, query: str = "",
     return sync_svc.search_user_docs(open_id, query)
 
 
+@router.get("/docs-search")
+def docs_search(query: str = "",
+                user: CurrentUser = Depends(get_current_user),
+                workspace: str = Depends(resolve_workspace)):
+    """按文档名全局搜索（T-941：与按用户检索解耦，无需先选用户）。纯读。"""
+    return sync_svc.search_docs(query)
+
+
 @router.get("/resolve-doc")
 def resolve_doc(input: str, user: CurrentUser = Depends(get_current_user),
                 workspace: str = Depends(resolve_workspace)):

@@ -566,6 +566,16 @@ def _chats_cache_key() -> str:
     return get_context_emp_no() or ""
 
 
+def _friendly_lark_error(e: Exception) -> str:
+    """CLI 错误人话化（T-941）：missing_scope → 授权缺失前缀
+    （原文保留——含 lark-cli hint 的修复命令，用户可依命令重新授权）。"""
+    msg = str(e)
+    if "missing_scope" in msg or "missing required scope" in msg:
+        return ("飞书授权缺少权限（当前 token 未授权该域），"
+                f"请在部署机按 hint 重新授权后重试。原文：{msg}")
+    return msg
+
+
 def _fetch_my_chats(key: str) -> dict:
     """同步拉取并写缓存（key 即 emp，透传 _run_lark 身份隔离）。失败不缓存。"""
     out = {"items": [], "errors": []}
@@ -574,7 +584,7 @@ def _fetch_my_chats(key: str) -> dict:
                              "--types", "p2p,group", "--sort", "active_time",
                              "--page-all"], emp=key)
     except Exception as e:
-        out["errors"].append(str(e))
+        out["errors"].append(_friendly_lark_error(e))
         return out
     items = (payload.get("data") or {}).get("items") or []
     for it in items:
@@ -637,7 +647,7 @@ def search_users(query: str) -> dict:
         payload = _run_lark(["contact", "+search-user", "--as", "user",
                              "--query", query, "--has-chatted"])
     except Exception as e:
-        out["errors"].append(str(e))
+        out["errors"].append(_friendly_lark_error(e))
         return out
     data = payload.get("data") or {}
     for it in (data.get("users") or data.get("items") or []):
@@ -653,11 +663,48 @@ def search_users(query: str) -> dict:
     return out
 
 
+def _parse_doc_results(payload: dict) -> list[dict]:
+    """docs +search 结果解析（em 高亮剥离 + owner 标注；共用解析）。"""
+    parsed: list[dict] = []
+    for it in (payload.get("data") or {}).get("results") or []:
+        meta = it.get("result_meta") or {}
+        token = str(meta.get("token", ""))
+        if not token:
+            continue
+        title = str(it.get("title_highlighted") or it.get("title") or "")
+        parsed.append({
+            "token": token,
+            "title": title.replace("<em>", "").replace("</em>", ""),
+            "url": str(meta.get("url") or ""),
+            "doc_type": str(meta.get("doc_types") or ""),
+            "owner_id": str(meta.get("owner_id") or ""),
+            "owner_name": str(meta.get("owner_name") or ""),
+        })
+    return parsed
+
+
+def search_docs(query: str) -> dict:
+    """按文档名全局搜索（T-941：与按用户检索解耦——无需先选用户，
+    直接搜名字；结果带产出人标注供勾选）。纯读。"""
+    out: dict = {"items": [], "errors": []}
+    query = (query or "").strip()
+    if not query:
+        return out
+    try:
+        payload = _run_lark(["docs", "+search", "--as", "user",
+                             "--query", query, "--page-size", "50"])
+    except Exception as e:
+        out["errors"].append(_friendly_lark_error(e))
+        return out
+    out["items"] = _parse_doc_results(payload)
+    return out
+
+
 def search_user_docs(open_id: str, query: str = "") -> dict:
     """按用户搜文档：docs +search → 应用侧按 owner_id 过滤
     （CLI --filter owner_ids 2026-08-17 实测不生效——对照实验定案）。
     召回边界：当前用户可见文档 ∩ 该用户产出（诚实呈现）。"""
-    out = {"items": [], "errors": []}
+    out: dict = {"items": [], "errors": []}
     open_id = (open_id or "").strip()
     if not open_id:
         out["errors"].append("open_id 必填")
@@ -666,26 +713,10 @@ def search_user_docs(open_id: str, query: str = "") -> dict:
         payload = _run_lark(["docs", "+search", "--as", "user",
                              "--query", query or "", "--page-size", "50"])
     except Exception as e:
-        out["errors"].append(str(e))
+        out["errors"].append(_friendly_lark_error(e))
         return out
-    results = (payload.get("data") or {}).get("results") or []
-    for it in results:
-        meta = it.get("result_meta") or {}
-        if str(meta.get("owner_id", "")) != open_id:
-            continue
-        token = str(meta.get("token", ""))
-        if not token:
-            continue
-        title = str(it.get("title_highlighted") or it.get("title") or "")
-        title = title.replace("<em>", "").replace("</em>", "")
-        out["items"].append({
-            "token": token,
-            "title": title,
-            "url": str(meta.get("url") or ""),
-            "doc_type": str(meta.get("doc_types") or ""),
-            "owner_id": open_id,
-            "owner_name": str(meta.get("owner_name") or ""),
-        })
+    out["items"] = [d for d in _parse_doc_results(payload)
+                    if d["owner_id"] == open_id]
     return out
 
 

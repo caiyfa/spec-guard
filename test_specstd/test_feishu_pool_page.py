@@ -533,3 +533,56 @@ def test_list_pool_materials_meta_fields(tmp_path):
     assert fm_y["owner_open_id"] == "ou_zhang"
     fm_old = next(i for i in fms if "obcnOld" in i["id"])
     assert fm_old["source_url"] == "" and fm_old["owner_open_id"] == ""
+
+
+# ══════════════════════════════════════════════════════════
+# T-941：文档名全局搜索（与按用户检索解耦）+ 授权错误人话化
+# ══════════════════════════════════════════════════════════
+
+
+def test_search_docs_global():
+    """按文档名全局搜索：不过滤 owner，结果带产出人标注。"""
+    def fake(args, timeout=90, emp=""):
+        assert args[:2] == ["docs", "+search"]
+        assert "ERD" in args
+        return {"ok": True, "data": {"results": [
+            {"title_highlighted": "<em>ERD</em>评审",
+             "result_meta": {"owner_id": "ou_a", "token": "tokA",
+                             "url": "uA", "doc_types": "DOCX",
+                             "owner_name": "张三"}},
+            {"title_highlighted": "他人文档",
+             "result_meta": {"owner_id": "ou_b", "token": "tokB",
+                             "url": "uB", "doc_types": "DOCX",
+                             "owner_name": "李四"}}]}}
+    with patch.object(svc, "_run_lark", side_effect=fake):
+        out = svc.search_docs("ERD")
+    assert [i["token"] for i in out["items"]] == ["tokA", "tokB"]  # 不过滤
+    assert out["items"][0]["title"] == "ERD评审"
+    assert out["items"][0]["owner_name"] == "张三"
+
+
+def test_search_docs_empty_query_shortcircuit():
+    out = svc.search_docs("  ")
+    assert out == {"items": [], "errors": []}
+
+
+def test_missing_scope_error_friendly():
+    """missing_scope → 人话前缀 + 原文保留（含修复命令）；其余原样。"""
+    raw = ('lark-cli 调用失败: {"error": {"subtype": "missing_scope", '
+           '"message": "missing required scope(s): contactuser:search"}}')
+    msg = svc._friendly_lark_error(ValueError(raw))
+    assert "飞书授权缺少权限" in msg
+    assert "contactuser:search" in msg
+    assert svc._friendly_lark_error(ValueError("网络超时")) == "网络超时"
+
+
+def test_search_users_missing_scope_friendly():
+    """选择器 errors 通道走人话包装（截图实锤：缺 contactuser:search）。"""
+    with patch.object(svc, "_run_lark",
+                      side_effect=ValueError(
+                          '{"subtype": "missing_scope", '
+                          '"missing required scope(s): contactuser:search"}')):
+        out = svc.search_users("张三")
+    assert out["items"] == []
+    assert "飞书授权缺少权限" in out["errors"][0]
+    assert "contactuser:search" in out["errors"][0]

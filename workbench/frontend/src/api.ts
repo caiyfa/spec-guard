@@ -1755,6 +1755,9 @@ export const feishuPoolApi = {
     request<{ items: FeishuUserDocItem[]; errors: string[] }>(
       `/feishu-pool/user-docs?open_id=${encodeURIComponent(openId)}`
       + `&query=${encodeURIComponent(query)}`),
+searchDocs: (query: string) =>
+  request<{ items: FeishuUserDocItem[]; errors: string[] }>(
+    `/feishu-pool/docs-search?query=${encodeURIComponent(query)}`),
 resolveDoc: (input: string) =>
   request<{ ok: boolean; items?: FeishuResolvedDoc[]; error?: string }>(
     `/feishu-pool/resolve-doc?input=${encodeURIComponent(input)}`),

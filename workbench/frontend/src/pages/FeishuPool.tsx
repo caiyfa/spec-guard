@@ -164,9 +164,7 @@ export default function FeishuPool() {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-gray-500">监听范围</span>
           <span className="text-gray-600">（同步范围即授权范围）</span>
-          <span className="ml-auto">
-            <FeishuWatchSettings onSaved={() => { loadWatcher(); loadMaterials(); }} />
-          </span>
+          <span className="ml-auto text-gray-500">在页面右上「⚙ 同步设置」维护</span>
         </div>
         {watchCfg ? (
           <div className="space-y-1.5">
