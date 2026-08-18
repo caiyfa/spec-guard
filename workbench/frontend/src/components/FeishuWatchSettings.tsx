@@ -269,19 +269,30 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   </div>
                 </div>
               </div>
+            ) : /授权缺少权限|missing_scope|未绑定|认证未就绪/.test(error) ? (
+              // 错误已表明授权问题 → 无条件显示带按钮的块（不依赖 authStatus 是否拉到——
+              // status 请求失败时 authStatus=null，旧条件四分支全不渲染致按钮消失，用户实锄）
+              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs">
+                <span className="text-amber-300">
+                  ⚠ {authStatus?.bound
+                    ? `当前授权缺少部分权限（${authStatus.identity_name}），重新授权一次补全全部域`
+                    : '飞书账号未绑定或授权不全，点击右侧按钮完成/补全授权'}
+                </span>
+                <button className={btn} onClick={startAuth}>{authStatus?.bound ? '重新授权' : '绑定飞书'}</button>
+              </div>
             ) : authStatus && !authStatus.bound ? (
               <div className="mb-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-xs">
                 <span className="text-red-400">⚠ 飞书账号未绑定（群聊/用户/文档搜索不可用）</span>
                 <button className={btn} onClick={startAuth}>绑定飞书</button>
               </div>
-            ) : authStatus?.bound && /授权缺少权限|missing_scope/.test(error) ? (
-              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs">
-                <span className="text-amber-300">⚠ 当前授权缺少部分权限（{authStatus.identity_name}），重新授权一次补全全部域</span>
-                <button className={btn} onClick={startAuth}>重新授权</button>
-              </div>
-            ) : authStatus?.bound && (
+            ) : authStatus?.bound ? (
               <div className="mb-2 text-[11px] text-gray-600 flex items-center gap-2">
                 <span className="text-green-500">●</span> 飞书已绑定：{authStatus.identity_name}
+                <button className="text-gray-500 hover:text-gray-300" onClick={startAuth}>重新授权</button>
+              </div>
+            ) : (
+              <div className="mb-2 text-[11px] text-gray-600 flex items-center gap-2">
+                <span className="text-gray-500">● 授权状态未知</span>
                 <button className="text-gray-500 hover:text-gray-300" onClick={startAuth}>重新授权</button>
               </div>
             )}
