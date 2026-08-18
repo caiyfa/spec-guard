@@ -98,6 +98,8 @@ def chat_proofread_job(emp_base_str: str):
             svc.sync_chat(emp_base, str(chat.get("chat_id", "")), day)
         except Exception as ce:
             log.warning("校对重拉失败 %s: %s", chat.get("chat_id"), ce)
+    # T-945：校对落池后异步聚类（候选话题次晨更新，演进链对齐飞书侧全量）
+    svc.maybe_cluster_async(emp_base)
 
 
 def user_materials_job(emp_base_str: str):

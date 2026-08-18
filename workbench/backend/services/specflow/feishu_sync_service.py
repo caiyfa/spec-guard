@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import threading
 import time
@@ -23,6 +24,8 @@ import yaml
 
 from specflow.feishu_pool import pool_store
 from specflow.feishu_pool.lark_cli import _run_lark  # noqa: F401  (测试 patch 点)
+
+log = logging.getLogger(__name__)
 
 _IMG_PLACEHOLDER_RE = re.compile(r"\[(图片#\d+)\]")
 
@@ -203,7 +206,31 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None) -> dict:
             out["chats"] += 1
         except Exception as e:
             out["errors"].append(f"chat {chat.get('chat_id', '?')}: {e}")
+    # T-945：群聊落池后异步聚类生成候选话题（链路闭环：落池→聚类→复核→图谱）。
+    # 放在 sync_all 尾部——手动同步/启动 catch-up 都走这里；LLM 未配置诚实跳过。
+    maybe_cluster_async(specflow_emp_base)
     return out
+
+
+def _cluster_once(emp_base: Path) -> None:
+    """单次聚类（可同步测试）：text 模型未配置→跳过；异常吞掉只记日志。"""
+    try:
+        from services import model_config
+        m = model_config.get_model("text")
+        if not m:
+            log.info("话题聚类跳过：未配置 text 模型（设置页 model_configs 加 model_id=text）")
+            return
+        from agent.llm_client import LLMClient
+        from specflow.feishu_pool import topic_cluster as tc
+        tc.cluster_chat_snapshots(emp_base, LLMClient(model_id="text"))
+    except Exception as e:
+        log.warning("话题聚类失败（不阻断同步）: %s", e)
+
+
+def maybe_cluster_async(emp_base: Path) -> None:
+    """异步触发聚类（daemon 线程，不阻塞 sync 返回；同步完成后话题页稍后可见）。"""
+    threading.Thread(target=_cluster_once, args=(emp_base,), daemon=True,
+                     name="feishu-topic-cluster").start()
 
 
 def sync_recent_docs(specflow_emp_base: Path, days: int = 1) -> dict:

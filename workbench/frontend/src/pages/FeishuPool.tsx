@@ -106,7 +106,8 @@ export default function FeishuPool() {
     try {
       const r = await feishuPoolApi.syncNow();
       setNotice(`同步完成：文档 ${r.docs} / 妙记 ${r.minutes} / 群聊 ${r.chats}`
-        + (r.errors.length ? `；${r.errors.length} 条失败（诚实呈现）` : ''));
+        + (r.errors.length ? `；${r.errors.length} 条失败（诚实呈现）` : '')
+        + '；话题生成中（后台聚类，稍后刷新「话题」页签查看候选）');
       loadMaterials(); loadTopics();
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };

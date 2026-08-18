@@ -378,6 +378,61 @@ def test_list_my_chats_quick_limit():
         svc._chats_cache.clear()
 
 
+# ══════════════════════════════════════════════════════════
+# T-945：同步后自动聚类生成候选话题（链路闭环：落池→聚类→复核→图谱）
+# ══════════════════════════════════════════════════════════
+
+
+def test_cluster_once_no_text_model(monkeypatch):
+    """未配置 text 模型 → 诚实跳过（不抛、不调聚类），与 vision 转述同模式。"""
+    called = []
+    monkeypatch.setattr("services.model_config.get_model", lambda mid: None)
+    monkeypatch.setattr("specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
+                        lambda *a, **k: called.append(a) or [])
+    svc._cluster_once(Path("x"))
+    assert called == []
+
+
+def test_cluster_once_with_text_model(monkeypatch):
+    """已配置 text 模型 → cluster_chat_snapshots 被调（LLM 客户端注入）。"""
+    called = {}
+
+    class _FakeLLM:
+        def __init__(self, model_id="text"):
+            called["model_id"] = model_id
+
+    monkeypatch.setattr("services.model_config.get_model", lambda mid: {"model_id": "text"})
+    monkeypatch.setattr("agent.llm_client.LLMClient", _FakeLLM)
+    monkeypatch.setattr(
+        "specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
+        lambda base, llm, days=None: called.setdefault("args", (base, llm)) or [])
+    svc._cluster_once(Path("/tmp/emp"))
+    assert called["model_id"] == "text"
+    assert called["args"][0] == Path("/tmp/emp")
+
+
+def test_cluster_once_error_swallowed(monkeypatch):
+    """聚类抛异常不外溢（异步线程内失败仅记日志，不阻断后续）。"""
+    monkeypatch.setattr("services.model_config.get_model", lambda mid: {"model_id": "text"})
+    monkeypatch.setattr("agent.llm_client.LLMClient", lambda model_id="text": None)
+    monkeypatch.setattr(
+        "specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("LLM 超时")))
+    svc._cluster_once(Path("x"))    # 不应抛
+
+
+def test_sync_all_triggers_cluster(monkeypatch, tmp_path):
+    """sync_all 完成后触发异步聚类（链路闭环的接线点）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(emp, {"chats": [], "docs": [], "minutes_days": 0,
+                                "chat_days": 0, "users": []})
+    triggered = []
+    monkeypatch.setattr(svc, "maybe_cluster_async",
+                        lambda base: triggered.append(base))
+    svc.sync_all(emp)
+    assert triggered == [emp]
+
+
 def test_lark_env_emp_injection():
     """_run_lark emp 身份隔离：USERPROFILE → SG_ROOT/.lark-cli/{emp}
     （watcher _spawn/_token_valid 同一约定）；空 emp → 不注入（现状兼容）。"""
