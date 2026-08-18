@@ -282,6 +282,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-944 | 体验修复 | 同步设置分 tab+群聊快速加载（先 10 群秒出+本地搜索+去单聊） | 同步设置前后端 | ①弹层分三 tab（授权群聊/监听用户/监听文档，计数徽标；授权块/保存栏常显）；②群聊先加载最近活跃 10 群（/chats?limit=N 快速路径单页不翻页不碰缓存，实测 0.93s vs 全量 5.66s），前端后台双请求全量补齐；③群名前端本地搜索（全量到后覆盖全部，未到时提示「拉取全部」）；④单聊不显示不拉取（全量耗时减半，T-938 的 p2p 置灰方案退役） | T-943 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（54 绿含 quick-limit 用例；build+oxlint 0 error；实测 0.93s/10群 vs 5.66s/200群；顺带 .gitignore 补 .specflow/ 9561901） |
 | T-945 | 链路闭环 | 同步后自动聚类生成候选话题（为 Agent 对话供上下文） | sync 服务 + watcher | 用户实锄链路断点：群聊落池✅→聚类❌（cluster_chat_snapshots 生产零调用→话题恒 0）→复核✅→图谱✅→Agent 消费部分✅；修复：①sync_all 尾部+每日校对 job 后异步触发 maybe_cluster_async（daemon 线程，text 模型未配置诚实跳过与 vision 同模式，异常吞掉记日志）；②同步完成提示「话题生成中」 | T-944 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（71 绿含 4 新用例：无模型跳过/有模型调用/异常吞掉/sync_all 触发；Agent 侧 read_material 工具仍为 T-934 储备） |
 | T-946 | 链路闭环 | 话题分阶段生成+时效窗口+按群配置+原文关联审核 | topic_cluster + sync 设置 + 话题页 | 用户需求四点：分片（按群×天逐文件单 LLM 调用本就分片）+时效（default_days 近 N 天过期不提取，库 0=不限兼容，业务默认 7 控 LLM 成本）+按群区分（watch.chats[].topic_days，0=关闭；同步设置勾选行「话题 N 天」输入，保存携带回显）+原文关联（话题卡片「查看原文」展开：拉快照全文按 window 起止 HH:MM 切消息片段，审核直接对照原始记录；source+window 字段一期已备） | T-945 | 已完成 | sess-agentchat-material | P1 ✅ 2026-08-18（80 绿含 3 新用例：窗口过滤/显式关闭/per-chat 覆盖 default；build+oxlint 0 error；顺手修 _next_seq SIM105） |
+| T-947 | 流程增强 | 话题人工介入工作流（自动直出保留+介入口子） | topic_cluster + 话题页（待开发） | 用户最终决策：自动直出保留（T-945 链路不变），新增三阶段介入工作区作为修正路径——①原文先行（选群×天拉原文左侧展示）②LLM 只出分段草案（_topic_drafts.yaml，不动候选）③勾选接受段→生成卡片覆盖该群该天旧候选；单卡编辑（title/summary）与重生成（id 稳定）；详见《upgrade-plans/2026-08-18-T947-话题人工介入工作流-开发任务.md》（自包含，新会话可直接开发） | T-946 | 未认领 | | 开发任务文档已定稿（含代码地图/TDD用例清单/验收标准），待新会话按 §六治理协议领取 |
 
 ---
 
@@ -338,6 +339,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 988569618cc5 | 2752d304d5cc | 已完成 | T-941+T-942：search_docs/错误包装 4 用例；文案断言改指向弹层内授权 |
 | workbench/backend/services/specflow/feishu_sync_service.py | sess-agentchat-material | 2026-08-18 | 44b382926c5b | 5cf53f3982ed | 已完成 | T-942：_friendly_lark_error 文案指向弹层内授权操作+未绑定分支 |
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-agentchat-material | 2026-08-18 | 96a59ec09b85 | c79d66899165 | 已完成 | T-942：弹层内嵌授权块（状态/发起/二维码+3s轮询/完成自动重载群聊） |
+| docs/upgrade-plans/2026-08-18-T947-话题人工介入工作流-开发任务.md | sess-agentchat-material | 2026-08-18 | NEW | ca4df2ae5289 | 已完成 | T-947 自包含开发任务文档（需求决策/代码地图/函数签名/TDD 清单/验收标准/治理），待新会话领取开发 |
 | agent/purposes/requirement_interview.md | sess-agentchat-material | 2026-08-17 | — | d27cfa18e450 | 已完成 | T-931：panels 对齐真实页签 id（[pack,focus,materials]，旧值入储备注释） |
 | agent/purposes/test_workbench.md | sess-agentchat-material | 2026-08-17 | — | 6c1652b5f242 | 已完成 | T-931：panels 对齐（[deps,history]） |
 | test_specstd/test_purpose.py | sess-agentchat-material | 2026-08-17 | — | 4f973acdac98 | 已完成 | T-931：panels 值断言用例 |
