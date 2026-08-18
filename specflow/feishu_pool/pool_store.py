@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time as _time
 from pathlib import Path
 
 from specflow.feishu_pool.paths import pool_dirs
@@ -25,8 +26,13 @@ def chat_sha8(chat_id: str) -> str:
 
 
 def save_doc_snapshot(specflow_emp_base: Path, doc_token: str, markdown: str,
-                      imgmap: dict | None = None, source_url: str = "") -> dict:
-    """文档快照落盘（fd-{token}.md + 可选 fd-{token}.imgmap.json）。"""
+                      imgmap: dict | None = None, source_url: str = "",
+                      meta: dict | None = None) -> dict:
+    """文档快照落盘（fd-{token}.md + 可选 fd-{token}.imgmap.json）。
+
+    meta（T-940）：可选 sidecar fd-{token}.meta.json（owner_open_id/owner_name/
+    source_url/title——材料归属与飞书原文直链；sync 调用方已知 owner 时传入）。
+    """
     d = pool_dirs(specflow_emp_base)["docs"]
     d.mkdir(parents=True, exist_ok=True)
     stem = f"fd-{doc_token}"
@@ -34,18 +40,25 @@ def save_doc_snapshot(specflow_emp_base: Path, doc_token: str, markdown: str,
     if imgmap is not None:
         (d / f"{stem}.imgmap.json").write_text(
             json.dumps(imgmap, ensure_ascii=False, indent=2), encoding="utf-8")
+    if meta is not None:
+        (d / f"{stem}.meta.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"node_id": f"fd:{doc_token}", "sha": sha12(markdown),
             "source_url": source_url, "file": f"docs/{stem}.md"}
 
 
 def save_minutes_snapshot(specflow_emp_base: Path, minute_token: str,
-                          detail_json: dict, source_url: str = "") -> dict:
-    """妙记快照落盘（fm-{token}.json）。"""
+                          detail_json: dict, source_url: str = "",
+                          meta: dict | None = None) -> dict:
+    """妙记快照落盘（fm-{token}.json + 可选 fm-{token}.meta.json）。"""
     d = pool_dirs(specflow_emp_base)["minutes"]
     d.mkdir(parents=True, exist_ok=True)
     stem = f"fm-{minute_token}"
     raw = json.dumps(detail_json, ensure_ascii=False, indent=2)
     (d / f"{stem}.json").write_text(raw, encoding="utf-8")
+    if meta is not None:
+        (d / f"{stem}.meta.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"node_id": f"fm:{minute_token}", "sha": sha12(raw),
             "source_url": source_url, "file": f"minutes/{stem}.json"}
 
@@ -75,8 +88,6 @@ def load_imgmap(specflow_emp_base: Path, stem_file: Path) -> dict:
 # ══════════════════════════════════════════════════════════
 # 事件直写原语（三期 T-925，F6）
 # ══════════════════════════════════════════════════════════
-
-import time as _time
 
 _SEEN_EVENTS_TTL = 7 * 86400   # event_id 去重表 TTL（7 天滚动）
 

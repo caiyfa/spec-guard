@@ -1783,6 +1783,9 @@ export interface FeishuPoolMaterial {
   sha: string;
   size: number;
   mtime: number;
+  source_url?: string;      // T-940：飞书原文直链（meta sidecar；存量空串降级）
+  owner_open_id?: string;   // T-940：产出人（按监听用户筛选）
+  owner_name?: string;
 }
 
 export interface FeishuTopic {

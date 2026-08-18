@@ -459,3 +459,77 @@ def test_fetch_material_image_rejects(tmp_path):
     assert out2["ok"] is False
     out3 = svc.fetch_material_image(emp, "../evil", "图片#1")
     assert out3["ok"] is False
+
+
+# ══════════════════════════════════════════════════════════
+# T-940：owner/meta 落盘（材料按监听用户切换）+ 飞书原文直链
+# ══════════════════════════════════════════════════════════
+
+
+def test_sync_minutes_single_owner_meta(tmp_path):
+    """单 owner 检索：meta 落 owner_open_id；source_url 取 meta_data.app_link（实测结构）。"""
+    def fake(args, timeout=90, emp=""):
+        if args[:2] == ["minutes", "+search"]:
+            return {"ok": True, "data": {"items": [
+                {"token": "obcnX",
+                 "meta_data": {"app_link": "https://x.feishu.cn/minutes/obcnX"}}]}}
+        assert args[:2] == ["minutes", "+detail"]
+        return {"ok": True, "data": {"minutes": [{"title": "T"}]}}
+    with patch.object(svc, "_run_lark", side_effect=fake):
+        svc.sync_minutes(tmp_path, days=3, owner_ids=["ou_zhang"])
+    meta = json.loads((tmp_path / "feishu_pool" / "minutes" / "fm-obcnX.meta.json")
+                      .read_text(encoding="utf-8"))
+    assert meta["owner_open_id"] == "ou_zhang"
+    assert meta["source_url"] == "https://x.feishu.cn/minutes/obcnX"
+
+
+def test_sync_user_docs_owner_meta(tmp_path):
+    """按用户搜文档：落盘 meta 带 owner（材料归属 + 列表直链）。"""
+    def fake(args, timeout=90, emp=""):
+        assert args[:2] == ["docs", "+search"]
+        return {"ok": True, "data": {"results": [
+            {"title_highlighted": "张三方案",
+             "result_meta": {"owner_id": "ou_zhang", "token": "tokD",
+                             "url": "https://x.feishu.cn/docx/tokD",
+                             "owner_name": "张三"}}]}}
+
+    def fake_fetch(args, timeout=90, emp=""):
+        assert args[:2] == ["docs", "+fetch"]
+        return {"ok": True, "data": {"content": "# 方案"}}
+    seq = [fake, fake_fetch]
+    it = iter(seq)
+    with patch.object(svc, "_run_lark",
+                      side_effect=lambda a, timeout=90, emp="": next(it)(a, timeout, emp)):
+        out = svc._sync_user_docs(tmp_path, "ou_zhang", "方案")
+    assert out["docs"] == 1
+    meta = json.loads((tmp_path / "feishu_pool" / "docs" / "fd-tokD.meta.json")
+                      .read_text(encoding="utf-8"))
+    assert meta["owner_open_id"] == "ou_zhang"
+    assert meta["owner_name"] == "张三"
+    assert meta["source_url"] == "https://x.feishu.cn/docx/tokD"
+
+
+def test_list_pool_materials_meta_fields(tmp_path):
+    """list 返 source_url/owner_*（meta sidecar）；无 meta 存量诚实降级空串；
+    minutes glob 不得把 fm-*.meta.json 当材料。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool_store.save_doc_snapshot(
+        emp, "tokA", "# T\n",
+        meta={"owner_open_id": "ou_zhang", "owner_name": "张三",
+              "source_url": "https://x.feishu.cn/docx/tokA", "title": "PRD"})
+    pool_store.save_minutes_snapshot(
+        emp, "obcnY", {"minutes": [{"title": "旧会"}]},
+        meta={"owner_open_id": "ou_zhang", "source_url": "u2"})
+    # 存量无 meta
+    pool_store.save_minutes_snapshot(emp, "obcnOld", {"minutes": []})
+    items = svc.list_pool_materials(emp)
+    doc = next(i for i in items if i["type"] == "feishu_doc")
+    assert doc["source_url"] == "https://x.feishu.cn/docx/tokA"
+    assert doc["owner_open_id"] == "ou_zhang"
+    assert doc["owner_name"] == "张三"
+    fms = [i for i in items if i["type"] == "feishu_minutes"]
+    assert len(fms) == 2                    # meta.json 未被当材料
+    fm_y = next(i for i in fms if "obcnY" in i["id"])
+    assert fm_y["owner_open_id"] == "ou_zhang"
+    fm_old = next(i for i in fms if "obcnOld" in i["id"])
+    assert fm_old["source_url"] == "" and fm_old["owner_open_id"] == ""

@@ -102,8 +102,9 @@ def _imgmap_from_content(content: str, images: list | None) -> dict:
     return entries
 
 
-def sync_doc(specflow_emp_base: Path, doc_token: str, url: str = "") -> dict:
-    """文档快照落池（docs +fetch 只读）。"""
+def sync_doc(specflow_emp_base: Path, doc_token: str, url: str = "",
+             meta: dict | None = None) -> dict:
+    """文档快照落池（docs +fetch 只读；meta T-940：owner/直链 sidecar）。"""
     payload = _run_lark(["docs", "+fetch", "--as", "user",
                          "--doc", doc_token, "--doc-format", "markdown"])
     data = payload.get("data") or {}
@@ -111,7 +112,7 @@ def sync_doc(specflow_emp_base: Path, doc_token: str, url: str = "") -> dict:
     imgmap = _imgmap_from_content(content, data.get("images"))
     return pool_store.save_doc_snapshot(
         specflow_emp_base, doc_token, content,
-        imgmap=imgmap if imgmap else None, source_url=url)
+        imgmap=imgmap if imgmap else None, source_url=url, meta=meta)
 
 
 def sync_minutes(specflow_emp_base: Path, days: int = 30,
@@ -126,6 +127,9 @@ def sync_minutes(specflow_emp_base: Path, days: int = 30,
     found = _run_lark(["minutes", "+search", "--owner-ids", owners,
                        "--page-size", "20"])
     items = (found.get("data") or {}).get("items") or []
+    # T-940：单 owner 检索时归属明确（search 返回无结构化 owner_id，
+    # 归属由调用方上下文落盘；多 owner/me 不记）
+    owner_open_id = owner_ids[0] if owner_ids and len(owner_ids) == 1 else ""
     out = []
     for it in items:
         token = str(it.get("minute_token") or it.get("token") or "")
@@ -133,9 +137,13 @@ def sync_minutes(specflow_emp_base: Path, days: int = 30,
             continue
         detail = _run_lark(["minutes", "+detail", "--minute-tokens", token,
                             "--summary", "--keyword"])
+        # URL：实测 search item 结构为 meta_data.app_link（兼容旧 url 键）
+        url = str((it.get("meta_data") or {}).get("app_link")
+                  or it.get("url") or "")
         out.append(pool_store.save_minutes_snapshot(
             specflow_emp_base, token, detail.get("data") or {},
-            source_url=str(it.get("url") or "")))
+            source_url=url,
+            meta={"owner_open_id": owner_open_id, "source_url": url}))
     return out
 
 
@@ -175,7 +183,11 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None) -> dict:
     for doc in cfg.get("docs") or []:
         try:
             sync_doc(specflow_emp_base, str(doc.get("token", "")),
-                     url=str(doc.get("url", "")))
+                     url=str(doc.get("url", "")),
+                     meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
+                           "owner_name": str(doc.get("owner_name") or ""),
+                           "title": str(doc.get("title") or ""),
+                           "source_url": str(doc.get("url") or "")})
             out["docs"] += 1
         except Exception as e:
             out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
@@ -267,7 +279,11 @@ def _sync_user_docs(specflow_emp_base: Path, open_id: str,
         if not token:
             continue
         try:
-            sync_doc(specflow_emp_base, token, url=str(meta.get("url") or ""))
+            sync_doc(specflow_emp_base, token, url=str(meta.get("url") or ""),
+                     meta={"owner_open_id": open_id,
+                           "owner_name": str(meta.get("owner_name") or ""),
+                           "title": str(it.get("title") or ""),
+                           "source_url": str(meta.get("url") or "")})
             out["docs"] += 1
         except Exception as e:
             out["errors"].append(f"{token}: {e}")
@@ -317,11 +333,24 @@ def _md_title_summary(f: Path) -> tuple[str, str]:
     return title, summary
 
 
+def _read_meta_sidecar(f: Path) -> dict:
+    """读材料 meta sidecar（{stem}.meta.json；缺失/损坏返回空 dict 诚实降级）。"""
+    mp = f.with_suffix(".meta.json")
+    if not mp.is_file():
+        return {}
+    try:
+        return json.loads(mp.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
     """材料池清单（三通道快照：id/类型/标题/摘要/文件/sha/大小/mtime，时间倒序）。
 
     title/summary 是人可读层（T-930 可读性补强）：minutes 取 title+artifacts.summary、
     docs 取首个 markdown 标题+首段、chats 取 watch 群名+首行消息。
+    T-940：附 source_url/owner_open_id/owner_name（meta sidecar；按监听用户筛选
+    与飞书原文直链；存量无 meta 降级空串）。
     """
     from specflow.feishu_pool.paths import pool_dirs
     pool = pool_dirs(specflow_emp_base)
@@ -341,17 +370,23 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
         if not d.is_dir():
             continue
         for f in sorted(d.glob(f"{prefix}*{ext}")):
+            if f.name.endswith(".meta.json"):      # sidecar 不是材料
+                continue
             content = f.read_text(encoding="utf-8", errors="replace")
             if ntype == "feishu_doc":
                 title, summary = _md_title_summary(f)
             else:
                 title, summary = _minutes_title_summary(f)
+            m = _read_meta_sidecar(f)
             items.append({
                 "id": f"{prefix[:-1]}:{f.stem[len(prefix):]}",
                 "type": ntype, "file": f"{sub}/{f.name}",   # 带目录前缀（T-939：material-content 白名单/前端 imgmap 推导依赖）
                 "title": title, "summary": summary[:80],
                 "sha": pool_store.sha12(content),
                 "size": f.stat().st_size, "mtime": f.stat().st_mtime,
+                "source_url": str(m.get("source_url") or ""),
+                "owner_open_id": str(m.get("owner_open_id") or ""),
+                "owner_name": str(m.get("owner_name") or ""),
             })
     chats_root = pool["chats"]
     if chats_root.is_dir():
@@ -366,6 +401,7 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
                 "sha": pool_store.sha12(f.read_text(encoding="utf-8",
                                                     errors="replace")),
                 "size": f.stat().st_size, "mtime": f.stat().st_mtime,
+                "source_url": "", "owner_open_id": "", "owner_name": "",
             })
     items.sort(key=lambda i: -i["mtime"])
     return items

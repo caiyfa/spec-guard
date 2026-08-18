@@ -36,6 +36,26 @@ def test_save_doc_snapshot_with_imgmap(tmp_path):
     assert json.loads(im.read_text(encoding="utf-8"))["图片#1"]["status"] == "pending"
 
 
+def test_save_snapshot_meta_sidecar(tmp_path):
+    """T-940：meta 参数落 {stem}.meta.json sidecar（owner/source_url 归属与飞书直链）。"""
+    base = tmp_path / ".specflow" / "u1"
+    pool_store.save_doc_snapshot(
+        base, "tokA", "# t\n", source_url="https://x.feishu.cn/docx/tokA",
+        meta={"owner_open_id": "ou_a", "owner_name": "张三", "title": "PRD",
+              "source_url": "https://x.feishu.cn/docx/tokA"})
+    meta = json.loads((base / "feishu_pool" / "docs" / "fd-tokA.meta.json")
+                      .read_text(encoding="utf-8"))
+    assert meta["owner_open_id"] == "ou_a"
+    assert meta["owner_name"] == "张三"
+    assert meta["source_url"] == "https://x.feishu.cn/docx/tokA"
+    pool_store.save_minutes_snapshot(
+        base, "obcn1", {"minutes": []}, source_url="u",
+        meta={"owner_open_id": "ou_b", "source_url": "https://x.feishu.cn/minutes/obcn1"})
+    meta2 = json.loads((base / "feishu_pool" / "minutes" / "fm-obcn1.meta.json")
+                       .read_text(encoding="utf-8"))
+    assert meta2["owner_open_id"] == "ou_b"
+
+
 def test_save_chat_snapshot_by_day(tmp_path):
     base = tmp_path / ".specflow" / "caiyunfei"
     rec = pool_store.save_chat_snapshot(
@@ -61,7 +81,7 @@ class TestFacts:
                           confidence=0.9, evidence="原文a", confirmed_by="u1")
         links = facts.load_links(ws)
         # 确定性：按 (src, dst) 排序落盘与读取
-        assert [l["src"] for l in links] == ["fd:tokA", "tp:b-0807-01"]
+        assert [lk["src"] for lk in links] == ["fd:tokA", "tp:b-0807-01"]
         assert links[0]["status"] == "confirmed"
         assert links[0]["confirmed_at"]  # 自动填时间
 

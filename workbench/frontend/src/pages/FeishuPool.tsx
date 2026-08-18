@@ -13,6 +13,7 @@ import {
   type FeishuPoolMaterial,
   type FeishuTopic,
   type FeishuMaterialContent,
+  type FeishuWatch,
 } from '../api';
 import FeishuWatchSettings from '../components/FeishuWatchSettings';
 
@@ -28,6 +29,10 @@ const IMG_STATUS: Record<string, { label: string; cls: string }> = {
   pending: { label: '待转述', cls: 'bg-amber-500/15 text-amber-400' },
   done: { label: '已转述', cls: 'bg-green-500/15 text-green-400' },
   failed: { label: '转述失败', cls: 'bg-red-500/15 text-red-400' },
+};
+
+const SCOPE_LABEL: Record<string, string> = {
+  group_sender: '群消息', minutes: '妙记', docs: '文档',
 };
 
 function fmtTime(ts: number) {
@@ -63,6 +68,8 @@ export default function FeishuPool() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [watcher, setWatcher] = useState<any>(null);
+  const [watchCfg, setWatchCfg] = useState<FeishuWatch | null>(null);
+  const [ownerFilter, setOwnerFilter] = useState('');
   const [materials, setMaterials] = useState<FeishuPoolMaterial[]>([]);
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
   const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null; imgUrls: Record<string, string> } | null>(null);
@@ -70,6 +77,8 @@ export default function FeishuPool() {
 
   const loadWatcher = useCallback(() => {
     feishuPoolApi.watcherStatus().then(setWatcher).catch(e => setError(String(e?.message || e)));
+    feishuPoolApi.getWatch().then(setWatchCfg)   // T-940：监听范围卡数据源
+      .catch(e => setError(String(e?.message || e)));
   }, []);
   const loadMaterials = useCallback(() => {
     feishuPoolApi.poolMaterials().then(r => setMaterials(r.items)).catch(e => setError(String(e?.message || e)));
@@ -101,6 +110,13 @@ export default function FeishuPool() {
       loadMaterials(); loadTopics();
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
+
+  // 材料按监听用户筛选（T-940）：产出物归人（docs/minutes 带 owner meta），
+  // 群聊不归人——选具体用户时只显示该用户产出；再点一次取消筛选。
+  const watchUsers = watchCfg?.users || [];
+  const filteredMaterials = ownerFilter
+    ? materials.filter(m => m.type !== 'chat' && m.owner_open_id === ownerFilter)
+    : materials;
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
@@ -143,6 +159,56 @@ export default function FeishuPool() {
         <span className="ml-auto text-gray-500">材料 {materials.length} · 候选话题 {topics.candidates.length} · 已确认话题 {topics.confirmed.length}</span>
       </div>
 
+      {/* 监听范围卡（T-940）：监听用户/授权群/文档一目了然 + 就近维护入口 */}
+      <div className={card + ' text-xs'}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-gray-500">监听范围</span>
+          <span className="text-gray-600">（同步范围即授权范围）</span>
+          <span className="ml-auto">
+            <FeishuWatchSettings onSaved={() => { loadWatcher(); loadMaterials(); }} />
+          </span>
+        </div>
+        {watchCfg ? (
+          <div className="space-y-1.5">
+            <div className="flex items-start gap-2 flex-wrap">
+              <span className="text-gray-500 shrink-0 mt-0.5">监听用户</span>
+              {watchUsers.length === 0
+                ? <span className="text-gray-600">无（点右上「⚙ 同步设置」添加）</span>
+                : watchUsers.map(u => (
+                  <button key={u.open_id}
+                    onClick={() => setOwnerFilter(ownerFilter === u.open_id ? '' : u.open_id)}
+                    className={'px-2 py-0.5 rounded border text-[11px] '
+                      + (ownerFilter === u.open_id
+                        ? 'bg-info/20 text-info border-info/40'
+                        : 'text-gray-300 border-border hover:border-gray-500')}>
+                    {u.name || u.open_id}
+                    <span className="ml-1 text-gray-500">
+                      {u.scopes.map(s => SCOPE_LABEL[s] || s).join('/') || '无监听项'}
+                    </span>
+                  </button>
+                ))}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-gray-500 shrink-0">授权群聊</span>
+              {(watchCfg.chats || []).length === 0
+                ? <span className="text-gray-600">无</span>
+                : (watchCfg.chats || []).map(c => (
+                  <span key={c.chat_id} className="px-2 py-0.5 rounded border border-border text-[11px] text-gray-300">
+                    {c.name || c.chat_id}
+                  </span>
+                ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 shrink-0">监听文档</span>
+              <span className="text-gray-300">{(watchCfg.docs || []).length} 篇</span>
+              <span className="text-gray-600">（粘贴链接/按用户检索添加）</span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-gray-500">监听配置加载中…</div>
+        )}
+      </div>
+
       {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
       {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
 
@@ -152,18 +218,27 @@ export default function FeishuPool() {
         {tabBtn('images', '🖼 图片描述')}
       </div>
 
-      {/* 页签 1：材料池清单（行点击看原文） */}
+      {/* 页签 1：材料池清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
       {tab === 'materials' && (
         <div className={card}>
+          {ownerFilter && (
+            <div className="mb-2 flex items-center gap-2 text-[11px] text-info">
+              ▸ 只看 {(watchUsers.find(u => u.open_id === ownerFilter)?.name) || ownerFilter} 的产出（文档+妙记）
+              <button className="text-gray-500 hover:text-gray-300"
+                onClick={() => setOwnerFilter('')}>× 取消</button>
+            </div>
+          )}
           {materials.length === 0 ? (
             <div className="text-xs text-gray-500">材料池为空——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
+          ) : filteredMaterials.length === 0 ? (
+            <div className="text-xs text-gray-500">该用户暂无产出材料（重新同步后新落盘材料才带归属）</div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr><th className={th}>类型</th><th className={th}>标题 / 摘要</th><th className={th}>大小</th><th className={th}>更新时间</th><th className={th}></th></tr>
+                <tr><th className={th}>类型</th><th className={th}>标题 / 摘要</th><th className={th}>产出人</th><th className={th}>大小</th><th className={th}>更新时间</th><th className={th}></th></tr>
               </thead>
               <tbody>
-                {materials.map(m => (
+                {filteredMaterials.map(m => (
                   <tr key={m.id} className="cursor-pointer hover:bg-surface-3/60" onClick={() => openDetail(m)}>
                     <td className={td}>
                       <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[m.type]?.cls || ''}`}>
@@ -172,12 +247,22 @@ export default function FeishuPool() {
                     </td>
                     <td className={td}>
                       <div className="text-gray-200">{m.title || m.id}</div>
-                      {m.summary && <div className="text-[11px] text-gray-500 truncate max-w-[420px]">{m.summary}</div>}
+                      {m.summary && <div className="text-[11px] text-gray-500 truncate max-w-[360px]">{m.summary}</div>}
                       <div className="text-[10px] text-gray-600">{m.id} · {m.sha}</div>
                     </td>
+                    <td className={td}>{m.owner_name || <span className="text-gray-600">—</span>}</td>
                     <td className={td}>{(m.size / 1024).toFixed(1)} KB</td>
                     <td className={td}>{fmtTime(m.mtime)}</td>
-                    <td className={td}><span className="text-[11px] text-info">查看原文 →</span></td>
+                    <td className={td}>
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        {m.source_url && (
+                          <a href={m.source_url} target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-[11px] text-info hover:underline">飞书原文 ↗</a>
+                        )}
+                        <span className="text-[11px] text-gray-500">本地快照 →</span>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -233,11 +318,15 @@ export default function FeishuPool() {
           <div className="w-[860px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold">
-                {detail.m.title || detail.m.id}
-                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[detail.m.type]?.cls}`}>
+              <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
+                <span className="truncate">{detail.m.title || detail.m.id}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${TYPE_BADGE[detail.m.type]?.cls}`}>
                   {TYPE_BADGE[detail.m.type]?.label}
                 </span>
+                {detail.m.source_url && (
+                  <a href={detail.m.source_url} target="_blank" rel="noreferrer"
+                    className="shrink-0 text-[11px] text-info hover:underline">在飞书打开原始文件 ↗</a>
+                )}
               </h3>
               <button className={btn} onClick={() => setDetail(null)}>关闭</button>
             </div>
