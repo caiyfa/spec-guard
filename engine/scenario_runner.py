@@ -60,6 +60,42 @@ class ScenarioScriptError(Exception):
     """
 
 
+class ScenarioTimeout(Exception):
+    """场景级软看门狗（ENG-T03）：场景累计耗时超过 SG_SCENARIO_TIMEOUT（秒，默认 300）。
+
+    检查点在 flow 步骤边界 / verify 断言边界 / poll 轮询边界——exec 内死循环
+    （while True 不回到边界）软看门狗拦不住，进程级兜底靠 workbench runner 层
+    T-118 看门狗（settings KV run_timeout_sec / 环境变量 SG_RUN_TIMEOUT，默认 0=禁用）。
+    归类 CAT_ENV（环境/未知，非场景编写错误）。
+    """
+
+
+def _scenario_timeout_sec():
+    """读取场景级软看门狗阈值：SG_SCENARIO_TIMEOUT（秒）。
+
+    缺省/空/非法/非正值一律回退默认 300。每次调用现读（测试与运行期可调）。
+    """
+    raw = (os.environ.get("SG_SCENARIO_TIMEOUT") or "").strip()
+    if not raw:
+        return 300.0
+    try:
+        val = float(raw)
+        return val if val > 0 else 300.0
+    except ValueError:
+        return 300.0
+
+
+def _check_scenario_deadline(rctx, where):
+    """检查点：超阈值抛 ScenarioTimeout。deadline 由 run_scenario 挂在 rctx 上
+    （嵌套场景各自设置/恢复，结束即还原——不跨场景泄漏）。"""
+    deadline = getattr(rctx, "_scenario_deadline", None)
+    timeout_sec = getattr(rctx, "_scenario_timeout_sec", None)
+    if deadline is not None and time.time() > deadline:
+        raise ScenarioTimeout(
+            f"场景执行超过 {timeout_sec:g}s（{where}边界触发软看门狗；"
+            f"脚本内死循环无法触发，进程级兜底见 runner 层 T-118 run_timeout_sec）")
+
+
 # ══════════════════════════════════════════════════════════
 # 资源租约注册表（session 级，进程结束即消亡）
 # ══════════════════════════════════════════════════════════
@@ -485,6 +521,8 @@ def step_poll(body, rctx, ns, record):
             if on_timeout == "skip":
                 raise SkipScenario(msg, category="poll_timeout")
             raise AssertionError(msg)
+        # ENG-T03：poll 轮询边界检查点（场景阈值可比 poll 自身 timeout_ms 更小）
+        _check_scenario_deadline(rctx, "poll 轮询")
 
         # 执行 HTTP 调用
         started = time.time()
@@ -826,6 +864,7 @@ def format_assertion_log(trace) -> str:
 def _run_verifies(scenario, rctx, ns, record, last_call_ref):
     first_fail_category = None
     for v in scenario.verify:
+        _check_scenario_deadline(rctx, "断言")   # ENG-T03：断言边界检查点
         if "status" in v:
             body = v["status"]
             try:
@@ -977,6 +1016,12 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
     if scenario.produces:
         record.given["produces"] = scenario.produces
     started = time.time()
+    # ENG-T03 场景级软看门狗：deadline 挂 rctx（step_poll/_run_verifies 检查点共用），
+    # 结束时还原 prev——嵌套场景（上游实例）各自独立计时，不跨场景泄漏
+    timeout_sec = _scenario_timeout_sec()
+    prev_deadline = getattr(rctx, "_scenario_deadline", None)
+    rctx._scenario_deadline = started + timeout_sec
+    rctx._scenario_timeout_sec = timeout_sec
 
     ns = dict(rctx.shared_ns)          # 继承共享命名空间
     if extra_ns:
@@ -1005,6 +1050,7 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
                 ns[save_name] = value
                 if step_type == "call":
                     last_call_ref = save_name
+            _check_scenario_deadline(rctx, "步骤")   # ENG-T03：步骤边界检查点
 
         if run_verify and scenario.verify:
             # 仅当断言依赖默认 of（无显式 of 字段）且无 call 步骤时才报错
@@ -1044,6 +1090,7 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
     except Exception as e:
         record.fail(CAT_ENV, f"{type(e).__name__}: {e}")
 
+    rctx._scenario_deadline = prev_deadline   # ENG-T03：还原（不泄漏到后续场景/teardown）
     record.duration_ms = int((time.time() - started) * 1000)
     record.saved_vars = saved          # 运行时属性（to_dict 时排除）
     record.run_ns = ns                 # 运行时完整命名空间（供 teardown 插值，不落盘）

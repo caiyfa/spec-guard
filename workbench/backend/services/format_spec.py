@@ -34,7 +34,7 @@ except Exception:
 SPEC_VERSION = "2.9.0"
 SPEC_UPDATED = "2026-08-20"
 SPEC_CHANGELOG = [
-    ("2.9.0", "2026-08-20", "call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试"),
+    ("2.9.0", "2026-08-20", "call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试。新增场景级软看门狗 SG_SCENARIO_TIMEOUT（秒，默认 300）：超阈值在步骤/断言/poll 边界抛 ScenarioTimeout（FAIL/env_error）；call 文件字段与 binary body 改传 bytes（fd 不泄漏、401 重试重发字节完整）"),
     ("2.8.0", "2026-08-20", "契约门禁强化（ENG-T02）：契约指纹纳入 verify 断言逻辑（改预期值/路径/操作符/脚本即触发 T6，改断言需 bump MINOR）；strict_deps 语义修正（DRIFT/ORPHANED 升格 FAIL 而非退化为 BLOCKED）；T7 依赖缺 version 声明由 WARN 升 ERROR；版本仲裁下沉至依赖每一跳（传递 orphan 不再崩溃、传递漂移不再漏检）"),
     ("2.7.0", "2026-08-14", "FR 编号解析升级为注册表锚定（方案 B，迭代名完全自由）：右锚流水 + 左锚功能注册表最长匹配（specs/{模块}/{功能}/ 目录）+ 中段迭代可含 '-'（2026-08-17/sprint-23 合法）；迭代代号约束收敛为文件系统安全底线，conformance STRUCT 同步；schema.py parse_fr_delta_id 必须携带 known_features"),
     ("2.6.0", "2026-08-13", "FR 编号迭代命名限制落地（specstd，方案 A 终版双右锚解析）：迭代代号禁止含 '-'（字母/数字/下划线开头可含 '.'，S24/v2.5/2026Q3 合法），conformance STRUCT 强制；schema.py 新增 ITER_CODE_RE / FR_DELTA_ID_RE / parse_fr_delta_id"),
@@ -362,6 +362,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 - `db_query.sql`：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，支持 `{{var}}` 插值
 - `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / tdm / uac），未配置该连接时场景 SKIP
 - `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）
+- **场景级软看门狗**（2.9.0）：环境变量 `SG_SCENARIO_TIMEOUT`（秒，默认 300）——场景累计耗时超阈值时在**步骤/断言/poll 轮询边界**抛 `ScenarioTimeout`（FAIL/env_error，消息带超时提示）。注意：`python` 脚本内死循环（不回到步骤边界）软看门狗拦不住，进程级兜底用 workbench 执行控制的 run 级看门狗（settings `run_timeout_sec` / 环境变量 `SG_RUN_TIMEOUT`，默认 0=禁用，建议生产开启）
 
 ### 1.7 断言类型（verify 断言）
 

@@ -171,14 +171,14 @@ class HttpClient:
         try:
             times = int(retry.get("times", 1))
             backoff = float(retry.get("backoff", 1.0))
-        except (TypeError, ValueError):
-            raise ValueError(f"retry 配置非法（times 应为非负整数、backoff 应为秒数）: {retry!r}")
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"retry 配置非法（times 应为非负整数、backoff 应为秒数）: {retry!r}") from e
         if times < 0 or backoff < 0:
             raise ValueError(f"retry 配置非法（times/backoff 不得为负）: {retry!r}")
         return {
             "times": times,
             "backoff": backoff,
-            "on_status": set(int(s) for s in retry.get("on_status", (500, 502, 503, 504))),
+            "on_status": {int(s) for s in retry.get("on_status", (500, 502, 503, 504))},
         }
 
     def _do(self, method, path, params, json_body, files, data, timeout,
