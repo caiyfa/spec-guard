@@ -183,13 +183,13 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
                 findings.append({"level": "ERROR", "vid": "T4", "scenario": sid,
                                  "message": f"depends_on 引用不存在的场景: {dep_id}"})
 
-        # T7 版本期望提示：依赖未声明 version（接受任意版本，建议显式锁定）
+        # T7 版本期望：依赖未声明 version（ENG-T02 由 WARN 升 ERROR——缺声明则漂移永不报）
         for d in deps:
             if isinstance(d, str):
-                findings.append({"level": "WARN", "vid": "T7", "scenario": sid,
+                findings.append({"level": "ERROR", "vid": "T7", "scenario": sid,
                                  "message": f"依赖 {d} 未声明版本期望（接受任意版本），建议补 version: ^X"})
             elif isinstance(d, dict) and d.get("id") and d.get("version") is None:
-                findings.append({"level": "WARN", "vid": "T7", "scenario": sid,
+                findings.append({"level": "ERROR", "vid": "T7", "scenario": sid,
                                  "message": f"依赖 {d['id']} 未声明版本期望（接受任意版本），建议补 version: ^X"})
 
         # T5 无孤例（无依赖且非 prep 标签）

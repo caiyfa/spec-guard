@@ -189,7 +189,7 @@ def validate_scenario_content(content: str) -> dict:
                     continue
                 expected = None if isinstance(d, str) else (d.get("version") if isinstance(d, dict) else None)
                 if expected is None:
-                    findings.append({"level": "WARN", "rule": "T7", "scenario": sid,
+                    findings.append({"level": "ERROR", "rule": "T7", "scenario": sid,
                                      "message": f"依赖 {dep_id} 未声明版本期望（接受任意版本），"
                                                 f"建议补 version: ^X 显式锁定"})
                     continue

@@ -651,14 +651,14 @@ verify:
         t4 = [f for f in data["findings"] if f["rule"] == "T4" and f["level"] == "ERROR"]
         assert t4 and "不可满足" in t4[0]["message"]
 
-    def test_validate_t7_string_dep_warns(self, workspace, monkeypatch):
-        """字符串形式依赖（未声明版本期望）→ T7 WARN 建议 ^X。"""
+    def test_validate_t7_string_dep_errors(self, workspace, monkeypatch):
+        """字符串形式依赖（未声明版本期望）→ T7 ERROR 建议 ^X（ENG-T02 由 WARN 升级）。"""
         monkeypatch.setattr(validator, "_scenario_index", lambda: {
             "TL-PREP-001": {"version": "0.1", "source": "scenarios"}})
         result = _call(validator, "validate",
                        {"content": self._DEP_YAML % "[TL-PREP-001]"})
         data = json.loads(result[0].text)
-        t7 = [f for f in data["findings"] if f["rule"] == "T7" and f["level"] == "WARN"]
+        t7 = [f for f in data["findings"] if f["rule"] == "T7" and f["level"] == "ERROR"]
         assert t7 and "^X" in t7[0]["message"]
 
     def test_validate_t5_orphan_warns(self, workspace, monkeypatch):

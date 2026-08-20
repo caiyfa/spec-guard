@@ -124,3 +124,24 @@ def test_fingerprint_sensitive_to_verify_change():
     level, msg = check_t6("FP-1", fp_zero, "0.1",
                           {"FP-1": {"version": "0.1", "fingerprint": fp_null}})
     assert level == "ERROR" and "未 bump" in msg
+
+
+# ══════════════════════════════════════════════════════════
+# 6. 缺 version 声明 → spec_validator T7 报 ERROR（此前 WARN，门禁太松）
+# ══════════════════════════════════════════════════════════
+
+def test_t7_missing_version_is_error(tmp_path):
+    backend = os.path.join(SG_ROOT, "workbench", "backend")
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
+    from services.spec_validator import validate_test_cases
+    (tmp_path / "UP-OK.yaml").write_text(
+        "id: UP-OK\nversion: 0.1\ntitle: 上游\n"
+        "flow:\n  - set_var: {vars: {x: 1}}\nverify: []\n", encoding="utf-8")
+    (tmp_path / "DOWN.yaml").write_text(
+        "id: DOWN\nversion: 0.1\ntitle: 下游缺版本\ndepends_on: [UP-OK]\n"
+        "flow:\n  - set_var: {vars: {y: 1}}\nverify: []\n", encoding="utf-8")
+    result = validate_test_cases(str(tmp_path))
+    t7 = [f for f in result["findings"] if f["vid"] == "T7"]
+    assert t7, "字符串形式依赖应触发 T7"
+    assert t7[0]["level"] == "ERROR", f"T7 应为 ERROR（ENG-T02 升级），实际 {t7[0]['level']}"
