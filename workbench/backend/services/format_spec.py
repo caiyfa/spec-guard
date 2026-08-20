@@ -566,8 +566,8 @@ depends_on:
 |------|----------|----------|------------------|
 | match | 期望满足 | 正常执行 | 同左 |
 | minor_drift | 精确期望，实际 minor 更高 | 执行 + INFO（record.given.dep_version_note） | 同左 |
-| **major_drift** | 主版本不符 / 精确期望高于实际 | verdict=**DRIFT** → SKIP + 报告，**不阻塞流水线** | 退化为 BLOCKED |
-| **orphan** | 上游场景不存在 | verdict=**ORPHANED** → SKIP + 报告 | 退化为 BLOCKED |
+| **major_drift** | 主版本不符 / 精确期望高于实际 | verdict=**DRIFT** → SKIP + 报告，**不阻塞流水线** | 升格为 FAIL |
+| **orphan** | 上游场景不存在 | verdict=**ORPHANED** → SKIP + 报告 | 升格为 FAIL |
 | orphan + optional | 可选依赖缺失 | verdict=SKIP | 同左 |
 
 **strict_deps 启用方式**：`pytest --strict-deps` 或环境变量 `SG_STRICT_DEPS=1`（发版门禁用）。
@@ -746,7 +746,7 @@ name: 上线后问题修复（第一批）
 description: 修复上线后发现的 8 个 BUG
 env: sit
 tags: [imported, post-launch-fixes]
-strict_deps: false        # true 时 DRIFT/ORPHANED 退化为 BLOCKED（发版门禁）
+strict_deps: false        # true 时 DRIFT/ORPHANED 升格为 FAIL（发版门禁）
 filter:
   scenarios:
     - PP-RC-001

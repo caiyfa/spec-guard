@@ -1,6 +1,6 @@
 # SpecGuard YAML 格式规范
 
-> **版本**：2.5.0 | **更新时间**：2026-08-07 | **生成方式**：SpecGuard Workbench 自动生成
+> **版本**：2.8.0 | **更新时间**：2026-08-20 | **生成方式**：SpecGuard Workbench 自动生成
 > **用途**：Agent 根据此规范生成合规的 test-case YAML 文件，SpecGuard 按此规范校验格式。
 > **结构**：第一~七章为语法层（冻结，变更需递增版本号）；第八章为 tool 目录（引擎注册表动态生成）。
 
@@ -8,6 +8,9 @@
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 2.8.0 | 2026-08-20 | 契约门禁强化（ENG-T02）：契约指纹纳入 verify 断言逻辑（改预期值/路径/操作符/脚本即触发 T6，改断言需 bump MINOR）；strict_deps 语义修正（DRIFT/ORPHANED 升格 FAIL 而非退化为 BLOCKED）；T7 依赖缺 version 声明由 WARN 升 ERROR；版本仲裁下沉至依赖每一跳（传递 orphan 不再崩溃、传递漂移不再漏检） |
+| 2.7.0 | 2026-08-14 | FR 编号解析升级为注册表锚定（方案 B，迭代名完全自由）：右锚流水 + 左锚功能注册表最长匹配（specs/{模块}/{功能}/ 目录）+ 中段迭代可含 '-'（2026-08-17/sprint-23 合法）；迭代代号约束收敛为文件系统安全底线，conformance STRUCT 同步；schema.py parse_fr_delta_id 必须携带 known_features |
+| 2.6.0 | 2026-08-13 | FR 编号迭代命名限制落地（specstd，方案 A 终版双右锚解析）：迭代代号禁止含 '-'（字母/数字/下划线开头可含 '.'，S24/v2.5/2026Q3 合法），conformance STRUCT 强制；schema.py 新增 ITER_CODE_RE / FR_DELTA_ID_RE / parse_fr_delta_id |
 | 2.5.0 | 2026-08-07 | 新增引擎内建断言器 schema_match（结构断言 fuzzy-match-lite，T-501）：#string/#number/#boolean/#null 类型标记、## 可选键、#[] 数组模式、键集严格嵌套递归；oracle 参数化形式调用，语法层零变更 |
 | 2.4.0 | 2026-08-05 | 归一化场景类型：废弃 test_type 字段（unit/scenario 二分抹除，统一为场景），删除 T2/T3 校验，T5 孤例规则改通用（无 depends_on 且非 prep 标签 → 疑似孤例） |
 | 2.3.0 | 2026-08-02 | 新增 2.6 requires 执行依赖声明（accounts/env/upstream）与 T8 校验——执行前预检扫描器静态读取，弹窗前预警缺失账号/环境键；requires 不进契约指纹 |
@@ -123,14 +126,15 @@ teardown:
 |----------|----------|------|
 | 契约破坏性变更（删产出资源 / 改 save 变量名 / covers 移除 FR） | **bump MAJOR** | `1.2` → `2.0` |
 | 契约兼容增强（新增产出 / 新增 save 变量 / covers 追加 FR） | **bump MINOR** | `1.2` → `1.3` |
-| 契约无关改动（改断言阈值 / 修 doc 描述 / 调 flow 步骤） | 不动版本 | — |
+| verify 断言逻辑变更（改预期值 / 路径 / 操作符 / 脚本；2.8.0 起入指纹，不影响下游消费的 save/produces） | **bump MINOR** | `0.1` → `0.2` |
+| 契约无关改动（修 doc 描述 / 调 flow 步骤） | 不动版本 | — |
 
 **生命周期**：
 - `0.x` = 活跃 delta 快照期（SNAPSHOT 语义）：契约可变，下游 `^0` 期望宽容匹配
 - delta 归档时 bump 到 `1.0` 冻结为 release
 - 归档后契约变更必须 bump MAJOR（T6 规则机器强制）
 
-**契约 = produces（资源+状态） + save 输出变量名 + doc.covers（FR 列表）**。引擎对
+**契约 = produces（资源+状态） + save 输出变量名 + doc.covers（FR 列表） + verify 断言逻辑（2.8.0 起纳入指纹）**。引擎对
 每个场景计算契约指纹（sha256-12），与 `contracts_baseline.json` 基线比对（见 T6）。
 
 ### 1.6 步骤语法：4 原语 + tool 信封
@@ -368,8 +372,8 @@ depends_on:
 |------|----------|----------|------------------|
 | match | 期望满足 | 正常执行 | 同左 |
 | minor_drift | 精确期望，实际 minor 更高 | 执行 + INFO（record.given.dep_version_note） | 同左 |
-| **major_drift** | 主版本不符 / 精确期望高于实际 | verdict=**DRIFT** → SKIP + 报告，**不阻塞流水线** | 退化为 BLOCKED |
-| **orphan** | 上游场景不存在 | verdict=**ORPHANED** → SKIP + 报告 | 退化为 BLOCKED |
+| **major_drift** | 主版本不符 / 精确期望高于实际 | verdict=**DRIFT** → SKIP + 报告，**不阻塞流水线** | 升格为 FAIL |
+| **orphan** | 上游场景不存在 | verdict=**ORPHANED** → SKIP + 报告 | 升格为 FAIL |
 | orphan + optional | 可选依赖缺失 | verdict=SKIP | 同左 |
 
 **strict_deps 启用方式**：`pytest --strict-deps` 或环境变量 `SG_STRICT_DEPS=1`（发版门禁用）。
@@ -548,7 +552,7 @@ name: 上线后问题修复（第一批）
 description: 修复上线后发现的 8 个 BUG
 env: sit
 tags: [imported, post-launch-fixes]
-strict_deps: false        # true 时 DRIFT/ORPHANED 退化为 BLOCKED（发版门禁）
+strict_deps: false        # true 时 DRIFT/ORPHANED 升格为 FAIL（发版门禁）
 filter:
   scenarios:
     - PP-RC-001

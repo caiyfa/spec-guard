@@ -30,7 +30,7 @@ class TriggerBody(BaseModel):
     target: str = ""         # 场景ID / 模块路径 / 标签名
     env: str = "sit"         # 目标环境
     breakpoints: list[str] = []   # 断点场景 ID 列表
-    strict_deps: bool = False     # 严格依赖模式（DRIFT/ORPHANED → BLOCKED）
+    strict_deps: bool = False     # 严格依赖模式（DRIFT/ORPHANED → FAIL）
     prep_only: bool = False           # K-046 轻量执行：只跑上游环境准备
     skip_upstream_verify: bool = False  # K-046 轻量执行：上游只跑 flow 不断言
     account_override: str = ""        # K-056 执行时账号选择：alias 覆盖场景 as: default
