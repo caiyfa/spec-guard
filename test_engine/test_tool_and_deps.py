@@ -11,7 +11,7 @@ if SG_ROOT not in sys.path:
     sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import (  # noqa: E402
-    ExecutionRecord, VERDICT_BLOCKED, VERDICT_DRIFT, VERDICT_ORPHANED, VERDICT_SKIP,
+    ExecutionRecord, VERDICT_BLOCKED, VERDICT_DRIFT, VERDICT_FAIL, VERDICT_ORPHANED, VERDICT_SKIP,
 )
 from engine.dependency_graph import DependencyGraph  # noqa: E402
 from engine.registry import Registry  # noqa: E402
@@ -149,12 +149,13 @@ def test_check_drift_verdict():
     assert "UP" in reason and "^1" in reason
 
 
-def test_check_drift_strict_becomes_blocked():
+def test_check_drift_strict_becomes_fail():
+    """ENG-T02：strict 下漂移升格 FAIL（此前 BLOCKED 走 pytest.skip 反而放过漂移）"""
     up = _scenario("UP", version="2.0")
     down = _scenario("DOWN", depends_on=[{"id": "UP", "mode": "shared", "version": "^1", "optional": False}])
     g = _graph([up, down])
     verdict, _ = _check_dep_versions(down, _rctx(g, strict=True))
-    assert verdict == VERDICT_BLOCKED
+    assert verdict == VERDICT_FAIL
 
 
 def test_check_orphan_verdict():
@@ -164,11 +165,12 @@ def test_check_orphan_verdict():
     assert verdict == VERDICT_ORPHANED
 
 
-def test_check_orphan_strict_becomes_blocked():
+def test_check_orphan_strict_becomes_fail():
+    """ENG-T02：strict 下孤儿依赖升格 FAIL（语义同漂移）"""
     down = _scenario("DOWN", depends_on=[{"id": "GHOST", "mode": "shared", "version": None, "optional": False}])
     g = _graph([down])
     verdict, _ = _check_dep_versions(down, _rctx(g, strict=True))
-    assert verdict == VERDICT_BLOCKED
+    assert verdict == VERDICT_FAIL
 
 
 def test_check_optional_missing_skips():

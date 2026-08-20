@@ -17,12 +17,15 @@ from jsonpath_ng.exceptions import JSONPathError
 
 from engine.execution_record import (
     CAT_ASSERT,
+    CAT_CONTRACT_DRIFT,
+    CAT_CONTRACT_ORPHAN,
     CAT_ENV,
     CAT_ORACLE,
     CAT_SCENARIO,
     CAT_UPSTREAM,
     VERDICT_BLOCKED,
     VERDICT_DRIFT,
+    VERDICT_FAIL,
     VERDICT_ORPHANED,
     VERDICT_PASS,
     VERDICT_SKIP,
@@ -109,7 +112,7 @@ class RunContext:
         self.db = db                     # 默认连接 engine.db_oracle.ReadOnlyDb（可为 None）
         # K-055：多 schema 命名连接注册表（{"default": ReadOnlyDb, "tdm": ...}）；未传时由 db 合成
         self.dbs = dbs if dbs is not None else ({"default": db} if db else {})
-        self.strict_deps = strict_deps   # 严格依赖模式：DRIFT/ORPHANED 退化为 BLOCKED（发版门禁用）
+        self.strict_deps = strict_deps   # 严格依赖模式：DRIFT/ORPHANED 升格为 FAIL（发版门禁用）
         self.leases = LeaseRegistry()    # session 级资源租约注册表（工号池/账号/配置层共用）
         self.records = []              # list[ExecutionRecord] 本次运行全部记录
         self.instances = {}            # scenario_id -> list[_Instance]（实例池：shared 复用 / exclusive 新建）
@@ -1051,13 +1054,24 @@ def _acquire_instance(scenario_id, rctx, consumer_id, mode):
     - shared：复用池内共享实例（无则创建）；共享实例永不被独占消费者触碰
     - exclusive：总是新建全新实例（懒重跑），其依赖闭包递归按各自 mode 获取：
       闭包内 shared 上游仍复用缓存，exclusive 上游同样新建（递归独占）
+    - ENG-T02 版本仲裁下沉：每一跳取实例前先仲裁（深层 DRIFT/ORPHANED 不再漏检）；
+      传递孤儿依赖不抛裸 KeyError，按上游失败语义传播（ENG-BUG-010）
     """
     pool = rctx.instances.setdefault(scenario_id, [])
     if mode == MODE_SHARED:
         for inst in pool:
             if inst.mode == MODE_SHARED:
                 return inst
-    scenario = rctx.graph.by_id[scenario_id]
+    scenario = rctx.graph.by_id.get(scenario_id)
+    if scenario is None:
+        # 传递孤儿依赖：此前 by_id[...] 直接 KeyError 冒泡（pytest ERROR 无 verdict）
+        raise _UpstreamFailed(scenario_id, VERDICT_ORPHANED)
+    verdict, reason = _check_dep_versions(scenario, rctx)   # 每一跳都仲裁（ENG-BUG-002③）
+    if verdict:
+        record = _verdict_record(scenario, verdict, reason)
+        record.upstream_of = consumer_id
+        rctx.records.append(record)
+        raise _UpstreamFailed(scenario_id, verdict)
     dep_ns = _resolve_dep_ns(scenario, rctx, consumer_id)   # 先递归准备它自己的上游
 
     no = len(pool) + 1
@@ -1096,6 +1110,12 @@ def _verdict_record(scenario, verdict, reason):
         tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
     record.verdict = verdict
     record.skip_reason = reason
+    # ENG-T02：DRIFT/ORPHANED/strict-FAIL 填充 failure（不调 fail() 以免 verdict 被改写）——
+    # pytest 侧 [unknown] 空消息消失，plan_executor 侧 FAIL 通知路径可用
+    if verdict == VERDICT_ORPHANED:
+        record.failure = {"category": CAT_CONTRACT_ORPHAN, "message": reason, "evidence": None}
+    elif verdict in (VERDICT_DRIFT, VERDICT_FAIL):
+        record.failure = {"category": CAT_CONTRACT_DRIFT, "message": reason, "evidence": None}
     record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
     return record
 
@@ -1105,9 +1125,12 @@ def _check_dep_versions(scenario, rctx):
 
     返回 (verdict, reason)；全部满足返回 (None, "")。
     - 上游缺失 + optional → SKIP（可选依赖豁免，两种模式一致）
-    - 上游缺失 → ORPHANED（strict_deps 下 BLOCKED）
-    - 契约版本 MAJOR 漂移 → DRIFT（strict_deps 下 BLOCKED）
+    - 上游缺失 → ORPHANED（strict_deps 下 FAIL）
+    - 契约版本 MAJOR 漂移 → DRIFT（strict_deps 下 FAIL）
     - MINOR 漂移 → 放行（调用方记录提示）
+
+    ENG-T02：除 run_with_deps 顶层（目标场景自己的结论）外，_acquire_instance
+    对依赖链每一跳调用本函数——深层漂移/孤儿不再漏检。
     """
     from engine.dependency_graph import ORPHAN
     from engine.versioning import MAJOR_DRIFT, MINOR_DRIFT
@@ -1118,13 +1141,13 @@ def _check_dep_versions(scenario, rctx):
             if st["optional"]:
                 return VERDICT_SKIP, f"可选依赖 {st['id']} 不存在，场景跳过（optional）"
             if rctx.strict_deps:
-                return VERDICT_BLOCKED, f"依赖场景 {st['id']} 不存在（strict_deps 严格模式）"
+                return VERDICT_FAIL, f"依赖场景 {st['id']} 不存在（strict_deps 严格模式）"
             return VERDICT_ORPHANED, f"依赖场景 {st['id']} 不存在——上游已删除/改名，请修正 depends_on"
         if status == MAJOR_DRIFT:
             msg = (f"依赖 {st['id']} 契约版本漂移: 期望 {st['version'] or '(未声明)'} "
                    f"实际 v{st['actual']}")
             if rctx.strict_deps:
-                return VERDICT_BLOCKED, msg + "（strict_deps 严格模式）"
+                return VERDICT_FAIL, msg + "（strict_deps 严格模式）"
             return VERDICT_DRIFT, msg + "——请核对上游契约后 bump 期望版本"
         if status == MINOR_DRIFT:
             minor_notes.append(f"{st['id']}(期望{st['version']}/实际v{st['actual']})")

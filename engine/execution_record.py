@@ -9,7 +9,7 @@ VERDICT_PASS = "PASS"
 VERDICT_FAIL = "FAIL"
 VERDICT_SKIP = "SKIP"
 VERDICT_BLOCKED = "BLOCKED"
-# 版本化依赖（格式 2.0）：契约版本失配 / 上游缺失（默认不阻塞流水线，strict_deps 下退化为 BLOCKED）
+# 版本化依赖（格式 2.0）：契约版本失配 / 上游缺失（默认不阻塞流水线，strict_deps 下升格为 FAIL）
 VERDICT_DRIFT = "DRIFT"
 VERDICT_ORPHANED = "ORPHANED"
 
@@ -22,6 +22,9 @@ CAT_ORACLE = "oracle_mismatch"        # DB 校对断言不通过
 CAT_UPSTREAM = "upstream_blocked"     # 上游未通过（BLOCKED 场景的 skip_category，非 fail 分类）
 CAT_ENV = "env_error"                 # 环境/未知错误（网络异常、真正的环境缺口）
 CAT_SCENARIO = "scenario_error"       # 场景编写错误（未定义变量 / 未注册 tool / jsonpath 拼错 / 脚本异常）
+# ENG-T02 追加（契约门禁类，归属见 docs/架构升级/ENG-T02-契约版本门禁强化.md §3.4）：
+CAT_CONTRACT_DRIFT = "contract_drift"     # 契约版本漂移（DRIFT；strict_deps 下 FAIL 的归类）
+CAT_CONTRACT_ORPHAN = "contract_orphan"   # 上游依赖缺失（ORPHANED 的归类）
 
 # body_excerpt 截断上限
 _MAX_STR = 500

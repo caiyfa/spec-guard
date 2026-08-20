@@ -39,7 +39,7 @@ def pytest_addoption(parser):
                      help="仅执行依赖闭包的上游 flow 准备环境，目标场景不执行")
     parser.addoption("--strict-deps", action="store_true",
                      default=os.environ.get("SG_STRICT_DEPS", "").lower() in ("1", "true", "yes"),
-                     help="严格依赖模式：DRIFT/ORPHANED 退化为 BLOCKED（发版门禁用；也可用 SG_STRICT_DEPS 环境变量）")
+                     help="严格依赖模式：DRIFT/ORPHANED 升格为 FAIL（发版门禁用；也可用 SG_STRICT_DEPS 环境变量）")
 
 
 @pytest.fixture(scope="session")
