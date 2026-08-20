@@ -3,12 +3,13 @@
 版本语义（Maven 风格简化）：
 - 版本号 "MAJOR.MINOR"（"1" 等价 "1.0"）；0.x = 活跃 delta 快照期（SNAPSHOT 语义）
 - 契约 = produces（资源+状态） + save 输出变量名 + doc.covers（FR 列表）
+  + verify 断言逻辑（规范化摘要，ENG-T02/格式 2.8.0 起纳入指纹）
 - 期望声明：`^X` 同主版本兼容；`X.Y` 精确锁定；省略 = 接受任意版本（lint 提示补全）
 
 匹配判定：
 - MATCH        期望满足
 - MINOR_DRIFT  同主版本且实际 minor 高于精确期望（兼容增强，执行 + INFO）
-- MAJOR_DRIFT  主版本不符 / 精确期望高于实际（契约漂移，DRIFT 或 strict 下 BLOCKED）
+- MAJOR_DRIFT  主版本不符 / 精确期望高于实际（契约漂移，DRIFT 或 strict 下 FAIL）
 
 T6 校验（spec_validator 调用）：契约指纹变更但 version 未 bump → ERROR。
 """
@@ -93,11 +94,49 @@ def _produces_key(produces):
     return sorted(f"{p.get('resource')}:{p.get('state', '')}" for p in (produces or []))
 
 
-def _fingerprint(produces, saves, covers):
+# json 断言的操作符键（与 _assert_json_ops 支持集对齐 + absent 反向语义）
+_JSON_ASSERT_OPS = ("eq", "ne", "contains", "len_eq", "len_gt", "not_null", "absent")
+
+
+def _verify_key(verify):
+    """verify 断言的规范化摘要（ENG-T02：改断言即改指纹，T6 可见）。
+
+    不渲染插值（保留 {{}} 原文——指纹是静态契约，与运行期变量无关）。
+    每条约言取类型键 + 规范化内容：
+    - json:   path + 出现的操作符键及预期值
+    - status: eq 原文
+    - oracle: name + params
+    - python: script 原文的 sha256-12（长脚本不撑大指纹源）
+    """
+    out = []
+    for v in (verify or []):
+        if not isinstance(v, dict) or not v:
+            out.append(str(v))
+            continue
+        kind, body = next(iter(v.items()))
+        if kind == "json" and isinstance(body, dict):
+            ops = {op: body[op] for op in _JSON_ASSERT_OPS if op in body}
+            out.append({"assert": "json", "path": body.get("path"), **ops})
+        elif kind == "status" and isinstance(body, dict):
+            out.append({"assert": "status", "eq": body.get("eq")})
+        elif kind == "oracle" and isinstance(body, dict):
+            out.append({"assert": "oracle", "name": body.get("name"),
+                        "params": body.get("params", {})})
+        elif kind == "python":
+            script = body if isinstance(body, str) else body.get("script", "")
+            out.append({"assert": "python",
+                        "script_sha": hashlib.sha256(str(script).encode("utf-8")).hexdigest()[:12]})
+        else:
+            out.append({"assert": str(kind), "body": body})
+    return out
+
+
+def _fingerprint(produces, saves, covers, verify=None):
     contract = {
         "produces": _produces_key(produces),
         "saves": sorted(set(saves)),
         "covers": sorted(str(c) for c in (covers or [])),
+        "verify": _verify_key(verify),
     }
     raw = json.dumps(contract, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
@@ -105,13 +144,15 @@ def _fingerprint(produces, saves, covers):
 
 def contract_fingerprint(scenario):
     """Scenario 对象 → 契约指纹"""
-    return _fingerprint(scenario.produces, _save_names_from_flow(scenario.flow), scenario.covers)
+    return _fingerprint(scenario.produces, _save_names_from_flow(scenario.flow),
+                        scenario.covers, scenario.verify)
 
 
 def fingerprint_from_raw(raw):
     """raw YAML dict → 契约指纹（spec_validator T6 用，不依赖 Scenario 对象）"""
     doc = raw.get("doc") or {}
-    return _fingerprint(raw.get("produces"), _save_names_from_flow(raw.get("flow")), doc.get("covers"))
+    return _fingerprint(raw.get("produces"), _save_names_from_flow(raw.get("flow")),
+                        doc.get("covers"), raw.get("verify"))
 
 
 # ══════════════════════════════════════════════════════════
@@ -160,5 +201,5 @@ def check_t6(scenario_id, fingerprint, version, baseline):
                          f"请 bump MAJOR/MINOR 或回退契约变更")
     if base["fingerprint"] == fingerprint and base["version"] != str(version):
         return ("WARN", f"{scenario_id}: version 已 bump（{base['version']} → {version}）"
-                        f"但契约（produces/save/covers）未变化——冗余 bump")
+                        f"但契约（produces/save/covers/verify）未变化——冗余 bump")
     return None

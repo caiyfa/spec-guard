@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.7.0"
-SPEC_UPDATED = "2026-08-14"
+SPEC_VERSION = "2.8.0"
+SPEC_UPDATED = "2026-08-20"
 SPEC_CHANGELOG = [
+    ("2.8.0", "2026-08-20", "契约门禁强化（ENG-T02）：契约指纹纳入 verify 断言逻辑（改预期值/路径/操作符/脚本即触发 T6，改断言需 bump MINOR）；strict_deps 语义修正（DRIFT/ORPHANED 升格 FAIL 而非退化为 BLOCKED）；T7 依赖缺 version 声明由 WARN 升 ERROR；版本仲裁下沉至依赖每一跳（传递 orphan 不再崩溃、传递漂移不再漏检）"),
     ("2.7.0", "2026-08-14", "FR 编号解析升级为注册表锚定（方案 B，迭代名完全自由）：右锚流水 + 左锚功能注册表最长匹配（specs/{模块}/{功能}/ 目录）+ 中段迭代可含 '-'（2026-08-17/sprint-23 合法）；迭代代号约束收敛为文件系统安全底线，conformance STRUCT 同步；schema.py parse_fr_delta_id 必须携带 known_features"),
     ("2.6.0", "2026-08-13", "FR 编号迭代命名限制落地（specstd，方案 A 终版双右锚解析）：迭代代号禁止含 '-'（字母/数字/下划线开头可含 '.'，S24/v2.5/2026Q3 合法），conformance STRUCT 强制；schema.py 新增 ITER_CODE_RE / FR_DELTA_ID_RE / parse_fr_delta_id"),
     ("2.5.0", "2026-08-07", "新增引擎内建断言器 schema_match（结构断言 fuzzy-match-lite，T-501）：#string/#number/#boolean/#null 类型标记、## 可选键、#[] 数组模式、键集严格嵌套递归；oracle 参数化形式调用，语法层零变更"),
@@ -319,14 +320,15 @@ teardown:
 |----------|----------|------|
 | 契约破坏性变更（删产出资源 / 改 save 变量名 / covers 移除 FR） | **bump MAJOR** | `1.2` → `2.0` |
 | 契约兼容增强（新增产出 / 新增 save 变量 / covers 追加 FR） | **bump MINOR** | `1.2` → `1.3` |
-| 契约无关改动（改断言阈值 / 修 doc 描述 / 调 flow 步骤） | 不动版本 | — |
+| verify 断言逻辑变更（改预期值 / 路径 / 操作符 / 脚本；2.8.0 起入指纹，不影响下游消费的 save/produces） | **bump MINOR** | `0.1` → `0.2` |
+| 契约无关改动（修 doc 描述 / 调 flow 步骤） | 不动版本 | — |
 
 **生命周期**：
 - `0.x` = 活跃 delta 快照期（SNAPSHOT 语义）：契约可变，下游 `^0` 期望宽容匹配
 - delta 归档时 bump 到 `1.0` 冻结为 release
 - 归档后契约变更必须 bump MAJOR（T6 规则机器强制）
 
-**契约 = produces（资源+状态） + save 输出变量名 + doc.covers（FR 列表）**。引擎对
+**契约 = produces（资源+状态） + save 输出变量名 + doc.covers（FR 列表） + verify 断言逻辑（2.8.0 起纳入指纹）**。引擎对
 每个场景计算契约指纹（sha256-12），与 `contracts_baseline.json` 基线比对（见 T6）。
 
 ### 1.6 步骤语法：4 原语 + tool 信封

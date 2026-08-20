@@ -1,402 +1,98 @@
 {
-  "0807-ACT-001": {
-    "fingerprint": "d8df65632824",
-    "version": "0.1"
-  },
-  "0807-ACT-002": {
-    "fingerprint": "7883d9020ace",
-    "version": "0.1"
-  },
   "EV-IMP-001": {
-    "fingerprint": "59f2dec54919",
+    "fingerprint": "505831cb5d58",
     "version": "0.1"
   },
   "EV-IMP-002": {
-    "fingerprint": "abdd1c77cd11",
+    "fingerprint": "94736ab75bfb",
     "version": "0.1"
   },
   "GP-IMP-001": {
-    "fingerprint": "e905efd14bd1",
+    "fingerprint": "0df932d3e419",
     "version": "0.1"
   },
   "GP-IMP-002": {
-    "fingerprint": "abdd1c77cd11",
+    "fingerprint": "6aaca897edf0",
     "version": "0.1"
   },
   "IS-PREP-002": {
-    "fingerprint": "e3931cf7be41",
+    "fingerprint": "091a897f4eed",
     "version": "0.1"
   },
   "IS-PREP-003": {
-    "fingerprint": "9bb43413201c",
+    "fingerprint": "b27391c9173b",
     "version": "0.1"
   },
   "IS-RVT-001": {
-    "fingerprint": "bad209ad1d1d",
+    "fingerprint": "8ba7a69bd9b1",
     "version": "0.1"
   },
   "IS-RVT-002": {
-    "fingerprint": "ff998a828c1f",
+    "fingerprint": "dd3096e0cb20",
     "version": "0.1"
   },
   "IS-RVT-003": {
-    "fingerprint": "83366603f0a7",
+    "fingerprint": "328c22d03c78",
     "version": "0.1"
   },
   "PP-PERM-001": {
-    "fingerprint": "8818f30cb509",
+    "fingerprint": "a02ed88fa90b",
     "version": "0.1"
   },
   "PP-PERM-002": {
-    "fingerprint": "06549fadbffb",
+    "fingerprint": "41c44aec23b9",
     "version": "0.1"
   },
   "PP-PERM-003": {
-    "fingerprint": "f4481f4e9404",
+    "fingerprint": "134d0af5c653",
     "version": "0.1"
   },
   "PP-PERM-004": {
-    "fingerprint": "06549fadbffb",
+    "fingerprint": "f2ec149e7dea",
     "version": "0.1"
   },
   "PP-RC-001": {
-    "fingerprint": "2471b369d56d",
+    "fingerprint": "17e00507df76",
     "version": "0.1"
   },
   "PP-RC-002": {
-    "fingerprint": "ccdbf21063eb",
+    "fingerprint": "9e42ab2e81a5",
     "version": "0.1"
   },
   "PP-RC-003": {
-    "fingerprint": "ccdbf21063eb",
+    "fingerprint": "9afadc22d4df",
     "version": "0.1"
   },
   "PP-RC-004": {
-    "fingerprint": "ccdbf21063eb",
+    "fingerprint": "6177d7e17ac0",
     "version": "0.1"
   },
   "PP-RC-005": {
-    "fingerprint": "643f9d09ecba",
+    "fingerprint": "1ba08a19e4b9",
     "version": "0.1"
   },
   "PP-RC-006": {
-    "fingerprint": "b13e5ecd7593",
+    "fingerprint": "f6d02411d6cb",
     "version": "0.1"
   },
   "PP-RC-007": {
-    "fingerprint": "b13e5ecd7593",
+    "fingerprint": "865939a73f2a",
     "version": "0.1"
   },
   "PP-SEC-001": {
-    "fingerprint": "350017b137d4",
+    "fingerprint": "31ae5f566f0f",
     "version": "0.1"
   },
   "PP-SEC-002": {
-    "fingerprint": "1d2b5c510e71",
+    "fingerprint": "9cb784068466",
     "version": "0.1"
   },
   "PP-SNAP-001": {
-    "fingerprint": "643f9d09ecba",
+    "fingerprint": "5fec25012b7e",
     "version": "0.1"
   },
   "PP-SNAP-002": {
-    "fingerprint": "3512305e6c4b",
+    "fingerprint": "c7cbef8cfe63",
     "version": "0.1"
-  },
-  "SS-TAG-001": {
-    "fingerprint": "01862f4795dc",
-    "version": "0.1"
-  },
-  "SS-TAG-002": {
-    "fingerprint": "01862f4795dc",
-    "version": "0.1"
-  },
-  "SS-TAG-004": {
-    "fingerprint": "01862f4795dc",
-    "version": "0.1"
-  },
-  "SS-TAG-005": {
-    "fingerprint": "01862f4795dc",
-    "version": "0.1"
-  },
-  "SS-TAG-006": {
-    "fingerprint": "01862f4795dc",
-    "version": "0.1"
-  },
-  "SS-TAG-007": {
-    "fingerprint": "01862f4795dc",
-    "version": "0.1"
-  },
-  "ST01-IMP-001": {
-    "fingerprint": "8791337d6d1e",
-    "version": "0.1"
-  },
-  "TL-DTL-001": {
-    "fingerprint": "1a7b13bbf8c0",
-    "version": "0.1"
-  },
-  "TL-RC-001": {
-    "fingerprint": "d7d5956aae75",
-    "version": "0.1"
-  },
-  "TL-RC-002": {
-    "fingerprint": "a7b2e9162a3c",
-    "version": "0.1"
-  },
-  "TL-RC-003": {
-    "fingerprint": "28aa73bb3d8b",
-    "version": "0.1"
-  },
-  "TL-RC-004": {
-    "fingerprint": "1020cd2b300a",
-    "version": "0.1"
-  },
-  "TL-RC-005": {
-    "fingerprint": "7bd014330994",
-    "version": "0.1"
-  },
-  "TL-RC-006": {
-    "fingerprint": "5d8b95d54480",
-    "version": "0.1"
-  },
-  "TL-RC-007": {
-    "fingerprint": "971180412de5",
-    "version": "0.3"
-  },
-  "TL-RC-008": {
-    "fingerprint": "4ee928b755d4",
-    "version": "0.1"
-  },
-  "TL-RC-009": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-010": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-011": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-012": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-013": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-014": {
-    "fingerprint": "971180412de5",
-    "version": "0.4"
-  },
-  "TL-RC-015": {
-    "fingerprint": "2527f2933cbc",
-    "version": "0.1"
-  },
-  "TL-RC-016": {
-    "fingerprint": "02e73cd20286",
-    "version": "0.1"
-  },
-  "TL-RC-017": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-018": {
-    "fingerprint": "2fa1b364444b",
-    "version": "0.1"
-  },
-  "TL-RC-019": {
-    "fingerprint": "0c311b8776cd",
-    "version": "0.1"
-  },
-  "TL-RC-020": {
-    "fingerprint": "c20dd1d6ec94",
-    "version": "0.1"
-  },
-  "TL-RC-021": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-022": {
-    "fingerprint": "2f32eac63d28",
-    "version": "0.1"
-  },
-  "TL-RC-023": {
-    "fingerprint": "7a2705562a5b",
-    "version": "0.1"
-  },
-  "TL-RC-024": {
-    "fingerprint": "b765e42a4edc",
-    "version": "0.1"
-  },
-  "TL-RC-025": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-026": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-027": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-028": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-029": {
-    "fingerprint": "7803213614a0",
-    "version": "0.1"
-  },
-  "TL-RC-030": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-031": {
-    "fingerprint": "99a004c33c21",
-    "version": "0.1"
-  },
-  "TL-RC-032": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-033": {
-    "fingerprint": "7001a9e8328f",
-    "version": "0.1"
-  },
-  "TL-RC-034": {
-    "fingerprint": "d77c04148536",
-    "version": "0.1"
-  },
-  "TL-RC-035": {
-    "fingerprint": "d77c04148536",
-    "version": "0.1"
-  },
-  "TL-RC-036": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-037": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-038": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-039": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-040": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-041": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-042": {
-    "fingerprint": "89c100bf6720",
-    "version": "0.1"
-  },
-  "TL-RC-043": {
-    "fingerprint": "99a004c33c21",
-    "version": "0.1"
-  },
-  "TL-RC-044": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-045": {
-    "fingerprint": "d80c8ad9c2a7",
-    "version": "0.1"
-  },
-  "TL-RC-046": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-047": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-048": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-049": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-050": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-051": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-052": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-053": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-054": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-055": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-056": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-057": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-058": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-059": {
-    "fingerprint": "d95cd08e890f",
-    "version": "0.1"
-  },
-  "TL-RC-060": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-061": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-062": {
-    "fingerprint": "3c59f9df975c",
-    "version": "0.1"
-  },
-  "TL-RC-063": {
-    "fingerprint": "eb42a1f705fd",
-    "version": "0.1"
-  },
-  "TL-RC-064": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "TL-RC-065": {
-    "fingerprint": "397811e906ed",
-    "version": "0.1"
-  },
-  "UT01-PREP-001": {
-    "fingerprint": "5a1a4d6693ba",
-    "version": "1.0"
   }
 }

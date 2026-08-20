@@ -21,6 +21,7 @@ from engine.execution_record import (  # noqa: E402
 from engine.registry import Registry  # noqa: E402
 from engine.scenario_loader import Scenario  # noqa: E402
 from engine.scenario_runner import RunContext, register_builtin_steps, run_with_deps  # noqa: E402
+from engine.versioning import check_t6, contract_fingerprint  # noqa: E402
 
 
 def _make_rctx(graph, strict=False):
@@ -106,3 +107,20 @@ def test_drift_verdict_has_failure_message():
     assert rec.failure and rec.failure["message"].strip(), \
         "DRIFT 记录必须带完整失败消息（此前 _verdict_record 不填 failure → pytest 只打 [unknown]）"
     assert "^2" in rec.failure["message"]
+
+
+# ══════════════════════════════════════════════════════════
+# 5. 改 verify 一条断言的预期 → contract_fingerprint 变化；check_t6 对旧基线报 ERROR
+# ══════════════════════════════════════════════════════════
+
+def test_fingerprint_sensitive_to_verify_change():
+    flow = [{"call": {"method": "GET", "path": "/api/x", "save": "resp"}}]
+    sc_null = Scenario(id="FP-1", flow=flow, doc={"covers": ["FR-001"]},
+                       verify=[{"json": {"of": "resp", "path": "$.data.status", "eq": None}}])
+    sc_zero = Scenario(id="FP-1", flow=flow, doc={"covers": ["FR-001"]},
+                       verify=[{"json": {"of": "resp", "path": "$.data.status", "eq": 0}}])
+    fp_null, fp_zero = contract_fingerprint(sc_null), contract_fingerprint(sc_zero)
+    assert fp_null != fp_zero, "改断言预期必须改变契约指纹（此前 eq:null→eq:0 指纹不变，T6 漏报）"
+    level, msg = check_t6("FP-1", fp_zero, "0.1",
+                          {"FP-1": {"version": "0.1", "fingerprint": fp_null}})
+    assert level == "ERROR" and "未 bump" in msg
