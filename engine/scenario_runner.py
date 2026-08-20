@@ -7,6 +7,7 @@
 """
 
 import os
+import pathlib
 import random
 import string
 import time
@@ -297,7 +298,9 @@ def step_call(body, rctx, ns, record):
                 fpath = v[1:]
                 if not os.path.isabs(fpath):
                     fpath = os.path.join(os.getcwd(), fpath)
-                files[k] = (os.path.basename(fpath), open(fpath, "rb"))  # noqa: SIM115
+                # ENG-T03（ENG-BUG-004/011）：读 bytes 而非流式句柄——句柄不 close 有
+                # fd 泄漏风险，且 401/重试重发时流已耗尽会发出空 body
+                files[k] = (os.path.basename(fpath), pathlib.Path(fpath).read_bytes())
             else:
                 data[k] = v
         files = files or None
@@ -315,7 +318,8 @@ def step_call(body, rctx, ns, record):
         fpath = render(body.get("file", ""), ns)
         if not os.path.isabs(fpath):
             fpath = os.path.join(os.getcwd(), fpath)
-        data = open(fpath, "rb")  # noqa: SIM115
+        # ENG-T03（ENG-BUG-004/011）：同 form——bytes 化，句柄不再存在，重试任意次安全
+        data = pathlib.Path(fpath).read_bytes()
         if headers is None:
             headers = {}
         headers.setdefault("Content-Type", "application/octet-stream")

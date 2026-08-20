@@ -107,7 +107,8 @@ def test_call_binary(tmp_path):
                "file": str(f), "save": "r"}, _rctx(client), {}, record)
     call = client.calls[0]
     assert call["headers"]["Content-Type"] == "application/octet-stream"
-    assert hasattr(call["data"], "read")
+    # ENG-T03：binary 改传 bytes（流式句柄有 fd 泄漏与 401 重试空 body 问题）
+    assert call["data"] == b"\x00\x01\x02"
 
 
 def test_call_invalid_body_type_rejected():
