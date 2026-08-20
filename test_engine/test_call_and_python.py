@@ -11,7 +11,7 @@ if SG_ROOT not in sys.path:
     sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import ExecutionRecord  # noqa: E402
-from engine.scenario_runner import step_call, step_python, SkipScenario  # noqa: E402
+from engine.scenario_runner import step_call, step_python, SkipScenario, ScenarioScriptError  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════
@@ -162,7 +162,8 @@ def test_python_step_skip_scenario():
 
 def test_python_step_error_propagates():
     record = ExecutionRecord(scenario_id="T")
-    with pytest.raises(KeyError):
+    # ENG-T01：python 步骤脚本异常经包装为 ScenarioScriptError（归 CAT_SCENARIO），不再裸抛 KeyError
+    with pytest.raises(ScenarioScriptError):
         step_python({"script": "ns['missing']"}, _rctx(None), {}, record)
 
 

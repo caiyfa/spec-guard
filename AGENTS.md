@@ -200,6 +200,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - **oracle/step 注册**：新断言器加到 `systems/{system}/oracles.py` 并注册；新 tool 在 `systems/{system}/steps.py` 声明，`engine/tool_registry.py` 模块导入时注册——**语法层零变更**。
 - **SKIP 语义（诚实结果）**：测试数据缺失/账号未配置 → SKIP；上游失败 → BLOCKED；绝不把环境问题报成 FAIL。
 - **前端**：React 函数组件 + TS 严格模式；DAG 布局用 elkjs（懒加载）；YAML 编辑用 Monaco；禁止 js-yaml 往返写回（会丢中文注释，用 deps_editor 文本外科手术）。
+- **前端体验基线（硬约束，新增页面/交互必逐条自查）**：①**操作状态持久化**——页签/选择器/筛选条件等用户选择用 localStorage 记住，进入即恢复上次状态，不遍用户重复选择；恢复值失效时诚实回退默认（不报错不空白）。②**技术侧细节不外露为用户操作面**——多模态转述/后台聚类等自动执行（同步后异步触发，模型未配置诚实跳过），不给用户设独立维护入口。③**三态分离**——加载中/空数据/错误三种状态分别呈现，占位文案不得混用（「加载中…」不得用于「无数据」，曾致 0 字节快照被误读为加载卡死）。④**长操作可单点刷新**——全局同步之外提供局部入口（如「更新本群」秒级反馈），不让用户为看一个群的变化等全量。⑤**缺失配置就地补——不报错踢人**——动作因缺配置（如未配 text/vision 模型）失败时，直接弹出配置弹层就地填写（预填可改默认值），保存后自动重试原动作；禁止只报错让用户自己去设置页找。
 - **智能层 skills 文件**：`agent/skills/*.md` 统一用 `---` YAML frontmatter（name/description/trigger/keywords）+ Markdown 正文；loader 30s 内存缓存热加载，**新增文件无需重启**；skills 正文注入 system prompt 的 `<skills>` XML 块，用户消息关键词命中 keywords 时附加技能提示（match_skills_hint）。
 
 ---
@@ -313,3 +314,4 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 - [2026-07-24] ✅ 仓库自 `ifelc-ms-tdm-api/tests/specguard/` 迁出为独立仓库，已 git init + 关联 gitee 远端；命令路径已去前缀，README 同步完成。
 - [2026-07-28] AGENTS.md 完成首轮适配度修订：补全 specstd/agent/mcp_server/feedback 四个此前缺失的顶层包，修正 Status/Git Workflow/环境依赖等过时声明。
 - [2026-08-05] AGENTS.md 新增「角色认知」章节：理清开发角色（本文件读者，不注入 agent 对话）与使用角色（agent 对话测试助手，规则知识来自 system prompt + 被测系统工作区 AGENTS.md）的边界，防止角色混淆。
+- [2026-08-19] 飞书材料池共享化（T-949）：chats/docs/minutes 快照与话题库/历史落**工作区共享材料区**（`{ws}/.specflow/feishu_pool/`，即 `specflow_dir("")`）；watch 配置与话题草案留私有区（谁配置谁拉）。**授权语义升级为工作区级**：docs/minutes 对用户的可见性跟随飞书侧权限元数据（perm meta，需 `docs:permission.member:retrieve`/`docs:permission.setting:read` scope，缺失时保守仅 owner 可见）；chats 快照对工作区全员可见（拉取者必在群内，办公转述语义）。多用户重复同步靠 message_id 幂等合并无害化。

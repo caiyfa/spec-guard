@@ -30,7 +30,8 @@ log = logging.getLogger(__name__)
 _IMG_PLACEHOLDER_RE = re.compile(r"\[(图片#\d+)\]")
 
 _DEFAULT_WATCH = {"chats": [], "docs": [], "users": [],
-                  "minutes_days": 30, "chat_days": 7}
+                  "minutes_days": 30, "chat_days": 7,
+                  "chat_sync_minutes": 0}
 
 _USER_SCOPES = {"group_sender", "minutes", "docs"}
 
@@ -105,14 +106,59 @@ def _imgmap_from_content(content: str, images: list | None) -> dict:
     return entries
 
 
+def _pull_perm_meta(token: str, doc_type: str) -> dict:
+    """T-949：拉取飞书侧权限元数据（drive +member-list / +permission-get-setting）。
+
+    missing_scope / 任何失败 → {"pulled_at": None, "error": …}（不阻断正文落盘；
+    可见性过滤对 perm 缺失保守处理）；成功 → {pulled_at, public, member_users,
+    member_chats}。成功返回形状待真实 token 补授权后校准（宽容解析多键名，
+    契约见 test_specstd/feishu_cli_contract.py）。
+    """
+    try:
+        members_payload = _run_lark(["drive", "+member-list", "--as", "user",
+                                     "--token", token, "--type", doc_type])
+        rows = ((members_payload.get("data") or {}).get("members")
+                or (members_payload.get("data") or {}).get("items") or [])
+        users: list[str] = []
+        chats: list[str] = []
+        for m in rows:
+            if not isinstance(m, dict):
+                continue
+            mid = str(m.get("member_id") or m.get("id") or "")
+            mtype = str(m.get("member_type") or m.get("type") or "user")
+            if not mid:
+                continue
+            (chats if mtype in ("chat", "group") else users).append(mid)
+    except ValueError as e:
+        return {"pulled_at": None, "public": False, "member_users": [],
+                "member_chats": [], "error": str(e)[:300]}
+    try:
+        setting = _run_lark(["drive", "+permission-get-setting", "--as", "user",
+                             "--token", token, "--type", doc_type])
+        sd = setting.get("data") or {}
+        link = str(sd.get("link_share_entity") or sd.get("link_share") or "")
+        public = link in ("tenant_readable", "anyone_readable",
+                          "anyone_can_view")
+    except ValueError as e:
+        # member 成功但 setting 失败：部分权限元数据（保留 members，诚实记错）
+        return {"pulled_at": None, "public": False,
+                "member_users": users, "member_chats": chats,
+                "error": str(e)[:300]}
+    return {"pulled_at": datetime.now().isoformat(timespec="seconds"),
+            "public": public, "member_users": users, "member_chats": chats}
+
+
 def sync_doc(specflow_emp_base: Path, doc_token: str, url: str = "",
              meta: dict | None = None) -> dict:
-    """文档快照落池（docs +fetch 只读；meta T-940：owner/直链 sidecar）。"""
+    """文档快照落池（docs +fetch 只读；meta T-940：owner/直链 sidecar；
+    T-949：附飞书权限元数据 perm——缺失不阻断，可见性过滤保守处理）。"""
     payload = _run_lark(["docs", "+fetch", "--as", "user",
                          "--doc", doc_token, "--doc-format", "markdown"])
     data = payload.get("data") or {}
     content = str(data.get("content") or data.get("markdown") or "")
     imgmap = _imgmap_from_content(content, data.get("images"))
+    meta = dict(meta or {})
+    meta.setdefault("perm", _pull_perm_meta(doc_token, "docx"))
     return pool_store.save_doc_snapshot(
         specflow_emp_base, doc_token, content,
         imgmap=imgmap if imgmap else None, source_url=url, meta=meta)
@@ -146,78 +192,111 @@ def sync_minutes(specflow_emp_base: Path, days: int = 30,
         out.append(pool_store.save_minutes_snapshot(
             specflow_emp_base, token, detail.get("data") or {},
             source_url=url,
-            meta={"owner_open_id": owner_open_id, "source_url": url}))
+            meta={"owner_open_id": owner_open_id, "source_url": url,
+                  "perm": _pull_perm_meta(token, "minutes")}))
     return out
-
-
-def _render_chat_lines(items: list) -> str:
-    """消息列表 → [HH:MM] 发送人: 内容 行格式（图片消息留 [图片#N] 占位）。"""
-    lines = []
-    img_seq = 0
-    for it in items:
-        ms = int(it.get("create_time_ms") or it.get("create_time") or 0)
-        hhmm = datetime.fromtimestamp(ms / 1000).strftime("%H:%M") if ms else "??:??"
-        sender = str(it.get("sender_name") or it.get("sender") or "?")
-        msg_type = str(it.get("msg_type") or "text")
-        if msg_type == "text":
-            body = str(it.get("text") or it.get("content") or "")
-        elif msg_type == "image":
-            img_seq += 1
-            body = f"[图片#{img_seq}]"
-        else:
-            body = f"[{msg_type}消息]"
-        lines.append(f"[{hhmm}] {sender}: {body}")
-    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def sync_chat(specflow_emp_base: Path, chat_id: str, day: str) -> dict:
-    """群聊快照落池（im +chat-messages-list 只读，按天归档）。"""
-    payload = _run_lark(["im", "+chat-messages-list", "--as", "user",
-                         "--chat-id", chat_id, "--page-size", "50"])
-    items = (payload.get("data") or {}).get("items") or []
-    markdown = _render_chat_lines(items)
-    return pool_store.save_chat_snapshot(specflow_emp_base, chat_id, day, markdown)
+    """群聊快照落池（T-948 重写：JSONL 事实源 + md 派生视图）。
+
+    按天拉取（--start/--end 圈定当日，end 取 23:59:59 防跨天污染）；
+    CLI 契约以实测快照为准（data.messages，见 test_feishu_chat_store._CLI_SNAPSHOT）；
+    0 条消息不写文件（消灭 0 字节假成功），返回 messages=0 + file=None。
+    """
+    from datetime import timedelta
+
+    from specflow.feishu_pool import chat_store
+    from specflow.feishu_pool.paths import pool_dirs
+    d = datetime.strptime(day, "%Y%m%d")
+    payload = _run_lark([
+        "im", "+chat-messages-list", "--as", "user",
+        "--chat-id", chat_id,
+        "--start", d.strftime("%Y-%m-%dT%H:%M:%S"),
+        "--end", (d + timedelta(days=1) - timedelta(seconds=1)).strftime(
+            "%Y-%m-%dT%H:%M:%S"),
+        "--order", "asc", "--page-all", "--page-limit", "40",
+        "--page-size", "50"])
+    data = payload.get("data") or {}
+    msgs = data.get("messages") or data.get("items") or []   # items 兼容观察期
+    rows = [chat_store.normalize_pull_message(m) for m in msgs if isinstance(m, dict)]
+    cs8 = pool_store.chat_sha8(chat_id)
+    if not rows:
+        return {"chat_sha8": cs8, "day": day, "messages": 0,
+                "added": 0, "updated": 0, "file": None}
+    day_file = (pool_dirs(specflow_emp_base)["chats"] / cs8 / f"{day}.jsonl")
+    merged = chat_store.merge_chat_jsonl(day_file, rows)
+    chat_store.rebuild_views(day_file)
+    return {"chat_sha8": cs8, "day": day, "messages": len(rows),
+            **merged, "file": f"chats/{cs8}/{day}.md"}
 
 
-def sync_all(specflow_emp_base: Path, cfg: dict | None = None) -> dict:
-    """按 watch 配置全通道同步；单条失败记 errors 不中断。"""
+def sync_all(specflow_emp_base: Path, cfg: dict | None = None,
+             material_base: Path | None = None,
+             chat_id: str = "") -> dict:
+    """按 watch 配置全通道同步；单条失败记 errors 不中断。
+
+    T-948：群聊通道按 chat_days 天窗口逐日拉取（历史补拉能力）；
+    返回 chats（有消息的 群×天 数）/ chats_empty（当日无消息的天数）/ days_pulled。
+    T-949：material_base 非空时三通道快照落共享材料区。
+    T-952：chat_id 非空时**单群模式**——只拉该群（docs/minutes 跳过，
+    介入工作台「更新本群」入口，秒级反馈不拉全量）。
+    """
+    from datetime import timedelta
+
     cfg = cfg if cfg is not None else load_watch_config(specflow_emp_base)
-    out = {"docs": 0, "minutes": 0, "chats": 0, "errors": []}
-    for doc in cfg.get("docs") or []:
+    material_root = Path(material_base) if material_base else specflow_emp_base
+    out = {"docs": 0, "minutes": 0, "chats": 0, "chats_empty": 0,
+           "days_pulled": 0, "errors": []}
+    today = datetime.now()
+    chat_days = max(1, int(cfg.get("chat_days") or 1))
+    days = [(today - timedelta(days=i)).strftime("%Y%m%d")
+            for i in range(chat_days)]
+    out["days_pulled"] = len(days)
+    if not chat_id:
+        for doc in cfg.get("docs") or []:
+            try:
+                sync_doc(material_root, str(doc.get("token", "")),
+                         url=str(doc.get("url", "")),
+                         meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
+                               "owner_name": str(doc.get("owner_name") or ""),
+                               "title": str(doc.get("title") or ""),
+                               "source_url": str(doc.get("url") or "")})
+                out["docs"] += 1
+            except Exception as e:
+                out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
         try:
-            sync_doc(specflow_emp_base, str(doc.get("token", "")),
-                     url=str(doc.get("url", "")),
-                     meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
-                           "owner_name": str(doc.get("owner_name") or ""),
-                           "title": str(doc.get("title") or ""),
-                           "source_url": str(doc.get("url") or "")})
-            out["docs"] += 1
+            out["minutes"] = len(sync_minutes(material_root,
+                                              int(cfg.get("minutes_days") or 0)))
         except Exception as e:
-            out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
-    try:
-        out["minutes"] = len(sync_minutes(specflow_emp_base,
-                                          int(cfg.get("minutes_days") or 0)))
-    except Exception as e:
-        out["errors"].append(f"minutes: {e}")
-    today = datetime.now().strftime("%Y%m%d")
+            out["errors"].append(f"minutes: {e}")
     for chat in cfg.get("chats") or []:
-        try:
-            sync_chat(specflow_emp_base, str(chat.get("chat_id", "")), today)
-            out["chats"] += 1
-        except Exception as e:
-            out["errors"].append(f"chat {chat.get('chat_id', '?')}: {e}")
-    # T-945：群聊落池后异步聚类生成候选话题（链路闭环：落池→聚类→复核→图谱）。
-    # 放在 sync_all 尾部——手动同步/启动 catch-up 都走这里；LLM 未配置诚实跳过。
-    maybe_cluster_async(specflow_emp_base)
+        if chat_id and str(chat.get("chat_id", "")) != chat_id:
+            continue                          # T-952：单群模式只拉指定群
+        for d in days:
+            try:
+                r = sync_chat(material_root, str(chat.get("chat_id", "")), d)
+                if r.get("messages"):
+                    out["chats"] += 1
+                else:
+                    out["chats_empty"] += 1
+            except Exception as e:
+                out["errors"].append(f"chat {chat.get('chat_id', '?')}/{d}: {e}")
+    # T-945：群聊落池后异步聚类；T-952：自动图片转述（均 daemon 线程，
+    # 模型未配置诚实跳过；技术侧多模态处理对用户透明）。
+    maybe_cluster_async(specflow_emp_base, material_base=material_root)
+    maybe_transcribe_async(specflow_emp_base, material_base=material_root)
     return out
 
 
-def _cluster_once(emp_base: Path) -> None:
+def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
     """单次聚类（可同步测试）：text 模型未配置→跳过；异常吞掉只记日志。
 
     T-946：从 watch 配置构造按群窗口——chats[].topic_days（缺省 7：只聚
     近 7 天快照；0=该群关闭）；未入 watch 的历史群回退默认 7 天（过期
-    数据不提取，控制 LLM 成本）。"""
+    数据不提取，控制 LLM 成本）。
+    T-949：窗口读私有 watch（emp_base），快照与话题库读材料区（material_base）。
+    """
     try:
         from services import model_config
         m = model_config.get_model("text")
@@ -235,16 +314,41 @@ def _cluster_once(emp_base: Path) -> None:
                     chat_windows[chat_sha8(cid)] = int(c.get("topic_days", 7) or 0)
                 except (TypeError, ValueError):
                     chat_windows[chat_sha8(cid)] = 7
-        tc.cluster_chat_snapshots(emp_base, LLMClient(model_id="text"),
+        material_root = Path(material_base) if material_base else emp_base
+        tc.cluster_chat_snapshots(material_root, LLMClient(model_id="text"),
                                   chat_windows=chat_windows, default_days=7)
     except Exception as e:
         log.warning("话题聚类失败（不阻断同步）: %s", e)
 
 
-def maybe_cluster_async(emp_base: Path) -> None:
+def maybe_cluster_async(emp_base: Path, material_base: Path | None = None) -> None:
     """异步触发聚类（daemon 线程，不阻塞 sync 返回；同步完成后话题页稍后可见）。"""
-    threading.Thread(target=_cluster_once, args=(emp_base,), daemon=True,
-                     name="feishu-topic-cluster").start()
+    threading.Thread(target=_cluster_once, args=(emp_base, material_base),
+                     daemon=True, name="feishu-topic-cluster").start()
+
+
+def _transcribe_once(emp_base: Path, material_base: Path | None = None) -> None:
+    """T-952：单次图片转述（可同步测试）——vision 模型未配置诚实跳过；
+    异常吞掉只记日志（与聚类同模式；技术侧转述对用户透明，无独立维护入口）。"""
+    try:
+        from services import model_config
+        if not model_config.get_model("vision"):
+            log.info("图片转述跳过：未配置 vision 模型（设置页 model_configs 加 model_id=vision）")
+            return
+        from agent.llm_client import LLMClient
+        from specflow.feishu_pool import captions
+        captions.transcribe_images(
+            Path(material_base) if material_base else emp_base,
+            llm_vision=LLMClient(model_id="vision"))
+    except Exception as e:
+        log.warning("图片转述失败（不阻断同步）: %s", e)
+
+
+def maybe_transcribe_async(emp_base: Path,
+                           material_base: Path | None = None) -> None:
+    """T-952：异步触发图片转述（daemon 线程；同步后自动，无需用户手动）。"""
+    threading.Thread(target=_transcribe_once, args=(emp_base, material_base),
+                     daemon=True, name="feishu-img-transcribe").start()
 
 
 def sync_recent_docs(specflow_emp_base: Path, days: int = 1) -> dict:
@@ -385,13 +489,113 @@ def _read_meta_sidecar(f: Path) -> dict:
         return {}
 
 
-def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
+def migrate_legacy_pool(specflow_emp_base: Path,
+                        material_base: Path | None = None) -> dict:
+    """T-949 存量迁移：私有区 chats/话题库/历史 → 共享材料区（幂等可重跑）。
+
+    - chats：逐文件 move（目标已存在则跳过——共享版本优先）；
+    - 话题库：私有 _topics.yaml/_candidate_topics.yaml 存在且共享无 → move；
+      共享已有 → 按 id 合并（冲突共享优先）后删私有文件；
+    - 历史：整行去重 append 合并后删私有文件。
+    返回 {chats_files, topic_store}。watch 配置/草案不迁（设计 D2：留私有）。
+    """
+    import shutil
+
+    mroot = Path(material_base) if material_base else specflow_emp_base
+    out = {"chats_files": 0, "topic_store": False}
+    if mroot == Path(specflow_emp_base):
+        return out                                  # 同区无需迁移
+    src_pool = Path(specflow_emp_base) / "feishu_pool"
+    dst_pool = mroot / "feishu_pool"
+    if not src_pool.is_dir():
+        return out
+    # ① chats
+    src_chats = src_pool / "chats"
+    if src_chats.is_dir():
+        for f in sorted(src_chats.rglob("*")):
+            if not f.is_file():
+                continue
+            dst = dst_pool / "chats" / f.relative_to(src_chats)
+            if dst.is_file():
+                f.unlink()                           # 共享版本优先，丢弃私有副本
+                out["chats_files"] += 1
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(f), str(dst))
+            out["chats_files"] += 1
+    # ② 话题库（_topics.yaml 优先，回退旧 _candidate_topics.yaml）
+    from specflow.feishu_pool import topic_cluster as tc
+    src_store = next((p for p in (src_pool / "_topics.yaml",
+                                  src_pool / "_candidate_topics.yaml")
+                      if p.is_file()), None)
+    if src_store is not None:
+        dst_store = dst_pool / "_topics.yaml"
+        if not dst_store.is_file():
+            dst_store.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src_store), str(dst_store))
+            out["topic_store"] = True
+        else:
+            # 合并：共享已有 → 私有卡按 id 并入（冲突共享优先）
+            merged = {t.get("id"): t for t in tc._load_candidates(mroot)}
+            for t in tc._load_candidates(specflow_emp_base):
+                merged.setdefault(t.get("id"), t)
+            tc._save_candidates(mroot, list(merged.values()))
+            src_store.unlink()
+            out["topic_store"] = True
+    # ③ 历史（整行去重 append）
+    src_hist = src_pool / "_topic_history.jsonl"
+    if src_hist.is_file():
+        dst_hist = dst_pool / "_topic_history.jsonl"
+        existing = (dst_hist.read_text(encoding="utf-8", errors="replace")
+                    .splitlines() if dst_hist.is_file() else [])
+        have = set(existing)
+        adds = [ln for ln in src_hist.read_text(
+            encoding="utf-8", errors="replace").splitlines()
+            if ln.strip() and ln not in have]
+        if adds:
+            dst_hist.parent.mkdir(parents=True, exist_ok=True)
+            with open(dst_hist, "a", encoding="utf-8") as fh:
+                for ln in adds:
+                    fh.write(ln + "\n")
+        src_hist.unlink()
+    return out
+
+
+def material_visible(item: dict, viewer_open_id: str,
+                     viewer_chats: set[str]) -> bool:
+    """T-949 材料可见性判定（跟随飞书侧权限，设计 §2.6）。
+
+    规则：chat 快照全员可见（拉取者必在群内，办公转述语义）→
+    owner 本人可见 → perm 有效时（public ∨ 用户被授权 ∨ 所在群被授权）可见 →
+    perm 缺失（missing_scope/拉取失败）对非 owner 保守不可见（推用户补授权）。
+    viewer_open_id 为空（未绑定飞书）：只剩 chat 类型可见。
+    """
+    if str(item.get("type") or "") == "chat":
+        return True
+    if viewer_open_id and str(item.get("owner_open_id") or "") == viewer_open_id:
+        return True
+    perm = item.get("perm") or {}
+    if not perm.get("pulled_at"):
+        return False
+    if perm.get("public"):
+        return True
+    if viewer_open_id and viewer_open_id in (perm.get("member_users") or []):
+        return True
+    if viewer_chats and (set(perm.get("member_chats") or []) & set(viewer_chats)):
+        return True
+    return False
+
+
+def list_pool_materials(specflow_emp_base: Path,
+                        viewer: dict | None = None) -> list[dict]:
     """材料池清单（三通道快照：id/类型/标题/摘要/文件/sha/大小/mtime，时间倒序）。
 
     title/summary 是人可读层（T-930 可读性补强）：minutes 取 title+artifacts.summary、
     docs 取首个 markdown 标题+首段、chats 取 watch 群名+首行消息。
     T-940：附 source_url/owner_open_id/owner_name（meta sidecar；按监听用户筛选
     与飞书原文直链；存量无 meta 降级空串）。
+    T-949：附 perm 摘要；viewer（{"open_id", "chats"}）非空时按飞书权限过滤，
+    None 不过滤（向后兼容/管理员视图）。
     """
     from specflow.feishu_pool.paths import pool_dirs
     pool = pool_dirs(specflow_emp_base)
@@ -428,6 +632,7 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
                 "source_url": str(m.get("source_url") or ""),
                 "owner_open_id": str(m.get("owner_open_id") or ""),
                 "owner_name": str(m.get("owner_name") or ""),
+                "perm": m.get("perm") or {},          # T-949：权限元数据摘要
             })
     chats_root = pool["chats"]
     if chats_root.is_dir():
@@ -444,25 +649,20 @@ def list_pool_materials(specflow_emp_base: Path) -> list[dict]:
                 "size": f.stat().st_size, "mtime": f.stat().st_mtime,
                 "source_url": "", "owner_open_id": "", "owner_name": "",
             })
+    if viewer is not None:
+        items = [i for i in items
+                 if material_visible(i, str(viewer.get("open_id") or ""),
+                                     set(viewer.get("chats") or []))]
     items.sort(key=lambda i: -i["mtime"])
     return items
 
 
 def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
-    """话题清单：候选（私有区）+ 已确认（共享区）。"""
-    import yaml
-
+    """话题清单：卡片（私有区 _topics.yaml 状态制，T-948 含全部状态）
+    + 已确认（共享区；T-949 合并为单一存储后此区分退役）。"""
     from specflow.feishu_pool import facts
-    from specflow.feishu_pool.paths import pool_dirs
-    cand_path = pool_dirs(specflow_emp_base)["root"] / "_candidate_topics.yaml"
-    candidates: list[dict] = []
-    if cand_path.is_file():
-        try:
-            raw = yaml.safe_load(cand_path.read_text(encoding="utf-8")) or {}
-            candidates = [t for t in (raw.get("topics") or [])
-                          if isinstance(t, dict)]
-        except Exception:
-            candidates = []
+    from specflow.feishu_pool import topic_cluster as tc
+    candidates = tc._load_candidates(specflow_emp_base)   # 含旧文件迁移+字段归一化
     return {"candidates": candidates,
             "confirmed": facts.load_topics(workspace_root)}
 
@@ -486,9 +686,10 @@ def update_image_caption(specflow_emp_base: Path, material_stem: str,
 # T-939：材料原文读取 + 图片字节代理（详情弹层）
 # ══════════════════════════════════════════════════════════
 
-# 材料相对路径白名单：docs|minutes|chats 前缀 + md|json 扩展（防私有区外泄）
+# 材料相对路径白名单：docs|minutes|chats 前缀 + md|json|jsonl 扩展（防私有区外泄；
+# T-948 增 jsonl：chats 消息事实源，/chat-messages 端点复用本校验）
 _MATERIAL_FILE_RE = re.compile(
-    r"^(docs|minutes|chats)/[A-Za-z0-9_\-./]+\.(md|json)$")
+    r"^(docs|minutes|chats)/[A-Za-z0-9_\-./]+\.(md|json|jsonl)$")
 
 _IMG_MIME = ((b"\x89PNG", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
              (b"GIF8", "image/gif"))
@@ -530,7 +731,9 @@ def read_material_content(specflow_emp_base: Path, rel_file: str) -> dict:
     else:
         out["type"] = "chat" if rel_file.startswith("chats/") else "feishu_doc"
         out["content"] = p.read_text(encoding="utf-8", errors="replace")
-    if rel_file.startswith("docs/"):
+    if rel_file.startswith("docs/") or rel_file.startswith("chats/"):
+        # T-952：chats 同样附 imgmap（时间轴富渲染的 key→caption 映射；
+        # post 内嵌图与 image 消息均在 imgmap——T-952a 起统一序号池）
         imgmap_path = p.with_suffix(".imgmap.json")
         if imgmap_path.is_file():
             try:
@@ -543,18 +746,107 @@ def read_material_content(specflow_emp_base: Path, rel_file: str) -> dict:
     return out
 
 
-def _download_image(media_key: str) -> bytes:
+def _download_image(media_key: str, emp: str = "") -> bytes:
     """下载图片字节（复用 captions 同源链路：docs +media-download）。"""
     from specflow.feishu_pool.captions import _download_image as _dl
-    return _dl(media_key)
+    return _dl(media_key, emp=emp)
+
+
+def fetch_image_by_key(material_base: Path, message_id: str,
+                    media_key: str, emp: str = "") -> dict:
+    """T-952/955b：聊天图片按 (message_id, media_key) 直取（时间轴富渲染用）。
+
+    im +messages-resources-download --type image（实测 2026-08-19：返回
+    data.saved_path 落盘产物；旧实现走 docs +media-download --media-key 为
+    臆断契约——该 flag 不存在，聊天图从未下载成功过）。
+    下载→读回→删临时文件；磁盘缓存 {材料区}/feishu_pool/_imgcache/{sha16}.bin。
+    emp 非空时按该用户飞书身份下载（T-956 多用户身份隔离一致性）。
+    """
+    if not message_id or not media_key:
+        return {"ok": False, "error": "message_id/media_key 为空"}
+    cache_dir = Path(material_base) / "feishu_pool" / "_imgcache"
+    cache = cache_dir / f"{hashlib.sha256(media_key.encode('utf-8')).hexdigest()[:16]}.bin"
+    if cache.is_file():
+        data = cache.read_bytes()
+        return {"ok": True, "data": data, "mime": _sniff_mime(data)}
+    seed = f"{message_id}|{media_key}"
+    tmp_name = (f"tmp-dl-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:16]}"
+                ".bin")
+    try:
+        _run_lark(["im", "+messages-resources-download", "--as", "user",
+                   "--message-id", message_id, "--file-key", media_key,
+                   "--type", "image", "--output", tmp_name],
+                  timeout=120, emp=emp)
+        tmp = Path(tmp_name)
+        if not tmp.is_file():
+            return {"ok": False, "error": "下载产物未找到（CLI 输出路径异常）"}
+        data = tmp.read_bytes()
+        tmp.unlink(missing_ok=True)
+    except ValueError as e:
+        Path(tmp_name).unlink(missing_ok=True)
+        return {"ok": False, "error": f"图片下载失败: {e}"}
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache.write_bytes(data)
+    return {"ok": True, "data": data, "mime": _sniff_mime(data)}
+
+
+def _sniff_mime(data: bytes) -> str:
+    if data.startswith(b"\x89PNG"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"GIF8"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"                          # 缺省 png（与既有代理一致）
+
+
+def fetch_chat_file(material_base: Path, message_id: str,
+                    file_key: str, file_name: str = "",
+                    emp: str = "") -> dict:
+    """T-955：聊天附件文件下载（消息附件可打开）。
+
+    im +messages-resources-download 按 message_id+file_key 拉（CLI 落 cwd
+    临时名 → 读回字节 → 删临时文件）；磁盘缓存 {材料区}/feishu_pool/_imgcache/
+    {sha16}.bin（同图/同附件只下载一次）。返回 {ok, data(bytes), file_name}。
+    emp 非空时按该用户飞书身份下载（T-956 多用户身份隔离一致性）。
+    """
+    if not message_id or not file_key:
+        return {"ok": False, "error": "message_id/file_key 为空"}
+    cache_dir = Path(material_base) / "feishu_pool" / "_imgcache"
+    seed = f"{message_id}|{file_key}"
+    cache = cache_dir / f"{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:16]}.bin"
+    if cache.is_file():
+        return {"ok": True, "data": cache.read_bytes(),
+                "file_name": file_name or "attachment"}
+    tmp_name = (f"tmp-dl-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:16]}"
+                ".bin")
+    try:
+        _run_lark(["im", "+messages-resources-download", "--as", "user",
+                   "--message-id", message_id, "--file-key", file_key,
+                   "--type", "file", "--output", tmp_name],
+                  timeout=180, emp=emp)
+        tmp = Path(tmp_name)
+        if not tmp.is_file():
+            return {"ok": False, "error": "下载产物未找到（CLI 输出路径异常）"}
+        data = tmp.read_bytes()
+        tmp.unlink(missing_ok=True)
+    except ValueError as e:
+        Path(tmp_name).unlink(missing_ok=True)
+        return {"ok": False, "error": f"附件下载失败: {e}"}
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache.write_bytes(data)
+    return {"ok": True, "data": data, "file_name": file_name or "attachment"}
 
 
 def fetch_material_image(specflow_emp_base: Path, imgmap_file: str,
-                         placeholder: str) -> dict:
+                         placeholder: str, emp: str = "") -> dict:
     """图片字节代理（前端 <img src> 直连）：imgmap 条目 media_key →
 
     下载 → 磁盘缓存（_imgcache/{sha16}.bin，同图只下载一次）→
     {ok, data(bytes), mime（魔数推断，缺省 png）}。纯读 + 材料目录内缓存。
+    emp 非空时按该用户飞书身份下载（T-956 多用户身份隔离一致性）。
     """
     p = _safe_material_path(specflow_emp_base, imgmap_file)
     if p is None or not p.is_file():
@@ -576,7 +868,7 @@ def fetch_material_image(specflow_emp_base: Path, imgmap_file: str,
         data = cache.read_bytes()
     else:
         try:
-            data = _download_image(media_key)
+            data = _download_image(media_key, emp=emp)
         except Exception as e:
             return {"ok": False, "error": f"图片下载失败: {e}"}
         cache.parent.mkdir(parents=True, exist_ok=True)

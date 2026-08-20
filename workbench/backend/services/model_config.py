@@ -92,12 +92,22 @@ def list_models() -> list[dict]:
 
 
 def get_model(mid: str) -> dict | None:
-    """获取单个模型配置（api_key 解密返回完整值，LLMClient 用）。"""
+    """获取单个模型配置（api_key 解密返回完整值，LLMClient 用）。
+
+    T-951b：id 精确命中优先；未命中且 mid 是用途别名（text/vision）时按
+    name 回退——设置页新建模型把名称填为 text/vision 即绑定该用途
+    （create_model 自动 id（model-NNN）否则永远无法被 get_model("text") 命中）。
+    """
     _ensure_table()
     with _LOCK, _connect() as conn:
         row = conn.execute(
             "SELECT * FROM model_configs WHERE id = ?", (mid,)
         ).fetchone()
+        if row is None and mid in ("text", "vision"):
+            row = conn.execute(
+                "SELECT * FROM model_configs WHERE name = ?"
+                " ORDER BY updated_at DESC LIMIT 1", (mid,)
+            ).fetchone()
     if not row:
         return None
     m = _row_to_dict(row)

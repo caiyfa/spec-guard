@@ -1,4 +1,3 @@
-engine\scenario_runner.py:17: unused import 'CAT_UPSTREAM' (90% confidence)
 specstd\anchors.py:17: unused import 'DeltaOperation' (90% confidence)
 specstd\anchors.py:17: unused import 'FR_INLINE_RE' (90% confidence)
 specstd\workspace.py:130: unused variable 'exc_info' (100% confidence)

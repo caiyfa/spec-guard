@@ -18,8 +18,12 @@ from specflow.feishu_pool.paths import shared_dirs
 
 _LINK_KEY_FIELDS = ("src", "dst", "edge", "confidence", "evidence",
                     "status", "confirmed_by", "confirmed_at")
-_TOPIC_KEY_FIELDS = ("id", "title", "summary", "chat_sha8", "window",
-                     "message_count", "participants_count", "source", "continues")
+# T-948：话题卡 v2 字段入白名单（keywords/message_ids/status/author/rev/
+# agent_origin/last_edited_*——确认提升时不丢用户编辑与 agent 原稿）
+_TOPIC_KEY_FIELDS = ("id", "title", "summary", "keywords", "chat_sha8", "window",
+                     "message_ids", "message_count", "participants_count",
+                     "source", "continues", "status", "author", "rev",
+                     "agent_origin", "last_edited_by", "last_edited_at")
 
 
 def _now() -> str:
@@ -103,3 +107,13 @@ def upsert_topic(workspace_root: Path, topic: dict) -> None:
     topics.append({k: topic.get(k) for k in _TOPIC_KEY_FIELDS if k in topic})
     topics.sort(key=lambda t: str(t.get("id", "")))
     _save_yaml(shared_dirs(workspace_root)["topics_yaml"], "topics", topics)
+
+
+def remove_topic(workspace_root: Path, topic_id: str) -> bool:
+    """从事实源移除话题（T-949：confirmed 卡被 reject 后的图谱一致性）。"""
+    topics = load_topics(workspace_root)
+    remaining = [t for t in topics if t.get("id") != topic_id]
+    if len(remaining) == len(topics):
+        return False
+    _save_yaml(shared_dirs(workspace_root)["topics_yaml"], "topics", remaining)
+    return True

@@ -1,11 +1,13 @@
-// 飞书材料池总览页（飞书知识图谱三期 T-929；T-939 体验重构）：
-// 状态卡条（watcher 运行/事件数/最近事件）+ 三页签：
-// ① 材料池清单（点击行看原文，图片内嵌直出）
-// ② 话题清单（候选/已确认/演进链）
-// ③ 图片描述（按材料分组：缩略图 + 转述状态 + 描述编辑；T-939 重构，
-//    替代旧「图片替身」手输 stem/占位符编辑器）
+// 飞书材料池总览页（飞书知识图谱三期 T-929；T-939 体验重构；T-950 话题工作台重构；
+// T-952 体验收敛）：
+// 状态卡条（watcher 运行/事件数/最近事件）+ 两页签：
+// ① 材料池清单（点击行看原文，图片内嵌直出；T-949 perm 徽标）
+// ② 话题工作台（人工介入双栏：时间轴×泳道色卡；T-952 富渲染：
+//    post 文本+内嵌图 / file 文件卡 / image 图+转述 caption——
+//    图片描述维护融入时间轴展示，独立 tab 退役：多模态转述是技术侧
+//    实现细节（同步后自动触发），不应作为用户操作面）
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -16,19 +18,14 @@ import {
   type FeishuWatch,
 } from '../api';
 import FeishuWatchSettings from '../components/FeishuWatchSettings';
+import TopicWorkspace from '../components/TopicWorkspace';
 
-type Tab = 'materials' | 'topics' | 'images';
+type Tab = 'materials' | 'topics';
 
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   feishu_doc: { label: '文档', cls: 'bg-sky-500/15 text-sky-400' },
   feishu_minutes: { label: '妙记', cls: 'bg-violet-500/15 text-violet-400' },
   chat: { label: '群聊', cls: 'bg-amber-500/15 text-amber-400' },
-};
-
-const IMG_STATUS: Record<string, { label: string; cls: string }> = {
-  pending: { label: '待转述', cls: 'bg-amber-500/15 text-amber-400' },
-  done: { label: '已转述', cls: 'bg-green-500/15 text-green-400' },
-  failed: { label: '转述失败', cls: 'bg-red-500/15 text-red-400' },
 };
 
 const SCOPE_LABEL: Record<string, string> = {
@@ -63,8 +60,18 @@ function inlineImages(content: string, imgUrls: Record<string, string>) {
     imgUrls[ph] ? `![${ph}](${imgUrls[ph]})` : `*（${ph} 图片暂不可见）*`);
 }
 
+
 export default function FeishuPool() {
-  const [tab, setTab] = useState<Tab>('materials');
+  // T-953：页签持久化（恢复上次所在页；非法值/隐私模式回退材料池）
+  const [tab, setTab] = useState<Tab>(() => {
+    try {
+      const saved = localStorage.getItem('sg-feishu-tab');
+      return saved === 'topics' ? 'topics' : 'materials';
+    } catch { return 'materials'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('sg-feishu-tab', tab); } catch { /* 跳过 */ }
+  }, [tab]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [watcher, setWatcher] = useState<any>(null);
@@ -74,6 +81,14 @@ export default function FeishuPool() {
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
   const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null; imgUrls: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState('');
+
+  // T-951：全部话题卡计数（页签 badge；卡片流本体在工作台右栏）
+  const allTopicCards = useMemo(() => {
+    const byId = new Map<string, FeishuTopic>();
+    topics.confirmed.forEach(t => byId.set(t.id, { ...t, status: 'confirmed' }));
+    topics.candidates.forEach(t => byId.set(t.id, t));
+    return Array.from(byId.values());
+  }, [topics]);
 
   const loadWatcher = useCallback(() => {
     feishuPoolApi.watcherStatus().then(setWatcher).catch(e => setError(String(e?.message || e)));
@@ -213,8 +228,7 @@ export default function FeishuPool() {
 
       <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
         {tabBtn('materials', `📦 材料池（${materials.length}）`)}
-        {tabBtn('topics', `💬 话题（${topics.candidates.length + topics.confirmed.length}）`)}
-        {tabBtn('images', '🖼 图片描述')}
+        {tabBtn('topics', `💬 话题（${allTopicCards.length}）`)}
       </div>
 
       {/* 页签 1：材料池清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
@@ -243,6 +257,13 @@ export default function FeishuPool() {
                       <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[m.type]?.cls || ''}`}>
                         {TYPE_BADGE[m.type]?.label || m.type}
                       </span>
+                      {/* T-949：perm 缺失（需补授权）诚实标注——重新扫码授权后同步即补齐 */}
+                      {m.type !== 'chat' && m.perm && !m.perm.pulled_at && (
+                        <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-400"
+                          title={(m.perm.error || '').slice(0, 120) || '权限元数据缺失'}>
+                          需补授权
+                        </span>
+                      )}
                     </td>
                     <td className={td}>
                       <div className="text-gray-200">{m.title || m.id}</div>
@@ -270,29 +291,14 @@ export default function FeishuPool() {
         </div>
       )}
 
-      {/* 页签 2：话题清单 */}
+      {/* 页签 2：话题工作台（T-951：单一双栏——消息时间轴×话题色卡，
+          卡片流收进右栏，页签不再分上下两层） */}
       {tab === 'topics' && (
-        <div className={card}>
-          <h2 className="text-sm font-semibold mb-2">候选话题（待复核关联，{topics.candidates.length}）</h2>
-          {topics.candidates.length === 0 && <div className="text-xs text-gray-500 mb-3">暂无</div>}
-          <div className="space-y-2 mb-4">
-            {topics.candidates.map(t => (
-              <TopicCard key={t.id} topic={t} confirmed={false} />
-            ))}
-          </div>
-          <h2 className="text-sm font-semibold mb-2">已确认话题（已入共享图谱，{topics.confirmed.length}）</h2>
-          {topics.confirmed.length === 0 && <div className="text-xs text-gray-500">暂无</div>}
-          <div className="space-y-2">
-            {topics.confirmed.map(t => (
-              <TopicCard key={t.id} topic={t} confirmed />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 页签 3：图片描述（按材料分组卡片流；T-939 重构） */}
-      {tab === 'images' && (
-        <ImagePanel materials={materials.filter(m => m.type === 'feishu_doc')} />
+        <TopicWorkspace
+          materials={materials}
+          watchCfg={watchCfg}
+          topics={topics}
+          onCommitted={loadTopics} />
       )}
 
       {/* 材料详情弹层（原文 + 图片内嵌） */}
@@ -316,6 +322,10 @@ export default function FeishuPool() {
             </div>
             {!detail.data ? (
               <div className="py-10 text-center text-xs text-gray-500">原文加载中…</div>
+            ) : !(detail.data.content || '').trim() ? (
+              <div className="py-10 text-center text-xs text-gray-500">
+                该快照内容为空（可能当日无消息或文档为空）
+              </div>
             ) : (
               <>
                 <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
@@ -351,175 +361,3 @@ export default function FeishuPool() {
   );
 }
 
-// 话题卡片（T-946）：摘要 + 「查看原文」展开——拉快照全文按 window 起止时间
-// 切出消息片段，审核时直接对照原始聊天记录（话题↔原文直接关联）。
-function TopicCard({ topic: t, confirmed }: { topic: FeishuTopic; confirmed: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const [lines, setLines] = useState<string[] | null>(null);
-  const [err, setErr] = useState('');
-
-  const loadSource = async () => {
-    if (lines !== null) return;
-    try {
-      const d = await feishuPoolApi.materialContent(t.source);
-      if (!d.ok) throw new Error(d.error);
-      // window: ['YYYY-MM-DDTHH:MM', ...] → 按起止 HH:MM 切 [HH:MM] 行
-      const start = (t.window?.[0] || '').slice(11, 16);
-      const end = (t.window?.[1] || '').slice(11, 16);
-      const all = (d.content || '').split('\n').filter(l => /^\[\d{2}:\d{2}\]/.test(l));
-      const sliced = all.filter(l => {
-        const hm = l.slice(1, 6);
-        if (start && end) return hm >= start && hm <= end;
-        return true;
-      });
-      setLines(sliced.length ? sliced : all.slice(0, 50));
-    } catch (e: any) { setErr(e.message); }
-  };
-
-  const toggle = () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (next) void loadSource();
-  };
-
-  const box = confirmed
-    ? 'p-2 rounded border border-green-500/30 bg-green-900/10 text-xs'
-    : 'p-2 rounded border border-border bg-surface-3 text-xs';
-  return (
-    <div className={box}>
-      <div className="flex items-center gap-2">
-        <span className="text-gray-200 font-medium">{t.title}</span>
-        <code className="text-[10px] text-gray-500">{t.id}</code>
-        {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续 {t.continues}</span>}
-        <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500">
-          {t.message_count} 条 · {t.participants_count} 人
-          <button className="text-info hover:underline" onClick={toggle}>
-            {expanded ? '收起原文' : '查看原文'}
-          </button>
-        </span>
-      </div>
-      <p className="text-gray-400 mt-1">{t.summary}</p>
-      {expanded && (
-        <div className="mt-2 border-t border-border pt-2">
-          {err && <div className="text-[11px] text-red-400">原文加载失败：{err}</div>}
-          {lines === null && !err && <div className="text-[11px] text-gray-500">原文加载中…</div>}
-          {lines !== null && (
-            <pre className="max-h-48 overflow-auto text-[10px] text-gray-400 leading-relaxed
-              bg-surface-3 border border-border rounded p-2 whitespace-pre-wrap">{lines.join('\n')}</pre>
-          )}
-          <div className="text-[10px] text-gray-600 mt-1">来源：{t.source}（{t.window?.[0] || '—'} ~ {t.window?.[1] || '—'}）</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 图片描述面板：材料下拉 → 图片卡片流（缩略图 + 状态 + 描述编辑）
-function ImagePanel({ materials }: { materials: FeishuPoolMaterial[] }) {
-  const [file, setFile] = useState('');
-  const [data, setData] = useState<FeishuMaterialContent | null>(null);
-  const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState('');
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-
-  useEffect(() => {
-    if (!file) { setData(null); return; }
-    let revoked = false;
-    const prev = imgUrls;
-    feishuPoolApi.materialContent(file).then(async d => {
-      if (!d.ok) throw new Error(d.error);
-      const urls = await loadImages(file, d.images || []);
-      if (revoked) return;
-      setData(d); setImgUrls(urls); setEdits({}); setError('');
-    }).catch(e => setError(String(e?.message || e)));
-    return () => {
-      revoked = true;
-      Object.values(prev).forEach(u => URL.revokeObjectURL(u));
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file]);
-
-  const saveCaption = async (placeholder: string) => {
-    const caption = (edits[placeholder] || '').trim();
-    if (!caption || !data) return;
-    const stem = file.replace(/^docs\//, '').replace(/\.imgmap\.json$/, '').replace(/\.md$/, '');
-    setBusy(placeholder); setError(''); setNotice('');
-    try {
-      await feishuPoolApi.updateCaption(stem, placeholder, caption);
-      setNotice(`已保存 ${placeholder} 的图片描述`);
-      setEdits(prev => ({ ...prev, [placeholder]: '' }));
-      const d = await feishuPoolApi.materialContent(file);
-      if (d.ok) setData(d);
-    } catch (e: any) { setError(e.message); } finally { setBusy(''); }
-  };
-
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
-
-  return (
-    <div className="bg-surface-2 border border-border rounded-lg p-4 mb-4">
-      <h2 className="text-sm font-semibold mb-1">图片描述（AI 自动转述，人工可改）</h2>
-      <div className="text-[11px] text-gray-500 mb-3">
-        新入池图片由监听自动转述；此页查看各材料图片原文并修订描述（描述供 agent 检索图片内容）
-      </div>
-      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
-      {materials.length === 0 ? (
-        <div className="text-xs text-gray-500">暂无含图片的文档材料</div>
-      ) : (
-        <>
-          <select className={`${input} mb-3`} value={file} onChange={e => setFile(e.target.value)}>
-            <option value="">— 选择材料 —</option>
-            {materials.map(m => (
-              <option key={m.id} value={m.file}>{m.title || m.id}（{m.file}）</option>
-            ))}
-          </select>
-          {data && (
-            <div className="grid grid-cols-1 gap-3">
-              {(data.images || []).length === 0 && (
-                <div className="text-xs text-gray-500">该材料无图片</div>
-              )}
-              {data.images.map(img => (
-                <div key={img.placeholder} className="flex gap-3 p-2 rounded border border-border bg-surface-3">
-                  {imgUrls[img.placeholder] ? (
-                    <img src={imgUrls[img.placeholder]} alt={img.placeholder}
-                      className="w-40 h-28 object-contain rounded border border-border bg-black/30" />
-                  ) : (
-                    <div className="w-40 h-28 flex items-center justify-center rounded border border-border
-                      bg-black/30 text-[10px] text-gray-600">{img.media_key ? '加载失败' : '无原图'}</div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${IMG_STATUS[img.status || 'pending']?.cls || ''}`}>
-                        {IMG_STATUS[img.status || 'pending']?.label || img.status}
-                      </span>
-                      <span className="text-[10px] text-gray-600">{img.placeholder}</span>
-                      {img.caption && (
-                        <span className="text-[10px] text-gray-500 truncate">
-                          当前：{img.caption}（{img.caption_by === 'manual' ? '人工' : 'AI 转述'}）
-                        </span>
-                      )}
-                      {img.error && <span className="text-[10px] text-red-400" title={img.error}>失败原因 ⓘ</span>}
-                    </div>
-                    <div className="flex gap-2">
-                      <input className={`${input} flex-1`} value={edits[img.placeholder] || ''}
-                        placeholder={img.caption ? '修订描述…' : '补写图片描述（≤60 字业务描述）'}
-                        onChange={e => setEdits(prev => ({ ...prev, [img.placeholder]: e.target.value }))} />
-                      <button className={btn}
-                        disabled={!(edits[img.placeholder] || '').trim() || busy === img.placeholder}
-                        onClick={() => saveCaption(img.placeholder)}>
-                        {busy === img.placeholder ? '保存中…' : '保存'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}

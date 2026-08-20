@@ -11,6 +11,7 @@
 import hashlib
 import json
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,20 @@ class _StreamUnavailable(Exception):
 
 class _StreamFailedMidway(Exception):
     """流式已产出部分 delta 后中断——回退非流式拿完整结果（前端以最终消息为准）。"""
+
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def _strip_think_tags(content) -> str:
+    """剔除思考标签（T-951a：MiniMax-M3 OpenAI 兼容接口 thinking 默认开启，
+    content 混入 <think>…</think>；下游 JSON 解析/转述直接消费会炸）。
+
+    对所有模型通用无侵入——正常正文不含该标签；剥离后清首尾空白。
+    """
+    if not content or not isinstance(content, str) or "<think>" not in content:
+        return content if isinstance(content, str) else ""
+    return _THINK_RE.sub("", content).strip()
 
 
 class LLMClient:
@@ -167,6 +182,9 @@ class LLMClient:
                 self._record_metrics(usage)
                 self._elapsed_time += time.time() - t0
                 message = data["choices"][0]["message"]
+                # T-951a：思考标签剔除（M3 等 thinking 模型克式输出兑底）
+                if isinstance(message.get("content"), str):
+                    message["content"] = _strip_think_tags(message["content"])
                 return message, usage
             except httpx.HTTPStatusError as e:
                 last_err = e
