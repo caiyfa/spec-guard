@@ -58,6 +58,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 ├── migrate_format_2.py           # 格式 2.0 迁移器（文本外科手术，非 round-trip）
 ├── requirements.txt              # Python 依赖（含 mcp/jsonpath-ng/httpx）
 ├── start-workbench.ps1           # 本地开发一键启动（后端:9100 默认无热重载 + 前端:5173；-Reload 显式开启热重载）
+├── new-worktree.ps1              # 多会话并行：建功能域 worktree + 同步主库本地运行状态（-SyncOnly 重同步）
 ├── serve-prod.ps1                # 生产部署（单端口 :9100 UAC SSO）
 │
 ├── engine/                       # 通用引擎【冻结层 · 语义改动需评审】
@@ -163,6 +164,9 @@ cd workbench/frontend && npx knip         # 前端死代码/幽灵依赖
 python -m pytest test_engine --cov=engine --cov-report=term-missing    # 引擎覆盖率
 python -m pytest test_specstd --cov=specstd --cov-report=term-missing  # specstd 覆盖率（全套件有 94 个存量 error，见质量基线 README）
 npx lefthook install                      # 克隆后一次性：装 git hooks（pre-push 门禁）
+
+# ── 多会话并行（worktree，规程见 Git Workflow §多会话并行开发）──
+pwsh new-worktree.ps1 <功能域>                # 建树 + 自动同步主库本地运行状态；-SyncOnly 仅重同步
 
 # ── 工作台 ──
 pwsh start-workbench.ps1                  # 本地开发（后端 :9100 默认无热重载 + 前端 :5173，依赖自检，幂等）
@@ -283,6 +287,21 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 - **commit 规范**：中文，格式 `{类型}: {中文简述}`（类型：feat/fix/docs/refactor/test/chore）。
 - 迁移自 TDM 后端项目的历史路径引用（`tests/specguard/`）已在命令侧清理完毕，README 与本文件命令路径一致。
 
+### 多会话并行开发（git worktree 规程）
+
+> 多 AI 会话并行的唯一合法形态。核心分工：**主库只做验收，worktree 只做开发**。
+
+- **主库 = master 验收线**：主库 checkout 永远停在 `master` 且工作树保持干净；用途仅限拉取最新代码 + 整体测试验收 + 联网场景串行执行。**禁止在主库直接开发**（AI 会话同样禁止——接到开发任务时，先确认目标 worktree，去那里动手）。
+- **一个功能域一棵 worktree，长期复用**：按功能域建树（如 `wt/engine-upgrade`），不随单个任务新建，管控树数量。建树一律走 `pwsh new-worktree.ps1 <功能域>`——自动从主库同步本地运行状态（workbench.db / specstd/workspaces / .lark-cli 等，node_modules 除外）；**禁止手工 `git worktree add`**（漏掉状态同步，新树跑不了工作台与工作区相关功能）。
+- **会话工作方式**：开发会话统一在主目录打开；agent 自行进入对应 worktree 开发——文件读写一律用 worktree 绝对路径（`D:\work\tdm-code\wt\<域>\...`），bash/git 命令用 `git -C <树路径>` 或先 `cd`。验收与联网测试指令回到主库执行。
+- **提交即推功能分支（备份线，防本地对象库损坏）**：worktree 与主库**共享同一个 `.git` 对象库**——本地对象库损坏会同时摧毁全部树（2026-08 已发生一次，恢复时只能全量入库、丢失提交细节与 message）。worktree 内每完成一次提交立刻 `git -C <树路径> push origin feature/<域>`；目的是备份，不要求 PR、不触发合并。远端功能分支合入 master 后可随手删（本地分支随树继续复用，下次推送会重建）。
+- **master 前进只在主库、验收之后**：主库 `git pull` 后在 master 上 `git merge feature/<域>`（本地分支与 origin 同名分支内容一致，用哪个都行）→ 整体测试验收 → 通过才 `git push origin master`（pre-push 门禁照常）；验收不过 `git reset --hard ORIG_HEAD`，远端 master 零污染。需要 PR 评审留痕或跨机器协作时，改走"远端合并 → 主库 pull"备选路径。
+- **worktree 分支回同步**：master 前进后，worktree 继续复用前 `git -C <树路径> fetch origin && git -C <树路径> rebase origin/master`。若合入方式是 squash（远端或本地 `--squash`）导致 rebase 假冲突、且本地改动已全部入库：`git -C <树路径> switch -C feature/<域> origin/master` 重置分支再出发；功能域分支不删，随树长期复用。
+- **并行纪律**：联网场景测试只在主库串行跑（SIT 是被测共享环境，进程内 LeaseRegistry 不跨树）；worktree 内只跑离线测试（`test_engine` / `engine_modes`）；工作台 :9100/:5173 不可两树同起。
+- **本地状态再同步**：主库状态有大变更（新注册工作区 / LLM 配置变更）后，对对应树执行 `pwsh new-worktree.ps1 <名> -SyncOnly`。
+- **删除**：先停从该目录起的 uvicorn/npm 进程（Windows 文件锁），再 `git worktree remove <路径>`。
+- **在册清单**：以 `git worktree list` 实时输出为准，不在任何文档抄静态清单。
+
 ---
 
 ## Always
@@ -315,3 +334,4 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 - [2026-07-28] AGENTS.md 完成首轮适配度修订：补全 specstd/agent/mcp_server/feedback 四个此前缺失的顶层包，修正 Status/Git Workflow/环境依赖等过时声明。
 - [2026-08-05] AGENTS.md 新增「角色认知」章节：理清开发角色（本文件读者，不注入 agent 对话）与使用角色（agent 对话测试助手，规则知识来自 system prompt + 被测系统工作区 AGENTS.md）的边界，防止角色混淆。
 - [2026-08-19] 飞书材料池共享化（T-949）：chats/docs/minutes 快照与话题库/历史落**工作区共享材料区**（`{ws}/.specflow/feishu_pool/`，即 `specflow_dir("")`）；watch 配置与话题草案留私有区（谁配置谁拉）。**授权语义升级为工作区级**：docs/minutes 对用户的可见性跟随飞书侧权限元数据（perm meta，需 `docs:permission.member:retrieve`/`docs:permission.setting:read` scope，缺失时保守仅 owner 可见）；chats 快照对工作区全员可见（拉取者必在群内，办公转述语义）。多用户重复同步靠 message_id 幂等合并无害化。
+- [2026-08-20] 多会话并行确立 git worktree 规程（Git Workflow §多会话并行开发）：主库永驻 master 只做验收，功能域 worktree 长期复用、建树走 `new-worktree.ps1`（同步 workbench.db/workspaces 等本地状态；lefthook pre-push 钩子硬编码主树二进制路径，worktree 内 push 门禁天然有效）。此前多会话同树开发出过事故；另本地对象库曾损坏（36f8108 恢复性全量入库），教训沉淀为「提交即推功能分支——worktree 共享主库对象库，不是备份，远端是唯一的提交细节备份线」。
