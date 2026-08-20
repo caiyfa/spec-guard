@@ -3,6 +3,7 @@
 所有记录仅包含只读数据；请求头中的 token 不落盘。
 """
 
+import json
 from dataclasses import asdict, dataclass, field
 
 VERDICT_PASS = "PASS"
@@ -31,6 +32,29 @@ _MAX_STR = 500
 _MAX_LIST = 20
 _MAX_DEPTH = 8
 
+# response_body / request body 大阈值上限（ENG-T04）：详细查询的"足够大"限度，
+# 防 run.json 体积失控为目的；超限截断并留痕（诚实可见，不无声丢弃）
+_BODY_MAX_CHARS = 20_000
+
+
+def truncate_body(obj):
+    """response_body / request body 专用大阈值截断（ENG-T04，ENG-BUG-005）。
+
+    - 序列化长度 ≤ _BODY_MAX_CHARS → **原对象直通**（与历史行为逐字节一致）；
+    - 超限 → 序列化文本截到恰好 _BODY_MAX_CHARS 字符，尾部附
+      「…(已截断，原始共N字符)」留痕（截断必须可见）。
+    body_excerpt 摘要逻辑不受影响（另用 truncate 的 500 字符/20 项/8 层上限）。
+    未来"详细查询"视图若需全量响应，从 output.log 回捞或按需重放（ENG-T04 §3.3）。
+    """
+    try:
+        text = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
+    except (TypeError, ValueError):
+        text = str(obj)
+    if len(text) <= _BODY_MAX_CHARS:
+        return obj
+    marker = f"…(已截断，原始共{len(text)}字符)"
+    return text[:_BODY_MAX_CHARS - len(marker)] + marker
+
 
 def truncate(obj, _depth=0):
     """响应摘录截断：深度/字符串长度/列表长度设上限，防止 run.json 膨胀。"""
@@ -58,7 +82,7 @@ class StepTrace:
     body_excerpt: object = None            # 响应体摘要（截断，用于快速展示）
     trace_id: str = ""                     # 请求跟踪 ID（ifelc-trace_id，网关全链追踪）
     response_headers: dict = field(default_factory=dict)  # 完整响应头
-    response_body: object = None           # 完整响应体（未截断，用于详细查询）
+    response_body: object = None           # 响应体（20KB 上限截断留痕，ENG-T04；摘要见 body_excerpt）
     note: str = ""
 
     def to_dict(self):

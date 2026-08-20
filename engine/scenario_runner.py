@@ -34,6 +34,7 @@ from engine.execution_record import (
     ExecutionRecord,
     StepTrace,
     truncate,
+    truncate_body,
 )
 from engine.http_client import HttpClient, _trace_id_of
 from engine.scenario_loader import MODE_SHARED
@@ -424,12 +425,13 @@ def step_call(body, rctx, ns, record):
         body_excerpt=truncate(resp_json),
         trace_id=trace_id,
         response_headers=dict(resp.headers),
-        response_body=resp_json if resp_json is not None else resp.text,
+        # ENG-T04：完整落盘的成本在付、详细查询消费端未落地——改 20KB 上限截断留痕
+        response_body=truncate_body(resp_json if resp_json is not None else resp.text),
     ))
-    # 完整的请求体/表单数据并入 request（不截断），供详细查询
+    # 完整的请求体/表单数据并入 request（20KB 上限截断留痕，ENG-T04——与响应体同口径）
     body_data = json_body if json_body is not None else (data if isinstance(data, (str, dict, list)) else None)
     if body_data is not None:
-        record.steps[-1].request["body"] = body_data
+        record.steps[-1].request["body"] = truncate_body(body_data)
     return {"status": resp.status_code, "json": resp_json,
             "headers": dict(resp.headers)}
 
