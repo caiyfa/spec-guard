@@ -304,6 +304,45 @@ def test_direct_write_group_sender_filter(tmp_path):
     assert "其他人的消息" not in content
 
 
+def test_direct_write_creates_jsonl_fact_source(tmp_path):
+    """T-948：事件直写产 JSONL 事实源（evt: 幂等键）+ md 派生视图同步重建。"""
+    import json as _json
+    root = tmp_path
+    (root / ".lark-cli" / "u1").mkdir(parents=True)
+    (root / ".lark-cli" / "u1" / "config.json").write_text("{}", encoding="utf-8")
+    sf = root / ".specflow" / "u1"
+    sf.mkdir(parents=True)
+    (sf / "feishu_watch.yaml").write_text(
+        "chats:\n  - chat_id: oc_a\ndocs: []\n", encoding="utf-8")
+    events = [{"chat_id": "oc_a", "event_id": "e9", "sender_id": "ou_x1",
+               "create_time": "1691498400000", "message_type": "text",
+               "content": "事实源消息"}]
+    from specflow.feishu_pool import pool_store
+    with patch.object(fw, "EVENT_KEYS", _ONE_KEY), \
+         patch.object(fw, "_token_valid", return_value=True), \
+         patch.object(fw.FeishuWatcher, "_spawn",
+                      new=lambda self, k, i: _FakeProc(events)), \
+         patch.object(fw.FeishuWatcher, "_catch_up", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_doc_poll", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chat_proofread", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_user_materials", new=lambda self: None), \
+         patch.object(fw.FeishuWatcher, "_schedule_chats_warmup", new=lambda self: None), \
+         patch.object(pool_store, "_resolve_sender", return_value="张三"):
+        w = fw.FeishuWatcher(tmp_path)
+        w.start()
+        time.sleep(0.3)
+        w.stop()
+    jsonl_files = list((sf / "feishu_pool" / "chats").rglob("*.jsonl"))
+    assert len(jsonl_files) == 1
+    row = _json.loads(jsonl_files[0].read_text(encoding="utf-8").strip())
+    assert row["message_id"] == "evt:e9"
+    assert row["sender_name"] == "张三"
+    assert row["origin"] == "event"
+    # md 派生视图同步重建（行格式不变，聚类 prompt 兼容）
+    md = jsonl_files[0].with_suffix(".md").read_text(encoding="utf-8")
+    assert "张三: 事实源消息" in md
+
+
 def test_user_materials_job_calls_sync(tmp_path):
     """模块级 job：委托 sync_user_materials（APScheduler 可序列化铁律）。"""
     emp = tmp_path / ".specflow" / "u1"

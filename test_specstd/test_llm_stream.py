@@ -161,3 +161,31 @@ class TestUnknownToolHint:
         result = rt._execute_tool({"function": {"name": "nonexistent_xyz", "arguments": "{}"}})
         assert "未知工具: nonexistent_xyz" in result
         assert "可用工具" in result
+
+
+# ══════════════════════════════════════════════════════════
+# T-951a：MiniMax-M3 接入兜底（<think> 标签剥离）
+# ══════════════════════════════════════════════════════════
+# 背景：MiniMax-M3 OpenAI 兼容接口 thinking 默认开启，content 混入
+# <think>…</think>；下游 _parse_llm_json/captions 直接解析会炸。
+# 剥离在 LLMClient 出口做（对所有模型通用无侵入——正常内容不含该标签）。
+
+def test_strip_think_tags_full():
+    """完整 think 块剥离（含多行思考内容）。"""
+    from agent.llm_client import _strip_think_tags
+    content = "<think>用户要求聚类，我先分析消息\n再考虑分组</think>{\"topics\": []}"
+    assert _strip_think_tags(content) == "{\"topics\": []}"
+
+
+def test_strip_think_tags_none_and_plain():
+    """无标签内容原样返回（空串/普通文本/含尖括号但不匹配）。"""
+    from agent.llm_client import _strip_think_tags
+    assert _strip_think_tags("") == ""
+    assert _strip_think_tags("普通回复") == "普通回复"
+    assert _strip_think_tags("<div>不是思考</div>") == "<div>不是思考</div>"
+
+
+def test_strip_think_tags_leading_whitespace():
+    """剥离后清理首尾空白（M3 常见：think 块后换行再正文）。"""
+    from agent.llm_client import _strip_think_tags
+    assert _strip_think_tags("<think>x</think>\n\n  正文  ") == "正文"

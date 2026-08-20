@@ -16,6 +16,8 @@ RBAC 与 specflow 路由同级（登录即可，角色在依赖注入层控制�
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -29,6 +31,47 @@ router = APIRouter(prefix="/api/feishu-pool", tags=["feishu-pool"],
 def _sf_base():
     from specstd.workspace import get_context_emp_no, specflow_dir
     return specflow_dir(emp=get_context_emp_no() or "")
+
+
+def _material_base():
+    """T-949 共享材料区根（{ws}/.specflow/）：chats/docs/minutes 快照与
+    话题库/历史所在；watch 配置与话题草案仍走 _sf_base() 私有区。"""
+    from specstd.workspace import specflow_dir
+    return specflow_dir("")
+
+
+_POOL_VIEWER_CACHE: dict[str, tuple[float, dict]] = {}
+_POOL_VIEWER_TTL = 300.0          # open_id+群列表解析缓存（免每次清单全量拉群）
+
+
+def _pool_viewer(user: CurrentUser) -> dict:
+    """T-949 可见性上下文：当前用户 open_id + 所在群 chat_id 集合。
+
+    解析失败诚实降级（open_id 空 → 仅 chat 类型材料可见）；
+    进程内 5min 缓存（auth status + chat-list 两次 CLI 调用摊薄）。
+    """
+    import time as _time
+    emp = str(user.emp_no or "")
+    now = _time.time()
+    hit = _POOL_VIEWER_CACHE.get(emp)
+    if hit and now - hit[0] < _POOL_VIEWER_TTL:
+        return hit[1]
+    viewer: dict = {"open_id": "", "chats": set()}
+    try:
+        from mcp_server.tools.lark_auth import do_status
+        st = do_status(emp)
+        viewer["open_id"] = str(st.get("open_id") or "")
+    except Exception:
+        pass
+    if viewer["open_id"]:
+        try:
+            r = sync_svc.list_my_chats(emp=emp)
+            viewer["chats"] = {str(c.get("chat_id") or "")
+                               for c in (r.get("items") or [])}
+        except Exception:
+            pass
+    _POOL_VIEWER_CACHE[emp] = (now, viewer)
+    return viewer
 
 
 def _ws_root():
@@ -45,6 +88,7 @@ class WatchConfig(BaseModel):
     users: list[dict] = []          # 用户监听维度（open_id/name/scopes）
     minutes_days: int = 30
     chat_days: int = 7
+    chat_sync_minutes: int = 0      # T-952：定时同步间隔（0=关，分钟）
 
 
 class ReviewPairs(BaseModel):
@@ -77,11 +121,25 @@ def put_watch(cfg: WatchConfig,
     return {**saved, "watcher": watcher_state}
 
 
+class SyncRequest(BaseModel):
+    chat_id: str = ""                    # T-952：非空时单群模式（只拉该群）
+
+
 @router.post("/sync")
-def sync_now(user: CurrentUser = Depends(get_current_user),
+def sync_now(body: SyncRequest | None = None,
+             user: CurrentUser = Depends(get_current_user),
              workspace: str = Depends(resolve_workspace)):
-    """手动立即同步（按 watch 配置三通道拉取；单通道失败记 errors 不中断）。"""
-    return sync_svc.sync_all(_sf_base())
+    """手动立即同步（按 watch 配置三通道拉取；单通道失败记 errors 不中断）。
+
+    T-949：快照落共享材料区（多用户复用；watch 仍读私有区——谁配置谁拉）；
+    同步前幂等迁移存量私有区数据（migrate_legacy_pool）。
+    T-952：body.chat_id 非空时单群模式（只拉该群，秒级反馈——介入工作台
+    「更新本群」入口）。
+    """
+    chat_id = (body.chat_id if body else "") or ""
+    sync_svc.migrate_legacy_pool(_sf_base(), material_base=_material_base())
+    return sync_svc.sync_all(_sf_base(), material_base=_material_base(),
+                             chat_id=chat_id)
 
 
 @router.get("/review-queue")
@@ -112,9 +170,10 @@ def review_reject(body: ReviewPairs,
 @router.post("/transcribe")
 def transcribe(user: CurrentUser = Depends(get_current_user),
                workspace: str = Depends(resolve_workspace)):
-    """存量手动转述（T-920）：扫当前用户材料池全部 pending 图片走 vision 模型。
+    """存量手动转述（T-920）：扫材料区全部 pending 图片走 vision 模型。
 
     未配置 vision 模型（model_configs 无 model_id=vision）→ skipped 不报错。
+    T-949：imgmap 随材料落共享区。
     """
     from services import model_config
     m = model_config.get_model("vision")
@@ -125,7 +184,7 @@ def transcribe(user: CurrentUser = Depends(get_current_user),
     from agent.llm_client import LLMClient
     from specflow.feishu_pool import captions
     llm = LLMClient(model_id="vision")
-    return captions.transcribe_images(_sf_base(), llm_vision=llm)
+    return captions.transcribe_images(_material_base(), llm_vision=llm)
 
 
 # ══════════════════════════════════════════════════════════
@@ -135,15 +194,186 @@ def transcribe(user: CurrentUser = Depends(get_current_user),
 @router.get("/materials")
 def pool_materials(user: CurrentUser = Depends(get_current_user),
                    workspace: str = Depends(resolve_workspace)):
-    """材料池清单（三通道快照，时间倒序）。纯读。"""
-    return {"items": sync_svc.list_pool_materials(_sf_base())}
+    """材料池清单（三通道快照，时间倒序；T-949 材料在共享区 + 按当前用户
+    的飞书权限可见性过滤）。纯读。"""
+    return {"items": sync_svc.list_pool_materials(
+        _material_base(), viewer=_pool_viewer(user))}
 
 
 @router.get("/topics")
 def pool_topics(user: CurrentUser = Depends(get_current_user),
                 workspace: str = Depends(resolve_workspace)):
-    """话题清单（候选=私有区 / 已确认=共享区）。纯读。"""
-    return sync_svc.list_pool_topics(_sf_base(), _ws_root())
+    """话题清单（卡片=共享材料区状态制 / 已确认=共享区 facts）。纯读。"""
+    return sync_svc.list_pool_topics(_material_base(), _ws_root())
+
+
+# ══════════════════════════════════════════════════════════
+# T-947：话题人工介入工作流端点（登录即可）
+# ══════════════════════════════════════════════════════════
+
+class DraftRequest(BaseModel):
+    chat_sha8: str
+    day: str = ""                       # 单日（兼容）或窗口首日
+    days: list[str] = []                # T-951c：多日窗口（非空优先于 day）
+
+
+class CommitRequest(BaseModel):
+    chat_sha8: str
+    day: str
+    days: list[str] = []                # T-951c：多日窗口（提交时清理窗口内各日旧卡）
+    picked: list[dict] = []
+
+
+class CardUpdate(BaseModel):
+    id: str
+    title: str = ""
+    summary: str = ""
+    keywords: list[str] = []          # T-948：空列表=不改；传入即覆盖
+    base_rev: int | None = None       # T-948 乐观锁：与卡片 rev 不符 → 409
+
+
+class RegenRequest(BaseModel):
+    id: str
+
+
+class TopicIdRequest(BaseModel):
+    id: str
+
+
+@router.get("/topics/drafts")
+def list_topic_drafts(user: CurrentUser = Depends(get_current_user),
+                      workspace: str = Depends(resolve_workspace)):
+    """全部话题草案（人工介入工作区）。纯读。"""
+    from specflow.feishu_pool import topic_cluster as tc
+    return {"items": tc.list_drafts(_sf_base())}
+
+
+@router.post("/topics/draft")
+def draft_topics(body: DraftRequest,
+                 user: CurrentUser = Depends(get_current_user),
+                 workspace: str = Depends(resolve_workspace)):
+    """对单群单日/多日窗口重新 AI 分段，写 _topic_drafts.yaml（不动话题库）。"""
+    from services import model_config
+
+    from agent.llm_client import LLMClient
+    from specflow.feishu_pool import topic_cluster as tc
+
+    if not model_config.get_model("text"):
+        raise HTTPException(
+            status_code=400,
+            detail="未配置 text 模型（设置页 model_configs 加 model_id=text）")
+    days = body.days or ([body.day] if body.day else [])
+    if not days:
+        raise HTTPException(status_code=400, detail="day 或 days 至少传一个")
+    try:
+        out = tc.draft_chat_segments(
+            _sf_base(), LLMClient(model_id="text"), body.chat_sha8, days,
+            material_base=_material_base())
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    return {"items": out}
+
+
+@router.post("/topics/commit")
+def commit_topics(body: CommitRequest,
+                  user: CurrentUser = Depends(get_current_user),
+                  workspace: str = Depends(resolve_workspace)):
+    """勾选段提交为话题卡（窗口内各日旧卡标 rejected 留痕；新卡带 author/agent_origin）。"""
+    from specflow.feishu_pool import topic_cluster as tc
+    author = {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
+    out = tc.commit_drafts(_sf_base(), body.chat_sha8, body.day, body.picked,
+                           author=author, material_base=_material_base(),
+                           days=body.days or None)
+    return {"items": out}
+
+
+@router.put("/topics/card")
+def update_topic_card(body: CardUpdate,
+                      user: CurrentUser = Depends(get_current_user),
+                      workspace: str = Depends(resolve_workspace)):
+    """单卡编辑 title/summary/keywords（T-948 R7；乐观锁冲突 → 409 带最新卡片）。"""
+    from specflow.feishu_pool import topic_cluster as tc
+    editor = {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
+    try:
+        return tc.edit_candidate(
+            _sf_base(), body.id, title=body.title, summary=body.summary,
+            keywords=body.keywords or None, base_rev=body.base_rev,
+            editor=editor, material_base=_material_base())
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except tc.RevConflict as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "卡片已被他人编辑，请刷新后重试",
+                    "topic": e.topic}) from None
+
+
+@router.get("/topics/history")
+def topic_history(topic_id: str,
+                  user: CurrentUser = Depends(get_current_user),
+                  workspace: str = Depends(resolve_workspace)):
+    """单卡编辑历史（倒序，最新在前；多用户协作留痕）。纯读。"""
+    from specflow.feishu_pool import topic_cluster as tc
+    return {"items": tc.list_history(_sf_base(), topic_id,
+                                     material_base=_material_base())}
+
+
+@router.post("/topics/regen")
+def regen_topic_card(body: RegenRequest,
+                     user: CurrentUser = Depends(get_current_user),
+                     workspace: str = Depends(resolve_workspace)):
+    """单卡重新生成（id 不变；agent_origin 换新版本、旧版进历史）。"""
+    from services import model_config
+
+    from agent.llm_client import LLMClient
+    from specflow.feishu_pool import topic_cluster as tc
+
+    if not model_config.get_model("text"):
+        raise HTTPException(
+            status_code=400,
+            detail="未配置 text 模型（设置页 model_configs 加 model_id=text）")
+    editor = {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
+    try:
+        return tc.regen_candidate(
+            _sf_base(), LLMClient(model_id="text"), body.id, editor=editor,
+            material_base=_material_base())
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+
+
+@router.post("/topics/confirm")
+def confirm_topic(body: TopicIdRequest,
+                  user: CurrentUser = Depends(get_current_user),
+                  workspace: str = Depends(resolve_workspace)):
+    """确认话题（状态翻转 draft→confirmed + 历史留痕 + 提升图谱事实源）。"""
+    return _set_status(body.id, "confirmed", user)
+
+
+@router.post("/topics/reject")
+def reject_topic(body: TopicIdRequest,
+                 user: CurrentUser = Depends(get_current_user),
+                 workspace: str = Depends(resolve_workspace)):
+    """拒绝话题（状态翻转 →rejected + 历史留痕）。"""
+    return _set_status(body.id, "rejected", user)
+
+
+def _set_status(topic_id: str, status: str, user: CurrentUser) -> dict:
+    from specflow.feishu_pool import topic_cluster as tc
+    editor = {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
+    try:
+        t = tc.set_topic_status(_sf_base(), topic_id, status, editor=editor,
+                                material_base=_material_base())
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    # T-949：图谱事实源联动（confirmed 提升 / rejected 移除，保持一致）
+    from specflow.feishu_pool import facts
+    if status == "confirmed":
+        facts.upsert_topic(_ws_root(), t)
+    elif status == "rejected":
+        facts.remove_topic(_ws_root(), topic_id)
+    return t
 
 
 @router.get("/watcher-status")
@@ -212,10 +442,10 @@ def feishu_auth_complete(body: AuthCompleteBody,
 def update_caption_ep(body: CaptionUpdate,
                       user: CurrentUser = Depends(get_current_user),
                       workspace: str = Depends(resolve_workspace)):
-    """图片 caption 人工补写（复核兜底；by=manual）。"""
+    """图片 caption 人工补写（复核兑底；by=manual）。T-949：imgmap 随材料在共享区。"""
     try:
         return sync_svc.update_image_caption(
-            _sf_base(), body.material, body.placeholder, body.caption)
+            _material_base(), body.material, body.placeholder, body.caption)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
 
@@ -267,16 +497,81 @@ def resolve_doc(input: str, user: CurrentUser = Depends(get_current_user),
 def material_content(file: str,
                      user: CurrentUser = Depends(get_current_user),
                      workspace: str = Depends(resolve_workspace)):
-    """材料原文读取（详情弹层；docs/chats 原文、minutes 可读化+raw、附 imgmap）。纯读。"""
-    return sync_svc.read_material_content(_sf_base(), file)
+    """材料原文读取（详情弹层；docs/chats 原文、minutes 可读化+raw、附 imgmap）。纯读。
+
+    T-949：材料在共享材料区。
+    """
+    return sync_svc.read_material_content(_material_base(), file)
+
+
+@router.get("/chat-messages")
+def chat_messages(sha8: str, day: str,
+                  user: CurrentUser = Depends(get_current_user),
+                  workspace: str = Depends(resolve_workspace)):
+    """群聊消息 JSONL 事实源（T-948：前端精确高亮/时间轴渲染用）。纯读。
+
+    路径校验复用 _safe_material_path 白名单（仅允许 chats/{sha8}/{day}.jsonl 形状）。
+    T-949：事实源在共享材料区。
+    """
+    from specflow.feishu_pool import chat_store
+    rel = f"chats/{sha8}/{day}.jsonl"
+    p = sync_svc._safe_material_path(_material_base(), rel)
+    if p is None or not p.is_file():
+        raise HTTPException(status_code=404, detail=f"消息快照不存在: {rel}")
+    return {"items": chat_store.load_chat_jsonl(p), "file": rel}
+
+
+@router.get("/chat-file")
+def chat_file(message_id: str, file_key: str, name: str = "attachment",
+              user: CurrentUser = Depends(get_current_user),
+              workspace: str = Depends(resolve_workspace)):
+    """T-955：聊天附件文件下载（消息附件可打开）。
+
+    纯读；磁盘缓存同附件只下载一次；Content-Disposition 附件下载流。
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_\-]+", message_id or "") \
+            or not re.fullmatch(r"[A-Za-z0-9_\-]+", file_key or ""):
+        raise HTTPException(status_code=400, detail="非法 message_id/file_key")
+    out = sync_svc.fetch_chat_file(_material_base(), message_id, file_key,
+                                    file_name=name,
+                                    emp=str(user.emp_no or ""))
+    if not out.get("ok"):
+        raise HTTPException(status_code=404, detail=out.get("error", "附件不存在"))
+    safe_name = re.sub(r"[^\w.\u4e00-\u9fff()\[\]-]", "_", out.get("file_name") or "attachment")
+    return Response(
+        content=out["data"], media_type="application/octet-stream",
+        headers={"Content-Disposition":
+                 f"attachment; filename*=UTF-8''{safe_name}"})
 
 
 @router.get("/material-image")
 def material_image(file: str, ph: str,
                    user: CurrentUser = Depends(get_current_user),
                    workspace: str = Depends(resolve_workspace)):
-    """图片字节代理（前端 <img> 直连；media_key 下载 + 磁盘缓存）。纯读。"""
-    out = sync_svc.fetch_material_image(_sf_base(), file, ph)
+    """图片字节代理（前端 <img> 直连；media_key 下载 + 磁盘缓存）。纯读。
+
+    T-949：imgmap 随材料在共享材料区。
+    """
+    out = sync_svc.fetch_material_image(_material_base(), file, ph,
+                                         emp=str(user.emp_no or ""))
+    if not out.get("ok"):
+        raise HTTPException(status_code=404, detail=out.get("error", "图片不存在"))
+    return Response(content=out["data"], media_type=out["mime"])
+
+
+@router.get("/chat-image")
+def chat_image(message_id: str, media_key: str,
+               user: CurrentUser = Depends(get_current_user),
+               workspace: str = Depends(resolve_workspace)):
+    """T-952/955b：聊天图片按 (message_id, media_key) 直取（时间轴富渲染）。
+
+    纯读；磁盘缓存同图只下载一次。参数形状校验（纵深防御）。
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_\-]+", message_id or "") \
+            or not re.fullmatch(r"[A-Za-z0-9_\-]+", media_key or ""):
+        raise HTTPException(status_code=400, detail="非法 message_id/media_key")
+    out = sync_svc.fetch_image_by_key(_material_base(), message_id, media_key,
+                                       emp=str(user.emp_no or ""))
     if not out.get("ok"):
         raise HTTPException(status_code=404, detail=out.get("error", "图片不存在"))
     return Response(content=out["data"], media_type=out["mime"])

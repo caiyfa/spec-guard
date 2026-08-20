@@ -586,8 +586,19 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
               </div>
             )}
 
-            <div className="mt-2 text-[11px] text-gray-500">
-              妙记同步窗口 {watch?.minutes_days ?? '—'} 天 · 群聊窗口 {watch?.chat_days ?? '—'} 天（在 feishu_watch.yaml 中调整）
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
+              <span>妙记窗口 {watch?.minutes_days ?? '—'} 天 · 群聊窗口 {watch?.chat_days ?? '—'} 天</span>
+              {/* T-952：定时同步间隔（0=关；保存即重启监听时生效） */}
+              <label className="flex items-center gap-1 ml-auto">
+                定时同步
+                <input type="number" min={0} max={1440}
+                  className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none focus:border-info"
+                  value={watch?.chat_sync_minutes ?? 0}
+                  onChange={e => setWatch(prev => prev ? {
+                    ...prev, chat_sync_minutes: Number(e.target.value) || 0,
+                  } : prev)} />
+                分钟（0=关）
+              </label>
             </div>
           </div>
         </div>

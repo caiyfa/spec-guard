@@ -16,7 +16,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from specflow.feishu_pool import facts, pool_store
+from specflow.feishu_pool import facts
 from specflow.feishu_pool.paths import pool_dirs, shared_dirs
 
 _QUEUE_NAME = "_review_queue.json"
@@ -105,15 +105,13 @@ def _promote_material(specflow_emp_base: Path, workspace_root: Path,
             shared["materials"].mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_file, shared["materials"] / f"{stem}.{ext}")
     elif src.startswith("tp:"):
-        cand = pool["root"] / "_candidate_topics.yaml"
-        if cand.is_file():
-            import yaml
-            topics = (yaml.safe_load(cand.read_text(encoding="utf-8"))
-                      or {}).get("topics") or []
-            for t in topics:
-                if t.get("id") == src:
-                    facts.upsert_topic(workspace_root, t)
-                    break
+        # T-948：话题库为 _topics.yaml 状态制单文件（topic_cluster 加载器
+        # 含旧 _candidate_topics.yaml 迁移兼容，禁止在此硬编码文件名）
+        from specflow.feishu_pool import topic_cluster as tc
+        for t in tc._load_candidates(specflow_emp_base):
+            if t.get("id") == src:
+                facts.upsert_topic(workspace_root, t)
+                break
 
 
 def _find_active_ivs_for_fr(workspace: str, fr_id: str) -> list[dict]:

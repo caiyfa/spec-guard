@@ -16,7 +16,8 @@ import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-for p in (str(SG_ROOT), str(BACKEND_DIR)):
+TEST_DIR = Path(__file__).resolve().parent
+for p in (str(SG_ROOT), str(BACKEND_DIR), str(TEST_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -37,7 +38,8 @@ def test_watch_config_roundtrip(tmp_path):
 def test_watch_config_default_when_missing(tmp_path):
     loaded = svc.load_watch_config(tmp_path / ".specflow" / "u1")
     assert loaded == {"chats": [], "docs": [], "users": [],
-                      "minutes_days": 30, "chat_days": 7}
+                      "minutes_days": 30, "chat_days": 7,
+                      "chat_sync_minutes": 0}   # T-952：定时同步默认关
 
 
 def test_watch_users_roundtrip(tmp_path):
@@ -90,22 +92,97 @@ def test_sync_doc_to_pool(tmp_path):
 
 
 def test_sync_chat_renders_timeline(tmp_path):
+    """T-948：真实 CLI 契约（data.messages/字符串时间/嵌套 sender）→
+    JSONL 事实源 + md 派生视图。"""
+    from feishu_cli_contract import pull_messages
     base = tmp_path / ".specflow" / "u1"
-    payload = {"ok": True, "data": {"items": [
-        {"create_time_ms": "1691498400000", "sender_name": "张三",
-         "msg_type": "text", "text": "导出要按平台过滤吗"},
-        {"create_time_ms": "1691498460000", "sender_name": "李四",
-         "msg_type": "text", "text": "按 corpCode+groupLevel"},
-    ]}}
+    payload = {"ok": True, "data": {"messages": pull_messages()}}
     with patch.object(svc, "_run_lark", return_value=payload):
-        rec = svc.sync_chat(base, chat_id="oc_abc", day="20230808")
-    f = base / "feishu_pool" / "chats" / rec["chat_sha8"] / "20230808.md"
-    text = f.read_text(encoding="utf-8")
-    from datetime import datetime
-    t1 = datetime.fromtimestamp(1691498400000 / 1000).strftime("%H:%M")
-    t2 = datetime.fromtimestamp(1691498460000 / 1000).strftime("%H:%M")
-    assert f"[{t1}] 张三: 导出要按平台过滤吗" in text
-    assert f"[{t2}] 李四: 按 corpCode+groupLevel" in text
+        rec = svc.sync_chat(base, chat_id="oc_8786450d43fc1c453beb1c147d947c03",
+                            day="20260818")
+    assert rec["messages"] == 2 and rec["file"] == f"chats/{rec['chat_sha8']}/20260818.md"
+    md = (base / "feishu_pool" / "chats" / rec["chat_sha8"]
+          / "20260818.md").read_text(encoding="utf-8")
+    assert "[09:15] 蔡云飞: [图片#1]" in md
+    assert "[14:07] 蔡云飞: @贺文君" in md
+    # JSONL 事实源存在且行数一致（md 是派生视图）
+    jsonl = base / "feishu_pool" / "chats" / rec["chat_sha8"] / "20260818.jsonl"
+    assert len(jsonl.read_text(encoding="utf-8").strip().splitlines()) == 2
+    # 图片 imgmap 同步生成（转述链路接手）
+    assert (base / "feishu_pool" / "chats" / rec["chat_sha8"]
+            / "20260818.imgmap.json").is_file()
+
+
+def test_sync_chat_day_range_args(tmp_path):
+    """T-948：按天拉取——--start/--end 圈定当日、--order asc、--page-all。"""
+    base = tmp_path / ".specflow" / "u1"
+    calls = []
+
+    def _fake(args, timeout=90):
+        calls.append(args)
+        return {"ok": True, "data": {"messages": []}}
+
+    with patch.object(svc, "_run_lark", side_effect=_fake):
+        svc.sync_chat(base, chat_id="oc_abc", day="20260818")
+    args = calls[0]
+    assert "--start" in args and args[args.index("--start") + 1].startswith("2026-08-18")
+    assert "--end" in args and args[args.index("--end") + 1].startswith("2026-08-18T23:59")
+    assert args[args.index("--order") + 1] == "asc"
+    assert "--page-all" in args
+
+
+def test_sync_chat_empty_writes_nothing(tmp_path):
+    """T-948 诚实性：0 条消息不写空文件，messages=0（消灭 0 字节假成功）。"""
+    base = tmp_path / ".specflow" / "u1"
+    with patch.object(svc, "_run_lark",
+                      return_value={"ok": True, "data": {"messages": []}}):
+        rec = svc.sync_chat(base, chat_id="oc_abc", day="20260818")
+    assert rec["messages"] == 0 and rec["file"] is None
+    assert not (base / "feishu_pool" / "chats").exists()
+
+
+def test_sync_all_chat_days_window(tmp_path):
+    """T-948：sync_all 按群拉 chat_days 天窗口（历史补拉能力）+ days_pulled 反馈。"""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [{"chat_id": "oc_abc"}],
+                                 "minutes_days": 0, "chat_days": 3})
+    starts = []
+
+    def _fake(args, timeout=90):
+        if args[:2] == ["im", "+chat-messages-list"]:
+            starts.append(args[args.index("--start") + 1][:10].replace("-", ""))
+            return {"ok": True, "data": {"messages": []}}
+        return {"ok": True, "data": {}}
+
+    with patch.object(svc, "_run_lark", side_effect=_fake), \
+         patch.object(svc, "maybe_cluster_async"):
+        out = svc.sync_all(base)
+    today = _dt.now().strftime("%Y%m%d")
+    assert out["days_pulled"] == 3
+    assert starts == [today,                      # 今天、昨天、前天（升序）
+                      (_dt.now() - _td(days=1)).strftime("%Y%m%d"),
+                      (_dt.now() - _td(days=2)).strftime("%Y%m%d")]
+    assert out["chats"] == 0 and out["chats_empty"] == 3   # 3 天全空，诚实计数
+
+
+def test_sync_all_chats_counts_messages(tmp_path):
+    """T-948：有消息的天计入 chats，空天计入 chats_empty。"""
+    from feishu_cli_contract import pull_messages
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [{"chat_id": "oc_abc"}],
+                                 "minutes_days": 0, "chat_days": 1})
+
+    def _fake(args, timeout=90):
+        if args[:2] == ["im", "+chat-messages-list"]:
+            return {"ok": True, "data": {"messages": pull_messages()}}
+        return {"ok": True, "data": {}}
+
+    with patch.object(svc, "_run_lark", side_effect=_fake), \
+         patch.object(svc, "maybe_cluster_async"):
+        out = svc.sync_all(base)
+    assert out["chats"] == 1 and out["chats_empty"] == 0
 
 
 def test_sync_all_collects_errors(tmp_path):
@@ -117,7 +194,7 @@ def test_sync_all_collects_errors(tmp_path):
     def _fake(args, timeout=90):
         if "docs" in args:
             raise ValueError("无权限，请点击链接申请权限")
-        return {"ok": True, "data": {"items": []}}
+        return {"ok": True, "data": {"messages": []}}
 
     with patch.object(svc, "_run_lark", side_effect=_fake):
         out = svc.sync_all(base)
@@ -147,7 +224,11 @@ def test_sync_recent_docs_intersection(tmp_path):
 
 
 def test_sync_minutes_owner_ids_passthrough(tmp_path):
-    """sync_minutes：owner_ids 透传 --owner-ids（None → me 保持现状）。"""
+    """sync_minutes：owner_ids 透传 --owner-ids（None → me 保持现状）。
+
+    T-949：minutes 同步附带 perm 元数据拉取（member-list/get-setting 插在
+    search 与 detail 之间），断言改为按调用类型过滤而非位置索引。
+    """
     base = tmp_path / ".specflow" / "u1"
     calls = []
 
@@ -161,8 +242,9 @@ def test_sync_minutes_owner_ids_passthrough(tmp_path):
     with patch.object(svc, "_run_lark", side_effect=fake):
         svc.sync_minutes(base, days=30, owner_ids=["ou_a", "ou_b"])
         svc.sync_minutes(base, days=30)
-    assert calls[0][calls[0].index("--owner-ids") + 1] == "ou_a,ou_b"
-    assert calls[2][calls[2].index("--owner-ids") + 1] == "me"
+    searches = [c for c in calls if c[:2] == ["minutes", "+search"]]
+    assert searches[0][searches[0].index("--owner-ids") + 1] == "ou_a,ou_b"
+    assert searches[1][searches[1].index("--owner-ids") + 1] == "me"
 
 
 def test_sync_user_materials_minutes_branch(tmp_path):
@@ -245,10 +327,11 @@ def test_e2e_pipeline(tmp_path):
         if "docs" in args:
             return {"ok": True, "data": {"content": "作废会话后级联删除人员", "images": []}}
         if "chat-messages-list" in " ".join(args):
-            return {"ok": True, "data": {"items": [
-                {"create_time_ms": "1691498400000", "sender_name": "张三",
-                 "msg_type": "text", "text": "作废会话后级联删除人员"}]}}
-        return {"ok": True, "data": {"items": []}}
+            from feishu_cli_contract import pull_messages
+            msgs = pull_messages()
+            msgs[0]["content"] = "作废会话后级联删除人员"
+            return {"ok": True, "data": {"messages": msgs}}
+        return {"ok": True, "data": {"messages": []}}
 
     with patch.object(svc, "_run_lark", side_effect=_fake):
         out = svc.sync_all(emp)

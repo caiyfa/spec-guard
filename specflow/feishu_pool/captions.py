@@ -80,17 +80,18 @@ def _iter_pending(specflow_emp_base: Path) -> list:
     return out
 
 
-def _download_image(media_key: str) -> bytes:
+def _download_image(media_key: str, emp: str = "") -> bytes:
     """按 media_key 下载图片二进制（lark-cli 只读；二期实装点）。
 
     docs +media-download（文档图）/ im +messages-resources-download（消息图）。
     统一从 lark_cli.run_lark 走（返回含 base64/文件路径的 payload，
-    实测结构以 lark-cli 返回为准微调）。
+    实测结构以 lark-cli 返回为准微调）。emp 非空时按该用户飞书身份下载
+    （多用户部署各用户只见自己的图）。
     """
     import base64
     from specflow.feishu_pool.lark_cli import _run_lark
     payload = _run_lark(["docs", "+media-download", "--media-key", media_key,
-                         "--as", "user"])
+                         "--as", "user"], emp=emp)
     data = payload.get("data") or {}
     if data.get("base64"):
         return base64.b64decode(data["base64"])

@@ -13,15 +13,26 @@ import time
 import uuid as _uuid
 
 from jsonpath_ng import parse as jsonpath_parse
+from jsonpath_ng.exceptions import JSONPathError
 
 from engine.execution_record import (
-    AssertionTrace, ExecutionRecord, StepTrace,
-    VERDICT_PASS, VERDICT_SKIP, VERDICT_BLOCKED, VERDICT_DRIFT, VERDICT_ORPHANED,
-    CAT_ASSERT, CAT_ORACLE, CAT_ENV, CAT_UPSTREAM,
+    CAT_ASSERT,
+    CAT_ENV,
+    CAT_ORACLE,
+    CAT_SCENARIO,
+    CAT_UPSTREAM,
+    VERDICT_BLOCKED,
+    VERDICT_DRIFT,
+    VERDICT_ORPHANED,
+    VERDICT_PASS,
+    VERDICT_SKIP,
+    AssertionTrace,
+    ExecutionRecord,
+    StepTrace,
     truncate,
 )
 from engine.http_client import HttpClient, _trace_id_of
-from engine.scenario_loader import MODE_SHARED, MODE_EXCLUSIVE
+from engine.scenario_loader import MODE_SHARED
 
 
 class SkipScenario(Exception):
@@ -33,6 +44,16 @@ class SkipScenario(Exception):
     def __init__(self, message, category="uncategorized"):
         super().__init__(message)
         self.category = category
+
+
+class ScenarioScriptError(Exception):
+    """python 步骤 / python 断言脚本内的非 SkipScenario 异常经此重包装。
+
+    ENG-T01：脚本错误属「场景编写错误」，应归 CAT_SCENARIO 而非 CAT_ENV。
+    step_python / python 断言的 exec 捕获到脚本异常后重抛为本类；run_scenario
+    的 except 链据此映射 CAT_SCENARIO。脚本内主动 raise SkipScenario 的语义
+    必须原样保留（不包装），故 step_python 中 SkipScenario 单独 re-raise。
+    """
 
 
 # ══════════════════════════════════════════════════════════
@@ -273,7 +294,7 @@ def step_call(body, rctx, ns, record):
                 fpath = v[1:]
                 if not os.path.isabs(fpath):
                     fpath = os.path.join(os.getcwd(), fpath)
-                files[k] = (os.path.basename(fpath), open(fpath, "rb"))
+                files[k] = (os.path.basename(fpath), open(fpath, "rb"))  # noqa: SIM115
             else:
                 data[k] = v
         files = files or None
@@ -291,7 +312,7 @@ def step_call(body, rctx, ns, record):
         fpath = render(body.get("file", ""), ns)
         if not os.path.isabs(fpath):
             fpath = os.path.join(os.getcwd(), fpath)
-        data = open(fpath, "rb")
+        data = open(fpath, "rb")  # noqa: SIM115
         if headers is None:
             headers = {}
         headers.setdefault("Content-Type", "application/octet-stream")
@@ -320,7 +341,7 @@ def step_call(body, rctx, ns, record):
         duration_ms=elapsed,
         body_excerpt=truncate(resp_json),
         trace_id=trace_id,
-        response_headers={k: v for k, v in resp.headers.items()},
+        response_headers=dict(resp.headers),
         response_body=resp_json if resp_json is not None else resp.text,
     ))
     # 完整的请求体/表单数据并入 request（不截断），供详细查询
@@ -328,7 +349,7 @@ def step_call(body, rctx, ns, record):
     if body_data is not None:
         record.steps[-1].request["body"] = body_data
     return {"status": resp.status_code, "json": resp_json,
-            "headers": {k: v for k, v in resp.headers.items()}}
+            "headers": dict(resp.headers)}
 
 
 def step_set_var(body, rctx, ns, record):
@@ -356,7 +377,10 @@ def step_db_query(body, rctx, ns, record):
     db = rctx.dbs.get(schema) or (rctx.db if schema == "default" else None)
     if db is None:
         available = sorted(rctx.dbs) or ["（无可用连接）"]
-        raise SkipScenario(f"当前环境 DB schema '{schema}' 不可用（可用: {available}），db_query 步骤无法执行")
+        # 诚实语义：DB 不可用 → SKIP，归类 db_unavailable（skip_category 枚举见 execution_record 默认）
+        raise SkipScenario(
+            f"当前环境 DB schema '{schema}' 不可用（可用: {available}），db_query 步骤无法执行",
+            category="db_unavailable")
     sql = render(body["sql"], ns)
     started = time.time()
     rows = db.query(sql)
@@ -427,7 +451,7 @@ def step_poll(body, rctx, ns, record):
             resp_json = None
 
         last_result = {"status": resp.status_code, "json": resp_json,
-                       "headers": {k: v for k, v in resp.headers.items()}}
+                       "headers": dict(resp.headers)}
 
         record.steps.append(StepTrace(
             type=f"poll:{attempt}",
@@ -636,15 +660,15 @@ def step_python(body, rctx, ns, record):
         fpath = render(body["file"], ns)
         if not os.path.isabs(fpath):
             fpath = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), fpath)
-        with open(fpath, "r", encoding="utf-8") as f:
+        with open(fpath, encoding="utf-8") as f:
             script = f.read()
     if not script:
         raise ValueError("python 步骤缺少 script（或 file）")
 
+    import datetime as _datetime
     import io as _io
     import json as _json
     import re as _re
-    import datetime as _datetime
     ctx = {
         "ns": ns,
         "save": lambda k, v: ns.__setitem__(k, v),
@@ -661,8 +685,15 @@ def step_python(body, rctx, ns, record):
     buf = _io.StringIO()
     started = time.time()
     from contextlib import redirect_stdout
-    with redirect_stdout(buf):
-        exec(compile(script, "<python_step>", "exec"), ctx)
+    try:
+        with redirect_stdout(buf):
+            exec(compile(script, "<python_step>", "exec"), ctx)
+    except SkipScenario:
+        raise   # 脚本内主动跳过：原样保留 SKIP 语义
+    except Exception as e:
+        # ENG-T01：脚本异常属场景编写错误，归 CAT_SCENARIO（而非 CAT_ENV）
+        raise ScenarioScriptError(
+            f"python 步骤脚本异常（场景编写错误）: {type(e).__name__}: {e}") from e
     elapsed = int((time.time() - started) * 1000)
 
     printed = buf.getvalue().strip()
@@ -751,7 +782,19 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
     for v in scenario.verify:
         if "status" in v:
             body = v["status"]
-            target = ns[body.get("of", last_call_ref)]
+            try:
+                target = ns[body.get("of", last_call_ref)]
+            except KeyError:
+                # ENG-BUG-012：of 写错变量名 → 该断言 FAIL + 归场景错误，不中断后续断言
+                trace = AssertionTrace(expr=f"{body.get('of', last_call_ref)}.status")
+                trace.passed = False
+                trace.message = (f"断言对象 {body.get('of', last_call_ref)!r} 不存在"
+                                f"（flow 未 save 该变量）")
+                record.assertions.append(trace)
+                print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
+                if not first_fail_category:
+                    first_fail_category = CAT_SCENARIO
+                continue
             expected = render(body["eq"], ns)
             actual = target["status"]
             trace = AssertionTrace(expr=f"{body.get('of', last_call_ref)}.status == {expected}",
@@ -765,8 +808,19 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
 
         elif "json" in v:
             body = v["json"]
-            target = ns[body.get("of", last_call_ref)]
             trace = AssertionTrace(expr=f"{body.get('of', last_call_ref)}{body['path']}")
+            try:
+                target = ns[body.get("of", last_call_ref)]
+            except KeyError:
+                # ENG-BUG-012：of 写错变量名 → 该断言 FAIL + 归场景错误，不中断后续断言
+                trace.passed = False
+                trace.message = (f"断言对象 {body.get('of', last_call_ref)!r} 不存在"
+                                f"（flow 未 save 该变量）")
+                record.assertions.append(trace)
+                print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
+                if not first_fail_category:
+                    first_fail_category = CAT_SCENARIO
+                continue
             try:
                 # U-1: call 产出取 ["json"]，db_query 裸数组直通（支持 DB 断言）
                 payload = target["json"] if isinstance(target, dict) and "json" in target else target
@@ -788,6 +842,12 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
                     trace.expr += " 不存在"
                 else:
                     trace.passed, trace.message = False, str(e)
+            except JSONPathError as e:
+                # ENG-BUG-001：jsonpath 拼错（语法/词法错误）→ 场景编写错误，原地落 trace
+                trace.passed = False
+                trace.message = f"断言 jsonpath 语法错误（场景编写错误）: {e}"
+                if not first_fail_category:
+                    first_fail_category = CAT_SCENARIO
             record.assertions.append(trace)
             print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
             if not trace.passed and not first_fail_category:
@@ -812,10 +872,10 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
             body = v["python"]
             script = body if isinstance(body, str) else body.get("script", "")
             trace = AssertionTrace(expr="python 断言脚本")
+            import datetime as _datetime
             import io as _io
             import json as _json
             import re as _re
-            import datetime as _datetime
             ctx = {
                 "ns": ns,
                 "save": lambda k, val: ns.__setitem__(k, val),
@@ -838,6 +898,12 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
                     trace.message = buf.getvalue().strip()[:200]
             except AssertionError as e:
                 trace.passed, trace.message = False, str(e)
+            except Exception as e:
+                # ENG-T01：python 断言脚本非断言类异常属场景编写错误，原地落 trace，不中断
+                trace.passed = False
+                trace.message = f"python 断言脚本异常（场景编写错误）: {type(e).__name__}: {e}"
+                if not first_fail_category:
+                    first_fail_category = CAT_SCENARIO
             record.assertions.append(trace)
             print(format_assertion_log(trace), flush=True)  # T-314：断言实时进日志
             if not trace.passed and not first_fail_category:
@@ -920,6 +986,15 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
         record.skip_category = e.category
     except AssertionError as e:
         record.fail(CAT_ASSERT, str(e))
+    except (KeyError, ValueError) as e:
+        # ENG-BUG-001：未定义变量 / 配置错误（未注册 tool 等）属场景编写错误
+        record.fail(CAT_SCENARIO, f"{type(e).__name__}: {e}")
+    except ScenarioScriptError as e:
+        # ENG-BUG-001：python 步骤脚本异常属场景编写错误
+        record.fail(CAT_SCENARIO, str(e))
+    except JSONPathError as e:
+        # ENG-BUG-001：jsonpath 语法/词法错误属场景编写错误
+        record.fail(CAT_SCENARIO, f"jsonpath 语法错误（场景编写错误）: {e}")
     except Exception as e:
         record.fail(CAT_ENV, f"{type(e).__name__}: {e}")
 
@@ -1009,6 +1084,8 @@ def _blocked_record(scenario, sid, verdict):
         tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
     record.verdict = VERDICT_BLOCKED
     record.skip_reason = f"上游场景 {sid} 未通过（{verdict}），本场景未执行"
+    # ENG-BUG-001：BLOCKED 场景复用 skip_category 字段承载上游分类（不得调 fail() 改写 verdict）
+    record.skip_category = CAT_UPSTREAM
     record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
     return record
 

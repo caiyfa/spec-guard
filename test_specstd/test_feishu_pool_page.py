@@ -431,13 +431,15 @@ def test_cluster_once_error_swallowed(monkeypatch):
 
 
 def test_sync_all_triggers_cluster(monkeypatch, tmp_path):
-    """sync_all 完成后触发异步聚类（链路闭环的接线点）。"""
+    """sync_all 完成后触发异步聚类（链路闭环的接线点；T-949 无共享区时
+    material_base 回退私有区）。"""
     emp = tmp_path / ".specflow" / "u1"
     svc.save_watch_config(emp, {"chats": [], "docs": [], "minutes_days": 0,
                                 "chat_days": 0, "users": []})
     triggered = []
     monkeypatch.setattr(svc, "maybe_cluster_async",
-                        lambda base: triggered.append(base))
+                        lambda base, material_base=None:
+                            triggered.append(material_base or base))
     svc.sync_all(emp)
     assert triggered == [emp]
 
@@ -519,15 +521,18 @@ def test_fetch_material_image_with_cache(tmp_path, monkeypatch):
         imgmap={"图片#1": {"media_key": "mk1", "caption": "",
                            "caption_by": "none", "status": "pending"}})
     calls: list = []
+    emps: list = []
 
-    def fake_dl(media_key):
+    def fake_dl(media_key, emp=""):
         calls.append(media_key)
+        emps.append(emp)
         return _PNG
     monkeypatch.setattr(svc, "_download_image", fake_dl)
-    r1 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#1")
+    r1 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#1", emp="u1")
     assert r1["ok"] is True and r1["data"] == _PNG
     assert r1["mime"] == "image/png"
-    r2 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#1")
+    assert emps == ["u1"]                     # emp 透传下载链路
+    r2 = svc.fetch_material_image(emp, "docs/fd-tokA.imgmap.json", "图片#1", emp="u1")
     assert calls == ["mk1"]                  # 二次走缓存
     assert r2["data"] == _PNG
 
@@ -555,12 +560,17 @@ def test_fetch_material_image_rejects(tmp_path):
 
 
 def test_sync_minutes_single_owner_meta(tmp_path):
-    """单 owner 检索：meta 落 owner_open_id；source_url 取 meta_data.app_link（实测结构）。"""
+    """单 owner 检索：meta 落 owner_open_id；source_url 取 meta_data.app_link（实测结构）。
+
+    T-949：sync 附带 perm 元数据拉取（drive 两调用），fake 宽容返回。
+    """
     def fake(args, timeout=90, emp=""):
         if args[:2] == ["minutes", "+search"]:
             return {"ok": True, "data": {"items": [
                 {"token": "obcnX",
                  "meta_data": {"app_link": "https://x.feishu.cn/minutes/obcnX"}}]}}
+        if args[0] == "drive":                    # T-949 perm 拉取
+            return {"ok": True, "data": {"members": [], "link_share_entity": "off"}}
         assert args[:2] == ["minutes", "+detail"]
         return {"ok": True, "data": {"minutes": [{"title": "T"}]}}
     with patch.object(svc, "_run_lark", side_effect=fake):
@@ -569,11 +579,17 @@ def test_sync_minutes_single_owner_meta(tmp_path):
                       .read_text(encoding="utf-8"))
     assert meta["owner_open_id"] == "ou_zhang"
     assert meta["source_url"] == "https://x.feishu.cn/minutes/obcnX"
+    assert meta["perm"]["pulled_at"] is not None       # T-949 perm 落盘
 
 
 def test_sync_user_docs_owner_meta(tmp_path):
-    """按用户搜文档：落盘 meta 带 owner（材料归属 + 列表直链）。"""
+    """按用户搜文档：落盘 meta 带 owner（材料归属 + 列表直链）。
+
+    T-949：sync_doc 附带 perm 拉取（member-list/get-setting 在 fetch 前）。
+    """
     def fake(args, timeout=90, emp=""):
+        if args[0] == "drive":                    # T-949 perm 拉取
+            return {"ok": True, "data": {"members": [], "link_share_entity": "off"}}
         assert args[:2] == ["docs", "+search"]
         return {"ok": True, "data": {"results": [
             {"title_highlighted": "张三方案",
@@ -584,10 +600,14 @@ def test_sync_user_docs_owner_meta(tmp_path):
     def fake_fetch(args, timeout=90, emp=""):
         assert args[:2] == ["docs", "+fetch"]
         return {"ok": True, "data": {"content": "# 方案"}}
-    seq = [fake, fake_fetch]
-    it = iter(seq)
-    with patch.object(svc, "_run_lark",
-                      side_effect=lambda a, timeout=90, emp="": next(it)(a, timeout, emp)):
+
+    def dispatch(args, timeout=90, emp=""):
+        if args[0] == "drive":
+            return fake(args, timeout, emp)
+        if args[:2] == ["docs", "+search"]:
+            return fake(args, timeout, emp)
+        return fake_fetch(args, timeout, emp)
+    with patch.object(svc, "_run_lark", side_effect=dispatch):
         out = svc._sync_user_docs(tmp_path, "ou_zhang", "方案")
     assert out["docs"] == 1
     meta = json.loads((tmp_path / "feishu_pool" / "docs" / "fd-tokD.meta.json")
@@ -595,6 +615,7 @@ def test_sync_user_docs_owner_meta(tmp_path):
     assert meta["owner_open_id"] == "ou_zhang"
     assert meta["owner_name"] == "张三"
     assert meta["source_url"] == "https://x.feishu.cn/docx/tokD"
+    assert meta["perm"]["pulled_at"] is not None       # T-949 perm 落盘
 
 
 def test_list_pool_materials_meta_fields(tmp_path):

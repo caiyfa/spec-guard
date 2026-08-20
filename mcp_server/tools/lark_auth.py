@@ -49,6 +49,8 @@ _REQUIRED_SCOPES = (
     "minutes:minutes.search:read",   # 妙记检索
     "minutes:minutes.artifacts:read",  # 妙记产物
     "drive:file:download",           # 文档增量轮询
+    "docs:permission.member:retrieve",  # T-949：协作者列表（材料可见性）
+    "docs:permission.setting:read",     # T-949：公开性设置（材料可见性）
 )
 
 

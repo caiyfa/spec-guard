@@ -87,19 +87,51 @@ def resolve_watch_user(sg_root: Path) -> str | None:
 # 托管器
 # ══════════════════════════════════════════════════════════
 
+def resolve_material_base() -> Path | None:
+    """T-949 共享材料区根（激活工作区时 {ws}/.specflow/；无上下文回退 None=私有区）。
+
+    工作台进程内必然有激活工作区；独立 CLI/测试场景无注册表 → None，
+    调用方回退各 emp 私有区（向后兼容单用户模式）。
+    """
+    try:
+        from specstd.workspace import specflow_dir
+        return specflow_dir("")
+    except Exception:
+        return None
+
+
+def chat_sync_job(emp_base_str: str):
+    """T-952：可配置定时同步 job（模块级——APScheduler 需可序列化 callable）。
+
+    watch 配置 chat_sync_minutes>0 时由 _schedule_chat_sync 注册 interval 触发；
+    全通道拉取（含自动聚类/转述）落共享材料区。
+    """
+    from services.specflow import feishu_sync_service as svc
+    try:
+        svc.sync_all(Path(emp_base_str),
+                     material_base=resolve_material_base())
+    except Exception as e:
+        log.warning("定时同步失败 %s: %s", emp_base_str, e)
+
+
 def chat_proofread_job(emp_base_str: str):
-    """每日群聊校对重拉 job（模块级——APScheduler 需可序列化 callable，禁闭包）。"""
+    """每日群聊校对重拉 job（模块级——APScheduler 需可序列化 callable，禁闭包）。
+
+    T-949：重拉落共享材料区（resolve_material_base；无工作区上下文回退私有区）。
+    """
     from services.specflow import feishu_sync_service as svc
     emp_base = Path(emp_base_str)
     cfg = svc.load_watch_config(emp_base)
+    material_base = resolve_material_base()
     day = datetime.now().strftime("%Y%m%d")
     for chat in cfg.get("chats") or []:
         try:
-            svc.sync_chat(emp_base, str(chat.get("chat_id", "")), day)
+            svc.sync_chat(material_base or emp_base,
+                          str(chat.get("chat_id", "")), day)
         except Exception as ce:
             log.warning("校对重拉失败 %s: %s", chat.get("chat_id"), ce)
     # T-945：校对落池后异步聚类（候选话题次晨更新，演进链对齐飞书侧全量）
-    svc.maybe_cluster_async(emp_base)
+    svc.maybe_cluster_async(emp_base, material_base=material_base)
 
 
 def user_materials_job(emp_base_str: str):
@@ -146,6 +178,7 @@ class FeishuWatcher:
         self._started_at = datetime.now().isoformat(timespec="seconds")
         self._catch_up()
         self._schedule_doc_poll()
+        self._schedule_chat_sync()
         self._schedule_chat_proofread()
         self._schedule_user_materials()
         self._schedule_chats_warmup()
@@ -166,6 +199,28 @@ class FeishuWatcher:
                 id=f"feishu-docs-{self.emp}", replace_existing=True)
         except Exception as e:
             log.warning("feishu_watcher 文档轮询 job 挂载失败（不阻断监听）: %s", e)
+
+    def _schedule_chat_sync(self):
+        """T-952：可配置定时同步（watch.chat_sync_minutes>0 时 interval 触发；
+        0/未配置=不挂载，保持每日校对克频）。保存配置即重启监听时重新挂载。"""
+        try:
+            from services.scheduler import get_scheduler
+            emp_base = self.sg_root / ".specflow" / self.emp
+            from services.specflow import feishu_sync_service as svc
+            minutes = int(svc.load_watch_config(emp_base)
+                          .get("chat_sync_minutes") or 0)
+            if minutes > 0:
+                get_scheduler().add_job(
+                    chat_sync_job, args=[str(emp_base)],
+                    trigger="interval", minutes=minutes,
+                    id=f"feishu-chat-sync-{self.emp}", replace_existing=True)
+            else:
+                try:
+                    get_scheduler().remove_job(f"feishu-chat-sync-{self.emp}")
+                except Exception:
+                    pass                      # 未挂载过，无事
+        except Exception as e:
+            log.warning("feishu_watcher 定时同步 job 挂载失败（不阻断监听）: %s", e)
 
     def _schedule_chat_proofread(self):
         """T-925：每日 03:00 群聊校对重拉（覆盖写——撤回/编辑/直写丢漏对齐飞书侧）。
@@ -239,7 +294,8 @@ class FeishuWatcher:
         """启动 catch-up：全量补拉一次（补离线窗口；幂等覆盖写）。"""
         try:
             from services.specflow import feishu_sync_service as svc
-            svc.sync_all(self.sg_root / ".specflow" / self.emp)
+            svc.sync_all(self.sg_root / ".specflow" / self.emp,
+                         material_base=resolve_material_base())
         except Exception as e:
             log.warning("feishu_watcher catch-up 失败（不阻断监听）: %s", e)
 
@@ -326,13 +382,15 @@ class FeishuWatcher:
                 self._throttled(f"minutes:{token}", kind="minutes", token=token)
 
     def _direct_write_chat(self, ev: dict):
-        """IM 事件直写（T-925）：event_id 去重 → 渲染行 → append 快照。
-
-        撤回/编辑无 CLI 事件，由每日校对重拉兜底（设计 §4.3）。
+        """IM 事件直写（T-925 建立；T-948 改 JSONL 事实源 + md 视图重建）。
+    
+        事件无 message_id → "evt:{event_id}" 幂等键（与拉取键不冲突）；
+        每日校对重拉以拉取结果为权威（同消息 pull 版本覆盖吸收 evt 条目）。
         授权校验 + 发送人过滤（设计 D4/D5）：仅授权 chat 且（配置了
         group_sender 时）命中发送人的消息才直写；校对重拉全量不受过滤影响。
         """
-        from specflow.feishu_pool import pool_store
+        from specflow.feishu_pool import chat_store, pool_store
+        from specflow.feishu_pool.paths import pool_dirs
         event_id = str(ev.get("event_id") or "")
         chat_id = str(ev.get("chat_id") or "")
         if not chat_id:
@@ -346,16 +404,14 @@ class FeishuWatcher:
         ms = int(ev.get("create_time") or 0)
         ts = datetime.fromtimestamp(ms / 1000) if ms else datetime.now()
         sender = pool_store.sender_display(emp_base, str(ev.get("sender_id") or ""))
-        msg_type = str(ev.get("message_type") or "text")
-        if msg_type == "text":
-            body = str(ev.get("content") or "")
-        elif msg_type == "image":
-            body = "[图片]"                     # 直写占位（imgmap 由校对重拉补齐）
-        else:
-            body = f"[{msg_type}消息]"
-        pool_store.append_chat_lines(
-            emp_base, chat_id, ts.strftime("%Y%m%d"),
-            [f"[{ts.strftime('%H:%M')}] {sender}: {body}"])
+        row = chat_store.normalize_event_message({**ev, "sender_name": sender})
+        cs8 = pool_store.chat_sha8(chat_id)
+        day = ts.strftime("%Y%m%d")
+        # T-949：直写落共享材料区（event_id 去重表仍留私有区——每用户自己的事件流）
+        material_root = resolve_material_base() or emp_base
+        day_file = pool_dirs(material_root)["chats"] / cs8 / f"{day}.jsonl"
+        chat_store.merge_chat_jsonl(day_file, [row])
+        chat_store.rebuild_views(day_file)
 
     def _authorized_for_direct_write(self, emp_base: Path, chat_id: str,
                                      sender_id: str) -> bool:

@@ -3,7 +3,7 @@
 所有记录仅包含只读数据；请求头中的 token 不落盘。
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 
 VERDICT_PASS = "PASS"
 VERDICT_FAIL = "FAIL"
@@ -13,14 +13,15 @@ VERDICT_BLOCKED = "BLOCKED"
 VERDICT_DRIFT = "DRIFT"
 VERDICT_ORPHANED = "ORPHANED"
 
-# 失败归类
-CAT_HTTP = "http_unexpected"
-CAT_ASSERT = "assert_failed"
-CAT_ORACLE = "oracle_mismatch"
-CAT_DB = "db_mismatch"
-CAT_POOL = "pool_unavailable"
-CAT_UPSTREAM = "upstream_blocked"
-CAT_ENV = "env_error"
+# 失败归类（ENG-T01：常量表 7 → 5）
+# 删除 CAT_HTTP / CAT_DB / CAT_POOL：网络异常归 CAT_ENV 属诚实语义；DB 失败已有
+# skip_category=db_unavailable 与 CAT_ORACLE 覆盖；pool 语义与 skip_category 的
+# pool_empty 重复（见 docs/架构升级/ENG-T01-失败归类体系改造.md §3.1）。
+CAT_ASSERT = "assert_failed"          # 断言失败（status/json/oracle 断言不通过）
+CAT_ORACLE = "oracle_mismatch"        # DB 校对断言不通过
+CAT_UPSTREAM = "upstream_blocked"     # 上游未通过（BLOCKED 场景的 skip_category，非 fail 分类）
+CAT_ENV = "env_error"                 # 环境/未知错误（网络异常、真正的环境缺口）
+CAT_SCENARIO = "scenario_error"       # 场景编写错误（未定义变量 / 未注册 tool / jsonpath 拼错 / 脚本异常）
 
 # body_excerpt 截断上限
 _MAX_STR = 500
