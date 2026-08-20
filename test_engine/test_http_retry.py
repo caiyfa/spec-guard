@@ -156,3 +156,98 @@ def test_100_uploads_no_handle_growth(tmp_path):
         assert kinds_files == "bytes", "每次上传的文件 payload 必须是 bytes"
     for sent in session.sent_files:
         assert sent["file"] == (src.name, payload)
+
+
+# ══════════════════════════════════════════════════════════
+# ENG-T03 §3.2 可配置重试（走真实 HttpClient.request + 假 Session）
+# ══════════════════════════════════════════════════════════
+
+import requests  # noqa: E402
+
+from engine.execution_record import CAT_SCENARIO  # noqa: E402
+
+
+def _real_client(script):
+    from engine.http_client import HttpClient
+    c = HttpClient("http://fake", account=None, token_provider=None)
+    c.session = FakeSession(script)
+    return c
+
+
+def _call_scenario(sid, call_extra=None, method="GET"):
+    call = {"method": method, "path": "/api/x", "save": "r"}
+    call.update(call_extra or {})
+    return Scenario(id=sid, title=sid, flow=[{"call": call}],
+                    verify=[{"status": {"of": "r", "eq": 200}}])
+
+
+def test_get_503_then_200_auto_retry_with_warn(capsys):
+    """验收1：GET 首次 503、二次 200 → 自动重试（默认 times=1）后 PASS，日志含重试 WARN。"""
+    client = _real_client([503, 200])
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    rec = run_scenario(_call_scenario("T-R1"), rctx)
+    assert rec.verdict == "PASS", f"自动重试后应 PASS: {rec.failure}"
+    assert len(client.session.calls) == 2, "503 后应自动重试一次"
+    out = capsys.readouterr().out
+    assert "WARN" in out and "重试第 1 次" in out and "503" in out, \
+        f"重试必须打 WARN 日志（诚实语义：抖动留痕），实际输出:\n{out[-500:]}"
+
+
+def test_persistent_503_exhausts_retry_then_fails(capsys):
+    """验收2：持续 503 + retry{times:2, backoff:0.05} → 重试耗尽后按既有路径 FAIL，耗时≈退避之和。"""
+    import time as _time
+    client = _real_client([503, 503, 503])
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    t0 = _time.monotonic()
+    rec = run_scenario(_call_scenario("T-R2", {"retry": {"times": 2, "backoff": 0.05}}), rctx)
+    elapsed_ms = (_time.monotonic() - t0) * 1000
+    assert rec.verdict == "FAIL", "重试耗尽后最终 503 → 断言 FAIL（既有路径）"
+    assert rec.failure["category"] == "assert_failed"
+    assert len(client.session.calls) == 3, "1 次原始 + 2 次重试"
+    assert elapsed_ms >= 100, f"总耗时 {elapsed_ms:.0f}ms 应≈退避之和 100ms（2×0.05s）"
+
+
+def test_post_without_retry_declaration_no_retry():
+    """验收3：POST 不写 retry/idempotent → 503 不重试（向后兼容回归）。"""
+    client = _real_client([503, 200])   # 备好的 200 不应被消费
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    rec = run_scenario(_call_scenario("T-R3", method="POST"), rctx)
+    assert rec.verdict == "FAIL"
+    assert len(client.session.calls) == 1, "POST 未声明幂等 → 不得重试"
+
+
+def test_post_idempotent_true_retries():
+    """POST 显式 idempotent: true（=times=1 语义糖）→ 503 后重试成功。"""
+    client = _real_client([503, 200])
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    rec = run_scenario(_call_scenario("T-R4", {"idempotent": True}, method="POST"), rctx)
+    assert rec.verdict == "PASS"
+    assert len(client.session.calls) == 2
+
+
+def test_network_error_always_retryable():
+    """网络异常（ConnectionError/Timeout）总是可重试（请求未必到达服务端）。"""
+    client = _real_client([requests.ConnectionError("boom"), 200])
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    rec = run_scenario(_call_scenario("T-R5"), rctx)
+    assert rec.verdict == "PASS"
+    assert len(client.session.calls) == 2
+
+
+def test_retry_and_idempotent_both_declared_is_scenario_error():
+    """retry 与 idempotent 同时声明 → 场景编写错误（CAT_SCENARIO）。"""
+    client = _real_client([200])
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    rec = run_scenario(_call_scenario("T-R6", {"retry": {"times": 1}, "idempotent": True}), rctx)
+    assert rec.verdict == "FAIL"
+    assert rec.failure["category"] == CAT_SCENARIO
+    assert len(client.session.calls) == 0, "配置非法应在发请求前拦截"
+
+
+def test_retry_times_zero_suppresses_get_default():
+    """GET 显式 retry{times:0} → 关闭默认重试（显式退出开关）。"""
+    client = _real_client([503, 200])
+    rctx = _make_rctx(lambda acc, service="tdm": client)
+    rec = run_scenario(_call_scenario("T-R7", {"retry": {"times": 0}}), rctx)
+    assert rec.verdict == "FAIL"
+    assert len(client.session.calls) == 1

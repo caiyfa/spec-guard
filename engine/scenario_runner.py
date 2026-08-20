@@ -252,6 +252,43 @@ def render(obj, ns):
 # 内置步骤处理器
 # ══════════════════════════════════════════════════════════
 
+# ENG-T03：幂等方法默认自动重试一次；其余方法需显式声明才重试
+_IDEMPOTENT_METHODS = ("GET", "HEAD", "OPTIONS")
+_RETRY_ON_STATUS_DEFAULT = (500, 502, 503, 504)
+
+
+def _call_retry_config(body, method):
+    """call 步骤的幂等重试配置（ENG-T03）。
+
+    - GET/HEAD/OPTIONS：默认 {"times": 1}（不声明即自动重试一次）；
+    - 其他方法：需显式二选一——retry: {times: N, backoff?: 秒, on_status?: [状态码]}
+      或 idempotent: true（等价 times=1 的语义糖）；
+    - retry: {times: 0} 显式关闭（含 GET 默认）。
+    返回 None 表示不重试。配置非法抛 ValueError（归 CAT_SCENARIO 场景编写错误）。
+    """
+    retry = body.get("retry")
+    idem = body.get("idempotent")
+    if retry is not None and idem is not None:
+        raise ValueError("call 步骤 retry 与 idempotent 二选一，不可同时声明")
+    if idem is not None and not isinstance(idem, bool):
+        raise ValueError("call 步骤 idempotent 只接受 true/false")
+    if retry is not None:
+        if not isinstance(retry, dict):
+            raise ValueError("call 步骤 retry 应为 dict（{times: N, backoff?: 秒, "
+                             f"on_status?: [状态码]}}），实际类型 {type(retry).__name__}")
+        times = retry.get("times")
+        if isinstance(times, bool) or not isinstance(times, int) or times < 0:
+            raise ValueError(f"call 步骤 retry.times 应为非负整数，实际 {times!r}")
+        cfg = dict(retry)
+        cfg.setdefault("backoff", 1.0)
+        cfg.setdefault("on_status", list(_RETRY_ON_STATUS_DEFAULT))
+        return cfg
+    if idem:
+        return {"times": 1, "backoff": 1.0, "on_status": list(_RETRY_ON_STATUS_DEFAULT)}
+    if method in _IDEMPOTENT_METHODS:
+        return {"times": 1, "backoff": 1.0, "on_status": list(_RETRY_ON_STATUS_DEFAULT)}
+    return None
+
 def step_call(body, rctx, ns, record):
     """HTTP 调用（Apifox 风格参数体系）。
 
@@ -263,6 +300,7 @@ def step_call(body, rctx, ns, record):
       - urlencoded:  {urlencoded: {k: v}}
       - raw:         {raw: "文本", content_type: "text/plain"（默认）}
       - binary:      {file: "path/to/file"}（文件字节流作为 body）
+    retry/idempotent: 幂等重试声明（ENG-T03，见 _call_retry_config）
     """
     account = body.get("as", "default")
     if account in ("none", "anonymous"):
@@ -329,7 +367,8 @@ def step_call(body, rctx, ns, record):
     started = time.time()
     resp = client.request(method, path, params=params, json_body=json_body,
                           data=data, files=files, headers=headers, cookies=cookies,
-                          raise_on_error=False, timeout=body.get("timeout", 30))
+                          raise_on_error=False, timeout=body.get("timeout", 30),
+                          retry=_call_retry_config(body, method))
     elapsed = int((time.time() - started) * 1000)
     try:
         resp_json = resp.json()

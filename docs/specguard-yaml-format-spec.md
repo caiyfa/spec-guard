@@ -1,6 +1,6 @@
 # SpecGuard YAML 格式规范
 
-> **版本**：2.8.0 | **更新时间**：2026-08-20 | **生成方式**：SpecGuard Workbench 自动生成
+> **版本**：2.9.0 | **更新时间**：2026-08-20 | **生成方式**：SpecGuard Workbench 自动生成
 > **用途**：Agent 根据此规范生成合规的 test-case YAML 文件，SpecGuard 按此规范校验格式。
 > **结构**：第一~七章为语法层（冻结，变更需递增版本号）；第八章为 tool 目录（引擎注册表动态生成）。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 2.9.0 | 2026-08-20 | call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试 |
 | 2.8.0 | 2026-08-20 | 契约门禁强化（ENG-T02）：契约指纹纳入 verify 断言逻辑（改预期值/路径/操作符/脚本即触发 T6，改断言需 bump MINOR）；strict_deps 语义修正（DRIFT/ORPHANED 升格 FAIL 而非退化为 BLOCKED）；T7 依赖缺 version 声明由 WARN 升 ERROR；版本仲裁下沉至依赖每一跳（传递 orphan 不再崩溃、传递漂移不再漏检） |
 | 2.7.0 | 2026-08-14 | FR 编号解析升级为注册表锚定（方案 B，迭代名完全自由）：右锚流水 + 左锚功能注册表最长匹配（specs/{模块}/{功能}/ 目录）+ 中段迭代可含 '-'（2026-08-17/sprint-23 合法）；迭代代号约束收敛为文件系统安全底线，conformance STRUCT 同步；schema.py parse_fr_delta_id 必须携带 known_features |
 | 2.6.0 | 2026-08-13 | FR 编号迭代命名限制落地（specstd，方案 A 终版双右锚解析）：迭代代号禁止含 '-'（字母/数字/下划线开头可含 '.'，S24/v2.5/2026Q3 合法），conformance STRUCT 强制；schema.py 新增 ITER_CODE_RE / FR_DELTA_ID_RE / parse_fr_delta_id |
@@ -143,7 +144,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 
 | 步骤类型 | 格式 | 产出变量 |
 |----------|------|----------|
-| `call` | `{as?, service?, method, path, params?, headers?, cookies?, body_type?, json?/form?/urlencoded?/raw?/file?, save, timeout?}` | `save.status`、`save.json`、`save.headers` |
+| `call` | `{as?, service?, method, path, params?, headers?, cookies?, body_type?, json?/form?/urlencoded?/raw?/file?, save, timeout?, retry?/idempotent?}` | `save.status`、`save.json`、`save.headers` |
 | `db_query` | `{sql, schema?, save, note?}` | 查询结果行数组（裸数组，可直接被 json 断言消费） |
 | `poll` | `{call, until, interval_ms?, timeout_ms?, on_timeout?, save}` | 末轮响应（结构同 call） |
 | `python` | `{script 或 file, save?}` | `output` 变量 / `ns` 直写 / `save(k,v)` |
@@ -153,6 +154,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 - `as`：账号别名（default 等），`none`/`anonymous` 表示不带 token 的匿名调用；`internal` = internal token 服务凭证（K-055，无用户身份，限参数驱动接口）
 - `service`：服务前缀路由（K-055，默认 tdm）——取 env 配置 `{service}_base`（如 hr_center/oss/uac），场景只写服务内相对路径，服务段不再丢失
 - `headers` / `cookies`：KV dict，支持 `{{var}}` 插值；`headers` 可显式覆盖 `Authorization`（负向测试用）
+- `retry` / `idempotent`（2.9.0，幂等重试声明，二选一）：`retry: {times: N, backoff?: 秒（默认 1.0）, on_status?: [状态码]（默认 [500,502,503,504]）}`；`idempotent: true` 等价 `times: 1` 的语义糖。**GET/HEAD/OPTIONS 默认自动重试一次**（`retry: {times: 0}` 显式关闭）；其他方法（POST/PUT/DELETE…）必须显式声明才重试——重试意味着请求可能被重复发送，幂等性由作者担保。网络异常（连接失败/超时）总是可重试；4xx 永不重试（401 刷新逻辑除外）；每次重试在执行日志打 `WARN 重试第N次` 留痕。`poll` 步骤内部固定不重试（轮询本身就是重试语义）
 - `body_type`（默认按 `json` 字段推断）：
 
 | body_type | 字段 | 说明 |
