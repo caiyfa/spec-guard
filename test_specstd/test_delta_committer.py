@@ -241,7 +241,10 @@ class TestMCP:
     def test_tool_registered(self):
         from mcp_server.server import ALL_TOOLS
         names = {t.name for t in ALL_TOOLS}
-        assert "commit_delta_changes" in names
+        # T-982：commit_delta_changes 收敛为 delta 工具的 action（legacy 名不再出现在工具面）
+        assert "delta" in names
+        from mcp_server.tools.tool_meta import legacy_owner
+        assert legacy_owner("commit_delta_changes") is not None
 
     def test_side_effect_draft(self):
         from mcp_server.tools.side_effect_registry import get_side_effect
@@ -267,6 +270,11 @@ class TestMCP:
         from agent.runtime import resolve_tools
         from agent.purpose_loader import load_purpose
         pdef = load_purpose("requirement_interview")
-        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"])
-        names = {t.name for t in tools}
-        assert "commit_delta_changes" in names
+        tools = resolve_tools(purpose_tools=list(pdef.tools),
+                              user_roles=["product"],
+                              purpose_domains=list(pdef.domains))
+        # T-982：product 可见 delta.commit（action 粒度白名单，schema 枚举裁剪）
+        delta_tool = next(t for t in tools if t.name == "delta")
+        enum = delta_tool.inputSchema["properties"]["action"]["enum"]
+        assert "commit" in enum
+        assert "push" not in enum

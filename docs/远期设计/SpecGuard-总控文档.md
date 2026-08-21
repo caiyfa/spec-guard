@@ -253,7 +253,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-976 | M-B | 解环（agent↔mcp_server、graph_index↔specflow）+ 环检查进 release_check | wt/dep-inversion | T-975 | ✅ 2208b0c（08-21 主库验收） | sess-dep-inversion | skill_loader/feishu_paths 下沉解两环；check_import_cycles 进 release_check ④；模块级无环+函数级回边白名单；离线 1599+236 全绿 |
 | T-980 | M-C | Agent 评测体系（轨迹断言 golden case + MockLLM 升基建 + metrics 工具维度） | wt/agent-eval | — | ✅ 2026-08-21 主库验收（a10105d：evals 3/3 + test_evals 36/36 + release_check PASS） | sess-agent-eval | 3-5 天；智能层后续一切的地基；T-982 解锁 |
 | T-981 | M-C | 测试类型学（dimensions 受控词表+维度断言映射，format_spec 三同步） | wt/test-taxonomy | — | 已完成（8df59e1 功能 + ef1547c 返修：test_dimensions 25 绿/test_specstd+test_engine 1948 绿/engine_modes 39 绿/release_check PASS/前端 build 47s/lint 8 持平基线；format_spec 2.14.0 三同步+baseline 零漂移） | sess-test-taxonomy | 3-4 天→当日完工；八维词表+T10 自检+覆盖面板维度聚合+24 入库场景补标注零告警；**一轮验收不通过返修**：测试以磁盘 rglob 为口径误卷主库本地未过闸草稿（scenarios/{smart-tag,system-settings,tmp}/ gitignored 约 80 个）——改 git ls-files 跟踪事实源+断言收窄到入库集合（草稿 DIM_MISSING WARN 为设计意图不卡 verdict），合并形态 108 文件复演实证零误炸；待主库复验 |
-| T-982 | M-C | 工具收敛（79→≤30，元数据派生 RBAC/写工具登记，eval 集验证收益） | wt/tool-consolidation | T-980 | 未认领 | | 5-8 天 |
+| T-982 | M-C | 工具收敛（79→≤30，元数据派生 RBAC/写工具登记，eval 集验证收益） | wt/tool-consolidation | T-980 | 已完成（c6556bc：stdio 92→39/对内 24≤30，两用途会话可见 15≤15；eval 前后 3/3 全过——前 list_scenarios/validate/read_spec→write_draft→validate → 后 scenario/validate/spec→draft→validate，断言 16/16 ok_rate 1.0 持平，证据 evals/baseline_t982/；离线 test_specstd 1694+engine_modes 39+test_engine 227 全绿+release_check PASS+前端 build 39s） | sess-tool-consolidation | 5-8 天；2026-08-21 认领当日完工；实测基线 stdio 92/runtime 95（任务卡 79 为过期快照）；待主库验收 |
 | T-990 | M-D | 群类型标签 + 吞并 T-933/T-934/T-935（对话内上传/read_material/e2e） | wt/material-pool | — | ✅ 08-21 主库验收（合并 2b0691a） | sess-material-pool | 2-3 天；2026-08-21 认领，当日完工（c0273de/60a1874/ea6d094/20075e1/a7a54df） |
 | T-991 | M-D | 话题 category/priority（schema v3，闲聊保留默认过滤） | wt/material-pool | T-990 | ✅ 08-21 主库验收（合并 2b0691a） | sess-material-pool | 2-3 天；拍板③已过（08-21）；当日完工（fd7747e） |
 | T-992 | M-D | link 死链修复 + 话题模块 FR 锚点派生 | wt/material-pool | T-991 | ✅ 08-21 主库验收（ff 合并 af4a1cf） | sess-material-pool | 1-2 天；拍板②已过（08-21：FR 锚点派生+留空后补）；当日完工（6ec3989） |
@@ -276,6 +276,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937~T-942（✅）→ T-933 ~ T-935（✅ 由 sess-material-pool 并入 T-990 施工，08-21 主库验收） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验（b002749）；T-938 群聊后台预热（cdf8d6e）；T-939 材料原文+图片直出（f66330b+1c90b83）；T-940 监听用户视图+按人切换+飞书直链（4a7f656）；T-941 同步设置去重+错误人话化+搜索解耦（871d64c）；T-942 授权闭环入弹层（006c5c2）；T-933~T-935 已随 T-990 吞并完成并验收，T-936 储备 |
 | sess-material-pool | M-D 材料池演进施工（wt/material-pool 树） | T-990（✅ 08-21 验收合并 2b0691a）→ T-991（✅ 同批验收）→ T-992（✅ 6ec3989 待验收）→ T-993（✅ 871f2a3 待验收，M-D 链全部完工） | 2026-08-21 | T-990 五提交+T-991 fd7747e+T-992 6ec3989+T-993 871f2a3（设计稿《跨群话题关联设计》评审通过后落地：relates 边/两段式推荐/关联抽屉）；决策②③已拍板入库；本会话文件读写一律用树路径，只跑离线测试与前端 build，提交即推 |
 | sess-test-taxonomy | M-C 测试类型学施工（wt/test-taxonomy 树） | T-981（✅ 8df59e1+ef1547c 待主库复验） | 2026-08-21 | 当日完工+当日返修：sg_core/test_dimensions 八维词表+证据提取+映射检查（DIM_VOCAB/DIM_MISSING/DIM_MAP）；format_spec 2.14.0 三同步（§1.2 doc 选填字段+§五 T10，baseline 重建比对零漂移）；validator 双路+spec_validator T10；compute_coverage 维度聚合+CoveragePanel 维度分布区块；generate-scenario 1.1.0 测试设计方法；24 入库场景补标注零告警；返修：存量回归测试口径磁盘 rglob→git ls-files（主库本地 gitignored 草稿约 80 个被误卷根因），合并形态 108 文件复演零误炸；离线全绿（39+1948）+release_check PASS+前端 build 成功 |
+| sess-tool-consolidation | M-C 工具收敛施工（wt/tool-consolidation 树） | T-982（已完成 c6556bc，待验收） | 2026-08-21 | tool_meta 元数据单一事实源+consolidate 合并器（17 组 77→24）；side_effect/RBAC/doc 足迹全派生（_KNOWN_WRITERS 与 _RBAC_READONLY_TOOLS 手工清单废除）；purpose domains 领域子集两用途 15 工具；顺手修 specflow_refs 缺 handle 与 audit 未登记两存量缺口；eval 前后 3/3 持平 |
 | | | | | |
 
 ---
@@ -290,6 +291,78 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| AGENTS.md | sess-tool-consolidation | 2026-08-21 | a9a84429c233 | | 0890c0155353 | 已完成 | T-982：mcp_server 结构行工具计数 |
+| agent/compactor.py | sess-tool-consolidation | 2026-08-21 | 98128bba2653 | | ee2ed56dc04f | 已完成 | T-982 F3：压缩分类按逻辑 id 归一 |
+| agent/doc_read.py | sess-tool-consolidation | 2026-08-21 | c766d64a688b | | e06784638d93 | 已完成 | T-982 F3：足迹 guard 元数据 doc_track 派生 + 逻辑 id 归一 |
+| agent/doc_write.py | sess-tool-consolidation | 2026-08-21 | b6a88f20afee | | 98875f25adc8 | 已完成 | T-982 F3：同上（写足迹） |
+| agent/prompts/system.md.j2 | sess-tool-consolidation | 2026-08-21 | b081e46e60c1 | | 1a6c4b89230d | 已完成 | T-982：合并/声明改造 |
+| agent/purpose_loader.py | sess-tool-consolidation | 2026-08-21 | 5d7cb1d7af5c | | a4812303ab10 | 已完成 | T-982 F4：PurposeDef 增 domains 字段 |
+| agent/purposes/requirement_interview.md | sess-tool-consolidation | 2026-08-21 | 79b019f9bdcf | | 33c92eec8492 | 已完成 | T-982 F4：领域子集 11+显式 4=15 工具 |
+| agent/purposes/test_workbench.md | sess-tool-consolidation | 2026-08-21 | bee6da6ce19e | | 6370378abbc2 | 已完成 | T-982 F4：领域子集 15 工具（specflow/feishu/graph/open 不下发） |
+| agent/runtime.py | sess-tool-consolidation | 2026-08-21 | fad14ab896fb | | 86f7f414e630 | 已完成 | T-982 F3：RBAC 派生 + action 粒度白名单/越权拒绝 + resolve_tools 领域子集 + 逻辑 id 文件依赖 |
+| agent/session.py | sess-tool-consolidation | 2026-08-21 | b328c5bb4068 | | 187045d01c92 | 已完成 | T-982 F4：白名单快照含 domain: 领域标识 |
+| agent/skills/analyze-workspace.md | sess-tool-consolidation | 2026-08-21 | fbe60ed0f9dc | | 3289b815989c | 已完成 | T-982：合并/声明改造 |
+| agent/skills/audit-spec.md | sess-tool-consolidation | 2026-08-21 | 0dcb47882999 | | 9080c0105896 | 已完成 | T-982：合并/声明改造 |
+| agent/skills/dag-orchestration.md | sess-tool-consolidation | 2026-08-21 | 12b10495dc4d | | 703bddc53c48 | 已完成 | T-982：合并/声明改造 |
+| agent/skills/debug-failure.md | sess-tool-consolidation | 2026-08-21 | f4f961b18329 | | 6fdfeafc8b62 | 已完成 | T-982：合并/声明改造 |
+| agent/skills/fabricate-test-data.md | sess-tool-consolidation | 2026-08-21 | df560fd674b0 | | bbce4b2c8b18 | 已完成 | T-982：合并/声明改造 |
+| agent/skills/feishu-chat.md | sess-tool-consolidation | 2026-08-21 | d2d2e3131ff7 | | 254ccef75fbb | 已完成 | T-982：合并/声明改造 |
+| agent/skills/gate-dock-guide.md | sess-tool-consolidation | 2026-08-21 | 91100c7a7f7e | | 2b3143b539af | 已完成 | T-982：合并/声明改造 |
+| agent/skills/generate-scenario.md | sess-tool-consolidation | 2026-08-21 | 0639af8ae44d | | e699c5e2a125 | 已完成 | T-982：合并/声明改造 |
+| agent/skills/renumber-fr.md | sess-tool-consolidation | 2026-08-21 | f2ddb0071243 | | 9caed7b9821d | 已完成 | T-982：合并/声明改造 |
+| agent/skills/spec-chat.md | sess-tool-consolidation | 2026-08-21 | b2284c2d2735 | | 8ea6cb2da38f | 已完成 | T-982：合并/声明改造 |
+| agent/skills/update-scenario.md | sess-tool-consolidation | 2026-08-21 | 47548ded0927 | | b9c9c5809a46 | 已完成 | T-982：合并/声明改造 |
+| agent/skills/validate-conformance.md | sess-tool-consolidation | 2026-08-21 | 896f93994a19 | | 5c75577a0b4c | 已完成 | T-982：合并/声明改造 |
+| agent/skills/zentao-story-point.md | sess-tool-consolidation | 2026-08-21 | f68f8e7c71b8 | | 4068c7b355ab | 已完成 | T-982：合并/声明改造 |
+| evals/README.md | sess-tool-consolidation | 2026-08-21 | c62e5954c653 | | 0c235eb2bac3 | 已完成 | T-982：case 格式文档工具名更新 |
+| evals/cases/001-list-scenarios.json | sess-tool-consolidation | 2026-08-21 | dfc547d8d4cc | | 455879cc671d | 已完成 | T-982 eval：scenario(action=list) |
+| evals/cases/003-draft-write-validate.json | sess-tool-consolidation | 2026-08-21 | d733807c8d93 | | 5728fe53c0c8 | 已完成 | T-982 eval：spec/draft 合并工具名 |
+| mcp_server/__init__.py | sess-tool-consolidation | 2026-08-21 | 27717615f717 | | a46f050887ce | 已完成 | T-982：包 docstring 收敛后面貌 |
+| mcp_server/server.py | sess-tool-consolidation | 2026-08-21 | c378764baa2f | | 71f79a02271e | 已完成 | T-982：docstring 工具计数 39 |
+| mcp_server/tools/attribution.py | sess-tool-consolidation | 2026-08-21 | 62fd54ff9aca | | 5fafd7b38797 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/audit.py | sess-tool-consolidation | 2026-08-21 | 39249c1f5b3d | | 5c0d58656eb7 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/compliance.py | sess-tool-consolidation | 2026-08-21 | 8fed4d213866 | | 5c37edd04299 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/coverage.py | sess-tool-consolidation | 2026-08-21 | 93b055310fa9 | | 1f3ddd35f4ad | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/delta_doc_writer.py | sess-tool-consolidation | 2026-08-21 | 1194806c0684 | | 64ff918ec308 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/draft_writer.py | sess-tool-consolidation | 2026-08-21 | ce1576593260 | | bbf3d669c473 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/fabrication.py | sess-tool-consolidation | 2026-08-21 | 1698a90c7672 | | d14f31ef9d55 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/feishu_fetch.py | sess-tool-consolidation | 2026-08-21 | 540749abc5bf | | ea586deb896b | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/gate_dock.py | sess-tool-consolidation | 2026-08-21 | 0efe269e407b | | 814609df5994 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/graph_index.py | sess-tool-consolidation | 2026-08-21 | 3fc295d33e6c | | 0cdc9a7f4f51 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/info_pack.py | sess-tool-consolidation | 2026-08-21 | 4e84fc0d5917 | | d969adadb447 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/knowledge.py | sess-tool-consolidation | 2026-08-21 | 4790dc4736e9 | | e0aa3a9a745e | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/lark_auth.py | sess-tool-consolidation | 2026-08-21 | 59a99048f1cf | | 8bdb475d568b | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/lark_run.py | sess-tool-consolidation | 2026-08-21 | 5de3ecd69b5b | | 418c445a9115 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/meta.py | sess-tool-consolidation | 2026-08-21 | 65d1fd7d7975 | | db0f47ae2e9f | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/open/dev_context.py | sess-tool-consolidation | 2026-08-21 | 2b75312b6bce | | dc6feda5c64b | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/open/lineage_query.py | sess-tool-consolidation | 2026-08-21 | 8b1dbdee3afd | | 8baa4fbe0b0c | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/open/quality_query.py | sess-tool-consolidation | 2026-08-21 | 67677c467e83 | | 1ebe443a4aff | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/open/refs_query.py | sess-tool-consolidation | 2026-08-21 | 1f0fe8d43c93 | | b20909d3112a | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/open/specflow_refs.py | sess-tool-consolidation | 2026-08-21 | 4ac92512cb31 | | 3af0a191d52e | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/registry_query.py | sess-tool-consolidation | 2026-08-21 | 633c2d2bfef2 | | add28cf21b1d | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/scenario_tools.py | sess-tool-consolidation | 2026-08-21 | 06da4547603c | | d9a1a96339a2 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/side_effect_registry.py | sess-tool-consolidation | 2026-08-21 | 4fb40e43ac26 | | 4d0fcd0221df | 已完成 | T-982 F3：_KNOWN_WRITERS 手工登记废除，分级从 tool_meta 派生（legacy 名兼容查询） |
+| mcp_server/tools/spec_reader.py | sess-tool-consolidation | 2026-08-21 | 425cd69269bb | | 8400aa1917c2 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/spec_search.py | sess-tool-consolidation | 2026-08-21 | 61fc8a0ac58d | | 4e41323ccb1e | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/specflow_interview.py | sess-tool-consolidation | 2026-08-21 | 06c4589adf7d | | a3269f04d247 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/specflow_ledger.py | sess-tool-consolidation | 2026-08-21 | 62b8301e61cb | | 4b02316bebff | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/specflow_pack.py | sess-tool-consolidation | 2026-08-21 | 00dfc046b897 | | 3d10c5ff4f10 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/specflow_refs.py | sess-tool-consolidation | 2026-08-21 | 7235c890504e | | 66595cf0a696 | 已完成 | T-982：合并/声明改造 |
+| mcp_server/tools/tool_meta.py | sess-tool-consolidation | 2026-08-21 | NEW | | e55ed355b6bf | 已完成 | T-982 F1：元数据单一事实源（side_effect/domain/rbac/doc_track + consolidate 合并器 + 单元派生） |
+| mcp_server/tools/validator.py | sess-tool-consolidation | 2026-08-21 | cb035f284120 | | 094927014e9d | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_agent.py | sess-tool-consolidation | 2026-08-21 | 6e1d7f1c10a5 | | ed7f34404c27 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_delta_committer.py | sess-tool-consolidation | 2026-08-21 | b7ed10bdd41d | | 9dc6d5ef1894 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_delta_doc_writer.py | sess-tool-consolidation | 2026-08-21 | 021e18f9b47e | | ba1af69ca018 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_doc_read.py | sess-tool-consolidation | 2026-08-21 | a5bdc90aea13 | | 76cb3f1cff27 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_evals.py | sess-tool-consolidation | 2026-08-21 | 920f1f6ba178 | | 2913bdf91d9e | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_lark_auth.py | sess-tool-consolidation | 2026-08-21 | a1cf98246da7 | | 2477266780d3 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_mcp_server.py | sess-tool-consolidation | 2026-08-21 | e10dfbd0861e | | d8c4556406b0 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_meta_tools.py | sess-tool-consolidation | 2026-08-21 | 0d84ca4f60b9 | | ef0fa4fa8689 | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_open_surface.py | sess-tool-consolidation | 2026-08-21 | 7381fec4bf17 | | dfec78c92d6f | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_purpose.py | sess-tool-consolidation | 2026-08-21 | a443c1601170 | | 4fd458834d4c | 已完成 | T-982：合并/声明改造 |
+| test_specstd/test_skill_governance.py | sess-tool-consolidation | 2026-08-21 | cae4f4f15b2c | | efb062d9ddd1 | 已完成 | T-982：合并/声明改造 |
+| workbench/backend/routers/agent.py | sess-tool-consolidation | 2026-08-21 | 78b134425d8f | | e7006941acb3 | 已完成 | T-982 F4：resolve_tools 透传 domains；材料引用引导文案改 pack(action=read_material) |
+| workbench/frontend/src/pages/AgentChat.tsx | sess-tool-consolidation | 2026-08-21 | 9751a8d0ae12 | | 9b851426e197 | 已完成 | T-982：步骤分组 name.action 键 + draft action 判定 + 调试文案 |
 | specflow/feishu_pool/cross_chat.py | sess-material-pool | 2026-08-21 | NEW | | 6817c23c773e | 已完成 | T-993 F1：跨群关联推荐引擎（确定性预筛零LLM + LLM精筛可选降级） |
 | workbench/backend/routers/feishu_pool.py | sess-material-pool | 2026-08-21 | 82d150372549 | | 9901c72cb301 | 已完成 | T-993 F2：relate/relations/cross-refine 三端点 |
 | workbench/backend/services/specflow/feishu_sync_service.py | sess-material-pool | 2026-08-21 | eeeec105a941 | | e5d6e83591a4 | 已完成 | T-993 D5：list_pool_topics 附确定性预筛 cross_suggestions |
@@ -317,6 +390,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/components/FeishuReviewPanel.tsx | sess-material-pool | 2026-08-21 | 2c2c408508bb | 46d0d12545d5 | 已完成 | T-991：复核队列「我的/共享」切换（useCallback 修 exhaustive-deps） |
 | test_specstd/test_feishu_topic_cluster.py | sess-material-pool | 2026-08-21 | 3e951b846c5b | ad57c201c8f1 | 已完成 | T-991：TestSchemaV3 8 用例（推导/聚类产出/闲聊保留/修订保留/normalize/edit/draft/regen） |
 | test_specstd/test_feishu_t948_router.py | sess-material-pool | 2026-08-21 | 69658b0a31da | 48ca673614ab | 已完成 | T-991：PUT card category/priority 成功 + 非法枚举 400 |
+| test_specstd/test_audit.py | sess-tool-consolidation | 2026-08-21 | 5c0e8abf4ff1 | | 82bb332ca03f | 已完成 | T-982：audit 技能断言改合并工具名 |
+| evals/baseline_t982/metrics_before.jsonl | sess-tool-consolidation | 2026-08-21 | NEW | | af9c5253817a | 已完成 | T-982 eval 收敛前后对比证据 |
+| evals/baseline_t982/report_before.md | sess-tool-consolidation | 2026-08-21 | NEW | | c008fcb361e5 | 已完成 | T-982 eval 收敛前后对比证据 |
+| evals/baseline_t982/metrics_after.jsonl | sess-tool-consolidation | 2026-08-21 | NEW | | 988cec6bce4f | 已完成 | T-982 eval 收敛前后对比证据 |
+| evals/baseline_t982/report_after.md | sess-tool-consolidation | 2026-08-21 | NEW | | d807ab97a421 | 已完成 | T-982 eval 收敛前后对比证据 |
 | test_specstd/test_feishu_review.py | sess-material-pool | 2026-08-21 | bbab61374d7f | 18bc3b5f8de7 | 已完成 | T-991：共享队列跨用户可见 + 路由 scope 路由 2 用例 |
 | test_specstd/test_feishu_pool_page.py | sess-material-pool | 2026-08-21 | 20b0abaf2d33 | 6861071765a3 | 已完成 | T-991：_cluster_once mock 签名适配 chat_kinds + kinds 断言（补登记：动它时才发现未列） |
 | workbench/backend/services/specflow/feishu_sync_service.py | sess-material-pool | 2026-08-21 | da519c270d54 | 64b1c0dcdad6 | 已完成 | T-990 群类型标签：_CHAT_KINDS 枚举 + _clean_chats 归一化（镜像 users 模式） |

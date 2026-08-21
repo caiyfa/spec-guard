@@ -56,7 +56,9 @@ class TestPurposeSessionModel:
         sm = SessionManager(tmp_path / "sessions", workspace="tdm")
         sid = sm.create(emp_no="90024166", workspace="tdm", purpose="requirement_interview")
         meta = sm.list_sessions()[0]
-        assert "read_spec" in meta["tool_whitelist"]
+        # T-982：快照含合并工具名与 domain: 领域标识
+        assert "spec" in meta["tool_whitelist"]
+        assert "domain:specflow" in meta["tool_whitelist"]
         assert "panels" in meta and len(meta["panels"]) > 0
 
 
@@ -144,12 +146,16 @@ class TestResolveTools:
         from agent.runtime import resolve_tools
         from agent.purpose_loader import load_purpose
         pdef = load_purpose("requirement_interview")
-        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"])
+        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"],
+                              purpose_domains=list(pdef.domains))
         names = {t.name for t in tools}
-        assert "read_spec" in names
-        assert "write_draft" in names            # 可起草 delta spec（T-xxx 开放）
-        assert "promote_draft" not in names       # 入库仍 tester/admin
-        assert "edit_dependency" not in names
+        assert "spec" in names
+        # T-982：action 粒度——product 可 draft.write（起草），不可 promote（入库 tester/admin）
+        draft = next(t for t in tools if t.name == "draft")
+        enum = draft.inputSchema["properties"]["action"]["enum"]
+        assert "write" in enum
+        assert "promote" not in enum
+        assert "scenario" not in names              # edit_dependency 所在域不下发
         assert "todo_write" in names               # meta 常驻
 
     def test_viewer_empty(self):
@@ -164,11 +170,14 @@ class TestResolveTools:
         assert resolve_tools(purpose_tools=[], user_roles=["dev"]) == []
         # product + 未知角色：未知角色不击穿只读收窄
         pdef = load_purpose("requirement_interview")
-        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product", "dev"])
+        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product", "dev"],
+                              purpose_domains=list(pdef.domains))
         names = {t.name for t in tools}
-        assert "read_spec" in names
-        assert "write_draft" in names             # 可起草 delta spec
-        assert "promote_draft" not in names        # 入库仍 tester/admin
+        assert "spec" in names
+        draft = next(t for t in tools if t.name == "draft")
+        enum = draft.inputSchema["properties"]["action"]["enum"]
+        assert "write" in enum                     # 可起草 delta spec
+        assert "promote" not in enum               # 入库仍 tester/admin
         # tester + 未知角色：tester 仍是全量（未知角色不拉低）
         tools2 = resolve_tools(purpose_tools=[], user_roles=["tester", "dev"])
         from agent.runtime import ALL_TOOLS
@@ -180,21 +189,25 @@ class TestResolveTools:
         from agent.purpose_loader import load_purpose
         from agent.llm_client import LLMClient
         pdef = load_purpose("requirement_interview")
-        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"])
-        rt = AgentRuntime(LLMClient(), tools=tools)  # 无 base_url → mock
+        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"],
+                              purpose_domains=list(pdef.domains))
+        rt = AgentRuntime(LLMClient(), tools=tools, purpose_name="requirement_interview",
+                          user_roles=["product"])  # 无 base_url → mock
         # 审计落点：monkeypatch user_store.audit 捕获调用
         import services.user_store as us_mod
         captured = {}
         def fake_audit(emp_no, action, target="", detail="", db_path=None):
             captured.update(emp_no=emp_no, action=action, target=target, detail=detail)
         monkeypatch.setattr(us_mod, "audit", fake_audit)
-        result = rt._execute_tool({"function": {"name": "promote_draft",
-                                                "arguments": "{}"}})
+        # T-982：action 粒度越权——draft 工具在册但 promote 单元不在白名单
+        assert "draft.write" in rt._tool_whitelist
+        assert "draft.promote" not in rt._tool_whitelist
+        result = rt._execute_tool({"function": {"name": "draft",
+                                                "arguments": "{\"action\": \"promote\"}"}})
         assert "越权拒绝" in result
-        assert "promote_draft" not in rt._tool_whitelist
         # WARNING 审计：action=tool_denied，target=越权工具名
         assert captured.get("action") == "tool_denied"
-        assert captured.get("target") == "promote_draft"
+        assert captured.get("target") == "draft"
 
 
 # ══════════════════════════════════════════════════════════

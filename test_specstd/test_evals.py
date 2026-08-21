@@ -268,7 +268,7 @@ class TestGoldenCases:
                     "tool_calls_failed", "tool_success_rate", "steps",
                     "turns", "duration_ms", "llm_calls"):
             assert key in m, f"metrics 缺工具维度字段 {key}"
-        assert m["tools_sequence"] == ["list_scenarios"]
+        assert m["tools_sequence"] == ["scenario"]  # T-982：合并工具名
 
     def _run_tampered(self, case_file: str, mutate) -> AssertionResult:
         case = load_case(CASES_DIR / case_file)
@@ -315,7 +315,7 @@ class TestGoldenCases:
         case = load_case(CASES_DIR / "003-draft-write-validate.json")
         case["max_turns"] = 1
         case["allow_leftover"] = True
-        case["expect"] = [{"type": "tools_required", "expect": ["read_spec"]}]
+        case["expect"] = [{"type": "tools_required", "expect": ["spec"]}]
         result = run_golden_case(case)
         assert result.passed, [f.detail for f in result.failures]
         assert result.metrics["fused"] is True

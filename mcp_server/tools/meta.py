@@ -69,3 +69,9 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         type="text",
         text=f"工具 {name} 仅在 Agent 运行时中可用，MCP server 独立模式不支持。",
     )]
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("todo_write", domain="meta", side_effect=SIDE_DRAFT, rbac="product")

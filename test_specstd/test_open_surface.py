@@ -276,10 +276,14 @@ class TestOpenRegistration:
         ]
 
     def test_read_run_report_mapped_not_duplicated(self, env):
-        """read_run_report：open 面 handle 可调（映射 attribution），注册面不重复。"""
+        """read_run_report：open 面 handle 可调（映射 attribution action），注册面不重复。
+
+        T-982：内部 read_run_report 已收敛为 attribution(action=report)，注册面
+        不再出现该工具名；open 面只在 handle 内映射别名，不重复注册 Tool。"""
         from mcp_server.server import ALL_TOOLS
-        dup = [t.name for t in ALL_TOOLS if t.name == "read_run_report"]
-        assert len(dup) == 1, f"read_run_report 重复注册: {len(dup)} 个"
+        names = [t.name for t in ALL_TOOLS]
+        assert "read_run_report" not in names
+        assert names.count("attribution") == 1
         from mcp_server.tools.open import quality_query
         assert all(t.name != "read_run_report" for t in quality_query.TOOLS)
 

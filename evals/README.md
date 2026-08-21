@@ -39,7 +39,7 @@ python evals/run_evals.py evals/cases/001-list-scenarios.json   # 单个
   "llm_script": [
     { "role": "assistant", "content": "", "tool_calls": [
       { "id": "c1", "type": "function",
-        "function": { "name": "read_spec", "arguments": { "path": "…" } } }  // arguments 可写对象
+        "function": { "name": "spec(action=read)", "arguments": { "path": "…" } } }  // arguments 可写对象
     ]},
     { "role": "assistant", "content": "最终答复（无 tool_calls 即停）" }
   ],
@@ -47,8 +47,8 @@ python evals/run_evals.py evals/cases/001-list-scenarios.json   # 单个
   // 工具结果 mock：只 mock 声明过的工具（替换 runtime._tool_map 条目，
   // 白名单/参数解析/截断等 runtime 链路全真）；未声明的走真实实现
   "tool_mocks": {
-    "read_spec": { "json": { "content": "…" } },        // JSON 结果
-    "write_draft": { "text": "ok" },                     // 纯文本结果
+    "spec(action=read)": { "json": { "content": "…" } },        // JSON 结果
+    "draft(action=write)": { "text": "ok" },                     // 纯文本结果
     "some_tool": [                                       // 多次调用按序取，末个重复
       { "json": { "code": 1 } }, { "error": "boom" }     // error=抛异常
     ]
@@ -56,14 +56,14 @@ python evals/run_evals.py evals/cases/001-list-scenarios.json   # 单个
 
   // 断言（顺序即报告顺序）
   "expect": [
-    { "type": "tool_sequence", "expect": ["read_spec", "write_draft", "validate"],
+    { "type": "tool_sequence", "expect": ["spec(action=read)", "draft(action=write)", "validate"],
       "ignore": ["todo_write"] },                        // 精确序列（可忽略 meta 工具）
     { "type": "tools_required", "expect": ["validate"] }, // 子集：这些必须调过（「调没调指定工具」）
-    { "type": "tools_forbidden", "expect": ["promote_draft"] }, // 这些不许调
+    { "type": "tools_forbidden", "expect": ["draft(action=promote)"] }, // 这些不许调
     { "type": "tool_result", "tool": "validate",
       "jsonpath": "$.verdict", "equals": "PASS" },       // jsonpath + equals/min/contains
     { "type": "artifact_validate",                        // 产物断言：复用 validator
-      "source_tool": "write_draft", "content_key": "content",
+      "source_tool": "draft(action=write)", "content_key": "content",
       "expect_verdict": "PASS", "max_error": 0 }         // 校验写型工具参数里的产物原文
   ]
 }
@@ -88,7 +88,7 @@ python evals/run_evals.py evals/cases/001-list-scenarios.json   # 单个
 
 评测进程内隔离工作区（SG_WORKSPACE 环境变量 / 注册表 active / contextvar 全部清空），
 validate 的 COVERS 校验等行为按「无激活工作区」确定性回放，不随宿主漂移；
-case 只允许使用离线可用的真实工具（`list_scenarios` / `validate` / `query_registry` 等纯读）
+case 只允许使用离线可用的真实工具（`scenario(action=list)` / `validate` / `query_registry` 等纯读）
 或声明 mock。**禁止在 case 里调用联网/DB 工具**（worktree 纪律：只跑离线测试）。
 
 评测期中和的副作用通道：审计落库（workbench.db）、纯读指纹扫描（rglob 工作区克隆）——

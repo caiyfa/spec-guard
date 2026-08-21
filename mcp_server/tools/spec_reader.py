@@ -1,4 +1,6 @@
 """spec_reader — 读取当前工作区的 spec 文件 + SpecGuard 仓库内容（K-021 双根）。
+>
+> T-982 收敛：3 工具合并为单 spec 工具（action=read/list/sync，原工具名为 legacy）。
 
 工具：
   read_spec: 读取单个文件（只读，越界/敏感路径拒绝）
@@ -16,6 +18,7 @@ import json
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 from specstd.workspace import (
     safe_resolve, get_active_workspace,
@@ -36,7 +39,7 @@ _BINARY_EXTS = {".xlsx", ".xls", ".pdf", ".png", ".jpg", ".jpeg", ".gif",
 # 文本读取上限（防超大文件撑爆上下文）
 _MAX_READ = 200 * 1024
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="read_spec",
         description="读取文件内容（只读，越界/敏感路径拒绝）。"
@@ -105,7 +108,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "read_spec":
         return _handle_read_spec(arguments)
     elif name == "list_spec_files":
@@ -363,3 +366,21 @@ def _handle_list_spec_files(arguments: dict) -> list[TextContent]:
             files.append(entry)
 
     return [TextContent(type="text", text=json.dumps(files, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：read/list/sync 合并为单 spec 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "spec",
+    "工作区 spec 读取与同步：read 读文件（K-021 双根：工作区未命中回退 SpecGuard 仓库根，"
+    "sg:// 强制仓库根；anchor/section 取章节省 token）、list 列文件树、sync 同步工作区（git pull）。",
+    actions={
+        "read": ActionMeta(legacy="read_spec", doc_track="read"),
+        "list": ActionMeta(legacy="list_spec_files"),
+        "sync": ActionMeta(legacy="sync_workspace"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="spec",
+)

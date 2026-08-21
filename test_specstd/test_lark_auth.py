@@ -168,11 +168,16 @@ class TestWhitelist:
         from agent.runtime import resolve_tools
 
         pdef = load_purpose("requirement_interview")
-        tools = resolve_tools(purpose_tools=list(pdef.tools), user_roles=["product"])
+        tools = resolve_tools(purpose_tools=list(pdef.tools),
+                              user_roles=["product"],
+                              purpose_domains=list(pdef.domains))
         names = {t.name for t in tools}
-        assert "lark_auth_login" in names
-        assert "lark_auth_status" in names
+        # T-982：lark_auth 合并工具按 action 裁剪——product 可见 status/login，不可见 logout
         assert "lark_execute" in names
+        la = next(t for t in tools if t.name == "lark_auth")
+        enum = la.inputSchema["properties"]["action"]["enum"]
+        assert "login" in enum and "status" in enum
+        assert "logout" not in enum
 
 
 # ══════════════════════════════════════════════════════════

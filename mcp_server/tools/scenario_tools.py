@@ -1,4 +1,6 @@
 """scenario_tools — 场景列表 / 读取 / ID 分配 / DAG 预演 / 依赖建议。
+>
+> T-982 收敛：7 工具合并为单 scenario 工具（action=list/read/next_id/check_dag/suggest_deps/edit/run）。
 
 工具：
   list_scenarios: 列出全部场景
@@ -15,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
@@ -23,7 +26,7 @@ from sg_core.format_spec import get_next_scenario_id  # noqa: E402
 
 SCENARIOS_ROOT = SG_ROOT / "scenarios"
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="list_scenarios",
         description=("列出 SpecGuard 仓库的全部场景，返回 {total, summary, scenarios}："
@@ -136,7 +139,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "list_scenarios":
         return _handle_list_scenarios(arguments)
     elif name == "read_scenario":
@@ -605,3 +608,25 @@ def _handle_edit_dependency(arguments: dict) -> list[TextContent]:
         "note": "版本期望已按上游当前版本自动推导（^主版本）；"
                 "建议用 check_dag 复核整体拓扑，validate 复核该场景格式",
     }, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：7 碎片合并为单 scenario 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "scenario",
+    "场景库操作：list 列场景、read 读场景 YAML、next_id 取新场景编号、check_dag 校验依赖图、"
+    "suggest_deps 依赖建议、edit 编辑依赖边（写 DAG）、run 执行场景（联网，仅全量角色）。",
+    actions={
+        "list": ActionMeta(legacy="list_scenarios"),
+        "read": ActionMeta(legacy="read_scenario", doc_track="read"),
+        "next_id": ActionMeta(legacy="next_scenario_id"),
+        "check_dag": ActionMeta(legacy="check_dag"),
+        "suggest_deps": ActionMeta(legacy="suggest_deps"),
+        "edit": ActionMeta(legacy="edit_dependency", side_effect=SIDE_DRAFT, rbac="staff"),
+        "run": ActionMeta(legacy="run_scenario", rbac="staff"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="scenario",
+)

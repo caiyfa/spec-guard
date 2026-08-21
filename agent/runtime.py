@@ -49,76 +49,31 @@ _TOOL_RESULT_MAX_CHARS = 50000
 # 全部为确定性过滤；LLM 请求越权工具 → 直接拒绝，不执行（铁律 2 运行时形态）
 # ══════════════════════════════════════════════════════════
 
-# RBAC 角色可见工具集（v1.8 角色集合并集语义）
+# RBAC 角色可见工具单元集（v1.8 角色集合并集语义；T-982 起从 tool_meta 派生）
 # - admin/tester：全量（无额外收窄）
-# - product：只读/校验/归因/台账查询工具（需求侧面试会话的可见面）
-# - 工具名为空集时角色不可用 Agent（viewer 无菜单，后端同样拦截）
-_RBAC_READONLY_TOOLS = frozenset({
-    # spec_reader
-    "read_spec", "list_spec_files", "sync_workspace",
-    # scenario_tools（只读部分）
-    "list_scenarios", "read_scenario", "next_scenario_id", "check_dag", "suggest_deps",
-    # registry_query
-    "query_registry",
-    # validator
-    "validate",
-    # attribution（归因只读）
-    "read_run_report", "read_run_log", "read_case_detail", "list_failures", "list_executions",
-    # compliance
-    "scan_compliance",
-    # meta
-    "todo_write",
-    # specflow 面试工具集（product 需求面试用，只读+登记+门禁纯函数）
-    "iv_open_topic", "iv_read_baseline", "iv_ask_question",
-    "iv_next_question", "iv_record_answer", "iv_p0_clear_check", "iv_append_transcript",
-    "sf_list_decisions", "sf_propose_decision", "sf_check_p0_gate",
-    "sf_suggest_scores", "sf_read_score_gate",
-    # 材料包工具
-    "pack_assemble", "pack_read_section", "material_parse_status",
-    "material_extract_topics", "pack_freshness_check",
-    # 材料解析产物读取（T-934，纯读：summary/topics/raw 三视图）
-    "read_material",
-    # info_pack 工具
-    "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
-    # GateDock 对话操作台状态查询（T-901，纯读）
-    "gate_dock_status",
-    # T-507/T-508 知识层（只读：技能正文/知识正文/格式规范章节按需取）
-    "load_skill", "read_knowledge", "read_format_spec",
-    # 飞书日程/会议纪要（需求面试场景材料收集用）
-    "feishu_calendar_agenda", "feishu_meeting_notes",
-    # 飞书文档/多维表格/链接统一解析 + 故事草案建议（S5 增补：对话分析建故事链路）
-    "feishu_doc_read", "feishu_base_query", "feishu_link_read", "sf_suggest_story_draft",
-    # S8 open/ 对外开放面（L0 只读，全部 side_effect: none）
-    "get_frozen_spec", "get_proposal", "query_decisions",
-    "get_interview_status", "get_delta_contract",
-    "get_coverage_gaps", "get_test_debt", "get_plan_status",
-    "trace_forward", "trace_backward", "query_graph",
-    "lookup_external_ref",
-    "dev_context_by_zt_ref", "dev_context_by_anchor", "dev_context_by_fr",
-    # 飞书认证状态查询（纯读）+ 飞书 CLI 通用执行器（im 域只读命令：群聊定位/拉取/检索）
-    "lark_auth_status", "lark_execute",
-    # 飞书授权发起（写操作仅限本人隔离目录登录态，不写业务数据；未授权时对话内展示二维码+链接）
-    "lark_auth_login",
-    # 草稿写入（product 角色可起草 delta spec / scenario YAML，不含 promote 入库操作）
-    "write_draft",
-    # delta 文档写入（方案 A：product 可写 changes/{delta}/ 起草区文档，不代提交 git）
-    "write_delta_doc",
-    # delta 受限提交（git add + commit，不 push；前置 conformance 门禁）
-    "commit_delta_changes",
-})
+# - product：派生可见单元（纯读默认 product 可见 + 声明 rbac="product" 的受限写 action；
+#   单元形态 "name"（整工具）或 "name.action"（合并工具单 action）——
+#   原 _RBAC_READONLY_TOOLS 手工清单废除，新增工具漏登记不再可能）
+# - 工具单元为空集时角色不可用 Agent（viewer 无菜单，后端同样拦截）
+from mcp_server.tools.tool_meta import (  # noqa: E402
+    domain_tools, filter_tool_actions, intersect_units, logical_id,
+    product_visible_units, tool_units, unit_allowed,
+)
 
 # 全量角色（语义 = 不额外收窄；与 _RBAC_TOOL_SETS 分离，避免 None 二义）
 _RBAC_FULL_ROLES = frozenset({"admin", "tester"})
 
-# 有限可见集角色；不在此表 = 未注册角色（H1：fail-closed 视为空集，绝不视为全量）
-_RBAC_TOOL_SETS = {
-    "product": _RBAC_READONLY_TOOLS,
-    "viewer": frozenset(),  # 空集 = 不可用 Agent
-}
+
+def _derive_rbac_tool_sets() -> dict:
+    """有限可见集角色；不在此表 = 未注册角色（H1：fail-closed 视为空集）。"""
+    return {
+        "product": product_visible_units(ALL_TOOLS),
+        "viewer": frozenset(),  # 空集 = 不可用 Agent
+    }
 
 
 def rbac_visible_tools(user_roles: list) -> Optional[set[str]]:
-    """角色可见工具集（v1.8 并集语义）：任一角色可见的工具并集。
+    """角色可见工具单元集（v1.8 并集语义）：任一角色可见单元的并集。
 
     H1 修复：未注册角色 fail-closed——贡献空集并 WARNING，不再与 admin/tester
     的全量语义混同。此前 _RBAC_TOOL_SETS.get(未知角色) 返回 None 即被当作全量，
@@ -126,11 +81,12 @@ def rbac_visible_tools(user_roles: list) -> Optional[set[str]]:
     """
     if not user_roles:
         return set()
+    tool_sets = _derive_rbac_tool_sets()
     visible: set[str] = set()
     for role in user_roles:
         if role in _RBAC_FULL_ROLES:
             return None  # admin/tester 之一 → 全量
-        rset = _RBAC_TOOL_SETS.get(role)
+        rset = tool_sets.get(role)
         if rset is None:
             _log.warning(
                 "rbac: 未注册角色 %r 视为空集（fail-closed）——"
@@ -140,24 +96,34 @@ def rbac_visible_tools(user_roles: list) -> Optional[set[str]]:
     return visible
 
 
-def resolve_tools(purpose_tools: list, user_roles: list) -> list:
-    """T-011：三层交集过滤——TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools。
+def resolve_tools(purpose_tools: list, user_roles: list,
+                  purpose_domains: list = None) -> list:
+    """T-011：三层交集过滤——TOOL_REGISTRY ∩ purpose(tools∪domains) ∩ rbac_visible_tools。
 
-    - purpose_tools 为空 = 用途不额外收窄（test_workbench 全量测试工具）
+    - purpose_tools/domains 均空 = 用途不额外收窄（如 test_workbench 不锁领域）
     - rbac 全量（admin/tester）= 角色层不额外收窄
+    - 合并工具部分 action 可见时裁剪 schema 的 action 枚举（下发 LLM 的
+      工具面与执行层白名单同源）
     - 返回过滤后的 Tool 列表（保持 ALL_TOOLS 顺序）
     """
-    rbac_set = rbac_visible_tools(user_roles)
-    if rbac_set is not None and not rbac_set:
+    rbac_units = rbac_visible_tools(user_roles)
+    if rbac_units is not None and not rbac_units:
         return []  # 角色无任何可见工具（viewer）
-    purpose_set = set(purpose_tools or [])
+    purpose_units = set(purpose_tools or [])
+    if purpose_domains:
+        purpose_units |= domain_tools(ALL_TOOLS, purpose_domains)
+    allowed: Optional[set[str]] = rbac_units
+    if purpose_units:
+        allowed = purpose_units if allowed is None \
+            else intersect_units(allowed, purpose_units)
     result = []
     for tool in ALL_TOOLS:
-        if rbac_set is not None and tool.name not in rbac_set:
+        if allowed is None:
+            result.append(tool)
             continue
-        if purpose_set and tool.name not in purpose_set:
-            continue
-        result.append(tool)
+        filtered = filter_tool_actions(tool, allowed)
+        if filtered is not None:
+            result.append(filtered)
     # meta 工具常驻（todo_write 在 _execute_tool 拦截，不参与白名单过滤）
     for name in META_TOOLS:
         if all(t.name != name for t in result):
@@ -186,10 +152,10 @@ _FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 智能测试助手——契约�
 ## 通用硬约束
 
 1. 禁止编造不存在的 FR ID、tool 名称、oracle 名称或文件内容
-2. doc.covers 中的 FR ID 必须在当前工作区的 spec 中存在（用 read_spec 验证）
+2. doc.covers 中的 FR ID 必须在当前工作区的 spec 中存在（用 spec(action=read) 验证）
 3. flow 中的 tool / verify 中的 oracle 必须已注册（用 query_registry 查询）
 4. 生成或修改场景 YAML 后必须调用 validate 工具校验
-5. 校验逻辑一律走确定性工具（validate / query_registry / read_spec），不凭推测断言
+5. 校验逻辑一律走确定性工具（validate / query_registry / spec(action=read)），不凭推测断言
 
 ## 格式规范
 
@@ -310,8 +276,8 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
                 sync_note = (
                     f"⚠ 工作区同步状态：远程仓库（{ws.name}@{ws.branch}）有新提交"
                     f"（本地 HEAD {sync.get('local_head') or '?'}，远程 {sync.get('remote_head') or '?'}），"
-                    f"你读到的文件可能不是最新版。read_spec 读到具体文件时若检测到远端更新，"
-                    f"会给出征询用户的决策提示——按提示用 sync_workspace 工具处理即可。")
+                    f"你读到的文件可能不是最新版。spec(action=read) 读到具体文件时若检测到远端更新，"
+                    f"会给出征询用户的决策提示——按提示用 spec(action=sync) 处理即可。")
             elif sync.get("remote_known"):
                 sync_note = f"工作区同步状态：{ws.name} 与远程同步（HEAD {sync.get('local_head') or '?'}）。"
             else:
@@ -368,12 +334,22 @@ class AgentRuntime:
         # 防住的都是合法工作流：K-012 未知工具报错/K-018 模式落错/K-022「没有入库工具」）
         self.tools = list(tools) if tools is not None else ALL_TOOLS
 
-        # T-011：白名单工具集（resolve_tools 过滤结果；LLM 请求白名单外的工具 → 确定性拒绝）
-        self._tool_whitelist = {t.name for t in self.tools}
+        # T-011：白名单工具单元集（resolve_tools 过滤结果；LLM 请求白名单外的
+        # 工具/action → 确定性拒绝。单元形态 "name" 或 "name.action"，与下发
+        # LLM 的 schema 同源——tool_units 从（可能裁剪过的）Tool 反推）
+        self._tool_whitelist = self._units_of(self.tools)
 
         # 重建 tool_map（meta 工具在 _execute_tool 中拦截，不映射到模块）
         self._tool_map = {}
         self._rebuild_tool_map()
+
+    @staticmethod
+    def _units_of(tools: list) -> set[str]:
+        """Tool 列表 → 白名单单元集（合并工具 action 枚举被裁剪时按单元收录）。"""
+        units: set[str] = set()
+        for t in tools:
+            units |= tool_units(t)
+        return units
 
     def _refresh_whitelist(self):
         """从当前 purpose 文件刷新工具白名单（定义变动即时生效，不锁死会话创建时刻）。"""
@@ -382,9 +358,10 @@ class AgentRuntime:
         from agent.purpose_loader import load_purpose
         pdef = load_purpose(self._purpose_name)
         if pdef:
-            tools = resolve_tools(list(pdef.tools), self._user_roles)
+            tools = resolve_tools(list(pdef.tools), self._user_roles,
+                                  purpose_domains=list(getattr(pdef, "domains", []) or []))
             self.tools = list(tools)
-            self._tool_whitelist = {t.name for t in tools}
+            self._tool_whitelist = self._units_of(tools)
             self._rebuild_tool_map()
 
     def run(self, system_prompt: str, user_message: str,
@@ -699,10 +676,13 @@ class AgentRuntime:
         side_effect = "none"
 
         # ── 常规工具 ──
-        # T-011：白名单强制——越权工具确定性拒绝（不执行，附可用清单自愈）
-        # 判断顺序：先查全局注册（真未知 vs 白名单外），再查白名单
+        # T-011：白名单强制——越权工具/action 确定性拒绝（不执行，附可用清单自愈）
+        # 判断顺序：先查全局注册（真未知 vs 白名单外），再查白名单（单元粒度：
+        # 合并工具按 action 判定，如 product 角色 draft.write 可见但 draft.promote 拒绝）
+        action = str(arguments.get("action", "") or "") if isinstance(arguments, dict) else ""
         if name not in META_TOOLS:
-            if name in TOOL_NAME_TO_MODULE and name not in self._tool_whitelist:
+            if name in TOOL_NAME_TO_MODULE and not unit_allowed(
+                    self._tool_whitelist, name, action):
                 available = "、".join(sorted(self._tool_whitelist))
                 verdict = "denied-whitelist"
                 # T-011：越权留 WARNING 审计
@@ -728,23 +708,25 @@ class AgentRuntime:
             self._record_audit(name, "warn", raw_args, "", side_effect)
             return f"未知工具: {name}。当前可用工具: {available}"
 
-        # A+B：记录文件依赖（read_spec/read_info_pack 的 path → write_draft 时落盘）
-        if name == "read_spec":
+        # A+B：记录文件依赖（逻辑 id 归一——合并工具按 action 映射回收敛前工具名，
+        # read_spec/read_info_pack 的 path → write_draft 时落盘；T-982 行为零变化）
+        lid = logical_id(name, action)
+        if lid == "read_spec":
             path = arguments.get("path", "")
             if path:
                 self._read_files.add(path)
-        elif name == "read_info_pack":
+        elif lid == "read_info_pack":
             sid = arguments.get("scenario_id", "")
             if sid:
                 self._read_files.add(f"info_pack:{sid}")
-        elif name == "write_draft" and self._read_files:
+        elif lid == "write_draft" and self._read_files:
             from mcp_server.tools.draft_writer import set_pending_source_files
             set_pending_source_files(sorted(self._read_files))
 
-        # T-081：查询 side_effect 级别
+        # T-081：查询 side_effect 级别（action 粒度；T-982 起从 tool_meta 派生）
         from mcp_server.tools.side_effect_registry import (
             get_side_effect, is_pure_read)
-        side_effect = get_side_effect(name)
+        side_effect = get_side_effect(name, action)
 
         # T-081：external-write 级确定性拒绝（外部写不进 MCP）
         if side_effect == "external-write":
@@ -755,7 +737,7 @@ class AgentRuntime:
 
         # T-081：none 级工具执行前记录初始指纹
         pre_fp = ""
-        if is_pure_read(name):
+        if is_pure_read(name, action):
             pre_fp = self._take_snapshot_fingerprint()
 
         # T-901（GateDock 二期）：注入会话上下文特权参数——下划线前缀，
@@ -767,7 +749,7 @@ class AgentRuntime:
             raw = result[0].text if result else "（无输出）"
 
             # T-081：none 级工具执行后比对指纹
-            if is_pure_read(name) and pre_fp:
+            if is_pure_read(name, action) and pre_fp:
                 post_fp = self._take_snapshot_fingerprint()
                 if pre_fp != post_fp:
                     verdict = "denied-side-effect"

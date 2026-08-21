@@ -18,7 +18,10 @@ import json
 import os
 import re
 
-# 设计 §4.5 边界纪律：只对这五个读型文档工具上足迹
+# 设计 §4.5 边界纪律：只对这五个读型文档工具上足迹（逻辑 id 词表。
+# T-982 起 guard 以 tool_meta doc_track 元数据为准（新读型文档工具声明
+# doc_track="read" 即自动上足迹，无登记缺口）；本表仅为 legacy 名直调兼容，
+# 与元数据派生结果的一致性由测试锁定）
 READ_DOC_TOOLS = frozenset({
     "read_spec",
     "read_scenario",
@@ -26,6 +29,21 @@ READ_DOC_TOOLS = frozenset({
     "read_run_log",
     "read_info_pack",
 })
+
+
+def _resolve_logical(tool: str, arguments: dict) -> tuple[str, str]:
+    """(tool, arguments) → (逻辑 id, doc_track)。
+
+    合并工具（spec/scenario/attribution/info_pack）按 action 归一为收敛前
+    工具名（read_spec 等）；未注册的 legacy 名直调原样透传、track 为空。
+    """
+    from mcp_server.tools.tool_meta import (
+        get_action_meta, legacy_owner, logical_id)
+    action = str((arguments or {}).get("action", "") or "")
+    lid = logical_id(tool, action)
+    owner = legacy_owner(lid)
+    track = get_action_meta(*owner).doc_track if owner else ""
+    return lid, track
 
 _EXCERPT_MAX_CHARS = 2000
 
@@ -95,7 +113,12 @@ def build_doc_read(tool: str, arguments: dict, result: str,
       thinking      — 意义标注②：本轮 K-024 思考文本（runtime 捎带）
       hunks         — 使用位置列表（V1 单 hunk；T-512 章节参数接入后多 hunk）
     """
-    if tool not in READ_DOC_TOOLS or _is_error_result(result):
+    lid, track = _resolve_logical(tool, arguments)
+    if track != "read" and lid not in READ_DOC_TOOLS:
+        return None
+    tool = lid  # 归一为逻辑 id：分支映射与 payload["tool"] 均用收敛前词汇
+
+    if _is_error_result(result):
         return None
 
     args = arguments or {}

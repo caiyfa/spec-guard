@@ -1,4 +1,6 @@
 """lark_auth.py — T-701：多用户飞书 CLI 认证服务。
+>
+> T-982 收敛：3 工具合并为单 lark_auth 工具（action=status/login/logout）。
 
 MCP 工具：
   lark_auth_status: 查询当前用户飞书绑定状态
@@ -26,6 +28,7 @@ import threading
 from pathlib import Path
 
 from mcp.types import TextContent, Tool
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -393,10 +396,10 @@ lark_auth_logout_tool = Tool(
     },
 )
 
-TOOLS = [lark_auth_status_tool, lark_auth_login_tool, lark_auth_logout_tool]
+_TOOL_DECLS = [lark_auth_status_tool, lark_auth_login_tool, lark_auth_logout_tool]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     """MCP 工具分发入口。"""
     try:
         from sg_core.emp_context import current_emp_no as _get_emp_no
@@ -426,3 +429,22 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))]
     except Exception as e:
         return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False, default=str))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：3 碎片合并为单 lark_auth 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "lark_auth",
+    "飞书 CLI 授权：status 查授权状态（纯读）、login 发起授权（写本人隔离目录登录态，"
+    "对话内展示二维码+链接）、logout 注销（仅全量角色）。",
+    actions={
+        "status": ActionMeta(legacy="lark_auth_status", rbac="product"),
+        "login": ActionMeta(legacy="lark_auth_login", rbac="product"),
+        "logout": ActionMeta(legacy="lark_auth_logout"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="feishu",
+    side_effect=SIDE_DRAFT,
+)

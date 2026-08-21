@@ -37,7 +37,8 @@ class PurposeDef:
     color: str = ""                    # 身份色 token
     chips: list[str] = field(default_factory=list)   # 卡片能力 chips
     roles: list[str] = field(default_factory=list)   # RBAC 可见性（v1.8 并集语义）
-    tools: list[str] = field(default_factory=list)   # 工具白名单（MCP 工具名）
+    tools: list[str] = field(default_factory=list)   # 工具白名单（MCP 工具名/单元 name.action）
+    domains: list[str] = field(default_factory=list) # 领域子集（T-982：按 tool_meta domain 整域纳入）
     panels: list[str] = field(default_factory=list)  # 右侧面板集
     description: str = ""              # 用途简述
     content: str = ""                  # Markdown 正文（system prompt 注入）
@@ -141,6 +142,7 @@ def _parse_purpose_file(purpose_id: str, text: str) -> PurposeDef:
         chips=_str_list("chips"),
         roles=_str_list("roles"),
         tools=_str_list("tools"),
+        domains=_str_list("domains"),
         panels=_str_list("panels"),
         description=str(frontmatter.get("description", "")),
         content=body,

@@ -379,20 +379,24 @@ class TestPureReadEnforcement:
 
 class TestRegistryConsistency:
     def test_no_dangling_writer_declarations(self):
-        """_KNOWN_WRITERS 无僵尸声明：声明的写工具必须真实注册（add_to_info_pack 为
-        runtime 模式特例——stdio 刻意排除，见 server.build_tool_modules）。"""
-        from mcp_server.server import ALL_TOOLS
-        reg_names = {t.name for t in ALL_TOOLS}
-        allowed_missing = {"add_to_info_pack"}
-        dangling = [k for k in side_effect_registry._KNOWN_WRITERS
-                    if k not in reg_names and k not in allowed_missing]
-        assert dangling == [], f"僵尸声明: {dangling}"
+        """T-982：_KNOWN_WRITERS 手工登记已废除——写工具分级从 tool_meta 声明派生，
+        本测试锁定派生结果无僵尸：所有 draft 级逻辑 id 都能映射回已注册工具。
+
+        （原 _KNOWN_WRITERS 僵尸/重复两测试随之退役；派生机制下「声明了但工具
+        不存在」不可能发生——分级与 Tool 声明同处一次 consolidate/declare 调用。）
+        """
+        draft_ids = side_effect_registry.list_tools_by_side_effect("draft")
+        assert draft_ids, "派生 draft 集为空——元数据声明丢失？"
+        from mcp_server.tools.tool_meta import legacy_owner
+        dangling = [n for n in draft_ids if legacy_owner(n) is None]
+        assert dangling == [], f"僵尸分级: {dangling}"
 
     def test_no_duplicate_writer_declarations(self):
-        """_KNOWN_WRITERS 无重复键（dict 字面量重复声明会静默覆盖）。"""
-        src = Path(side_effect_registry.__file__).read_text(encoding="utf-8")
-        for key in side_effect_registry._KNOWN_WRITERS:
-            assert src.count(f'"{key}"') == 1, f"重复声明: {key}"
+        """T-982：派生 draft 集无重复（consolidate 对 legacy 唯一性有断言，
+        此处再锁一道跨模块冲突——两个合并工具不得认领同一 legacy 名）。"""
+        draft_ids = side_effect_registry.list_tools_by_side_effect("draft")
+        dup = sorted({n for n in draft_ids if draft_ids.count(n) > 1})
+        assert dup == [], f"重复分级: {dup}"
 
     def test_pure_read_tools_classified_none(self):
         """自证纯读的工具必须为 none（纯读强制覆盖，不缩小检测面）。"""

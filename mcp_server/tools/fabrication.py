@@ -52,3 +52,9 @@ def _handle_fabricate(arguments: dict) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=json.dumps({
             "ok": False, "error": f"数据制造失败: {e}"}, ensure_ascii=False, indent=2))]
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("fabricate_data", domain="scenario", side_effect=SIDE_DRAFT, rbac="staff")

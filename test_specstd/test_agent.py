@@ -284,7 +284,7 @@ class TestRuntime:
         """max_turns 熔断。"""
         # 始终返回 tool_calls → 永不 stop → 熔断
         tool_call = {"id": "c1", "type": "function",
-                     "function": {"name": "list_scenarios", "arguments": "{}"}}
+                     "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
         mock = MockLLM([{"role": "assistant", "content": "", "tool_calls": [tool_call]}] * 10)
         runtime = AgentRuntime(mock, max_turns=3)
         messages = runtime.run("sys", "test")
@@ -297,7 +297,7 @@ class TestRuntime:
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [
                 {"id": "c1", "type": "function",
-                 "function": {"name": "list_scenarios", "arguments": "{}"}}
+                 "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
             ]},
             {"role": "assistant", "content": "完成"},
         ])
@@ -382,7 +382,7 @@ class TestRuntime:
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [
                 {"id": "c1", "type": "function",
-                 "function": {"name": "list_scenarios", "arguments": "{}"}}
+                 "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
             ]},
             {"role": "assistant", "content": "完成"},
         ])
@@ -394,7 +394,7 @@ class TestRuntime:
         assert "tool_call_start" in types
         assert types.index("tool_call_start") < types.index("tool_call")
         start_evt = next(e for e in events if e["type"] == "tool_call_start")
-        assert start_evt["tool"] == "list_scenarios"
+        assert start_evt["tool"] == "scenario"
 
     def test_compaction_preserves_full_history(self, tmp_path):
         """K-019：压缩只作用 LLM 工作副本——会话文件必须保留完整历史（页面展示不丢）。
@@ -491,7 +491,7 @@ class TestPromptOptimization:
         """T-601 + T-507：任务指引来自技能目录，正文不常驻（按需 load_skill）。"""
         p = build_system_prompt()
         assert "可用技能" in p
-        assert "load_skill" in p            # T-507：按需取正文指引注入
+        assert "knowledge(action=skill)" in p  # T-507/T-982：按需取正文指引注入（knowledge 合并工具）
         assert "交互式生成流程" not in p     # T-507：正文不再全量注入
         assert "DAG 拓扑设计" not in p       # T-507：正文不再全量注入
         assert "当前模式" not in p           # 不再有模式态
@@ -652,7 +652,7 @@ class TestToolDispatch:
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [
                 {"id": "c1", "type": "function",
-                 "function": {"name": "list_scenarios", "arguments": "{\"invalid\": true}"}}
+                 "function": {"name": "scenario", "arguments": "{\"action\": \"list\", \"invalid\": true}"}}
             ]},
         ])
         runtime = AgentRuntime(mock, max_turns=5)
@@ -765,7 +765,7 @@ class TestToolErrorGranularity:
                 if self._call_count == 1:
                     return {"role": "assistant", "content": "", "tool_calls": [
                         {"id": "c1", "type": "function",
-                         "function": {"name": "list_scenarios", "arguments": "{}"}}
+                         "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
                     ]}, {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
                 return {"role": "assistant", "content": "完成"}, \
                     {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
@@ -968,7 +968,7 @@ class TestRuntimeCancel:
     def test_cancel_prevents_next_turn(self):
         """cancel() 后下一轮 LLM 调用不执行，消息含 [CANCEL] 标记。"""
         tool_call = {"id": "c1", "type": "function",
-                     "function": {"name": "list_scenarios", "arguments": "{}"}}
+                     "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [tool_call]},
             {"role": "assistant", "content": "第二轮不应执行"},
@@ -989,7 +989,7 @@ class TestRuntimeCancel:
         sm = SessionManager(tmp_path / "sessions")
         sid = sm.create()
         tool_call = {"id": "c1", "type": "function",
-                     "function": {"name": "list_scenarios", "arguments": "{}"}}
+                     "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [tool_call]},
             {"role": "assistant", "content": "第二轮"},
@@ -1005,7 +1005,7 @@ class TestRuntimeCancel:
     def test_cancel_emits_cancelled_event(self):
         """cancel() 后发射 cancelled 事件。"""
         tool_call = {"id": "c1", "type": "function",
-                     "function": {"name": "list_scenarios", "arguments": "{}"}}
+                     "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [tool_call]},
         ])
@@ -1044,7 +1044,7 @@ class TestRuntimeCancel:
                     # 第一轮：返回 tool_calls
                     return {"role": "assistant", "content": "", "tool_calls": [
                         {"id": "c1", "type": "function",
-                         "function": {"name": "list_scenarios", "arguments": "{}"}}
+                         "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
                     ]}, {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
                 # 第二轮不应执行
                 return {"role": "assistant", "content": "第二轮不应执行"}, \
@@ -1147,7 +1147,7 @@ class TestToolResultTruncation:
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [
                 {"id": "c1", "type": "function",
-                 "function": {"name": "list_scenarios", "arguments": "{}"}}
+                 "function": {"name": "scenario", "arguments": "{\"action\": \"list\"}"}}
             ]},
             {"role": "assistant", "content": "完成"},
         ])
@@ -1331,9 +1331,10 @@ class TestMaterialE2E:
 
         # ② 贯通：requirement_interview purpose + product 角色 → read_material 可用
         tool_call = {"id": "c1", "type": "function",
-                     "function": {"name": "read_material",
+                     "function": {"name": "pack",
                                   "arguments": json.dumps(
-                                      {"material_id": mid, "section": "summary"})}}
+                                      {"action": "read_material",
+                                       "material_id": mid, "section": "summary"})}}
         mock = MockLLM([
             {"role": "assistant", "content": "", "tool_calls": [tool_call]},
             {"role": "assistant", "content": "已读取材料摘要"},

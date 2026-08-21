@@ -62,3 +62,9 @@ def _handle_query_registry(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps(steps, ensure_ascii=False, indent=2))]
 
     return [TextContent(type="text", text=f"错误：未知查询类型: {qtype}")]
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("query_registry", domain="spec")

@@ -1,4 +1,6 @@
 """feishu_fetch.py — 飞书日程/纪要素材拉取 MCP 工具（T-025/T-026，S2.5）。
+>
+> T-982 收敛：5 工具合并为单 feishu_read 工具（action=calendar/notes/doc/base/link）。
 
 链路（全部实测验证，read-only）：
   feishu_calendar_agenda: lark-cli calendar +agenda --as user [--start --end]
@@ -19,6 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 # 飞书知识图谱一期 T-914：lark-cli 子进程封装统一为 specflow.feishu_pool.lark_cli
 #（原内联实现迁移，行为不变；_PERMISSION_HINTS 为本模块特有保留）
@@ -111,7 +114,7 @@ feishu_link_read_tool = Tool(
     },
 )
 
-TOOLS = [
+_TOOL_DECLS = [
     feishu_calendar_agenda_tool,
     feishu_meeting_notes_tool,
     feishu_doc_read_tool,
@@ -158,7 +161,7 @@ def _looks_like_permission_denied(text: str) -> bool:
 # 工具处理函数
 # ══════════════════════════════════════════════════════════
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     handlers = {
         "feishu_calendar_agenda": _handle_agenda,
         "feishu_meeting_notes": _handle_meeting_notes,
@@ -489,3 +492,24 @@ async def _handle_base_query(arguments: dict) -> list[TextContent]:
                 resource_type="base", url=url)))]
         return [TextContent(type="text",
                             text=str({"ok": False, "error": str(e)}))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：5 碎片合并为单 feishu_read 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "feishu_read",
+    "飞书材料读取（纯读）：calendar 日程、notes 会议纪要（妙记）、doc 文档、"
+    "base 多维表格、link 统一链接解析。",
+    actions={
+        "calendar": ActionMeta(legacy="feishu_calendar_agenda"),
+        "notes": ActionMeta(legacy="feishu_meeting_notes"),
+        "doc": ActionMeta(legacy="feishu_doc_read"),
+        "base": ActionMeta(legacy="feishu_base_query"),
+        "link": ActionMeta(legacy="feishu_link_read"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="feishu",
+    rbac="product",
+)

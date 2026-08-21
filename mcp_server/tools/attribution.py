@@ -1,4 +1,6 @@
 """attribution — 失败归因工具。
+>
+> T-982 收敛：7 工具合并为单 attribution 工具（action=report/log/case/failures/executions/db/assemble）。
 
 工具：
   read_run_report: 读取运行报告，提取失败场景与断言差异
@@ -12,6 +14,7 @@ import re
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
@@ -34,7 +37,7 @@ SQL_DENY_RE = re.compile(
     re.IGNORECASE,
 )
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="read_run_report",
         description="读取 SpecGuard 运行报告，提取失败场景、断言差异、环境探测结果。"
@@ -138,7 +141,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "read_run_report":
         return _handle_read_report(arguments)
     elif name == "db_evidence":
@@ -418,3 +421,26 @@ def _handle_db_evidence(arguments: dict) -> list[TextContent]:
             "error": f"DB 查询失败（可能未配置 DB 连接）: {e}",
             "hint": "请检查 systems/tdm/config/env.*.yaml 中的 db 段配置",
         }, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：7 碎片合并为单 attribution 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "attribution",
+    "失败归因与执行证据：report 读运行报告、log 读执行日志、case 读单场景明细、"
+    "failures 失败台账、executions 运行列表、db 只读 DB 校对证据（仅全量角色）、"
+    "assemble 组装证据包（仅全量角色）。",
+    actions={
+        "report": ActionMeta(legacy="read_run_report", doc_track="read"),
+        "log": ActionMeta(legacy="read_run_log", doc_track="read"),
+        "case": ActionMeta(legacy="read_case_detail"),
+        "failures": ActionMeta(legacy="list_failures"),
+        "executions": ActionMeta(legacy="list_executions"),
+        "db": ActionMeta(legacy="db_evidence", rbac="staff"),
+        "assemble": ActionMeta(legacy="assemble_evidence", rbac="staff"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="run",
+)

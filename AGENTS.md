@@ -106,7 +106,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   └── sessions/                 #   会话产物（.jsonl，不入 git）
 │
 ├── mcp_server/                   # MCP 工具层（stdio，Agent 通过工具操作仓库）
-│   ├── server.py                 #   stdio 入口（注册 8 模块 / 24 个工具）
+│   ├── server.py                 #   stdio 入口（T-982 收敛：对内 24 合并工具+open 15，见 tools/tool_meta.py）
 │   └── tools/                    #   spec_reader/scenario_tools/registry_query/draft_writer/validator/attribution/audit/meta
 │       ├── info_pack.py          #     基础信息包读写（尚未挂载到 server.TOOL_MODULES）
 │       └── live_registry.py      #     运行时 tool 注册器（导入时注册 engine 适配包）

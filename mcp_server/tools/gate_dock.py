@@ -76,3 +76,9 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     result = build_gate_dock(ws, iv)
     result["ok"] = True
     return _emit(result)
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("gate_dock_status", domain="meta")
