@@ -5,6 +5,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { runsApi, type RunSummary, type FailureEntry } from '../api';
+import Attribution from './Attribution';
+import Schedules from './Schedules';
 
 interface CaseBrief {
   id: string;
@@ -143,7 +145,7 @@ function RunDetail({ runId }: { runId: string }) {
   );
 }
 
-export default function History() {
+function RunRecords() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selected, setSelected] = useState<string>('');
   const [copiedId, setCopiedId] = useState('');
@@ -256,6 +258,44 @@ export default function History() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── T-996：执行中心三 tab（执行记录 + 失败归因 + 定时任务），?tab= 深链 + localStorage 记忆 ──
+const EXEC_TABS = [
+  { id: 'records', label: '📜 执行记录' },
+  { id: 'attribution', label: '🧭 失败归因' },
+  { id: 'schedules', label: '⏰ 定时任务' },
+] as const;
+type ExecTab = typeof EXEC_TABS[number]['id'];
+
+export default function History() {
+  const [tab, setTab] = useState<ExecTab>(() => {
+    const q = new URLSearchParams(window.location.search).get('tab');
+    const saved = localStorage.getItem('sg_exec_tab');
+    const valid = (v: string | null): v is ExecTab => EXEC_TABS.some(t => t.id === v);
+    if (valid(q)) return q;
+    if (valid(saved)) return saved;
+    return 'records';
+  });
+  useEffect(() => { localStorage.setItem('sg_exec_tab', tab); }, [tab]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex gap-1 mb-4 flex-shrink-0">
+        {EXEC_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === 'records' && <RunRecords />}
+        {tab === 'attribution' && <Attribution />}
+        {tab === 'schedules' && <Schedules />}
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
-// AuditLog — MCP 调用审计查看页（T-082，admin-only）
-// 简易审计记录表格：时间/工号/工具/判定/摘要，按工号/工具过滤
+// AuditLog — 审计日志统一页（T-996 双审计统一）：
+// 页签① MCP 调用审计（T-082）＋ 页签② 管理操作审计（原 AdminUsers 审计区，/users/audit-log）
 
 import { useCallback, useEffect, useState } from 'react';
-import { auditApi, type AuditCall } from '../api';
+import { auditApi, usersApi, type AuditCall } from '../api';
 
 const VERDICT_LABEL: Record<string, { label: string; color: string }> = {
   ok: { label: '通过', color: 'text-green-400' },
@@ -11,7 +11,7 @@ const VERDICT_LABEL: Record<string, { label: string; color: string }> = {
   warn: { label: '警告', color: 'text-amber-400' },
 };
 
-export default function AuditLog() {
+function McpAudit() {
   const [calls, setCalls] = useState<AuditCall[]>([]);
   const [emp, setEmp] = useState('');
   const [tool, setTool] = useState('');
@@ -144,6 +144,80 @@ export default function AuditLog() {
           </div>
         );
       })()}
+    </div>
+  );
+}
+// ── 页签②：管理操作审计（用户/角色/菜单/授权变更，原 AdminUsers 审计区）──
+function AdminAudit() {
+  const [audit, setAudit] = useState<any[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    usersApi.auditLog(100).then(r => setAudit(r.entries)).catch(e => setError(e.message || '加载失败'));
+  }, []);
+
+  return (
+    <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
+      {error && <div className="text-red-400 text-sm p-3">✗ {error}</div>}
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-gray-500 border-b border-border">
+            <th className="px-3 py-2">时间</th>
+            <th className="px-3 py-2">操作人</th>
+            <th className="px-3 py-2">动作</th>
+            <th className="px-3 py-2">对象</th>
+            <th className="px-3 py-2">详情</th>
+          </tr>
+        </thead>
+        <tbody>
+          {audit.map((a, i) => (
+            <tr key={i} className="border-b border-border/50 text-gray-400">
+              <td className="px-3 py-1.5 font-mono">{a.created_at}</td>
+              <td className="px-3 py-1.5">{a.emp_no}</td>
+              <td className="px-3 py-1.5">{a.action}</td>
+              <td className="px-3 py-1.5">{a.target}</td>
+              <td className="px-3 py-1.5 truncate max-w-[16rem]">{a.detail}</td>
+            </tr>
+          ))}
+          {audit.length === 0 && !error && (
+            <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-600">暂无审计记录</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── T-996：双审计统一一页两 tab（?tab=admin 深链 + localStorage 记忆）──
+const AUDIT_TABS = [
+  { id: 'mcp', label: '🛠 MCP 调用' },
+  { id: 'admin', label: '👤 管理操作' },
+] as const;
+type AuditTab = typeof AUDIT_TABS[number]['id'];
+
+export default function AuditLog() {
+  const [tab, setTab] = useState<AuditTab>(() => {
+    const q = new URLSearchParams(window.location.search).get('tab');
+    const saved = localStorage.getItem('sg_audit_tab');
+    const valid = (v: string | null): v is AuditTab => AUDIT_TABS.some(t => t.id === v);
+    if (valid(q)) return q;
+    if (valid(saved)) return saved;
+    return 'mcp';
+  });
+  useEffect(() => { localStorage.setItem('sg_audit_tab', tab); }, [tab]);
+
+  return (
+    <div className="max-w-6xl">
+      <div className="flex gap-1 mb-4">
+        {AUDIT_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'mcp' && <McpAudit />}
+      {tab === 'admin' && <AdminAudit />}
     </div>
   );
 }
