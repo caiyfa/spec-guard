@@ -79,6 +79,8 @@ _RBAC_READONLY_TOOLS = frozenset({
     # 材料包工具
     "pack_assemble", "pack_read_section", "material_parse_status",
     "material_extract_topics", "pack_freshness_check",
+    # 材料解析产物读取（T-934，纯读：summary/topics/raw 三视图）
+    "read_material",
     # info_pack 工具
     "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
     # GateDock 对话操作台状态查询（T-901，纯读）
