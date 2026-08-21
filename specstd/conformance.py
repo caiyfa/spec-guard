@@ -83,14 +83,20 @@ def check_conformance(workspace_root: Path, workspace_name: str = "") -> Conform
 # ══════════════════════════════════════════════════════════
 
 def _check_struct(report: ConformanceReport, ws_root: Path):
-    """检查必备顶级目录和文件。"""
+    """检查必备顶级目录和文件。
+
+    T-1000（工作区自管理）：目录/文件缺失降级 WARN——注册允许空壳工作区先上车
+    （逐步补结构），合规闸门聚焦内容级错误（锚点重复/delta 缺件/AGENTS 缺节），
+    缺失类问题以 WARN 提示而非 REJECT 阻断。存量行为前提：verdict 重算 bug 修复前
+    此类 ERROR 从未生效过，降级不构成新放行。
+    """
     # 必备目录
     for d in REQUIRED_TOP_DIRS:
         dir_path = ws_root / d
         if not dir_path.is_dir():
             report.add(
-                RuleName.STRUCT.value, RuleLevel.ERROR.value,
-                f"必备目录缺失: {d}/",
+                RuleName.STRUCT.value, RuleLevel.WARN.value,
+                f"必备目录缺失: {d}/（T-1000 起降级 WARN，不阻断注册）",
                 path=d,
             )
 
@@ -99,8 +105,8 @@ def _check_struct(report: ConformanceReport, ws_root: Path):
         file_path = ws_root / f
         if not file_path.is_file():
             report.add(
-                RuleName.STRUCT.value, RuleLevel.ERROR.value,
-                f"必备文件缺失: {f}",
+                RuleName.STRUCT.value, RuleLevel.WARN.value,
+                f"必备文件缺失: {f}（T-1000 起降级 WARN，不阻断注册）",
                 path=f,
             )
 

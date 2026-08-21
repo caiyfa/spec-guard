@@ -14,7 +14,7 @@ def test_seed_idempotent(db):
     rbac_store.init_db(db)  # 重复 init 不重复写
     menus = rbac_store.list_menus(db)
     roles = rbac_store.list_roles(db)
-    assert len(menus) == 22  # T-996：5 分组 + 17 菜单项（29 叶收缩，含新增 menu-systems）
+    assert len(menus) == 23  # T-996 22 + T-1000 新增 menu-activity（menu-workspace 复活 T-996 删除项，净增一叶）
     assert {r["role_key"] for r in roles} == {"admin", "tester", "viewer", "product"}
     assert all(r["is_builtin"] for r in roles)
     # admin 保底两条授权
@@ -164,4 +164,4 @@ def test_t996_menu_shrink_migration(db):
     rbac_store.init_db(db)
     keys2 = {m["menu_key"] for m in rbac_store.list_menus(db)}
     assert "menu-lineage" not in keys2
-    assert len(keys2) == 22
+    assert len(keys2) == 23

@@ -392,7 +392,24 @@ class TestCoverageREST:
         (inv_dir / "spec.md").write_text(
             f"# Inventory Activity\n\n## 一、功能描述\n\n{fr_lines}\n",
             encoding="utf-8")
-        wsm.register_local("tdm", str(repo), "tdm", activate=True)
+        # T-1000 verdict 修复暴露的存量冲突：fixture 在 module1 之外补的
+        # inventory-activity spec 复用 FR-001~004（与 create_valid_workspace 基线
+        # FR-001/002 重复，ANCHOR 唯一性 ERROR → 注册拒绝 → 「无激活工作区」）。
+        # 真实意图是 inventory-activity 模块独立成库——单独注册并激活。
+        inv_repo = tmp_path / "repo-inv"
+        for d in ("specs", "changes", "archive"):
+            (inv_repo / d).mkdir(parents=True, exist_ok=True)
+        (inv_repo / "AGENTS.md").write_text(
+            '# WS\n\n## Project Overview\n\nx\n\n## 术语\n\n- FR\n',
+            encoding="utf-8")
+        import shutil
+        shutil.copytree(repo / "specs" / "system-settings",
+                        inv_repo / "specs" / "system-settings")
+        delta_src = repo / "changes" / "extend-void-scope"
+        if delta_src.is_dir():
+            shutil.copytree(delta_src, inv_repo / "changes" / "extend-void-scope")
+        wsm.register_local("tdm", str(inv_repo), "tdm", activate=True)
+        assert wsm.get_active_workspace() is not None
 
         from main import app
         from fastapi.testclient import TestClient

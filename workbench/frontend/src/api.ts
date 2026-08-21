@@ -550,6 +550,8 @@ export interface WorkspaceInfo {
   system: string;
   source: { type: string; path?: string; url?: string; branch?: string; local_path?: string };
   last_commit: string;
+  owner_emp?: string;          // T-1000：注册人工号（空=存量/系统登记）
+  system_pending?: boolean;    // T-1000：系统适配包未建=待接入
 }
 
 export interface SystemInfo {
@@ -559,8 +561,16 @@ export interface SystemInfo {
   accounts: string[];
 }
 
+export interface WorkspaceTreeGroup {
+  system: string;
+  display_name: string;
+  system_pending: boolean;
+  workspaces: WorkspaceInfo[];
+}
+
 export const workspaceApi = {
   list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
+  tree: () => request<{ tree: WorkspaceTreeGroup[] }>('/workspace/tree'),
   systems: () => request<{ systems: SystemInfo[] }>('/workspace/systems'),
   registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
     request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),
@@ -2030,4 +2040,32 @@ export const systemsApi = {
     request<{ ok: boolean }>(`/systems/${encodeURIComponent(name)}/review`, { method: 'POST', body: '{}' }),
   reload: (name: string) =>
     request<{ ok: boolean; gate: ExtensionGate }>(`/systems/${encodeURIComponent(name)}/reload`, { method: 'POST', body: '{}' }),
+};
+
+// ── T-1000 F3：产出反查 ──
+export interface ProductRecord {
+  id: number;
+  product_path: string;
+  product_type: string;  // draft / scenario / plan / doc
+  session_id: string;
+  emp_no: string;
+  workspace: string;
+  fr_anchor: string;
+  created_at: string;
+}
+
+export const productsApi = {
+  bySession: (sid: string) =>
+    request<{ products: ProductRecord[]; session_id: string }>(`/products/by-session/${encodeURIComponent(sid)}`),
+  mine: (params?: { emp?: string; type?: string; from?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.emp) q.set('emp', params.emp);
+    if (params?.type) q.set('type', params.type);
+    if (params?.from) q.set('from', params.from);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return request<{ products: ProductRecord[]; emp_no: string }>(`/products/mine${qs ? `?${qs}` : ''}`);
+  },
+  trace: (path: string) =>
+    request<{ records: ProductRecord[]; path: string }>(`/products/trace?path=${encodeURIComponent(path)}`),
 };

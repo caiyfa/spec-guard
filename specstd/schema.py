@@ -250,17 +250,19 @@ class ConformanceReport:
     summary: dict = field(default_factory=dict)
 
     def __post_init__(self):
-        if not self.summary:
-            n_err = sum(1 for f in self.findings if f.level == RuleLevel.ERROR.value)
-            n_warn = sum(1 for f in self.findings if f.level == RuleLevel.WARN.value)
-            n_info = sum(1 for f in self.findings if f.level == RuleLevel.INFO.value)
-            self.summary = {"error": n_err, "warn": n_warn, "info": n_info}
-            if not self.findings:
-                self.verdict = "PASS"
-            elif n_err > 0:
-                self.verdict = "REJECT"
-            else:
-                self.verdict = "PASS"
+        # 无条件重算（此前 `if not self.summary` 守卫失效：dataclass 初始化时 summary
+        # 已被填充为全零，后续 add() 触发的重算永远走不进分支——verdict 锁死 PASS，
+        # 合规闸门对「必备文件缺失」等 ERROR 实际放行。存量 bug，T-1000 测试暴露）
+        n_err = sum(1 for f in self.findings if f.level == RuleLevel.ERROR.value)
+        n_warn = sum(1 for f in self.findings if f.level == RuleLevel.WARN.value)
+        n_info = sum(1 for f in self.findings if f.level == RuleLevel.INFO.value)
+        self.summary = {"error": n_err, "warn": n_warn, "info": n_info}
+        if not self.findings:
+            self.verdict = "PASS"
+        elif n_err > 0:
+            self.verdict = "REJECT"
+        else:
+            self.verdict = "PASS"
 
     def add(self, rule: str, level: str, message: str, path: str = "", **detail):
         """添加一条 finding。"""

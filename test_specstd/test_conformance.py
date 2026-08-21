@@ -41,15 +41,15 @@ class TestConformance:
         assert report.verdict == "PASS"
 
     def test_struct_violation(self, tmp_path):
-        """STRUCT 违规：缺少 archive 目录应报 ERROR。"""
+        """STRUCT 违规：缺少 archive 目录应报 finding（T-1000 起缺失类降级 WARN，不阻断注册）。"""
         ws = create_struct_violation(tmp_path / "struct")
         report = check_conformance(ws, "test-struct")
-        struct_errors = [
+        struct_findings = [
             f for f in report.findings
-            if f.rule == RuleName.STRUCT.value and f.level == RuleLevel.ERROR.value
+            if f.rule == RuleName.STRUCT.value and f.level == RuleLevel.WARN.value
         ]
-        assert len(struct_errors) > 0, "应检测到 STRUCT 违规"
-        assert any("archive" in f.message for f in struct_errors), "错误消息应提及 archive"
+        assert len(struct_findings) > 0, "应检测到 STRUCT 违规"
+        assert any("archive" in f.message for f in struct_findings), "消息应提及 archive"
 
     def test_agents_violation(self, tmp_path):
         """AGENTS 违规：缺少术语 token 清单节应报 ERROR。"""

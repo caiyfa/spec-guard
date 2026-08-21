@@ -211,9 +211,7 @@ class TestSessionConcurrencyGuard:
         assert client.post("/api/drafts/x.yaml/validate", headers=h_viewer).status_code == 403
         assert client.get("/api/feedback/ledger", headers=h_viewer).status_code == 403
         assert client.get("/api/users", headers=h_viewer).status_code == 403
-        assert client.post("/api/workspace/register-local",
-                           json={"name": "x", "path": "/tmp", "system": "tdm"},
-                           headers=h_viewer).status_code == 403
+        # T-1000：工作区注册放开登录即可（自管理，注册人记 owner_emp）——viewer 不再 403
 
     def test_tester_allowed_but_not_admin_ops(self, client):
         h_admin = _login(client, "90000001")
@@ -221,11 +219,9 @@ class TestSessionConcurrencyGuard:
         # admin 提权 tester
         r = client.put("/api/users/90000002/role", json={"role": "tester"}, headers=h_admin)
         assert r.status_code == 200
-        # tester：不能管用户/工作区注册/环境配置
+        # tester：不能管用户/工作区注销/环境配置（T-1000：注册已放开登录即可）
         assert client.get("/api/users", headers=h_tester).status_code == 403
-        assert client.post("/api/workspace/register-local",
-                           json={"name": "x", "path": "/tmp", "system": "tdm"},
-                           headers=h_tester).status_code == 403
+        assert client.delete("/api/workspace/some-ws", headers=h_tester).status_code == 403
         assert client.put("/api/reference/env-config", json={"raw": "a: 1"},
                           headers=h_tester).status_code == 403
 

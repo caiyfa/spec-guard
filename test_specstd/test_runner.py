@@ -340,6 +340,10 @@ class TestSystemInjection:
         monkeypatch.setattr(wsm, "REGISTRY_PATH", tmp_path / "registry.yaml")
         ws = tmp_path / "ws1"
         (ws / "scenarios").mkdir(parents=True)
+        # T-1000：runner 触发前校验适配包就绪——造一个 hr 包目录（SG_SYSTEMS_ROOT 动态根）
+        pkg = tmp_path / "pkgs" / "hr"
+        pkg.mkdir(parents=True)
+        monkeypatch.setenv("SG_SYSTEMS_ROOT", str(tmp_path / "pkgs"))
         wsm.register_local("ws1", str(ws), "hr", activate=True)
         self._stub(mgr, monkeypatch)
         monkeypatch.delenv("SPEC_GUARD_SYSTEM", raising=False)
