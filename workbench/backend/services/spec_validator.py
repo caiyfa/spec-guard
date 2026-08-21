@@ -192,6 +192,21 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
                 findings.append({"level": "ERROR", "vid": "T7", "scenario": sid,
                                  "message": f"依赖 {d['id']} 未声明版本期望（接受任意版本），建议补 version: ^X"})
 
+        # T9 断言对象显式化提示（ENG-T05/ENG-BUG-007）：≥2 个带 save 的步骤 + 无 of 的
+        # status/json 断言 → WARN——默认 of 仅指最后一个带 save 的 call 步骤，
+        # poll/db_query/tool 的 save 不参与，多 save 场景不写 of 易静默断言错对象
+        save_count = sum(
+            1 for st in (flow or []) if isinstance(st, dict)
+            for st_body in st.values() if isinstance(st_body, dict) and st_body.get("save"))
+        has_no_of_assert = any(
+            (("status" in v and "of" not in v.get("status", {})) or
+             ("json" in v and "of" not in v.get("json", {})))
+            for v in (verify or []) if isinstance(v, dict))
+        if save_count >= 2 and has_no_of_assert:
+            findings.append({"level": "WARN", "vid": "T9", "scenario": sid,
+                             "message": f"场景有 {save_count} 个带 save 的步骤且存在未写 of 的 status/json 断言——"
+                                        f"默认 of 仅指最后一个带 save 的 call 步骤（poll/db_query/tool 不算），建议显式指定 of"})
+
         # T5 无孤例（无依赖且非 prep 标签）
         tags = raw.get("tags") or []
         if not deps and "prep" not in tags:

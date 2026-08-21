@@ -1,6 +1,6 @@
 # SpecGuard YAML 格式规范
 
-> **版本**：2.9.0 | **更新时间**：2026-08-20 | **生成方式**：SpecGuard Workbench 自动生成
+> **版本**：2.10.0 | **更新时间**：2026-08-21 | **生成方式**：SpecGuard Workbench 自动生成
 > **用途**：Agent 根据此规范生成合规的 test-case YAML 文件，SpecGuard 按此规范校验格式。
 > **结构**：第一~七章为语法层（冻结，变更需递增版本号）；第八章为 tool 目录（引擎注册表动态生成）。
 
@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 2.10.0 | 2026-08-21 | 渲染与断言防呆（ENG-T05）：插值残留扫描——渲染后仍含 {{ 抛 RenderError（FAIL/scenario_error，请求不发出），字面量 {{ 暂无转义语法；poll call 段补 service 路由与 headers/cookies 透传；poll until 配置错误（jsonpath 拼错等）第一轮快速失败而非轮询至超时；T9 lint——≥2 个带 save 步骤 + 无 of 断言 WARN 提示显式指定；python 步骤文档补浅拷贝注意事项（勿对上游 dict/list 原地修改） |
 | 2.9.0 | 2026-08-20 | call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试。新增场景级软看门狗 SG_SCENARIO_TIMEOUT（秒，默认 300）：超阈值在步骤/断言/poll 边界抛 ScenarioTimeout（FAIL/env_error）；call 文件字段与 binary body 改传 bytes（fd 不泄漏、401 重试重发字节完整） |
 | 2.8.0 | 2026-08-20 | 契约门禁强化（ENG-T02）：契约指纹纳入 verify 断言逻辑（改预期值/路径/操作符/脚本即触发 T6，改断言需 bump MINOR）；strict_deps 语义修正（DRIFT/ORPHANED 升格 FAIL 而非退化为 BLOCKED）；T7 依赖缺 version 声明由 WARN 升 ERROR；版本仲裁下沉至依赖每一跳（传递 orphan 不再崩溃、传递漂移不再漏检） |
 | 2.7.0 | 2026-08-14 | FR 编号解析升级为注册表锚定（方案 B，迭代名完全自由）：右锚流水 + 左锚功能注册表最长匹配（specs/{模块}/{功能}/ 目录）+ 中段迭代可含 '-'（2026-08-17/sprint-23 合法）；迭代代号约束收敛为文件系统安全底线，conformance STRUCT 同步；schema.py parse_fr_delta_id 必须携带 known_features |
@@ -167,14 +168,14 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 
 - `db_query.sql`：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，支持 `{{var}}` 插值
 - `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / tdm / uac），未配置该连接时场景 SKIP
-- `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）
+- `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）。**call 段参数**（2.10.0 起与 call 步骤对齐一部分）：`as`（账号）、`service`（服务前缀路由，默认 tdm）、`headers`/`cookies`（KV dict，支持插值）、`timeout`；**until 配置错误快速失败**——jsonpath 拼错等非"条件不满足"异常第一轮即 FAIL（scenario_error），不再轮询至超时掩盖错误（jsonpath 无匹配仍按"未满足"继续轮询）
 - **场景级软看门狗**（2.9.0）：环境变量 `SG_SCENARIO_TIMEOUT`（秒，默认 300）——场景累计耗时超阈值时在**步骤/断言/poll 轮询边界**抛 `ScenarioTimeout`（FAIL/env_error，消息带超时提示）。注意：`python` 脚本内死循环（不回到步骤边界）软看门狗拦不住，进程级兜底用 workbench 执行控制的 run 级看门狗（settings `run_timeout_sec` / 环境变量 `SG_RUN_TIMEOUT`，默认 0=禁用，建议生产开启）
 
 ### 1.7 断言类型（verify 断言）
 
 | 断言类型 | 格式 | 说明 |
 |----------|------|------|
-| `status` | `{of?, eq}` | HTTP 状态码断言（of 缺省为最后一个 call 的 save 名） |
+| `status` | `{of?, eq}` | HTTP 状态码断言（of 缺省为最后一个带 save 的 **call** 步骤——poll/db_query/tool 的 save 不参与默认 of，多 save 场景建议显式写 of，lint T9 会提示） |
 | `json` | `{of?, path, eq}` | JSONPath 等于 |
 | `json` | `{of?, path, ne}` | JSONPath 不等于 |
 | `json` | `{of?, path, not_null: true}` | JSONPath 非 null |
@@ -296,6 +297,8 @@ flow:
         method: GET
         path: /api/data-io/import/task/result
         params: {taskNo: "{{submit.json.data.taskNo}}"}
+        service: tdm            # 可选：服务前缀路由（2.10.0，同 call 步骤语义）
+        headers: {X-Source: sg} # 可选：自定义头（2.10.0，支持 {{var}} 插值）
       until:
         - json: {path: "$.data.status", eq: "DONE"}
       interval_ms: 2000
@@ -329,6 +332,8 @@ verify:
       assert len(rows) == 3, f"期望 3 行，实际 {len(rows)}"
       assert rows[0]['total_score'] is None, "首行分数应为 NULL"
 ```
+
+**浅拷贝注意事项（2.10.0）**：场景命名空间对共享变量是**浅拷贝**——`ns` 中来自上游/其他场景的 dict/list 是共享引用，脚本内**原地修改**（`append`/`pop`/改键）会泄漏污染其他场景。需要修改时先拷贝：`rows = list(ns['rows'])` / `d = dict(ns['d'])`。（引擎不做深拷贝是有意设计：`export_ns` 的传递引用绑定依赖共享引用实现"与实例一致的世界观"。）
 
 **脚本可用上下文**：
 
@@ -474,6 +479,8 @@ requires:
 
 verify 断言用 JSONPath：`$.data.list[0].id`、`$.data.list.length()`、`$.data.list[*].empNo`。
 flow 参数插值支持数组下标：`{{resp.json.data.records[0].id}}`、`{{rows[-1].id}}`（正/负索引、嵌套路径）。
+
+**字面量 `{{` 限制（2.10.0）**：插值渲染后仍残留 `{{` 的字符串会抛 `RenderError`（FAIL/scenario_error，请求不发出）——书写错误的占位符（缺右括号/空占位符 `{{}}`）不再静默作为字面量发给 API。需发送含字面量 `{{` 的内容时**暂无转义语法**（当前场景库无此实际需要；出现真实需求时再演进语法并 bump 版本）。
 
 ---
 

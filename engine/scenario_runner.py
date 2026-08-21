@@ -774,6 +774,9 @@ def step_python(body, rctx, ns, record):
     - http(account) 取 HTTP 客户端（含 token），db 只读 DB 连接（可为 None）
     - fn            内置函数（fn.timestamp() 等）
     - json / re / time / datetime / uuid 预导入模块；SkipScenario 主动跳过
+
+    浅拷贝注意（ENG-BUG-013）：不要对 ns 中来自上游的 dict/list 做原地修改
+    （append/pop/改键）——共享引用会泄漏到其他场景；需要修改时先 list(x)/dict(x) 拷贝。
     """
     script = body.get("script")
     if not script and body.get("file"):
@@ -1059,6 +1062,9 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
     rctx._scenario_deadline = started + timeout_sec
     rctx._scenario_timeout_sec = timeout_sec
 
+    # 浅拷贝（ENG-BUG-013 文档化，不改行为）：saved_vars 里的 dict/list 跨场景共享引用，
+    # python 步骤原地修改会污染其他场景；深拷贝会破坏 _Instance.export_ns 的传递引用
+    # 绑定设计（见其 docstring），故仅文档约束（format_spec §python 浅拷贝注意事项）
     ns = dict(rctx.shared_ns)          # 继承共享命名空间
     if extra_ns:
         ns.update(extra_ns)            # 实例绑定覆盖（exclusive 上游的变量在此注入）

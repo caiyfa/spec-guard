@@ -197,3 +197,64 @@ def test_poll_defaults_unchanged():
     assert rec.verdict == "PASS"
     assert seen["service"] == "tdm"
     assert seen["headers"] is None
+
+
+# ══════════════════════════════════════════════════════════
+# 4. T9 断言对象显式化提示（ENG-BUG-007，验收 3）
+# ══════════════════════════════════════════════════════════
+
+def _validate_tc(tmp_path, files):
+    backend = os.path.join(SG_ROOT, "workbench", "backend")
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
+    from services.spec_validator import validate_test_cases
+    for name, content in files.items():
+        (tmp_path / name).write_text(content, encoding="utf-8")
+    return validate_test_cases(str(tmp_path))
+
+
+_MULTI_SAVE_YAML = """id: MS-001
+version: 0.1
+title: 多save无of
+flow:
+  - call: {method: GET, path: /api/a, save: a}
+  - db_query: {sql: "SELECT 1", save: rows}
+verify:
+  - json: {path: "$.data.x", eq: 1}
+"""
+
+_UP_YAML = """id: UP-EXISTS
+version: 0.1
+title: 上游
+flow:
+  - set_var: {vars: {x: 1}}
+verify: []
+"""
+
+
+def test_t9_multi_save_without_of_warns(tmp_path):
+    """验收3：call(save=a)+db_query(save=rows)+无 of 断言 → T9 WARN。"""
+    result = _validate_tc(tmp_path, {"MS-001.yaml": _MULTI_SAVE_YAML, "UP.yaml": _UP_YAML})
+    t9 = [f for f in result["findings"] if f["vid"] == "T9"]
+    assert t9, f"多 save + 无 of 断言应报 T9 WARN: {result['findings']}"
+    assert t9[0]["level"] == "WARN"
+    assert "of" in t9[0]["message"]
+
+
+def test_t9_no_warn_when_of_explicit_or_single_save(tmp_path):
+    """显式 of 或仅单个 save 步骤 → 不报 T9（避免噪声）。"""
+    explicit_of = _MULTI_SAVE_YAML.replace(
+        '- json: {path: "$.data.x", eq: 1}',
+        '- json: {of: a, path: "$.data.x", eq: 1}')
+    single_save = """id: SS-001
+version: 0.1
+title: 单save
+flow:
+  - call: {method: GET, path: /api/a, save: a}
+verify:
+  - json: {path: "$.data.x", eq: 1}
+"""
+    result = _validate_tc(tmp_path, {"MS.yaml": explicit_of, "SS.yaml": single_save,
+                                     "UP.yaml": _UP_YAML})
+    t9 = [f for f in result["findings"] if f["vid"] == "T9"]
+    assert not t9, f"显式 of / 单 save 不应报 T9: {t9}"
