@@ -65,10 +65,6 @@ class HttpClient:
         self.check_version = check_version
         self.session = requests.Session()
 
-    def as_user(self, account):
-        """返回切换身份的新客户端（共享 session 池无必要，认证头不同）"""
-        return HttpClient(self.base_url, self.token_provider, account, self.check_version)
-
     # ── 请求 ─────────────────────────────────────────────
     def request(self, method, path, params=None, json_body=None, files=None,
                 data=None, headers=None, cookies=None, raise_on_error=True, timeout=30,

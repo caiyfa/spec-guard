@@ -70,11 +70,6 @@ def match_expectation(expected, actual):
     return MAJOR_DRIFT
 
 
-def version_satisfies_snapshot_tolerance(expected):
-    """快照期宽容：^0 期望匹配任意 0.x 实际版本（标准 caret 语义即满足）。"""
-    return str(expected or "").strip().startswith("^0")
-
-
 # ══════════════════════════════════════════════════════════
 # 契约指纹
 # ══════════════════════════════════════════════════════════

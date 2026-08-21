@@ -119,7 +119,7 @@ class ExecutionRecord:
     verdict: str = VERDICT_FAIL
     failure: dict = None                               # {category, message, evidence}
     skip_reason: str = ""
-    skip_category: str = "uncategorized"               # SKIP 归类（pool_empty/pool_leased_out/account_missing/db_unavailable/oracle_infra/uncategorized）
+    skip_category: str = "uncategorized"               # SKIP 归类（pool_empty/pool_leased_out/account_missing/db_unavailable/oracle_infra/poll_timeout/uncategorized）
     duration_ms: int = 0
     upstream_of: str = ""                              # 非空表示该记录是作为哪个场景的上游执行的
     instance_no: int = 1                               # 实例序号（exclusive 依赖会产生多实例，>1 表示重跑份）

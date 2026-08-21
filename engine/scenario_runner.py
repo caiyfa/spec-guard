@@ -44,7 +44,9 @@ from engine.scenario_loader import MODE_SHARED
 class SkipScenario(Exception):
     """场景前置条件不满足（工号池无候选/账号未配置等）→ verdict=SKIP
 
-    category: SKIP 归类（pool_empty/pool_leased_out/account_missing/db_unavailable/oracle_infra/uncategorized）
+    category: SKIP 归类（pool_empty/pool_leased_out/account_missing/db_unavailable/
+    oracle_infra/poll_timeout/uncategorized——ENG-MNT-002 补 poll_timeout，实际取值
+    以 grep category= 全仓核对为准）
     向后兼容：不带 category 的调用点一律归为 uncategorized，无需批量修改业务代码。
     """
     def __init__(self, message, category="uncategorized"):
@@ -766,6 +768,9 @@ def _fn_namespace():
 
 def step_python(body, rctx, ns, record):
     """Python 脚本原语（格式 2.1）：在引擎上下文执行脚本，处理复杂逻辑。
+
+    ⚠️ 安全（ENG-SEC-001）：script 经 exec 以引擎进程身份执行——执行场景 YAML
+    等同执行代码，外部贡献场景必须人工评审后才允许入库执行。
 
     用法：
     - python:

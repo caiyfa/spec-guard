@@ -320,6 +320,7 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 ## Never
 
 - 不让 Agent 产物绕过三道闸（人工评审 → 格式校验 → 发布门禁）直接入 `scenarios/`。
+- 不把场景 YAML 当纯数据——`python` 步骤/断言等同执行任意代码（exec），外部贡献场景必须人工评审后才允许入库执行（ENG-SEC-001 标注；引擎不加禁用开关的决策见问题清单对应条目）。
 - 不在校验器/只读工具里写任何副作用（validate 必须纯读）。
 - 不把运行产物（各工作区 `.specguard/reports/`）、`node_modules/`、`__pycache__/`、`workbench/backend/data/`、`agent/sessions/` 提交进仓库。
 - 不在代码里硬编码环境凭据（一律走 env 配置 + devops 凭据回退）。
