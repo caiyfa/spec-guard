@@ -239,11 +239,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 任务ID | 阶段 | 任务 | worktree | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|
-| T-960 | P0 | 凭据出库（env.sit.yaml client_secret→环境变量回退） | 主库小刀 | — | 未认领 | | 0.5 天 |
-| T-961 | P0 | 飞书池 API 绑定 RBAC + 三处错位绑定对齐 | 主库小刀 | — | 未认领 | | 0.5 天 |
-| T-962 | P0 | /quality 死菜单清理 | 主库小刀 | — | 未认领 | | 0.5 小时 |
-| T-963 | P0 | P0/P1 mark 断链修复（priority→mark 映射） | 主库小刀 | — | 未认领 | | 0.5 天 |
-| T-964 | P0 | clarity 假分数清理（specflow_ledger.py:179 占位 62.0） | 主库小刀 | — | 未认领 | | 0.5 天；08-21 知识库翻案新增 |
+| T-960 | P0 | 凭据出库（env.sit.yaml client_secret→环境变量回退） | 主库小刀 | — | 待总控人定 | | 0.5 天；凭据红线涉 Ask First（internal_token 注释自称「SIT 默认值非敏感」，client_secret 是否真敏感值待拍板——出库改 ${SG_TDM_CLIENT_SECRET:} 回退 vs 确认为 SIT 公开值保留） |
+| T-961 | P0 | 飞书池 API 绑定 RBAC + 三处错位绑定对齐 | 主库小刀 | — | ✅ 08-21（随 T-996 闭环） | sess-acceptance | feishu-pool→menu-feishu-pool 补绑、三处错位（spec/specflow/zentao/knowledge/workspace→menu-agent、coverage→menu-lifecycle、notify→menu-feedback）随 T-996 menu_guard 对齐一并修正 |
+| T-962 | P0 | /quality 死菜单清理 | 主库小刀 | — | ✅ 08-21（随 T-996 闭环） | sess-acceptance | menu-quality 死菜单（/quality 无路由）随 T-996 SEED_MENUS 迁移移除并映射授权至 menu-dashboard，menus 表已无该项 |
+| T-963 | P0 | P0/P1 mark 断链修复（priority→mark 映射） | 主库小刀 | — | ✅ 08-21 主库清 | sess-acceptance | scenario_loader priority 注入 tags（P0/P1 已注册 mark）；实证 pytest -m P0 选中 22/-m P1 选中 40（修复前 -m P0 为 0） |
+| T-964 | P0 | clarity 假分数清理（specflow_ledger.py:179 占位 62.0） | 主库小刀 | — | ✅ 08-21 主库清 | sess-acceptance | 两处占位（specflow_ledger.py:182 MCP + specflow_decisions.py:193 REST）62.0→诚实降级 pending_manual 不入库；机打 4 维保留；test_specflow_rest 3 处断言同步（5→4 入库/confirm 过滤 id=None/空文本 pending_manual）；test_specstd+engine 1950 绿 |
 | T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | ✅ 33682ba（08-21 主库验收） | sess-multi-system | 1 天；顺带修复plan_executor漏注册内置oracles漂移bug |
 | T-971 | M-A | system 一等公民化（9 调用点归一+runner 断链+分键缓存） | wt/multi-system | T-970 | ✅ 0fbcd9e（08-21 主库验收） | sess-multi-system | 2-3 天；多用户多系统切换硬前置 |
 | T-972 | M-A | 引擎 TDM 泄漏清理 | wt/multi-system | — | ✅ f52d3a9（08-21 主库验收） | sess-multi-system | 1 天；format_spec 2.12.0 三同步 |

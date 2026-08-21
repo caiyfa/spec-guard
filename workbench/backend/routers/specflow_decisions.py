@@ -189,11 +189,10 @@ def evaluate_scores(
                          evidence, spec_sha, skip_if_suggested=True)
         results.append(r)
 
-    # LLM 建议维度（QA 确认后生效）
-    r = db_add_score(workspace, interview_id, "clarity", 62.0, "llm_suggested",
-                     "LLM 建议：预期清晰度待 QA 复核", spec_sha,
-                     skip_if_suggested=True)
-    results.append(r)
+    # T-964：clarity 假分数清理——不再硬编码 62.0 占位入库，诚实降级为「待人工评分」
+    results.append({"id": None, "dimension": "clarity", "score": None,
+                    "source": "llm_suggested", "status": "pending_manual",
+                    "note": "clarity 无机打/LLM 真评通道，待 QA 人工评分后入库"})
 
     return {"scores": results}
 

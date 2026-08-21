@@ -179,12 +179,14 @@ async def _handle_sf_suggest_scores(args: dict) -> list[TextContent]:
         r = db_add_score(ws, iv_id, dim, score, "machine", evidence,
                          skip_if_suggested=True)
         results.append(r)
-    r = db_add_score(ws, iv_id, "clarity", 62.0, "llm_suggested",
-                     "LLM 建议：预期清晰度待 QA 复核", skip_if_suggested=True)
-    results.append(r)
+    # T-964：clarity 假分数清理——不再硬编码 62.0 占位入库，诚实降级为「待人工评分」
+    # （机打采集器无 clarity 真实采集通道，LLM 真评未接；占位常量会让假分数混入 suggested）
+    results.append({"id": None, "dimension": "clarity", "score": None,
+                    "source": "llm_suggested", "status": "pending_manual",
+                    "note": "clarity 无机打/LLM 真评通道，待 QA 人工评分后入库"})
     return [TextContent(type="text", text=str({
         "status": "suggested",
-        "message": "评分已入库（status=suggested），不计入总分。需 QA 确认后才生效。",
+        "message": "评分已入库（status=suggested），不计入总分。需 QA 确认后才生效。clarity 待人工评分。",
         "scores": results,
     }))]
 

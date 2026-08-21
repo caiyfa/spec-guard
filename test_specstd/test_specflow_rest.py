@@ -248,8 +248,11 @@ class TestFreezeRoleGate:
                         json={"interview_id": iv_id, "spec_text": spec_text})
         assert r.status_code == 200
         scores = r.json()["scores"]
-        assert len(scores) == 5
-        for s in scores:
+        # T-964：机打 4 维（clarity 占位已清理，改 pending_manual 不入库不计数）
+        assert len(scores) == 5  # 4 机打入库 + 1 clarity pending_manual 提示
+        confirmed = [s for s in scores if s.get("id") is not None]
+        assert len(confirmed) == 4  # clarity pending_manual 无 id，不参与 confirm
+        for s in confirmed:
             r = client.post(f"/api/specflow/decisions/scores/{s['id']}/confirm",
                             headers=headers, json={"verdict": "confirm"})
             assert r.status_code == 200, r.text
@@ -295,23 +298,25 @@ class TestScoreConfirm:
                          headers=headers,
                          json={"interview_id": iv_id, "spec_text": spec_text})
         assert r2.status_code == 200
-        # 两次 evaluate 后仍只有 5 条 suggested
+        # 两次 evaluate 后仍只有 4 条 suggested（T-964：clarity 占位清理，不入库不计数）
         lst = client.get(f"/api/specflow/decisions/scores?interview_id={iv_id}",
                          headers=headers)
         assert lst.status_code == 200
-        assert len(lst.json()["scores"]) == 5
+        assert len(lst.json()["scores"]) == 4
 
     def test_evaluate_empty_text_skips_machine_dims(self, client):
-        """I4 修复：空 spec_text 时不写机打维度（仅 clarity 建议）。"""
+        """I4 修复 + T-964：空 spec_text 时不写机打维度；clarity 占位已清理（pending_manual 不入库）。"""
         headers = _as_role(client, roles=("product",))
         iv_id = _open_interview()
         r = client.post("/api/specflow/decisions/scores/evaluate",
                         headers=headers, json={"interview_id": iv_id})
         assert r.status_code == 200
         scores = r.json()["scores"]
-        # 仅 clarity 1 条（机打维度基于空文本无意义，拒绝采集）
+        # T-964：空文本机打 0 维 + clarity pending_manual 提示 1 条（占位已清理，不入库）
         assert len(scores) == 1
         assert scores[0]["dimension"] == "clarity"
+        assert scores[0]["status"] == "pending_manual"
+        assert scores[0]["id"] is None
 
 
 # ══════════════════════════════════════════════════════════

@@ -157,12 +157,17 @@ def _parse_scenario(path, suite_meta):
         parse_version(version)
     except VersionError as e:
         raise ScenarioLoadError(f"{path}: version 非法: {e}")
+    _priority = raw.get("priority", "P1")
+    _tags = list(raw.get("tags", []) or [])
+    # T-963：priority 注入 tags（P0/P1 mark 断链修复）——pytest -m P0/P1 依赖 tags 转 mark
+    if _priority and _priority not in _tags:
+        _tags.append(_priority)
     return Scenario(
         id=sid,
         title=raw.get("title", ""),
         version=version,
-        priority=raw.get("priority", "P1"),
-        tags=raw.get("tags", []) or [],
+        priority=_priority,
+        tags=_tags,
         doc=doc,
         depends_on=_normalize_depends(raw.get("depends_on"), path),
         flow=flow,
