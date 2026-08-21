@@ -263,7 +263,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-997 | M-E | api.ts 按域拆分 + 前端关键路径 vitest | wt/frontend-ia | — | 未认领 | | 2 天 |
 | T-1000 | M-E | 工作区自管理 + 系统/工作区二级模型 + 产出反查 | wt/frontend-ia | T-995 | 未认领 | | 3-5 天；拍板已过（08-21 按推荐方案）；设计单《架构反馈升级/2026-08-21-M-E-工作区自管理与产出反查-设计单.md》 |
 | T-998 | M-F | 文档滞后批量修 + 总控状态对账（T-701~703） | wt/tool-consolidation（空窗复用） | — | 已完成（提交号见会话行，待主库验收） | sess-tool-consolidation | 0.5 天；当日完工 |
-| T-999 | M-F | workspace.py 拆分 / scenario_runner 抽插值器 / print→logging / user_store 治理 | 任意树空窗 | — | 未认领 | | 各 1-2 天分次 |
+| T-999 | M-F | workspace.py 拆分 / scenario_runner 抽插值器 / print→logging / user_store 治理 | wt/tool-consolidation（空窗复用） | — | 进行中（分次：a print→logging → b user_store → c runner 插值器 → d workspace 拆分） | sess-tool-consolidation | 各 1-2 天分次 |
 
 ---
 
