@@ -1280,6 +1280,8 @@ export const specflowApi = {
     uploadFile<{ material: MaterialItem }>(`/specflow/interviews/${iv_id}/materials`, file),
   listMaterials: (iv_id: string, status = '') =>
     request<{ materials: MaterialItem[] }>(`/specflow/interviews/${iv_id}/materials${status ? `?status=${status}` : ''}`),
+  previewMaterial: (mid: string) =>   // T-933：材料页签摘要（解析文本优先，截 20000 字）
+    request<{ material_id: string; source: string; text: string; fmt?: string }>(`/specflow/materials/${mid}/preview`),
   listTopics: (mid: string, confirmedOnly = false) =>
     request<{ topics: MaterialTopic[] }>(`/specflow/materials/${mid}/topics?confirmed_only=${confirmedOnly}`),
   confirmTopic: (mid: string, tid: string, confirmed: boolean) =>

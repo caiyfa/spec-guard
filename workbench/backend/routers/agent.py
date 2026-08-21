@@ -289,6 +289,41 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
             structured.append({"type": "info_pack", "path": rid, "sha": ""})
             continue
 
+        if rtype == "material":
+            # T-933: 材料引用——不注入全文（大文档会挤爆上下文），只注入标识/
+            # 文件名/状态；正文由 agent 用 read_material 工具按需分页读取
+            # （requirement_interview 白名单已登记）
+            m = None
+            try:
+                from services.specflow.materials_service import _db_conn
+                from specflow.materials import store
+                conn = _db_conn()
+                try:
+                    m = store.get_material(conn, rid)
+                finally:
+                    conn.close()
+            except Exception:
+                m = None
+            ws_now = ""
+            try:
+                from specstd.workspace import get_context_workspace
+                ws_now = get_context_workspace() or ""
+            except Exception:
+                pass
+            if m and m.get("workspace") == ws_now:
+                blocks.append(
+                    f"--- {rid} (material:{m['filename']}, status:{m['status']}) ---\n"
+                    "[材料引用] 内容不注入——用 read_material 工具按需读取"
+                    "（section=summary|topics|raw，raw 支持 offset/limit 分页）")
+                structured.append({"type": "material", "path": rid,
+                                   "sha": str(m.get("sha256_12") or ""),
+                                   "label": m["filename"]})
+            else:
+                blocks.append(f"--- {rid} ---\n[材料不存在或不可读]")
+                structured.append({"type": "material", "path": rid, "sha": "",
+                                   "missing": True})
+            continue
+
         content, sha = "", ""
         try:
             if rtype == "file":
