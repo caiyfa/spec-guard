@@ -208,3 +208,9 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     if fn is None:
         return [TextContent(type="text", text=f"未知工具: {name}")]
     return fn(arguments)
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare(["trace_forward", "trace_backward", "query_graph"], domain="open")

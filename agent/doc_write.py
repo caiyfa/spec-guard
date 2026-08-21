@@ -28,7 +28,9 @@ def _write_note(tool: str, args: dict) -> str:
     return f"{tool}({', '.join(parts)})" if parts else f"{tool}()"
 
 
-# 写型工具清单（产物更新足迹覆盖面：草稿/delta 起草区/信息包/入库/回滚）
+# 写型工具清单（产物更新足迹覆盖面：草稿/delta 起草区/信息包/入库/回滚。
+# 逻辑 id 词表——T-982 起 guard 以 tool_meta doc_track 元数据为准，本表仅为
+# legacy 名直调兼容，一致性由测试锁定）
 WRITE_TOOLS = frozenset({
     "write_draft",
     "write_delta_doc",
@@ -177,7 +179,13 @@ def build_doc_write(tool: str, arguments: dict, result: str,
                       PASS/SKIP 时为空——Agent 据此定位修复）
       hunks         — 更新位置列表（V1 单 hunk：写入内容头部行区间）
     """
-    if tool not in WRITE_TOOLS or _is_error_result(result):
+    from agent.doc_read import _resolve_logical
+    lid, track = _resolve_logical(tool, arguments)
+    if track != "write" and lid not in WRITE_TOOLS:
+        return None
+    tool = lid  # 归一为逻辑 id：分支映射与 payload["tool"] 均用收敛前词汇
+
+    if _is_error_result(result):
         return None
 
     args = arguments or {}

@@ -17,7 +17,7 @@ keywords: [操作台, 闸门, 入包, 议题确认, 评分确认, 冻结, 建故
 |----------|----------|
 | 材料解析完成（parsed/indexed） | 议题候选确认卡 |
 | 议题确认完毕 | 材料入包卡 |
-| 机器评分产出（sf_suggest_scores 后） | 评分 QA 确认卡 |
+| 机器评分产出（ledger(action=suggest_scores) 后） | 评分 QA 确认卡 |
 | 三闸全过 | 冻结确认卡 |
 | delta 冻结完成 | 禅道建故事卡 |
 | 禅道 BUG 回查 resolved/closed | 回归建议 |

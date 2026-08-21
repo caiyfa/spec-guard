@@ -177,3 +177,8 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         "truncated": truncated,
     }
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))]
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("lark_execute", domain="feishu", side_effect=SIDE_DRAFT, rbac="product")

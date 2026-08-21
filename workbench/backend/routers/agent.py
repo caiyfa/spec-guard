@@ -286,7 +286,7 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
 
         if rtype == "material":
             # T-933: 材料引用——不注入全文（大文档会挤爆上下文），只注入标识/
-            # 文件名/状态；正文由 agent 用 read_material 工具按需分页读取
+            # 文件名/状态；正文由 agent 用 pack(action=read_material) 工具按需分页读取
             # （requirement_interview 白名单已登记）
             m = None
             try:
@@ -308,7 +308,7 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
             if m and m.get("workspace") == ws_now:
                 blocks.append(
                     f"--- {rid} (material:{m['filename']}, status:{m['status']}) ---\n"
-                    "[材料引用] 内容不注入——用 read_material 工具按需读取"
+                    "[材料引用] 内容不注入——用 pack(action=read_material) 工具按需读取"
                     "（section=summary|topics|raw，raw 支持 offset/limit 分页）")
                 structured.append({"type": "material", "path": rid,
                                    "sha": str(m.get("sha256_12") or ""),
@@ -827,14 +827,16 @@ async def agent_ws(websocket: WebSocket,
                 return build_system_prompt(scenario_context=ctx, purpose=session_purpose)
 
             system_prompt = await asyncio.to_thread(_build_prompt, scenario_id)
-            # T-011: 三层交集白名单装配——TOOL_REGISTRY ∩ purpose.tools ∩ rbac_visible_tools
-            # （meta 工具 todo_write 常驻；全量用户 admin/tester 角色层不额外收窄）
+            # T-011: 三层交集白名单装配——TOOL_REGISTRY ∩ purpose(tools∪domains) ∩ rbac_visible_tools
+            # （meta 工具 todo_write 常驻；全量用户 admin/tester 角色层不额外收窄；
+            # T-982：purpose 按 domains 选领域子集，合并工具 action 粒度裁剪）
             # 工具白名单跟随配置，不锁死在会话创建时（purpose 定义变动即时生效）
             pdef_now = load_purpose(session_purpose) if session_purpose else None
             purpose_tools = list(pdef_now.tools if pdef_now else [])
             whitelist_tools = resolve_tools(
                 purpose_tools=purpose_tools,
                 user_roles=list(_ws_roles or []),
+                purpose_domains=list(getattr(pdef_now, "domains", []) or []),
             )
             # M4：空白名单显式拒绝——绝不能回退全量（原 `or None` 会让空列表
             # 静默变成 ALL_TOOLS，防御纵深被破坏）

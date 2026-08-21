@@ -2,10 +2,10 @@
 name: feishu-chat
 description: 读取飞书群聊/私聊记录。定位群用 `im +chat-search --query`（唯一正确命令，勿拼成 +search/+search-chat）；
   拉消息用 `im +chat-messages-list --chat-id`；按内容检索用 `im +messages-search --query`（勿拼成 +message-search）。
-  找不到目标群时用 `im +chat-list --sort active_time` 列最近群并展示给用户确认。全部经 lark_execute 执行，先 load_skill 取正文。
+  找不到目标群时用 `im +chat-list --sort active_time` 列最近群并展示给用户确认。全部经 lark_execute 执行，先 knowledge(action=skill) 取正文。
 version: 1.0.0
 author: platform-team
-depends_tools: [lark_execute, lark_auth_status, lark_auth_login]
+depends_tools: [lark_execute, lark_auth(action=status), lark_auth(action=login)]
 trigger: 用户要求读取群聊/聊天记录、查看某个群/某个人的讨论内容、按关键词找聊天消息时
 keywords: [群聊, 聊天记录, 群消息, 讨论记录, 聊天内容, 消息记录, im, 找群]
 ---
@@ -58,10 +58,10 @@ keywords: [群聊, 聊天记录, 群消息, 讨论记录, 聊天内容, 消息�
 - **只读铁律**：三个动线全部是只读命令；若命令含写操作关键词（+create/+update/+delete 等），
   lark_execute 会要求 confirm_write=true——群聊读取场景一律不应出现
 - **身份**：默认 `--as user`；bot 身份不可枚举/读取 p2p 私聊（隐私保护，会被拒绝或降级为仅群聊）
-- **未授权引导**：报 not_configured/permission_denied 时，先 `lark_auth_status` 查绑定状态；
-  unbound 则调 `lark_auth_login`（Phase1 返回 verification_url + qr_data_uri + device_code），
+- **未授权引导**：报 not_configured/permission_denied 时，先 `lark_auth(action=status)` 查绑定状态；
+  unbound 则调 `lark_auth(action=login)`（Phase1 返回 verification_url + qr_data_uri + device_code），
   把**二维码图片**（`![授权二维码]({qr_data_uri})`）和**授权链接**一起展示给用户；
-  用户扫码后调 `lark_auth_login(device_code=xxx)`（Phase2）完成授权，无需用户改文件
+  用户扫码后调 `lark_auth(action=login, device_code=xxx)`（Phase2）完成授权，无需用户改文件
 - **权限不足**：bound 但报 permission_denied 时提示用户补授权
   （读消息需 `im:chat:read` + `im:message:readonly`；关键词检索需 `search:message`），不静默降级
 - **结果截断**：lark_execute 返回上限 50k 字符；量大时缩小时间窗/加过滤，不一次拉全

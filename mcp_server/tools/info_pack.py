@@ -1,4 +1,6 @@
 """info_pack — 基础信息包读取与追加工具（G2-1）。
+>
+> T-982 收敛：3 工具合并为单 info_pack 工具（action=read/add/list）。
 
 工具：
   read_info_pack: 读取场景基础信息包的全部文件内容（拼接返回）
@@ -9,10 +11,11 @@ import json
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="read_info_pack",
         description="读取场景基础信息包的全部文件内容。"
@@ -68,7 +71,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "read_info_pack":
         return _handle_read_info_pack(arguments)
     elif name == "add_to_info_pack":
@@ -254,3 +257,21 @@ def _handle_add_to_info_pack(arguments: dict) -> list[TextContent]:
         "added_file": file_path,
         "info_pack": updated.get("info_pack", []),
     }, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：3 碎片合并为单 info_pack 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "info_pack",
+    "场景信息包：read 读信息包拼接文本、add 补充产物（写信息包）、list 列关联产物（新鲜度+派生草稿）。",
+    actions={
+        "read": ActionMeta(legacy="read_info_pack", doc_track="read"),
+        "add": ActionMeta(legacy="add_to_info_pack", side_effect=SIDE_DRAFT, doc_track="write"),
+        "list": ActionMeta(legacy="list_info_pack_artifacts"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="scenario",
+    rbac="product",
+)

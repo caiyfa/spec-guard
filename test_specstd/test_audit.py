@@ -52,10 +52,10 @@ class TestAuditSkill:
         skill = load_skill("audit-spec")
         assert skill is not None
         # 审计流程与工具指引
-        assert "write_audit_report" in skill.content
-        assert "report_vulnerability" in skill.content
-        assert "read_spec" in skill.content
-        assert "list_spec_files" in skill.content
+        assert "audit(action=write_report)" in skill.content  # T-982：audit 合并工具
+        assert "audit(action=report_vulnerability)" in skill.content  # T-982
+        assert "spec(action=read)" in skill.content      # T-982：spec 合并工具
+        assert "spec(action=list)" in skill.content      # T-982
 
     def test_audit_skill_in_list(self):
         clear_cache()

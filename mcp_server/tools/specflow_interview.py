@@ -1,4 +1,6 @@
 """specflow_interview.py — 面试 MCP 工具（M02 §5.2，T-020）。
+>
+> T-982 收敛：7 工具合并为单 interview 工具（action=open/read_baseline/ask/next/record/p0_check/append）。
 
 挂载 server.TOOL_MODULES，约束：校验类纯读无副作用；
 所有写工具只写 .specflow/，绝不写 specs/ 与 .specguard/。
@@ -7,6 +9,7 @@
 from __future__ import annotations
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 # ══════════════════════════════════════════════════════════
 # 工具定义
@@ -116,7 +119,7 @@ iv_append_transcript_tool = Tool(
     },
 )
 
-TOOLS = [
+_TOOL_DECLS = [
     iv_open_topic_tool,
     iv_read_baseline_tool,
     iv_ask_question_tool,
@@ -131,7 +134,7 @@ TOOLS = [
 # 工具处理函数
 # ══════════════════════════════════════════════════════════
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     handlers = {
         "iv_open_topic": _handle_iv_open_topic,
         "iv_read_baseline": _handle_iv_read_baseline,
@@ -355,3 +358,26 @@ async def _handle_iv_append_transcript(args: dict) -> list[TextContent]:
     }
     append_transcript(tpath, entry)
     return [TextContent(type="text", text=str({"status": "appended"}))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：7 碎片合并为单 interview 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "interview",
+    "需求面试会话状态机：open 开话题、read_baseline 读基线、ask 提问、next 下一问、"
+    "record 记录回答（落台账）、p0_check P0 清零检查、append 追加 transcript。",
+    actions={
+        "open": ActionMeta(legacy="iv_open_topic", side_effect=SIDE_DRAFT),
+        "read_baseline": ActionMeta(legacy="iv_read_baseline"),
+        "ask": ActionMeta(legacy="iv_ask_question"),
+        "next": ActionMeta(legacy="iv_next_question", side_effect=SIDE_DRAFT),
+        "record": ActionMeta(legacy="iv_record_answer", side_effect=SIDE_DRAFT),
+        "p0_check": ActionMeta(legacy="iv_p0_clear_check"),
+        "append": ActionMeta(legacy="iv_append_transcript", side_effect=SIDE_DRAFT),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="specflow",
+    rbac="product",
+)

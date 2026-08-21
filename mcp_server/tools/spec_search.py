@@ -1,4 +1,6 @@
 """spec_search — 工作区 spec 文本搜索 + FR 编号解析校验（编号重排能力）。
+>
+> T-982 收敛：2 工具合并为单 spec_search 工具（action=search/parse_fr）。
 
 工具：
   search_spec_files: 工作区内文本搜索（只读）——编号重排的替换点定位与残留自检；
@@ -15,6 +17,7 @@ import re
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -26,7 +29,7 @@ _TEXT_EXTS = {".md", ".yaml", ".yml"}
 # 命中行返回上限（防大批量结果刷屏；total 仍报告真实总数）
 _MAX_HITS = 200
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="search_spec_files",
         description="在当前工作区内搜索文本内容（只读），返回命中文件+行号+行文本。"
@@ -66,7 +69,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "search_spec_files":
         return _handle_search(arguments)
     elif name == "parse_fr_id":
@@ -242,3 +245,20 @@ def _handle_parse_fr_id(arguments: dict) -> list[TextContent]:
         result["error"] = (f"迭代代号 '{parsed['iter']}' 非法：禁路径分隔符/空白/Windows 保留字符"
                            "且不能以 '.' 开头——可含 '-'（如 2026-08-17 合法）")
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：search/parse_fr 合并为单 spec_search 工具
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "spec_search",
+    "工作区 spec 文本搜索与 FR 编号解析校验（编号重排能力：替换点定位/残留自检/新编号合法性）。",
+    actions={
+        "search": ActionMeta(legacy="search_spec_files"),
+        "parse_fr": ActionMeta(legacy="parse_fr_id"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="spec",
+    rbac="staff",
+)

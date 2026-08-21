@@ -174,8 +174,9 @@ class TestRuntimeDocRead:
 
     def test_read_scenario_emits(self):
         """读型文档工具调用后发 doc_read，捎带本轮思考文本。"""
+        # T-982：合并工具 scenario(action=read) 调用，事件 payload 仍用逻辑 id read_scenario
         evts = self._run_and_collect(
-            "read_scenario", '{"id": "PP-PERM-001"}', thinking="先确认场景前置条件")
+            "scenario", '{"action": "read", "id": "PP-PERM-001"}', thinking="先确认场景前置条件")
         assert len(evts) == 1
         evt = evts[0]
         assert evt["tool"] == "read_scenario"

@@ -1,4 +1,6 @@
 """specflow_ledger.py — 决策台账 MCP 工具（M04 §5.2，T-023）。
+>
+> T-982 收敛：5 工具合并为单 ledger 工具（action=list/propose/check_p0/suggest_scores/read_gate）。
 
 独立模块，与测试工具不同模块。
 resolve/confirm/amend 三个写闸门不暴露给 MCP——拍板只能由人在 UI/REST 完成。
@@ -7,6 +9,7 @@ resolve/confirm/amend 三个写闸门不暴露给 MCP——拍板只能由人在
 from __future__ import annotations
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 # ══════════════════════════════════════════════════════════
 # 工具定义
@@ -85,7 +88,7 @@ sf_read_score_gate_tool = Tool(
     },
 )
 
-TOOLS = [
+_TOOL_DECLS = [
     sf_list_decisions_tool,
     sf_propose_decision_tool,
     sf_check_p0_gate_tool,
@@ -98,7 +101,7 @@ TOOLS = [
 # 工具处理函数
 # ══════════════════════════════════════════════════════════
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     handlers = {
         "sf_list_decisions": _handle_sf_list_decisions,
         "sf_propose_decision": _handle_sf_propose_decision,
@@ -191,3 +194,23 @@ async def _handle_sf_read_score_gate(args: dict) -> list[TextContent]:
     from specstd.workspace import get_context_workspace
     result = db_list_scores(args["interview_id"], get_context_workspace() or "")
     return [TextContent(type="text", text=str(result))]
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：5 碎片合并为单 ledger 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "ledger",
+    "决策台账与五维评分：list 列决策、propose 提议决策（人拍板才生效）、"
+    "check_p0 P0 门禁检查、suggest_scores 建议评分、read_gate 读评分门禁。",
+    actions={
+        "list": ActionMeta(legacy="sf_list_decisions"),
+        "propose": ActionMeta(legacy="sf_propose_decision", side_effect=SIDE_DRAFT),
+        "check_p0": ActionMeta(legacy="sf_check_p0_gate"),
+        "suggest_scores": ActionMeta(legacy="sf_suggest_scores", side_effect=SIDE_DRAFT),
+        "read_gate": ActionMeta(legacy="sf_read_score_gate"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="specflow",
+    rbac="product",
+)

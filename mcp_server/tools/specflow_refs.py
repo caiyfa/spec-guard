@@ -1,4 +1,6 @@
 """specflow_refs.py — 外部锚点/禅道作业 MCP 工具（M06 §5.3，T-056）。
+>
+> T-982 收敛：4 工具合并为单 refs 工具（action 参数化）。
 
 sf_list_external_refs  纯读：外部锚点查询（M10 血缘链数据源）
 sf_register_external_ref 写但低风险：仅登记引用，不触禅道
@@ -11,6 +13,7 @@ story/bug 创建与故事点回写**不暴露 MCP**——触外部系统的写�
 from __future__ import annotations
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 
 # ══════════════════════════════════════════════════════════
@@ -82,7 +85,7 @@ sf_suggest_story_draft_tool = Tool(
     },
 )
 
-TOOLS = [
+_TOOL_DECLS = [
     sf_list_external_refs_tool,
     sf_register_external_ref_tool,
     sf_get_zentao_job_tool,
@@ -171,3 +174,31 @@ HANDLERS = {
     "sf_get_zentao_job": _handle_sf_get_zentao_job,
     "sf_suggest_story_draft": _handle_sf_suggest_story_draft,
 }
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：4 碎片合并为单 refs 工具（action 参数化）
+# 顺手修存量 bug：原模块只有 HANDLERS 表没有 handle()，server/runtime 调用必炸
+# （AttributeError）——consolidate 包装时补 _legacy_handle 派发。
+# ══════════════════════════════════════════════════════════
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
+    fn = HANDLERS.get(name)
+    if not fn:
+        return [TextContent(type="text", text=f"未知工具: {name}")]
+    return await fn(arguments)
+
+
+TOOLS, handle = consolidate(
+    "refs",
+    "外部锚点/禅道（只读为主）：list 查外部锚点登记、register 登记外部资产引用（仅登记不触禅道）、"
+    "zentao_job 查禅道写作业状态、suggest_story 建议禅道故事草案（恒 draft 态，创建须人在页签确认）。",
+    actions={
+        "list": ActionMeta(legacy="sf_list_external_refs", rbac="staff"),
+        "register": ActionMeta(legacy="sf_register_external_ref", side_effect=SIDE_DRAFT, rbac="staff"),
+        "zentao_job": ActionMeta(legacy="sf_get_zentao_job", rbac="staff"),
+        "suggest_story": ActionMeta(legacy="sf_suggest_story_draft", side_effect=SIDE_DRAFT, rbac="product"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="specflow",
+)

@@ -3,7 +3,7 @@ name: audit-spec
 description: 系统性审计 spec 文档与接口实现的漏洞并登记反馈
 version: 1.0.0
 author: platform-team
-depends_tools: [read_spec, list_spec_files, scan_compliance, file_vulnerability, list_executions, list_failures]
+depends_tools: [spec(action=read), spec(action=list), scan_compliance, file_vulnerability, attribution(action=executions), attribution(action=failures)]
 trigger: 用户需要审计需求文档、检查 spec 漏洞、或做接口与 spec 一致性核对时
 keywords: [审计, 漏洞, spec 检查, 一致性, 审读, 核对需求, 检查需求文档, 找问题, vulnerability]
 ---
@@ -13,15 +13,15 @@ keywords: [审计, 漏洞, spec 检查, 一致性, 审读, 核对需求, 检查�
 
 ### 审计流程
 
-1. 用 list_spec_files 列出工作区所有 spec 文件
-2. 用 read_spec 逐一审读，检查：
+1. 用 spec(action=list) 列出工作区所有 spec 文件
+2. 用 spec(action=read) 逐一审读，检查：
    - FR/AC 描述是否模糊（如「合理」「正常」等不可测词汇）
    - FR 之间是否自相矛盾
    - 边界条件是否缺失（空值/上限/并发）
    - 字段定义是否完整（类型/枚举/必填）
-3. 如有运行报告（read_run_report），对比实际接口行为与 spec 描述
-4. 每发现一条漏洞，调用 report_vulnerability 登记
-5. 审计完成后调用 write_audit_report 输出完整报告
+3. 如有运行报告（attribution(action=report)），对比实际接口行为与 spec 描述
+4. 每发现一条漏洞，调用 audit(action=report_vulnerability) 登记
+5. 审计完成后调用 audit(action=write_report) 输出完整报告
 
 ### 漏洞分类
 

@@ -1,4 +1,6 @@
 """graph_index.py — 图谱查询 MCP 工具（M11 §5.2，T-070）。
+>
+> T-982 收敛：7 工具合并为 graph+lineage 双工具（action 参数化）。
 
 工具：
   graph_query      图谱查询（L0/L1/L2 三层语义缩放 + 节点详情）；纯读
@@ -16,6 +18,7 @@ graph_rebuild 只写派生物（graph_index.db），红线：绝不回写 spec/�
 from __future__ import annotations
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 # ══════════════════════════════════════════════════════════
 # 工具定义
@@ -122,7 +125,7 @@ lineage_check_tool = Tool(
     },
 )
 
-TOOLS = [graph_query_tool, graph_backlink_tool, graph_rebuild_tool,
+_TOOL_DECLS = [graph_query_tool, graph_backlink_tool, graph_rebuild_tool,
          graph_snapshot_tool, graph_diff_tool, lineage_trace_tool,
          lineage_check_tool]
 
@@ -140,7 +143,7 @@ def _workspace_root():
     return ws.root
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     arguments = arguments or {}
     try:
         if name == "graph_query":
@@ -255,3 +258,44 @@ def _do_lineage_check(arguments: dict) -> list[TextContent]:
 def _render(data) -> str:
     import json
     return json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：7 碎片合并为 graph + lineage 双工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+_G_TOOLS, _G_HANDLE = consolidate(
+    "graph",
+    "全景图谱：query 查节点/边、backlink 反查引用、rebuild 重建索引（写派生库）、"
+    "snapshot 快照（写派生库）、diff 快照对比。",
+    actions={
+        "query": ActionMeta(legacy="graph_query"),
+        "backlink": ActionMeta(legacy="graph_backlink"),
+        "rebuild": ActionMeta(legacy="graph_rebuild", side_effect=SIDE_DRAFT),
+        "snapshot": ActionMeta(legacy="graph_snapshot", side_effect=SIDE_DRAFT),
+        "diff": ActionMeta(legacy="graph_diff"),
+    },
+    decls=[t for t in _TOOL_DECLS if t.name.startswith("graph_")],
+    legacy_handle=_legacy_handle,
+    domain="graph",
+    rbac="staff",
+)
+_L_TOOLS, _L_HANDLE = consolidate(
+    "lineage",
+    "血缘链：trace 正向/反向溯源、check 血缘完整性校验。",
+    actions={
+        "trace": ActionMeta(legacy="lineage_trace"),
+        "check": ActionMeta(legacy="lineage_check"),
+    },
+    decls=[t for t in _TOOL_DECLS if t.name.startswith("lineage_")],
+    legacy_handle=_legacy_handle,
+    domain="graph",
+    rbac="staff",
+)
+TOOLS = _G_TOOLS + _L_TOOLS
+_LINEAGE_NAMES = {"lineage", "lineage_trace", "lineage_check"}
+
+
+async def handle(name: str, arguments: dict) -> list[TextContent]:
+    if name in _LINEAGE_NAMES:
+        return await _L_HANDLE(name, arguments)
+    return await _G_HANDLE(name, arguments)

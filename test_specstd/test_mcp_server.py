@@ -44,76 +44,66 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 92  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）+ gate_dock_status 1（T-901 GateDock 对话操作台，纯读）+ reset_draft_area 1（草稿区重置工具）+ read_material 1（T-934 材料解析产物三视图）
+        # T-982 工具收敛：stdio 92 → 39（对内 24 合并工具 + S8 open/ 15 契约面不变）
+        assert len(ALL_TOOLS) == 39
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
-        expected = {"read_spec", "list_spec_files", "list_scenarios",
-                     "read_scenario", "next_scenario_id",
-                     "query_registry", "write_draft", "undo_draft", "validate",
-                     "write_delta_doc",  # 方案 A：delta 文档写通道（changes/ 起草区限定）
-                     "commit_delta_changes",  # 方案 A：delta 受限提交（add+commit，不 push）
-                     "read_run_report", "db_evidence",
-                     "write_audit_report", "report_vulnerability",
-                     "todo_write",
-                     "promote_draft",  # H-3/H-4: meta 工具；K-015: promote_draft
-                     "check_dag", "run_scenario",  # K-021: DAG 预演 + 试执行
-                     "promote_drafts",  # K-021⑥: 批量入库
-                     "reset_draft_area",  # 草稿区重置
-                     "edit_dependency",  # K-027: DAG 依赖边编排
-                     "suggest_deps",  # K-046: 依赖建议（确定性引擎）
-                     "list_failures", "list_executions", "read_run_log",  # K-052: 失败索引 + 全量执行台账
-                     "scan_compliance",  # T-313: 全库格式合规缺口扫描
-                     "read_case_detail",  # 单场景完整 case 详情（trace_id/响应头体）
-                     "sync_workspace",  # 远端更新同步 + 会话级 dismiss
-                     # S2 specflow 面试工具（7）
-                     "iv_open_topic", "iv_read_baseline", "iv_ask_question",
-                     "iv_next_question",
-                     "iv_record_answer", "iv_p0_clear_check", "iv_append_transcript",
-                     # S2 specflow 决策台账工具（5）
-                     "sf_list_decisions", "sf_propose_decision", "sf_check_p0_gate",
-                     "sf_suggest_scores", "sf_read_score_gate",
-                     # S2.5 飞书日程/纪要工具（2）
-                     "feishu_calendar_agenda", "feishu_meeting_notes",
-                     # S3 材料包/信息包工具（5）+ T-934 read_material（1）
-                     "pack_assemble", "pack_read_section", "material_parse_status",
-                     "material_extract_topics", "pack_freshness_check",
-                     "read_material",
-                     # S5 外部锚点/禅道作业工具（3，M06 §5.3）
-                     "sf_list_external_refs", "sf_register_external_ref",
-                     "sf_get_zentao_job",
-                     # S5 增补：飞书文档/多维表格拉取 + 链接统一解析 + 故事草案建议（对话分析建故事链路）
-                     "feishu_doc_read", "feishu_base_query", "feishu_link_read", "sf_suggest_story_draft",
-                     # S6 覆盖缺口查询（1，M07 §5.2）
-                     "query_coverage_gaps",
-                     # P-A 图谱查询（8，M11 §5.2 + M10 §5.2，T-070/T-072/T-073/T-074）
-                     "graph_query", "graph_backlink", "graph_rebuild",
-                     "graph_snapshot", "graph_diff", "lineage_trace", "lineage_check",
-                     # S6 数据制造（1，M08 §5.2）+ 归因证据包（1，M09 §5.2）
-                     "fabricate_data", "assemble_evidence",
-                     # T-507 知识层：技能正文按需取 + 格式规范按章节取（2）
-                     "load_skill", "read_format_spec",
-                     # T-507 knowledge 知识触达（1）
-                     "read_knowledge",
-                     # 飞书 CLI 支线（4，T-701/T-702）
-                     "lark_auth_login", "lark_auth_logout", "lark_auth_status",
-                     "lark_execute",
-                     # S8 open/ 对外开放面（15 新名；read_run_report 复用内部同名，M13 §5.1）
-                     "get_frozen_spec", "get_proposal", "query_decisions",
-                     "get_interview_status", "get_delta_contract",
-                     "get_coverage_gaps", "get_test_debt", "get_plan_status",
-                     "trace_forward", "trace_backward", "query_graph",
-                     "lookup_external_ref",
-                     "dev_context_by_zt_ref", "dev_context_by_anchor",
-                     "dev_context_by_fr",
-                     # 编号重排能力（2：FR 引用搜索 + FR 编号双右锚解析校验）
-                     "search_spec_files", "parse_fr_id",
-                     # S0.6 git 推送（1：分支级推送远端）
-                     "push_delta",
-                     # T-901 GateDock 对话操作台状态查询（1，纯读）
-                     "gate_dock_status",
-                     }
+        expected = {
+            # T-982 合并工具面（对内 24，action 参数化；stdio 不含 info_pack）
+            "spec", "spec_search", "validate", "query_registry",
+            "scenario", "fabricate_data",
+            "attribution",
+            "draft", "delta",
+            "interview", "ledger", "pack", "refs",
+            "feishu_read", "lark_auth", "lark_execute",
+            "graph", "lineage",
+            "knowledge",
+            "audit", "scan_compliance", "query_coverage_gaps",
+            "todo_write", "gate_dock_status",
+            # S8 open/ 对外开放面（15 新名，对外契约不变；read_run_report 复用内部映射）
+            "get_frozen_spec", "get_proposal", "query_decisions",
+            "get_interview_status", "get_delta_contract",
+            "get_coverage_gaps", "get_test_debt", "get_plan_status",
+            "trace_forward", "trace_backward", "query_graph",
+            "lookup_external_ref",
+            "dev_context_by_zt_ref", "dev_context_by_anchor",
+            "dev_context_by_fr",
+        }
         assert names == expected
+
+    def test_legacy_names_all_mapped(self):
+        """T-982：收敛前 77 个内部工具名全部映射到合并工具 action（无孤儿）。"""
+        from mcp_server.tools.tool_meta import legacy_owner
+        legacy = [
+            "read_spec", "list_spec_files", "sync_workspace",
+            "search_spec_files", "parse_fr_id",
+            "list_scenarios", "read_scenario", "next_scenario_id", "check_dag",
+            "run_scenario", "edit_dependency", "suggest_deps",
+            "write_draft", "undo_draft", "promote_draft", "promote_drafts",
+            "reset_draft_area",
+            "write_delta_doc", "commit_delta_changes", "push_delta",
+            "read_run_report", "read_run_log", "read_case_detail",
+            "list_failures", "list_executions", "db_evidence", "assemble_evidence",
+            "iv_open_topic", "iv_read_baseline", "iv_ask_question",
+            "iv_next_question", "iv_record_answer", "iv_p0_clear_check",
+            "iv_append_transcript",
+            "sf_list_decisions", "sf_propose_decision", "sf_check_p0_gate",
+            "sf_suggest_scores", "sf_read_score_gate",
+            "pack_assemble", "pack_read_section", "material_parse_status",
+            "material_extract_topics", "read_material", "pack_freshness_check",
+            "sf_list_external_refs", "sf_register_external_ref",
+            "sf_get_zentao_job", "sf_suggest_story_draft",
+            "feishu_calendar_agenda", "feishu_meeting_notes", "feishu_doc_read",
+            "feishu_base_query", "feishu_link_read",
+            "lark_auth_status", "lark_auth_login", "lark_auth_logout",
+            "graph_query", "graph_backlink", "graph_rebuild", "graph_snapshot",
+            "graph_diff", "lineage_trace", "lineage_check",
+            "load_skill", "read_knowledge", "read_format_spec",
+            "write_audit_report", "report_vulnerability",
+        ]
+        unmapped = [n for n in legacy if legacy_owner(n) is None]
+        assert unmapped == [], f"legacy 名未映射: {unmapped}"
 
 
 # ══════════════════════════════════════════════════════════

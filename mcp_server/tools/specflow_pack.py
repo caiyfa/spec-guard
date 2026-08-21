@@ -1,4 +1,6 @@
 """specflow_pack.py — 材料包/信息包 MCP 工具（M03 §5.2，T-030/T-031/T-032）。
+>
+> T-982 收敛：6 工具合并为单 pack 工具（action=assemble/read_section/parse_status/extract_topics/read_material/freshness）。
 
 工具：
   pack_assemble            六分区装配 → info_pack.yaml（确定性，零 LLM）
@@ -14,6 +16,7 @@
 from __future__ import annotations
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 # ══════════════════════════════════════════════════════════
 # 工具定义
@@ -110,7 +113,7 @@ read_material_tool = Tool(
     },
 )
 
-TOOLS = [
+_TOOL_DECLS = [
     pack_assemble_tool,
     pack_read_section_tool,
     material_parse_status_tool,
@@ -124,7 +127,7 @@ TOOLS = [
 # 工具处理函数
 # ══════════════════════════════════════════════════════════
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     handlers = {
         "pack_assemble": _handle_pack_assemble,
         "pack_read_section": _handle_pack_read_section,
@@ -354,3 +357,26 @@ async def _handle_pack_freshness_check(args: dict) -> list[TextContent]:
         return [TextContent(type="text", text=str(result))]
     except Exception as e:
         return [TextContent(type="text", text=f"校验失败: {e}")]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：6 碎片合并为单 pack 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "pack",
+    "材料包与材料解析：assemble 组装材料包、read_section 读包章节、parse_status 材料解析状态、"
+    "extract_topics 提取话题、read_material 读材料解析产物（summary/topics/raw 三视图）、"
+    "freshness 新鲜度检查。",
+    actions={
+        "assemble": ActionMeta(legacy="pack_assemble", side_effect=SIDE_DRAFT),
+        "read_section": ActionMeta(legacy="pack_read_section"),
+        "parse_status": ActionMeta(legacy="material_parse_status"),
+        "extract_topics": ActionMeta(legacy="material_extract_topics"),
+        "read_material": ActionMeta(legacy="read_material"),
+        "freshness": ActionMeta(legacy="pack_freshness_check"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="specflow",
+    rbac="product",
+)

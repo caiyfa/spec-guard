@@ -47,3 +47,9 @@ def _handle_query_gaps(arguments: dict) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=json.dumps({
             "ok": False, "error": f"覆盖聚合失败: {e}"}, ensure_ascii=False, indent=2))]
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("query_coverage_gaps", domain="quality", rbac="staff")

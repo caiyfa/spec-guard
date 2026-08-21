@@ -1,119 +1,79 @@
-"""side_effect_registry — MCP 工具副作用注册表（T-081）。
+"""side_effect_registry — MCP 工具副作用注册表（T-081；T-982 起从 tool_meta 派生）。
 
 side_effect 枚举：
 - none: 纯读无副作用（默认）。运行时强制：执行前后仓库指纹比对，变化即报错。
 - draft: 产物一律草稿态。写 draft 目录、场景库、台账等内部存储。
-- external-write: 触外部系统的写。默认为空集（「外部写不进 MCP」通则的代码形态）。
+- external-write: 触外部系统的写。_EXTERNAL_WRITERS 为空集（「外部写不进 MCP」红线）。
 
-构建方式：全模块扫描，未显式声明的工具默认 none。
+T-982：_KNOWN_WRITERS 手工登记废除，分级改从 tool_meta 声明派生（合并工具按
+action 粒度判定）——新增写工具漏登记不再可能：未声明 side_effect 的工具默认
+none（纯读 + 指纹闸），写工具必须在声明处标 SIDE_DRAFT 否则会被指纹闸拦下。
+查询兼容 legacy 工具名（自动映射到所属 (tool, action)，测试/脚本零改动）。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from mcp_server import server
+from mcp_server.tools.tool_meta import (
+    SIDE_NONE, SIDE_DRAFT, SIDE_EXTERNAL_WRITE, VALID_SIDES,  # noqa: F401 再导出
+    legacy_owner, resolve_side_effect,
+)
 
 _log = logging.getLogger("side_effect_registry")
 
-# ── 级别枚举 ──
-SIDE_NONE = "none"
-SIDE_DRAFT = "draft"
-SIDE_EXTERNAL_WRITE = "external-write"
-
-VALID_LEVELS = frozenset({SIDE_NONE, SIDE_DRAFT, SIDE_EXTERNAL_WRITE})
-
-
-# ── 已知写工具的覆盖声明（未在此列的均默认 none）──
-_KNOWN_WRITERS: dict[str, str] = {
-    # draft_writer
-    "write_draft": SIDE_DRAFT,
-    # delta_doc_writer（方案 A：产品可写 changes/{delta}/ 起草区文档，不代提交 git）
-    "write_delta_doc": SIDE_DRAFT,
-    # delta_committer（受限提交：git add + commit，不 push，本地仓库写）
-    "commit_delta_changes": SIDE_DRAFT,
-    # fabrication
-    "fabricate_data": SIDE_DRAFT,
-    # scenario_tools
-    "promote_draft": SIDE_DRAFT,
-    "edit_dependency": SIDE_DRAFT,
-    # graph_index（写派生物索引库/快照）
-    "graph_rebuild": SIDE_DRAFT,
-    "graph_snapshot": SIDE_DRAFT,
-    # meta
-    "todo_write": SIDE_DRAFT,
-    # specflow_interview（写面试/问题/外部锚点表）
-    "iv_open_topic": SIDE_DRAFT,
-    "iv_record_answer": SIDE_DRAFT,
-    "iv_append_transcript": SIDE_DRAFT,
-    "iv_next_question": SIDE_DRAFT,
-    # specflow_ledger（写决策台账/评分）
-    "sf_propose_decision": SIDE_DRAFT,
-    "sf_suggest_scores": SIDE_DRAFT,
-    # specflow_refs（写外部锚点）
-    "sf_register_external_ref": SIDE_DRAFT,
-    # specflow_pack（写信息包）
-    "pack_assemble": SIDE_DRAFT,
-    "add_to_info_pack": SIDE_DRAFT,
-    # zentao 相关（写外部系统放行前暂标 draft，确认 external-write 安全后再升）
-    "sf_suggest_story_draft": SIDE_DRAFT,
-    # T-701/T-702 飞书 CLI：登录写本地凭据文件（~/.lark-cli/{emp}/）、
-    # lark_execute 执行命令（high-risk-write 在工具内部强制 --yes 确认）——
-    # 遵循 zentao 先例暂标 draft（写内部/受控），external-write 保持空集红线；
-    # 确认安全边界后再评估是否升级
-    "lark_auth_login": SIDE_DRAFT,
-    "lark_auth_logout": SIDE_DRAFT,
-    "lark_execute": SIDE_DRAFT,
-}
-
-# ── 外部写集（初始化为空——「外部写不进 MCP」通则）──
+# ── 外部写集（红线：初始化为空——「外部写不进 MCP」通则）──
 _EXTERNAL_WRITERS: set[str] = set()
 
 
-# ── 构建注册表 ──
+def get_side_effect(tool_name: str, action: str = "") -> str:
+    """查询工具（或 legacy 工具名）的副作用级别（默认 none）。
 
-def _build_registry() -> dict[str, str]:
-    """扫描全部已注册工具，构造 tool_name → side_effect 映射。"""
-    registry: dict[str, str] = {}
-    all_tools = server.ALL_TOOLS  # 从 server 读已注册的工具清单
-    for tool in all_tools:
-        name = tool.name
-        if name in _EXTERNAL_WRITERS:
-            registry[name] = SIDE_EXTERNAL_WRITE
-        elif name in _KNOWN_WRITERS:
-            registry[name] = _KNOWN_WRITERS[name]
-        else:
-            registry[name] = SIDE_NONE
-    return registry
+    合并工具按 action 粒度：get_side_effect("draft", "write") 或兼容形态
+    get_side_effect("write_draft") 均可。
+    """
+    if tool_name in _EXTERNAL_WRITERS:
+        return SIDE_EXTERNAL_WRITE
+    owner = legacy_owner(tool_name)
+    if owner is None:
+        return SIDE_NONE
+    name, owned_action = owner
+    return resolve_side_effect(name, action or owned_action)
 
 
-# 单例注册表（首次构建后缓存）
-_REGISTRY: Optional[dict[str, str]] = None
-
-
-def get_side_effect(tool_name: str) -> str:
-    """查询工具的副作用级别（默认 none）。"""
-    global _REGISTRY
-    if _REGISTRY is None:
-        _REGISTRY = _build_registry()
-    return _REGISTRY.get(tool_name, SIDE_NONE)
-
-
-def is_pure_read(tool_name: str) -> bool:
-    """是否为纯读工具（side_effect=none）。"""
-    return get_side_effect(tool_name) == SIDE_NONE
+def is_pure_read(tool_name: str, action: str = "") -> bool:
+    """是否为纯读工具/action（side_effect=none）。"""
+    return get_side_effect(tool_name, action) == SIDE_NONE
 
 
 def list_tools_by_side_effect(level: str) -> list[str]:
-    """按副作用级别列出工具名。"""
-    global _REGISTRY
-    if _REGISTRY is None:
-        _REGISTRY = _build_registry()
-    return sorted(name for name, se in _REGISTRY.items() if se == level)
+    """按副作用级别列出逻辑工具 id（合并工具展开为 legacy action 名）。
+
+    返回逻辑 id 而非合并工具名：消费方（测试/审计报表）以收敛前词汇读取，
+    收敛前后口径一致。
+    """
+    from mcp_server import server  # 延迟导入（避环：server 聚合工具模块）
+    out: list[str] = []
+    for tool in server.ALL_TOOLS:
+        if tool.name in _EXTERNAL_WRITERS:
+            if level == SIDE_EXTERNAL_WRITE:
+                out.append(tool.name)
+            continue
+        from mcp_server.tools.tool_meta import get_meta
+        meta = get_meta(tool.name)
+        if not meta.actions:
+            if resolve_side_effect(tool.name) == level:
+                out.append(tool.name)
+            continue
+        for a in meta.actions:
+            if resolve_side_effect(tool.name, a) == level:
+                from mcp_server.tools.tool_meta import logical_id
+                out.append(logical_id(tool.name, a))
+    return sorted(out)
 
 
 def invalidate_cache():
-    """清空注册表缓存（工具模块热加载后调用）。"""
-    global _REGISTRY
-    _REGISTRY = None
+    """兼容桩：派生自 tool_meta 声明（import 时登记），无缓存可清。
+
+    保留仅为旧调用点零改动（工具模块热加载场景已由 import 机制覆盖）。
+    """

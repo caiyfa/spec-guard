@@ -1,4 +1,6 @@
 """knowledge — 知识层工具（T-507 skills 目录化配套 + T-508 触景分发配套）。
+>
+> T-982 收敛：3 工具合并为单 knowledge 工具（action=skill/read/format_spec）。
 
 工具：
   load_skill: 按需取技能正文（T-507——skills 目录常驻 system prompt，
@@ -12,6 +14,7 @@
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -79,7 +82,7 @@ def _read_knowledge(ref: str) -> str:
     return f"未知知识层: {layer}"
 
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="load_skill",
         description="按需读取技能正文（技能目录已在 system prompt 常驻，正文需要时用本工具取）。"
@@ -121,7 +124,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "load_skill":
         skill_name = arguments.get("name", "")
         skill = _load_skill(skill_name)
@@ -186,3 +189,21 @@ def _extract_section(md: str, section: str) -> str:
             end_idx = j
             break
     return "\n".join(lines[start_idx:end_idx])
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：3 碎片合并为单 knowledge 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "knowledge",
+    "知识层按需取用（纯读）：skill 取技能正文、read 读知识条目、format_spec 读格式规范章节。",
+    actions={
+        "skill": ActionMeta(legacy="load_skill"),
+        "read": ActionMeta(legacy="read_knowledge"),
+        "format_spec": ActionMeta(legacy="read_format_spec"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="knowledge",
+    rbac="product",
+)

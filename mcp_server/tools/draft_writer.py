@@ -1,11 +1,12 @@
-"""draft_writer — 写入草稿到 .specguard/drafts/ 目录。
+"""draft_writer — 草稿生命周期工具（T-982 收敛：5 碎片合并为单 draft 工具）。
 
 工具：
-  write_draft: 写入草稿（drafts/ 限定 + 禁覆盖 + patch 模式）
-  undo_draft: 从 .bak 备份恢复草稿
-  promote_draft: 单份草稿入库
-  promote_drafts: 批量草稿入库
-  reset_draft_area: 重置草稿区状态（清空草稿/回收站/元数据/DB 记录）
+  draft（action 参数化）:
+    write         写入草稿（drafts/ 限定 + 禁覆盖 + patch 模式）［原 write_draft］
+    undo          从 .bak 备份恢复草稿［原 undo_draft］
+    promote       单份草稿入库［原 promote_draft］
+    promote_batch 批量草稿入库［原 promote_drafts］
+    reset         重置草稿区状态（清空草稿/回收站/元数据/DB 记录）［原 reset_draft_area］
 """
 
 import contextvars
@@ -14,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -100,7 +103,9 @@ def _record_author(filename: str):
     """记录草稿作者到 drafts/_meta.json（M7 多用户归属；无用户上下文时跳过）。"""
     _record_meta(filename)
 
-TOOLS = [
+# T-982：原 5 个碎片 Tool 声明逐字保留（schema/描述零漂移），模块末尾
+# consolidate 合并为单 draft 工具（action 参数化）。
+_TOOL_DECLS = [
     Tool(
         name="write_draft",
         description="写入草稿到 drafts/ 目录。路径限定（仅 drafts/ 可写），禁止覆盖已有文件"
@@ -184,7 +189,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "write_draft":
         return _handle_write_draft(arguments)
     elif name == "undo_draft":
@@ -437,3 +442,25 @@ def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps({
         "ok": True, "workspace": ws, **stats,
     }, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：5 碎片合并为单 draft 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "draft",
+    "草稿生命周期管理：写入/撤销/入库（单份/批量）/重置草稿区。"
+    "写草稿用 write；入库（移入场景库+发布门禁）用 promote/promote_batch"
+    "（仅用户明确确认后）；reset 不可逆，调用前请用户确认。",
+    actions={
+        "write": ActionMeta(legacy="write_draft", rbac="product", doc_track="write"),
+        "undo": ActionMeta(legacy="undo_draft", doc_track="write"),
+        "promote": ActionMeta(legacy="promote_draft", doc_track="write"),
+        "promote_batch": ActionMeta(legacy="promote_drafts", doc_track="write"),
+        "reset": ActionMeta(legacy="reset_draft_area"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="draft",
+    side_effect=SIDE_DRAFT,
+)

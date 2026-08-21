@@ -3,7 +3,8 @@
 启动方式（T-975 起须从仓库根启动，模块内不再做 sys.path 引导）：
     python -m mcp_server.server          # stdio 模式（Qoder 等宿主挂载）
 
-Qoder 挂载后 list_tools 可见全部 10 个工具。
+Qoder 挂载后 list_tools 可见 39 个工具（T-982 收敛：对内 24 个合并工具
+（action 参数化）+ S8 open/ 15 个对外开放面；收敛前 92 个碎片化工具）。
 """
 
 import asyncio

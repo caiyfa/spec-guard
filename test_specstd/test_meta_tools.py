@@ -252,9 +252,9 @@ class TestMetaToolsDeprecated:
         for mode_name in ("generate", "debug", "analyze", "chat", "audit", ""):
             runtime = AgentRuntime(MockLLM(), max_turns=1, mode_name=mode_name)
             tool_names = {t.name for t in runtime.tools}
-            for t in ("write_draft", "promote_drafts", "validate", "read_run_report",
-                      "run_scenario", "check_dag", "write_audit_report",
-                      "list_info_pack_artifacts"):
+            # T-982：合并工具面（draft/scenario/attribution/audit/info_pack 全 action 可见）
+            for t in ("draft", "validate", "attribution",
+                      "scenario", "audit", "info_pack"):
                 assert t in tool_names, f"mode={mode_name!r} 应有 {t}"
 
     def test_meta_tools_in_openai_format(self):

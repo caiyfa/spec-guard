@@ -1,4 +1,6 @@
 """audit — Spec 审计工具（H-1）。
+>
+> T-982 收敛：2 工具合并为单 audit 工具（action=write_report/report_vulnerability）；顺手补登记缺口：两写工具原未登记 _KNOWN_WRITERS（side 误为 none），元数据派生后归正 DRAFT。
 
 工具：
   write_audit_report: 写入 Spec 审计报告到 .specguard/audit/ 目录
@@ -11,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -32,7 +35,7 @@ def _sanitize_filename(text: str, max_len: int = 60) -> str:
     return safe[:max_len]
 
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="write_audit_report",
         description="写入 Spec 审计报告到工作区 .specguard/audit/ 目录。"
@@ -75,7 +78,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "write_audit_report":
         return _handle_write_audit_report(arguments)
     elif name == "report_vulnerability":
@@ -234,3 +237,21 @@ async def _handle_report_vulnerability(arguments: dict) -> list[TextContent]:
         result["notify_error"] = notify_error
 
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：2 碎片合并为单 audit 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "audit",
+    "安全审计产物：write_report 写审计报告、report_vulnerability 上报漏洞（均仅全量角色）。",
+    actions={
+        "write_report": ActionMeta(legacy="write_audit_report"),
+        "report_vulnerability": ActionMeta(legacy="report_vulnerability"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="quality",
+    side_effect=SIDE_DRAFT,
+    rbac="staff",
+)

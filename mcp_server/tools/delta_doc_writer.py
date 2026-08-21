@@ -1,4 +1,6 @@
 """delta_doc_writer — MCP 工具：写入/提交 delta 文档（changes/{delta}/ 限定）。
+>
+> T-982 收敛：3 工具合并为单 delta 工具（action=write/commit/push）。
 
 工具：
   write_delta_doc: 写入 changes/{delta}/ 下文件（proposal/delta-spec/manifest/
@@ -15,11 +17,12 @@ import json
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 
-TOOLS = [
+_TOOL_DECLS = [
     Tool(
         name="write_delta_doc",
         description="写入 delta 文档到工作区 changes/{delta_id}/ 目录（delta 起草区："
@@ -83,7 +86,7 @@ TOOLS = [
 ]
 
 
-async def handle(name: str, arguments: dict) -> list[TextContent]:
+async def _legacy_handle(name: str, arguments: dict) -> list[TextContent]:
     if name == "write_delta_doc":
         return _handle_write_delta_doc(arguments)
     elif name == "commit_delta_changes":
@@ -141,3 +144,22 @@ def _handle_push_delta(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps({
             "ok": False, "error": f"推送异常: {e}",
         }, ensure_ascii=False, indent=2))]
+
+
+# ══════════════════════════════════════════════════════════
+# T-982 工具收敛：3 碎片合并为单 delta 工具（action 参数化）
+# ══════════════════════════════════════════════════════════
+TOOLS, handle = consolidate(
+    "delta",
+    "delta 起草区文档：write 写 changes/{delta}/ 起草区文档（含 conformance 校验）、"
+    "commit 受限提交（git add+commit，不 push，前置门禁）、push 推送远端（仅全量角色）。",
+    actions={
+        "write": ActionMeta(legacy="write_delta_doc", rbac="product", doc_track="write"),
+        "commit": ActionMeta(legacy="commit_delta_changes", rbac="product", doc_track="write"),
+        "push": ActionMeta(legacy="push_delta"),
+    },
+    decls=_TOOL_DECLS,
+    legacy_handle=_legacy_handle,
+    domain="draft",
+    side_effect=SIDE_DRAFT,
+)

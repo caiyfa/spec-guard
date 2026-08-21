@@ -67,7 +67,9 @@ class SessionManager:
                 from agent.purpose_loader import load_purpose
                 pdef = load_purpose(purpose)
                 if pdef:
-                    meta["tool_whitelist"] = list(pdef.tools)
+                    # T-982：白名单快照 = 显式工具单元 + 领域子集（domain: 前缀标识）
+                    meta["tool_whitelist"] = (list(pdef.tools)
+                                              + [f"domain:{d}" for d in (pdef.domains or [])])
                     meta["panels"] = list(pdef.panels)
             except Exception:
                 pass

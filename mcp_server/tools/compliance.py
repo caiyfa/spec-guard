@@ -52,3 +52,9 @@ def _handle_scan_compliance(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps({
             "ok": False, "error": f"{type(e).__name__}: {e}",
         }, ensure_ascii=False, indent=2))]
+
+
+# T-982：工具元数据声明（side_effect/domain/rbac 派生源，见 tool_meta）
+from mcp_server.tools.tool_meta import declare, SIDE_DRAFT  # noqa: E402
+
+declare("scan_compliance", domain="quality")

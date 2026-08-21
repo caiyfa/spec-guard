@@ -287,6 +287,11 @@ def _generate_summary(to_compress: list[dict],
                 except json.JSONDecodeError:
                     args = {}
 
+                # T-982：合并工具按 action 归一为逻辑 id（收敛前词汇），
+                # 历史会话消息（legacy 名）经 logical_id 原样透传
+                from mcp_server.tools.tool_meta import logical_id as _lid
+                tool_name = _lid(tool_name, str(args.get("action", "") or ""))
+
                 if tool_name in FILE_READ_TOOLS:
                     path = args.get("path", args.get("scenario_id", ""))
                     if path and path not in files_read:
