@@ -176,11 +176,12 @@ def _merge_deps(scenario_raw, text):
 
 
 def _env_has_key(env_config, key):
-    """env 键比对——与引擎 env 命名空间语义一致（scenario_runner:98-101）：
-    {{env.resource_code}} ← env 配置 default_resource_code（有默认值回退，不缺失）；
+    """env 键比对——与引擎 env 命名空间语义一致（scenario_runner RunContext）：
+    {{env.resource_code}} ← env 配置 default_resource_code（T-972 起引擎不设
+    代码兜底，配置缺失即预警——不再恒判存在）；
     {{env.vars.*}} ← env 配置 vars 子段；其余为 env 配置顶层键。"""
     if key == "resource_code":
-        return True  # 引擎回退默认值 TDM_SNAPSHOT_ARCHIVE，运行期不会未定义
+        return bool(env_config.get("default_resource_code"))
     if key.startswith("vars."):
         return (env_config.get("vars") or {}).get(key[5:]) is not None
     return key in env_config

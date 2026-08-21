@@ -11,6 +11,9 @@ class Registry:
         self.step_handlers = {}
         self.oracles = {}
         self.data_providers = {}
+        # 随机文本池（T-972 引擎去领域化）：领域词库由系统适配包在 register()
+        # 时注入（如 systems/{system}/random_pools.py），引擎本体不携带任何领域词
+        self.pools = {}
 
     # ── 注册 ─────────────────────────────────────────────
     def step(self, name, handler):

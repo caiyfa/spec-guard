@@ -10,12 +10,11 @@ SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SG_ROOT not in sys.path:
     sys.path.insert(0, SG_ROOT)
 
-from engine.db_oracle import normalize_db_config, build_db_connections  # noqa: E402
-from engine.scenario_runner import RunContext, step_db_query, step_call, SkipScenario  # noqa: E402
+from engine.db_oracle import build_db_connections, normalize_db_config  # noqa: E402
+from engine.dependency_graph import DependencyGraph  # noqa: E402
 from engine.execution_record import ExecutionRecord  # noqa: E402
 from engine.registry import Registry  # noqa: E402
-from engine.dependency_graph import DependencyGraph  # noqa: E402
-
+from engine.scenario_runner import RunContext, SkipScenario, step_call, step_db_query  # noqa: E402
 
 # ══════════════════════════════════════════════════════════
 # R2：db 段双形态归一化
@@ -153,8 +152,9 @@ class TestDbQuerySchema:
 # ══════════════════════════════════════════════════════════
 
 class TestServiceRouting:
-    def _rctx(self):
-        env = {
+    def _rctx(self, env=None):
+        env = env if env is not None else {
+            "default_service": "tdm",
             "tdm_base": "http://gw/femsp/hr-tdm",
             "hr_center_base": "http://gw/femsp/hr-center",
             "accounts": {"default": {"ad": "a", "emp_no": "1"}},
@@ -162,10 +162,18 @@ class TestServiceRouting:
         return RunContext(registry=Registry(), env_config=env, token_provider=None,
                           graph=DependencyGraph([]), run_dir=".")
 
-    def test_default_service_tdm(self):
+    def test_default_service_from_env(self):
+        """T-972：service 缺省路由到 env 声明的 default_service（引擎不内置系统名）。"""
         rctx = self._rctx()
         c = rctx.http_client("default")
         assert c.base_url == "http://gw/femsp/hr-tdm"
+
+    def test_missing_default_service_skips(self):
+        """T-972：env 未声明 default_service 且 call 未声明 service → SkipScenario。"""
+        rctx = self._rctx(env={"tdm_base": "http://gw/femsp/hr-tdm",
+                               "accounts": {"default": {"ad": "a", "emp_no": "1"}}})
+        with pytest.raises(SkipScenario, match="缺少 default_service"):
+            rctx.http_client("default")
 
     def test_named_service(self):
         rctx = self._rctx()

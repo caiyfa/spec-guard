@@ -358,7 +358,7 @@ def _make_rctx_with_db(rows):
     reg.step("db_query", step_db_query)
     reg.step("call", step_call)
     graph = DependencyGraph([])
-    rctx = RunContext(registry=reg, env_config={"tdm_base": "http://stub"},
+    rctx = RunContext(registry=reg, env_config={"default_service": "tdm", "tdm_base": "http://stub"},
                       token_provider=None, graph=graph, run_dir=".")
     rctx.db = _StubDb(rows)
     return rctx
@@ -429,7 +429,7 @@ def _make_rctx_with_poll_client(client):
     reg = Registry()
     reg.step("poll", step_poll)
     graph = DependencyGraph([])
-    rctx = RunContext(registry=reg, env_config={"tdm_base": "http://stub"},
+    rctx = RunContext(registry=reg, env_config={"default_service": "tdm", "tdm_base": "http://stub"},
                       token_provider=None, graph=graph, run_dir=".")
     rctx._clients[("tdm", "default")] = client  # K-055：client 缓存键改 (service, account)
     # 预置账号配置
@@ -511,6 +511,11 @@ def _make_rctx_with_random():
     from engine.scenario_runner import step_random
     reg = Registry()
     reg.step("random", step_random)
+    # T-972：领域词库不再引擎内置——测试自注册所需池（生产由 systems/tdm 注入）
+    reg.pools.update({
+        "activity_name": ["年度干部盘点", "半年度人才盘点", "季度绩效盘点"],
+        "person_name": ["张超", "李明", "王芳"],
+    })
     graph = DependencyGraph([])
     return RunContext(registry=reg, env_config={}, token_provider=None,
                       graph=graph, run_dir=".")

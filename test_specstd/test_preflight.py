@@ -56,8 +56,9 @@ def _write(lib, sid, text):
 
 
 def _env_config(accounts=None, extra=None):
+    # T-972：resource_code 比对真实检查 default_resource_code（引擎已无代码兜底）
     cfg = {"accounts": accounts or {"default": {"ad": "u1", "emp_no": "1"}},
-           "resource_code": "TDM_X", "vars": {"inv_code": "INV"}}
+           "default_resource_code": "TDM_X", "vars": {"inv_code": "INV"}}
     if extra:
         cfg.update(extra)
     return cfg

@@ -5,9 +5,9 @@
 - 拒绝多语句（含分号），防止注入写操作
 
 K-055：多 schema 命名连接注册表——微服务系统一个环境常连多个 schema
-（hr_center / tdm / uac ...），env yaml 的 db 段支持两种形态：
+（hr_center / biz / uac ...），env yaml 的 db 段支持两种形态：
   旧：db: {host, user, password, name: hr_center}      → 自动视为 default
-  新：db: {default: {...hr_center}, tdm: {...}, uac: {...}}
+  新：db: {default: {...hr_center}, biz: {...}, uac: {...}}
 """
 
 import re
@@ -93,7 +93,7 @@ def normalize_db_config(db_cfg):
     """db 段归一化为 {名称: 连接配置}（K-055 双形态兼容）。
 
     旧形态 {host, user, ...} → {"default": 原样}；
-    新形态 {default: {...}, tdm: {...}} → 原样（缺 default 时取第一个为 default）。
+    新形态 {default: {...}, biz: {...}} → 原样（缺 default 时取第一个为 default）。
     返回 (connections_cfg: dict, default_name: str)。
     """
     if not db_cfg:

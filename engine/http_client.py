@@ -19,7 +19,7 @@ import requests
 from engine.execution_record import truncate  # T-314：响应摘要与报告 body_excerpt 同源
 
 VERSION_PATTERN = re.compile(r'^\d+\.\d+\.\d+(?:-SNAPSHOT)?\([0-9a-f]{7,8}\)$')
-# TDM 网关统一响应包装里的请求跟踪 ID（ifelc-trace_id / ifelc_trace_id 兼容）
+# 网关统一响应包装里的请求跟踪 ID（ifelc-trace_id / ifelc_trace_id 兼容）
 _TRACE_ID_PATTERN = re.compile(r'ifelc[-_]trace[-_]id"\s*:\s*"([^"]+)"')
 
 

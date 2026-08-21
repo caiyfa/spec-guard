@@ -160,7 +160,7 @@ class RunContext:
         self.skip_upstream_verify = skip_upstream_verify
         self.prep_only = prep_only
         self.db = db                     # 默认连接 engine.db_oracle.ReadOnlyDb（可为 None）
-        # K-055：多 schema 命名连接注册表（{"default": ReadOnlyDb, "tdm": ...}）；未传时由 db 合成
+        # K-055：多 schema 命名连接注册表（{"default": ReadOnlyDb, "biz": ...}）；未传时由 db 合成
         self.dbs = dbs if dbs is not None else ({"default": db} if db else {})
         self.strict_deps = strict_deps   # 严格依赖模式：DRIFT/ORPHANED 升格为 FAIL（发版门禁用）
         self.leases = LeaseRegistry()    # session 级资源租约注册表（工号池/账号/配置层共用）
@@ -168,23 +168,35 @@ class RunContext:
         self.instances = {}            # scenario_id -> list[_Instance]（实例池：shared 复用 / exclusive 新建）
         self.teardown_stack = []       # [(scenario, _Instance)] 已执行且声明 teardown 的实例，session 末 LIFO 清理
         self.shared_ns = {}            # 跨场景变量命名空间 {scenario_id: saved_vars}（仅共享实例发布）
+        # T-972 引擎去领域化：默认资源码/默认服务名不再内置任何系统字面量——
+        # 由 systems/{system}/config/env.*.yaml 声明（default_service/default_resource_code）
+        self.default_service = env_config.get("default_service", "")
         # env 命名空间：场景可用 {{env.resource_code}} / {{env.vars.*}} 引用环境级配置
         self.shared_ns["env"] = {
-            "resource_code": env_config.get("default_resource_code", "TDM_SNAPSHOT_ARCHIVE"),
+            "resource_code": env_config.get("default_resource_code", ""),
             "vars": env_config.get("vars", {}),   # REQ-3：自定义变量段全量暴露
         }
         self._clients = {}             # (service, account) -> HttpClient（K-055 服务路由）
 
-    def http_client(self, account, service="tdm"):
+    def http_client(self, account, service=None):
         """按账号别名 + 服务获取客户端（account=None 表示不带 token 的匿名调用）。
 
         K-055 服务前缀路由：service → env 配置的 `{service}_base`（如 hr_center_base/
         oss_base/uac_base），解决「接口全路径的服务段（hr-center 等）丢失」——
         场景只写服务内相对路径，服务由 service 字段声明。
+        T-972：service 缺省（None）用 env 配置 default_service（系统主网关）；
+        未声明时 SkipScenario（环境配置缺口，不误报 FAIL）。
         别名（default/restricted 等）必须在 env 配置 accounts 中映射为真实 AD 账号；
         未配置时抛 SkipScenario（支持"受限账号后补，缺账号时 SKIP"的场景约定）。
         服务 base 未配置同样 SkipScenario（环境配置缺口，不误报 FAIL）。
         """
+        if service is None:
+            service = self.default_service
+            if not service:
+                raise SkipScenario(
+                    "环境配置缺少 default_service（call/poll 未声明 service 时的默认"
+                    "服务名，请在 systems/{system}/config/env.*.yaml 声明——"
+                    "default_service: <名> 对应 <名>_base）")
         key = (service, account or "__anonymous__")
         if key not in self._clients:
             base = self.env.get(f"{service}_base")
@@ -366,8 +378,11 @@ def step_call(body, rctx, ns, record):
     account = body.get("as", "default")
     if account in ("none", "anonymous"):
         account = None
-    # K-055：服务前缀路由——service 字段（默认 tdm，支持 {{}} 插值）
-    service = str(render(body.get("service", "tdm"), ns) or "tdm")
+    # K-055：服务前缀路由——service 字段（支持 {{}} 插值；缺省用 env 的
+    # default_service，T-972 起引擎不内置系统名）
+    raw_service = body.get("service")
+    service = (str(render(raw_service, ns)) if raw_service is not None
+               else (getattr(rctx, "default_service", "") or None))
     client = rctx.http_client(account, service)
     method = body.get("method", "GET").upper()
     path = render(body["path"], ns)
@@ -540,8 +555,11 @@ def step_poll(body, rctx, ns, record):
     if account in ("none", "anonymous"):
         account = None
     # ENG-T05（ENG-BUG-014）：poll 的 call 段补 service 路由与 headers/cookies 透传
-    # （与 step_call 同款参数语义；urlencoded 等复杂 body_type 仍属 call 步骤能力）
-    service = str(render(call_body.get("service", "tdm"), ns) or "tdm")
+    # （与 step_call 同款参数语义；urlencoded 等复杂 body_type 仍属 call 步骤能力；
+    #   service 缺省用 env 的 default_service，T-972 起引擎不内置系统名）
+    raw_service = call_body.get("service")
+    service = (str(render(raw_service, ns)) if raw_service is not None
+               else (getattr(rctx, "default_service", "") or None))
     client = rctx.http_client(account, service)
     method = call_body.get("method", "GET").upper()
     path = render(call_body["path"], ns)
@@ -648,38 +666,10 @@ def _eval_json_condition(body, actual):
 
 
 # ══════════════════════════════════════════════════════════
-# 随机文本池（HR 领域自然语言词库）
+# 随机文本池（T-972 引擎去领域化）
 # ══════════════════════════════════════════════════════════
-
-RANDOM_POOLS = {
-    "activity_name": [
-        "年度干部盘点", "半年度人才盘点", "季度绩效盘点", "专项能力盘点",
-        "中层干部盘点", "高潜人才盘点", "新员工盘点", "管理层盘点",
-        "技术人才盘点", "销售团队盘点",
-    ],
-    "department": [
-        "研发部", "产品部", "市场部", "人事部", "财务部",
-        "运营部", "技术部", "设计部", "客服部", "法务部",
-    ],
-    "person_name": [
-        "张超", "李明", "王芳", "赵强", "陈静",
-        "刘伟", "杨柳", "周涛", "吴雪", "郑浩",
-    ],
-    "eval_text": [
-        "表现优秀，能力突出", "工作认真负责，团队协作好", "技术能力强，学习速度快",
-        "沟通能力出色，执行力强", "具有创新思维，解决问题能力强",
-        "工作态度积极，责任心强", "业务理解深入，产出稳定",
-        "具有领导潜力，能独立负责项目",
-    ],
-    "session_desc": [
-        "常规盘点流程", "年度例行盘点", "重点关注高潜人员",
-        "全面能力评估", "绩效与潜力双维度盘点",
-    ],
-    "tag": [
-        "核心骨干", "高潜人才", "技术专家", "管理后备",
-        "业务标兵", "创新先锋", "团队标杆",
-    ],
-}
+# 领域词库不在引擎内置——系统适配包在 register() 时注入 registry.pools
+# （如 systems/{system}/random_pools.py），引擎 grep 零领域词命中。
 
 
 def step_random(body, rctx, ns, record):
@@ -709,9 +699,11 @@ def step_random(body, rctx, ns, record):
     elif rtype == "text":
         pool_name = body.get("pool", "")
         if pool_name:
-            pool = RANDOM_POOLS.get(pool_name)
+            pools = getattr(rctx.registry, "pools", None) or {}
+            pool = pools.get(pool_name)
             if not pool:
-                raise ValueError(f"随机文本池不存在: {pool_name}（可用: {sorted(RANDOM_POOLS)}）")
+                raise ValueError(f"随机文本池不存在: {pool_name}（可用: {sorted(pools)}"
+                                 f"；领域词库由系统适配包 register() 注入 registry.pools）")
             value = random.choice(pool)
         else:
             length = int(body.get("length", 8))

@@ -50,6 +50,14 @@ def test_build_registry_system_package_registered():
     assert "fetch_permission" in reg.step_handlers
 
 
+def test_build_registry_system_pools_injected():
+    # T-972：领域词库由适配包注入 registry.pools（引擎本体零领域词）
+    reg = build_registry("tdm", {})
+    assert "activity_name" in reg.pools
+    assert "person_name" in reg.pools
+    assert any("盘点" in w for w in reg.pools["activity_name"])
+
+
 def test_build_token_provider_from_env_config():
     tp = build_token_provider({
         "sso": {"domain": "https://sso.example", "app_id": "app", "password": "pw"},

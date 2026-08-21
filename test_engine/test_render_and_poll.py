@@ -26,7 +26,9 @@ from engine.scenario_runner import (  # noqa: E402
 def _rctx(client=None, client_getter=None):
     reg = Registry()
     register_builtin_steps(reg)
-    rc = RunContext(registry=reg, env_config={}, token_provider=None, graph=None, run_dir=".")
+    # T-972：default_service 由 env 声明（引擎不内置系统名）
+    rc = RunContext(registry=reg, env_config={"default_service": "tdm"},
+                    token_provider=None, graph=None, run_dir=".")
     if client_getter is not None:
         rc.http_client = client_getter
     elif client is not None:
