@@ -179,3 +179,18 @@
 | test_specstd/test_feishu_sync.py | sess-feishu-graph | 2026-08-14 | — | 233703329b5c | 已完成 | T-916：e2e 贯通（收口笔） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-feishu-graph | 2026-08-14 | 918a20f96c61 | 4e09855feb68 | 已完成 | v1.25：§4.9 任务块+§5 会话+§6 登记+收口状态 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-feishu-graph | 2026-08-14 | 58b09aab4c31 | 4130088d3b1e | 已完成 | v1.26：二期任务登记 |
+
+### 6.1 陈年「登记中」未回填行（2026-08-21 清理）
+
+> sess-lark-dev（T-701~T-703，2026-08-11）登记后未回填修改后hash、未改状态。2026-08-21 核实：登记文件已全部落地入库（lark_auth/lark_run/lark_binding/LarkBinding.tsx/两份设计计划文档均存在，.gitignore 已含 .lark-cli/；「绑定飞书」入口后续经 T-942 演进为同步设置弹层内嵌授权块，App.tsx 独立路由未保留）。此行是 T-701~T-703 状态对账（T-998）的佐证：任务实已交付、总控状态滞后。
+
+| 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
+|---|---|---|---|---|---|---|
+| mcp_server/tools/lark_auth.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701：MCP 3 工具（lark_auth_status/login/logout）+ RPEST 共用底层函数 |
+| mcp_server/tools/lark_run.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-702：lark_execute 通用执行器（白名单/写保护/审计） |
+| .gitignore | sess-lark-dev | 2026-08-11 | a9c6c2c5be38 | | 登记中 | T-701：补充 .lark-cli/ |
+| workbench/backend/routers/lark_binding.py | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-703：REST 端点 4 个（status/login/logout/scopes） |
+| workbench/frontend/src/App.tsx | sess-lark-dev | 2026-08-11 | b43a13ab3d15 | | 登记中 | T-703：菜单「绑定飞书」+ 路由 /lark-binding |
+| workbench/frontend/src/pages/LarkBinding.tsx | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-703：绑定页 UI（状态卡片/scope 清单/绑定引导） |
+| docs/远期设计/SpecGuard-飞书CLI集成设计-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 设计文档 |
+| docs/远期设计/SpecGuard-飞书CLI集成计划-T701-T703.md | sess-lark-dev | 2026-08-11 | NEW | | 登记中 | T-701~T-703 实施计划 |
