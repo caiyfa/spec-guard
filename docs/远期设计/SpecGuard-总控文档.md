@@ -244,7 +244,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-962 | P0 | /quality 死菜单清理 | 主库小刀 | — | 未认领 | | 0.5 小时 |
 | T-963 | P0 | P0/P1 mark 断链修复（priority→mark 映射） | 主库小刀 | — | 未认领 | | 0.5 天 |
 | T-964 | P0 | clarity 假分数清理（specflow_ledger.py:179 占位 62.0） | 主库小刀 | — | 未认领 | | 0.5 天；08-21 知识库翻案新增 |
-| T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | 未认领 | | 1 天 |
+| T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | 进行中 | sess-multi-system | 1 天 |
 | T-971 | M-A | system 一等公民化（9 调用点归一+runner 断链+分键缓存） | wt/multi-system | T-970 | 未认领 | | 2-3 天；多用户多系统切换硬前置 |
 | T-972 | M-A | 引擎 TDM 泄漏清理 | wt/multi-system | — | 未认领 | | 1 天 |
 | T-973 | M-A | 系统包动态注册（分级：配置型 UI 即时生效/代码型评审后热加载） | wt/multi-system | T-970/T-971 | 未认领 | | 2-3 天；08-21 用户拍板分级方案 |
@@ -270,6 +270,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 > 表行格式：`| 会话ID | 角色/方向 | 认领任务ID | 开工时间 | 备注 |`
 | 会话ID | 角色/方向 | 认领任务ID | 开工时间 | 备注 |
 |---|---|---|---|---|
+| sess-multi-system | M-A 多系统贯通施工 | T-970 → T-971 →（T-972 穿插）→ T-973 → T-974 | 2026-08-21 | 树 wt/multi-system（feature/multi-system）；T-973 按用户拍板分级方案（配置型 UI 即时生效/代码型 extensions.py=admin 评审闸后热加载，闸不可绕）；只跑离线测试，提交即推 |
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937~T-942（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验（b002749）；T-938 群聊后台预热（cdf8d6e）；T-939 材料原文+图片直出（f66330b+1c90b83）；T-940 监听用户视图+按人切换+飞书直链（4a7f656）；T-941 同步设置去重+错误人话化+搜索解耦（871d64c）；T-942 授权闭环入弹层（006c5c2）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
 | | | | | |
