@@ -4,14 +4,11 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from test_specstd.helpers import create_valid_workspace  # noqa: E402
 
@@ -78,16 +75,12 @@ class TestV1WorkspaceNameTraversal:
 class TestV2V10GateNotBypassable:
     def test_register_models_have_no_conformance_flag(self):
         backend = SG_ROOT / "workbench" / "backend"
-        if str(backend) not in sys.path:
-            sys.path.insert(0, str(backend))
         from routers.workspace import RegisterLocalBody, RegisterGitBody
         assert "run_conformance" not in RegisterLocalBody.model_fields
         assert "run_conformance" not in RegisterGitBody.model_fields
 
     def test_trigger_model_has_no_skip_flag(self):
         backend = SG_ROOT / "workbench" / "backend"
-        if str(backend) not in sys.path:
-            sys.path.insert(0, str(backend))
         from routers.runs import TriggerBody
         assert "skip_covers_check" not in TriggerBody.model_fields
 
@@ -587,8 +580,6 @@ class TestV16V17:
 class TestD1DraftsGate:
     def _import_drafts_router(self):
         backend = SG_ROOT / "workbench" / "backend"
-        if str(backend) not in sys.path:
-            sys.path.insert(0, str(backend))
         from routers import drafts as drafts_router
         return drafts_router
 

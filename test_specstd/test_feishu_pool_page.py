@@ -4,20 +4,15 @@
 """
 
 import json
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-for p in (str(SG_ROOT), str(BACKEND_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from services.specflow import feishu_sync_service as svc  # noqa: E402
 
 from specflow.feishu_pool import pool_store  # noqa: E402
-
 
 def test_list_pool_materials(tmp_path):
     emp = tmp_path / ".specflow" / "u1"
@@ -36,7 +31,6 @@ def test_list_pool_materials(tmp_path):
     assert fm["feishu_doc"]["file"] == "docs/fd-tokA.md"
     assert fm["feishu_minutes"]["file"] == "minutes/fm-obcn1.json"
     assert fm["chat"]["file"].startswith("chats/")
-
 
 def test_list_pool_materials_title_summary(tmp_path):
     """材料清单可读性：title/summary 提取（minutes JSON / docs 首行标题 / chats 群名+首行）。"""
@@ -60,7 +54,6 @@ def test_list_pool_materials_title_summary(tmp_path):
     chat = items["chat"]
     assert chat["title"] == "需求讨论群" and "级联删除" in chat["summary"]
 
-
 def test_list_pool_topics(tmp_path):
     emp = tmp_path / ".specflow" / "u1"
     cand_dir = emp / "feishu_pool"
@@ -82,7 +75,6 @@ def test_list_pool_topics(tmp_path):
     assert [t["id"] for t in out["candidates"]] == ["tp:aaa-0814-01"]
     assert [t["id"] for t in out["confirmed"]] == ["tp:aaa-0813-01"]
 
-
 def test_update_caption_endpoint_semantics(tmp_path):
     """caption 人工补写服务函数（路由层薄包装，核心在 captions.update_caption）。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -96,7 +88,6 @@ def test_update_caption_endpoint_semantics(tmp_path):
                      .read_text(encoding="utf-8"))
     assert img["图片#1"]["caption"] == "人工描述"
     assert img["图片#1"]["caption_by"] == "manual"
-
 
 # ══════════════════════════════════════════════════════════
 # 选择器数据源（同步设置弹层；mock _run_lark）
@@ -120,7 +111,6 @@ def test_list_my_chats(tmp_path):
                                "chat_mode": "group", "peer_open_id": ""}
     svc._chats_cache.clear()
 
-
 def test_search_users_empty_query_shortcircuit():
     """query 为空 → 空列表且不调 CLI（不扫全量）。"""
     calls = []
@@ -128,7 +118,6 @@ def test_search_users_empty_query_shortcircuit():
                       side_effect=lambda a, timeout=90: calls.append(a)):
         out = svc.search_users("  ")
     assert out == {"items": [], "errors": []} and calls == []
-
 
 def test_search_users_parse(tmp_path):
     def fake(args, timeout=90):
@@ -140,7 +129,6 @@ def test_search_users_parse(tmp_path):
         out = svc.search_users("张三")
     assert out["items"][0]["open_id"] == "ou_a"
     assert out["items"][0]["email"] == "zs@x.com"
-
 
 def test_search_user_docs_owner_filter_and_error(tmp_path):
     """应用侧 owner 过滤 + CLI 失败 errors 通道。"""
@@ -162,7 +150,6 @@ def test_search_user_docs_owner_filter_and_error(tmp_path):
         out2 = svc.search_user_docs("ou_a", "")
     assert out2["items"] == [] and out2["errors"]
 
-
 # ══════════════════════════════════════════════════════════
 # T-937：resolve_doc_link（链接/token → 文档标识）
 # 实测定案：wiki +node-get 仅适用于 wiki 节点（普通云文档 404），
@@ -170,7 +157,6 @@ def test_search_user_docs_owner_filter_and_error(tmp_path):
 # ══════════════════════════════════════════════════════════
 
 _WIKI_URL = "https://fehorizon.feishu.cn/wiki/DLmdwrGg7i2caHkX9PtcFPa2nKh"
-
 
 def test_resolve_doc_link_wiki_url():
     """wiki URL → wiki +node-get 解析 obj_token/title/owner（存 obj_token 非 node_token）。"""
@@ -192,7 +178,6 @@ def test_resolve_doc_link_wiki_url():
     assert item["owner_open_id"] == "ou_owner1"
     assert item["url"] == _WIKI_URL
 
-
 def test_resolve_doc_link_docx_url_local():
     """docx URL → 本地解析（零 CLI；?query 剥离）。"""
     calls: list = []
@@ -205,14 +190,12 @@ def test_resolve_doc_link_docx_url_local():
     assert item["token"] == "NNSVdZKrBo3i09xG0BWcqSZNnzd"
     assert item["url"].startswith("https://fehorizon.feishu.cn/docx/NNSV")
 
-
 def test_resolve_doc_link_bare_token():
     """裸 token → 本地透传（兼容旧手填习惯；零 CLI）。"""
     with patch.object(svc, "_run_lark", side_effect=AssertionError("不应调 CLI")):
         out = svc.resolve_doc_link("FBxodQkaJoUicrxdk67cUkbhnwc")
     assert out["ok"] is True
     assert out["items"][0]["token"] == "FBxodQkaJoUicrxdk67cUkbhnwc"
-
 
 def test_resolve_doc_link_rejects_non_doc():
     """minutes/base/非飞书域链接 → 明确错误（仅支持云文档 docx/wiki）。"""
@@ -226,11 +209,9 @@ def test_resolve_doc_link_rejects_non_doc():
             assert out["ok"] is False, bad
             assert "云文档" in out["error"], bad
 
-
 def test_resolve_doc_link_empty_input():
     out = svc.resolve_doc_link("  ")
     assert out["ok"] is False
-
 
 def test_resolve_doc_link_cli_error():
     """node-get 失败（无权限/不存在）→ 错误诚实呈现。"""
@@ -240,11 +221,9 @@ def test_resolve_doc_link_cli_error():
     assert out["ok"] is False
     assert "not found" in out["error"]
 
-
 # ══════════════════════════════════════════════════════════
 # T-937：list_my_chats TTL 缓存（弹层秒开配套；同工号 60s 内不重复调 CLI）
 # ══════════════════════════════════════════════════════════
-
 
 def test_list_my_chats_cache_hit():
     """同工号 TTL 内两次调用只打一次 CLI，结果一致。"""
@@ -263,7 +242,6 @@ def test_list_my_chats_cache_hit():
         assert out1 == out2 and out1["items"][0]["chat_id"] == "oc_a"
     finally:
         svc._chats_cache.clear()
-
 
 def test_list_my_chats_cache_no_cache_errors():
     """失败结果不缓存——重试即时生效。"""
@@ -285,7 +263,6 @@ def test_list_my_chats_cache_no_cache_errors():
     finally:
         svc._chats_cache.clear()
 
-
 def test_list_my_chats_cache_ttl_expiry(monkeypatch):
     """TTL 过期后重新调 CLI；不同工号不共享缓存。"""
     calls: list = []
@@ -305,11 +282,9 @@ def test_list_my_chats_cache_ttl_expiry(monkeypatch):
     finally:
         svc._chats_cache.clear()
 
-
 # ══════════════════════════════════════════════════════════
 # T-938：stale-while-revalidate + emp 身份隔离（后台预热配套）
 # ══════════════════════════════════════════════════════════
-
 
 def test_list_my_chats_stale_returns_old_and_triggers_refresh(monkeypatch):
     """缓存过期：立即返回旧值（stale=True）+ 触发后台刷新，不等 CLI。"""
@@ -335,7 +310,6 @@ def test_list_my_chats_stale_returns_old_and_triggers_refresh(monkeypatch):
     finally:
         svc._chats_cache.clear()
 
-
 def test_list_my_chats_explicit_emp_separate_keys():
     """显式 emp 参数：独立缓存 key，各自调 CLI（后台预热 job 传入）。"""
     calls: list = []
@@ -354,7 +328,6 @@ def test_list_my_chats_explicit_emp_separate_keys():
         assert svc._chats_cache["uA"][1]["items"][0]["chat_id"].startswith("oc_uA_")
     finally:
         svc._chats_cache.clear()
-
 
 def test_list_my_chats_quick_limit():
     """T-944：limit 快速预览——单次 --page-size N（group only，无 page-all），
@@ -377,11 +350,9 @@ def test_list_my_chats_quick_limit():
     finally:
         svc._chats_cache.clear()
 
-
 # ══════════════════════════════════════════════════════════
 # T-945：同步后自动聚类生成候选话题（链路闭环：落池→聚类→复核→图谱）
 # ══════════════════════════════════════════════════════════
-
 
 def test_cluster_once_no_text_model(monkeypatch):
     """未配置 text 模型 → 诚实跳过（不抛、不调聚类），与 vision 转述同模式。"""
@@ -391,7 +362,6 @@ def test_cluster_once_no_text_model(monkeypatch):
                         lambda *a, **k: called.append(a) or [])
     svc._cluster_once(Path("x"))
     assert called == []
-
 
 def test_cluster_once_with_text_model(monkeypatch):
     """已配置 text 模型 → cluster_chat_snapshots 被调（T-946：带按群窗口+默认7天）。"""
@@ -419,7 +389,6 @@ def test_cluster_once_with_text_model(monkeypatch):
     assert called["default"] == 7
     assert called["windows"] == {chat_sha8("oc_a"): 30, chat_sha8("oc_b"): 7}
 
-
 def test_cluster_once_error_swallowed(monkeypatch):
     """聚类抛异常不外溢（异步线程内失败仅记日志，不阻断后续）。"""
     monkeypatch.setattr("services.model_config.get_model", lambda mid: {"model_id": "text"})
@@ -428,7 +397,6 @@ def test_cluster_once_error_swallowed(monkeypatch):
         "specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("LLM 超时")))
     svc._cluster_once(Path("x"))    # 不应抛
-
 
 def test_sync_all_triggers_cluster(monkeypatch, tmp_path):
     """sync_all 完成后触发异步聚类（链路闭环的接线点；T-949 无共享区时
@@ -443,7 +411,6 @@ def test_sync_all_triggers_cluster(monkeypatch, tmp_path):
     svc.sync_all(emp)
     assert triggered == [emp]
 
-
 def test_lark_env_emp_injection():
     """_run_lark emp 身份隔离：USERPROFILE → SG_ROOT/.lark-cli/{emp}
     （watcher _spawn/_token_valid 同一约定）；空 emp → 不注入（现状兼容）。"""
@@ -452,11 +419,9 @@ def test_lark_env_emp_injection():
     assert env["USERPROFILE"].replace("\\", "/").endswith(".lark-cli/90000001")
     assert lark_cli._lark_env("") == {}
 
-
 # ══════════════════════════════════════════════════════════
 # T-939：材料原文读取（详情弹层）+ 图片字节代理（内嵌展示）
 # ══════════════════════════════════════════════════════════
-
 
 def test_read_material_content_doc_with_imgmap(tmp_path):
     """doc：原文 + imgmap 条目列表（前端 [图片#N] 内嵌与描述编辑共用）。"""
@@ -473,7 +438,6 @@ def test_read_material_content_doc_with_imgmap(tmp_path):
                               "caption": "架构图", "caption_by": "vision_llm",
                               "status": "done"}]
 
-
 def test_read_material_content_minutes_readable(tmp_path):
     """minutes：可读化文本（title/summary）+ raw JSON 附带（折叠展示）。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -485,7 +449,6 @@ def test_read_material_content_minutes_readable(tmp_path):
     assert "评审会" in out["content"] and "讨论导出" in out["content"]
     assert "minutes" in out["raw"]
 
-
 def test_read_material_content_chat(tmp_path):
     emp = tmp_path / ".specflow" / "u1"
     saved = pool_store.save_chat_snapshot(
@@ -495,7 +458,6 @@ def test_read_material_content_chat(tmp_path):
     assert "张三: hi" in out["content"]
     assert out["images"] == []
 
-
 def test_read_material_content_rejects_traversal(tmp_path):
     """路径白名单 + 防穿越（私有区文件不外泄）。"""
     for bad in ["../evil.md", "other/x.md", "docs/../../evil.md",
@@ -503,15 +465,12 @@ def test_read_material_content_rejects_traversal(tmp_path):
         out = svc.read_material_content(tmp_path, bad)
         assert out["ok"] is False, bad
 
-
 def test_read_material_content_not_found(tmp_path):
     out = svc.read_material_content(tmp_path / ".specflow" / "u1",
                                     "docs/fd-none.md")
     assert out["ok"] is False
 
-
 _PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16     # PNG 魔数
-
 
 def test_fetch_material_image_with_cache(tmp_path, monkeypatch):
     """图片代理：下载 → 磁盘缓存 → 二次命中零下载。"""
@@ -536,7 +495,6 @@ def test_fetch_material_image_with_cache(tmp_path, monkeypatch):
     assert calls == ["mk1"]                  # 二次走缓存
     assert r2["data"] == _PNG
 
-
 def test_fetch_material_image_rejects(tmp_path):
     """无 media_key（占位符扫描产物）/未知占位符 → 明确错误。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -553,11 +511,9 @@ def test_fetch_material_image_rejects(tmp_path):
     out3 = svc.fetch_material_image(emp, "../evil", "图片#1")
     assert out3["ok"] is False
 
-
 # ══════════════════════════════════════════════════════════
 # T-940：owner/meta 落盘（材料按监听用户切换）+ 飞书原文直链
 # ══════════════════════════════════════════════════════════
-
 
 def test_sync_minutes_single_owner_meta(tmp_path):
     """单 owner 检索：meta 落 owner_open_id；source_url 取 meta_data.app_link（实测结构）。
@@ -580,7 +536,6 @@ def test_sync_minutes_single_owner_meta(tmp_path):
     assert meta["owner_open_id"] == "ou_zhang"
     assert meta["source_url"] == "https://x.feishu.cn/minutes/obcnX"
     assert meta["perm"]["pulled_at"] is not None       # T-949 perm 落盘
-
 
 def test_sync_user_docs_owner_meta(tmp_path):
     """按用户搜文档：落盘 meta 带 owner（材料归属 + 列表直链）。
@@ -617,7 +572,6 @@ def test_sync_user_docs_owner_meta(tmp_path):
     assert meta["source_url"] == "https://x.feishu.cn/docx/tokD"
     assert meta["perm"]["pulled_at"] is not None       # T-949 perm 落盘
 
-
 def test_list_pool_materials_meta_fields(tmp_path):
     """list 返 source_url/owner_*（meta sidecar）；无 meta 存量诚实降级空串；
     minutes glob 不得把 fm-*.meta.json 当材料。"""
@@ -643,11 +597,9 @@ def test_list_pool_materials_meta_fields(tmp_path):
     fm_old = next(i for i in fms if "obcnOld" in i["id"])
     assert fm_old["source_url"] == "" and fm_old["owner_open_id"] == ""
 
-
 # ══════════════════════════════════════════════════════════
 # T-941：文档名全局搜索（与按用户检索解耦）+ 授权错误人话化
 # ══════════════════════════════════════════════════════════
-
 
 def test_search_docs_global():
     """按文档名全局搜索：不过滤 owner，结果带产出人标注。"""
@@ -669,11 +621,9 @@ def test_search_docs_global():
     assert out["items"][0]["title"] == "ERD评审"
     assert out["items"][0]["owner_name"] == "张三"
 
-
 def test_search_docs_empty_query_shortcircuit():
     out = svc.search_docs("  ")
     assert out == {"items": [], "errors": []}
-
 
 def test_missing_scope_error_friendly():
     """授权类错误 → 纯人话一句（不拼 lark-cli 技术原文，用户实锄只要提示）；其余原样。"""
@@ -684,7 +634,6 @@ def test_missing_scope_error_friendly():
     unbound = svc._friendly_lark_error(ValueError("飞书认证未就绪：请先执行 lark-cli auth login"))
     assert msg != unbound and "绑定飞书" in unbound
     assert svc._friendly_lark_error(ValueError("网络超时")) == "网络超时"
-
 
 def test_search_users_missing_scope_friendly():
     """选择器 errors 通道走人话包装（截图实锤：缺 contactuser:search）。"""

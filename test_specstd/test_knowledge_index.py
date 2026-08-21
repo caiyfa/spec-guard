@@ -7,15 +7,12 @@
 - 投递预算纪律（每篇每会话一次、≤400 字符、总量 ≤4KB、优先级截断）
 """
 
-import sys
 import time
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.knowledge_index import (
     build_index,

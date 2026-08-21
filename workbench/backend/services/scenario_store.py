@@ -8,7 +8,6 @@ K-025 性能：①CSafeLoader（libyaml 可用时 C 解析，语义一致快 5-1
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -16,8 +15,6 @@ import yaml
 
 # SpecGuard 根目录（services/ → backend/ → workbench/ → specguard/）
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 SCENARIOS_ROOT = SG_ROOT / "scenarios"
 REPORTS_ROOT = SG_ROOT / "reports"

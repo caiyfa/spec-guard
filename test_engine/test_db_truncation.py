@@ -6,11 +6,8 @@
 """
 
 import os
-import sys
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.db_oracle import ReadOnlyDb  # noqa: E402
 from engine.registry import Registry  # noqa: E402

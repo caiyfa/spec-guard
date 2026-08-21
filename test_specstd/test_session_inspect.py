@@ -6,14 +6,11 @@ inspect 脚本输出结构化排查视图：错误汇总优先 + 工具调用链
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent import inspect  # noqa: E402
 

@@ -4,14 +4,11 @@
 （2026-08-19 实测固化）。所有 mock 必须复用该形状，禁止凭代码期望造字段。
 """
 
-import sys
 from pathlib import Path
 
 _TEST_DIR = Path(__file__).resolve().parent
-if str(_TEST_DIR) not in sys.path:
-    sys.path.insert(0, str(_TEST_DIR))
 
-from feishu_cli_contract import pull_messages  # noqa: E402
+from test_specstd.feishu_cli_contract import pull_messages  # noqa: E402
 
 from specflow.feishu_pool import chat_store as cs  # noqa: E402
 
@@ -157,7 +154,7 @@ def test_load_missing_returns_empty(tmp_path):
 
 def test_normalize_post_message():
     """post：content 原样存（markdown 化文本）；内嵌图提取 image_keys（可多张）。"""
-    from feishu_cli_contract import POST_MESSAGE
+    from test_specstd.feishu_cli_contract import POST_MESSAGE
     row = cs.normalize_pull_message(POST_MESSAGE)
     assert row["msg_type"] == "post"
     assert "跨平台工作经历" in row["content"]        # 文本主体保留
@@ -168,7 +165,7 @@ def test_normalize_post_message():
 
 def test_normalize_file_message():
     """file：content 自描述标签解析出 file_name/file_key；content 原样保留。"""
-    from feishu_cli_contract import FILE_MESSAGE
+    from test_specstd.feishu_cli_contract import FILE_MESSAGE
     row = cs.normalize_pull_message(FILE_MESSAGE)
     assert row["msg_type"] == "file"
     assert row["file_name"] == "report_gap_analysis_v9.xlsx"
@@ -177,7 +174,7 @@ def test_normalize_file_message():
 
 def test_render_md_post_and_file(tmp_path):
     """md 派生：post 文本+内嵌图占位（多图逐一编号）；file 渲染文件名卡片行。"""
-    from feishu_cli_contract import FILE_MESSAGE, POST_MESSAGE
+    from test_specstd.feishu_cli_contract import FILE_MESSAGE, POST_MESSAGE
     f = tmp_path / "20260818.jsonl"
     cs.merge_chat_jsonl(f, [cs.normalize_pull_message(POST_MESSAGE),
                             cs.normalize_pull_message(FILE_MESSAGE)])

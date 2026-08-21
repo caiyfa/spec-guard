@@ -7,9 +7,6 @@ import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND = os.path.join(SG_ROOT, "workbench", "backend")
-for p in (SG_ROOT, BACKEND):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from services.deps_editor import (  # noqa: E402
     DepsEditError, add_dep, remove_dep, expected_version_of,
@@ -53,7 +50,6 @@ flow:
   - call: {method: GET, path: /api/x, save: resp}
 """
 
-
 @pytest.fixture()
 def yaml_file(tmp_path):
     def _make(content):
@@ -62,16 +58,13 @@ def yaml_file(tmp_path):
         return str(p)
     return _make
 
-
 def _read(path):
     with open(path, encoding="utf-8") as f:
         return f.read()
 
-
 def test_expected_version():
     assert expected_version_of("0.1") == "^0"
     assert expected_version_of("1.2") == "^1"
-
 
 def test_add_dep_shared(yaml_file):
     path = yaml_file(SAMPLE)
@@ -83,25 +76,21 @@ def test_add_dep_shared(yaml_file):
     assert "- UP-002" in text
     assert "折叠文本不要动" in text
 
-
 def test_add_dep_exclusive(yaml_file):
     path = yaml_file(SAMPLE)
     add_dep(path, "UP-004", "exclusive", "1.2")
     assert "{id: UP-004, mode: exclusive, version: ^1}" in _read(path)
-
 
 def test_add_dep_duplicate_rejected(yaml_file):
     path = yaml_file(SAMPLE)
     with pytest.raises(DepsEditError, match="已存在"):
         add_dep(path, "UP-001", "shared", "0.1")
 
-
 def test_add_dep_no_section(yaml_file):
     path = yaml_file(NO_DEPS)
     add_dep(path, "UP-001", "shared", "0.1")
     text = _read(path)
     assert "depends_on:\n  - {id: UP-001, version: ^0}\nflow:" in text
-
 
 def test_add_dep_empty_section(yaml_file):
     path = yaml_file(EMPTY_DEPS)
@@ -110,7 +99,6 @@ def test_add_dep_empty_section(yaml_file):
     assert "depends_on:\n  - {id: UP-001, version: ^0}" in text
     assert "depends_on: []" not in text
 
-
 def test_remove_dep_dict_form(yaml_file):
     path = yaml_file(SAMPLE)
     remove_dep(path, "UP-001")
@@ -118,18 +106,15 @@ def test_remove_dep_dict_form(yaml_file):
     assert "UP-001" not in text
     assert "- UP-002" in text   # 其余依赖保留
 
-
 def test_remove_dep_scalar_form(yaml_file):
     path = yaml_file(SAMPLE)
     remove_dep(path, "UP-002")
     assert "- UP-002" not in _read(path)
 
-
 def test_remove_dep_missing_rejected(yaml_file):
     path = yaml_file(SAMPLE)
     with pytest.raises(DepsEditError, match="不存在"):
         remove_dep(path, "GHOST")
-
 
 def test_remove_last_dep_collapses_section(yaml_file):
     path = yaml_file(SAMPLE)

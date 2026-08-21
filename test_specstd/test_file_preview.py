@@ -7,17 +7,12 @@
 4. read_spec 对 xlsx 返回转换文本而非拒读
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 from services import file_preview
 

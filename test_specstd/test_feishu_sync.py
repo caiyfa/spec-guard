@@ -8,7 +8,6 @@
 注：lark-cli 真实返回结构以实测为准微调，测试锁定落盘契约（mock _run_lark）。
 """
 
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,12 +16,8 @@ import pytest
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 TEST_DIR = Path(__file__).resolve().parent
-for p in (str(SG_ROOT), str(BACKEND_DIR), str(TEST_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from services.specflow import feishu_sync_service as svc  # noqa: E402
-
 
 def test_watch_config_roundtrip(tmp_path):
     base = tmp_path / ".specflow" / "u1"
@@ -34,13 +29,11 @@ def test_watch_config_roundtrip(tmp_path):
     assert loaded["chats"][0]["chat_id"] == "oc_abc"
     assert loaded["minutes_days"] == 30
 
-
 def test_watch_config_default_when_missing(tmp_path):
     loaded = svc.load_watch_config(tmp_path / ".specflow" / "u1")
     assert loaded == {"chats": [], "docs": [], "users": [],
                       "minutes_days": 30, "chat_days": 7,
                       "chat_sync_minutes": 0}   # T-952：定时同步默认关
-
 
 def test_watch_users_roundtrip(tmp_path):
     """watch v2：users 维度读写（open_id/name/scopes）。"""
@@ -55,7 +48,6 @@ def test_watch_users_roundtrip(tmp_path):
     assert loaded["users"][0]["open_id"] == "ou_a"
     assert loaded["users"][0]["scopes"] == ["group_sender", "minutes"]
 
-
 def test_watch_users_legacy_config_default(tmp_path):
     """旧配置（无 users 字段）加载自动补齐 users: []。"""
     base = tmp_path / ".specflow" / "u1"
@@ -64,7 +56,6 @@ def test_watch_users_legacy_config_default(tmp_path):
         "chats: []\ndocs: []\nminutes_days: 30\nchat_days: 7\n", encoding="utf-8")
     loaded = svc.load_watch_config(base)
     assert loaded["users"] == []
-
 
 def test_watch_users_scopes_filtered_and_dedup(tmp_path):
     """scopes 非法值丢弃；空 open_id 丢弃；按 open_id 去重（后写覆盖）。"""
@@ -78,7 +69,6 @@ def test_watch_users_scopes_filtered_and_dedup(tmp_path):
     assert saved["users"][0]["name"] == "张三2"
     assert saved["users"][0]["scopes"] == ["docs"]
 
-
 def test_sync_doc_to_pool(tmp_path):
     base = tmp_path / ".specflow" / "u1"
     payload = {"ok": True, "data": {"content": "# PRD 正文 [图片#1]",
@@ -90,11 +80,10 @@ def test_sync_doc_to_pool(tmp_path):
     assert (base / "feishu_pool" / "docs" / "fd-FBxod.md").is_file()
     assert (base / "feishu_pool" / "docs" / "fd-FBxod.imgmap.json").is_file()
 
-
 def test_sync_chat_renders_timeline(tmp_path):
     """T-948：真实 CLI 契约（data.messages/字符串时间/嵌套 sender）→
     JSONL 事实源 + md 派生视图。"""
-    from feishu_cli_contract import pull_messages
+    from test_specstd.feishu_cli_contract import pull_messages
     base = tmp_path / ".specflow" / "u1"
     payload = {"ok": True, "data": {"messages": pull_messages()}}
     with patch.object(svc, "_run_lark", return_value=payload):
@@ -111,7 +100,6 @@ def test_sync_chat_renders_timeline(tmp_path):
     # 图片 imgmap 同步生成（转述链路接手）
     assert (base / "feishu_pool" / "chats" / rec["chat_sha8"]
             / "20260818.imgmap.json").is_file()
-
 
 def test_sync_chat_day_range_args(tmp_path):
     """T-948：按天拉取——--start/--end 圈定当日、--order asc、--page-all。"""
@@ -130,7 +118,6 @@ def test_sync_chat_day_range_args(tmp_path):
     assert args[args.index("--order") + 1] == "asc"
     assert "--page-all" in args
 
-
 def test_sync_chat_empty_writes_nothing(tmp_path):
     """T-948 诚实性：0 条消息不写空文件，messages=0（消灭 0 字节假成功）。"""
     base = tmp_path / ".specflow" / "u1"
@@ -139,7 +126,6 @@ def test_sync_chat_empty_writes_nothing(tmp_path):
         rec = svc.sync_chat(base, chat_id="oc_abc", day="20260818")
     assert rec["messages"] == 0 and rec["file"] is None
     assert not (base / "feishu_pool" / "chats").exists()
-
 
 def test_sync_all_chat_days_window(tmp_path):
     """T-948：sync_all 按群拉 chat_days 天窗口（历史补拉能力）+ days_pulled 反馈。"""
@@ -166,10 +152,9 @@ def test_sync_all_chat_days_window(tmp_path):
                       (_dt.now() - _td(days=2)).strftime("%Y%m%d")]
     assert out["chats"] == 0 and out["chats_empty"] == 3   # 3 天全空，诚实计数
 
-
 def test_sync_all_chats_counts_messages(tmp_path):
     """T-948：有消息的天计入 chats，空天计入 chats_empty。"""
-    from feishu_cli_contract import pull_messages
+    from test_specstd.feishu_cli_contract import pull_messages
     base = tmp_path / ".specflow" / "u1"
     svc.save_watch_config(base, {"chats": [{"chat_id": "oc_abc"}],
                                  "minutes_days": 0, "chat_days": 1})
@@ -183,7 +168,6 @@ def test_sync_all_chats_counts_messages(tmp_path):
          patch.object(svc, "maybe_cluster_async"):
         out = svc.sync_all(base)
     assert out["chats"] == 1 and out["chats_empty"] == 0
-
 
 def test_sync_all_collects_errors(tmp_path):
     base = tmp_path / ".specflow" / "u1"
@@ -200,7 +184,6 @@ def test_sync_all_collects_errors(tmp_path):
         out = svc.sync_all(base)
     assert out["errors"] and "无权限" in out["errors"][0]   # 诚实呈现
     assert "docs" in out and "chats" in out                  # 不中断
-
 
 def test_sync_recent_docs_intersection(tmp_path):
     """T-922：drive +search 近1天编辑 ∩ watch.docs 授权清单 → 仅交集落池。"""
@@ -221,7 +204,6 @@ def test_sync_recent_docs_intersection(tmp_path):
     assert out["docs"] == 1                                    # tokOther 被交集过滤
     assert (base / "feishu_pool" / "docs" / "fd-tokAuth.md").is_file()
     assert not (base / "feishu_pool" / "docs" / "fd-tokOther.md").exists()
-
 
 def test_sync_minutes_owner_ids_passthrough(tmp_path):
     """sync_minutes：owner_ids 透传 --owner-ids（None → me 保持现状）。
@@ -246,7 +228,6 @@ def test_sync_minutes_owner_ids_passthrough(tmp_path):
     assert searches[0][searches[0].index("--owner-ids") + 1] == "ou_a,ou_b"
     assert searches[1][searches[1].index("--owner-ids") + 1] == "me"
 
-
 def test_sync_user_materials_minutes_branch(tmp_path):
     """sync_user_materials：scopes 含 minutes 的用户按其 open_id 拉妙记落池。"""
     base = tmp_path / ".specflow" / "u1"
@@ -268,7 +249,6 @@ def test_sync_user_materials_minutes_branch(tmp_path):
     assert out["minutes"] == 1 and out["errors"] == []
     assert any("--owner-ids" in c and "ou_a" in c for c in calls)
     assert (base / "feishu_pool" / "minutes" / "fm-obcn1.json").is_file()
-
 
 def test_sync_user_docs_owner_filter(tmp_path):
     """用户文档轮询：docs +search 结果按 owner_id 应用侧过滤后落池。"""
@@ -294,7 +274,6 @@ def test_sync_user_docs_owner_filter(tmp_path):
     assert out["docs"] == 1 and out["errors"] == []
     assert (base / "feishu_pool" / "docs" / "fd-tokA.md").is_file()
     assert not (base / "feishu_pool" / "docs" / "fd-tokB.md").exists()
-
 
 # ══════════════════════════════════════════════════════════
 # T-916：端到端贯通（全 mock：同步→聚类→建议→确认→图谱→焦点子图）
@@ -327,7 +306,7 @@ def test_e2e_pipeline(tmp_path):
         if "docs" in args:
             return {"ok": True, "data": {"content": "作废会话后级联删除人员", "images": []}}
         if "chat-messages-list" in " ".join(args):
-            from feishu_cli_contract import pull_messages
+            from test_specstd.feishu_cli_contract import pull_messages
             msgs = pull_messages()
             msgs[0]["content"] = "作废会话后级联删除人员"
             return {"ok": True, "data": {"messages": msgs}}

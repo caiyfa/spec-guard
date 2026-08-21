@@ -24,14 +24,11 @@ accounts 定义，跑完才 SKIP（output.log 只剩「账号别名未定义」�
 
 import os
 import re
-import sys
 from pathlib import Path
 
 import yaml
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 _YAML_LOADER = yaml.CSafeLoader if hasattr(yaml, "CSafeLoader") else yaml.SafeLoader
 

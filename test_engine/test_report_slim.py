@@ -8,12 +8,9 @@ T-316 原设计「完整落盘供详细查询」的消费端（前端详细查�
 
 import json
 import os
-import sys
 from types import SimpleNamespace
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import _BODY_MAX_CHARS, truncate_body  # noqa: E402
 from engine.registry import Registry  # noqa: E402

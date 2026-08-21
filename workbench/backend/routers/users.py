@@ -10,7 +10,6 @@
   GET    /api/users/audit-log                审计日志（admin）
 """
 
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,8 +18,6 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from services.auth import CurrentUser, get_current_user, require_role  # noqa: E402
 from services import user_store  # noqa: E402

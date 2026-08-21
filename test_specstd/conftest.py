@@ -1,14 +1,11 @@
 """specstd 测试辅助：创建各种 spec 仓库样例（合规 + 7 类违规）。"""
 
-import sys
 from pathlib import Path
 
 import pytest
 
 # 添加仓库根到 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 # ══════════════════════════════════════════════════════════
@@ -21,8 +18,6 @@ if str(SG_ROOT) not in sys.path:
 @pytest.fixture(autouse=True)
 def _bypass_menu_guard(monkeypatch):
     backend = SG_ROOT / "workbench" / "backend"
-    if str(backend) not in sys.path:
-        sys.path.insert(0, str(backend))
     try:
         from services.menu_guard import MenuGuardMiddleware
     except ImportError:

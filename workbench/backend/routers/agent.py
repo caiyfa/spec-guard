@@ -6,7 +6,6 @@
 import asyncio
 import json
 import re
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -20,8 +19,6 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 # 确保仓库根在 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.llm_client import LLMClient
 from agent.session import SessionManager, _validate_session_id
@@ -189,8 +186,6 @@ def _build_scenario_context(scenario_id: str) -> str:
         return ""
     try:
         BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-        if str(BACKEND_DIR) not in sys.path:
-            sys.path.insert(0, str(BACKEND_DIR))
         from services import scenario_meta
         meta = scenario_meta.get_meta(scenario_id)
     except Exception:

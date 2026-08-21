@@ -1,11 +1,9 @@
 """菜单守卫中间件单测：直接构造 ASGI scope 调用（不依赖 FastAPI TestClient）。"""
 import asyncio
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / ".." / "workbench" / "backend"))
 
 from services import menu_guard, rbac_store, user_store  # noqa: E402
 

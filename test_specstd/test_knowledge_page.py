@@ -8,7 +8,6 @@
 """
 
 import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -17,10 +16,6 @@ import pytest
 os.environ["SG_AUTH_MODE"] = "mock"
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
-if str(SG_ROOT / "workbench" / "backend") not in sys.path:
-    sys.path.insert(0, str(SG_ROOT / "workbench" / "backend"))
 
 from unittest.mock import patch  # noqa: E402
 

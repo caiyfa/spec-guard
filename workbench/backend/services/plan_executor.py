@@ -9,14 +9,11 @@
 import asyncio
 import importlib
 import os
-import sys
 from datetime import datetime
 from pathlib import Path
 
 # 确保仓库根在 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from engine.registry import Registry                          # noqa: E402
 from engine.token_provider import TokenProvider               # noqa: E402

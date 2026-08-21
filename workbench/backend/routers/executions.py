@@ -3,7 +3,6 @@
 数据源为 services.execution_index（文件真相源 + SQLite 投影 + 文件降级），
 响应结构与 MCP 工具 list_executions 一致。
 """
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -11,8 +10,6 @@ from fastapi import APIRouter, Depends
 from services.auth import CurrentUser, get_current_user
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from services import execution_index  # noqa: E402
 from specstd.workspace import reports_dir  # noqa: E402

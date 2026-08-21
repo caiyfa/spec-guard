@@ -3,12 +3,9 @@
 覆盖：FR 标题式/列表式、AC 块、md 标题树（编号/文字）、yaml part（保注释）、未命中。
 """
 
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from mcp_server.tools.sections import (
     extract_fr_section, extract_heading_section, extract_yaml_part, list_fr_anchors,

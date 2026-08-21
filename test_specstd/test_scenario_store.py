@@ -11,17 +11,12 @@
 4. 场景库已存在坏图（如 git 拉取带入）时 get_dag/get_drift_report 降级不抛
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 from services import scenario_store as ss  # noqa: E402
 

@@ -5,12 +5,10 @@
 - _validate_system：非法模块名 / 适配包不存在 → HTTPException(400)；合法 → 通过
 - 路由挂载：GET /api/workspace/systems
 """
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / ".." / "workbench" / "backend"))
 
 from fastapi import HTTPException  # noqa: E402
 

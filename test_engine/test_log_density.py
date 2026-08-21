@@ -6,15 +6,12 @@
 """
 
 import os
-import sys
 import time
 from types import SimpleNamespace
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from engine.http_client import HttpClient  # noqa: E402
 from engine import scenario_runner as sr  # noqa: E402

@@ -1,10 +1,8 @@
 """rbac API 校验逻辑经 store 层测试覆盖；本文件验证路由挂载与 /api/menus/me 形状。"""
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / ".." / "workbench" / "backend"))
 
 from routers import rbac  # noqa: E402
 from services import rbac_store  # noqa: E402

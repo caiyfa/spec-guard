@@ -8,17 +8,12 @@ account_override（K-046/K-056 用户选择）入队即丢失——队列重放�
 2. _start_next_from_queue 重放时透传三项（此前只透传 strict_deps）
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 from services import user_store  # noqa: E402
 from services import runner as runner_mod  # noqa: E402

@@ -6,15 +6,12 @@
 3. covers 校验（编造 FR 报错）
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 # 确保仓库根在 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.conformance import check_conformance, check_covers
 from specstd.anchors import scan_anchors, extract_covers_from_yaml

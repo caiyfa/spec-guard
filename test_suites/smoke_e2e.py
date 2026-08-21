@@ -22,8 +22,6 @@ os.environ.pop("SG_LLM_BASE_URL", None)
 os.environ.pop("SG_LLM_API_KEY", None)
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(SG_ROOT))
-sys.path.insert(0, str(SG_ROOT / "workbench" / "backend"))
 
 TMP = Path(tempfile.mkdtemp(prefix="sg_smoke_"))
 LEDGER_FILE = SG_ROOT / "feedback" / "ledger.json"

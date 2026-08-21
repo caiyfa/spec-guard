@@ -6,12 +6,9 @@
 - fail-open 策略（无激活工作区 / 无锚点 / 校验异常）不阻止执行，但打印 WARN 保证可观测
 """
 
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 def check_covers_gate() -> list[dict]:

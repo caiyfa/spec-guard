@@ -7,22 +7,17 @@
 - watch 配置、话题草案留**私有区**（个人拉取范围与个人工作产物）。
 """
 
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 TEST_DIR = Path(__file__).resolve().parent
-for p in (str(SG_ROOT), str(BACKEND_DIR), str(TEST_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
-from feishu_cli_contract import pull_messages  # noqa: E402
+from test_specstd.feishu_cli_contract import pull_messages  # noqa: E402
 from services.specflow import feishu_sync_service as svc  # noqa: E402
 
 from specflow.feishu_pool import topic_cluster as tc  # noqa: E402
-
 
 def _fake_lark_with_msgs(msgs):
     def _fake(args, timeout=90):
@@ -32,7 +27,6 @@ def _fake_lark_with_msgs(msgs):
             return {"ok": True, "data": {"content": "正文", "images": []}}
         return {"ok": True, "data": {}}
     return _fake
-
 
 def test_sync_all_routes_materials_to_shared_base(tmp_path):
     """sync_all(material_base=共享根)：chats/docs/minutes 落共享区，
@@ -51,7 +45,6 @@ def test_sync_all_routes_materials_to_shared_base(tmp_path):
     assert (emp / "feishu_pool" / "chats").exists() is False    # 私有区无快照
     assert (shared / "feishu_pool" / "docs" / "fd-tokA.md").is_file()
     mc.assert_called_once_with(emp, material_base=shared)       # 聚类也走共享区
-
 
 def test_two_users_sync_same_chat_idempotent(tmp_path):
     """两用户先后同步同群同消息 → 共享 JSONL 无重复（幂等合并红利）。"""
@@ -78,7 +71,6 @@ def test_two_users_sync_same_chat_idempotent(tmp_path):
     ids = [r["message_id"] for r in rows]
     assert len(ids) == len(set(ids))                     # 无重复
 
-
 def test_topic_store_on_shared_base(tmp_path):
     """话题库/历史随 material_base 落共享区（多用户加工同一份卡片）。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -100,7 +92,6 @@ def test_topic_store_on_shared_base(tmp_path):
     assert t["rev"] == 2
     hist = tc.list_history(emp, out[0]["id"], material_base=shared)
     assert {h["editor"]["emp"] for h in hist} == {"u1", "u2"}
-
 
 def test_drafts_stay_private_chats_read_shared(tmp_path):
     """draft：chats 从共享区读，_topic_drafts.yaml 落私有区（个人工作产物）。"""
@@ -126,7 +117,6 @@ def test_drafts_stay_private_chats_read_shared(tmp_path):
     assert (emp / "feishu_pool" / "_topic_drafts.yaml").is_file()   # 草案私有
     assert not (shared / "feishu_pool" / "_topic_drafts.yaml").exists()
 
-
 # ══════════════════════════════════════════════════════════
 # T-949 T2：docs/minutes 权限元数据拉取（perm meta sidecar）
 # ══════════════════════════════════════════════════════════
@@ -137,10 +127,9 @@ def _read_meta(emp: Path, name: str) -> dict:
         (emp / "feishu_pool" / "docs" / f"{name}.meta.json").read_text(
             encoding="utf-8"))
 
-
 def test_sync_doc_pulls_perm_meta(tmp_path):
     """权限接口成功：meta.perm 落 public + member_users + member_chats。"""
-    from feishu_cli_contract import MEMBER_LIST_OK, SETTING_OK
+    from test_specstd.feishu_cli_contract import MEMBER_LIST_OK, SETTING_OK
     base = tmp_path / ".specflow" / "u1"
 
     def _fake(args, timeout=90):
@@ -158,10 +147,9 @@ def test_sync_doc_pulls_perm_meta(tmp_path):
     assert perm["member_chats"] == ["oc_group"]
     assert perm["public"] is True        # link_share_entity=tenant_readable
 
-
 def test_sync_doc_missing_scope_no_block(tmp_path):
     """missing_scope（2026-08-19 实测形状）：正文照常落盘，perm 诚实记缺失。"""
-    from feishu_cli_contract import perm_missing_payloads
+    from test_specstd.feishu_cli_contract import perm_missing_payloads
     base = tmp_path / ".specflow" / "u1"
     miss_member, miss_setting = perm_missing_payloads()
 
@@ -179,10 +167,9 @@ def test_sync_doc_missing_scope_no_block(tmp_path):
     assert perm["pulled_at"] is None
     assert "permission.member:retrieve" in perm["error"]
 
-
 def test_sync_minutes_perm_meta(tmp_path):
     """妙记同步同样落 perm meta（owner 归属 + 权限元数据同构）。"""
-    from feishu_cli_contract import MEMBER_LIST_OK, SETTING_OK
+    from test_specstd.feishu_cli_contract import MEMBER_LIST_OK, SETTING_OK
 
     def _fake(args, timeout=90):
         if "+member-list" in args:
@@ -203,7 +190,6 @@ def test_sync_minutes_perm_meta(tmp_path):
          / "fm-obcnP.meta.json").read_text(encoding="utf-8"))
     assert meta["perm"]["member_users"] == ["ou_owner"]
 
-
 # ══════════════════════════════════════════════════════════
 # T-949 T3：材料可见性过滤（跟随飞书权限）
 # ══════════════════════════════════════════════════════════
@@ -212,12 +198,10 @@ def _mk_doc_item(perm=None, owner=""):
     return {"id": "fd:tokV", "type": "feishu_doc", "title": "文档", "file": "docs/fd-tokV.md",
             "owner_open_id": owner, "perm": perm}
 
-
 def test_visibility_chat_always_visible():
     """群聊快照：拉取者必在群内（办公转述语义）→ 工作区全员可见。"""
     item = {"id": "chat:aaa/1", "type": "chat", "perm": None, "owner_open_id": ""}
     assert svc.material_visible(item, "", set()) is True
-
 
 def test_visibility_perm_member_user():
     """perm 有效：被授权用户可见；无关用户不可见。"""
@@ -226,14 +210,12 @@ def test_visibility_perm_member_user():
     assert svc.material_visible(_mk_doc_item(ok_perm), "ou_a", set()) is True
     assert svc.material_visible(_mk_doc_item(ok_perm), "ou_b", set()) is False
 
-
 def test_visibility_perm_member_chat():
     """群授权：viewer 所在群 ∩ member_chats → 可见。"""
     ok_perm = {"pulled_at": "2026-08-19T09:00:00", "public": False,
                "member_users": [], "member_chats": ["oc_x"]}
     assert svc.material_visible(_mk_doc_item(ok_perm), "ou_b", {"oc_x"}) is True
     assert svc.material_visible(_mk_doc_item(ok_perm), "ou_b", {"oc_y"}) is False
-
 
 def test_visibility_public_and_owner():
     """public 材料/owner 本人始终可见。"""
@@ -242,13 +224,11 @@ def test_visibility_public_and_owner():
     miss = {"pulled_at": None, "public": False, "member_users": [], "member_chats": []}
     assert svc.material_visible(_mk_doc_item(miss, owner="ou_own"), "ou_own", set()) is True
 
-
 def test_visibility_perm_missing_conservative():
     """perm 缺失（missing_scope）：非 owner 不可见（保守——推用户补授权）。"""
     miss = {"pulled_at": None, "public": False, "member_users": ["ou_a"],
             "member_chats": [], "error": "missing_scope"}
     assert svc.material_visible(_mk_doc_item(miss), "ou_a", set()) is False
-
 
 def test_list_pool_materials_viewer_filter(tmp_path):
     """清单层：viewer 过滤生效；viewer=None 不过滤（兼容）。"""
@@ -271,7 +251,6 @@ def test_list_pool_materials_viewer_filter(tmp_path):
     assert {i["id"] for i in bob} == {"fd:tokP"}      # 仅被授权的 P 可见
     owner = svc.list_pool_materials(base, viewer={"open_id": "ou_own", "chats": set()})
     assert {i["id"] for i in owner} == {"fd:tokP"}    # owner 可见 P；Q 无 owner 且 perm 缺失不可见
-
 
 # ══════════════════════════════════════════════════════════
 # T-949 T4：confirm 联动图谱事实源 + 存量私有区迁移
@@ -300,7 +279,6 @@ def test_confirm_reject_sync_facts(tmp_path):
     facts.remove_topic(ws, tid)
     assert all(t["id"] != tid for t in facts.load_topics(ws))
 
-
 def test_migrate_legacy_private_pool(tmp_path):
     """存量迁移：私有区 chats/_topics/_history → 共享区；幂等可重跑。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -325,7 +303,6 @@ def test_migrate_legacy_private_pool(tmp_path):
     out2 = svc.migrate_legacy_pool(emp, material_base=shared)
     assert out2["chats_files"] == 0 and out2["topic_store"] is False
 
-
 # ══════════════════════════════════════════════════════════
 # T-951b：模型用途别名解析（设置页建的模型可被 text/vision 链路命中）
 # ══════════════════════════════════════════════════════════
@@ -333,10 +310,7 @@ def test_migrate_legacy_private_pool(tmp_path):
 def test_model_purpose_alias_resolution(tmp_path, monkeypatch):
     """get_model("text")：id 精确命中优先；无则按 name 别名回退（设置页建
     模型 name 填 text/vision 即绑定用途——否则自动 id 永远无法命中）。"""
-    import sys
     backend = str(SG_ROOT / "workbench" / "backend")
-    if backend not in sys.path:
-        sys.path.insert(0, backend)
     from services import model_config as mc
     from services import user_store
     # 隔离 DB（_connect 默认读 user_store.DB_PATH 模块全局；避免污染真实 workbench.db）
@@ -356,7 +330,6 @@ def test_model_purpose_alias_resolution(tmp_path, monkeypatch):
     with sqlite3.connect(tmp_path / "test_models.db") as conn:
         conn.execute("UPDATE model_configs SET name='text' WHERE id='model-001'")
     assert mc.get_model("text")["model"] == "MiniMax-M3"   # id=text 优先
-
 
 # ══════════════════════════════════════════════════════════
 # T-951c：介入工作台多日窗口（跨天话题支持）
@@ -390,7 +363,6 @@ def _mk_two_day_jsonl(tmp_path):
         cs.rebuild_views(f)
     return emp
 
-
 def test_draft_multi_day_window(tmp_path):
     """多日分段：msg_lines 跨日行号锚定 → window 用真实 ts 跨日表达 + days 字段。"""
     from unittest.mock import MagicMock
@@ -407,7 +379,6 @@ def test_draft_multi_day_window(tmp_path):
     assert seg["days"] == ["20260818", "20260819"]
     assert seg["message_count"] == 3
 
-
 def test_draft_multi_day_skips_missing(tmp_path):
     """窗口含无快照日：跳过不炸；全无快照诚实 FileNotFoundError。"""
     from unittest.mock import MagicMock
@@ -423,7 +394,6 @@ def test_draft_multi_day_skips_missing(tmp_path):
     import pytest as _pytest
     with _pytest.raises(FileNotFoundError):
         tc.draft_chat_segments(emp, llm, "3f9a2c", ["20260801"])
-
 
 def test_commit_multi_day_clears_window(tmp_path):
     """窗口提交：清理窗口内各日旧卡（跨天话题不残留单日旧卡）。"""
@@ -454,7 +424,6 @@ def test_commit_multi_day_clears_window(tmp_path):
     assert by_id["tp:3f9a2c-20260819-01"]["status"] == "rejected"  # 窗口内他日也清理
     assert by_id[out[0]["id"]]["status"] == "draft"
 
-
 def test_regen_multi_day_topic(tmp_path):
     """跨日卡 regen：按 days 拼接窗口内容重提炼（不再只有首日）。"""
     from unittest.mock import MagicMock
@@ -480,7 +449,6 @@ def test_regen_multi_day_topic(tmp_path):
     # prompt 内容含两日消息（跨日拼接），非仅首日
     assert "早上定稿" in seen["content"]
     assert t["title"] == "重提炼跨日"
-
 
 # ══════════════════════════════════════════════════════════
 # T-952b：单群同步 + 图片按 key 直取 + chats 附 imgmap
@@ -511,7 +479,6 @@ def test_sync_all_single_chat(tmp_path):
                            chat_id="oc_a")
     assert pulled == ["oc_a"]                       # 只有 oc_a
     assert out["chats"] == 1 and out["docs"] == 0 and out["minutes"] == 0
-
 
 def test_fetch_image_by_key_cached(tmp_path):
     """图片按 (message_id, media_key) 经 im 通道下载（CLI 落 cwd 临时名→读回删）；
@@ -546,12 +513,11 @@ def test_fetch_image_by_key_cached(tmp_path):
     finally:
         os.chdir(cwd_before)
 
-
 def test_material_content_chats_attaches_imgmap(tmp_path):
     """material-content 对 chats 快照附 imgmap images（前端 key→caption 映射）。"""
     import json as _json
     from specflow.feishu_pool import chat_store as cs
-    from feishu_cli_contract import POST_MESSAGE
+    from test_specstd.feishu_cli_contract import POST_MESSAGE
     base = tmp_path / ".specflow"
     f = base / "feishu_pool" / "chats" / "3f9a2c" / "20260818.jsonl"
     cs.merge_chat_jsonl(f, [cs.normalize_pull_message(POST_MESSAGE)])
@@ -560,7 +526,6 @@ def test_material_content_chats_attaches_imgmap(tmp_path):
     assert out["ok"] and out["type"] == "chat"
     keys = {i["media_key"] for i in out["images"]}
     assert "img_v3_0214l_f94ffa17-8f78-4319-a049-c7a5bb5dc7fg" in keys
-
 
 # ══════════════════════════════════════════════════════════
 # T-952c：同步后自动转述 + 定时同步可配置
@@ -579,14 +544,12 @@ def test_sync_all_triggers_transcribe(tmp_path):
         svc.sync_all(emp)
     assert calls == [(emp, emp)]                     # 转述与聚类同模式触发
 
-
 def test_maybe_transcribe_skips_without_vision(tmp_path):
     """vision 模型未配置 → 跳过（不抛错、不调 LLM）——与聚类同模式。"""
     from services import model_config
     with patch.object(model_config, "get_model", return_value=None):
         out = svc._transcribe_once(tmp_path)         # 未配置：静默返回
     assert out is None
-
 
 def test_maybe_transcribe_runs_with_vision(tmp_path):
     """vision 配置时：transcribe_images 被调用（材料区透传）。"""
@@ -603,7 +566,6 @@ def test_maybe_transcribe_runs_with_vision(tmp_path):
                           called.append(base)):
         svc._transcribe_once(tmp_path)
     assert called == [tmp_path]
-
 
 # ══════════════════════════════════════════════════════════
 # T-955：聊天文件下载（消息附件可打开）

@@ -12,18 +12,13 @@
 """
 
 import asyncio
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 import services.plan_executor as pe  # noqa: E402
 from engine.execution_record import ExecutionRecord  # noqa: E402

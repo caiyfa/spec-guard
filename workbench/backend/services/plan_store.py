@@ -7,7 +7,6 @@
 
 import os
 import re
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -15,8 +14,6 @@ from typing import Optional
 import yaml
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import get_active_workspace, plans_dir, reports_dir, get_workspace_root  # noqa: E402
 

@@ -8,19 +8,14 @@
 """
 
 import json
-import sys
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-for p in (str(SG_ROOT), str(BACKEND_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from services.specflow import feishu_watcher as fw  # noqa: E402
-
 
 def _mk_user(root: Path, emp: str, with_watch=True):
     (root / ".lark-cli" / emp).mkdir(parents=True)
@@ -30,7 +25,6 @@ def _mk_user(root: Path, emp: str, with_watch=True):
         sf.mkdir(parents=True)
         (sf / "feishu_watch.yaml").write_text(
             "chats:\n  - chat_id: oc_a\ndocs: []\n", encoding="utf-8")
-
 
 class TestSingleUserGuard:
     def test_zero_user_skip(self, tmp_path):
@@ -46,7 +40,6 @@ class TestSingleUserGuard:
         _mk_user(tmp_path, "u2")
         with patch.object(fw, "_token_valid", return_value=True):
             assert fw.resolve_watch_user(tmp_path) is None  # 二期边界：告警不启动
-
 
 # ══════════════════════════════════════════════════════════
 # T-918：子进程托管核心（节流/优雅停/崩溃退避）
@@ -72,9 +65,7 @@ class _FakeProc:
     def terminate(self):
         self.returncode = 0
 
-
 _ONE_KEY = [("im.message.receive_v1", "bot")]
-
 
 class TestConsumeLoop:
     def test_im_event_direct_write(self, tmp_path):
@@ -149,7 +140,6 @@ class TestConsumeLoop:
             w.stop()
         assert len(calls) >= 2                  # 崩溃后重启过
 
-
 # ══════════════════════════════════════════════════════════
 # T-919：模块级单例（main.py startup/shutdown 接线）
 # ══════════════════════════════════════════════════════════
@@ -175,7 +165,6 @@ class TestBackgroundSingleton:
             fw.stop_background()
             fw.stop_background()                            # 幂等：重复停止安全
             assert fw._REGISTRY is None
-
 
 # ══════════════════════════════════════════════════════════
 # T-923：e2e 贯通（事件 NDJSON → 节流 → 重拉落池 → 聚类 → 建议入队）
@@ -241,7 +230,6 @@ def test_e2e_event_to_review_queue(tmp_path):
     queue = rev.list_queue(emp)
     assert queue[0]["status"] == "pending" and queue[0]["dst"] == "FR-012"
 
-
 def test_direct_write_drops_unauthorized_chat(tmp_path):
     """未授权 chat 的消息不直写（D5）。"""
     _mk_user(tmp_path, "u1")   # fixture 授权 oc_a
@@ -263,7 +251,6 @@ def test_direct_write_drops_unauthorized_chat(tmp_path):
         w.stop()
     emp = tmp_path / ".specflow" / "u1"
     assert list((emp / "feishu_pool" / "chats").rglob("*.md")) == []
-
 
 def test_direct_write_group_sender_filter(tmp_path):
     """group_sender 过滤：命中 sender 直写 / 未命中丢弃（D4，仅直写）。"""
@@ -303,7 +290,6 @@ def test_direct_write_group_sender_filter(tmp_path):
     assert "关注人的消息" in content
     assert "其他人的消息" not in content
 
-
 def test_direct_write_creates_jsonl_fact_source(tmp_path):
     """T-948：事件直写产 JSONL 事实源（evt: 幂等键）+ md 派生视图同步重建。"""
     import json as _json
@@ -342,7 +328,6 @@ def test_direct_write_creates_jsonl_fact_source(tmp_path):
     md = jsonl_files[0].with_suffix(".md").read_text(encoding="utf-8")
     assert "张三: 事实源消息" in md
 
-
 def test_user_materials_job_calls_sync(tmp_path):
     """模块级 job：委托 sync_user_materials（APScheduler 可序列化铁律）。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -354,7 +339,6 @@ def test_user_materials_job_calls_sync(tmp_path):
         fw.user_materials_job(str(emp))
     assert called == [emp]
 
-
 def test_chats_warmup_job_calls_list():
     """T-938 模块级预热 job：委托 list_my_chats(emp=...)（身份隔离 + 可序列化铁律）。"""
     called = []
@@ -364,13 +348,11 @@ def test_chats_warmup_job_calls_list():
         fw.chats_warmup_job("u1")
     assert called == ["u1"]
 
-
 def test_chats_warmup_job_tolerates_errors():
     """预热失败不抛（job 内 log.warning，不炸 scheduler 线程）。"""
     with patch("services.specflow.feishu_sync_service.list_my_chats",
                return_value={"items": [], "errors": ["认证未就绪"]}):
         fw.chats_warmup_job("u1")   # 不应抛异常
-
 
 # ══════════════════════════════════════════════════════════
 # T-924：WatcherRegistry 多用户编排
@@ -425,7 +407,6 @@ class TestRegistry:
         assert st["watchers"][0]["emp"] == "u1"
         assert "started_at" in st["watchers"][0]
         fw.stop_background()
-
 
 # ══════════════════════════════════════════════════════════
 # T-928：三期 e2e 贯通（多用户事件→直写→聚类 continues→图谱 evolves→确认 suggest_ivs）

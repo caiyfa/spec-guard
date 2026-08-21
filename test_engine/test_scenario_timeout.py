@@ -8,13 +8,10 @@ env_error、消息带超时提示）；poll 轮询同样受场景阈值约束；
 """
 
 import os
-import sys
 import time
 from types import SimpleNamespace
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import CAT_ENV  # noqa: E402
 from engine.registry import Registry  # noqa: E402

@@ -6,12 +6,10 @@
 - get_env_config / save_env_config：system 参数透传 + 非法 system 400
 - 兼容性：缺省 system 参数回落 tdm
 """
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / ".." / "workbench" / "backend"))
 
 from fastapi import HTTPException  # noqa: E402
 

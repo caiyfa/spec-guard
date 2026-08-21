@@ -4,7 +4,6 @@
 """
 import asyncio
 import os
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -21,8 +20,6 @@ from services.covers_gate import check_covers_gate as _check_covers
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 class TriggerBody(BaseModel):

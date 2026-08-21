@@ -5,7 +5,6 @@ patch _sf_base 指向 tmp 私有区。核心业务逻辑在 test_feishu_topic_cl
 此处聚焦 HTTP 语义转换（409 乐观锁 / 404 / 状态翻转端点 / JSONL 读取）。
 """
 
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -14,19 +13,14 @@ import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-for p in (str(SG_ROOT), str(BACKEND_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from routers import feishu_pool as rp  # noqa: E402
 
 _USER = SimpleNamespace(emp_no="90000001", name="王测试")
 
-
 def _patch_bases(emp: Path):
     """T-949：双 base patch（单用户模式——材料区与私有区同路径）。"""
     return patch.object(rp, "_material_base", return_value=emp)
-
 
 def _mk_topic_file(emp: Path):
     (emp / "feishu_pool").mkdir(parents=True, exist_ok=True)
@@ -37,7 +31,6 @@ def _mk_topic_file(emp: Path):
         "    window: ['2026-08-07T14:00', '2026-08-07T14:00']\n"
         "    message_count: 1\n    participants_count: 1\n"
         "    source: chats/3f9a2c/20260807.md\n", encoding="utf-8")
-
 
 def test_update_card_rev_conflict_returns_409(tmp_path):
     """base_rev 落后 → 409 + detail 携带最新卡片（前端冲突提示载荷）。"""
@@ -53,7 +46,6 @@ def test_update_card_rev_conflict_returns_409(tmp_path):
     assert exc.detail["topic"]["rev"] == 3
     assert "已被他人编辑" in exc.detail["message"]
 
-
 def test_update_card_keywords_ok(tmp_path):
     """编辑 keywords 成功路径：卡片更新 + editor 身份落痕。"""
     emp = tmp_path / ".specflow" / "u1"
@@ -66,7 +58,6 @@ def test_update_card_keywords_ok(tmp_path):
     assert t["rev"] == 4
     assert t["last_edited_by"]["emp"] == "90000001"
 
-
 def test_update_card_404(tmp_path):
     emp = tmp_path / ".specflow" / "u1"
     _mk_topic_file(emp)
@@ -75,7 +66,6 @@ def test_update_card_404(tmp_path):
          pytest.raises(Exception) as ei:
         rp.update_topic_card(body, user=_USER, workspace="tdm")
     assert getattr(ei.value, "status_code", None) == 404
-
 
 def test_confirm_reject_endpoints(tmp_path):
     """confirm/reject 端点：状态翻转 + editor 留痕 + facts 图谱联动（T-949）。"""
@@ -97,7 +87,6 @@ def test_confirm_reject_endpoints(tmp_path):
     # T-949 图谱事实源联动：confirm 提升、reject 移除
     from specflow.feishu_pool import facts
     assert facts.load_topics(ws) == []               # reject 后图谱无残留
-
 
 def test_chat_messages_endpoint(tmp_path):
     """/chat-messages：返回 JSONL 事实源数组（精确高亮数据源）。"""

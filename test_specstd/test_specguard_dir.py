@@ -10,14 +10,11 @@
 7. 无激活工作区时 raise RuntimeError
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from test_specstd.helpers import create_valid_workspace
 

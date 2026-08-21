@@ -7,18 +7,13 @@
 - invalid（evidence 校验失败）条目不可确认
 """
 
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-for p in (str(SG_ROOT), str(BACKEND_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
 
 from services.specflow import feishu_review_service as rev  # noqa: E402
 from specflow.feishu_pool import facts, pool_store  # noqa: E402
-
 
 def _prepare(tmp_path):
     ws = tmp_path / "ws"
@@ -27,7 +22,6 @@ def _prepare(tmp_path):
     pool_store.save_doc_snapshot(emp, "tokA", "# 导出 PRD\n含 FR-012 提及\n",
                                  source_url="u")
     return ws, emp
-
 
 def test_confirm_promotes_to_shared(tmp_path):
     ws, emp = _prepare(tmp_path)
@@ -44,7 +38,6 @@ def test_confirm_promotes_to_shared(tmp_path):
     item = rev.list_queue(emp)[0]
     assert item["status"] == "confirmed"
 
-
 def test_reject_writes_shared_rejected_trace(tmp_path):
     ws, emp = _prepare(tmp_path)
     sugg = {"src": "fd:tokA", "dst": "FR-009", "confidence": 0.5,
@@ -57,7 +50,6 @@ def test_reject_writes_shared_rejected_trace(tmp_path):
     assert not (ws / ".specguard" / "feishu" / "materials").exists() or \
         not list((ws / ".specguard" / "feishu" / "materials").iterdir())
 
-
 def test_cannot_review_others_material(tmp_path):
     ws, emp1 = _prepare(tmp_path)
     rev.enqueue_suggestions(emp1, "u1", [
@@ -65,7 +57,6 @@ def test_cannot_review_others_material(tmp_path):
          "evidence": "FR-012 提及", "valid": True, "suggested_by": "u1"}])
     emp2 = tmp_path / ".specflow" / "u2"
     assert rev.list_queue(emp2) == []   # u2 看不到 u1 的复核队列
-
 
 def test_invalid_suggestion_not_confirmable(tmp_path):
     ws, emp = _prepare(tmp_path)
@@ -75,7 +66,6 @@ def test_invalid_suggestion_not_confirmable(tmp_path):
     out = rev.confirm_suggestions(emp, ws, "u1", [("fd:tokA", "FR-012")])
     assert out["confirmed"] == 0 and out["skipped"] == 1
     assert facts.load_links(ws) == []   # invalid 不落事实源
-
 
 def test_topic_promotion_writes_topics_yaml(tmp_path):
     ws, emp = _prepare(tmp_path)
@@ -98,7 +88,6 @@ def test_topic_promotion_writes_topics_yaml(tmp_path):
     assert topics[0]["id"] == "tp:3f9a2c-20260807-01"
     assert topics[0]["title"] == "导出权限"
 
-
 # ══════════════════════════════════════════════════════════
 # T-927：确认可选入包（suggest_ivs）
 # ══════════════════════════════════════════════════════════
@@ -113,7 +102,6 @@ def test_confirm_returns_suggest_ivs(tmp_path):
             "suggested_by": "u1"}])
         out = rev.confirm_suggestions(emp, ws, "u1", [("fd:tokA", "FR-012")])
     assert out["suggest_ivs"] == [{"iv_id": "IV-001", "title": "导出功能面试"}]
-
 
 def test_confirm_no_iv_returns_empty(tmp_path):
     from unittest.mock import patch
