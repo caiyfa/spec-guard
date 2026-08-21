@@ -287,6 +287,18 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| specflow/feishu_pool/topic_cluster.py | sess-material-pool | 2026-08-21 | 3c092804048b | | 登记中 | T-991 schema v3：category/priority 枚举 + 三 prompt rubric/few-shot + _PROMPT_VERSION pv3 + derive_priority + normalize/edit/regen + chat_kinds 参数 |
+| specflow/feishu_pool/facts.py | sess-material-pool | 2026-08-21 | c272f7e22852 | | 登记中 | T-991：_TOPIC_KEY_FIELDS 加 category/priority（confirm 提升不丢） |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-material-pool | 2026-08-21 | 64b1c0dcdad6 | | 登记中 | T-991：_cluster_once 建 chat_kinds（watch kind）传聚类 |
+| workbench/backend/services/specflow/feishu_review_service.py | sess-material-pool | 2026-08-21 | 3fd320c6a146 | | 登记中 | T-991：复核队列共享可选（base 参数化语义说明） |
+| workbench/backend/routers/feishu_pool.py | sess-material-pool | 2026-08-21 | cbb1f284201d | | 登记中 | T-991：CardUpdate 加 category/priority + draft 端点传 chat_kind + review 三端点 scope 参数 |
+| workbench/frontend/src/api.ts | sess-material-pool | 2026-08-21 | cca8e0525a4d | | 登记中 | T-991：FeishuTopic 加 category/priority 类型 + editTopicCard 参数 + review scope |
+| workbench/frontend/src/components/TopicCard.tsx | sess-material-pool | 2026-08-21 | c758631988c6 | | 登记中 | T-991：分类/优先级徽标 + 编辑表单两下拉 |
+| workbench/frontend/src/components/TopicWorkspace.tsx | sess-material-pool | 2026-08-21 | 2f968442a1e3 | | 登记中 | T-991：分类筛选 + 闲聊默认过滤开关（localStorage）+ 泳道优先级排序 |
+| workbench/frontend/src/components/FeishuReviewPanel.tsx | sess-material-pool | 2026-08-21 | 2c2c408508bb | | 登记中 | T-991：复核队列「我的/共享」切换 |
+| test_specstd/test_feishu_topic_cluster.py | sess-material-pool | 2026-08-21 | 3e951b846c5b | | 登记中 | T-991：category/priority 聚类产出/derive_priority/normalize/edit/闲聊保留 用例 |
+| test_specstd/test_feishu_t948_router.py | sess-material-pool | 2026-08-21 | 69658b0a31da | | 登记中 | T-991：PUT card category/priority + 非法枚举 400 |
+| test_specstd/test_feishu_review.py | sess-material-pool | 2026-08-21 | bbab61374d7f | | 登记中 | T-991：review scope=shared 用例 |
 | workbench/backend/services/specflow/feishu_sync_service.py | sess-material-pool | 2026-08-21 | da519c270d54 | 64b1c0dcdad6 | 已完成 | T-990 群类型标签：_CHAT_KINDS 枚举 + _clean_chats 归一化（镜像 users 模式） |
 | workbench/frontend/src/api.ts | sess-material-pool | 2026-08-21 | 88b5bebaad67 | cca8e0525a4d | 已完成 | T-990/T-933：FeishuWatch.chats 加 kind + FEISHU_CHAT_KINDS 导出 + previewMaterial 客户端 |
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-material-pool | 2026-08-21 | c2d0ebae46d4 | 4fe721777def | 已完成 | T-990 群类型标签：表单行 kind 选择 + 回显/提交 |
