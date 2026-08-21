@@ -1,13 +1,10 @@
 """T-507 量化脚本：实测 system prompt 各静态组成部分大小。"""
 import re
-import sys
 from pathlib import Path
 
-sys.path.insert(0, ".")
-sys.path.insert(0, "workbench/backend")
 
 # format_spec
-from services.format_spec import generate_format_spec_md  # noqa: E402
+from sg_core.format_spec import generate_format_spec_md  # noqa: E402
 
 fs = generate_format_spec_md()
 print(f"format_spec: {len(fs)} chars")

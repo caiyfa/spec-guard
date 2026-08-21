@@ -1,9 +1,10 @@
 """发布检查（delta 归档前置人工确认清单）。
 
-输出三类待办：
+输出四类待办：
 1. 快照场景清单（version 0.x）——归档时需 bump 到 1.0 冻结
 2. 未解决的版本漂移/缺失（DRIFT/ORPHANED）——归档前必须清零
 3. T6 契约基线一致性——契约变更未 bump version 的场景
+4. 包依赖环检查（T-976）——模块级 import 环阻塞；函数级回边提示不卡关
 
 用法：
     python release_check.py           # 打印报告；存在阻塞项时退出码 1
@@ -13,8 +14,6 @@ import os
 import sys
 
 SG_ROOT = os.path.dirname(os.path.abspath(__file__))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.dependency_graph import DependencyGraph  # noqa: E402
 from engine.scenario_loader import load_scenarios  # noqa: E402
@@ -61,6 +60,14 @@ def main():
             print(f"   [{level}] {message}")
     if not t6_issues:
         print("   全部通过")
+
+    # ── 4. 包依赖环检查（T-976）──
+    from scripts.check_import_cycles import check_cycles
+    cycle_blockers, cycle_lines = check_cycles()
+    print("\n④ 包依赖环检查（模块级 import）：")
+    for ln in cycle_lines:
+        print(ln)
+    blockers += cycle_blockers
 
     print(f"\n{'═' * 50}")
     if blockers:

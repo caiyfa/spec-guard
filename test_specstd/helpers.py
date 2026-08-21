@@ -3,13 +3,10 @@
 从 conftest.py 分离出来，避免与根目录 conftest.py 的模块名冲突。
 """
 
-import sys
 from pathlib import Path
 
 # 添加仓库根到 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 # ══════════════════════════════════════════════════════════

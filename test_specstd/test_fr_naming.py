@@ -10,14 +10,11 @@
 """
 
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.schema import (  # noqa: E402
     ITER_CODE_RE, FR_DELTA_ID_RE, parse_fr_delta_id,

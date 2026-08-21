@@ -19,12 +19,9 @@ needs_manual=True 由用户手动选择。
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import get_context_emp_no, get_workspace_root  # noqa: E402
 

@@ -85,11 +85,8 @@ async def test_send(cid: str, body: TestSendBody = None, user=Depends(require_ro
     }
 
     # J-2：调用真实 send_notification
-    import sys
     from pathlib import Path
     sg_root = Path(__file__).resolve().parent.parent.parent.parent
-    if str(sg_root) not in sys.path:
-        sys.path.insert(0, str(sg_root))
     from feedback.notify import send_notification
     ok = await send_notification(config, event, test_payload)
 

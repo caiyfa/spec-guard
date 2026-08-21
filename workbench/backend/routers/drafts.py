@@ -22,7 +22,6 @@
 
 import json as _json
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -35,8 +34,6 @@ from services.auth import require_role
 router = APIRouter(prefix="/api/drafts", tags=["drafts"])
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import (  # noqa: E402
     can_read_private,

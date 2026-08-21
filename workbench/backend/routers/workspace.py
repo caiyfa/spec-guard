@@ -15,7 +15,6 @@
 """
 
 import os
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,8 +25,6 @@ router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 _RAW_MAX_BYTES = 30 * 1024 * 1024  # K-036：保真预览原始字节上限 30MB
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import (
     list_workspaces, get_workspace, get_active_workspace,

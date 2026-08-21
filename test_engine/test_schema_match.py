@@ -9,13 +9,10 @@
 """
 
 import os
-import sys
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.registry import Registry  # noqa: E402
 from engine.schema_match import (  # noqa: E402

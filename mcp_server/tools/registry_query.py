@@ -5,19 +5,14 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
-from services.format_spec import get_tool_catalog  # noqa: E402
+from sg_core.format_spec import get_tool_catalog  # noqa: E402
 from mcp_server.tools.live_registry import list_oracles, list_step_types  # noqa: E402
 
 TOOLS = [

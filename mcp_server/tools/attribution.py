@@ -9,17 +9,12 @@
 
 import json
 import re
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 def _get_reports_root() -> Path:
     """获取报告目录（优先工作区 .specguard/reports/，无工作区回退 SG_ROOT/reports/）。"""
@@ -168,7 +163,7 @@ def _handle_assemble_evidence(arguments: dict) -> list[TextContent]:
     if not run_id or not scenario_id:
         return [TextContent(type="text", text="错误：缺少 run_id 或 scenario_id 参数")]
     try:
-        from services import attribution_service
+        from sg_core import attribution_service
         evidence = attribution_service.assemble_evidence(run_id, scenario_id)
         return [TextContent(type="text", text=json.dumps(
             evidence, ensure_ascii=False, indent=2, default=str))]
@@ -182,7 +177,7 @@ def _handle_assemble_evidence(arguments: dict) -> list[TextContent]:
 
 def _handle_list_failures(arguments: dict) -> list[TextContent]:
     """失败索引查询（K-052）：services.failure_index 的 MCP 出口。"""
-    from services import failure_index
+    from sg_core import failure_index
 
     scenario_id = str(arguments.get("scenario_id", "") or "")
     limit = int(arguments.get("limit", 10) or 10)
@@ -202,7 +197,7 @@ def _handle_list_failures(arguments: dict) -> list[TextContent]:
 
 def _handle_list_executions(arguments: dict) -> list[TextContent]:
     """全量执行索引查询：services.execution_index 的 MCP 出口。"""
-    from services import execution_index
+    from sg_core import execution_index
 
     scenario_id = str(arguments.get("scenario_id", "") or "")
     run_id = str(arguments.get("run_id", "") or "")
@@ -391,8 +386,6 @@ def _handle_db_evidence(arguments: dict) -> list[TextContent]:
         import importlib
         import os
         BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-        if str(BACKEND_DIR) not in sys.path:
-            sys.path.insert(0, str(BACKEND_DIR))
 
         from engine.db_oracle import ReadOnlyDb, normalize_db_config
         system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")

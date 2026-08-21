@@ -1,14 +1,11 @@
 """K-055 微服务体系适配单测：多 schema DB 注册表 + 服务前缀 call 路由。"""
 
 import os
-import sys
 from types import SimpleNamespace
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.db_oracle import normalize_db_config, build_db_connections  # noqa: E402
 from engine.scenario_runner import RunContext, step_db_query, step_call, SkipScenario  # noqa: E402

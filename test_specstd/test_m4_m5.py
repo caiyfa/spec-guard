@@ -1,14 +1,11 @@
 """M4+M5 测试：内容签名 + 反哺闭环 + 飞书通知。"""
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from feedback.ledger import FeedbackLedger
 from feedback.notify import NotifyRegistry, mask_url

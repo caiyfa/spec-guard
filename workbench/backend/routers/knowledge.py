@@ -11,7 +11,6 @@
 纪律：写操作 RBAC（admin/tester）+ 审计留痕；词条/叙事按工作区/系统隔离。
 """
 
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,8 +26,6 @@ router = APIRouter(
 )
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 class GlossaryBody(BaseModel):

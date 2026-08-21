@@ -9,7 +9,6 @@
 """
 
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -17,8 +16,6 @@ import httpx
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.llm_client import LLMClient
 from agent.session import SessionManager

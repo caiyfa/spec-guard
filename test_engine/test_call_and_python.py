@@ -1,14 +1,11 @@
 """引擎离线单测：call Apifox 参数体系（headers/cookies/body_type）+ python 原语。"""
 
 import os
-import sys
 from types import SimpleNamespace
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import ExecutionRecord  # noqa: E402
 from engine.scenario_runner import step_call, step_python, SkipScenario, ScenarioScriptError  # noqa: E402

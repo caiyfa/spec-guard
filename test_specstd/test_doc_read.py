@@ -7,12 +7,9 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.doc_read import READ_DOC_TOOLS, build_doc_read
 from agent.runtime import AgentRuntime

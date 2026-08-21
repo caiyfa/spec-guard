@@ -17,12 +17,9 @@ REST（POST /api/spec/changes/{delta}/commit）与 MCP 共用本服务。
 
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import get_context_emp_no, get_workspace_root  # noqa: E402
 

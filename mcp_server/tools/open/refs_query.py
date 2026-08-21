@@ -120,7 +120,7 @@ def _handle_lookup_external_ref(args: dict) -> list[TextContent]:
     # 关联场景的最近执行（failures/executions 台账，读不到静默）
     try:
         from mcp_server.tools.attribution import _get_reports_root
-        from services import execution_index
+        from sg_core import execution_index
         for r in rows:
             if r.get("linked_type") != "scenario":
                 continue

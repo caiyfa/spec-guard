@@ -11,12 +11,14 @@
 import sys
 from pathlib import Path
 
-# 确保 backend 目录在 sys.path 中（支持直接运行）
+# 入口统一引导（T-975）：backend 平铺风格 + 仓库根包（specstd/engine/sg_core）一次到位。
+# 此前 routers/services 各自散装 insert 30 余处，全部收敛到本入口（routers 由 main import，
+# 加载顺序必然在后）。
 BACKEND_DIR = Path(__file__).resolve().parent
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
-
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
+for _p in (str(BACKEND_DIR), str(SG_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +27,9 @@ from routers import scenarios, runs, reference, plans, spec_validation, agent, w
 from services.auth import get_current_user
 from services import user_store, rbac_store
 from services.menu_guard import MenuGuardMiddleware
+
+# T-975：自定义角色校验钩子注册（sg_core.user_store 不反向依赖 workbench，组装根注入）
+user_store.set_role_validator(rbac_store.role_exists)
 
 app = FastAPI(
     title="SpecGuard Workbench API",

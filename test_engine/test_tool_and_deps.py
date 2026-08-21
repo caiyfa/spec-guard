@@ -1,14 +1,11 @@
 """引擎离线单测：tool 信封分发 + 依赖版本仲裁（DRIFT/ORPHANED/optional/strict_deps）。"""
 
 import os
-import sys
 from types import SimpleNamespace
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import (  # noqa: E402
     ExecutionRecord, VERDICT_BLOCKED, VERDICT_DRIFT, VERDICT_FAIL, VERDICT_ORPHANED, VERDICT_SKIP,

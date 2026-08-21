@@ -7,14 +7,11 @@
 
 import importlib
 import os
-import sys
 from datetime import datetime
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.abspath(__file__))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.registry import Registry                          # noqa: E402
 from engine.token_provider import TokenProvider               # noqa: E402
@@ -77,10 +74,7 @@ def env_config(sg_system, pytestconfig):
     if overrides_json:
         try:
             import json
-            backend_dir = os.path.join(SG_ROOT, "workbench", "backend")
-            if backend_dir not in sys.path:
-                sys.path.insert(0, backend_dir)
-            from services.preflight import apply_overrides
+            from workbench.backend.services.preflight import apply_overrides
             cfg = apply_overrides(cfg, json.loads(overrides_json))
         except ImportError:
             print("[SpecGuard WARN] SG_OVERRIDES 存在但无法加载 services.preflight，忽略覆盖")

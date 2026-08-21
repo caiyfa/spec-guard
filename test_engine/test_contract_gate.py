@@ -8,11 +8,8 @@ ENG-BUG-010（传递孤儿依赖运行期崩溃）。全部离线（内存 Scena
 """
 
 import os
-import sys
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.dependency_graph import DependencyGraph
 from engine.execution_record import (  # noqa: E402
@@ -132,8 +129,6 @@ def test_fingerprint_sensitive_to_verify_change():
 
 def test_t7_missing_version_is_error(tmp_path):
     backend = os.path.join(SG_ROOT, "workbench", "backend")
-    if backend not in sys.path:
-        sys.path.insert(0, backend)
     from services.spec_validator import validate_test_cases
     (tmp_path / "UP-OK.yaml").write_text(
         "id: UP-OK\nversion: 0.1\ntitle: 上游\n"

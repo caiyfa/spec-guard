@@ -15,7 +15,6 @@
 
 import json
 import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -26,8 +25,6 @@ os.environ.pop("SG_ADMIN_ACCOUNTS", None)
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 from fastapi.testclient import TestClient
 

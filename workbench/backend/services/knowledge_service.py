@@ -12,12 +12,9 @@
 """
 
 import re
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.glossary import parse_glossary, GLOSSARY_FILE, extract_fr_refs
 from specstd.anchors import scan_anchors

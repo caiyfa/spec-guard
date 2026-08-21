@@ -10,7 +10,6 @@
 
 import asyncio
 import os
-import sys
 import tempfile
 from pathlib import Path
 from datetime import datetime
@@ -18,11 +17,7 @@ from datetime import datetime
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 os.environ.setdefault("SG_AUTH_MODE", "mock")
 

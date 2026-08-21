@@ -3,7 +3,6 @@
 端点全部经 MenuGuardMiddleware 绑定 menu-menu-manage（除 /api/menus/me 白名单，
 该端点登录即可，供侧边栏渲染）。
 """
-import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,8 +11,6 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api", tags=["rbac"])
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from services import rbac_store  # noqa: E402
 from services.auth import CurrentUser, get_current_user  # noqa: E402

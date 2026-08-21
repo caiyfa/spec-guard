@@ -33,7 +33,9 @@ from services import user_store
 
 # 请求级用户身份上下文（M7：draft 作者归属等下游场景使用；
 # asyncio.to_thread / threadpool 复制 context，下游线程可读）
-_CTX_EMP_NO: contextvars.ContextVar[str] = contextvars.ContextVar("sg_emp_no", default="")
+# T-975：contextvar 定义下沉 sg_core.emp_context（mcp_server/agent 工具的作者归属
+# 与 FastAPI 会话共享同一实例）；auth 内保留原名 re-export。
+from sg_core.emp_context import _CTX_EMP_NO  # noqa: F401（auth 内 set/get 继续用）
 
 
 def current_emp_no() -> str:

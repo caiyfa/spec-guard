@@ -75,14 +75,9 @@ class LLMClient:
         优先级：model_id 指定模型 → model_configs 默认模型 → llm_config 旧表 → 环境变量
         """
         try:
-            import sys
-            from pathlib import Path
-            backend_dir = Path(__file__).resolve().parent.parent / "workbench" / "backend"
-            if str(backend_dir) not in sys.path:
-                sys.path.insert(0, str(backend_dir))
             # 优先从 model_configs 表加载
             try:
-                from services import model_config
+                from sg_core import model_config
                 if model_id:
                     m = model_config.get_model(model_id)
                 else:
@@ -102,7 +97,7 @@ class LLMClient:
             except Exception:
                 pass
             # 回退到旧 llm_config 表
-            from services import llm_config
+            from sg_core import llm_config
             return llm_config.resolve_config()
         except Exception:
             return {}

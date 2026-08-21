@@ -4,14 +4,11 @@ T-505：词条格式约定（七维适配版 + [token:] 锚点）+ 候选提取�
 词条↔FR 关联校验进 conformance 留 T-508 后评（本测试只测解析能力）。
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.glossary import (
     GLOSSARY_FILE,

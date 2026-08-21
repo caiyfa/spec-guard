@@ -10,15 +10,12 @@
 
 import contextvars
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import drafts_dir, get_workspace_root  # noqa: E402
 
@@ -63,7 +60,7 @@ def _rel_path(path: Path) -> str:
 def _record_meta(filename: str, scenario_id: str = "", source_files: list[str] = None):
     """记录草稿元数据到 drafts/_meta.json（M7 作者归属 + K-013 场景关联/信息包基准 commit + K-xxx 文件依赖）。"""
     try:
-        from services.auth import current_emp_no  # 延迟导入（MCP stdio 无此上下文）
+        from sg_core.emp_context import current_emp_no  # 延迟导入（MCP stdio 无此上下文）
         emp_no = current_emp_no()
     except Exception:
         emp_no = ""
@@ -84,7 +81,7 @@ def _record_meta(filename: str, scenario_id: str = "", source_files: list[str] =
         entry["scenario_id"] = scenario_id
         # K-013：记录信息包基准 commit（git 型），供后续核对信息包是否已演进
         try:
-            from services import scenario_meta as sm
+            from sg_core import scenario_meta as sm
             m = sm.get_meta(scenario_id)
             if m:
                 commits = [e.get("commit") for e in (m.get("info_pack") or []) if e.get("commit")]
@@ -212,9 +209,9 @@ def _handle_promote_drafts(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="错误：filenames 必须是数组")]
 
     try:
-        from services import draft_promote
+        from sg_core import draft_promote
         try:
-            from services.auth import current_emp_no
+            from sg_core.emp_context import current_emp_no
             emp_no = current_emp_no()
         except Exception:
             emp_no = ""
@@ -242,9 +239,9 @@ def _handle_promote_draft(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="错误：缺少 filename 或 module 参数")]
 
     try:
-        from services import draft_promote
+        from sg_core import draft_promote
         try:
-            from services.auth import current_emp_no
+            from sg_core.emp_context import current_emp_no
             emp_no = current_emp_no()
         except Exception:
             emp_no = ""
@@ -331,7 +328,7 @@ def _register_gates(filename: str, content: str):
     try:
         import yaml as _yaml
         from specstd.workspace import get_context_emp_no
-        from services import draft_gates
+        from sg_core import draft_gates
 
         draft_gates.ensure_tables()
         raw = _yaml.safe_load(content) or {}
@@ -423,7 +420,7 @@ def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
 
     # 4. 删除 DB 三闸记录
     try:
-        from services import draft_gates
+        from sg_core import draft_gates
         if ws:
             draft_gates.delete_workspace_gates(ws)
     except Exception:
@@ -431,7 +428,7 @@ def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
 
     # 5. 删除 DB 草稿台账
     try:
-        from services import ledger_store
+        from sg_core import ledger_store
         if ws:
             ledger_store.clear_drafts(ws)
     except Exception:

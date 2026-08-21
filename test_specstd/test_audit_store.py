@@ -9,7 +9,6 @@
 - 截断逻辑（max 200 字符）
 """
 
-import sys
 import json
 import tempfile
 from pathlib import Path
@@ -17,8 +16,6 @@ from pathlib import Path
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from workbench.backend.services import audit_store  # noqa: E402
 

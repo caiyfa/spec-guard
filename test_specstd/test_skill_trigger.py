@@ -4,12 +4,9 @@
 不命中、多技能命中、runtime 注入（新会话 + 恢复会话）、全技能 keywords 完备性。
 """
 
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent import skill_loader  # noqa: E402
 

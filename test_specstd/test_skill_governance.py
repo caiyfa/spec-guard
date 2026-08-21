@@ -9,7 +9,6 @@
 """
 
 import os
-import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -20,8 +19,6 @@ import pytest
 os.environ["SG_AUTH_MODE"] = "mock"
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent import skill_loader, purpose_loader  # noqa: E402
 from mcp_server.tools import side_effect_registry  # noqa: E402

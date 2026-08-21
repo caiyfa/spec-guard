@@ -5,15 +5,12 @@ TestCase 校验：验证测试 YAML 的格式合规性（类型声明/产出声�
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from engine.versioning import check_t6, fingerprint_from_raw, load_baseline  # noqa: E402
 from specstd.workspace import get_active_workspace  # noqa: E402

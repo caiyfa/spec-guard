@@ -33,7 +33,7 @@ SpecGuard 存在两类 AI 角色，认知边界必须清晰，互不越界：
 
 | 你要做什么 | 读什么 | 备注 |
 |-----------|--------|------|
-| 写/改场景 YAML、理解 DSL | `workbench/backend/services/format_spec.py` | **格式规范唯一权威**（引擎注册表动态生成）；`docs/specguard-yaml-format-spec.md` 仅是导出快照 |
+| 写/改场景 YAML、理解 DSL | `sg_core/format_spec.py` | **格式规范唯一权威**（引擎注册表动态生成；T-975 下沉 sg_core，原 services 位置留 shim）；`docs/specguard-yaml-format-spec.md` 仅是导出快照 |
 | 了解完全体能力与边界 | `docs/完全体SpecGuard能力边界与交互流程-测试人员指南.md` | 三层架构 + 双反馈循环 |
 | 落地 Agent 智能层 | `docs/SpecGuard-Agent架构设计-MCP工具层与薄Harness.md` | MCP 工具层 + 薄 Harness，含 6 项 ADR |
 | 智能层落地与阶段计划 | `docs/SpecGuard智能层开发简报.md`、`docs/SpecGuard智能层开发计划-M0至M5.md` | M0-M5 已完成，落地总结 + 阶段拆解 |
@@ -80,6 +80,13 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   └── workspace.py              #   工作区注册/git 克隆/激活切换；contextvar 向下游透传
 │       └── workspaces/           #   注册表+克隆目录（registry.yaml/_clones/_anchors，不入 git）
 │
+├── sg_core/                      # 共享内核（T-975 下沉：mcp_server/agent/workbench 三方
+│   ├── user_store.py             #   共同消费的实体；依赖单向 sg_core→specstd/engine，
+│   ├── ledger_store.py           #   不得反向 import mcp_server/agent/workbench——
+│   ├── draft_promote.py          #   workbench/backend/services 下同名模块为 sys.modules
+│   ├── model_config.py           #   转发 shim，存量 import 零改动；monkeypatch 打桩
+│   ├── format_spec.py            #   指向 sg_core.X（定义模块）；环检查见
+│   └── …（共 24 模块）           #   scripts/check_import_cycles.py + release_check ④）
 ├── systems/                      # 被测系统适配包（接入新系统=新增子包）
 │   └── tdm/                      #   TDM 干部盘点适配
 │       ├── config/env.sit.yaml   #     环境配置（网关/账号池/资源码/DB，占位符 ${VAR:default}）
@@ -205,7 +212,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - **SKIP 语义（诚实结果）**：测试数据缺失/账号未配置 → SKIP；上游失败 → BLOCKED；绝不把环境问题报成 FAIL。
 - **前端**：React 函数组件 + TS 严格模式；DAG 布局用 elkjs（懒加载）；YAML 编辑用 Monaco；禁止 js-yaml 往返写回（会丢中文注释，用 deps_editor 文本外科手术）。
 - **前端体验基线（硬约束，新增页面/交互必逐条自查）**：①**操作状态持久化**——页签/选择器/筛选条件等用户选择用 localStorage 记住，进入即恢复上次状态，不遍用户重复选择；恢复值失效时诚实回退默认（不报错不空白）。②**技术侧细节不外露为用户操作面**——多模态转述/后台聚类等自动执行（同步后异步触发，模型未配置诚实跳过），不给用户设独立维护入口。③**三态分离**——加载中/空数据/错误三种状态分别呈现，占位文案不得混用（「加载中…」不得用于「无数据」，曾致 0 字节快照被误读为加载卡死）。④**长操作可单点刷新**——全局同步之外提供局部入口（如「更新本群」秒级反馈），不让用户为看一个群的变化等全量。⑤**缺失配置就地补——不报错踢人**——动作因缺配置（如未配 text/vision 模型）失败时，直接弹出配置弹层就地填写（预填可改默认值），保存后自动重试原动作；禁止只报错让用户自己去设置页找。
-- **智能层 skills 文件**：`agent/skills/*.md` 统一用 `---` YAML frontmatter（name/description/trigger/keywords）+ Markdown 正文；loader 30s 内存缓存热加载，**新增文件无需重启**；skills 正文注入 system prompt 的 `<skills>` XML 块，用户消息关键词命中 keywords 时附加技能提示（match_skills_hint）。
+- **智能层 skills 文件**：`agent/skills/*.md` 统一用 `---` YAML frontmatter（name/description/trigger/keywords）+ Markdown 正文；loader 实体在 `sg_core/skill_loader.py`（T-976 解环下沉，`agent/skill_loader.py` 留转发 shim），30s 内存缓存热加载，**新增文件无需重启**；skills 正文注入 system prompt 的 `<skills>` XML 块，用户消息关键词命中 keywords 时附加技能提示（match_skills_hint）。
 
 ---
 
@@ -340,4 +347,5 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 - [2026-08-05] AGENTS.md 新增「角色认知」章节：理清开发角色（本文件读者，不注入 agent 对话）与使用角色（agent 对话测试助手，规则知识来自 system prompt + 被测系统工作区 AGENTS.md）的边界，防止角色混淆。
 - [2026-08-19] 飞书材料池共享化（T-949）：chats/docs/minutes 快照与话题库/历史落**工作区共享材料区**（`{ws}/.specflow/feishu_pool/`，即 `specflow_dir("")`）；watch 配置与话题草案留私有区（谁配置谁拉）。**授权语义升级为工作区级**：docs/minutes 对用户的可见性跟随飞书侧权限元数据（perm meta，需 `docs:permission.member:retrieve`/`docs:permission.setting:read` scope，缺失时保守仅 owner 可见）；chats 快照对工作区全员可见（拉取者必在群内，办公转述语义）。多用户重复同步靠 message_id 幂等合并无害化。
 - [2026-08-20] 多会话并行确立 git worktree 规程（Git Workflow §多会话并行开发）：主库永驻 master 只做验收，功能域 worktree 长期复用、建树走 `new-worktree.ps1`（同步 workbench.db/workspaces 等本地状态；lefthook pre-push 钩子硬编码主树二进制路径，worktree 内 push 门禁天然有效）。此前多会话同树开发出过事故；另本地对象库曾损坏（36f8108 恢复性全量入库），教训沉淀为「提交即推功能分支——worktree 共享主库对象库，不是备份，远端是唯一的提交细节备份线」。
+- [2026-08-21] T-975/T-976 依赖翻正（wt/dep-inversion）：21+3 个 services 实体下沉 `sg_core/`（user_store 数据层地基/ledger_store/draft_promote/format_spec/skill_loader/data_validator 等），原位置 sys.modules 转发 shim——**同名单引/打桩零改动，但 monkeypatch 必须指向 sg_core.X（定义模块）**；全仓 sys.path.insert 由 ~200 处清至 2 处合法入口引导（main.py 组合根 + backend 独立运维脚本），测试路径引导归一 pytest.ini `pythonpath`。模块级 import 环清零并进 release_check ④ 门禁（scripts/check_import_cycles.py）；函数级回边 3 条白名单登记（M-A/M-C 演进收编）。**下沉模块的 `Path(__file__)` 层数必须随新位置修正**（本次漏过 data_validator 一处，被 POOL_EXISTS 硬拒测试当场抓住）。顺手修存量 bug：audit_store.DB_DIR 幽灵路径（workbench/workbench/，主库存在该幽灵目录，可择期清理）。
 - [2026-08-21] worktree 规程补三条跨树协调纪律：①树与分支 1:1 长期复用，会话进树不切分支；②开工三件事（fetch→worktree list→读主库总控状态列）建立跨树视野；③认领/状态回写走 push 通道（改自己树的总控状态行→提交即推），总控 §6 文件登记表只协调同树内会话——跨树防撞靠功能域文件邻区事前隔离 + 合并验收 git 兜底，**不复制总控到各树**（事实源分裂比没有更糟）。

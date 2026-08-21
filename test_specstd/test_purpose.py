@@ -10,14 +10,11 @@ T-012 purposes 热加载注册表 / T-013 RBAC 多角色用途过滤。
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 # ══════════════════════════════════════════════════════════
@@ -275,18 +272,14 @@ class TestPurposeEndpoints:
     @pytest.fixture()
     def client(self, tmp_path, monkeypatch):
         """装配 TestClient（隔离 DB + sessions，不污染真实数据）。"""
-        sys.path.insert(0, str(SG_ROOT / "workbench" / "backend"))
-        try:
-            from services import user_store
-            monkeypatch.setattr(user_store, "DB_PATH", tmp_path / "workbench.db")
-            from routers import agent as agent_router
-            monkeypatch.setattr(agent_router, "SESSIONS_ROOT", tmp_path / "sessions")
-            from main import app
-            from fastapi.testclient import TestClient
-            with TestClient(app) as c:
-                yield c
-        finally:
-            sys.path.pop(0)
+        from services import user_store
+        monkeypatch.setattr(user_store, "DB_PATH", tmp_path / "workbench.db")
+        from routers import agent as agent_router
+        monkeypatch.setattr(agent_router, "SESSIONS_ROOT", tmp_path / "sessions")
+        from main import app
+        from fastapi.testclient import TestClient
+        with TestClient(app) as c:
+            yield c
 
     def _login(self, client, emp_no: str, name: str = "") -> dict:
         r = client.post("/api/auth/mock-login", json={"emp_no": emp_no, "name": name or emp_no})

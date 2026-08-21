@@ -12,17 +12,12 @@ REST（PUT /api/spec/changes/{delta}、POST .../commit）与 MCP 共用服务层
 """
 
 import json
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 TOOLS = [
     Tool(
@@ -100,7 +95,7 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
 
 def _handle_write_delta_doc(arguments: dict) -> list[TextContent]:
     try:
-        from services.specflow.delta_doc_writer import write_delta_doc
+        from workbench.backend.services.specflow.delta_doc_writer import write_delta_doc
         result = write_delta_doc(
             workspace=str(arguments.get("workspace", "") or ""),
             delta_id=str(arguments.get("delta_id", "") or ""),
@@ -116,7 +111,7 @@ def _handle_write_delta_doc(arguments: dict) -> list[TextContent]:
 
 def _handle_commit_delta_changes(arguments: dict) -> list[TextContent]:
     try:
-        from services.specflow.delta_committer import commit_delta_changes
+        from workbench.backend.services.specflow.delta_committer import commit_delta_changes
         result = commit_delta_changes(
             workspace=str(arguments.get("workspace", "") or ""),
             delta_id=str(arguments.get("delta_id", "") or ""),
@@ -131,8 +126,8 @@ def _handle_commit_delta_changes(arguments: dict) -> list[TextContent]:
 
 def _handle_push_delta(arguments: dict) -> list[TextContent]:
     try:
-        from services.specflow.delta_committer import push_delta
-        from services import git_config
+        from workbench.backend.services.specflow.delta_committer import push_delta
+        from sg_core import git_config
         from specstd.workspace import get_context_emp_no
         emp = get_context_emp_no() or ""
         token = git_config.get_decrypted_token(emp) if emp else ""

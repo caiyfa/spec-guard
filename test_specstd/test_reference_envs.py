@@ -8,17 +8,12 @@
 """
 
 import os
-import sys
 import importlib
 
 import pytest
 
 SG_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 BACKEND_DIR = os.path.join(SG_ROOT, "workbench", "backend")
-if BACKEND_DIR not in sys.path:
-    sys.path.insert(0, BACKEND_DIR)
 
 # mock 认证必须在 services.auth 首次导入前生效
 os.environ["SG_AUTH_MODE"] = "mock"

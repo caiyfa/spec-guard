@@ -5,17 +5,12 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 from specstd.anchors import resolve_covers, scan_anchors  # noqa: E402
 from specstd.workspace import get_active_workspace  # noqa: E402
@@ -86,8 +81,8 @@ def _scenario_index() -> dict[str, dict]:
         pass
     try:
         # K-016 同构的场景库根（工作区有 scenarios/ 则用，否则 SpecGuard 仓库根）
-        from services.draft_promote import _scenarios_root
-        from services.scenario_store import _scenarios_cached, SCENARIOS_ROOT as _SS_ROOT
+        from sg_core.draft_promote import _scenarios_root
+        from workbench.backend.services.scenario_store import _scenarios_cached, SCENARIOS_ROOT as _SS_ROOT
         if _scenarios_root() == _SS_ROOT:
             # K-025：主路径走指纹缓存（此前每次 validate 全量重解析 90+ YAML）
             for s in _scenarios_cached():
@@ -230,7 +225,7 @@ def validate_scenario_content(content: str) -> dict:
 
     # 注册表引用校验（tool 名称）
     try:
-        from services.format_spec import get_tool_catalog
+        from sg_core.format_spec import get_tool_catalog
         valid_tools = {t["name"] for t in get_tool_catalog()}
     except Exception:
         valid_tools = set()
@@ -258,7 +253,7 @@ def validate_scenario_content(content: str) -> dict:
     # {{random:6}} 类（Apifox 语法）不在 fn.*/env.*/上游引用/场景内 save 与
     # set_var vars 集合 → 运行期必 KeyError「变量未定义」（EX-5c6f4c98），ERROR 禁止入库
     try:
-        from services.preflight import _static_unresolved_templates
+        from workbench.backend.services.preflight import _static_unresolved_templates
         tpl_text = ""
         for section in ("flow", "verify", "teardown"):
             val = raw.get(section)
@@ -277,7 +272,7 @@ def validate_scenario_content(content: str) -> dict:
     # 文件引用，与 BODY_KEY/UNKNOWN_TPL 同族；缺失 = 仓库缺陷，应随 git 提交，
     # 与运行期 SKIP（环境缺口）语义不同；含插值路径静态不可判，不在此报）
     try:
-        from services.preflight import _static_file_refs, _file_exists
+        from workbench.backend.services.preflight import _static_file_refs, _file_exists
         ws = get_active_workspace()
         base = ws.root if ws else SG_ROOT
         for f in _static_file_refs(raw):

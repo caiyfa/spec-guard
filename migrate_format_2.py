@@ -17,11 +17,8 @@ import argparse
 import difflib
 import os
 import re
-import sys
 
 SG_ROOT = os.path.dirname(os.path.abspath(__file__))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 SCENARIOS_ROOT = os.path.join(SG_ROOT, "scenarios")
 

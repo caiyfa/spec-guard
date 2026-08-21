@@ -9,14 +9,11 @@
 
 import asyncio
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from mcp_server.tools import feishu_fetch  # noqa: E402
 
@@ -257,11 +254,12 @@ class TestRunLark:
         assert feishu_fetch._lark_command() == ["lark-cli"]
 
     def test_non_json_output(self, monkeypatch):
+        from specflow.feishu_pool import lark_cli
         class P:
             returncode = 1
             stdout = "some plain text"
             stderr = ""
-        monkeypatch.setattr(feishu_fetch.subprocess, "run",
+        monkeypatch.setattr(lark_cli.subprocess, "run",
                             lambda *a, **k: P())
         with pytest.raises(ValueError, match="输出非 JSON"):
             feishu_fetch._run_lark(["calendar", "+agenda"])
@@ -271,15 +269,17 @@ class TestRunLark:
             returncode = 1
             stdout = '{"ok": false, "error": "boom"}'
             stderr = ""
-        monkeypatch.setattr(feishu_fetch.subprocess, "run",
+        from specflow.feishu_pool import lark_cli
+        monkeypatch.setattr(lark_cli.subprocess, "run",
                             lambda *a, **k: P())
         with pytest.raises(ValueError, match="调用失败"):
             feishu_fetch._run_lark(["calendar", "+agenda"])
 
     def test_timeout(self, monkeypatch):
+        from specflow.feishu_pool import lark_cli
         def hang(*a, **k):
             raise subprocess.TimeoutExpired("lark-cli", 90)
-        monkeypatch.setattr(feishu_fetch.subprocess, "run", hang)
+        monkeypatch.setattr(lark_cli.subprocess, "run", hang)
         with pytest.raises(ValueError, match="超时"):
             feishu_fetch._run_lark(["calendar", "+agenda"])
 

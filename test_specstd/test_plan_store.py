@@ -5,17 +5,12 @@ SG_ROOT / REGISTRY_PATH / CLONES_DIR 到 tmp_path，register_local 激活临时�
 计划落盘到该工作区的 .specguard/plans/。
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 import specstd.workspace as wsm  # noqa: E402
 from services import plan_store  # noqa: E402

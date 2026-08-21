@@ -7,15 +7,12 @@ DB 隔离：monkeypatch _load_db_config 返回 {}（K-001 教训：避免读真�
 """
 
 import json
-import sys
 from pathlib import Path
 
 import httpx
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.llm_client import LLMClient
 from agent.runtime import AgentRuntime

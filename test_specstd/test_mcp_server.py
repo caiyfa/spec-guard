@@ -11,14 +11,11 @@
 
 import asyncio
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from test_specstd.helpers import create_valid_workspace
 from specstd.workspace import register_local, unregister, drafts_dir
@@ -360,7 +357,7 @@ class TestScenarioTools:
             "id: B-001\ntitle: 下游\nversion: \"0.1\"\n"
             "flow:\n  - call: {method: GET, path: /b, save: r}\n"
             "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
-        from services import scenario_store
+        from workbench.backend.services import scenario_store
         monkeypatch.setattr(scenario_store, "SCENARIOS_ROOT", lib)
         monkeypatch.setattr(scenario_tools, "SCENARIOS_ROOT", lib)
         # K-xxx：场景库重定向时台账投影一并重定向，防污染真实 workbench.db

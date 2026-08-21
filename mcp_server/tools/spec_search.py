@@ -12,14 +12,11 @@
 
 import json
 import re
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.schema import ITER_CODE_RE, FR_DELTA_ID_RE, parse_fr_delta_id  # noqa: E402
 from specstd.workspace import get_active_workspace, safe_resolve  # noqa: E402

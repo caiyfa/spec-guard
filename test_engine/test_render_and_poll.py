@@ -7,13 +7,10 @@ poll 参数透传（ENG-BUG-014）。
 """
 
 import os
-import sys
 import time
 from types import SimpleNamespace
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.execution_record import CAT_SCENARIO  # noqa: E402
 from engine.registry import Registry  # noqa: E402
@@ -205,8 +202,6 @@ def test_poll_defaults_unchanged():
 
 def _validate_tc(tmp_path, files):
     backend = os.path.join(SG_ROOT, "workbench", "backend")
-    if backend not in sys.path:
-        sys.path.insert(0, backend)
     from services.spec_validator import validate_test_cases
     for name, content in files.items():
         (tmp_path / name).write_text(content, encoding="utf-8")

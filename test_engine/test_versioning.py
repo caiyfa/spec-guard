@@ -1,13 +1,10 @@
 """引擎离线单测：版本解析 / 期望匹配 / 契约指纹 / T6 校验（不依赖 DB/HTTP）。"""
 
 import os
-import sys
 
 import pytest
 
 SG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if SG_ROOT not in sys.path:
-    sys.path.insert(0, SG_ROOT)
 
 from engine.versioning import (  # noqa: E402
     MATCH, MINOR_DRIFT, MAJOR_DRIFT,

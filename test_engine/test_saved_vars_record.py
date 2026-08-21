@@ -1,10 +1,7 @@
 """ExecutionRecord.to_dict 收录截断 saved_vars（全量执行台账数据源）。"""
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from engine.execution_record import ExecutionRecord
 

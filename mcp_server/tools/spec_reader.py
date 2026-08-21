@@ -145,11 +145,8 @@ def _read_text_guarded(resolved: Path, display_path: str) -> list[TextContent]:
     ext = resolved.suffix.lower()
     if ext in {".xlsx", ".docx", ".pdf"}:
         try:
-            import sys as _sys
             BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-            if str(BACKEND_DIR) not in _sys.path:
-                _sys.path.insert(0, str(BACKEND_DIR))
-            from services import file_preview
+            from sg_core import file_preview
             _fmt, text = file_preview.preview_text(resolved)
             note = f"[{ext} 已转换为文本预览，大文件可能截断]\n\n"
             return [TextContent(type="text", text=note + text)]
@@ -183,11 +180,8 @@ def _migration_hint(path: str) -> str:
         return ""
     sid = name.rsplit(".", 1)[0]
     try:
-        import sys as _sys
         BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-        if str(BACKEND_DIR) not in _sys.path:
-            _sys.path.insert(0, str(BACKEND_DIR))
-        from services import ledger_store
+        from sg_core import ledger_store
         # 1) 场景台账：同 ID 已入库 → 指向库内当前路径（file_path 为相对仓库根路径）
         for r in ledger_store.query_scenarios():
             if r.get("id") == sid:

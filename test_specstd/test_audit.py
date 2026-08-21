@@ -9,14 +9,11 @@
 
 import asyncio
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.skill_loader import load_skill, list_skills, clear_cache
 from feedback.ledger import FeedbackLedger

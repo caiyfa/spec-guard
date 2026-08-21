@@ -10,14 +10,11 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from specstd.workspace import (
     can_read_private,
@@ -183,12 +180,8 @@ class TestMigrateDraftsEmp:
         sess_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         # 执行迁移（简化入口：import 后调用内部函数）
-        sys.path.insert(0, str(SG_ROOT / "scripts"))
-        try:
-            from migrate_drafts_emp import migrate
-            moved, kept = migrate(ws_root=ws_root, sessions_root=tmp_path / "agent" / "sessions")
-        finally:
-            sys.path.pop(0)
+        from migrate_drafts_emp import migrate
+        moved, kept = migrate(ws_root=ws_root, sessions_root=tmp_path / "agent" / "sessions")
         assert "ST-EMP-001.yaml" in moved
         # 文件已迁入 90024166 私有区
         assert (ws_root / ".specguard" / "90024166" / "drafts" / "ST-EMP-001.yaml").is_file()
@@ -201,11 +194,7 @@ class TestMigrateDraftsEmp:
         shared.mkdir(parents=True)
         (shared / "ST-ORPHAN-001.yaml").write_text("id: ST-ORPHAN-001\n", encoding="utf-8")
 
-        sys.path.insert(0, str(SG_ROOT / "scripts"))
-        try:
-            from migrate_drafts_emp import migrate
-            moved, kept = migrate(ws_root=ws_root, sessions_root=tmp_path / "agent" / "sessions")
-        finally:
-            sys.path.pop(0)
+        from migrate_drafts_emp import migrate
+        moved, kept = migrate(ws_root=ws_root, sessions_root=tmp_path / "agent" / "sessions")
         assert "ST-ORPHAN-001.yaml" in kept
         assert (shared / "ST-ORPHAN-001.yaml").is_file()

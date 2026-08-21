@@ -11,12 +11,9 @@
 8. 压缩后保留的尾部消息 token ≤ max_context_tokens * 0.25
 """
 
-import sys
 from pathlib import Path
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.compactor import (
     estimate_tokens,

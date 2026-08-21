@@ -9,14 +9,11 @@ Agent 推卡动线：状态迁移节点（材料解析/评分产出/三闸推进
 """
 
 import json
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT / "workbench" / "backend") not in sys.path:
-    sys.path.insert(0, str(SG_ROOT / "workbench" / "backend"))
 
 TOOLS = [
     Tool(
