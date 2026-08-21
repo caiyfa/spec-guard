@@ -224,9 +224,9 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 任务ID | 阶段 | 任务 | 模块 | 产出/验收要点 | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| T-933 | 材料-上传 | 对话内材料上传 + 引用类型扩展 | AgentChat.tsx + api.ts | 📎 入口走 S3 既有上传端点；上传成功挂 reference 卡片（ChatReference 扩 'material'）随消息进 references；「材料」页签列会话引用材料（标题/状态/摘要）；build | T-932 | 未认领 | | |
-| T-934 | 材料-读取 | read_material MCP 工具 + 白名单登记 | mcp_server/tools/specflow_pack.py + purposes md | summary/topics/raw 三视图 + raw 分页；requirement_interview tools 登记；MCP 用例 ≥3 | — | 未认领 | | |
-| T-935 | 收口 | e2e + 全量回归 | test_specstd + 前端 | 上传→引用→read_material 贯通（mock）；全量回归 + release_check + build | T-931~T-934 | 未认领 | | |
+| T-933 | 材料-上传 | 对话内材料上传 + 引用类型扩展 | AgentChat.tsx + api.ts | 📎 入口走 S3 既有上传端点；上传成功挂 reference 卡片（ChatReference 扩 'material'）随消息进 references；「材料」页签列会话引用材料（标题/状态/摘要）；build | T-932 | 进行中 | sess-material-pool | 并入 T-990 施工（2026-08-21），随其验收 |
+| T-934 | 材料-读取 | read_material MCP 工具 + 白名单登记 | mcp_server/tools/specflow_pack.py + purposes md | summary/topics/raw 三视图 + raw 分页；requirement_interview tools 登记；MCP 用例 ≥3 | — | 进行中 | sess-material-pool | 并入 T-990 施工（2026-08-21），随其验收 |
+| T-935 | 收口 | e2e + 全量回归 | test_specstd + 前端 | 上传→引用→read_material 贯通（mock）；全量回归 + release_check + build | T-931~T-934 | 进行中 | sess-material-pool | 并入 T-990 施工（2026-08-21），随其验收 |
 | T-936 | 储备 | MaterialsPanel 瘦身评估 | — | 对话链路验收后评估入包闸门/六区重组去向，总控人拍板 | T-935 验收 | 储备 | | 触发制，不认领 |
 
 
@@ -254,7 +254,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-980 | M-C | Agent 评测体系（轨迹断言 golden case + MockLLM 升基建 + metrics 工具维度） | wt/agent-eval | — | 未认领 | | 3-5 天；智能层后续一切的地基 |
 | T-981 | M-C | 测试类型学（dimensions 受控词表+维度断言映射，format_spec 三同步） | wt/test-taxonomy | — | 未认领 | | 3-4 天；与 T-980 并行 |
 | T-982 | M-C | 工具收敛（79→≤30，元数据派生 RBAC/写工具登记，eval 集验证收益） | wt/tool-consolidation | T-980 | 未认领 | | 5-8 天 |
-| T-990 | M-D | 群类型标签 + 吞并 T-933/T-934/T-935（对话内上传/read_material/e2e） | wt/material-pool | — | 未认领 | | 2-3 天 |
+| T-990 | M-D | 群类型标签 + 吞并 T-933/T-934/T-935（对话内上传/read_material/e2e） | wt/material-pool | — | 进行中 | sess-material-pool | 2-3 天；2026-08-21 认领 |
 | T-991 | M-D | 话题 category/priority（schema v3，闲聊保留默认过滤） | wt/material-pool | T-990 | 未认领 | | 2-3 天；拍板③前置 |
 | T-992 | M-D | link 死链修复 + 话题模块 FR 锚点派生 | wt/material-pool | T-991 | 未认领 | | 1-2 天；拍板②前置 |
 | T-993 | M-D | 跨群话题关联（先设计文档） | wt/material-pool | T-992 | 未认领 | | 3-5 天 |
@@ -272,6 +272,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 |---|---|---|---|---|
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937~T-942（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验（b002749）；T-938 群聊后台预热（cdf8d6e）；T-939 材料原文+图片直出（f66330b+1c90b83）；T-940 监听用户视图+按人切换+飞书直链（4a7f656）；T-941 同步设置去重+错误人话化+搜索解耦（871d64c）；T-942 授权闭环入弹层（006c5c2）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
+| sess-material-pool | M-D 材料池演进施工（wt/material-pool 树） | T-990（进行中，吞并 T-933/T-934/T-935）→ T-991 → T-992 → T-993 | 2026-08-21 | 链式顺序施工；T-991/T-992 动工前需总控人拍板决策②③（话题 FR 锚点派生/闲聊默认过滤）；本会话文件读写一律用树路径 D:\work\tdm-code\wt\material-pool\，只跑离线测试与前端 build，提交即推 feature/material-pool |
 | | | | | |
 
 ---
