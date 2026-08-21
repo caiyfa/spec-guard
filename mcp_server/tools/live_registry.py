@@ -3,12 +3,11 @@
 D3 决策：注册表是单一事实源——query_registry / validator 必须读活注册表，
 新增 oracle/step 后工具自动可见，不允许硬编码清单漂移。
 
-构建方式与 conftest.py 一致（db=None，仅注册元数据，不触网/连库）。
+构建走 engine.bootstrap 组合根（T-970 装配归一；db=None，仅注册元数据，不触网/连库）。
 """
 
 from __future__ import annotations
 
-import importlib
 import os
 import sys
 from pathlib import Path
@@ -21,33 +20,24 @@ _CACHE = {}
 
 
 def get_live_registry():
-    """构建并缓存活注册表。失败时返回 None（调用方自行降级）。"""
+    """构建并缓存活注册表。失败时返回 None（调用方自行降级）。
+
+    T-970 装配归一：统一走 engine.bootstrap 组合根（db=None，仅注册元数据，
+    不触网/连库；环境配置缺失时降级空 dict，注册元数据通常不依赖配置值）。
+    """
     if "registry" in _CACHE:
         return _CACHE["registry"]
     try:
-        from engine.registry import Registry
-        from engine.scenario_runner import register_builtin_steps
-        from engine.schema_match import register_builtin_oracles
+        from engine.bootstrap import build_registry, load_system_env
 
         system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
-        mod = importlib.import_module(f"systems.{system}")
-
-        env_config = {}
+        env_name = os.environ.get("SG_ENV", "sit")
         try:
-            env_name = os.environ.get("SG_ENV", "sit")
-            if hasattr(mod, "load_env"):
-                env_config = mod.load_env(env_name)
-            else:
-                cfg_mod = importlib.import_module(f"systems.{system}.config")
-                env_config = cfg_mod.load_env(env_name)
+            env_config = load_system_env(system, env_name)
         except Exception:
-            env_config = {}  # 环境配置缺失时降级（注册元数据通常不依赖配置值）
+            env_config = {}
 
-        reg = Registry()
-        register_builtin_steps(reg)
-        register_builtin_oracles(reg)
-        if hasattr(mod, "register"):
-            mod.register(reg, env_config, None)  # db=None：只注册元数据
+        reg = build_registry(system, env_config, None)
         _CACHE["registry"] = reg
         return reg
     except Exception:
