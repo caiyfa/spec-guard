@@ -9,7 +9,6 @@
 import os
 import pathlib
 import random
-import re
 import string
 import time
 import uuid as _uuid
@@ -19,16 +18,9 @@ from jsonpath_ng.exceptions import JSONPathError
 
 from engine.execution_record import (
     CAT_ASSERT,
-    CAT_CONTRACT_DRIFT,
-    CAT_CONTRACT_ORPHAN,
     CAT_ENV,
     CAT_ORACLE,
     CAT_SCENARIO,
-    CAT_UPSTREAM,
-    VERDICT_BLOCKED,
-    VERDICT_DRIFT,
-    VERDICT_FAIL,
-    VERDICT_ORPHANED,
     VERDICT_PASS,
     VERDICT_SKIP,
     AssertionTrace,
@@ -38,7 +30,27 @@ from engine.execution_record import (
     truncate_body,
 )
 from engine.http_client import HttpClient, _trace_id_of
+
+# T-999c 抽出：插值器 → engine/interpolation.py，实例池 → engine/instance_pool.py；
+# 此处再导出保持 `from engine.scenario_runner import render/LeaseRegistry/...` 存量引用零改动
+from engine.instance_pool import (  # noqa: F401
+    LeaseRegistry,
+    _acquire_instance,
+    _blocked_record,
+    _check_dep_versions,
+    _Instance,
+    _resolve_dep_ns,
+    _UpstreamFailed,
+    _verdict_record,
+)
 from engine.scenario_loader import MODE_SHARED
+
+# 抽出段常量再导出（test_engine_modes 等存量 `from engine.scenario_runner import VERDICT_*` 零改动）
+from engine.execution_record import (  # noqa: F401,E402  # isort:skip
+    CAT_CONTRACT_DRIFT, CAT_CONTRACT_ORPHAN, CAT_UPSTREAM,
+    VERDICT_BLOCKED, VERDICT_DRIFT, VERDICT_FAIL, VERDICT_ORPHANED,
+)
+from engine.interpolation import _FNS, RenderError, _resolve, render  # noqa: F401
 
 
 class SkipScenario(Exception):
@@ -74,14 +86,6 @@ class ScenarioTimeout(Exception):
     """
 
 
-class RenderError(ValueError):
-    """插值渲染后仍残留 {{ 占位符（ENG-T05/ENG-BUG-006）。
-
-    书写错误的插值（缺右括号/空占位符）此前静默作为字面量发给 API，脏数据到
-    断言/下游才暴露。ValueError 子类 → run_scenario 的 except 链归 CAT_SCENARIO
-    （依赖 ENG-T01 的分类）。字面量 {{ 无转义语法（format_spec 已注明限制）。
-    """
-
 
 def _scenario_timeout_sec():
     """读取场景级软看门狗阈值：SG_SCENARIO_TIMEOUT（秒）。
@@ -107,41 +111,6 @@ def _check_scenario_deadline(rctx, where):
         raise ScenarioTimeout(
             f"场景执行超过 {timeout_sec:g}s（{where}边界触发软看门狗；"
             f"脚本内死循环无法触发，进程级兜底见 runner 层 T-118 run_timeout_sec）")
-
-
-# ══════════════════════════════════════════════════════════
-# 资源租约注册表（session 级，进程结束即消亡）
-# ══════════════════════════════════════════════════════════
-
-class LeaseRegistry:
-    """session 级资源租约注册表。任何步骤处理器/调度器都可接入。
-
-    resource_type: 资源类型标识（emp_no / session_id / account / config_key / ...）
-    key:           资源实例标识
-    holder:        持有者（场景 ID + 实例号），用于报告展示与冲突诊断
-    租约是 session 级，挂在 RunContext 上，进程结束即消亡。
-    """
-    def __init__(self):
-        self._leases = {}   # {resource_type: {key: holder}}
-
-    def acquire(self, resource_type, key, holder):
-        held = self._leases.setdefault(resource_type, {})
-        if key in held:
-            return False          # 已被租出，调用方决定换候选还是 SKIP
-        held[key] = holder
-        return True
-
-    def leased_keys(self, resource_type):
-        return set(self._leases.get(resource_type, {}))
-
-    def release(self, resource_type, key):        # teardown/实例清理时归还
-        self._leases.get(resource_type, {}).pop(key, None)
-
-    def release_all(self):                        # session 结束时整体释放
-        self._leases.clear()
-
-    def snapshot(self):                           # 报告落盘用：{type: {key: holder}}
-        return {t: dict(keys) for t, keys in self._leases.items()}
 
 
 # ══════════════════════════════════════════════════════════
@@ -237,88 +206,6 @@ class RunContext:
         """账号别名 → 真实 AD 账号（token 换取用）"""
         info = self.account_info(account)
         return info.get("ad") if info else None
-
-
-# ══════════════════════════════════════════════════════════
-# 变量插值
-# ══════════════════════════════════════════════════════════
-
-# REQ-2：内置变量函数（运行时生成新值）
-_FNS = {
-    "fn.timestamp": lambda: str(int(time.time())),
-    "fn.date": lambda: time.strftime("%Y%m%d"),
-    "fn.uuid_short": lambda: _uuid.uuid4().hex[:8],
-}
-
-
-def _resolve(expr, ns):
-    """变量插值解析：支持点号路径 + 数组下标 + fn 函数。
-
-    解析顺序：
-    1. fn 函数（fn.timestamp 等）→ 直接调用
-    2. 点号路径（emp.no）→ 快速 dict 路径
-    3. 数组下标/复杂路径 → jsonpath 兜底
-    """
-    expr = expr.strip()
-
-    # REQ-2：fn 函数拦截
-    if expr in _FNS:
-        return _FNS[expr]()
-
-    # 快路径：点号 dict 路径
-    parts = expr.split(".")
-    try:
-        cur = ns
-        for p in parts:
-            if isinstance(cur, dict) and p in cur:
-                cur = cur[p]
-            elif isinstance(cur, list) and p.isdigit():
-                cur = cur[int(p)]
-            else:
-                raise KeyError(p)
-        return cur
-    except (KeyError, TypeError, IndexError):
-        pass
-
-    # REQ-1：jsonpath 兜底（数组下标 records[0].id、负索引 rows[-1]）
-    try:
-        matches = jsonpath_parse(f"$.{expr}").find(ns)
-        if matches:
-            return matches[0].value
-    except Exception:
-        pass
-
-    raise KeyError(f"变量未定义: {expr}（可用键: {list(ns) if isinstance(ns, dict) else type(ns)}）")
-
-
-# ENG-T05（ENG-BUG-006）：渲染结果残留占位符检测——写错的插值不再静默作为字面量发出
-_PLACEHOLDER_LEFT = re.compile(r"\{\{")
-
-
-def render(obj, ns):
-    """递归插值：dict/list/str 中的 {{expr}} 全部替换
-
-    残留扫描（ENG-T05）：字符串经 fullmatch/sub 处理后仍含 {{ → 抛 RenderError
-    （归 CAT_SCENARIO）。注：fullmatch 分支的解析值来自变量，其内容含 {{ 属数据
-    而非模板错误，不扫描。
-    """
-    if obj is None:
-        return None
-    if isinstance(obj, dict):
-        return {k: render(v, ns) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [render(v, ns) for v in obj]
-    if isinstance(obj, str):
-        m = re.fullmatch(r"\{\{\s*(.+?)\s*\}\}", obj)
-        if m:
-            return _resolve(m.group(1), ns)          # 完全匹配：保留类型
-        out = re.sub(r"\{\{\s*(.+?)\s*\}\}",
-                     lambda mm: str(_resolve(mm.group(1), ns)), obj)
-        if _PLACEHOLDER_LEFT.search(out):
-            raise RenderError(f"未解析的插值占位符: {obj!r}"
-                              f"（渲染结果残留 '{{'，检查是否缺右括号或变量名拼错）")
-        return out
-    return obj
 
 
 # ══════════════════════════════════════════════════════════
@@ -1151,153 +1038,6 @@ def run_scenario(scenario, rctx, upstream_of="", run_verify=True, extra_ns=None,
     return record
 
 
-# ══════════════════════════════════════════════════════════
-# 实例池：shared 复用 / exclusive 新建（写型场景状态管理核心）
-# ════════════════════════════════════════════════════════
-
-class _Instance:
-    """上游场景的一次执行实例。
-
-    - mode=shared：session 内唯一，所有只读消费者共享
-    - mode=exclusive：为单个消费者新建，消费者可变更其状态而不影响其他人
-    export_ns：本实例及其依赖闭包的变量快照 {scenario_id: saved_vars}，
-    消费者合并后得到“与本实例一致的世界观”（传递引用绑定到同一套实例）。
-    """
-
-    def __init__(self, scenario, record, mode, no, export_ns):
-        self.scenario = scenario
-        self.record = record
-        self.mode = mode
-        self.no = no                   # 实例序号（1 起，报告区分多实例）
-        self.export_ns = export_ns     # {scenario_id: saved_vars}，含传递依赖
-        self.torn_down = False
-
-
-class _UpstreamFailed(Exception):
-    """上游实例未通过，携带 (scenario_id, verdict) 供消费者标记 BLOCKED"""
-
-    def __init__(self, sid, verdict):
-        self.sid, self.verdict = sid, verdict
-        super().__init__(f"{sid}: {verdict}")
-
-
-def _resolve_dep_ns(scenario, rctx, consumer_id):
-    """解析场景的直接依赖 → 合并后的实例绑定命名空间。上游未通过时抛 _UpstreamFailed。"""
-    dep_ns = {}
-    for dep in scenario.depends_on:
-        inst = _acquire_instance(dep["id"], rctx, consumer_id, dep["mode"])
-        if inst.record.verdict != VERDICT_PASS:
-            raise _UpstreamFailed(dep["id"], inst.record.verdict)
-        dep_ns.update(inst.export_ns)
-    return dep_ns
-
-
-def _acquire_instance(scenario_id, rctx, consumer_id, mode):
-    """获取上游场景的可用实例。
-
-    - shared：复用池内共享实例（无则创建）；共享实例永不被独占消费者触碰
-    - exclusive：总是新建全新实例（懒重跑），其依赖闭包递归按各自 mode 获取：
-      闭包内 shared 上游仍复用缓存，exclusive 上游同样新建（递归独占）
-    - ENG-T02 版本仲裁下沉：每一跳取实例前先仲裁（深层 DRIFT/ORPHANED 不再漏检）；
-      传递孤儿依赖不抛裸 KeyError，按上游失败语义传播（ENG-BUG-010）
-    """
-    pool = rctx.instances.setdefault(scenario_id, [])
-    if mode == MODE_SHARED:
-        for inst in pool:
-            if inst.mode == MODE_SHARED:
-                return inst
-    scenario = rctx.graph.by_id.get(scenario_id)
-    if scenario is None:
-        # 传递孤儿依赖：此前 by_id[...] 直接 KeyError 冒泡（pytest ERROR 无 verdict）
-        raise _UpstreamFailed(scenario_id, VERDICT_ORPHANED)
-    verdict, reason = _check_dep_versions(scenario, rctx)   # 每一跳都仲裁（ENG-BUG-002③）
-    if verdict:
-        record = _verdict_record(scenario, verdict, reason)
-        record.upstream_of = consumer_id
-        rctx.records.append(record)
-        raise _UpstreamFailed(scenario_id, verdict)
-    dep_ns = _resolve_dep_ns(scenario, rctx, consumer_id)   # 先递归准备它自己的上游
-
-    no = len(pool) + 1
-    record = run_scenario(scenario, rctx, upstream_of=consumer_id,
-                          run_verify=not rctx.skip_upstream_verify,
-                          extra_ns=dep_ns, instance_no=no)
-    record.dep_mode = mode
-    rctx.records.append(record)
-
-    export_ns = dict(dep_ns)
-    export_ns[scenario_id] = record.saved_vars
-    inst = _Instance(scenario, record, mode, no, export_ns)
-    pool.append(inst)
-    if record.verdict == VERDICT_PASS and mode == MODE_SHARED:
-        rctx.shared_ns[scenario_id] = record.saved_vars   # 仅共享实例发布到全局
-    if scenario.teardown:
-        rctx.teardown_stack.append((scenario, inst))       # 失败实例也登记（尽力清理）
-    return inst
-
-
-def _blocked_record(scenario, sid, verdict):
-    record = ExecutionRecord(
-        scenario_id=scenario.id, title=scenario.title, covers=scenario.covers,
-        tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
-    record.verdict = VERDICT_BLOCKED
-    record.skip_reason = f"上游场景 {sid} 未通过（{verdict}），本场景未执行"
-    # ENG-BUG-001：BLOCKED 场景复用 skip_category 字段承载上游分类（不得调 fail() 改写 verdict）
-    record.skip_category = CAT_UPSTREAM
-    record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
-    return record
-
-
-def _verdict_record(scenario, verdict, reason):
-    record = ExecutionRecord(
-        scenario_id=scenario.id, title=scenario.title, covers=scenario.covers,
-        tags=scenario.tags, priority=scenario.priority, doc=scenario.doc)
-    record.verdict = verdict
-    record.skip_reason = reason
-    # ENG-T02：DRIFT/ORPHANED/strict-FAIL 填充 failure（不调 fail() 以免 verdict 被改写）——
-    # pytest 侧 [unknown] 空消息消失，plan_executor 侧 FAIL 通知路径可用
-    if verdict == VERDICT_ORPHANED:
-        record.failure = {"category": CAT_CONTRACT_ORPHAN, "message": reason, "evidence": None}
-    elif verdict in (VERDICT_DRIFT, VERDICT_FAIL):
-        record.failure = {"category": CAT_CONTRACT_DRIFT, "message": reason, "evidence": None}
-    record.given = {"depends_on": scenario.depends_display, "file": scenario.path}
-    return record
-
-
-def _check_dep_versions(scenario, rctx):
-    """版本仲裁（格式 2.0）：执行前评估依赖边的版本匹配状态。
-
-    返回 (verdict, reason)；全部满足返回 (None, "")。
-    - 上游缺失 + optional → SKIP（可选依赖豁免，两种模式一致）
-    - 上游缺失 → ORPHANED（strict_deps 下 FAIL）
-    - 契约版本 MAJOR 漂移 → DRIFT（strict_deps 下 FAIL）
-    - MINOR 漂移 → 放行（调用方记录提示）
-
-    ENG-T02：除 run_with_deps 顶层（目标场景自己的结论）外，_acquire_instance
-    对依赖链每一跳调用本函数——深层漂移/孤儿不再漏检。
-    """
-    from engine.dependency_graph import ORPHAN
-    from engine.versioning import MAJOR_DRIFT, MINOR_DRIFT
-    minor_notes = []
-    for st in rctx.graph.dep_status.get(scenario.id, []):
-        status = st["status"]
-        if status == ORPHAN:
-            if st["optional"]:
-                return VERDICT_SKIP, f"可选依赖 {st['id']} 不存在，场景跳过（optional）"
-            if rctx.strict_deps:
-                return VERDICT_FAIL, f"依赖场景 {st['id']} 不存在（strict_deps 严格模式）"
-            return VERDICT_ORPHANED, f"依赖场景 {st['id']} 不存在——上游已删除/改名，请修正 depends_on"
-        if status == MAJOR_DRIFT:
-            msg = (f"依赖 {st['id']} 契约版本漂移: 期望 {st['version'] or '(未声明)'} "
-                   f"实际 v{st['actual']}")
-            if rctx.strict_deps:
-                return VERDICT_FAIL, msg + "（strict_deps 严格模式）"
-            return VERDICT_DRIFT, msg + "——请核对上游契约后 bump 期望版本"
-        if status == MINOR_DRIFT:
-            minor_notes.append(f"{st['id']}(期望{st['version']}/实际v{st['actual']})")
-    if minor_notes:
-        scenario._minor_drift_note = "MINOR 漂移放行: " + ", ".join(minor_notes)
-    return None, ""
 
 
 def run_with_deps(scenario, rctx):

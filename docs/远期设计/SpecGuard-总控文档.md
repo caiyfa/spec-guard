@@ -645,3 +645,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_notify_config.py | sess-tool-consolidation | 2026-08-21 | 0314751fae62 | 3b7c528d1c6d | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
 | test_specstd/test_scenario_meta_pack.py | sess-tool-consolidation | 2026-08-21 | 089a969de8e4 | 3c8984cce813 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
 | workbench/backend/scripts/migrate_encrypt_apikeys.py | sess-tool-consolidation | 2026-08-21 | 5cd6f1f26ef8 | 800243c26366 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| engine/scenario_runner.py | sess-tool-consolidation | 2026-08-21 | 5cbd737f0537 | 71b1914bc44f | 已完成 | T-999c：抽插值器/实例池，再导出兼容 |
+| engine/interpolation.py | sess-tool-consolidation | 2026-08-21 | NEW | 9ae71bd74771 | 已完成 | T-999c：新模块（render/_resolve/RenderError/_FNS） |
+| engine/instance_pool.py | sess-tool-consolidation | 2026-08-21 | NEW | 7ef70896d589 | 已完成 | T-999c：新模块（LeaseRegistry/实例池/依赖仲裁辅助） |
+| AGENTS.md | sess-tool-consolidation | 2026-08-21 | 94c0c4400b15 | 0b8a7406cde7 | 已完成 | T-999c：引擎块同步 interpolation/instance_pool |

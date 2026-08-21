@@ -62,7 +62,9 @@ specguard/                        # 仓库根（独立，无外层前缀）
 ├── serve-prod.ps1                # 生产部署（单端口 :9100 UAC SSO）
 │
 ├── engine/                       # 通用引擎【冻结层 · 语义改动需评审】
-│   ├── scenario_runner.py        #   执行器（flow/verify/插值/依赖调度，~1080 行）
+│   ├── scenario_runner.py        #   执行器（flow/verify/依赖调度；T-999c 抽出后 ~1160 行）
+│   │   ├── interpolation.py      #   变量插值器（render/_resolve/RenderError，runner 再导出兼容）
+│   │   └── instance_pool.py      #   实例池+资源租约（LeaseRegistry/shared/exclusive/依赖仲裁辅助）
 │   ├── dependency_graph.py       #   DAG：拓扑/环检测/版本仲裁
 │   ├── scenario_loader.py        #   YAML 场景加载
 │   ├── tool_registry.py          #   tool 元数据注册表（模块导入时注册）
