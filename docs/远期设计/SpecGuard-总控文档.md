@@ -287,6 +287,21 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-material-pool | 2026-08-21 | da519c270d54 | | 登记中 | T-990 群类型标签：_CHAT_KINDS 枚举 + _clean_chats 归一化（镜像 users 模式） |
+| workbench/frontend/src/api.ts | sess-material-pool | 2026-08-21 | 88b5bebaad67 | | 登记中 | T-990：FeishuWatch.chats 加 kind 字段类型 |
+| workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-material-pool | 2026-08-21 | c2d0ebae46d4 | | 登记中 | T-990 群类型标签：表单行 kind 选择 + 回显/提交 |
+| workbench/frontend/src/components/useChatOptions.ts | sess-material-pool | 2026-08-21 | 3179db312d82 | | 登记中 | T-990：ChatOption 透传 kind |
+| workbench/frontend/src/components/TopicWorkspace.tsx | sess-material-pool | 2026-08-21 | c68ee50bf444 | | 登记中 | T-990：群下拉文案带 kind |
+| workbench/frontend/src/pages/FeishuPool.tsx | sess-material-pool | 2026-08-21 | ede4f3cac462 | | 登记中 | T-990：授权群聊卡 kind 徽标 |
+| workbench/frontend/src/pages/AgentChat.tsx | sess-material-pool | 2026-08-21 | 961c92ee762c | | 登记中 | T-933：📎上传走 S3 端点 + ChatReference 扩 material + 材料⻚签（SIDE_TABS 注册表补行+内容分支） |
+| workbench/backend/routers/agent.py | sess-material-pool | 2026-08-21 | 03d797ed5cd1 | | 登记中 | T-933：_process_references 加 material 分支（注入 material_id/文件名提示） |
+| agent/runtime.py | sess-material-pool | 2026-08-21 | 2420441bc0e2 | | 登记中 | T-933：system prompt「用户引用（@）」段补 material 类型说明 |
+| agent/purposes/requirement_interview.md | sess-material-pool | 2026-08-21 | d27cfa18e450 | | 登记中 | T-934：tools 白名单登记 read_material |
+| mcp_server/tools/specflow_pack.py | sess-material-pool | 2026-08-21 | b4ce4c04cf01 | | 登记中 | T-934：read_material 工具（summary/topics/raw 三视图 + raw 分页） |
+| test_specstd/test_feishu_sync.py | sess-material-pool | 2026-08-21 | a1872f5da59d | | 登记中 | T-990：kind roundtrip 用例 |
+| test_specstd/test_specflow_materials.py | sess-material-pool | 2026-08-21 | eee48fc93262 | | 登记中 | T-934：read_material MCP 用例（≥3） |
+| test_specstd/test_mcp_server.py | sess-material-pool | 2026-08-21 | a5747952d23d | | 登记中 | T-934：ALL_TOOLS 计数 91→92 + expected 集合加名 |
+| test_specstd/test_agent.py | sess-material-pool | 2026-08-21 | 022fe6e8fd73 | | 登记中 | T-935：上传→引用→read_material 贯通 e2e（MockLLM） |
 | docs/远期设计/SpecGuard-AgentChat材料工作流与purpose面板装配专项设计.md | sess-agentchat-material | 2026-08-17 | NEW | fcd7c6055d45 | 已完成 | §4.10 专项设计定稿（T-931~T-936 拆解 + D1-D6 决策：页签注册表装配/上传链路复用 S3/read_material 工具/MaterialsPanel 不删） |
 | docs/superpowers/specs/2026-08-18-同步设置体验修复-design.md | sess-agentchat-material | 2026-08-18 | NEW | 9f11b2e2081a | 已完成 | T-937 设计定稿（D1-D5：弹层秒开/手填删除/下拉搜索化/resolve-doc 链接解析/回显统一） |
 | test_specstd/test_feishu_pool_page.py | sess-agentchat-material | 2026-08-18 | 988569618cc5 | 2752d304d5cc | 已完成 | T-941+T-942：search_docs/错误包装 4 用例；文案断言改指向弹层内授权 |
