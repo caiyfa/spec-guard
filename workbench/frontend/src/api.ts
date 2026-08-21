@@ -1916,6 +1916,8 @@ export interface FeishuTopic {
   last_edited_at?: string;
   category?: FeishuTopicCategory;       // T-991：五分类（存量卡默认 routine）
   priority?: FeishuTopicPriority;       // T-991：high|normal|low（初值信号推导）
+  modules?: string[];           // T-992：FR 锚点派生（已确认 mentions 边→模块目录；
+                                // 响应时计算不落库，关联不到 FR 留空——拍板②）
 }
 
 export type FeishuTopicDraft = Omit<FeishuTopic, 'id'>;

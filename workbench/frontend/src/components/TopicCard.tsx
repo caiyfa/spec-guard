@@ -214,6 +214,17 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
               ))}
             </div>
           )}
+          {/* T-992：功能模块（FR 锚点派生，拍板②——非自由字段；留空不显示） */}
+          {(t.modules || []).length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-1">
+              {t.modules.map(m => (
+                <span key={m} className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-400"
+                  title="功能模块：由已确认的话题→FR 关联边派生（FR 模块目录）">
+                  🏷 {m}
+                </span>
+              ))}
+            </div>
+          )}
         </>
       )}
       {(t.last_edited_by?.name || t.author?.name) && (

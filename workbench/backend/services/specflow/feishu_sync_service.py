@@ -349,8 +349,87 @@ def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
         tc.cluster_chat_snapshots(material_root, LLMClient(model_id="text"),
                                   chat_windows=chat_windows, default_days=7,
                                   chat_kinds=chat_kinds or None)
+        # T-992：聚类后触发建边建议入队（死链修复——此前 suggest→enqueue
+        # 仅测试调用，生产链路断着；挂聚类尾部使 sync 与 watcher 两路都覆盖）
+        _suggest_links_for_pool(emp_base, material_root)
     except Exception as e:
         log.warning("话题聚类失败（不阻断同步）: %s", e)
+
+
+# T-992：单轮建边建议对象数软上限（控 LLM 成本；超出诚实记日志截断）
+_SUGGEST_MAX_TARGETS = 200
+# 单对象喂给 LLM 的正文截断（字符）
+_SUGGEST_MAX_TEXT = 6000
+
+
+def _suggest_links_for_pool(emp_base: Path, material_root: Path) -> None:
+    """T-992 死链修复：对材料池对象跑 LLM 建边建议并入复核队列（生产接线）。
+
+    对象：话题卡（非 rejected，title+summary）+ docs 快照（fd-*）+ minutes
+    快照（fm-*，title+summary 可读化）；逐对象一次 LLM 调用（三重防幻觉在
+    link_suggest：幻觉 fr_id 丢弃/evidence 原文子串校验/rejected 不重提）。
+    入当前用户私有队列（mine 语义不变，T-991 共享 scope 仅查看侧）。
+
+    拍板②留空后补语义：工作区无 FR 锚点（spec 未落）→ 跳过不硬派生；新 FR
+    诞生后下一轮同步自动补挂——enqueue 按 (src,dst) 去重不挡新 dst。
+    """
+    try:
+        from specflow.feishu_pool import link_suggest as ls
+        from specflow.feishu_pool import topic_cluster as tc
+        from specflow.feishu_pool.paths import pool_dirs
+        from specstd.anchors import scan_anchors
+        from specstd.workspace import get_workspace_root
+
+        ws_root = get_workspace_root()
+        if not ws_root:
+            log.info("建边建议跳过：工作区未激活")
+            return
+        anchors = scan_anchors(ws_root)
+        if not anchors:
+            log.info("建边建议跳过：工作区无 FR 锚点（spec 未落——话题模块留空，"
+                     "待 spec 冻结后下一轮同步自动补挂）")
+            return
+
+        pool = pool_dirs(material_root)
+        targets: list[tuple[str, str]] = []
+        # 话题卡（非 rejected）
+        for t in tc._load_candidates(material_root):
+            if t.get("status") == "rejected":
+                continue
+            text = f"{t.get('title', '')}\n{t.get('summary', '')}".strip()
+            if text:
+                targets.append((str(t.get("id", "")), text))
+        # docs 快照（markdown 正文）
+        for f in sorted(pool["docs"].glob("fd-*.md")) if pool["docs"].is_dir() else []:
+            targets.append((f"fd:{f.stem[3:]}",
+                            f.read_text(encoding="utf-8", errors="replace")))
+        # minutes 快照（可读化 title+summary；无文本层跳过）
+        for f in sorted(pool["minutes"].glob("fm-*.json")) if pool["minutes"].is_dir() else []:
+            title, summary = _minutes_title_summary(f)
+            text = f"{title}\n{summary}".strip()
+            if text:
+                targets.append((f"fm:{f.stem[3:]}", text))
+        if not targets:
+            return
+        if len(targets) > _SUGGEST_MAX_TARGETS:
+            log.warning("建边建议对象 %d 超软上限 %d，本轮截断（下轮同步继续）",
+                        len(targets), _SUGGEST_MAX_TARGETS)
+            targets = targets[:_SUGGEST_MAX_TARGETS]
+
+        from agent.llm_client import LLMClient
+        from services.specflow import feishu_review_service as rev
+        llm = LLMClient(model_id="text")
+        suggested_by = str(emp_base.name or "")
+        added = 0
+        for src_id, text in targets:
+            sug = ls.suggest_links_for_material(
+                src_id, text[:_SUGGEST_MAX_TEXT], anchors, llm,
+                workspace_root=ws_root)
+            if sug:
+                added += rev.enqueue_suggestions(emp_base, suggested_by, sug)
+        log.info("建边建议完成：%d 对象，新入队 %d 条", len(targets), added)
+    except Exception as e:
+        log.warning("建边建议失败（不阻断同步）: %s", e)
 
 
 def maybe_cluster_async(emp_base: Path, material_base: Path | None = None) -> None:
@@ -689,14 +768,47 @@ def list_pool_materials(specflow_emp_base: Path,
     return items
 
 
+def _topic_modules(workspace_root: Path) -> dict[str, list[str]]:
+    """T-992：话题模块派生——已确认 mentions 边 → FR 锚点 module。
+
+    拍板②：不做自由文本字段（FR→模块目录已存在且被 covers 门禁维护，第二
+    套词表必然漂移）；关联不到 FR 的话题（闲聊/日常沟通/spec 未落）模块留空，
+    语义自洽。响应时派生不落库，mentions 边确认后下一请求自动可见。
+    """
+    try:
+        from specflow.feishu_pool import facts
+        from specstd.anchors import scan_anchors
+        anchors = scan_anchors(workspace_root)
+        mods: dict[str, set[str]] = {}
+        for l in facts.load_links(workspace_root):
+            if l.get("status") != "confirmed" or l.get("edge") != "mentions":
+                continue
+            src = str(l.get("src", ""))
+            if not src.startswith("tp:"):
+                continue
+            info = anchors.get(str(l.get("dst", "")))
+            mod = (getattr(info, "module", "") or "") if info else ""
+            if mod:
+                mods.setdefault(src, set()).add(mod)
+        return {k: sorted(v) for k, v in mods.items()}
+    except Exception:
+        return {}
+
+
 def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
     """话题清单：卡片（私有区 _topics.yaml 状态制，T-948 含全部状态）
-    + 已确认（共享区；T-949 合并为单一存储后此区分退役）。"""
+    + 已确认（共享区；T-949 合并为单一存储后此区分退役）。
+    T-992：每卡附 modules（FR 锚点派生，拍板②——关联不到留空）。"""
     from specflow.feishu_pool import facts
     from specflow.feishu_pool import topic_cluster as tc
     candidates = tc._load_candidates(specflow_emp_base)   # 含旧文件迁移+字段归一化
-    return {"candidates": candidates,
-            "confirmed": facts.load_topics(workspace_root)}
+    confirmed = facts.load_topics(workspace_root)
+    mods = _topic_modules(workspace_root)
+    for t in candidates:
+        t["modules"] = mods.get(str(t.get("id")), [])
+    for t in confirmed:
+        t["modules"] = mods.get(str(t.get("id")), [])
+    return {"candidates": candidates, "confirmed": confirmed}
 
 
 def update_image_caption(specflow_emp_base: Path, material_stem: str,

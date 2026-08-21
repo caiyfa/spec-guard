@@ -648,3 +648,134 @@ def test_search_users_missing_scope_friendly():
         out = svc.search_users("张三")
     assert out["items"] == []
     assert out["errors"] == ["飞书授权缺少权限——请点击弹层顶部「重新授权」补全后重试"]
+
+
+# ══════════════════════════════════════════════════════════
+# T-992：建边建议生产接线（死链修复）+ 话题模块 FR 锚点派生
+# ══════════════════════════════════════════════════════════
+
+def _patch_suggest_env(monkeypatch, tmp_path, anchors, links_payload):
+    """建边建议测试环境：mock 工作区根/锚点/聚类/LLM。"""
+    from unittest.mock import MagicMock
+    ws = tmp_path / "ws"
+    ws.mkdir(exist_ok=True)
+    monkeypatch.setattr("specstd.workspace.get_workspace_root", lambda: ws)
+    monkeypatch.setattr("specstd.anchors.scan_anchors",
+                        lambda root: anchors)
+    monkeypatch.setattr(
+        "specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
+        lambda *a, **k: [])
+    llm = MagicMock()
+    import json as _json
+    llm.chat.return_value = {"content": _json.dumps(
+        {"links": links_payload}, ensure_ascii=False)}
+    monkeypatch.setattr("agent.llm_client.LLMClient", lambda model_id="": llm)
+    return ws
+
+
+def test_cluster_once_enqueues_link_suggestions(monkeypatch, tmp_path):
+    """T-992 死链修复：聚类后对话题/docs/minutes 对象跑建议并生产入队。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool = emp / "feishu_pool"
+    (pool / "chats" / "aaa").mkdir(parents=True)
+    (pool / "docs").mkdir()
+    (pool / "minutes").mkdir()
+    # 话题卡 + docs 快照 + minutes 快照（三种对象）
+    (pool / "_topics.yaml").write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:aaa-20260807-01\n    title: 级联删除\n    summary: 作废会话后级联删除\n"
+        "    chat_sha8: aaa\n    status: draft\n    rev: 1\n"
+        "    window: ['2026-08-07T14:00', '2026-08-07T14:01']\n"
+        "    message_count: 2\n    participants_count: 1\n"
+        "    source: chats/aaa/20260807.md\n"
+        "  - id: tp:aaa-20260807-02\n    title: 已拒话题\n    summary: s\n"
+        "    chat_sha8: aaa\n    status: rejected\n    rev: 1\n"
+        "    window: ['2026-08-07T15:00', '2026-08-07T15:00']\n"
+        "    message_count: 1\n    participants_count: 1\n"
+        "    source: chats/aaa/20260807.md\n", encoding="utf-8")
+    (pool / "docs" / "fd-tokA.md").write_text("# 导出 PRD\n含 FR-012 提及\n",
+                                              encoding="utf-8")
+    (pool / "minutes" / "fm-m01.json").write_text(
+        json.dumps({"title": "评审会", "summary": "讨论 FR-012 导出"},
+                   ensure_ascii=False), encoding="utf-8")
+    anchors = {"FR-012": type("A", (), {"title": "导出", "module": "employee",
+                                        "feature": "person", "ac_ids": []})()}
+    _patch_suggest_env(monkeypatch, tmp_path, anchors, [
+        {"fr_id": "FR-012", "confidence": 0.9, "evidence": "级联删除"}])
+    monkeypatch.setattr("services.model_config.get_model",
+                        lambda mid: {"model_id": "text"})
+    monkeypatch.setattr(svc, "load_watch_config", lambda base: {
+        "chats": [], "docs": [], "users": [], "minutes_days": 30, "chat_days": 7})
+    svc._cluster_once(emp)
+    from services.specflow import feishu_review_service as rev
+    queue = rev.list_queue(emp)
+    srcs = {i["src"] for i in queue}
+    # 话题（非 rejected）+ docs + minutes 三类对象都入队；rejected 话题不建
+    assert srcs == {"tp:aaa-20260807-01", "fd:tokA", "fm:m01"}
+    assert all(i["status"] == "pending" for i in queue)
+
+
+def test_cluster_once_suggest_skipped_without_anchors(monkeypatch, tmp_path):
+    """拍板②留空语义：工作区无 FR 锚点 → 建议跳过（不硬派生）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    (emp / "feishu_pool" / "_topics.yaml").parent.mkdir(parents=True)
+    (emp / "feishu_pool" / "_topics.yaml").write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:aaa-20260807-01\n    title: t\n    summary: s\n"
+        "    chat_sha8: aaa\n    status: draft\n    rev: 1\n"
+        "    window: ['2026-08-07T14:00', '2026-08-07T14:00']\n"
+        "    message_count: 1\n    participants_count: 1\n"
+        "    source: chats/aaa/20260807.md\n", encoding="utf-8")
+    _patch_suggest_env(monkeypatch, tmp_path, anchors={}, links_payload=[
+        {"fr_id": "FR-012", "confidence": 0.9, "evidence": "x"}])
+    monkeypatch.setattr("services.model_config.get_model",
+                        lambda mid: {"model_id": "text"})
+    monkeypatch.setattr(svc, "load_watch_config", lambda base: {
+        "chats": [], "docs": [], "users": [], "minutes_days": 30, "chat_days": 7})
+    svc._cluster_once(emp)
+    from services.specflow import feishu_review_service as rev
+    assert rev.list_queue(emp) == []
+
+
+def test_list_pool_topics_modules_derived(tmp_path):
+    """T-992：话题模块 = 已确认 mentions 边 → FR 锚点 module 派生（不落库）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    cand_dir = emp / "feishu_pool"
+    cand_dir.mkdir(parents=True)
+    (cand_dir / "_topics.yaml").write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:aaa-20260807-01\n    title: 有关联\n    summary: s\n"
+        "    chat_sha8: aaa\n    status: confirmed\n    rev: 1\n"
+        "    window: ['2026-08-07T14:00', '2026-08-07T14:00']\n"
+        "    message_count: 1\n    participants_count: 1\n"
+        "    source: chats/aaa/20260807.md\n"
+        "  - id: tp:aaa-20260807-02\n    title: 无关联\n    summary: s\n"
+        "    chat_sha8: aaa\n    status: draft\n    rev: 1\n"
+        "    window: ['2026-08-07T15:00', '2026-08-07T15:00']\n"
+        "    message_count: 1\n    participants_count: 1\n"
+        "    source: chats/aaa/20260807.md\n", encoding="utf-8")
+    ws = tmp_path / "ws"
+    from specflow.feishu_pool import facts
+    # 已确认 mentions 边 ×2（同话题不同 FR 跨模块）+ 一条 rejected 边（不计）
+    facts.append_link(ws, src="tp:aaa-20260807-01", dst="FR-012",
+                      edge="mentions", confidence=0.9, evidence="e",
+                      confirmed_by="u1")
+    facts.append_link(ws, src="tp:aaa-20260807-01", dst="FR-013",
+                      edge="mentions", confidence=0.8, evidence="e",
+                      confirmed_by="u1")
+    facts.append_link(ws, src="tp:aaa-20260807-02", dst="FR-014",
+                      edge="mentions", confidence=0.5, evidence="e",
+                      confirmed_by="u1", status="rejected")
+    anchors = {
+        "FR-012": type("A", (), {"title": "a", "module": "employee",
+                                 "feature": "f", "ac_ids": []})(),
+        "FR-013": type("A", (), {"title": "b", "module": "inventory",
+                                 "feature": "f", "ac_ids": []})(),
+        "FR-014": type("A", (), {"title": "c", "module": "evaluation",
+                                 "feature": "f", "ac_ids": []})(),
+    }
+    with patch("specstd.anchors.scan_anchors", lambda root: anchors):
+        out = svc.list_pool_topics(emp, ws)
+    by_title = {t["title"]: t for t in out["candidates"]}
+    assert by_title["有关联"]["modules"] == ["employee", "inventory"]
+    assert by_title["无关联"]["modules"] == []   # rejected 边不派生；留空语义
