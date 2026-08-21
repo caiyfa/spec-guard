@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.12.0"
+SPEC_VERSION = "2.13.0"
 SPEC_UPDATED = "2026-08-21"
 SPEC_CHANGELOG = [
+    ("2.13.0", "2026-08-21", "tool 限定名与动态系统包（T-973）：tool 信封 use 支持多系统同名消歧的限定写法 `system:name`（裸名唯一命中时行为不变）；tool 目录按系统命名空间组织（本表「归属系统」列，动态系统包注册的工具自动可见）；系统包 manifest 契约（config/template/code 三级——模板断言 assertions.yaml 经 SELECT-only 确定性校验注册为 oracle，代码型 extensions.py 评审闸后热加载）。语法层兼容扩展，存量 YAML 无需修改"),
     ("2.12.0", "2026-08-21", "引擎去领域化（T-972）：call/poll 的 service 缺省值由「内置 tdm」改为「env 配置 default_service 声明的默认服务名」（未声明且场景未写 service 时 SKIP——环境配置缺口）；{{env.resource_code}} 不再内置 TDM 兜底资源码（env 必配 default_resource_code，缺失时预检预警）；random 词库由系统适配包注入（YAML 语法与 tdm 可用池名不变）。语法层零变更，YAML 无需修改"),
     ("2.11.0", "2026-08-21", "DB 截断可见性（ENG-T06/ENG-BUG-009）：db_query 超过 max_rows=1000 的截断不再静默——db_traces 落 `truncated: true`、执行日志打 WARN、case JSON 顶层 `warnings` 挂截断条目（计数类断言将失真的显式告警）；新增 `allow_truncate: true` 显式豁免（落痕保留、告警消失，用于只取样本的正当场景，默认 false）"),
     ("2.10.0", "2026-08-21", "渲染与断言防呆（ENG-T05）：插值残留扫描——渲染后仍含 {{ 抛 RenderError（FAIL/scenario_error，请求不发出），字面量 {{ 暂无转义语法；poll call 段补 service 路由与 headers/cookies 透传；poll until 配置错误（jsonpath 拼错等）第一轮快速失败而非轮询至超时；T9 lint——≥2 个带 save 步骤 + 无 of 断言 WARN 提示显式指定；python 步骤文档补浅拷贝注意事项（勿对上游 dict/list 原地修改）"),

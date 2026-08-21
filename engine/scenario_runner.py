@@ -737,15 +737,19 @@ def step_tool(body, rctx, ns, record):
 
     YAML 语法层冻结为 3 原语（call/db_query/poll）+ 本信封；领域能力全部以
     tool 形式调用。with 段为工具参数，save 为产出变量名（注入命名空间）。
-    工具元数据见 engine.tool_registry.TOOLS（name 唯一关联 handler）。
+    工具元数据见 engine.tool_registry.TOOLS（T-973 起按 system:name 命名空间
+    组织；use 支持裸名唯一命中与限定名两种写法，handler 一律按裸名绑定）。
     """
-    from engine.tool_registry import TOOLS
+    from engine.tool_registry import resolve_tool
     use = body.get("use")
     if not use:
         raise ValueError("tool 步骤缺少 use 字段（工具名）")
-    if use not in TOOLS:
-        raise ValueError(f"未注册的 tool: {use}（可用: {sorted(TOOLS)}）")
-    handler = rctx.registry.get_step(use)
+    spec, handler_name = resolve_tool(use)
+    if spec is None:
+        from engine.tool_registry import TOOLS
+        raise ValueError(f"未注册的 tool: {use}（可用: {sorted(TOOLS)}；"
+                         f"多系统同名时用 `system:name` 限定）")
+    handler = rctx.registry.get_step(handler_name)
     inner = dict(body.get("with") or {})
     if body.get("save"):
         inner["save"] = body["save"]

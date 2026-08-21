@@ -57,9 +57,16 @@ def get_live_registry(system: str = ""):
 
 
 def invalidate_live_registry(system: str = "") -> None:
-    """失效某系统（空 = 全部）的活注册表缓存——系统包重建/热加载后调用。"""
+    """失效某系统（空 = 全部）的活注册表缓存——系统包重建/热加载后调用。
+
+    T-973：单系统失效连带清掉该系统的 tool 元数据（重装配时重新注册）；
+    extensions 模块缓存按 sha256 自动失效（system_package._EXT_MODULE_CACHE）。
+    空参全清只清注册表缓存——tool 元数据无法枚举系统归属，留待各自重建。
+    """
+    from engine.tool_registry import unregister_system_tools
     if system:
         _CACHE.pop(system, None)
+        unregister_system_tools(system)
     else:
         _CACHE.clear()
 

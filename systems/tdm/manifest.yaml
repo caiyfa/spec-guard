@@ -1,0 +1,9 @@
+# TDM 系统包 manifest（T-973 系统包契约参照）
+# tier: code——含专属 steps/oracles（仓内 Python 包，git 评审留痕）
+# layout: package——按 systems.tdm 包导入装配（register 钩子在 __init__.py）
+name: tdm
+display_name: 干部盘点（TDM）
+tier: code
+layout: package
+enabled: true
+description: 干部盘点系统适配包——全景档案/360评价/九宫格落位/盘点会话四模块场景与 DB 校对断言
