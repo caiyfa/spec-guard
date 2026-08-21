@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 
 # K-007：审计完成后自动更新 spec 签名基线（默认 False=手动标记）
 KEY_AUDIT_AUTO_UPDATE_BASELINE = "audit_auto_update_baseline"
@@ -14,7 +14,7 @@ KEY_AUDIT_AUTO_UPDATE_BASELINE = "audit_auto_update_baseline"
 
 def _ensure_table():
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -25,14 +25,14 @@ def _ensure_table():
 
 def get_setting(key: str, default: str = "") -> str:
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else default
 
 
 def set_setting(key: str, value: str):
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute(
             "INSERT INTO settings (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",

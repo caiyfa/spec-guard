@@ -24,12 +24,12 @@ DB_PATH = DATA_DIR / "workbench.db"
 
 VALID_ROLES = ("admin", "tester", "viewer", "product")
 
-_LOCK = threading.RLock()
+DB_LOCK = threading.RLock()  # 公共锁：同库表服务共用（T-999b 去私有化，原 _LOCK）
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def _connect(db_path: Path | None = None) -> sqlite3.Connection:
+def db_connect(db_path: Path | None = None) -> sqlite3.Connection:  # 公共连接口（T-999b，原 _connect）
     path = db_path or DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), timeout=10)
@@ -40,7 +40,7 @@ def _connect(db_path: Path | None = None) -> sqlite3.Connection:
 
 def init_db(db_path: Path | None = None):
     """建表（幂等）。"""
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             emp_no TEXT PRIMARY KEY,
@@ -125,7 +125,7 @@ def _row_to_user(row: sqlite3.Row) -> dict:
 
 
 def get_user(emp_no: str, db_path: Path | None = None) -> Optional[dict]:
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         row = conn.execute("SELECT * FROM users WHERE emp_no = ?", (emp_no,)).fetchone()
         return _row_to_user(row) if row else None
 
@@ -161,7 +161,7 @@ def upsert_user(emp_no: str, name: str = "", db_path: Path | None = None) -> dic
     """
     init_db(db_path)
     now = _now()
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         row = conn.execute("SELECT * FROM users WHERE emp_no = ?", (emp_no,)).fetchone()
         if row is None:
             role = "viewer"
@@ -208,7 +208,7 @@ def upsert_user(emp_no: str, name: str = "", db_path: Path | None = None) -> dic
 
 def list_users(db_path: Path | None = None) -> list[dict]:
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         rows = conn.execute("SELECT * FROM users ORDER BY created_at").fetchall()
         return [_row_to_user(r) for r in rows]
 
@@ -242,7 +242,7 @@ def set_roles(emp_no: str, roles: list[str], actor: str, db_path: Path | None = 
     for r in roles:
         if r not in VALID_ROLES and not (_role_validator and _role_validator(r, db_path)):
             raise ValueError(f"非法角色: {r}（应为 {VALID_ROLES} 或已注册的自定义角色）")
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         cur = conn.execute(
             "UPDATE users SET roles = ?, role = ? WHERE emp_no = ?",
             (",".join(roles), roles[0], emp_no))
@@ -257,7 +257,7 @@ def set_roles(emp_no: str, roles: list[str], actor: str, db_path: Path | None = 
 
 
 def set_default_workspace(emp_no: str, workspace: str, db_path: Path | None = None) -> bool:
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         cur = conn.execute(
             "UPDATE users SET default_workspace = ? WHERE emp_no = ?", (workspace, emp_no))
         return cur.rowcount > 0
@@ -271,7 +271,7 @@ def grant_workspace(workspace_name: str, emp_no: str, granted_by: str,
                     db_path: Path | None = None) -> bool:
     """授权（幂等：已授权返回 False）。"""
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         try:
             conn.execute(
                 "INSERT INTO workspace_grants (workspace_name, emp_no, granted_by, created_at)"
@@ -290,7 +290,7 @@ def grant_workspace(workspace_name: str, emp_no: str, granted_by: str,
 
 def revoke_workspace(workspace_name: str, emp_no: str, actor: str,
                      db_path: Path | None = None) -> bool:
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         cur = conn.execute(
             "DELETE FROM workspace_grants WHERE workspace_name = ? AND emp_no = ?",
             (workspace_name, emp_no),
@@ -319,13 +319,13 @@ def list_grants(emp_no: str = "", workspace_name: str = "",
     if conds:
         sql += " WHERE " + " AND ".join(conds)
     sql += " ORDER BY created_at"
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
 
 def has_grant(emp_no: str, workspace_name: str, db_path: Path | None = None) -> bool:
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         row = conn.execute(
             "SELECT 1 FROM workspace_grants WHERE emp_no = ? AND workspace_name = ?",
             (emp_no, workspace_name),
@@ -340,7 +340,7 @@ def has_grant(emp_no: str, workspace_name: str, db_path: Path | None = None) -> 
 def audit(emp_no: str, action: str, target: str = "", detail: str = "",
           db_path: Path | None = None):
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         conn.execute(
             "INSERT INTO audit_log (emp_no, action, target, detail, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
@@ -350,7 +350,7 @@ def audit(emp_no: str, action: str, target: str = "", detail: str = "",
 
 def list_audit(limit: int = 100, db_path: Path | None = None) -> list[dict]:
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         rows = conn.execute(
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
@@ -373,7 +373,7 @@ def enqueue_run(emp_no: str, scope: str, target: str, env: str, plan_id: str,
     """
     import json as _json
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         cur = conn.execute(
             "INSERT INTO run_queue (emp_no, scope, target, env, plan_id, breakpoints,"
             " strict_deps, workspace, status, created_at,"
@@ -390,7 +390,7 @@ def enqueue_run(emp_no: str, scope: str, target: str, env: str, plan_id: str,
 def list_run_queue(db_path: Path | None = None) -> list[dict]:
     """全部排队/运行中条目（FIFO 序）。"""
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         rows = conn.execute(
             "SELECT * FROM run_queue WHERE status IN ('queued', 'running') ORDER BY id"
         ).fetchall()
@@ -398,7 +398,7 @@ def list_run_queue(db_path: Path | None = None) -> list[dict]:
 
 
 def get_run_queue_item(item_id: int, db_path: Path | None = None) -> Optional[dict]:
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         row = conn.execute("SELECT * FROM run_queue WHERE id = ?", (item_id,)).fetchone()
         return dict(row) if row else None
 
@@ -414,7 +414,7 @@ def update_run_queue(item_id: int, status: str, db_path: Path | None = None,
         sets.append("finished_at = ?")
         params.append(_now())
     params.append(item_id)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         cur = conn.execute(f"UPDATE run_queue SET {', '.join(sets)} WHERE id = ?", params)
         return cur.rowcount > 0
 
@@ -422,7 +422,7 @@ def update_run_queue(item_id: int, status: str, db_path: Path | None = None,
 def fail_stale_running(db_path: Path | None = None) -> int:
     """进程启动时调用：上一生命周期遗留的 running 目标记 failed（进程已死）。"""
     init_db(db_path)
-    with _LOCK, _connect(db_path) as conn:
+    with DB_LOCK, db_connect(db_path) as conn:
         cur = conn.execute(
             "UPDATE run_queue SET status = 'failed', finished_at = ?"
             " WHERE status = 'running'", (_now(),))

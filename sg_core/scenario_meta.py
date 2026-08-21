@@ -17,7 +17,7 @@ from pathlib import Path
 
 import yaml
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 
@@ -83,7 +83,7 @@ def pack_paths(meta: dict) -> list[str]:
 def _ensure_table():
     """建表（幂等）。"""
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS scenario_meta (
                 id TEXT PRIMARY KEY,
@@ -174,7 +174,7 @@ def get_promotions(sid: str) -> list[dict]:
 def _next_id() -> str:
     """生成下一个场景元数据 ID（SG-META-序号）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT id FROM scenario_meta WHERE id LIKE 'SG-META-%' ORDER BY id"
         ).fetchall()
@@ -203,7 +203,7 @@ def create_meta(name: str, module: str, workspace: str = "") -> dict:
         "created_at": now,
         "updated_at": now,
     }
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             INSERT INTO scenario_meta (id, name, module, workspace, info_pack, status, created_at, updated_at)
             VALUES (:id, :name, :module, :workspace, :info_pack, :status, :created_at, :updated_at)
@@ -215,7 +215,7 @@ def create_meta(name: str, module: str, workspace: str = "") -> dict:
 def get_meta(sid: str) -> dict | None:
     """获取单个场景元数据。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT * FROM scenario_meta WHERE id = ?", (sid,)
         ).fetchone()
@@ -238,7 +238,7 @@ def update_info_pack(sid: str, files: list) -> dict | None:
     now = datetime.now().isoformat(timespec="seconds")
     entries = normalize_pack(files)
     info_pack_json = json.dumps(entries, ensure_ascii=False)
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         result = conn.execute(
             "UPDATE scenario_meta SET info_pack = ?, updated_at = ? WHERE id = ?",
             (info_pack_json, now, sid),
@@ -267,7 +267,7 @@ def add_to_info_pack(sid: str, file_path: str) -> dict | None:
 def list_meta(workspace: str = "") -> list[dict]:
     """列出场景元数据（按工作区筛选）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         if workspace:
             rows = conn.execute(
                 "SELECT * FROM scenario_meta WHERE workspace = ? ORDER BY updated_at DESC",
@@ -284,7 +284,7 @@ def update_status(sid: str, status: str) -> dict | None:
     """更新场景状态。"""
     _ensure_table()
     now = datetime.now().isoformat(timespec="seconds")
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         result = conn.execute(
             "UPDATE scenario_meta SET status = ?, updated_at = ? WHERE id = ?",
             (status, now, sid),

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 from sg_core import crypto
 
 # 模型配置字段
@@ -24,7 +24,7 @@ MODEL_FIELDS = (
 def _ensure_table():
     """建表（幂等）。"""
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS model_configs (
                 id TEXT PRIMARY KEY,
@@ -58,7 +58,7 @@ def _is_key_unchanged(value) -> bool:
 def _next_id() -> str:
     """生成下一个模型 ID。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT id FROM model_configs WHERE id LIKE 'model-%' ORDER BY id"
         ).fetchall()
@@ -75,7 +75,7 @@ def _next_id() -> str:
 def list_models() -> list[dict]:
     """列出全部模型配置（api_key 脱敏返回，前端列表用）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT * FROM model_configs ORDER BY is_default DESC, updated_at DESC"
         ).fetchall()
@@ -98,7 +98,7 @@ def get_model(mid: str) -> dict | None:
     （create_model 自动 id（model-NNN）否则永远无法被 get_model("text") 命中）。
     """
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT * FROM model_configs WHERE id = ?", (mid,)
         ).fetchone()
@@ -117,7 +117,7 @@ def get_model(mid: str) -> dict | None:
 def get_default_model() -> dict | None:
     """获取默认模型配置（api_key 解密返回完整值）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT * FROM model_configs WHERE is_default = 1 LIMIT 1"
         ).fetchone()
@@ -153,7 +153,7 @@ def create_model(data: dict) -> dict:
         "created_at": now,
         "updated_at": now,
     }
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             INSERT INTO model_configs (id, name, base_url, api_key, model, timeout,
                 temperature, max_context_tokens, max_output_tokens,
@@ -190,7 +190,7 @@ def update_model(mid: str, data: dict) -> dict | None:
     sets.append("updated_at = ?")
     values.append(now)
     values.append(mid)
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         result = conn.execute(
             f"UPDATE model_configs SET {', '.join(sets)} WHERE id = ?", values
         )
@@ -202,7 +202,7 @@ def update_model(mid: str, data: dict) -> dict | None:
 def delete_model(mid: str) -> bool:
     """删除模型配置。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         # 不允许删除默认模型（除非是唯一模型）
         row = conn.execute(
             "SELECT is_default FROM model_configs WHERE id = ?", (mid,)
@@ -222,7 +222,7 @@ def delete_model(mid: str) -> bool:
 def set_default(mid: str) -> dict | None:
     """设置默认模型。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT id FROM model_configs WHERE id = ?", (mid,)
         ).fetchone()

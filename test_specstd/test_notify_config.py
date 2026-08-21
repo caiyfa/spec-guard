@@ -222,8 +222,8 @@ class TestEncryption:
             "events": ["vulnerability"],
         })
         # 直接查 DB 验证加密
-        from services.user_store import _connect, _LOCK
-        with _LOCK, _connect() as conn:
+        from services.user_store import db_connect, DB_LOCK
+        with DB_LOCK, db_connect() as conn:
             row = conn.execute(
                 "SELECT webhook_url FROM notify_configs LIMIT 1"
             ).fetchone()
@@ -239,8 +239,8 @@ class TestEncryption:
             "secret": "my_dingtalk_secret",
             "events": ["vulnerability"],
         })
-        from services.user_store import _connect, _LOCK
-        with _LOCK, _connect() as conn:
+        from services.user_store import db_connect, DB_LOCK
+        with DB_LOCK, db_connect() as conn:
             row = conn.execute(
                 "SELECT secret FROM notify_configs LIMIT 1"
             ).fetchone()
@@ -256,8 +256,8 @@ class TestEncryption:
             "secret": "",
             "events": ["vulnerability"],
         })
-        from services.user_store import _connect, _LOCK
-        with _LOCK, _connect() as conn:
+        from services.user_store import db_connect, DB_LOCK
+        with DB_LOCK, db_connect() as conn:
             row = conn.execute(
                 "SELECT secret FROM notify_configs LIMIT 1"
             ).fetchone()

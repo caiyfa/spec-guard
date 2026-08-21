@@ -634,3 +634,14 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/backend/services/preflight.py | sess-tool-consolidation | 2026-08-21 | 161bc3d7a4a7 | 2d266badf788 | 已完成 | T-999a：print→logging |
 | sg_core/crypto.py | sess-tool-consolidation | 2026-08-21 | a10f5531f1c7 | 3658a36b97c5 | 已完成 | T-999a：print→logging |
 | feedback/notify.py | sess-tool-consolidation | 2026-08-21 | c6a6431e65eb | ce24cb1fca37 | 已完成 | T-999a：print→logging |
+| sg_core/user_store.py | sess-tool-consolidation | 2026-08-21 | 5a2a6753c189 | 19c1729a846f | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| sg_core/git_config.py | sess-tool-consolidation | 2026-08-21 | 4de054b9317e | 77179fd0ce93 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| sg_core/model_config.py | sess-tool-consolidation | 2026-08-21 | 5b11eeb06d31 | 131475987a7d | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| sg_core/settings_store.py | sess-tool-consolidation | 2026-08-21 | be56ed6a37dd | b1ded52d0f97 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| sg_core/llm_config.py | sess-tool-consolidation | 2026-08-21 | 3d09e284ec71 | 983466e34edb | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| sg_core/scenario_meta.py | sess-tool-consolidation | 2026-08-21 | d10f8334b053 | c0084ce454d4 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| sg_core/notify_config.py | sess-tool-consolidation | 2026-08-21 | 709734ca39cd | cfbff8f23791 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| test_specstd/test_crypto.py | sess-tool-consolidation | 2026-08-21 | 4aaef8f54b10 | 2c8a6232bed3 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| test_specstd/test_notify_config.py | sess-tool-consolidation | 2026-08-21 | 0314751fae62 | 3b7c528d1c6d | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| test_specstd/test_scenario_meta_pack.py | sess-tool-consolidation | 2026-08-21 | 089a969de8e4 | 3c8984cce813 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |
+| workbench/backend/scripts/migrate_encrypt_apikeys.py | sess-tool-consolidation | 2026-08-21 | 5cd6f1f26ef8 | 800243c26366 | 已完成 | T-999b：user_store 去私有化（db_connect/DB_LOCK） |

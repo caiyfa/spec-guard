@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import time
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 
 # 配置键常量（基础连接 + 模型能力）
 LLM_CONFIG_KEYS = (
@@ -30,7 +30,7 @@ _CACHE_TTL: float = 30  # 30 秒缓存
 def _ensure_table():
     """建表（幂等）。"""
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS llm_config (
                 key TEXT PRIMARY KEY,
@@ -48,7 +48,7 @@ def get_all() -> dict[str, str]:
         return dict(_CACHE)
 
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute("SELECT key, value FROM llm_config").fetchall()
     result = {r["key"]: r["value"] for r in rows}
     _CACHE = result
@@ -67,7 +67,7 @@ def save(configs: dict[str, str]) -> dict[str, str]:
     from datetime import datetime
     _ensure_table()
     now = datetime.now().isoformat(timespec="seconds")
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         for key, value in configs.items():
             if key in LLM_CONFIG_KEYS:
                 conn.execute(
@@ -84,7 +84,7 @@ def save(configs: dict[str, str]) -> dict[str, str]:
 def clear():
     """清空 UI 配置（回退到环境变量）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("DELETE FROM llm_config")
     global _CACHE, _CACHE_TS
     _CACHE = {}
@@ -123,7 +123,7 @@ def is_env_controlled() -> dict[str, bool]:
     }
 
 
-def probe_connectivity(base_url: str, api_key: str, model: str,
+def probedb_connectivity(base_url: str, api_key: str, model: str,
                        timeout: int = 30) -> dict:
     """探测 LLM 连通性：发一条简短消息验证。
 

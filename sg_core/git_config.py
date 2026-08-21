@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 from sg_core import crypto
 
 
@@ -24,7 +24,7 @@ GIT_CONFIG_FIELDS = ("name", "email", "token")
 def _ensure_table():
     """建表（幂等）。"""
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS git_configs (
                 emp_no TEXT PRIMARY KEY,
@@ -40,7 +40,7 @@ def _ensure_table():
 def get_git_config(emp_no: str) -> dict:
     """读取用户的 git 配置（token 不解密，返回 has_token 标记）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT name, email, token FROM git_configs WHERE emp_no=?",
             (emp_no,),
@@ -63,7 +63,7 @@ def save_git_config(emp_no: str, name: str = "", email: str = "",
     _ensure_table()
     now = datetime.now().isoformat(timespec="seconds")
 
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         existing = conn.execute(
             "SELECT token FROM git_configs WHERE emp_no=?", (emp_no,)
         ).fetchone()
@@ -92,7 +92,7 @@ def save_git_config(emp_no: str, name: str = "", email: str = "",
 def get_decrypted_token(emp_no: str) -> str:
     """解密返回用户的 git token（供 push 时注入）。无配置时返回空串。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT token FROM git_configs WHERE emp_no=?", (emp_no,)
         ).fetchone()

@@ -55,7 +55,7 @@ class TestPackEntries:
         """旧版纯路径列表（DB/YAML 中的 str）读取时自动升级为条目。"""
         meta = _create()
         # 模拟旧版数据：直接写 str 列表到 DB
-        with user_store._LOCK, user_store._connect() as conn:
+        with user_store.DB_LOCK, user_store.db_connect() as conn:
             conn.execute("UPDATE scenario_meta SET info_pack = ? WHERE id = ?",
                          (json.dumps(["specs/module1/feature1/spec.md"]), meta["id"]))
         loaded = scenario_meta.get_meta(meta["id"])

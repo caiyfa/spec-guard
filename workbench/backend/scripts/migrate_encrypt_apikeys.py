@@ -19,7 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from services import crypto  # noqa: E402
-from services.user_store import _connect, _LOCK, init_db  # noqa: E402
+from services.user_store import db_connect, DB_LOCK, init_db  # noqa: E402
 
 
 def migrate() -> tuple[int, int]:
@@ -29,7 +29,7 @@ def migrate() -> tuple[int, int]:
         (已迁移条数, 跳过条数)
     """
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         # 表不存在则无数据可迁移（全新部署）
         table = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='model_configs'"
@@ -41,7 +41,7 @@ def migrate() -> tuple[int, int]:
         rows = conn.execute("SELECT id, api_key FROM model_configs").fetchall()
 
     migrated = skipped = 0
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         for row in rows:
             key = row["api_key"] or ""
             if not key or crypto.is_encrypted(key):

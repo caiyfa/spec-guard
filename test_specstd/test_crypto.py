@@ -158,9 +158,9 @@ def test_model_config_list_has_api_key_flag(db):
 def test_migrate_plaintext_keys(db, monkeypatch):
     """迁移脚本把存量明文 key 加密，且幂等。"""
     # 手动插入明文 key（模拟存量数据）
-    from services.user_store import _connect, _LOCK
+    from services.user_store import db_connect, DB_LOCK
     model_config._ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute(
             "INSERT INTO model_configs (id, name, base_url, api_key, model, timeout,"
             " temperature, max_context_tokens, max_output_tokens, thinking_enabled,"

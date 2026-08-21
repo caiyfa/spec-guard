@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import datetime
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 from sg_core import crypto
 
 # 可用渠道
@@ -32,7 +32,7 @@ CONFIG_FIELDS = (
 def _ensure_table():
     """建表（幂等）+ 存量库补列（T-996：system/scenario_pattern 用例级过滤维度）。"""
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS notify_configs (
                 id TEXT PRIMARY KEY,
@@ -64,7 +64,7 @@ def _next_id() -> str:
 def list_configs() -> list[dict]:
     """列出全部通知配置（webhook_url/secret 脱敏返回）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT * FROM notify_configs ORDER BY created_at DESC"
         ).fetchall()
@@ -80,7 +80,7 @@ def list_configs() -> list[dict]:
 def get_config(cid: str) -> dict | None:
     """获取单个配置（webhook_url/secret 解密返回完整值）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         row = conn.execute(
             "SELECT * FROM notify_configs WHERE id = ?", (cid,)
         ).fetchone()
@@ -123,7 +123,7 @@ def create_config(data: dict, created_by: str = "") -> dict:
         "created_by": created_by,
         "created_at": now,
     }
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             INSERT INTO notify_configs (id, name, channel, webhook_url, secret,
                 mention_mobiles, events, enabled, system, scenario_pattern, created_by, created_at)
@@ -160,7 +160,7 @@ def update_config(cid: str, data: dict) -> dict | None:
     if not sets:
         return get_config(cid)
     values.append(cid)
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         result = conn.execute(
             f"UPDATE notify_configs SET {', '.join(sets)} WHERE id = ?", values
         )
@@ -172,7 +172,7 @@ def update_config(cid: str, data: dict) -> dict | None:
 def delete_config(cid: str) -> bool:
     """删除通知配置。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         result = conn.execute(
             "DELETE FROM notify_configs WHERE id = ?", (cid,)
         )
@@ -185,7 +185,7 @@ def get_configs_by_event(event: str) -> list[dict]:
     供 J-2 的 send_notification 调用。
     """
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT * FROM notify_configs WHERE enabled = 1 ORDER BY created_at DESC"
         ).fetchall()
