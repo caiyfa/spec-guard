@@ -20,7 +20,7 @@ python -m pytest -v
 - 网络可达 SIT 网关 `sit-ha.fehorizon.com` + SIT MySQL
 - DB 密码：自动回退读取 devops 技能凭据 `~/.qoder/skills/devops/scripts/.env.devops`（无需手动配置）
 
-每次运行自动生成报告：`reports/{时间戳}/`
+每次运行自动生成报告：`{工作区}/.specguard/reports/{EX-任务号}/`（K-050 起按任务号归档）
 
 | 产物 | 说明 |
 |------|------|
@@ -257,7 +257,7 @@ depends_on:
 specguard/
 ├── pytest.ini                  # testpaths + markers（P0/P1/resolver/permission/snapshot/security）
 ├── conftest.py                 # 会话级夹具：环境加载/场景发现/报告生成
-├── engine/                     # 通用引擎（系统无关）
+├── engine/                     # 通用引擎（系统无关，冻结层）
 │   ├── scenario_loader.py      #   YAML 场景加载
 │   ├── dependency_graph.py     #   DAG 依赖图（循环检测/拓扑排序）
 │   ├── scenario_runner.py      #   执行器（flow/verify/插值/依赖调度）
@@ -267,6 +267,16 @@ specguard/
 │   ├── execution_record.py     #   执行记录模型
 │   ├── report_writer.py        #   报告生成（md + json）
 │   └── registry.py             #   步骤/断言器/提供者注册表
+├── specstd/                    # Spec 标准层（schema/anchors/conformance/signature/workspace）
+├── sg_core/                    # 共享内核（T-975 下沉：format_spec/user_store/skill_loader 等 24 模块）
+├── specflow/                   # 需求侧包（面试/delta/feishu_pool 材料池/anchor/lineage/materials）
+├── graph_index/                # 图谱索引（链接关系物化为 nodes+边，派生物可重建）
+├── integrations/zentao/        # 禅道集成单包（story/bug 读写唯一通道）
+├── agent/                      # 智能层薄 Harness（runtime/session/llm_client/skills×13/purposes）
+├── mcp_server/                 # MCP 工具层（stdio；T-982 收敛后对内 24 合并工具 + open 15）
+├── feedback/                   # 反哺闭环（ledger SPQ 台账 + notify 通知出口）
+├── skills/                     # 飞书 CLI 宿主侧技能包（lark-* 27 域）
+├── evals/                      # Agent 评测（T-980 golden case 基建：run_evals.py + cases/）
 ├── systems/tdm/                # TDM 系统专属
 │   ├── config/env.sit.yaml     #   环境配置（网关/账号池/资源码/DB）
 │   ├── config.py               #   配置加载（占位符替换/凭据回退）
@@ -276,10 +286,14 @@ specguard/
 │   ├── emp_pool.py             #   工号池角色定义与校验
 │   └── hr_center_oracle.py     #   hr-center 权限预言机
 ├── scenarios/                  # 场景库（按模块分目录，自动发现）
-│   └── employee/person-profile/*.yaml
-├── test_suites/                # pytest 入口（场景参数化）
-└── reports/                    # 运行产物（时间戳目录，不入库）
+│   └── {employee,evaluation,inventory}/…/*.yaml
+├── test_suites/                # pytest 入口（场景参数化 + 引擎离线自测）
+├── test_engine/                # 引擎组件单测；test_specstd/ specstd+智能层单测；
+│                               # test_workbench/ 工作台后端单测（均需显式指定路径）
+└── workbench/                  # 可视化工作台（FastAPI 后端 + React 19 前端）
 ```
+
+> 运行产物（drafts/plans/reports）已迁移至各工作区的 `.specguard/` 目录，不在仓库根。
 
 ---
 

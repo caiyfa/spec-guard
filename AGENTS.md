@@ -100,20 +100,34 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   ├── session.py                #   会话管理（多用户按工号隔离，agent/sessions/{emp}/）
 │   ├── llm_client.py             #   LLM 客户端（配置热加载，DB 驱动）
 │   ├── compactor.py              #   长对话压缩（超限自动摘要早期轮次）
-│   ├── skill_loader.py + skills/ #   技能加载（T-601：modes 退役后唯一事实源，8 技能 30s TTL）
+│   ├── skill_loader.py + skills/ #   技能加载（T-601：modes 退役后唯一事实源，13 技能 30s TTL）
 │   ├── prompts/system.md.j2      #   system prompt Jinja 模板（注入 skills/format_spec/AGENTS）
 │   ├── cli.py                    #   POC 独立验证入口
 │   └── sessions/                 #   会话产物（.jsonl，不入 git）
 │
 ├── mcp_server/                   # MCP 工具层（stdio，Agent 通过工具操作仓库）
 │   ├── server.py                 #   stdio 入口（T-982 收敛：对内 24 合并工具+open 15，见 tools/tool_meta.py）
-│   └── tools/                    #   spec_reader/scenario_tools/registry_query/draft_writer/validator/attribution/audit/meta
+│   └── tools/                    #   合并工具模块（spec/scenario/draft/attribution/audit/specflow×5/
+│       │                         #   feishu_read/lark_auth/lark_run/graph/lineage/knowledge/info_pack/
+│       │                         #   registry_query/validator/meta/open×15…元数据见 tool_meta.py）
 │       ├── info_pack.py          #     基础信息包读写（尚未挂载到 server.TOOL_MODULES）
 │       └── live_registry.py      #     运行时 tool 注册器（导入时注册 engine 适配包）
 │
 ├── feedback/                     # 反哺闭环（双反馈循环 A/B 的持久化）
 │   ├── ledger.py                 #   SPQ 台账状态机（pending→in_progress→closed）
 │   └── notify.py                 #   通知出口
+│
+├── specflow/                     # 需求侧包（双系统分离，与 engine 平级；不依赖 engine）
+│   ├── interview/                #   面试闭环（会话/纪要/问题链）
+│   ├── delta/                    #   delta 文档（archive/manifest/merge/verify）
+│   ├── feishu_pool/              #   飞书材料池共享区（chats/docs/minutes 快照+话题聚类+跨群关联）
+│   ├── anchor/                   #   FR 锚点派生；lineage/ 血缘；materials/ 材料引用
+├── graph_index/                  # 图谱索引（T-070 P-A 支路）：链接关系确定性物化为
+│   └── builder.py/service.py/…   #   nodes+类型化边（graph_index.db，派生物非事实源，可删可重建）
+├── integrations/                 # 外部系统集成唯一通道
+│   └── zentao/                   #   禅道集成单包（M06：story/bug 读写同包，杜绝第二套链接）
+├── skills/                       # 飞书 CLI 宿主侧技能包（lark-* 27 域，T-701~703 支线交付，
+│                                 #   供 ZCode 等宿主挂载，非 agent/skills 智能层技能）
 │
 ├── scenarios/                    # 场景库（按模块分目录，自动发现，双层 YAML）
 │   ├── employee/person-profile/  #   全景档案（_suite.yaml 声明模块元信息）
@@ -129,9 +143,9 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │
 ├── (drafts/plans/reports 已迁移至各工作区的 .specguard/ 目录，见 specstd/workspace.py)
 └── workbench/                    # 可视化工作台
-    ├── backend/                  #   FastAPI（main.py + routers/×15 + services/×20，含 RBAC + 工作区中间件）
-    │   ├── routers/              #   auth/users/scenarios/runs/reference/plans/spec_validation/
-    │   │                         #   agent/workspace/feedback/drafts/settings/notify/schedules
+    ├── backend/                  #   FastAPI（main.py + routers/×34 + services/×41（多数为
+    │   ├── routers/              #   sg_core 转发 shim）+ services/specflow/×13 + services/zentao/，
+    │   │                         #   含 RBAC + 工作区中间件；路由清单以 main.py include_router 为准）
     │   └── services/             #   auth(会话+RBAC)/runner/scenario_store/plan_store/format_spec/
     │                             #   deps_editor/spec_validator/covers_gate/user_store/crypto/
     │                             #   llm_config/model_config/scenario_meta/scheduler/file_preview
