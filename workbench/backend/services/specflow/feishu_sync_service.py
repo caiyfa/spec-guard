@@ -334,6 +334,7 @@ def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
         from specflow.feishu_pool import topic_cluster as tc
         from specflow.feishu_pool.pool_store import chat_sha8
         chat_windows = {}
+        chat_kinds = {}
         for c in (load_watch_config(emp_base).get("chats") or []):
             cid = str(c.get("chat_id", ""))
             if cid:
@@ -341,9 +342,13 @@ def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
                     chat_windows[chat_sha8(cid)] = int(c.get("topic_days", 7) or 0)
                 except (TypeError, ValueError):
                     chat_windows[chat_sha8(cid)] = 7
+                # T-991：群类型标签随聚类下传（priority 推导信号；多 emp 同群
+                # 配置以最后处理的 watch 为准——kind 语义通常一致）
+                chat_kinds[chat_sha8(cid)] = str(c.get("kind") or "")
         material_root = Path(material_base) if material_base else emp_base
         tc.cluster_chat_snapshots(material_root, LLMClient(model_id="text"),
-                                  chat_windows=chat_windows, default_days=7)
+                                  chat_windows=chat_windows, default_days=7,
+                                  chat_kinds=chat_kinds or None)
     except Exception as e:
         log.warning("话题聚类失败（不阻断同步）: %s", e)
 

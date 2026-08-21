@@ -1744,14 +1744,16 @@ export const feishuPoolApi = {
               chats_empty?: number; days_pulled?: number; errors: string[] }>(
       '/feishu-pool/sync', { method: 'POST',
         body: JSON.stringify(chatId ? { chat_id: chatId } : {}) }),
-  reviewQueue: () => request<{ items: FeishuReviewItem[] }>('/feishu-pool/review-queue'),
-  confirm: (pairs: [string, string][]) =>
+  reviewQueue: (scope: 'mine' | 'shared' = 'mine') =>
+    request<{ items: FeishuReviewItem[]; scope: string }>(
+      `/feishu-pool/review-queue?scope=${scope}`),
+  confirm: (pairs: [string, string][], scope: 'mine' | 'shared' = 'mine') =>
     request<{ confirmed: number; skipped: number;
               suggest_ivs?: { iv_id: string; title: string }[] }>(
-      '/feishu-pool/review/confirm', { method: 'POST', body: JSON.stringify({ pairs }) }),
-  reject: (pairs: [string, string][]) =>
+      '/feishu-pool/review/confirm', { method: 'POST', body: JSON.stringify({ pairs, scope }) }),
+  reject: (pairs: [string, string][], scope: 'mine' | 'shared' = 'mine') =>
     request<{ rejected: number; skipped: number }>(
-      '/feishu-pool/review/reject', { method: 'POST', body: JSON.stringify({ pairs }) }),
+      '/feishu-pool/review/reject', { method: 'POST', body: JSON.stringify({ pairs, scope }) }),
   transcribe: () =>
     request<{ status: string; reason?: string; done: number; failed: number; total: number }>(
       '/feishu-pool/transcribe', { method: 'POST' }),
@@ -1771,9 +1773,11 @@ export const feishuPoolApi = {
     request<{ items: FeishuTopic[] }>('/feishu-pool/topics/commit', {
       method: 'POST', body: JSON.stringify({ chat_sha8, day, days: days || [], picked }) }),
   editTopicCard: (id: string, title?: string, summary?: string,
-                  keywords?: string[], baseRev?: number) =>
+                  keywords?: string[], baseRev?: number,
+                  category?: string, priority?: string) =>
     request<FeishuTopic>('/feishu-pool/topics/card', {
-      method: 'PUT', body: JSON.stringify({ id, title, summary, keywords, base_rev: baseRev }) }),
+      method: 'PUT', body: JSON.stringify({ id, title, summary, keywords,
+        base_rev: baseRev, category: category || '', priority: priority || '' }) }),
   regenTopicCard: (id: string) =>
     request<FeishuTopic>('/feishu-pool/topics/regen', {
       method: 'POST', body: JSON.stringify({ id }) }),
@@ -1887,6 +1891,10 @@ interface FeishuTopicOrigin {
   prompt_version?: string;
 }
 
+// T-991：话题五分类（chat 闲聊默认过滤可开关——拍板③）/ 优先级（信号推导初值，人工可改）
+export type FeishuTopicCategory = 'chat' | 'routine' | 'requirement' | 'test' | 'solution';
+export type FeishuTopicPriority = 'high' | 'normal' | 'low';
+
 export interface FeishuTopic {
   id: string;
   title: string;
@@ -1906,6 +1914,8 @@ export interface FeishuTopic {
   agent_origin?: FeishuTopicOrigin;
   last_edited_by?: { emp: string; name: string };
   last_edited_at?: string;
+  category?: FeishuTopicCategory;       // T-991：五分类（存量卡默认 routine）
+  priority?: FeishuTopicPriority;       // T-991：high|normal|low（初值信号推导）
 }
 
 export type FeishuTopicDraft = Omit<FeishuTopic, 'id'>;

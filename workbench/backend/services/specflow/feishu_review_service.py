@@ -7,6 +7,9 @@
 
 复核队列：.specflow/{emp}/feishu_pool/_review_queue.json（覆盖式 JSON，
 量小随用户，一期不建表）。队列按 emp 目录天然隔离——只能复核本人材料。
+T-991 共享可选：路由层 scope=shared 时传共享材料区根（.specflow/feishu_pool/
+_review_queue.json）——本服务全部函数以 base 路径参数化，无侵入；多人协作
+场景可互相复核建边建议（默认仍 mine 私有，行为不变）。
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ def _now() -> str:
 
 
 def _queue_path(specflow_emp_base: Path) -> Path:
-    return pool_dirs(specflow_emp_base)["root"] / _QUEUE_NAME
+    return pool_dirs(specflow_emp_base)["root"] / "_review_queue.json"
 
 
 def _load_queue(specflow_emp_base: Path) -> list[dict]:

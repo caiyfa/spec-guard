@@ -124,3 +124,43 @@ def test_confirm_no_iv_returns_empty(tmp_path):
             "suggested_by": "u1"}])
         out = rev.confirm_suggestions(emp, ws, "u1", [("fd:tokA", "FR-012")])
     assert out["suggest_ivs"] == []
+
+
+# ══════════════════════════════════════════════════════════
+# T-991：复核队列共享可选（scope=shared → 共享材料区队列）
+# ══════════════════════════════════════════════════════════
+
+def test_shared_scope_queue_visible_across_users(tmp_path):
+    """共享队列：u1 入队共享 base，u2 经 scope=shared 可见（服务层 base 参数化）。"""
+    ws, emp1 = _prepare(tmp_path)
+    shared = tmp_path / ".specflow"          # 共享材料区根（specflow_dir("")）
+    rev.enqueue_suggestions(shared, "u1", [
+        {"src": "fd:tokA", "dst": "FR-012", "confidence": 0.9,
+         "evidence": "FR-012 提及", "valid": True, "suggested_by": "u1"}])
+    emp2 = tmp_path / ".specflow" / "u2"
+    # 默认 mine：u2 私有队列为空（隔离不变）
+    assert rev.list_queue(emp2) == []
+    # shared：u2 可见共享队列
+    items = rev.list_queue(shared)
+    assert len(items) == 1 and items[0]["src"] == "fd:tokA"
+
+
+def test_router_review_queue_scope_routing(tmp_path):
+    """路由层 scope 路由：mine → _sf_base；shared → _material_base。"""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from routers import feishu_pool as rp
+
+    ws, emp1 = _prepare(tmp_path)
+    shared = tmp_path / ".specflow"
+    rev.enqueue_suggestions(shared, "u1", [
+        {"src": "fd:tokA", "dst": "FR-012", "confidence": 0.9,
+         "evidence": "FR-012 提及", "valid": True, "suggested_by": "u1"}])
+    user = SimpleNamespace(emp_no="90000002", name="王二")
+    emp2 = tmp_path / ".specflow" / "u2"
+    with patch.object(rp, "_sf_base", return_value=emp2), \
+         patch.object(rp, "_material_base", return_value=shared):
+        out_mine = rp.review_queue(scope="mine", user=user, workspace="tdm")
+        assert out_mine["items"] == [] and out_mine["scope"] == "mine"
+        out_shared = rp.review_queue(scope="shared", user=user, workspace="tdm")
+        assert len(out_shared["items"]) == 1 and out_shared["scope"] == "shared"

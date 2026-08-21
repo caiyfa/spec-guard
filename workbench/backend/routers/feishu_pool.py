@@ -93,6 +93,7 @@ class WatchConfig(BaseModel):
 
 class ReviewPairs(BaseModel):
     pairs: list[list[str]] = []
+    scope: str = "mine"     # T-991：mine=私有队列（默认）/ shared=共享队列
 
 
 @router.get("/watch")
@@ -143,10 +144,14 @@ def sync_now(body: SyncRequest | None = None,
 
 
 @router.get("/review-queue")
-def review_queue(user: CurrentUser = Depends(get_current_user),
+def review_queue(scope: str = "mine",
+                 user: CurrentUser = Depends(get_current_user),
                  workspace: str = Depends(resolve_workspace)):
+    """复核队列（默认 mine=当前用户私有区；T-991 scope=shared 共享材料区
+    ——多人协作场景可互相复核建边建议）。"""
     from services.specflow import feishu_review_service as rev_svc
-    return {"items": rev_svc.list_queue(_sf_base())}
+    base = _material_base() if scope == "shared" else _sf_base()
+    return {"items": rev_svc.list_queue(base), "scope": scope}
 
 
 @router.post("/review/confirm")
@@ -155,7 +160,8 @@ def review_confirm(body: ReviewPairs,
                    workspace: str = Depends(resolve_workspace)):
     from services.specflow import feishu_review_service as rev_svc
     pairs = [(p[0], p[1]) for p in body.pairs if len(p) == 2]
-    return rev_svc.confirm_suggestions(_sf_base(), _ws_root(), user.emp_no, pairs)
+    base = _material_base() if body.scope == "shared" else _sf_base()
+    return rev_svc.confirm_suggestions(base, _ws_root(), user.emp_no, pairs)
 
 
 @router.post("/review/reject")
@@ -164,7 +170,8 @@ def review_reject(body: ReviewPairs,
                   workspace: str = Depends(resolve_workspace)):
     from services.specflow import feishu_review_service as rev_svc
     pairs = [(p[0], p[1]) for p in body.pairs if len(p) == 2]
-    return rev_svc.reject_suggestions(_sf_base(), _ws_root(), user.emp_no, pairs)
+    base = _material_base() if body.scope == "shared" else _sf_base()
+    return rev_svc.reject_suggestions(base, _ws_root(), user.emp_no, pairs)
 
 
 @router.post("/transcribe")
@@ -229,6 +236,8 @@ class CardUpdate(BaseModel):
     title: str = ""
     summary: str = ""
     keywords: list[str] = []          # T-948：空列表=不改；传入即覆盖
+    category: str = ""                # T-991：空=不改（chat|routine|requirement|test|solution）
+    priority: str = ""                # T-991：空=不改（high|normal|low）
     base_rev: int | None = None       # T-948 乐观锁：与卡片 rev 不符 → 409
 
 
@@ -265,10 +274,21 @@ def draft_topics(body: DraftRequest,
     days = body.days or ([body.day] if body.day else [])
     if not days:
         raise HTTPException(status_code=400, detail="day 或 days 至少传一个")
+    # T-991：watch 反查该群类型标签（priority 推导信号；当前用户 watch 视角）
+    chat_kind = ""
+    try:
+        from specflow.feishu_pool.pool_store import chat_sha8 as _sha8
+        for c in (sync_svc.load_watch_config(_sf_base()).get("chats") or []):
+            cid = str(c.get("chat_id") or "")
+            if cid and _sha8(cid) == body.chat_sha8:
+                chat_kind = str(c.get("kind") or "")
+                break
+    except Exception:
+        pass
     try:
         out = tc.draft_chat_segments(
             _sf_base(), LLMClient(model_id="text"), body.chat_sha8, days,
-            material_base=_material_base())
+            material_base=_material_base(), chat_kind=chat_kind)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     return {"items": out}
@@ -291,16 +311,20 @@ def commit_topics(body: CommitRequest,
 def update_topic_card(body: CardUpdate,
                       user: CurrentUser = Depends(get_current_user),
                       workspace: str = Depends(resolve_workspace)):
-    """单卡编辑 title/summary/keywords（T-948 R7；乐观锁冲突 → 409 带最新卡片）。"""
+    """单卡编辑 title/summary/keywords/category/priority（T-948 R7 + T-991；
+    乐观锁冲突 → 409 带最新卡片；非法枚举 → 400）。"""
     from specflow.feishu_pool import topic_cluster as tc
     editor = {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
     try:
         return tc.edit_candidate(
             _sf_base(), body.id, title=body.title, summary=body.summary,
             keywords=body.keywords or None, base_rev=body.base_rev,
-            editor=editor, material_base=_material_base())
+            editor=editor, material_base=_material_base(),
+            category=body.category, priority=body.priority)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
     except tc.RevConflict as e:
         raise HTTPException(
             status_code=409,
