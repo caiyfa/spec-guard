@@ -346,7 +346,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
           <option value="">— 选择群 —</option>
           {chatOptions.map(c => (
             <option key={c.chat_sha8} value={c.chat_sha8}>
-              {c.name} ({c.chat_sha8})
+              {c.name}{c.kind ? ` · ${c.kind}` : ''} ({c.chat_sha8})
             </option>
           ))}
         </select>

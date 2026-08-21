@@ -1644,8 +1644,12 @@ export interface FeishuWatchUser {
   scopes: string[];   // 'group_sender' | 'minutes' | 'docs'
 }
 
+// T-990：群类型标签枚举（与后端 feishu_sync_service._CHAT_KINDS 对齐）
+export const FEISHU_CHAT_KINDS = ['测试', '产研', '用户', '项目', '运维', '迭代'] as const;
+export type FeishuChatKind = typeof FEISHU_CHAT_KINDS[number];
+
 export interface FeishuWatch {
-  chats: { chat_id: string; name?: string; topic_days?: number }[];
+  chats: { chat_id: string; name?: string; kind?: string; topic_days?: number }[];
   docs: { token: string; url?: string; owner_open_id?: string; title?: string }[];
   users: FeishuWatchUser[];
   minutes_days: number;

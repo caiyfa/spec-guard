@@ -7,7 +7,7 @@ import {
   type FeishuWatch,
 } from '../api';
 
-export type ChatOption = { chat_sha8: string; name: string; days: string[] };
+export type ChatOption = { chat_sha8: string; name: string; days: string[]; kind?: string };
 
 export async function sha256Hex8(input: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
@@ -35,16 +35,25 @@ export function useChatOptions(materials: FeishuPoolMaterial[],
     });
     (async () => {
       if (watchCfg?.chats?.length) {
+        // watch 授权群补充（无快照时 days 为空）；T-990：带出群类型标签
+        const watchKindBySha8 = new Map<string, string>();
         const entries = await Promise.all(
           watchCfg.chats.map(async (c: any) => {
             const cid = c.chat_id;
             if (!cid) return null;
             const sha8 = await sha256Hex8(cid);
+            if (c.kind) watchKindBySha8.set(sha8, String(c.kind));
             return { sha8, name: c.name || sha8 };
           }));
         for (const e of entries) {
           if (!e || map.has(e.sha8)) continue;
-          map.set(e.sha8, { chat_sha8: e.sha8, name: e.name, days: [] });
+          map.set(e.sha8, { chat_sha8: e.sha8, name: e.name, days: [],
+                            kind: watchKindBySha8.get(e.sha8) });
+        }
+        // 已有快照的群也补 watch 侧 kind（快照文件名不带类型）
+        for (const [sha8, kind] of watchKindBySha8) {
+          const existing = map.get(sha8);
+          if (existing && !existing.kind) existing.kind = kind;
         }
       }
       const opts = Array.from(map.values());

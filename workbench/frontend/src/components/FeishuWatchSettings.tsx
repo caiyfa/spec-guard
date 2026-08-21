@@ -4,7 +4,7 @@
 // 不显示；③授权块/保存栏常显不受 tab 切换影响。授权闭环见 T-942 注释。
 
 import { useEffect, useRef, useState } from 'react';
-import { feishuPoolApi, type FeishuWatch,
+import { feishuPoolApi, FEISHU_CHAT_KINDS, type FeishuWatch,
         type FeishuWatchUser, type FeishuChatItem, type FeishuUserItem,
         type FeishuUserDocItem, type LarkStatus, type LarkLoginResult } from '../api';
 
@@ -15,6 +15,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   const [chatSelList, setChatSelList] = useState<FeishuChatItem[]>([]);
   const [chatSel, setChatSel] = useState<Set<string>>(new Set());
   const [chatTopicDays, setChatTopicDays] = useState<Record<string, number>>({});
+  // T-990：按群类型标签（话题分类先验/优先级信号；空=未标注）
+  const [chatKind, setChatKind] = useState<Record<string, string>>({});
   const [chatsLoading, setChatsLoading] = useState(false);
   const [chatsFullLoaded, setChatsFullLoaded] = useState(false);
   const [chatFilter, setChatFilter] = useState('');
@@ -132,10 +134,13 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
       setChatSel(new Set((w.chats || []).map(c => c.chat_id)));
       // T-946：按群话题窗口回显（缺省 7）
       const days: Record<string, number> = {};
+      const kinds: Record<string, string> = {};
       (w.chats || []).forEach(c => {
         days[c.chat_id] = Number(c.topic_days ?? 7) || 0;
+        kinds[c.chat_id] = c.kind || '';   // T-990：群类型标签回显
       });
       setChatTopicDays(days);
+      setChatKind(kinds);
       // docs 回显到勾选列表（title 可读呈现；不再 textarea 裸 token 回显）
       const docs = (w.docs || []).map(d => ({
         token: d.token, title: d.title || '', url: d.url || '',
@@ -182,6 +187,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
         ...watch,
         chats: [...chatMap.values()].map(c => ({
           ...c,
+          kind: chatKind[c.chat_id] || '',     // T-990：群类型标签（空=未标注）
           topic_days: chatTopicDays[c.chat_id] ?? 7,   // T-946：按群话题窗口
         })),
         docs: docSelList.filter(d => docSel.has(d.token)).map(d => ({
@@ -426,6 +432,17 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                         <code className="text-[10px] text-gray-600">{c.chat_id}</code>
                         {chatSel.has(c.chat_id) && (
                           <span className="ml-auto flex items-center gap-1 shrink-0 text-[10px] text-gray-500">
+                            <select
+                              className="bg-surface-3 border border-border rounded px-1 py-0.5 text-[10px] text-gray-300 outline-none focus:border-info"
+                              value={chatKind[c.chat_id] || ''}
+                              onChange={e => setChatKind(prev => ({
+                                ...prev,
+                                [c.chat_id]: e.target.value,
+                              }))}
+                              title="群类型标签（话题分类的先验信号；未标注也可正常监听）">
+                              <option value="">未标注</option>
+                              {FEISHU_CHAT_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+                            </select>
                             话题
                             <input type="number" min={0} max={365}
                               className="w-12 bg-surface-3 border border-border rounded px-1 py-0.5 text-[10px] text-gray-300 outline-none focus:border-info"

@@ -208,6 +208,7 @@ export default function FeishuPool() {
                 ? <span className="text-gray-600">无</span>
                 : (watchCfg.chats || []).map(c => (
                   <span key={c.chat_id} className="px-2 py-0.5 rounded border border-border text-[11px] text-gray-300">
+                    {c.kind && <span className="text-info mr-1">{c.kind}</span>}
                     {c.name || c.chat_id}
                   </span>
                 ))}
