@@ -18,10 +18,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
+
+logger = logging.getLogger("specguard.crypto")
 
 # 密钥文件位置（与 user_store.DATA_DIR 一致，但独立定义避免循环依赖）
 BACKEND_DIR = Path(__file__).resolve().parent.parent / "workbench" / "backend"
@@ -59,10 +62,8 @@ def _load_key() -> bytes:
         _KEY_FILE.chmod(0o600)
     except OSError:
         pass  # Windows 无 chmod 语义，依赖文件系统 ACL
-    print(
-        f"[crypto] 已生成数据库加密密钥到 {_KEY_FILE}，"
-        f"建议配置 SG_DB_ENCRYPTION_KEY 环境变量以固定密钥（密钥丢失=数据不可恢复）"
-    )
+    logger.warning("已生成数据库加密密钥到 %s，建议配置 SG_DB_ENCRYPTION_KEY "
+                   "环境变量以固定密钥（密钥丢失=数据不可恢复）", _KEY_FILE)
     return _KEY_CACHE
 
 

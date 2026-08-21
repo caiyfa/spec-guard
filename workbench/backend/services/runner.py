@@ -10,6 +10,7 @@ asyncio 子进程直接 NotImplementedError；Popen 不依赖事件循环 flavor
 
 import asyncio
 import json
+import logging
 import os
 import re
 import secrets
@@ -23,6 +24,8 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import WebSocket
+
+logger = logging.getLogger("specguard.runner")
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # 仓库根
 
@@ -180,7 +183,7 @@ async def push_run_notifications(reports_root: Path, run_id: str,
                     str(conclusion)[:200], f"reports/{cases_dir.parent.name}/report.md",
                 )
     except Exception as e:
-        print(f"[SpecGuard WARN] 通知自动推送失败（不影响执行结果）: {type(e).__name__}: {e}")
+        logger.warning("通知自动推送失败（不影响执行结果）: %s: %s", type(e).__name__, e)
 
 
 class RunManager:

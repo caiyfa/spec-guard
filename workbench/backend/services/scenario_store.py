@@ -7,11 +7,14 @@ K-025 性能：①CSafeLoader（libyaml 可用时 C 解析，语义一致快 5-1
 （get_dag 甚至解析两遍），场景/ DAG/草稿页加载慢的主因。
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
 
 import yaml
+
+logger = logging.getLogger("specguard.scenario_store")
 
 # SpecGuard 根目录（services/ → backend/ → workbench/ → specguard/）
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -213,7 +216,7 @@ def _engine_graph():
         try:
             _cache["graph"] = DependencyGraph(load_scenarios(str(scenarios_root())))
         except CycleError as e:
-            print(f"[SpecGuard WARN] 场景库存在依赖环，DAG 仲裁降级: {e}")
+            logger.warning("场景库存在依赖环，DAG 仲裁降级: %s", e)
             _cache["graph"] = _DegradedGraph()
             _cache["cycles"] = validate_dag()["cycles"]
     return _cache["graph"]

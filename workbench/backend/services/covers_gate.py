@@ -6,7 +6,10 @@
 - fail-open 策略（无激活工作区 / 无锚点 / 校验异常）不阻止执行，但打印 WARN 保证可观测
 """
 
+import logging
 from pathlib import Path
+
+logger = logging.getLogger("specguard.covers_gate")
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -23,17 +26,17 @@ def check_covers_gate() -> list[dict]:
 
         ws = get_active_workspace()
         if not ws:
-            print("[SpecGuard WARN] covers 前置闸跳过：无激活工作区")
+            logger.warning("covers 前置闸跳过：无激活工作区")
             return []
 
         anchors = scan_anchors(ws.root)
         if not anchors:
-            print(f"[SpecGuard WARN] covers 前置闸跳过：工作区 {ws.name} 无 FR 锚点")
+            logger.warning("covers 前置闸跳过：工作区 %s 无 FR 锚点", ws.name)
             return []
 
         scenarios_root = SG_ROOT / "scenarios"
         findings = check_covers(anchors, scenarios_root)
         return [f.to_dict() for f in findings if f.level == "ERROR"]
     except Exception as e:
-        print(f"[SpecGuard WARN] covers 前置闸异常放行（fail-open）: {type(e).__name__}: {e}")
+        logger.warning("covers 前置闸异常放行（fail-open）: %s: %s", type(e).__name__, e)
         return []

@@ -15,6 +15,7 @@ DB 表 scheduled_jobs:
 from __future__ import annotations
 
 import asyncio
+import logging
 import sqlite3
 import threading
 import uuid
@@ -25,6 +26,8 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.cron import CronTrigger
+
+logger = logging.getLogger("specguard.scheduler")
 
 # ── 路径 ──
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -133,7 +136,7 @@ def _restore_jobs(sched: AsyncIOScheduler):
                 replace_existing=True,
             )
         except Exception as e:
-            print(f"[scheduler WARN] 恢复 job {job_id} 失败: {e}")
+            logger.warning("恢复 job %s 失败: %s", job_id, e)
 
 
 # ══════════════════════════════════════════════════════════
@@ -154,7 +157,7 @@ async def _execute_job(job_id: str):
         ).fetchone()
 
     if not row:
-        print(f"[scheduler WARN] job {job_id} 不存在于 DB，从调度器移除")
+        logger.warning("job %s 不存在于 DB，从调度器移除", job_id)
         sched = get_scheduler()
         sched.remove_job(job_id)
         return
@@ -176,11 +179,11 @@ async def _execute_job(job_id: str):
                 (_now(), job_id),
             )
             conn.commit()
-        print(f"[scheduler WARN] 任务 {row['name']} 跳过："
-              f"已有执行进行中（run_id={run_manager.run_id}）")
+        logger.warning("任务 %s 跳过：已有执行进行中（run_id=%s）",
+                   row["name"], run_manager.run_id)
         return
 
-    print(f"[scheduler] 执行定时任务: {row['name']} (plan={plan_id}, ws={workspace})")
+    logger.info("执行定时任务: %s (plan=%s, ws=%s)", row["name"], plan_id, workspace)
 
     try:
         from services.plan_executor import execute_plan
@@ -203,10 +206,10 @@ async def _execute_job(job_id: str):
             )
             conn.commit()
 
-        print(f"[scheduler] 任务完成: {row['name']} → {status} (run_id={run_id})")
+        logger.info("任务完成: %s → %s (run_id=%s)", row["name"], status, run_id)
 
     except Exception as e:
-        print(f"[scheduler ERROR] 任务执行异常: {row['name']}: {e}")
+        logger.error("任务执行异常: %s: %s", row["name"], e)
         with _LOCK, _connect() as conn:
             conn.execute(
                 """UPDATE scheduled_jobs
@@ -380,7 +383,7 @@ def update_job(job_id: str, name: str = "", plan_id: str = "",
                     replace_existing=True,
                 )
             except Exception as e:
-                print(f"[scheduler WARN] 重新注册 job {job_id} 失败: {e}")
+                logger.warning("重新注册 job %s 失败: %s", job_id, e)
 
     return updated
 

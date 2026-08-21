@@ -8,6 +8,7 @@ migrate_registry_to_configs 一次性迁移后归档。
 """
 
 import fnmatch
+import logging
 import hashlib
 import hmac
 import ipaddress
@@ -20,6 +21,8 @@ from pathlib import Path
 from urllib.parse import urlparse, quote_plus
 
 import httpx
+
+logger = logging.getLogger("specguard.notify")
 
 # 送达回执文件（D2：各触发点消息送达回执落盘）
 RECEIPTS_PATH = Path(__file__).resolve().parent / "receipts.jsonl"
@@ -171,9 +174,8 @@ VULN_BATCH_THRESHOLD = 3
 
 
 def _log_notify_failure(config_id: str, event: str, error: str):
-    """记录通知失败到 stderr（不抛异常）。"""
-    import sys
-    print(f"[notify] 发送失败 config={config_id} event={event}: {error}", file=sys.stderr)
+    """记录通知失败（不抛异常）。"""
+    logger.warning("发送失败 config=%s event=%s: %s", config_id, event, error)
 
 
 async def send_notification(config: dict, event: str, payload: dict) -> bool:

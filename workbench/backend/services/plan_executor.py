@@ -7,9 +7,12 @@
 """
 
 import asyncio
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger("specguard.plan_executor")
 
 # 确保仓库根在 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -208,7 +211,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
     # 只执行 plan 中的场景；依赖闭包（上游）由 run_single → run_with_deps 内部处理
     missing = [sid for sid in scenario_ids if sid not in graph.by_id]
     if missing:
-        print(f"[plan_executor WARN] 计划中的场景在场景库中不存在，跳过: {missing}")
+        logger.warning("计划中的场景在场景库中不存在，跳过: %s", missing)
 
     plan_scenario_ids = [sid for sid in scenario_ids if sid in graph.by_id]
     topo_ids = graph.topo_order(plan_scenario_ids)
@@ -291,7 +294,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
     }
     report_writer.dump_json(rctx.records, str(run_dir), meta)
     report_writer.render_md(rctx.records, str(run_dir), meta)
-    print(f"[plan_executor] 报告已生成: {run_dir / 'report.md'}")
+    logger.info("报告已生成: %s", run_dir / "report.md")
 
     # T-116：失败索引（与 runner 侧 _record_failures 对齐）——
     # 定时/引擎直跑执行的失败同样进 failures/index.jsonl 台账
@@ -299,9 +302,9 @@ async def execute_plan(plan_id: str, workspace: str = "",
         from services import failure_index
         n = failure_index.append_failures(reports_root, f"{plan_id}/{run_id}")
         if n:
-            print(f"[plan_executor] {n} 条失败已记入 failures/index.jsonl")
+            logger.info("%s 条失败已记入 failures/index.jsonl", n)
     except Exception as e:
-        print(f"[SpecGuard WARN] 失败索引写入失败（不影响执行结论）: {type(e).__name__}: {e}")
+        logger.warning("失败索引写入失败（不影响执行结论）: %s: %s", type(e).__name__, e)
 
     # 全量执行索引（与 runner 侧 _record_executions 对齐）——
     # 定时/引擎直跑执行的全部结果同样进 executions/index.jsonl 台账
@@ -309,9 +312,9 @@ async def execute_plan(plan_id: str, workspace: str = "",
         from services import execution_index
         n = execution_index.append_executions(reports_root, f"{plan_id}/{run_id}")
         if n:
-            print(f"[plan_executor] {n} 条执行记录已记入 executions/index.jsonl")
+            logger.info("%s 条执行记录已记入 executions/index.jsonl", n)
     except Exception as e:
-        print(f"[SpecGuard WARN] 执行索引写入失败（不影响执行结论）: {type(e).__name__}: {e}")
+        logger.warning("执行索引写入失败（不影响执行结论）: %s: %s", type(e).__name__, e)
 
     # T-304：D2 场景级通知（fail/drift/skip 事件）与 runner 路径对齐——
     # 此前定时执行只触发 plan_failure/plan_success（计划粒度），配置了场景级
@@ -320,7 +323,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
         from services.runner import push_run_notifications
         await push_run_notifications(reports_root, f"{plan_id}/{run_id}", system=system)
     except Exception as e:
-        print(f"[SpecGuard WARN] 场景级通知推送失败（不影响执行结论）: {type(e).__name__}: {e}")
+        logger.warning("场景级通知推送失败（不影响执行结论）: %s: %s", type(e).__name__, e)
 
     # ── 7. 汇总状态 ──
     has_fail = any(r["status"] in ("fail", "error") for r in results)
@@ -395,8 +398,7 @@ async def _notify_failure(plan_id: str, plan_name: str, scenario_id: str,
             await send_notification(config, "plan_failure", payload)
 
     except Exception as e:
-        print(f"[plan_executor WARN] 失败通知发送异常（不阻塞主流程）: "
-              f"{type(e).__name__}: {e}")
+        logger.warning("失败通知发送异常（不阻塞主流程）: %s: %s", type(e).__name__, e)
 
 
 async def _notify_success(plan_id: str, plan_name: str, scenario_count: int,
@@ -426,5 +428,4 @@ async def _notify_success(plan_id: str, plan_name: str, scenario_count: int,
             await send_notification(config, "plan_success", payload)
 
     except Exception as e:
-        print(f"[plan_executor WARN] 成功通知发送异常（不阻塞主流程）: "
-              f"{type(e).__name__}: {e}")
+        logger.warning("成功通知发送异常（不阻塞主流程）: %s: %s", type(e).__name__, e)

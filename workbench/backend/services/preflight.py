@@ -22,11 +22,14 @@ accounts 定义，跑完才 SKIP（output.log 只剩「账号别名未定义」�
   路径静态不可判 → 单列 unknown_file_refs（诚实语义，不报假缺口）
 """
 
+import logging
 import os
 import re
 from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger("specguard.preflight")
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -443,6 +446,6 @@ def _load_env(env_name: str, system: str) -> dict:
         mod = importlib.import_module(f"systems.{sys_name}")
         return mod.load_env(env_name) or {}
     except Exception as e:
-        print(f"[SpecGuard WARN] preflight 环境配置加载失败 "
-              f"(systems.{sys_name}.load_env('{env_name}')): {type(e).__name__}: {e}")
+        logger.warning("preflight 环境配置加载失败 (systems.%s.load_env('%s')): %s: %s",
+                 sys_name, env_name, type(e).__name__, e)
         return {}

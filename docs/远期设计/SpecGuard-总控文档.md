@@ -626,3 +626,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 *本文件本身被修改时，同样需要在 §6 登记（第一行登记者是总控人）。hash 工具：`sg-hash.py`（sha256-12，与 specstd 契约指纹同口径）。*
 | AGENTS.md | sess-tool-consolidation | 2026-08-21 | 0890c0155353 | 94c0c4400b15 | 已完成 | T-998：补 specflow/graph_index/integrations/skills 四包 + skills 8→13/routers×34/services×41 计数 + mcp tools 名单归一 |
 | README.md | sess-tool-consolidation | 2026-08-21 | fdf199e7fdc7 | 1f08e9558404 | 已完成 | T-998：§八目录树重写（补 10 顶层包/去 reports 幽灵）+ §一报告路径改 .specguard/{EX-任务号} |
+| workbench/backend/services/scheduler.py | sess-tool-consolidation | 2026-08-21 | 7522d0e59dea | 199be0da9846 | 已完成 | T-999a：print→logging |
+| workbench/backend/services/plan_executor.py | sess-tool-consolidation | 2026-08-21 | 7d8958906289 | 5f286c6ee682 | 已完成 | T-999a：print→logging |
+| workbench/backend/services/covers_gate.py | sess-tool-consolidation | 2026-08-21 | 6534816656b3 | 086e1f39466d | 已完成 | T-999a：print→logging |
+| workbench/backend/services/scenario_store.py | sess-tool-consolidation | 2026-08-21 | 5ad129574cf9 | 4e90ea3e76e4 | 已完成 | T-999a：print→logging |
+| workbench/backend/services/runner.py | sess-tool-consolidation | 2026-08-21 | 36aff40d71dc | 467f4e13fe38 | 已完成 | T-999a：print→logging |
+| workbench/backend/services/preflight.py | sess-tool-consolidation | 2026-08-21 | 161bc3d7a4a7 | 2d266badf788 | 已完成 | T-999a：print→logging |
+| sg_core/crypto.py | sess-tool-consolidation | 2026-08-21 | a10f5531f1c7 | 3658a36b97c5 | 已完成 | T-999a：print→logging |
+| feedback/notify.py | sess-tool-consolidation | 2026-08-21 | c6a6431e65eb | ce24cb1fca37 | 已完成 | T-999a：print→logging |
