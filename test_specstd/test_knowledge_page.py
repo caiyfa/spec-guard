@@ -20,8 +20,11 @@ SG_ROOT = Path(__file__).resolve().parent.parent
 from unittest.mock import patch  # noqa: E402
 
 from specstd.workspace import (  # noqa: E402
-    register_local, set_context_workspace, reset_context_workspace,
-    set_context_emp_no, reset_context_emp_no,
+    register_local,
+    reset_context_emp_no,
+    reset_context_workspace,
+    set_context_emp_no,
+    set_context_workspace,
 )
 
 
@@ -60,6 +63,7 @@ def ctx(ws):
 def client():
     """TestClient（mock 鉴权 + 已登录）。"""
     from fastapi.testclient import TestClient
+
     from workbench.backend.main import app
     with TestClient(app) as c:
         yield c
@@ -131,24 +135,17 @@ class TestEnvNarrative:
         assert "凭据红线" in r["message"]
         assert any(f["level"] == "ERROR" for f in r["findings"])
 
-    def test_save_env_narrative_ok(self, ctx):
-        """合法叙事保存成功（写入真实适配包后立即恢复原文件，防测试污染——
-        2026-08-11 曾误删 T-506 产物 env.sit.md，教训同「测试污染生产配置」）。"""
+    def test_save_env_narrative_ok(self, ctx, tmp_path):
+        """合法叙事保存成功（SG_ROOT 重定向 tmp 隔离——2026-08-11 曾误删
+        T-506 产物 env.sit.md；2026-08-21 再修：恢复式写盘内容虽同但碰真实文件
+        mtime，每轮全量回归后遗留 stat 脏（验收反馈），改为根本不碰真实适配包）。"""
         from services import knowledge_service as ks
-        env_md = SG_ROOT / "systems" / "tdm" / "config" / "env.sit.md"
-        backup = env_md.read_text(encoding="utf-8") if env_md.is_file() else None
-        try:
-            with patch.object(ks, "_active_system", return_value="tdm"):
-                r = ks.save_env_narrative("sit", "# 环境叙事\n\n## 一、定位\nSIT 环境\n",
-                                          emp="90024166")
-            assert r["saved"] is True
-            assert env_md.is_file()
-        finally:
-            # 恢复原文件（防污染：env.sit.md 是 T-506 版本化产物）
-            if backup is not None:
-                env_md.write_text(backup, encoding="utf-8")
-            else:
-                env_md.unlink(missing_ok=True)
+        with patch.object(ks, "_active_system", return_value="tdm"), \
+             patch.object(ks, "SG_ROOT", tmp_path):
+            r = ks.save_env_narrative("sit", "# 环境叙事\n\n## 一、定位\nSIT 环境\n",
+                                      emp="90024166")
+        assert r["saved"] is True
+        assert (tmp_path / "systems" / "tdm" / "config" / "env.sit.md").is_file()
 
     def test_env_api_credential_rejected(self, ctx, client, headers):
         r = client.put("/api/knowledge/env/sit",
