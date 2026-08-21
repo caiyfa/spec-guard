@@ -14,6 +14,7 @@ import {
   feishuPoolApi,
   type FeishuPoolMaterial,
   type FeishuTopic,
+  type CrossChatCandidate,
   type FeishuMaterialContent,
   type FeishuWatch,
 } from '../api';
@@ -79,6 +80,8 @@ export default function FeishuPool() {
   const [ownerFilter, setOwnerFilter] = useState('');
   const [materials, setMaterials] = useState<FeishuPoolMaterial[]>([]);
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
+  // T-993：确定性预筛的跨群候选（list_pool_topics 附带，透传给工作台推荐位）
+  const [crossSuggestions, setCrossSuggestions] = useState<CrossChatCandidate[]>([]);
   const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null; imgUrls: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState('');
 
@@ -99,7 +102,10 @@ export default function FeishuPool() {
     feishuPoolApi.poolMaterials().then(r => setMaterials(r.items)).catch(e => setError(String(e?.message || e)));
   }, []);
   const loadTopics = useCallback(() => {
-    feishuPoolApi.poolTopics().then(setTopics).catch(e => setError(String(e?.message || e)));
+    feishuPoolApi.poolTopics()
+      .then(r => { setTopics({ candidates: r.candidates, confirmed: r.confirmed });
+                   setCrossSuggestions(r.cross_suggestions || []); })
+      .catch(e => setError(String(e?.message || e)));
   }, []);
 
   useEffect(() => { loadWatcher(); loadMaterials(); loadTopics(); },
@@ -299,7 +305,8 @@ export default function FeishuPool() {
           materials={materials}
           watchCfg={watchCfg}
           topics={topics}
-          onCommitted={loadTopics} />
+          onCommitted={loadTopics}
+          crossSuggestions={crossSuggestions} />
       )}
 
       {/* 材料详情弹层（原文 + 图片内嵌） */}

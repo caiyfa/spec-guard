@@ -779,3 +779,45 @@ def test_list_pool_topics_modules_derived(tmp_path):
     by_title = {t["title"]: t for t in out["candidates"]}
     assert by_title["有关联"]["modules"] == ["employee", "inventory"]
     assert by_title["无关联"]["modules"] == []   # rejected 边不派生；留空语义
+
+
+def test_list_pool_topics_cross_suggestions(tmp_path):
+    """T-993 D5：list_pool_topics 附确定性预筛 cross_suggestions（跨群同类
+    候选入选；rejected 对不再推荐）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    pool = emp / "feishu_pool"
+    pool.mkdir(parents=True)
+    (pool / "_topics.yaml").write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:aaaaaa-20260807-01\n    title: 导出权限过滤方案\n"
+        "    summary: s\n    chat_sha8: aaaaaa\n    status: confirmed\n"
+        "    category: requirement\n    rev: 1\n"
+        "    window: ['2026-08-07T14:00', '2026-08-07T15:00']\n"
+        "    message_count: 5\n    participants_count: 2\n"
+        "    source: chats/aaaaaa/20260807.md\n"
+        "  - id: tp:bbbbbb-20260807-01\n    title: 导出权限过滤讨论\n"
+        "    summary: s\n    chat_sha8: bbbbbb\n    status: draft\n"
+        "    category: requirement\n    rev: 1\n"
+        "    window: ['2026-08-07T15:00', '2026-08-07T16:00']\n"
+        "    message_count: 4\n    participants_count: 2\n"
+        "    source: chats/bbbbbb/20260807.md\n", encoding="utf-8")
+    ws = tmp_path / "ws"
+    from specflow.feishu_pool import facts
+    facts.append_link(ws, src="tp:aaaaaa-20260807-01",
+                      dst="tp:bbbbbb-20260807-01", edge="relates",
+                      confidence=0, evidence="", confirmed_by="u1",
+                      status="rejected")       # 已忽略的对
+    with patch("specstd.anchors.scan_anchors", lambda root: {}):
+        out = svc.list_pool_topics(emp, ws)
+    # rejected 对被过滤 → 预筛为空（唯一候选已被忽略）
+    assert out["cross_suggestions"] == []
+    # 撤掉 rejected 留痕后同一对重新入选
+    (ws / ".specguard" / "feishu").mkdir(parents=True, exist_ok=True)
+    facts.append_link(ws, src="tp:aaaaaa-20260807-01",
+                      dst="tp:bbbbbb-20260807-01", edge="relates",
+                      confidence=1, evidence="", confirmed_by="u1",
+                      status="confirmed")
+    with patch("specstd.anchors.scan_anchors", lambda root: {}):
+        out2 = svc.list_pool_topics(emp, ws)
+    # confirmed 对也不再进推荐（已是关联，无需再荐）
+    assert out2["cross_suggestions"] == []

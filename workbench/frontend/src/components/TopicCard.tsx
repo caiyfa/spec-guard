@@ -39,12 +39,15 @@ const ACTION_LABEL: Record<string, string> = {
   confirm: '确认', reject: '拒绝', reopen: '重新打开',
 };
 
-export default function TopicCard({ topic: t, draft, selected, onSelect, onRefresh }: {
+export default function TopicCard({ topic: t, draft, selected, onSelect, onRefresh,
+                                     relatedCount, onOpenRelations }: {
   topic: FeishuTopic;
   draft?: boolean;             // 介入工作区草案段（未提交，仅展示）
   selected?: boolean;
   onSelect?: () => void;
   onRefresh: () => void;
+  relatedCount?: number;       // T-993：跨群关联数（relates_to 边连通方）
+  onOpenRelations?: () => void;  // T-993：打开关联抽屉（并排多群证据）
 }) {
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(t.title);
@@ -149,6 +152,13 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
             title={`优先级：${t.priority}（信号推导初值，可编辑）`}>
             {(PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.normal).label}
           </span>
+        )}
+        {!draft && (relatedCount || 0) > 0 && (
+          <button className="text-[10px] shrink-0 text-emerald-400 hover:underline"
+            title="跨群关联（点击查看多群证据并排）"
+            onClick={e => { e.stopPropagation(); onOpenRelations?.(); }}>
+            🔗 {(relatedCount || 0) + 1} 群
+          </button>
         )}
         {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续</span>}
         <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500">

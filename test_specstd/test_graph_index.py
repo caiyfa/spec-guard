@@ -711,3 +711,46 @@ class TestFeishuNodes:
             # trace 上游可追溯演进链
             tr = service.trace(store, "tp:aaa-0808-01", direction="up")
             assert "tp:aaa-0807-01" in {n["id"] for n in tr["path"]}
+
+    # ── T-993：relates 边（links 按 edge 分派；仅 tp↔tp） ──
+
+    def test_relates_edges_derived(self, fake_ws):
+        """confirmed relates（tp↔tp）→ 图谱 relates 边；断链端不建边。"""
+        self._add_feishu_facts(fake_ws)
+        fe = fake_ws["ws"] / ".specguard" / "feishu"
+        (fe / "topics.yaml").write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:3f9a2c-0807-01\n    title: 导出权限讨论\n"
+            "    summary: s\n    chat_sha8: 3f9a2c\n"
+            "    window: ['2026-08-07T14:00', '2026-08-07T15:30']\n"
+            "    message_count: 23\n    participants_count: 4\n"
+            "    source: chats/3f9a2c/20260807.md\n"
+            "  - id: tp:9b1e4d-0807-01\n    title: 导出权限过滤（测试群）\n"
+            "    summary: s\n    chat_sha8: 9b1e4d\n"
+            "    window: ['2026-08-07T15:00', '2026-08-07T16:00']\n"
+            "    message_count: 12\n    participants_count: 3\n"
+            "    source: chats/9b1e4d/20260807.md\n", encoding="utf-8")
+        (fe / "material_links.yaml").write_text(
+            "version: 1\nlinks:\n"
+            # 合法：tp↔tp confirmed → relates
+            "  - src: tp:3f9a2c-0807-01\n    dst: tp:9b1e4d-0807-01\n"
+            "    edge: relates\n    confidence: 1.0\n    evidence: ''\n"
+            "    status: confirmed\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-21T10:00:00'\n"
+            # 防御：relates 但端点非 tp（fd）→ 不建边
+            "  - src: fd:tokABC\n    dst: tp:9b1e4d-0807-01\n"
+            "    edge: relates\n    confidence: 1.0\n    evidence: ''\n"
+            "    status: confirmed\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-21T10:01:00'\n"
+            # 兼容：无 edge 字段（存量数据形态）→ 回退 mentions
+            "  - src: tp:3f9a2c-0807-01\n    dst: FR-012\n"
+            "    confidence: 0.8\n    evidence: x\n    status: confirmed\n"
+            "    confirmed_by: u1\n    confirmed_at: '2026-08-21T10:02:00'\n",
+            encoding="utf-8")
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            rel = store.list_edges("relates")
+            assert {(e["src"], e["dst"]) for e in rel} \
+                == {("tp:3f9a2c-0807-01", "tp:9b1e4d-0807-01")}
+            men = store.list_edges("mentions")
+            assert {e["src"] for e in men} == {"tp:3f9a2c-0807-01"}   # 无 edge 回退
