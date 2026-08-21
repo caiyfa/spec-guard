@@ -15,8 +15,8 @@ from sg_core import crypto
 # 可用渠道
 CHANNELS = ("dingtalk", "feishu")
 
-# 可订阅事件
-EVENTS = ("vulnerability", "plan_failure", "plan_success")
+# 可订阅事件（fail/drift/skip 为 T-996 合并 NotifyRegistry 后的用例级事件）
+EVENTS = ("vulnerability", "plan_failure", "plan_success", "fail", "drift", "skip")
 
 # 加密字段
 ENCRYPTED_FIELDS = ("webhook_url", "secret")
@@ -25,11 +25,12 @@ ENCRYPTED_FIELDS = ("webhook_url", "secret")
 CONFIG_FIELDS = (
     "name", "channel", "webhook_url", "secret",
     "mention_mobiles", "events", "enabled",
+    "system", "scenario_pattern",
 )
 
 
 def _ensure_table():
-    """建表（幂等）。"""
+    """建表（幂等）+ 存量库补列（T-996：system/scenario_pattern 用例级过滤维度）。"""
     init_db()
     with _LOCK, _connect() as conn:
         conn.execute("""
@@ -42,10 +43,17 @@ def _ensure_table():
                 mention_mobiles TEXT DEFAULT '',
                 events TEXT NOT NULL DEFAULT '["plan_failure","vulnerability"]',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                system TEXT NOT NULL DEFAULT '',
+                scenario_pattern TEXT NOT NULL DEFAULT '*',
                 created_by TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT ''
             )
         """)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(notify_configs)").fetchall()}
+        if "system" not in cols:
+            conn.execute("ALTER TABLE notify_configs ADD COLUMN system TEXT NOT NULL DEFAULT ''")
+        if "scenario_pattern" not in cols:
+            conn.execute("ALTER TABLE notify_configs ADD COLUMN scenario_pattern TEXT NOT NULL DEFAULT '*'")
 
 
 def _next_id() -> str:
@@ -110,15 +118,17 @@ def create_config(data: dict, created_by: str = "") -> dict:
         "mention_mobiles": data.get("mention_mobiles", ""),
         "events": json.dumps(events, ensure_ascii=False),
         "enabled": 1 if data.get("enabled", True) else 0,
+        "system": data.get("system") or "",
+        "scenario_pattern": data.get("scenario_pattern") or "*",
         "created_by": created_by,
         "created_at": now,
     }
     with _LOCK, _connect() as conn:
         conn.execute("""
             INSERT INTO notify_configs (id, name, channel, webhook_url, secret,
-                mention_mobiles, events, enabled, created_by, created_at)
+                mention_mobiles, events, enabled, system, scenario_pattern, created_by, created_at)
             VALUES (:id, :name, :channel, :webhook_url, :secret,
-                :mention_mobiles, :events, :enabled, :created_by, :created_at)
+                :mention_mobiles, :events, :enabled, :system, :scenario_pattern, :created_by, :created_at)
         """, record)
     return get_config(cid)
 

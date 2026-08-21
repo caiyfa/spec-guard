@@ -1,7 +1,10 @@
-"""feedback.notify — 飞书通知（webhook 注册表 + 掩码存储 + 仅出站）。
+"""feedback.notify — 群聊 webhook 通知（钉钉/飞书，仅出站）。
+
+T-996 二合一：webhook 存储统一到 sg_core.notify_config（SQLite 加密存储），
+本模块只保留发送/渲染/SSRF 校验/回执；旧 NotifyRegistry（registry.json）由
+migrate_registry_to_configs 一次性迁移后归档。
 
 消息只含 ID/结论/链接——不泄露敏感信息。
-webhook URL 掩码存储（如 a3f***）。
 """
 
 import fnmatch
@@ -17,6 +20,17 @@ from pathlib import Path
 from urllib.parse import urlparse, quote_plus
 
 import httpx
+
+# 送达回执文件（D2：各触发点消息送达回执落盘）
+RECEIPTS_PATH = Path(__file__).resolve().parent / "receipts.jsonl"
+
+
+def _append_receipt(record: dict):
+    """追加一条送达回执到 receipts.jsonl。"""
+    record = {"timestamp": datetime.now().isoformat(timespec="seconds"), **record}
+    RECEIPTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(RECEIPTS_PATH, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def validate_webhook_url(url: str) -> str | None:
@@ -64,121 +78,88 @@ def mask_url(url: str) -> str:
     return url[:8] + "***"
 
 
-class NotifyRegistry:
-    """飞书 webhook 注册表。"""
+# ════════════════════════════════════════════════════════════
+# 用例级通知（T-996：NotifyRegistry 收编，存储走 sg_core.notify_config）
+# ════════════════════════════════════════════════════════════
 
-    def __init__(self, registry_path: Path, receipts_path: Path | None = None):
-        self.path = registry_path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        # 回执记录文件（D2 修复：各触发点消息送达回执落盘）
-        self.receipts_path = receipts_path or (self.path.parent / "receipts.jsonl")
-        self._webhooks = self._load()
+# 用例级事件 → 默认展示图标/模板色
+_CASE_EVENT_LABEL = {"fail": "❌ 场景失败", "drift": "🟠 场景漂移", "skip": "⏭️ 场景跳过"}
 
-    def _append_receipt(self, record: dict):
-        """追加一条送达回执到 receipts.jsonl。"""
-        record = {"timestamp": datetime.now().isoformat(timespec="seconds"), **record}
-        with open(self.receipts_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    def _load(self) -> list[dict]:
-        if not self.path.is_file():
-            return []
-        with open(self.path, "r", encoding="utf-8") as f:
-            return json.load(f)
+def case_webhook_count() -> int:
+    """订阅了任一用例级事件的启用配置数（runner 零成本早退判断用）。"""
+    from sg_core import notify_config
+    return sum(len(notify_config.get_configs_by_event(e)) for e in _CASE_EVENT_LABEL)
 
-    def _save(self):
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self._webhooks, f, ensure_ascii=False, indent=2, sort_keys=True)
-            f.write("\n")
 
-    def register(self, system: str, scenario_pattern: str, url: str,
-                 events: list[str] = None) -> dict:
-        """注册 webhook。URL 须通过 SSRF 校验（V14），非法时抛 ValueError。"""
-        url_err = validate_webhook_url(url)
-        if url_err:
-            raise ValueError(f"webhook URL 非法: {url_err}")
-        entry = {
-            "id": f"wh-{len(self._webhooks) + 1:03d}",
-            "system": system,
-            "scenario_pattern": scenario_pattern,
-            "url": url,
-            "masked_url": mask_url(url),
-            "events": events or ["fail", "drift", "skip"],
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        }
-        self._webhooks.append(entry)
-        self._save()
-        return entry
+async def notify_case_event(system: str, scenario_id: str, event: str,
+                            verdict: str, conclusion: str, report_link: str = "") -> list[dict]:
+    """用例级通知：按 system + scenario_pattern(fnmatch) + event 过滤已启用配置并发送。
 
-    def list_webhooks(self) -> list[dict]:
-        """列出全部 webhook（显示掩码 URL，不暴露完整 URL）。"""
-        return [{k: v for k, v in w.items() if k != "url"} for w in self._webhooks]
+    返回每个配置的发送结果；送达回执落盘（含零匹配，便于审计触发点行为）。
+    """
+    from sg_core import notify_config
+    matched = []
+    for cfg in notify_config.get_configs_by_event(event):
+        if cfg.get("system") and cfg["system"] != system:
+            continue
+        if not fnmatch.fnmatch(scenario_id, cfg.get("scenario_pattern") or "*"):
+            continue
+        matched.append(cfg)
+    payload = {
+        "system": system,
+        "scenario_id": scenario_id,
+        "event": event,
+        "verdict": verdict,
+        "conclusion": conclusion[:200],
+        "report_link": report_link,
+    }
+    results = []
+    for cfg in matched:
+        ok = await send_notification(cfg, event, payload)
+        results.append({"webhook_id": cfg["id"], "ok": ok})
+    _append_receipt({
+        "system": system, "scenario_id": scenario_id, "event": event,
+        "verdict": verdict, "matched": len(matched),
+        "results": results,
+    })
+    return results
 
-    def unregister(self, webhook_id: str) -> bool:
-        """注销 webhook。"""
-        before = len(self._webhooks)
-        self._webhooks = [w for w in self._webhooks if w["id"] != webhook_id]
-        if len(self._webhooks) < before:
-            self._save()
-            return True
-        return False
 
-    def find_matches(self, system: str, scenario_id: str, event: str) -> list[dict]:
-        """查找匹配的 webhook（系统 + 场景 pattern + 事件类型）。"""
-        matches = []
-        for wh in self._webhooks:
-            if wh["system"] != system:
-                continue
-            if not fnmatch.fnmatch(scenario_id, wh["scenario_pattern"]):
-                continue
-            if event not in wh.get("events", []):
-                continue
-            matches.append(wh)
-        return matches
+def migrate_registry_to_configs(sg_root: Path) -> int:
+    """旧 NotifyRegistry（feedback/registry.json）一次性迁移进 notify_configs。
 
-    def send_notification(self, system: str, scenario_id: str, event: str,
-                           verdict: str, conclusion: str, report_link: str = "") -> list[dict]:
-        """发送通知（仅出站，消息只含 ID/结论/链接）。
-
-        返回每个 webhook 的发送结果。
-        """
-        matches = self.find_matches(system, scenario_id, event)
-        results = []
-
-        message = {
-            "scenario_id": scenario_id,
-            "event": event,
-            "verdict": verdict,
-            "conclusion": conclusion[:200],
-            "report_link": report_link,
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-        }
-
-        for wh in matches:
-            try:
-                resp = httpx.post(wh["url"], json={
-                    "msg_type": "text",
-                    "content": {"text": json.dumps(message, ensure_ascii=False)},
-                }, timeout=10)
-                results.append({
-                    "webhook_id": wh["id"],
-                    "status_code": resp.status_code,
-                    "ok": resp.status_code == 200,
-                })
-            except Exception as e:
-                results.append({
-                    "webhook_id": wh["id"],
-                    "error": str(e),
-                    "ok": False,
-                })
-
-        # D2 修复：送达回执落盘（含未匹配到 webhook 的情况，便于审计触发点行为）
-        self._append_receipt({
-            "system": system, "scenario_id": scenario_id, "event": event,
-            "verdict": verdict, "matched": len(matches),
-            "results": [{"webhook_id": r["webhook_id"], "ok": r["ok"]} for r in results],
-        })
-        return results
+    幂等：迁移后 registry.json 改名 .migrated，再次调用无文件直接返回 0。
+    非法 URL（SSRF 校验不过）跳过并记录回执。返回迁移条数。
+    """
+    registry_path = sg_root / "feedback" / "registry.json"
+    if not registry_path.is_file():
+        return 0
+    from sg_core import notify_config
+    with open(registry_path, "r", encoding="utf-8") as f:
+        webhooks = json.load(f)
+    migrated = 0
+    for wh in webhooks:
+        url = wh.get("url", "")
+        err = validate_webhook_url(url)
+        if err:
+            _append_receipt({"system": wh.get("system", ""), "scenario_id": "",
+                             "event": "migrate_skip", "verdict": "",
+                             "matched": 0, "results": [],
+                             "note": f"registry {wh.get('id')} URL 非法跳过: {err}"})
+            continue
+        notify_config.create_config({
+            "name": f"{wh.get('system', '')}/{wh.get('scenario_pattern', '*')}（registry 迁移）",
+            "channel": "feishu",
+            "webhook_url": url,
+            "events": wh.get("events") or ["fail", "drift", "skip"],
+            "enabled": True,
+            "system": wh.get("system", ""),
+            "scenario_pattern": wh.get("scenario_pattern") or "*",
+        }, created_by="t996-migrate")
+        migrated += 1
+    registry_path.rename(registry_path.with_suffix(".json.migrated"))
+    return migrated
 
 
 # ════════════════════════════════════════════════════════════
@@ -298,6 +279,19 @@ def _render_markdown(event: str, payload: dict) -> tuple[str, str]:
         )
         return title, text
 
+    if event in _CASE_EVENT_LABEL:
+        label = _CASE_EVENT_LABEL[event]
+        title = f"{label}：{payload.get('scenario_id', '')}"
+        text = (
+            f"### {label}\n\n"
+            f"- **系统**：{payload.get('system', '-')}\n"
+            f"- **场景**：{payload.get('scenario_id', '-')}\n"
+            f"- **判定**：{payload.get('verdict', '-')}\n"
+            f"- **结论**：{str(payload.get('conclusion', '-'))[:200]}\n\n"
+            f"[查看报告]({payload.get('report_link', '')})"
+        )
+        return title, text
+
     # 未知事件：通用格式
     title = f"SpecGuard 通知：{event}"
     text = f"### SpecGuard 通知\n\n事件: {event}\n\n```json\n{json.dumps(payload, ensure_ascii=False)[:500]}\n```"
@@ -357,6 +351,25 @@ def _render_feishu_card(event: str, payload: dict) -> dict:
             "elements": [
                 {"tag": "div", "text": {"tag": "lark_md",
                  "content": f"**计划**：{payload.get('plan_name', '-')}\n**场景数**：{payload.get('scenario_count', '-')}\n**时间**：{payload.get('run_at', '-')}"}},
+            ],
+        }
+
+    if event in _CASE_EVENT_LABEL:
+        label = _CASE_EVENT_LABEL[event]
+        return {
+            "header": {
+                "title": {"tag": "plain_text", "content": f"{label}：{payload.get('scenario_id', '')}"},
+                "template": {"fail": "red", "drift": "orange", "skip": "grey"}.get(event, "blue"),
+            },
+            "elements": [
+                {"tag": "div", "text": {"tag": "lark_md",
+                 "content": f"**系统**：{payload.get('system', '-')}\n**场景**：{payload.get('scenario_id', '-')}\n**判定**：{payload.get('verdict', '-')}"}},
+                {"tag": "div", "text": {"tag": "lark_md",
+                 "content": f"**结论**：{str(payload.get('conclusion', '-'))[:200]}"}},
+                {"tag": "action", "actions": [
+                    {"tag": "button", "text": {"tag": "plain_text", "content": "查看报告"},
+                     "url": payload.get("report_link", ""), "type": "primary"},
+                ]},
             ],
         }
 

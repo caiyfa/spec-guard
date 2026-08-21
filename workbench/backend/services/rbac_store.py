@@ -28,46 +28,33 @@ BUILTIN_ROLES = ("admin", "tester", "viewer", "product")
 ROLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
 MENU_KEY_RE = re.compile(r"^(group|menu)-[a-z0-9-]{1,63}$")
 
-# ── 种子数据：菜单树（与历史 App.tsx NAV_GROUPS 一致；全新配置 = 零角色授权）──
+# ── 种子数据：菜单树（T-996 信息架构收缩：8 组 29 叶 → 5 组 16 叶；全新配置 = 零角色授权）──
 # (menu_key, label, icon, path, parent_key, sort, visible, is_system)
+# 血缘链并入全景图谱第四镜头；技能/材料/评分/禅道/合规收进 Agent 对话页内页签；
+# 覆盖缺口并入生命周期页；定时任务/失败归因并入执行中心；通知配置并入反哺闭环。
 SEED_MENUS: list[tuple] = [
     ("group-overview", "总览", "📊", "", "", 0, 1, 0),
     ("menu-dashboard", "仪表盘", "", "/dashboard", "group-overview", 0, 1, 0),
     ("menu-graph", "全景图谱", "", "/graph", "group-overview", 1, 1, 0),
-    ("menu-lineage", "血缘链", "", "/lineage", "group-overview", 2, 1, 0),
-    ("group-workspace", "工作区", "🗂", "", "", 1, 1, 0),
-    ("menu-workspace", "工作区中心", "", "/workspace", "group-workspace", 0, 1, 0),
-    ("menu-knowledge", "知识", "", "/knowledge", "group-workspace", 1, 1, 0),
-    ("menu-env-config", "环境配置", "", "/env-config", "group-workspace", 2, 1, 0),
-    ("menu-settings", "系统设置", "", "/settings", "group-workspace", 3, 1, 0),
-    ("menu-users", "用户管理", "", "/admin-users", "group-workspace", 4, 1, 1),
-    ("menu-audit", "审计日志", "", "/audit", "group-workspace", 5, 1, 0),
-    ("menu-menu-manage", "菜单管理", "", "/menu-roles", "group-workspace", 6, 1, 1),
-    ("group-requirement", "需求", "📋", "", "", 2, 1, 0),
-    ("menu-spec", "合规校验", "", "/spec", "group-requirement", 0, 1, 0),
-    ("menu-materials", "材料管理", "", "/materials", "group-requirement", 1, 1, 0),
-    ("menu-feishu-pool", "飞书材料池", "", "/feishu-pool", "group-requirement", 4, 1, 0),
-    ("menu-scores", "评分与冻结", "", "/scores", "group-requirement", 2, 1, 0),
-    ("menu-zentao", "禅道集成", "", "/zentao", "group-requirement", 3, 1, 0),
-    ("group-scenario", "场景", "🧩", "", "", 3, 1, 0),
-    ("menu-lifecycle", "测试生命周期", "", "/lifecycle", "group-scenario", 0, 1, 0),
-    ("menu-coverage", "覆盖缺口", "", "/coverage", "group-scenario", 1, 1, 0),
-    ("menu-plans", "场景管理", "", "/plans", "group-scenario", 2, 1, 0),
-    ("menu-dag", "DAG 编排", "", "/dag", "group-scenario", 3, 1, 0),
-    ("group-agent", "Agent", "🤖", "", "", 4, 1, 0),
-    ("menu-agent", "对话", "", "/agent", "group-agent", 0, 1, 0),
+    ("group-agent", "Agent", "🤖", "", "", 1, 1, 0),
+    ("menu-agent", "Agent 对话", "", "/agent", "group-agent", 0, 1, 0),
     ("menu-drafts", "草稿评审", "", "/drafts", "group-agent", 1, 1, 0),
-    ("menu-skills", "技能", "", "/skills", "group-agent", 2, 1, 0),
-    ("group-execution", "执行", "▶️", "", "", 5, 1, 0),
+    ("group-scenario", "场景", "🧩", "", "", 2, 1, 0),
+    ("menu-plans", "场景管理", "", "/plans", "group-scenario", 0, 1, 0),
+    ("menu-dag", "DAG 编排", "", "/dag", "group-scenario", 1, 1, 0),
+    ("menu-feishu-pool", "飞书材料池", "", "/feishu-pool", "group-scenario", 2, 1, 0),
+    ("menu-lifecycle", "覆盖与生命周期", "", "/lifecycle", "group-scenario", 3, 1, 0),
+    ("group-execution", "执行", "▶️", "", "", 3, 1, 0),
     ("menu-run", "测试执行", "", "/run", "group-execution", 0, 1, 0),
-    ("menu-schedules", "定时任务", "", "/schedules", "group-execution", 1, 1, 0),
-    ("menu-history", "执行记录", "", "/history", "group-execution", 2, 1, 0),
-    ("menu-attribution", "失败归因", "", "/attribution", "group-execution", 3, 1, 0),
-    ("group-feedback", "反哺", "🔄", "", "", 6, 1, 0),
-    ("menu-feedback", "反哺闭环", "", "/feedback", "group-feedback", 0, 1, 0),
-    ("menu-notify", "通知配置", "", "/notify", "group-feedback", 1, 1, 0),
-    ("group-quality", "质量", "🛡️", "", "", 7, 1, 0),
-    ("menu-quality", "质量中心", "", "/quality", "group-quality", 0, 1, 0),
+    ("menu-history", "执行中心", "", "/history", "group-execution", 1, 1, 0),
+    ("menu-feedback", "反哺闭环", "", "/feedback", "group-execution", 2, 1, 0),
+    ("group-system", "系统管理", "⚙️", "", "", 4, 1, 0),
+    ("menu-users", "用户管理", "", "/admin-users", "group-system", 0, 1, 1),
+    ("menu-menu-manage", "菜单管理", "", "/menu-roles", "group-system", 1, 1, 1),
+    ("menu-audit", "审计日志", "", "/audit", "group-system", 2, 1, 0),
+    ("menu-env-config", "环境配置", "", "/env-config", "group-system", 3, 1, 0),
+    ("menu-settings", "系统设置", "", "/settings", "group-system", 4, 1, 0),
+    ("menu-systems", "系统包管理", "", "/systems", "group-system", 5, 1, 1),
 ]
 
 SEED_ROLES: list[tuple] = [
@@ -141,24 +128,60 @@ def init_db(db_path: Path | None = None):
         if conn.execute("SELECT COUNT(*) c FROM role_menus").fetchone()["c"] == 0:
             conn.executemany(
                 "INSERT INTO role_menus (role_key,menu_key) VALUES (?,?)", SEED_ROLE_MENUS)
-        # 存量迁移（幂等）：首页让位给对话页，仪表盘改挂 /dashboard
-        conn.execute(
-            "UPDATE menus SET path='/dashboard', updated_at=? WHERE menu_key='menu-dashboard' AND path='/'",
-            (_now(),))
-        # 存量迁移（幂等）：飞书材料池菜单（T-929）
+        _migrate_menus_t996(conn)
+
+
+# T-996 信息架构收缩：已移除的菜单键 → 幸存菜单键（授权无损映射）
+_MENU_REMAP_T996: dict[str, str] = {
+    "menu-lineage": "menu-graph",       # 血缘链并入全景图谱第四镜头
+    "menu-coverage": "menu-lifecycle",  # 覆盖缺口并入生命周期页（两 tab）
+    "menu-schedules": "menu-history",   # 定时任务并入执行中心
+    "menu-attribution": "menu-history", # 失败归因并入执行中心
+    "menu-notify": "menu-feedback",     # 通知配置并入反哺闭环
+    "menu-skills": "menu-agent",        # 技能收对话只读页签
+    "menu-materials": "menu-agent",     # 材料管理收操作台页签
+    "menu-scores": "menu-agent",        # 评分冻结收操作台页签
+    "menu-zentao": "menu-agent",        # 禅道集成收对话页内
+    "menu-spec": "menu-agent",          # 合规校验收对话页内
+    "menu-knowledge": "menu-agent",     # 知识收对话页内
+    "menu-workspace": "menu-dashboard", # 工作区中心让位（T-1000 重建后挂回）
+    "menu-quality": "menu-dashboard",   # 质量中心（死菜单，/quality 无路由）
+}
+# T-996 移除的分组（子项已全部迁出）
+_GROUPS_REMOVED_T996 = ("group-workspace", "group-requirement", "group-feedback", "group-quality")
+
+
+def _migrate_menus_t996(conn: sqlite3.Connection):
+    """菜单信息架构收缩迁移（幂等）：
+
+    1) upsert 新种子树（INSERT OR IGNORE + 对齐 label/path/parent_key/sort/is_system，
+       visible 不动——管理员手工隐藏的保持隐藏）；
+    2) 存量授权按 _MENU_REMAP_T996 无损映射到幸存菜单（INSERT OR IGNORE 防唯一冲突）；
+    3) 删除已移除的菜单/分组行及其授权残留。
+    检测条件：旧键一个都不存在时跳过 2/3（全新库直接走种子）。
+    """
+    now = _now()
+    for m in SEED_MENUS:
         conn.execute(
             "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
-            " VALUES ('menu-feishu-pool','飞书材料池','','/feishu-pool','group-requirement',4,1,0,?,?)",
-            (_now(), _now()))
-        # 存量迁移（幂等）：质量中心菜单（2026-08-14 基线可视化；admin/tester 可见）
+            " VALUES (?,?,?,?,?,?,?,?,?,?)", m + (now, now))
         conn.execute(
-            "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
-            " VALUES ('group-quality','质量','🛡️','','',7,1,0,?,?)",
-            (_now(), _now()))
-        conn.execute(
-            "INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
-            " VALUES ('menu-quality','质量中心','','/quality','group-quality',0,1,0,?,?)",
-            (_now(), _now()))
+            "UPDATE menus SET label=?, icon=?, path=?, parent_key=?, sort=?, is_system=?, updated_at=?"
+            " WHERE menu_key=? AND (label!=? OR icon!=? OR path!=? OR parent_key!=? OR sort!=? OR is_system!=?)",
+            (m[1], m[2], m[3], m[4], m[5], m[7], now, m[0], m[1], m[2], m[3], m[4], m[5], m[7]))
+    old_keys = list(_MENU_REMAP_T996) + list(_GROUPS_REMOVED_T996)
+    ph = ",".join("?" * len(old_keys))
+    if not conn.execute(f"SELECT 1 FROM menus WHERE menu_key IN ({ph}) LIMIT 1", old_keys).fetchone():
+        return
+    rows = conn.execute(
+        f"SELECT role_key, menu_key FROM role_menus WHERE menu_key IN ({ph})", old_keys).fetchall()
+    for r in rows:
+        target = _MENU_REMAP_T996.get(r["menu_key"])
+        if target:
+            conn.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES (?,?)",
+                         (r["role_key"], target))
+    conn.execute(f"DELETE FROM role_menus WHERE menu_key IN ({ph})", old_keys)
+    conn.execute(f"DELETE FROM menus WHERE menu_key IN ({ph})", old_keys)
 
 
 def _ensure_audit(conn: sqlite3.Connection):

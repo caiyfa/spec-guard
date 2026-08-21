@@ -1,6 +1,8 @@
-"""M4+M5 测试：内容签名 + 反哺闭环 + 飞书通知。"""
+"""M4+M5 测试：内容签名 + 反哺闭环 + 群聊通知（T-996：webhook 存储统一 notify_config）。"""
 
+import asyncio
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -8,8 +10,25 @@ import pytest
 SG_ROOT = Path(__file__).resolve().parent.parent
 
 from feedback.ledger import FeedbackLedger
-from feedback.notify import NotifyRegistry, mask_url
+from feedback import notify as notify_mod
+from feedback.notify import mask_url
 from specstd.signature import sign_spec_body, sign_api_yaml, detect_changes, compute_signatures
+
+
+@pytest.fixture
+def cfg_store(tmp_path, monkeypatch):
+    """notify_config 指向临时库（隔离，不碰 workbench.db）。"""
+    import sg_core.notify_config as nc
+    db = tmp_path / "notify.db"
+
+    def connect():
+        conn = sqlite3.connect(str(db), timeout=10)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    monkeypatch.setattr(nc, "_connect", connect)
+    monkeypatch.setattr(nc, "init_db", lambda: None)
+    return nc
 
 
 # ══════════════════════════════════════════════════════════
@@ -137,34 +156,78 @@ class TestMaskUrl:
         assert "***" in masked
 
 
-class TestNotifyRegistry:
-    def test_register(self, tmp_path):
-        reg = NotifyRegistry(tmp_path / "registry.json")
-        entry = reg.register("tdm", "PP-RC-*", "https://open.feishu.cn/hook/a3f8c21")
-        assert entry["id"] == "wh-001"
-        assert entry["masked_url"] != entry["url"]
+class TestCaseNotify:
+    """T-996 二合一：用例级通知走统一 notify_configs（system + scenario_pattern + event 过滤）。"""
 
-    def test_list_masks_url(self, tmp_path):
-        reg = NotifyRegistry(tmp_path / "registry.json")
-        reg.register("tdm", "PP-*", "https://open.feishu.cn/hook/secret")
-        items = reg.list_webhooks()
-        assert "url" not in items[0]
-        assert "masked_url" in items[0]
+    def _mk(self, nc, system="tdm", pattern="PP-*", events=("fail",), **kw):
+        return nc.create_config({
+            "name": f"{system}/{pattern}", "channel": "feishu",
+            "webhook_url": "https://open.feishu.cn/hook/a3f8c21",
+            "events": list(events), "system": system, "scenario_pattern": pattern, **kw,
+        })
 
-    def test_find_matches(self, tmp_path):
-        reg = NotifyRegistry(tmp_path / "registry.json")
-        reg.register("tdm", "PP-RC-*", "https://open.feishu.cn/h1", ["fail"])
-        reg.register("tdm", "EV-*", "https://open.feishu.cn/h2", ["fail"])
-        matches = reg.find_matches("tdm", "PP-RC-001", "fail")
-        assert len(matches) == 1
+    def test_create_keeps_case_filters(self, cfg_store):
+        cfg = self._mk(cfg_store, pattern="PP-RC-*")
+        assert cfg["system"] == "tdm"
+        assert cfg["scenario_pattern"] == "PP-RC-*"
+        assert cfg["events"] == ["fail"]
 
-    def test_no_match_wrong_system(self, tmp_path):
-        reg = NotifyRegistry(tmp_path / "registry.json")
-        reg.register("tdm", "PP-*", "https://open.feishu.cn/hook")
-        assert len(reg.find_matches("pbs", "PP-RC-001", "fail")) == 0
+    def test_list_masks_url(self, cfg_store):
+        self._mk(cfg_store)
+        items = cfg_store.list_configs()
+        assert "***" in items[0]["webhook_url"]
+        assert "a3f8c21" not in items[0]["webhook_url"]
 
-    def test_unregister(self, tmp_path):
-        reg = NotifyRegistry(tmp_path / "registry.json")
-        entry = reg.register("tdm", "PP-*", "https://open.feishu.cn/hook")
-        assert reg.unregister(entry["id"]) is True
-        assert len(reg.list_webhooks()) == 0
+    def test_case_event_match_and_receipt(self, cfg_store, tmp_path, monkeypatch):
+        self._mk(cfg_store, pattern="PP-RC-*")
+        self._mk(cfg_store, pattern="EV-*")
+        sent = []
+
+        async def fake_send(cfg, event, payload):
+            sent.append((cfg["id"], event, payload))
+            return True
+
+        receipts = tmp_path / "receipts.jsonl"
+        monkeypatch.setattr(notify_mod, "send_notification", fake_send)
+        monkeypatch.setattr(notify_mod, "RECEIPTS_PATH", receipts)
+        results = asyncio.run(notify_mod.notify_case_event(
+            "tdm", "PP-RC-001", "fail", "FAIL", "断言失败", "reports/X/report.md"))
+        assert len(results) == 1 and results[0]["ok"] is True
+        assert sent[0][2]["scenario_id"] == "PP-RC-001"
+        receipt = json.loads(receipts.read_text(encoding="utf-8").splitlines()[0])
+        assert receipt["matched"] == 1 and receipt["event"] == "fail"
+
+    def test_no_match_wrong_system(self, cfg_store, tmp_path, monkeypatch):
+        self._mk(cfg_store, system="tdm")
+        monkeypatch.setattr(notify_mod, "RECEIPTS_PATH", tmp_path / "receipts.jsonl")
+        results = asyncio.run(notify_mod.notify_case_event("pbs", "PP-RC-001", "fail", "FAIL", "x"))
+        assert results == []
+
+    def test_event_not_subscribed(self, cfg_store, tmp_path, monkeypatch):
+        self._mk(cfg_store, events=("fail",))
+        monkeypatch.setattr(notify_mod, "RECEIPTS_PATH", tmp_path / "receipts.jsonl")
+        results = asyncio.run(notify_mod.notify_case_event("tdm", "PP-001", "drift", "DRIFT", "x"))
+        assert results == []
+
+    def test_migrate_registry_to_configs(self, cfg_store, tmp_path, monkeypatch):
+        root = tmp_path / "sgroot"
+        (root / "feedback").mkdir(parents=True)
+        (root / "feedback" / "registry.json").write_text(json.dumps([
+            {"id": "wh-001", "system": "tdm", "scenario_pattern": "PP-*",
+             "url": "https://open.feishu.cn/hook/abc", "events": ["fail", "drift"],
+             "created_at": "2026-08-01T00:00:00"},
+            {"id": "wh-002", "system": "tdm", "scenario_pattern": "*",
+             "url": "http://10.0.0.1/hook", "events": ["skip"],  # SSRF 不过，跳过
+             "created_at": "2026-08-01T00:00:00"},
+        ]), encoding="utf-8")
+        monkeypatch.setattr(notify_mod, "RECEIPTS_PATH", tmp_path / "receipts.jsonl")
+        n = notify_mod.migrate_registry_to_configs(root)
+        assert n == 1
+        configs = cfg_store.list_configs()
+        assert len(configs) == 1
+        assert configs[0]["system"] == "tdm" and configs[0]["scenario_pattern"] == "PP-*"
+        assert set(configs[0]["events"]) == {"fail", "drift"}
+        # 幂等：registry.json 已改名 .migrated，再次调用返回 0
+        assert not (root / "feedback" / "registry.json").exists()
+        assert (root / "feedback" / "registry.json.migrated").is_file()
+        assert notify_mod.migrate_registry_to_configs(root) == 0

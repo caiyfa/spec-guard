@@ -488,6 +488,22 @@ class TestDbEvidenceConnector:
 # V14 webhook SSRF / V15 状态机 / D2 回执
 # ══════════════════════════════════════════════════════════
 
+def _patch_notify_config_db(monkeypatch, tmp_path):
+    """notify_config 指向临时库（T-996 二合一后 webhook 存储在 SQLite，测试隔离不碰 workbench.db）。"""
+    import sqlite3
+    import sg_core.notify_config as nc
+    db = tmp_path / "notify.db"
+
+    def connect():
+        conn = sqlite3.connect(str(db), timeout=10)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    monkeypatch.setattr(nc, "_connect", connect)
+    monkeypatch.setattr(nc, "init_db", lambda: None)
+    return nc
+
+
 class TestV14V15D2:
     def test_webhook_url_validation(self):
         from feedback.notify import validate_webhook_url
@@ -504,25 +520,41 @@ class TestV14V15D2:
         assert validate_webhook_url("https://hook.internal.corp/x") is None
         assert validate_webhook_url("https://open.feishu.cn/x") is not None
 
-    def test_register_rejects_bad_url(self, tmp_path):
-        from feedback.notify import NotifyRegistry
-        reg = NotifyRegistry(tmp_path / "registry.json", tmp_path / "receipts.jsonl")
-        with pytest.raises(ValueError):
-            reg.register("tdm", "PP-*", "http://10.0.0.1/hook")
+    def test_migrate_skips_bad_url(self, tmp_path, monkeypatch):
+        """V14 迁移期守卫：registry.json 中的非法 URL 不入库（T-996 二合一迁移）。"""
+        from feedback import notify as notify_mod
+        root = tmp_path / "sgroot"
+        (root / "feedback").mkdir(parents=True)
+        (root / "feedback" / "registry.json").write_text(json.dumps([
+            {"id": "wh-1", "system": "tdm", "scenario_pattern": "PP-*",
+             "url": "http://10.0.0.1/hook", "events": ["fail"]},
+        ]), encoding="utf-8")
+        monkeypatch.setattr(notify_mod, "RECEIPTS_PATH", tmp_path / "receipts.jsonl")
+        _patch_notify_config_db(monkeypatch, tmp_path)
+        import sg_core.notify_config as nc
+        assert notify_mod.migrate_registry_to_configs(root) == 0
+        assert nc.list_configs() == []
 
     def test_receipt_written_on_send(self, tmp_path, monkeypatch):
+        import asyncio
         from feedback import notify as notify_mod
-        # 拦截出站请求，避免真实网络调用
-        class FakeResp:
-            status_code = 200
-        monkeypatch.setattr(notify_mod.httpx, "post", lambda *a, **k: FakeResp())
 
-        reg = notify_mod.NotifyRegistry(tmp_path / "registry.json", tmp_path / "receipts.jsonl")
-        reg.register("tdm", "PP-*", "https://open.feishu.cn/hook/abc", events=["fail"])
-        results = reg.send_notification("tdm", "PP-RC-005", "fail", "FAIL", "断言失败")
+        async def fake_send(cfg, event, payload):
+            return True
+
+        monkeypatch.setattr(notify_mod, "send_notification", fake_send)
+        receipts = tmp_path / "receipts.jsonl"
+        monkeypatch.setattr(notify_mod, "RECEIPTS_PATH", receipts)
+        nc = _patch_notify_config_db(monkeypatch, tmp_path)
+        nc.create_config({
+            "name": "t", "channel": "feishu", "webhook_url": "https://open.feishu.cn/hook/abc",
+            "events": ["fail"], "system": "tdm", "scenario_pattern": "PP-*",
+        })
+        results = asyncio.run(notify_mod.notify_case_event(
+            "tdm", "PP-RC-005", "fail", "FAIL", "断言失败"))
         assert results and results[0]["ok"] is True
 
-        lines = (tmp_path / "receipts.jsonl").read_text(encoding="utf-8").splitlines()
+        lines = receipts.read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1
         receipt = json.loads(lines[0])
         assert receipt["scenario_id"] == "PP-RC-005"
@@ -540,13 +572,16 @@ class TestV14V15D2:
         with pytest.raises(ValueError):
             ledger.transition(entry["spq_id"], "pending")
 
-    def test_ledger_full_url_not_in_list(self, tmp_path):
-        from feedback.notify import NotifyRegistry
-        reg = NotifyRegistry(tmp_path / "registry.json", tmp_path / "receipts.jsonl")
-        reg.register("tdm", "*", "https://open.feishu.cn/hook/secret-token-12345")
-        for wh in reg.list_webhooks():
-            assert "url" not in wh
-            assert "secret-token-12345" not in json.dumps(wh)
+    def test_ledger_full_url_not_in_list(self, tmp_path, monkeypatch):
+        """列表脱敏：完整 webhook URL 不出现在 list_configs 输出（T-996 后存储为 notify_configs）。"""
+        nc = _patch_notify_config_db(monkeypatch, tmp_path)
+        nc.create_config({
+            "name": "t", "channel": "feishu",
+            "webhook_url": "https://open.feishu.cn/hook/secret-token-12345",
+            "events": ["fail"], "system": "tdm", "scenario_pattern": "*",
+        })
+        for cfg in nc.list_configs():
+            assert "secret-token-12345" not in json.dumps(cfg)
 
 
 # ══════════════════════════════════════════════════════════

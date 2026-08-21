@@ -25,6 +25,19 @@ class NotifyConfigBody(BaseModel):
     mention_mobiles: str = ""
     events: list[str] = ["plan_failure", "vulnerability"]
     enabled: bool = True
+    # T-996 用例级过滤维度（订阅 fail/drift/skip 时生效；空 system + '*' 匹配全部）
+    system: str = ""
+    scenario_pattern: str = "*"
+
+
+def _check_webhook_url(url: str):
+    """webhook URL SSRF 校验（对齐旧 NotifyRegistry.register 的 V14 硬约束）。"""
+    if not url:
+        return
+    from feedback.notify import validate_webhook_url
+    err = validate_webhook_url(url)
+    if err:
+        raise HTTPException(status_code=400, detail=f"webhook URL 非法: {err}")
 
 
 class TestSendBody(BaseModel):
@@ -40,6 +53,7 @@ def list_configs(user=Depends(require_role("admin", "tester"))):
 @router.post("/configs")
 def create_config(body: NotifyConfigBody, user=Depends(require_role("admin"))):
     """创建通知配置。webhook_url/secret 加密存储。"""
+    _check_webhook_url(body.webhook_url)
     try:
         return notify_config.create_config(body.model_dump(), created_by=user.emp_no)
     except ValueError as e:
@@ -49,6 +63,7 @@ def create_config(body: NotifyConfigBody, user=Depends(require_role("admin"))):
 @router.put("/configs/{cid}")
 def update_config(cid: str, body: NotifyConfigBody, user=Depends(require_role("admin"))):
     """更新通知配置。"""
+    _check_webhook_url(body.webhook_url)
     try:
         result = notify_config.update_config(cid, body.model_dump())
     except ValueError as e:
