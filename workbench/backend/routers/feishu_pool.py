@@ -249,6 +249,17 @@ class TopicIdRequest(BaseModel):
     id: str
 
 
+# T-993 D4/D5：跨群关联——确认/忽略写 relates_to 边；精筛结果进程内缓存
+class RelateRequest(BaseModel):
+    a: str
+    b: str
+    confirmed: bool = True     # false = 忽略（rejected 留痕防重复推荐）
+
+
+_XREFINE_CACHE: dict[str, tuple[float, list[dict]]] = {}   # {ws: (ts, 精筛结果)}
+_XREFINE_TTL = 300.0          # 5 分钟（设计 D5：推荐不是事实，不落盘）
+
+
 @router.get("/topics/drafts")
 def list_topic_drafts(user: CurrentUser = Depends(get_current_user),
                       workspace: str = Depends(resolve_workspace)):
@@ -398,6 +409,75 @@ def _set_status(topic_id: str, status: str, user: CurrentUser) -> dict:
     elif status == "rejected":
         facts.remove_topic(_ws_root(), topic_id)
     return t
+
+
+# ══════════════════════════════════════════════════════════
+# T-993：跨群话题关联（设计 D2/D4/D5——relates_to 边，只推荐不合并）
+# ══════════════════════════════════════════════════════════
+
+@router.post("/topics/relate")
+def relate_topics(body: RelateRequest,
+                  user: CurrentUser = Depends(get_current_user),
+                  workspace: str = Depends(resolve_workspace)):
+    """人工确认/忽略跨群关联：写 material_links.yaml 的 relates_to 边
+    （confirmed=关联生效进图谱 / rejected=忽略留痕防重复推荐）。"""
+    from specflow.feishu_pool import facts
+    from specflow.feishu_pool import topic_cluster as tc
+    known = {str(t.get("id")) for t in tc._load_candidates(_material_base())}
+    for tid in (body.a, body.b):
+        if tid not in known:
+            raise HTTPException(status_code=404, detail=f"话题不存在: {tid}")
+    a, b = sorted((body.a, body.b))            # 键规范化（与预筛一致）
+    facts.append_link(_ws_root(), src=a, dst=b, edge="relates",
+                      confidence=1.0 if body.confirmed else 0.0,
+                      evidence="", confirmed_by=str(user.emp_no or ""),
+                      status="confirmed" if body.confirmed else "rejected")
+    _XREFINE_CACHE.pop(workspace, None)        # 状态变了，精筛缓存失效
+    return {"a": a, "b": b,
+            "status": "confirmed" if body.confirmed else "rejected"}
+
+
+@router.get("/topics/relations")
+def topic_relations(user: CurrentUser = Depends(get_current_user),
+                    workspace: str = Depends(resolve_workspace)):
+    """全部已确认跨群关联边（前端「N 群」徽标与关联抽屉数据源）。纯读。"""
+    from specflow.feishu_pool import facts
+    items = [l for l in facts.load_links(_ws_root())
+             if l.get("edge") == "relates" and l.get("status") == "confirmed"]
+    return {"items": items}
+
+
+@router.post("/topics/cross-refine")
+def cross_refine(user: CurrentUser = Depends(get_current_user),
+                 workspace: str = Depends(resolve_workspace)):
+    """LLM 精筛跨群候选（设计 D5：按需触发，进程内 5min 缓存不落盘；
+    text 模型未配置 → 诚实返回预筛原样并标注 unrefined）。"""
+    import time as _time
+    hit = _XREFINE_CACHE.get(workspace)
+    if hit and _time.time() - hit[0] < _XREFINE_TTL:
+        return {"items": hit[1], "cached": True}
+    from specflow.feishu_pool import facts
+    out = sync_svc.list_pool_topics(_material_base(), _ws_root())
+    candidates = out.get("cross_suggestions") or []
+    cards = ([t for t in out.get("candidates", [])
+              if t.get("status") != "rejected"]
+             + out.get("confirmed", []))
+    by_id = {str(t.get("id")): t for t in cards}
+    unrefined = False
+    try:
+        from services import model_config
+        if model_config.get_model("text"):
+            from agent.llm_client import LLMClient
+            from specflow.feishu_pool import cross_chat as xc
+            candidates = xc.refine_with_llm(candidates, by_id,
+                                            LLMClient(model_id="text"))
+        else:
+            unrefined = True
+    except Exception:
+        unrefined = True                       # LLM 不可达：诚实降级
+    payload = {"items": candidates, "cached": False, "unrefined": unrefined}
+    _XREFINE_CACHE[workspace] = (_time.time(), candidates)
+    return payload
 
 
 @router.get("/watcher-status")

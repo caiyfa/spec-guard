@@ -12,6 +12,8 @@ import {
   type FeishuTopicDraft,
   type FeishuChatMessage,
   type FeishuWatch,
+  type TopicRelation,
+  type CrossChatCandidate,
 } from '../api';
 import { useChatOptions, sha256Hex8 } from './useChatOptions';
 import TopicCard from './TopicCard';
@@ -59,11 +61,13 @@ function loadWorkspacePersisted(): {
   } catch { return {}; }
 }
 
-export default function TopicWorkspace({ materials, watchCfg, topics, onCommitted }: {
+export default function TopicWorkspace({ materials, watchCfg, topics, onCommitted,
+                                          crossSuggestions }: {
   materials: FeishuPoolMaterial[];
   watchCfg: FeishuWatch | null;
   topics: { candidates: FeishuTopic[]; confirmed: FeishuTopic[] };
   onCommitted: () => void;
+  crossSuggestions?: CrossChatCandidate[];   // T-993：确定性预筛（list_pool_topics 附带）
 }) {
   const chatOptions = useChatOptions(materials, watchCfg);
   const [sha8, setSha8] = useState(() => loadWorkspacePersisted().sha8 || '');
@@ -89,6 +93,67 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [imgFailed, setImgFailed] = useState<Set<string>>(new Set());   // T-955：图片三态之失败态
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [reloadKey, setReloadKey] = useState(0);       // T-952：单群刷新后重拉窗口
+  // T-993：跨群关联——confirmed 边 / 推荐面板 / 关联抽屉
+  const [relations, setRelations] = useState<TopicRelation[]>([]);
+  const [crossOpen, setCrossOpen] = useState(false);
+  const [crossSugg, setCrossSugg] = useState<CrossChatCandidate[]>([]);
+  const [refining, setRefining] = useState(false);
+  const [unrefined, setUnrefined] = useState(false);
+  const [relateDrawer, setRelateDrawer] = useState<FeishuTopic | null>(null);
+  useEffect(() => {
+    feishuPoolApi.topicRelations()
+      .then(r => setRelations(r.items || []))
+      .catch(() => setRelations([]));
+  }, [topics]);
+  useEffect(() => { setCrossSugg(crossSuggestions || []); }, [crossSuggestions]);
+  // 关联邻接表 {topicId: [对方 id]}（连通分量入口——A-B、B-C 则 A 含 C）
+  const relatedMap = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    relations.forEach(r => {
+      (m[r.src] = m[r.src] || []).push(r.dst);
+      (m[r.dst] = m[r.dst] || []).push(r.src);
+    });
+    return m;
+  }, [relations]);
+  const topicById = useMemo(() => {
+    const m: Record<string, FeishuTopic> = {};
+    [...topics.candidates, ...topics.confirmed]
+      .forEach(t => { if (t.id) m[t.id] = t; });
+    return m;
+  }, [topics]);
+  // 关联操作：确认/忽略（忽略写 rejected 防重复推荐）→ 刷新关联与清单
+  const relate = async (a: string, b: string, confirmed: boolean) => {
+    try {
+      await feishuPoolApi.relateTopics(a, b, confirmed);
+      const r = await feishuPoolApi.topicRelations();
+      setRelations(r.items || []);
+      onCommitted();
+      if (relateDrawer) {
+        const still = (r.items || []).some(x =>
+          (x.src === relateDrawer.id && x.dst === b) || (x.dst === relateDrawer.id && x.src === b));
+        if (!still && !confirmed) setRelateDrawer(null);
+      }
+    } catch (e: any) { setError(e.message); }
+  };
+  const runRefine = async () => {
+    setRefining(true); setError('');
+    try {
+      const r = await feishuPoolApi.crossRefine();
+      setCrossSugg(r.items || []);
+      setUnrefined(!!r.unrefined);
+    } catch (e: any) { setError(e.message); } finally { setRefining(false); }
+  };
+  // 跳转：关联抽屉里点某群卡 → 切到该群该日（复用既有群/日选择）
+  const jumpToTopic = (t: FeishuTopic) => {
+    const day = (t.days || [])[0]
+      || String(t.id).match(/-(\d{8})-/)?.[1] || '';
+    if (t.chat_sha8 && day) { setSha8(t.chat_sha8); setDaySel(day); }
+    setRelateDrawer(null);
+  };
+  const chatNameOf = (sha8: string) => {
+    const c = chatOptions.find(o => o.chat_sha8 === sha8);
+    return c ? `${c.name}${c.kind ? ` · ${c.kind}` : ''}` : sha8;
+  };
   // 图片大图预览弹层（点击缩略图就地放大，ESC/点遮罩关闭——不跳新标签页）
   const [previewImg, setPreviewImg] = useState<{ url: string; caption: string } | null>(null);
   // T-955：长操作耗时提示（分类/同步中实时显示已耗时秒数）
@@ -402,6 +467,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
             {busy === 'commit' ? '提交中…' : `生成话题卡（勾选 ${checked.size} 段）`}
           </button>
         )}
+        {/* T-993：跨群推荐入口（确定性预筛即时可见；LLM 精筛按需触发） */}
+        <button className={btn} onClick={() => setCrossOpen(v => !v)}
+          title="跨群同主题话题候选（预筛 + 可选模型精筛；只推荐不合并，关联需人工确认）">
+          🔗 跨群推荐{crossSugg.length > 0 ? `（${crossSugg.length}）` : ''}
+        </button>
         {sha8 && daySel && (
           <span className="ml-auto flex items-center gap-1.5">
             <select className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-info"
@@ -517,7 +587,9 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                         ) : (
                           <TopicCard topic={t} onRefresh={onCommitted}
                             selected={selectedKey === l.key}
-                            onSelect={() => setSelectedKey(prev => prev === l.key ? null : l.key)} />
+                            onSelect={() => setSelectedKey(prev => prev === l.key ? null : l.key)}
+                            relatedCount={(relatedMap[t.id] || []).length}
+                            onOpenRelations={() => setRelateDrawer(t)} />
                         )}
                       </div>
                     );
@@ -540,6 +612,111 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       {previewImg && (
         <ImageLightbox url={previewImg.url} caption={previewImg.caption}
           onClose={() => setPreviewImg(null)} />
+      )}
+      {/* T-993：跨群推荐面板（预筛清单 + 可选模型精筛 + 关联/忽略） */}
+      {crossOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+          onClick={() => setCrossOpen(false)}>
+          <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold">🔗 跨群同主题候选（只推荐不合并，关联需人工确认）</span>
+              <button className={btn} onClick={runRefine} disabled={refining}
+                title="用 text 模型逐对复核是否同一主题（未配置时诚实降级为预筛结果）">
+                {refining ? '精筛中…' : '模型精筛'}
+              </button>
+              {unrefined && (
+                <span className="text-[10px] text-amber-400">未经模型复核（未配置 text 模型或不可达）</span>
+              )}
+              <button className="ml-auto text-gray-500 hover:text-gray-300"
+                onClick={() => setCrossOpen(false)}>✕</button>
+            </div>
+            {crossSugg.length === 0 ? (
+              <div className="text-xs text-gray-500 text-center py-6">
+                暂无跨群候选（预筛条件：跨群 + 同分类非闲聊 + 时间近 7 天 + 标题相似或关键词交集）
+              </div>
+            ) : crossSugg.map(c => {
+              const a = topicById[c.src];
+              const b = topicById[c.dst];
+              if (!a || !b) return null;
+              const pairRelated = (relatedMap[c.src] || []).includes(c.dst);
+              return (
+                <div key={`${c.src}|${c.dst}`}
+                  className="mb-2 p-2 rounded border border-border bg-surface-3/60">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {[a, b].map(t => (
+                      <div key={t.id} className="min-w-0">
+                        <div className="text-gray-200 truncate" title={t.title}>{t.title}</div>
+                        <div className="text-[10px] text-gray-500 truncate">
+                          {chatNameOf(t.chat_sha8)} · {String(t.window?.[0] || '').slice(5, 16)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5 text-[10px] flex-wrap">
+                    <span className="text-gray-500">{c.reasons.join('；')} · 分 {c.score}</span>
+                    {c.refined && (
+                      <span className={c.llm_same ? 'text-green-400' : 'text-gray-500'}>
+                        模型：{c.llm_same ? '同一主题' : '不同主题'}（{c.llm_confidence}）{c.llm_reason}
+                      </span>
+                    )}
+                    {!pairRelated ? (
+                      <span className="ml-auto flex gap-2">
+                        <button className="text-emerald-400 hover:underline"
+                          onClick={() => relate(c.src, c.dst, true)}>🔗 关联</button>
+                        <button className="text-gray-500 hover:text-red-400"
+                          title="忽略（留痕，不再重复推荐）"
+                          onClick={() => relate(c.src, c.dst, false)}>忽略</button>
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-emerald-400">已关联 ✓</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {/* T-993：关联抽屉（多群证据并排 + 跳原文 + 解除关联） */}
+      {relateDrawer && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+          onClick={() => setRelateDrawer(null)}>
+          <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold">🔗 跨群关联（{(relatedMap[relateDrawer.id] || []).length + 1} 群并排）</span>
+              <button className="ml-auto text-gray-500 hover:text-gray-300"
+                onClick={() => setRelateDrawer(null)}>✕</button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {[relateDrawer, ...(relatedMap[relateDrawer.id] || [])
+                .map(id => topicById[id]).filter(Boolean)].map((t, i) => (
+                <div key={t.id} className="p-2 rounded border border-border bg-surface-3/60
+                  flex items-start gap-2 text-xs">
+                  <span className="text-[10px] text-gray-600 shrink-0 mt-0.5">
+                    {i === 0 ? '本卡' : `群${i + 1}`}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-gray-200 truncate" title={t.title}>{t.title}</div>
+                    <div className="text-[10px] text-gray-500">
+                      {chatNameOf(t.chat_sha8)} · {String(t.window?.[0] || '').slice(5, 16)}
+                      {t.category ? ` · ${t.category}` : ''}
+                    </div>
+                    <div className="text-[10px] text-gray-400 truncate mt-0.5">{t.summary}</div>
+                  </div>
+                  <button className="text-info hover:underline text-[10px] shrink-0"
+                    onClick={() => jumpToTopic(t)}>跳原文 →</button>
+                  {i > 0 && (
+                    <button className="text-gray-500 hover:text-red-400 text-[10px] shrink-0"
+                      title="解除该关联（写 rejected 留痕）"
+                      onClick={() => relate(relateDrawer.id, t.id, false)}>解除</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

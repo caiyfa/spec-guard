@@ -370,7 +370,10 @@ def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
                 store.upsert_edge(src=new_id, dst=old_id, edge_type="evolves",
                                   commit=False)
 
-    # 3. mentions 边（仅 confirmed；src/dst 均须已存在，断链不建边）
+    # 3. mentions / relates 边（仅 confirmed；src/dst 均须已存在，断链不建边）
+    #    T-993：links 按 edge 字段分派——relates（跨群话题关联，复用既有预留
+    #    边类型）仅话题↔话题（tp 端防御校验）；存量数据无 edge 字段回退
+    #    mentions（向后兼容）
     links_yaml = shared["links_yaml"]
     if links_yaml.is_file():
         try:
@@ -385,8 +388,12 @@ def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
                 continue
             if store.get_node(src) is None or store.get_node(dst) is None:
                 continue
+            edge_type = str(l.get("edge") or "mentions")
+            if edge_type == "relates" \
+                    and not (src.startswith("tp:") and dst.startswith("tp:")):
+                continue                      # 关联边仅话题-话题（脏数据防御）
             store.upsert_edge(
-                src=src, dst=dst, edge_type="mentions",
+                src=src, dst=dst, edge_type=edge_type,
                 attrs={"confidence": l.get("confidence", 0),
                        "evidence": str(l.get("evidence") or ""),
                        "confirmed_by": str(l.get("confirmed_by") or ""),

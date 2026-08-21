@@ -138,3 +138,76 @@ def test_update_card_invalid_category_400(tmp_path):
         rp.update_topic_card(body, user=_USER, workspace="tdm")
     assert getattr(ei.value, "status_code", None) == 400
     assert "category" in str(ei.value.detail)
+
+
+# ══════════════════════════════════════════════════════════
+# T-993：跨群关联端点（relate 确认/忽略 + relations 清单）
+# ══════════════════════════════════════════════════════════
+
+def _mk_two_topic_file(emp: Path):
+    (emp / "feishu_pool").mkdir(parents=True, exist_ok=True)
+    (emp / "feishu_pool" / "_topics.yaml").write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:aaaaaa-20260807-01\n    title: 产研群讨论\n    summary: s\n"
+        "    chat_sha8: aaaaaa\n    status: confirmed\n    rev: 1\n"
+        "    window: ['2026-08-07T14:00', '2026-08-07T15:00']\n"
+        "    message_count: 5\n    participants_count: 2\n"
+        "    source: chats/aaaaaa/20260807.md\n"
+        "  - id: tp:bbbbbb-20260807-01\n    title: 测试群跟进\n    summary: s\n"
+        "    chat_sha8: bbbbbb\n    status: draft\n    rev: 1\n"
+        "    window: ['2026-08-07T15:00', '2026-08-07T16:00']\n"
+        "    message_count: 4\n    participants_count: 2\n"
+        "    source: chats/bbbbbb/20260807.md\n", encoding="utf-8")
+
+
+def test_relate_topics_confirm_writes_edge(tmp_path):
+    """确认关联 → facts 落 relates confirmed 边（键规范化小 id 在前）。"""
+    from specflow.feishu_pool import facts
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_two_topic_file(emp)
+    body = rp.RelateRequest(a="tp:bbbbbb-20260807-01",
+                            b="tp:aaaaaa-20260807-01", confirmed=True)
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws):
+        out = rp.relate_topics(body, user=_USER, workspace="tdm")
+    assert out["status"] == "confirmed"
+    assert out["a"] == "tp:aaaaaa-20260807-01"     # 排序规范化
+    links = facts.load_links(ws)
+    assert links[0]["edge"] == "relates"
+    assert links[0]["status"] == "confirmed"
+    assert links[0]["confirmed_by"] == "90000001"
+
+
+def test_relate_topics_reject_leaves_trace(tmp_path):
+    """忽略关联 → rejected 留痕（防重复推荐）。"""
+    from specflow.feishu_pool import facts
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_two_topic_file(emp)
+    body = rp.RelateRequest(a="tp:aaaaaa-20260807-01",
+                            b="tp:bbbbbb-20260807-01", confirmed=False)
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws):
+        rp.relate_topics(body, user=_USER, workspace="tdm")
+    links = facts.load_links(ws)
+    assert links[0]["status"] == "rejected"
+    # relations 端点只回 confirmed
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws):
+        out = rp.topic_relations(user=_USER, workspace="tdm")
+    assert out["items"] == []
+
+
+def test_relate_topics_unknown_id_404(tmp_path):
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_two_topic_file(emp)
+    body = rp.RelateRequest(a="tp:not-exist", b="tp:aaaaaa-20260807-01")
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         pytest.raises(Exception) as ei:
+        rp.relate_topics(body, user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 404

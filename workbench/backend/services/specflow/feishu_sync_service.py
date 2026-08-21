@@ -798,7 +798,10 @@ def _topic_modules(workspace_root: Path) -> dict[str, list[str]]:
 def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
     """话题清单：卡片（私有区 _topics.yaml 状态制，T-948 含全部状态）
     + 已确认（共享区；T-949 合并为单一存储后此区分退役）。
-    T-992：每卡附 modules（FR 锚点派生，拍板②——关联不到留空）。"""
+    T-992：每卡附 modules（FR 锚点派生，拍板②——关联不到留空）。
+    T-993 D5：附 cross_suggestions（确定性预筛零 LLM——跨群候选关联，
+    rejected 对不重复推荐；LLM 精筛由 /topics/cross-refine 按需触发）。"""
+    from specflow.feishu_pool import cross_chat as xc
     from specflow.feishu_pool import facts
     from specflow.feishu_pool import topic_cluster as tc
     candidates = tc._load_candidates(specflow_emp_base)   # 含旧文件迁移+字段归一化
@@ -808,7 +811,14 @@ def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
         t["modules"] = mods.get(str(t.get("id")), [])
     for t in confirmed:
         t["modules"] = mods.get(str(t.get("id")), [])
-    return {"candidates": candidates, "confirmed": confirmed}
+    # 已处理对（confirmed 已关联 / rejected 已忽略）均不再重复推荐
+    done_pairs = {xc.pair_key(str(l.get("src", "")), str(l.get("dst", "")))
+                  for l in facts.load_links(workspace_root)
+                  if l.get("edge") == "relates"}
+    pool_cards = [t for t in candidates if t.get("status") != "rejected"] + confirmed
+    suggestions = xc.suggest_cross_chat_relations(pool_cards, done_pairs)
+    return {"candidates": candidates, "confirmed": confirmed,
+            "cross_suggestions": suggestions}
 
 
 def update_image_caption(specflow_emp_base: Path, material_stem: str,

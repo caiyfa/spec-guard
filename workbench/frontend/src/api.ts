@@ -1761,7 +1761,8 @@ export const feishuPoolApi = {
   poolMaterials: () =>
     request<{ items: FeishuPoolMaterial[] }>('/feishu-pool/materials'),
   poolTopics: () =>
-    request<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>('/feishu-pool/topics'),
+    request<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[];
+              cross_suggestions: CrossChatCandidate[] }>('/feishu-pool/topics'),
   // ── T-947：话题人工介入工作区（T-951c：draft 支持 days 多日窗口） ──
   listTopicDrafts: () =>
     request<{ items: Record<string, FeishuTopicDraft[]> }>('/feishu-pool/topics/drafts'),
@@ -1792,6 +1793,15 @@ export const feishuPoolApi = {
   topicHistory: (id: string) =>
     request<{ items: FeishuTopicHistoryItem[] }>(
       `/feishu-pool/topics/history?topic_id=${encodeURIComponent(id)}`),
+  // T-993：跨群关联——确认/忽略（忽略写 rejected 防重复推荐）+ 关联边清单 + LLM 精筛
+  relateTopics: (a: string, b: string, confirmed: boolean) =>
+    request<{ a: string; b: string; status: string }>('/feishu-pool/topics/relate', {
+      method: 'POST', body: JSON.stringify({ a, b, confirmed }) }),
+  topicRelations: () =>
+    request<{ items: TopicRelation[] }>('/feishu-pool/topics/relations'),
+  crossRefine: () =>
+    request<{ items: CrossChatCandidate[]; cached: boolean; unrefined: boolean }>(
+      '/feishu-pool/topics/cross-refine', { method: 'POST' }),
   // T-948：群聊消息 JSONL 事实源（时间轴渲染与精确高亮）
   chatMessages: (sha8: string, day: string) =>
     request<{ items: FeishuChatMessage[]; file: string }>(
@@ -1921,6 +1931,25 @@ export interface FeishuTopic {
 }
 
 export type FeishuTopicDraft = Omit<FeishuTopic, 'id'>;
+
+// T-993：跨群关联（relates_to 边——只推荐不合并，人确认后生效）
+export interface TopicRelation {
+  src: string;                 // tp id（规范化小 id 在前）
+  dst: string;
+  confirmed_by?: string;
+  confirmed_at?: string;
+}
+
+export interface CrossChatCandidate {
+  src: string;                 // tp id
+  dst: string;
+  score: number;               // 确定性预筛分（0~1）
+  reasons: string[];
+  refined?: boolean;           // LLM 精筛是否落注（false=未经模型复核）
+  llm_same?: boolean;
+  llm_confidence?: number;
+  llm_reason?: string;
+}
 
 // T-948：群聊消息 JSONL 事实源行（/chat-messages；时间轴渲染与精确高亮）
 export interface FeishuChatMessage {
