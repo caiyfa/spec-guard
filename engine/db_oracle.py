@@ -35,6 +35,9 @@ class ReadOnlyDb:
             cursorclass=pymysql.cursors.DictCursor,
             connect_timeout=connect_timeout, read_timeout=read_timeout,
         )
+        # ENG-T06（ENG-BUG-009）：最近一次 query 是否发生 max_rows 截断（调用方可读）。
+        # 单线程执行模型下实例属性安全；并行化（依赖状态管理设计-V3 §7.2）改连接池时一并处理。
+        self.last_truncated = False
 
     @staticmethod
     def _guard(sql):
@@ -49,15 +52,18 @@ class ReadOnlyDb:
             raise SqlGuardError(f"只读守卫拒绝多语句 SQL: {sql[:80]}")
 
     def query(self, sql, params=None, max_rows=1000):
-        """执行只读查询，返回 list[dict]（超出 max_rows 截断）"""
+        """执行只读查询，返回 list[dict]（超出 max_rows 截断）。
+
+        截断事实经 self.last_truncated 外抛（ENG-T06）——返回类型契约不动，
+        调用方（step_db_query / oracle）读该标志落痕告警，不再静默丢弃。
+        """
         self._guard(sql)
         self._ensure_alive()
         with self._conn.cursor() as cur:
             cur.execute(sql, params or ())
             rows = cur.fetchmany(max_rows + 1)
-        if len(rows) > max_rows:
-            return rows[:max_rows]
-        return rows
+        self.last_truncated = len(rows) > max_rows
+        return rows[:max_rows] if self.last_truncated else rows
 
     def query_one(self, sql, params=None):
         rows = self.query(sql, params, max_rows=2)

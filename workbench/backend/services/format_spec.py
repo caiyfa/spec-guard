@@ -31,9 +31,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.10.0"
+SPEC_VERSION = "2.11.0"
 SPEC_UPDATED = "2026-08-21"
 SPEC_CHANGELOG = [
+    ("2.11.0", "2026-08-21", "DB 截断可见性（ENG-T06/ENG-BUG-009）：db_query 超过 max_rows=1000 的截断不再静默——db_traces 落 `truncated: true`、执行日志打 WARN、case JSON 顶层 `warnings` 挂截断条目（计数类断言将失真的显式告警）；新增 `allow_truncate: true` 显式豁免（落痕保留、告警消失，用于只取样本的正当场景，默认 false）"),
     ("2.10.0", "2026-08-21", "渲染与断言防呆（ENG-T05）：插值残留扫描——渲染后仍含 {{ 抛 RenderError（FAIL/scenario_error，请求不发出），字面量 {{ 暂无转义语法；poll call 段补 service 路由与 headers/cookies 透传；poll until 配置错误（jsonpath 拼错等）第一轮快速失败而非轮询至超时；T9 lint——≥2 个带 save 步骤 + 无 of 断言 WARN 提示显式指定；python 步骤文档补浅拷贝注意事项（勿对上游 dict/list 原地修改）"),
     ("2.9.0", "2026-08-20", "call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试。新增场景级软看门狗 SG_SCENARIO_TIMEOUT（秒，默认 300）：超阈值在步骤/断言/poll 边界抛 ScenarioTimeout（FAIL/env_error）；call 文件字段与 binary body 改传 bytes（fd 不泄漏、401 重试重发字节完整）"),
     ("2.8.0", "2026-08-20", "契约门禁强化（ENG-T02）：契约指纹纳入 verify 断言逻辑（改预期值/路径/操作符/脚本即触发 T6，改断言需 bump MINOR）；strict_deps 语义修正（DRIFT/ORPHANED 升格 FAIL 而非退化为 BLOCKED）；T7 依赖缺 version 声明由 WARN 升 ERROR；版本仲裁下沉至依赖每一跳（传递 orphan 不再崩溃、传递漂移不再漏检）"),
@@ -340,7 +341,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 | 步骤类型 | 格式 | 产出变量 |
 |----------|------|----------|
 | `call` | `{as?, service?, method, path, params?, headers?, cookies?, body_type?, json?/form?/urlencoded?/raw?/file?, save, timeout?, retry?/idempotent?}` | `save.status`、`save.json`、`save.headers` |
-| `db_query` | `{sql, schema?, save, note?}` | 查询结果行数组（裸数组，可直接被 json 断言消费） |
+| `db_query` | `{sql, schema?, save, note?, allow_truncate?}` | 查询结果行数组（裸数组，可直接被 json 断言消费） |
 | `poll` | `{call, until, interval_ms?, timeout_ms?, on_timeout?, save}` | 末轮响应（结构同 call） |
 | `python` | `{script 或 file, save?}` | `output` 变量 / `ns` 直写 / `save(k,v)` |
 | `tool` | `{use, with?, save?}` | 由工具声明决定（见第八章 tool 目录） |
@@ -362,6 +363,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 
 - `db_query.sql`：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，支持 `{{var}}` 插值
 - `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / tdm / uac），未配置该连接时场景 SKIP
+- `db_query.allow_truncate`（2.11.0，默认 false）：查询超过 max_rows=1000 时截断**三层落痕**——db_traces `truncated: true`、执行日志 WARN、case JSON 顶层 `warnings` 截断条目（`$.length()`/`len_eq` 等计数断言将失真）；声明 `allow_truncate: true` 豁免告警（落痕保留），用于"只取前 N 行看样本"的正当场景
 - `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）。**call 段参数**（2.10.0 起与 call 步骤对齐一部分）：`as`（账号）、`service`（服务前缀路由，默认 tdm）、`headers`/`cookies`（KV dict，支持插值）、`timeout`；**until 配置错误快速失败**——jsonpath 拼错等非"条件不满足"异常第一轮即 FAIL（scenario_error），不再轮询至超时掩盖错误（jsonpath 无匹配仍按"未满足"继续轮询）
 - **场景级软看门狗**（2.9.0）：环境变量 `SG_SCENARIO_TIMEOUT`（秒，默认 300）——场景累计耗时超阈值时在**步骤/断言/poll 轮询边界**抛 `ScenarioTimeout`（FAIL/env_error，消息带超时提示）。注意：`python` 脚本内死循环（不回到步骤边界）软看门狗拦不住，进程级兜底用 workbench 执行控制的 run 级看门狗（settings `run_timeout_sec` / 环境变量 `SG_RUN_TIMEOUT`，默认 0=禁用，建议生产开启）
 

@@ -124,6 +124,7 @@ class ExecutionRecord:
     upstream_of: str = ""                              # 非空表示该记录是作为哪个场景的上游执行的
     instance_no: int = 1                               # 实例序号（exclusive 依赖会产生多实例，>1 表示重跑份）
     dep_mode: str = ""                                 # 作为上游时的消费模式（shared/exclusive）
+    warnings: list = field(default_factory=list)       # 场景级告警（ENG-T06：db 截断等；不改变 verdict，to_dict 落盘）
 
     def fail(self, category, message, evidence=None):
         self.verdict = VERDICT_FAIL
