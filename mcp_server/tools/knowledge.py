@@ -15,7 +15,7 @@ from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
 
-from agent.skill_loader import load_skill as _load_skill  # noqa: E402
+from sg_core.skill_loader import load_skill as _load_skill  # noqa: E402
 
 
 def _skill_text(skill) -> str:
@@ -126,7 +126,7 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         skill_name = arguments.get("name", "")
         skill = _load_skill(skill_name)
         if not skill:
-            from agent.skill_loader import list_skills
+            from sg_core.skill_loader import list_skills
             available = "、".join(s.name for s in list_skills())
             return [TextContent(type="text",
                                 text=f"技能不存在: {skill_name}。可用技能: {available}")]

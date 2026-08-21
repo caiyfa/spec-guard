@@ -108,7 +108,7 @@ def fabricate(frs: list[str], source_delta: str = "",
         {drafts: [{id, covers, source_delta, data_contract, validation, draft_id}],
          rejected: [{fr, reason}], reuse_hints: [str]}
     """
-    from workbench.backend.services.data_validator import validate_data_contract
+    from sg_core.data_validator import validate_data_contract
 
     anchors = _load_anchors()
     existing_preps, existing_ids = _load_existing(target)

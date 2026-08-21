@@ -309,7 +309,7 @@ def _build_feishu_nodes(store: "GraphStore", workspace_root: Path):
     - topics.yaml → topic 节点
     - material_links.yaml（仅 status=confirmed）→ mentions 边（src/dst 均须已存在）
     """
-    from specflow.feishu_pool.paths import shared_dirs
+    from sg_core.feishu_paths import shared_dirs
     workspace_root = Path(workspace_root)
     shared = shared_dirs(workspace_root)
     if not shared["root"].is_dir():
