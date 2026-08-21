@@ -47,7 +47,7 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        assert len(ALL_TOOLS) == 91  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）+ gate_dock_status 1（T-901 GateDock 对话操作台，纯读）+ reset_draft_area 1（草稿区重置工具）
+        assert len(ALL_TOOLS) == 92  # 64（61 基础 + T-507 知识层 3）+ 飞书支线 lark 4（T-701/T-702）+ S8 open/ 15（T-083；read_run_report 为内部映射不重复注册）+ feishu_link_read 1（链接统一解析入口）(stdio 不含 info_pack) + write_delta_doc 1 + commit_delta_changes 1（方案 A delta 文档写/受限提交通道）+ spec_search 2（编号重排：search_spec_files + parse_fr_id）+ push_delta 1（S0.6 分支级推送远端）+ gate_dock_status 1（T-901 GateDock 对话操作台，纯读）+ reset_draft_area 1（草稿区重置工具）+ read_material 1（T-934 材料解析产物三视图）
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -78,9 +78,10 @@ class TestToolRegistration:
                      "sf_suggest_scores", "sf_read_score_gate",
                      # S2.5 飞书日程/纪要工具（2）
                      "feishu_calendar_agenda", "feishu_meeting_notes",
-                     # S3 材料包/信息包工具（5）
+                     # S3 材料包/信息包工具（5）+ T-934 read_material（1）
                      "pack_assemble", "pack_read_section", "material_parse_status",
                      "material_extract_topics", "pack_freshness_check",
+                     "read_material",
                      # S5 外部锚点/禅道作业工具（3，M06 §5.3）
                      "sf_list_external_refs", "sf_register_external_ref",
                      "sf_get_zentao_job",

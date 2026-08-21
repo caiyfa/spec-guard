@@ -5,6 +5,7 @@
   pack_read_section        读单分区（面试官按需取上下文）
   material_parse_status    材料状态机快照（纯读）
   material_extract_topics  议题候选提取（LLM 在 Agent 侧，工具落库 confirmed=0）
+  read_material            读材料解析产物三视图：summary 概览/topics 候选/raw 分页原文（T-934）
   pack_freshness_check     新鲜度校验（纯读）
 
 约束：写域仅 .specflow/（材料/信息包）；解析产物 _parsed/ 为派生物可重建。
@@ -89,11 +90,32 @@ pack_freshness_check_tool = Tool(
     },
 )
 
+read_material_tool = Tool(
+    name="read_material",
+    description="读材料解析产物（summary 概览 / topics 议题候选 / raw 原文分页）。"
+                "面试官引用材料原文做证据用；未解析或文件缺失时诚实报错。",
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "material_id": {"type": "string", "description": "材料 ID MAT-xxx"},
+            "section": {"type": "string", "enum": ["summary", "topics", "raw"],
+                        "description": "视图：summary=概览+头部摘要（默认）"
+                                       "/topics=议题候选清单/raw=解析原文分页"},
+            "offset": {"type": "integer", "minimum": 0,
+                       "description": "raw 分页起始字符偏移（默认 0）"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 20000,
+                      "description": "raw 分页每页字符数（默认 4000，上限 20000）"},
+        },
+        "required": ["material_id"],
+    },
+)
+
 TOOLS = [
     pack_assemble_tool,
     pack_read_section_tool,
     material_parse_status_tool,
     material_extract_topics_tool,
+    read_material_tool,
     pack_freshness_check_tool,
 ]
 
@@ -108,6 +130,7 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
         "pack_read_section": _handle_pack_read_section,
         "material_parse_status": _handle_material_parse_status,
         "material_extract_topics": _handle_material_extract_topics,
+        "read_material": _handle_read_material,
         "pack_freshness_check": _handle_pack_freshness_check,
     }
     handler = handlers.get(name)
@@ -220,6 +243,102 @@ async def _handle_material_extract_topics(args: dict) -> list[TextContent]:
         }))]
     except Exception as e:
         return [TextContent(type="text", text=f"登记失败: {e}")]
+
+
+async def _handle_read_material(args: dict) -> list[TextContent]:
+    """读材料解析产物三视图（T-934）：summary 概览 / topics 候选 / raw 分页原文。
+
+    摘要为解析文本头部派生（材料本体无 summary 字段，不编造）；
+    解析产物缺失时回退原文预览，两者皆无 → 诚实报错。
+    """
+    try:
+        import json
+        from pathlib import Path
+        from workbench.backend.services.specflow.materials_service import (
+            _db_conn, db_list_topics)
+        from specflow.materials import store
+        ws, sf_base = _ctx()
+        if not ws:
+            return [TextContent(type="text", text="读取失败: 缺少工作区上下文")]
+        mid = str(args["material_id"])
+        section = str(args.get("section") or "summary")
+        if section not in ("summary", "topics", "raw"):
+            return [TextContent(type="text",
+                                text="读取失败: section 仅支持 summary|topics|raw")]
+
+        conn = _db_conn()
+        try:
+            m = store.get_material(conn, mid)
+        finally:
+            conn.close()
+        if not m or m["workspace"] != ws:
+            return [TextContent(type="text", text=f"读取失败: 材料不存在: {mid}")]
+
+        iv_dir = Path(sf_base) / "interviews" / m["iv_id"]
+        stem = Path(m["filename"]).stem or mid
+        parsed_dir = iv_dir / "materials" / "_parsed"
+
+        if section == "topics":
+            topics = db_list_topics(m["iv_id"], ws, material_id=mid)
+            return [TextContent(type="text", text=str({
+                "material_id": mid, "count": len(topics),
+                "topics": [{"topic_id": t["topic_id"], "title": t["title"],
+                            "confirmed": t["confirmed"],
+                            "priority_hint": t.get("priority_hint", ""),
+                            "prd_section": t.get("prd_section", "")}
+                           for t in topics],
+            }))]
+
+        text = ""
+        source = "parsed"
+        extract = parsed_dir / f"{stem}.extract.txt"
+        if extract.is_file():
+            text = extract.read_text(encoding="utf-8")
+        else:
+            raw_file = iv_dir / "materials" / m["filename"]
+            if raw_file.is_file():
+                from workbench.backend.services.file_preview import preview_text
+                text, _fmt = preview_text(raw_file)
+                source = "raw"
+        if not text:
+            return [TextContent(type="text", text=str({
+                "material_id": mid, "filename": m["filename"],
+                "status": m["status"],
+                "error": "解析产物缺失且原文不可读（failed 材料无产物，"
+                         "parse_error: " + str(m.get("parse_error") or "") + "）",
+            }))]
+
+        if section == "summary":
+            chunks_n = 0
+            chunks_file = parsed_dir / f"{stem}.chunks.json"
+            if chunks_file.is_file():
+                try:
+                    chunks_n = len(json.loads(chunks_file.read_text(encoding="utf-8")))
+                except Exception:
+                    chunks_n = 0
+            head = " ".join(text[:600].split())
+            if len(text) > 600:
+                head += "…"
+            return [TextContent(type="text", text=str({
+                "material_id": mid, "iv_id": m["iv_id"],
+                "filename": m["filename"], "fmt": m["fmt"],
+                "status": m["status"], "pack_included": m["pack_included"],
+                "source": source, "total_chars": len(text), "chunks": chunks_n,
+                "summary": head,
+                "hint": "原文分页读取用 section=raw（offset/limit）",
+            }))]
+
+        # raw 分页（offset/limit 字符切片，has_more 提示翻页）
+        offset = max(0, int(args.get("offset") or 0))
+        limit = min(20000, max(1, int(args.get("limit") or 4000)))
+        return [TextContent(type="text", text=str({
+            "material_id": mid, "section": "raw", "source": source,
+            "offset": offset, "limit": limit, "total_chars": len(text),
+            "has_more": offset + limit < len(text),
+            "text": text[offset:offset + limit],
+        }))]
+    except Exception as e:
+        return [TextContent(type="text", text=f"读取失败: {e}")]
 
 
 async def _handle_pack_freshness_check(args: dict) -> list[TextContent]:
