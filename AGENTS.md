@@ -79,8 +79,12 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   ├── anchors.py                #   FR/AC 锚点解析
 │   ├── conformance.py            #   合规校验器
 │   ├── signature.py              #   内容指纹（delta diff 基础）
-│   └── workspace.py              #   工作区注册/git 克隆/激活切换；contextvar 向下游透传
-│       └── workspaces/           #   注册表+克隆目录（registry.yaml/_clones/_anchors，不入 git）
+│   ├── workspace.py              #   工作区门面：contextvars+路径常量+resolve_system+
+│   │   │                         #   四分块再导出（T-999d 拆分，monkeypatch 单一事实面不变）
+│   │   ├── ws_registry.py        #   注册表（WorkspaceInfo/CRUD/local·git 注册/pull）
+│   │   ├── ws_dirs.py            #   路径访问与产物目录（safe_resolve/.specguard·.specflow 区）
+│   │   ├── ws_git.py             #   git 历史与远程同步状态（git_log/remote marks/屏蔽）
+│   │   └── workspaces/           #   注册表+克隆目录（registry.yaml/_clones/_anchors，不入 git）
 │
 ├── sg_core/                      # 共享内核（T-975 下沉：mcp_server/agent/workbench 三方
 │   ├── user_store.py             #   共同消费的实体；依赖单向 sg_core→specstd/engine，
