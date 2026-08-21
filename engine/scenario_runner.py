@@ -496,11 +496,10 @@ def step_db_query(body, rctx, ns, record):
     note = body.get("note", "db_query")
     # ENG-T06 三层落痕：截断事实不再静默——db_traces 标记 / 执行日志 WARN / 场景级 warnings
     truncated = bool(getattr(db, "last_truncated", False))
-    if truncated:
-        if not allow_truncate:
-            print("[SpecGuard WARN] db_query 结果截断于 1000 行（实际更多），计数类断言将失真"
-                  "——如只取样本属预期，可声明 allow_truncate: true 豁免告警", flush=True)
-            record.warnings.append(f"db_query '{note}' 结果截断于 1000 行（计数类断言将失真）")
+    if truncated and not allow_truncate:
+        print("[SpecGuard WARN] db_query 结果截断于 1000 行（实际更多），计数类断言将失真"
+              "——如只取样本属预期，可声明 allow_truncate: true 豁免告警", flush=True)
+        record.warnings.append(f"db_query '{note}' 结果截断于 1000 行（计数类断言将失真）")
     record.db_traces.append({"purpose": note,
                              "sql": sql, "rows": len(rows),
                              "truncated": truncated,
