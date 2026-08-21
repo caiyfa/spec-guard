@@ -1,0 +1,57 @@
+import type { ChatMessage } from './types';
+
+/** K-013：消息展示时剥离 <references> 注入块（内容已在引用面板呈现） */
+export function stripRefBlock(content: string): string {
+  return content.replace(/^<references>[\s\S]*?<\/references>\s*/, '');
+}
+
+// ── 按角色估算 token 分布（参考 opencode 的 chars/4 方法） ──
+export function calcCtxBreakdown(messages: ChatMessage[], actualPromptTokens: number): Record<string, number> {
+  const est: Record<string, number> = { system: 0, user: 0, assistant: 0, tool: 0 };
+  for (const msg of messages) {
+    const role = msg.role in est ? msg.role : 'system';
+    const content = msg.content || '';
+    const toolArgs = (msg.tool_calls || []).reduce((s, tc) => s + (tc.function.arguments || '').length, 0);
+    est[role] += Math.ceil((content.length + toolArgs) / 4);
+  }
+  const total = Object.values(est).reduce((a, b) => a + b, 0);
+  if (total > 0 && actualPromptTokens > 0) {
+    const scale = actualPromptTokens / total;
+    for (const k in est) est[k] = Math.round(est[k] * scale);
+  }
+  return est;
+}
+
+export const fmtSize = (n?: number) => n === undefined ? '' : n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} B`;
+
+/** md 文本首个标题（产物卡片主标题用） */
+export function firstMdTitle(text: string): string | null {
+  const m = /^#{1,3}\s+(.+)$/m.exec(text);
+  return m ? m[1].replace(/[#*`[\]]/g, '').trim() : null;
+}
+
+/** 扩展名 → 格式标签 */
+export function extLabelOf(name?: string): string {
+  if (!name) return '';
+  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+  if (ext === '.yaml' || ext === '.yml') return 'YAML';
+  if (ext === '.md' || ext === '.markdown') return 'Markdown';
+  return ext.replace('.', '').toUpperCase();
+}
+
+// ── 提取 <plan> 标签 ──
+export function extractPlan(content: string): string[] | null {
+  const match = content.match(/<plan>([\s\S]*?)<\/plan>/);
+  if (!match) return null;
+  return match[1].split('\n').map(l => l.trim()).filter(l => l);
+}
+
+// ── 去除 <plan> 标签后的内容 ──
+export function stripPlan(content: string): string {
+  return content.replace(/<plan>[\s\S]*?<\/plan>/g, '').trim();
+}
+
+// ── K-024：工具参数/结果的友好渲染 ──
+export function tryParseJson(text: string): any {
+  try { return JSON.parse(text); } catch { return undefined; }
+}
