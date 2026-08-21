@@ -247,8 +247,8 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | ✅ 33682ba | sess-multi-system | 1 天；顺带修复plan_executor漏注册内置oracles漂移bug |
 | T-971 | M-A | system 一等公民化（9 调用点归一+runner 断链+分键缓存） | wt/multi-system | T-970 | ✅ 0fbcd9e | sess-multi-system | 2-3 天；多用户多系统切换硬前置 |
 | T-972 | M-A | 引擎 TDM 泄漏清理 | wt/multi-system | — | ✅ f52d3a9 | sess-multi-system | 1 天；format_spec 2.12.0 三同步 |
-| T-973 | M-A | 系统包动态注册（分级：配置型 UI 即时生效/代码型评审后热加载） | wt/multi-system | T-970/T-971 | 进行中 | sess-multi-system | 2-3 天；08-21 用户拍板分级方案 |
-| T-974 | M-A | 多系统 e2e 收口（新系统注册到跑通不重启） | wt/multi-system | T-971~T-973 | 未认领 | | 1 天 |
+| T-973 | M-A | 系统包动态注册（分级：配置型 UI 即时生效/代码型评审后热加载） | wt/multi-system | T-970/T-971 | ✅ 9d4bf6c | sess-multi-system | 2-3 天；08-21 用户拍板分级方案；sha256评审闸不可绕已测试锁定；前端管理页留M-E/T-996评估，API已全量落地 |
+| T-974 | M-A | 多系统 e2e 收口（新系统注册到跑通不重启） | wt/multi-system | T-971~T-973 | 进行中 | sess-multi-system | 1 天 |
 | T-975 | M-B | 依赖倒挂翻正（sg_core 下沉，消灭 sys.path.insert） | wt/dep-inversion | — | 未认领 | | 3-5 天；动作最大提交即推 |
 | T-976 | M-B | 解环（agent↔mcp_server、graph_index↔specflow）+ 环检查进 release_check | wt/dep-inversion | T-975 | 未认领 | | 1-2 天 |
 | T-980 | M-C | Agent 评测体系（轨迹断言 golden case + MockLLM 升基建 + metrics 工具维度） | wt/agent-eval | — | 未认领 | | 3-5 天；智能层后续一切的地基 |
