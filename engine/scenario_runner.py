@@ -9,6 +9,7 @@
 import os
 import pathlib
 import random
+import re
 import string
 import time
 import uuid as _uuid
@@ -68,6 +69,15 @@ class ScenarioTimeout(Exception):
     （while True 不回到边界）软看门狗拦不住，进程级兜底靠 workbench runner 层
     T-118 看门狗（settings KV run_timeout_sec / 环境变量 SG_RUN_TIMEOUT，默认 0=禁用）。
     归类 CAT_ENV（环境/未知，非场景编写错误）。
+    """
+
+
+class RenderError(ValueError):
+    """插值渲染后仍残留 {{ 占位符（ENG-T05/ENG-BUG-006）。
+
+    书写错误的插值（缺右括号/空占位符）此前静默作为字面量发给 API，脏数据到
+    断言/下游才暴露。ValueError 子类 → run_scenario 的 except 链归 CAT_SCENARIO
+    （依赖 ENG-T01 的分类）。字面量 {{ 无转义语法（format_spec 已注明限制）。
     """
 
 
@@ -267,9 +277,17 @@ def _resolve(expr, ns):
     raise KeyError(f"变量未定义: {expr}（可用键: {list(ns) if isinstance(ns, dict) else type(ns)}）")
 
 
+# ENG-T05（ENG-BUG-006）：渲染结果残留占位符检测——写错的插值不再静默作为字面量发出
+_PLACEHOLDER_LEFT = re.compile(r"\{\{")
+
+
 def render(obj, ns):
-    """递归插值：dict/list/str 中的 {{expr}} 全部替换"""
-    import re
+    """递归插值：dict/list/str 中的 {{expr}} 全部替换
+
+    残留扫描（ENG-T05）：字符串经 fullmatch/sub 处理后仍含 {{ → 抛 RenderError
+    （归 CAT_SCENARIO）。注：fullmatch 分支的解析值来自变量，其内容含 {{ 属数据
+    而非模板错误，不扫描。
+    """
     if obj is None:
         return None
     if isinstance(obj, dict):
@@ -280,8 +298,12 @@ def render(obj, ns):
         m = re.fullmatch(r"\{\{\s*(.+?)\s*\}\}", obj)
         if m:
             return _resolve(m.group(1), ns)          # 完全匹配：保留类型
-        return re.sub(r"\{\{\s*(.+?)\s*\}\}",
-                      lambda mm: str(_resolve(mm.group(1), ns)), obj)
+        out = re.sub(r"\{\{\s*(.+?)\s*\}\}",
+                     lambda mm: str(_resolve(mm.group(1), ns)), obj)
+        if _PLACEHOLDER_LEFT.search(out):
+            raise RenderError(f"未解析的插值占位符: {obj!r}"
+                              f"（渲染结果残留 '{{'，检查是否缺右括号或变量名拼错）")
+        return out
     return obj
 
 
@@ -504,11 +526,16 @@ def step_poll(body, rctx, ns, record):
     account = call_body.get("as", "default")
     if account in ("none", "anonymous"):
         account = None
-    client = rctx.http_client(account)
+    # ENG-T05（ENG-BUG-014）：poll 的 call 段补 service 路由与 headers/cookies 透传
+    # （与 step_call 同款参数语义；urlencoded 等复杂 body_type 仍属 call 步骤能力）
+    service = str(render(call_body.get("service", "tdm"), ns) or "tdm")
+    client = rctx.http_client(account, service)
     method = call_body.get("method", "GET").upper()
     path = render(call_body["path"], ns)
     params = render(call_body.get("params"), ns)
     json_body = render(call_body.get("json"), ns)
+    headers = render(call_body.get("headers"), ns)
+    cookies = render(call_body.get("cookies"), ns)
 
     started_total = time.time()
     attempt = 0
@@ -529,6 +556,7 @@ def step_poll(body, rctx, ns, record):
         # 执行 HTTP 调用
         started = time.time()
         resp = client.request(method, path, params=params, json_body=json_body,
+                              headers=headers, cookies=cookies,
                               raise_on_error=False, timeout=call_body.get("timeout", 30))
         elapsed = int((time.time() - started) * 1000)
         try:
@@ -559,9 +587,15 @@ def step_poll(body, rctx, ns, record):
                     if not _eval_json_condition(jb, actual):
                         all_passed = False
                         break
-                except (AssertionError, Exception):
+                except AssertionError:
+                    # 条件不满足（含 jsonpath 无匹配）→ 正常轮询
                     all_passed = False
                     break
+                except Exception as e:
+                    # ENG-T05（ENG-BUG-008）：配置错误（jsonpath 拼错/KeyError 等）快速失败，
+                    # 不再被当成"任务还没好"轮询至超时掩盖真实错误；ValueError → CAT_SCENARIO
+                    raise ValueError(
+                        f"poll until 条件配置错误: {type(e).__name__}: {e}") from e
             elif "status" in cond:
                 sb = cond["status"]
                 expected = render(sb.get("eq"), ns)
