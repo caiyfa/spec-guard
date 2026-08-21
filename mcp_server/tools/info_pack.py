@@ -6,14 +6,11 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT / "workbench" / "backend") not in sys.path:
-    sys.path.insert(0, str(SG_ROOT / "workbench" / "backend"))
 
 TOOLS = [
     Tool(
@@ -88,7 +85,7 @@ def _handle_list_artifacts(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="错误：缺少 scenario_id 参数")]
 
     try:
-        from services import scenario_meta, info_pack_freshness
+        from sg_core import scenario_meta, info_pack_freshness
         meta = scenario_meta.get_meta(scenario_id)
     except Exception as e:
         return [TextContent(type="text", text=f"错误：无法访问场景元数据: {e}")]
@@ -170,7 +167,7 @@ def _handle_read_info_pack(arguments: dict) -> list[TextContent]:
 
     # 从 DB 获取文件列表
     try:
-        from services import scenario_meta
+        from sg_core import scenario_meta
         meta = scenario_meta.get_meta(scenario_id)
     except Exception as e:
         return [TextContent(type="text", text=f"错误：无法访问场景元数据: {e}")]
@@ -205,7 +202,7 @@ def _handle_read_info_pack(arguments: dict) -> list[TextContent]:
         try:
             # K-030：办公文档（xlsx/docx/pdf）经 file_preview 转文本——
             # 信息包关键文件常是 xlsx（read_text 直接 UnicodeDecodeError）
-            from services import file_preview
+            from sg_core import file_preview
             if file_preview.is_office_doc(resolved):
                 _fmt, content = file_preview.preview_text(resolved)
                 content = f"[办公文档已转换为文本预览]\n{content}"
@@ -243,7 +240,7 @@ def _handle_add_to_info_pack(arguments: dict) -> list[TextContent]:
 
     # 更新 DB
     try:
-        from services import scenario_meta
+        from sg_core import scenario_meta
         updated = scenario_meta.add_to_info_pack(scenario_id, file_path)
     except Exception as e:
         return [TextContent(type="text", text=f"错误：无法更新基础信息包: {e}")]

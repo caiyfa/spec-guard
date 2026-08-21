@@ -7,9 +7,7 @@
 from __future__ import annotations
 
 import os
-import threading
 import time
-from typing import Optional
 
 from sg_core.user_store import _connect, _LOCK, init_db
 

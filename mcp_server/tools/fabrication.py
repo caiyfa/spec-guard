@@ -5,17 +5,12 @@
 """
 
 import json
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 TOOLS = [
     Tool(
@@ -51,7 +46,7 @@ def _handle_fabricate(arguments: dict) -> list[TextContent]:
     if not isinstance(frs, list) or not frs:
         return [TextContent(type="text", text="错误：frs 必须为非空数组")]
     try:
-        from services import data_fabrication
+        from sg_core import data_fabrication
         result = data_fabrication.fabricate(frs=frs, source_delta=source_delta)
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
     except Exception as e:

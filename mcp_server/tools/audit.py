@@ -5,23 +5,17 @@
   report_vulnerability: 登记漏洞到反馈台账（SPQ ledger）+ 触发群聊通知
 """
 
-import asyncio
 import json
 import re
-import sys
 from datetime import datetime
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 # Backend services 路径（notify_config 等）
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 # 台账文件路径（T-2 切换点：未来迁移到 .specguard/ledger.json）
 LEDGER_PATH = SG_ROOT / "feedback" / "ledger.json"
@@ -138,7 +132,7 @@ def _handle_write_audit_report(arguments: dict) -> list[TextContent]:
     # K-007: 若开启「审计完成自动更新基线」，审计报告成功后更新 spec 签名基线
     baseline_updated = False
     try:
-        from services import settings_store, spec_baseline
+        from sg_core import settings_store, spec_baseline
         if settings_store.audit_auto_update_baseline():
             baseline_updated = spec_baseline.update_baseline()
     except Exception:
@@ -201,7 +195,7 @@ async def _handle_report_vulnerability(arguments: dict) -> list[TextContent]:
     notify_error = ""
     try:
         from feedback.notify import send_batch_notifications
-        from services.notify_config import get_configs_by_event
+        from sg_core.notify_config import get_configs_by_event
 
         configs = get_configs_by_event("vulnerability")
         if configs:

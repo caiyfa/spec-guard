@@ -1,20 +1,16 @@
 """SpecGuard MCP Server — stdio 模式入口。
 
-启动方式：
-    python -m mcp_server.server          # stdio 模式
-    python mcp_server/server.py           # 直接运行
+启动方式（T-975 起须从仓库根启动，模块内不再做 sys.path 引导）：
+    python -m mcp_server.server          # stdio 模式（Qoder 等宿主挂载）
 
 Qoder 挂载后 list_tools 可见全部 10 个工具。
 """
 
 import asyncio
-import sys
 from pathlib import Path
 
 # 确保仓库根在 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from mcp.server import Server  # noqa: E402
 from mcp.server.stdio import stdio_server  # noqa: E402

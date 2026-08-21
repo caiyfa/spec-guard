@@ -11,20 +11,15 @@
 """
 
 import json
-import sys
 from pathlib import Path
 from typing import Optional
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
-from services.format_spec import get_next_scenario_id  # noqa: E402
+from sg_core.format_spec import get_next_scenario_id  # noqa: E402
 
 SCENARIOS_ROOT = SG_ROOT / "scenarios"
 
@@ -213,7 +208,7 @@ def _handle_list_scenarios(arguments: dict) -> list[TextContent]:
     # K-xxx：扫描结果落台账（自愈）——MCP 侧扫描后场景映射即为最新，
     # 后续 read_scenario 按 ID 查表定位，无需再全量扫描
     try:
-        from services import ledger_store
+        from sg_core import ledger_store
         ledger_store.upsert_scenarios(scenarios)
     except Exception:
         pass
@@ -227,7 +222,7 @@ def _lookup_scenario_path(scenario_id: str) -> Optional[Path]:
     路径可迁移——由台账维护映射，工具查表定位。台账不可用返回 None（回退扫描）。
     """
     try:
-        from services import ledger_store
+        from sg_core import ledger_store
         rows = ledger_store.query_scenarios()
     except Exception:
         return None
@@ -247,7 +242,7 @@ def _sync_scenario_ledger() -> None:
         import json as _json
         raw = _handle_list_scenarios({})
         data = _json.loads(raw[0].text)
-        from services import ledger_store
+        from sg_core import ledger_store
         ledger_store.upsert_scenarios(data.get("scenarios", []))
     except Exception:
         pass  # 台账自愈失败不影响读取
@@ -412,8 +407,8 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
     if bool(sid) == bool(draft):
         return [TextContent(type="text", text="错误：scenario_id 与 draft 必须二选一")]
 
-    from services.plan_executor import _setup_runtime
-    from services.draft_promote import _scenarios_root
+    from workbench.backend.services.plan_executor import _setup_runtime
+    from sg_core.draft_promote import _scenarios_root
     from engine.dependency_graph import DependencyGraph, CycleError
     from engine.scenario_loader import _parse_scenario
     from engine.scenario_runner import RunContext, run_single, run_teardowns
@@ -523,8 +518,8 @@ def _handle_suggest_deps(arguments: dict) -> list[TextContent]:
 
     与 HTTP 端点（/api/drafts/suggest-deps、/api/scenarios/{id}/suggest-deps）同一实现。
     """
-    from services import dep_suggest
-    from services.draft_promote import _scenarios_root
+    from workbench.backend.services import dep_suggest
+    from sg_core.draft_promote import _scenarios_root
 
     target_id = str(arguments.get("target_id", "") or "")
     drafts_only = bool(arguments.get("drafts_only", False))
@@ -564,7 +559,7 @@ def _handle_edit_dependency(arguments: dict) -> list[TextContent]:
     if scenario_id == dep_id:
         return [TextContent(type="text", text="错误：不允许自依赖")]
 
-    from services import deps_editor, scenario_store
+    from workbench.backend.services import deps_editor, scenario_store
 
     scenarios = {s["id"]: s for s in scenario_store.list_scenarios()}
     if scenario_id not in scenarios:

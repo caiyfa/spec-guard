@@ -360,7 +360,7 @@ class TestScenarioTools:
             "id: B-001\ntitle: 下游\nversion: \"0.1\"\n"
             "flow:\n  - call: {method: GET, path: /b, save: r}\n"
             "verify:\n  - status: {eq: 200}\n", encoding="utf-8")
-        from services import scenario_store
+        from workbench.backend.services import scenario_store
         monkeypatch.setattr(scenario_store, "SCENARIOS_ROOT", lib)
         monkeypatch.setattr(scenario_tools, "SCENARIOS_ROOT", lib)
         # K-xxx：场景库重定向时台账投影一并重定向，防污染真实 workbench.db

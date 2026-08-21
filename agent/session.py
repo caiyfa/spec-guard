@@ -168,11 +168,7 @@ class SessionManager:
                 }, ensure_ascii=False) + "\n")
         # K-xxx：会话元数据投影到 SQLite 台账（agent 可脱离 workbench 独立跑，失败静默）
         try:
-            import sys as _sys
-            _bd = Path(__file__).resolve().parent.parent / "workbench" / "backend"
-            if str(_bd) not in _sys.path:
-                _sys.path.insert(0, str(_bd))
-            from services import ledger_store
+            from sg_core import ledger_store
             count = len([m for m in messages if m.get("_type") not in ("session_meta", "todo_list")])
             tools = len([m for m in messages if m.get("tool_calls")])
             ledger_store.upsert_session(

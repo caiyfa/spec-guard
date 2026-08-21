@@ -10,7 +10,6 @@ verdict ∈ {ok, denied-whitelist, denied-side-effect, warn}
 
 from __future__ import annotations
 
-import json
 import re
 import sqlite3
 import threading

@@ -8,14 +8,11 @@
 （T-601：switch_mode 随 modes 体系退役删除——工具壳不再有意义。）
 """
 
-import sys
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 
 # Meta 工具名称集合（常驻；T-601：switch_mode 退役，仅剩 todo_write）

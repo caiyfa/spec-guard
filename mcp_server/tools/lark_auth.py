@@ -28,8 +28,6 @@ from pathlib import Path
 from mcp.types import TextContent, Tool
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 # ── 用户隔离目录 ──
 _LARK_DIR = SG_ROOT / ".lark-cli"
@@ -401,7 +399,7 @@ TOOLS = [lark_auth_status_tool, lark_auth_login_tool, lark_auth_logout_tool]
 async def handle(name: str, arguments: dict) -> list[TextContent]:
     """MCP 工具分发入口。"""
     try:
-        from services.auth import current_emp_no as _get_emp_no
+        from sg_core.emp_context import current_emp_no as _get_emp_no
         emp_no = _get_emp_no()
     except Exception:
         # MCP server 独立模式（无 runtime 上下文）：从环境变量或默认取

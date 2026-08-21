@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 
 from sg_core.user_store import _connect, _LOCK, init_db

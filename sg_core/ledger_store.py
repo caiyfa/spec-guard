@@ -23,7 +23,6 @@ import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent / "workbench" / "backend"
 DB_PATH = BACKEND_DIR / "data" / "workbench.db"

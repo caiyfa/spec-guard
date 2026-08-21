@@ -6,7 +6,6 @@ max_turns=12 熔断；kill 后重跑可从 JSONL 续会话。
 import asyncio
 import json
 import logging
-import sys
 import threading
 from pathlib import Path
 from typing import Optional
@@ -14,8 +13,6 @@ from typing import Optional
 _log = logging.getLogger("agent.runtime")
 
 SG_ROOT = Path(__file__).resolve().parent.parent
-if str(SG_ROOT) not in sys.path:
-    sys.path.insert(0, str(SG_ROOT))
 
 from agent.llm_client import LLMClient
 from agent.session import SessionManager
@@ -244,11 +241,9 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
     if not format_spec_text:
         try:
             BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-            if str(BACKEND_DIR) not in sys.path:
-                sys.path.insert(0, str(BACKEND_DIR))
             # T-507 激进档（定档 2026-08-11）：骨架常驻 + read_format_spec 按需取细节
             # 区别：product 用途用产品友好变体，其余用途用全量骨架
-            from services.format_spec import generate_format_spec_skeleton, generate_format_spec_product
+            from sg_core.format_spec import generate_format_spec_skeleton, generate_format_spec_product
             is_product = purpose in ("requirement_interview",)
             format_spec_text = (
                 generate_format_spec_product() if is_product
@@ -597,7 +592,7 @@ class AgentRuntime:
         parts = []
         # T-510：纠正关键词 → 经验飞轮检索注入（recency×hit_count，≤2KB 封顶）
         try:
-            from services.experience_store import detect_correction, search_experiences
+            from sg_core.experience_store import detect_correction, search_experiences
             from specstd.workspace import get_workspace_root
             if detect_correction(user_message):
                 root = get_workspace_root()
@@ -709,10 +704,7 @@ class AgentRuntime:
                 # T-011：越权留 WARNING 审计
                 try:
                     from specstd.workspace import get_context_emp_no
-                    _bd = SG_ROOT / "workbench" / "backend"
-                    if str(_bd) not in sys.path:
-                        sys.path.insert(0, str(_bd))
-                    from services import user_store as _us
+                    from sg_core import user_store as _us
                     _emp = get_context_emp_no() or ""
                     _us.audit(_emp, "tool_denied", name,
                               detail=f"session={self._session_id or ''}; purpose 白名单外工具被拒绝",
@@ -838,7 +830,7 @@ class AgentRuntime:
             emp = get_context_emp_no() or ""
             ws = get_context_workspace() or ""
             purpose = getattr(getattr(self, '_session', None), 'purpose', '') or ''
-            from services.audit_store import record_call as _rc
+            from sg_core.audit_store import record_call as _rc
             _rc(
                 tool_name=tool_name,
                 verdict=verdict,
