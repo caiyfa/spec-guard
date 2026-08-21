@@ -26,7 +26,7 @@ def cfg_store(tmp_path, monkeypatch):
         conn.row_factory = sqlite3.Row
         return conn
 
-    monkeypatch.setattr(nc, "_connect", connect)
+    monkeypatch.setattr(nc, "db_connect", connect)
     monkeypatch.setattr(nc, "init_db", lambda: None)
     return nc
 

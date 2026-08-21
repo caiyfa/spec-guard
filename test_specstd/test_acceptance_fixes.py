@@ -499,7 +499,7 @@ def _patch_notify_config_db(monkeypatch, tmp_path):
         conn.row_factory = sqlite3.Row
         return conn
 
-    monkeypatch.setattr(nc, "_connect", connect)
+    monkeypatch.setattr(nc, "db_connect", connect)
     monkeypatch.setattr(nc, "init_db", lambda: None)
     return nc
 
