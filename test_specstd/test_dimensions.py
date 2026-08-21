@@ -168,13 +168,58 @@ class TestCheckDimensions:
 # 存量场景回归（标注适配性：全库零 DIM 告警）
 # ══════════════════════════════════════════════════════════
 
+def _tracked_scenario_files() -> list:
+    """入库场景的事实源 = git 跟踪的 scenarios/*.yaml（去掉 _suite 套件元信息）。
+
+    口径理由（T-981 返修）：磁盘 rglob 会把本地未过闸草稿卷进来——
+    scenarios/{inventory/smart-tag,system-settings,tmp}/ 在 .gitignore 里
+    （「对话产出的待评审场景，未过三道闸，不入库，本地保留」），主库工作树
+    常年携带约 80 个此类草稿；它们未标 dimensions 是正常中间态（DIM_MISSING
+    仅为 WARN 提示、不卡 verdict），测试若以磁盘为口径会在主库验收时假炸。
+    git ls-files 口径同时消除「场景库扩容后硬编码基数假性失败」。
+    """
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(SG_ROOT), "ls-files", "scenarios/*.yaml", "scenarios/*.yml"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        files = [SG_ROOT / line for line in out.splitlines()
+                 if line.strip() and not line.strip().endswith("_suite.yaml")
+                 and not Path(line).name.startswith("_")]
+        if files:
+            return files
+    except Exception:
+        pass
+    # git 不可用的极端环境：退化磁盘扫描（保证测试可跑）
+    root = SG_ROOT / "scenarios"
+    return [f for f in sorted(root.rglob("*.yaml")) if not f.name.startswith("_")]
+
+
+def _tracked_scenario_ids() -> set:
+    """git 跟踪场景的 ID 集合（spec_validator findings 过滤用）。"""
+    import yaml
+    ids = set()
+    for f in _tracked_scenario_files():
+        try:
+            raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            if raw.get("id"):
+                ids.add(str(raw["id"]))
+        except Exception:
+            continue
+    return ids
+
+
 class TestStockScenarios:
     def test_all_stock_scenarios_annotated_and_clean(self):
-        """24 个存量场景全部补标注且通过维度检查（映射设计对存量零误报）。"""
+        """全部入库（git 跟踪）场景均已标注且通过维度检查（映射设计对存量零误报）。
+
+        动态口径：场景库扩容时新场景入库即进 git 跟踪集，自动纳入本回归——
+        未标/词表外/映射缺失都会在入库当刻被抓，无需维护硬编码基数。
+        """
         import yaml
-        root = SG_ROOT / "scenarios"
-        files = [f for f in sorted(root.rglob("*.yaml")) if not f.name.startswith("_")]
-        assert len(files) == 24, "存量场景数（补标注任务基数）"
+        files = _tracked_scenario_files()
+        assert files, "git 跟踪场景集为空（仓库装配异常）"
         problems = []
         for f in files:
             raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
@@ -222,11 +267,23 @@ verify:
         assert report["verdict"] == "REJECT"
 
     def test_spec_validator_full_library_has_no_dim_findings(self):
-        """工作台全库校验口径：存量补标注后 T10 零命中。"""
+        """工作台全库校验口径：入库（git 跟踪）场景 T10 零命中。
+
+        validate_test_cases 磁盘扫描会卷入本地未过闸草稿（gitignored 目录）——
+        草稿缺 dimensions 的 DIM_MISSING WARN 是设计意图（提示补标，不卡 verdict），
+        不入本断言；入库场景必须零 T10 findings。
+        """
         from workbench.backend.services.spec_validator import validate_test_cases
         report = validate_test_cases(str(SG_ROOT / "scenarios"))
-        t10 = [f for f in report["findings"] if f.get("vid") == "T10"]
+        tracked = _tracked_scenario_ids()
+        t10 = [f for f in report["findings"]
+               if f.get("vid") == "T10" and f.get("scenario") in tracked]
         assert not t10, t10
+        # 草稿可带 DIM_MISSING 提示，但全库（含草稿）不得有词表外 ERROR——
+        # 词表外值在任何文件里都是真问题（拼写错误会静默逃出维度聚合）
+        t10_err = [f for f in report["findings"]
+                   if f.get("vid") == "T10" and f.get("level") == "ERROR"]
+        assert not t10_err, t10_err
 
 
 # ══════════════════════════════════════════════════════════
