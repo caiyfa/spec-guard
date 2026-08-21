@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sg_core.user_store import _connect, _LOCK, init_db
+from sg_core.user_store import db_connect, DB_LOCK, init_db
 
 # 产物类型白注册（不写死枚举——写路径诚实上报，查询侧任意过滤）
 PRODUCT_TYPES = ("draft", "scenario", "plan", "doc")
@@ -17,7 +17,7 @@ PRODUCT_TYPES = ("draft", "scenario", "plan", "doc")
 
 def _ensure_table():
     init_db()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS product_index (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +41,7 @@ def record_product(product_path: str, product_type: str, session_id: str = "",
     if not product_path:
         return
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         conn.execute(
             "INSERT INTO product_index (product_path,product_type,session_id,emp_no,workspace,fr_anchor,created_at)"
             " VALUES (?,?,?,?,?,?,?)",
@@ -52,7 +52,7 @@ def record_product(product_path: str, product_type: str, session_id: str = "",
 def by_session(session_id: str) -> list[dict]:
     """某会话产出了什么。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT * FROM product_index WHERE session_id=? ORDER BY id", (session_id,)).fetchall()
     return [dict(r) for r in rows]
@@ -72,7 +72,7 @@ def by_emp(emp_no: str, product_type: str = "", date_from: str = "",
         args.append(date_from)
     sql += " ORDER BY id DESC LIMIT ?"
     args.append(max(1, min(int(limit or 100), 500)))
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(sql, args).fetchall()
     return [dict(r) for r in rows]
 
@@ -80,7 +80,7 @@ def by_emp(emp_no: str, product_type: str = "", date_from: str = "",
 def trace(product_path: str) -> list[dict]:
     """产物溯源：这草稿/场景是哪次会话产的（同一路径全部记录，时间正序）。"""
     _ensure_table()
-    with _LOCK, _connect() as conn:
+    with DB_LOCK, db_connect() as conn:
         rows = conn.execute(
             "SELECT * FROM product_index WHERE product_path=? ORDER BY id", (product_path,)).fetchall()
     return [dict(r) for r in rows]
