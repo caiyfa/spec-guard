@@ -25,6 +25,7 @@ register_tool(
         "exclusive": "独占租约（bool，写型场景防互踩）",
     },
     outputs=["no", "role", "activity_id", "session_id", "snapshot_type"],
+    system="tdm",
 )
 
 register_tool(
@@ -35,6 +36,7 @@ register_tool(
         "resource_code": "资源码（可选，默认取 env.resource_code）",
     },
     outputs=["corp_all", "corp_codes", "level_all", "levels", "vm_all", "vm_codes", "has_any"],
+    system="tdm",
 )
 
 register_tool(
@@ -46,6 +48,7 @@ register_tool(
         "public": "是否公开（bool，默认 false=私有）",
     },
     outputs=["ossKey", "fileName", "fileSize"],
+    system="tdm",
 )
 
 register_tool(
@@ -56,6 +59,7 @@ register_tool(
         "output_dir": "下载目录（默认 downloads）",
     },
     outputs=["file_path", "file_size", "ossKey", "fileName"],
+    system="tdm",
 )
 
 register_tool(
@@ -68,6 +72,7 @@ register_tool(
         "role_code": "限定角色 code（可选）",
     },
     outputs=["emp_no", "ad", "emp_name", "role_code"],
+    system="tdm",
 )
 
 register_tool(
@@ -79,6 +84,7 @@ register_tool(
         "corp_code": "要求平台在权限范围内（可选）",
     },
     outputs=["corp_all", "corp_codes", "level_all", "levels", "vm_all", "vm_codes", "has_any"],
+    system="tdm",
 )
 
 

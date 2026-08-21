@@ -65,8 +65,34 @@ def _get_reports_root() -> Path:
         return SG_ROOT / "reports"
 
 
+def _resolve_run_context(workspace: str) -> tuple[str, str]:
+    """按触发工作区解析 (system, scenarios_root)——T-971 断链修复的唯一解析点。
+
+    system：工作区绑定优先，回退 resolve_system()（contextvar/env/tdm）；
+    scenarios_root：工作区 scenarios/ 存在则用（与 draft_promote._scenarios_root
+    同口径），否则空串（子进程回退仓库根 scenarios/）。
+    """
+    system, scenarios_root = "", ""
+    if workspace:
+        try:
+            from specstd.workspace import get_workspace
+            ws = get_workspace(workspace)
+            if ws:
+                system = ws.system or ""
+                ws_scenarios = ws.root / "scenarios"
+                if ws_scenarios.is_dir():
+                    scenarios_root = str(ws_scenarios)
+        except Exception:
+            pass
+    if not system:
+        from specstd.workspace import resolve_system
+        system = resolve_system()
+    return system, scenarios_root
+
+
 def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
-                  account_override: str = "", overrides: Optional[list] = None) -> subprocess.Popen:
+                  account_override: str = "", overrides: Optional[list] = None,
+                  system: str = "", scenarios_root: str = "") -> subprocess.Popen:
     """创建 pytest 子进程（K-047：subprocess.Popen，不依赖事件循环 flavor）。
 
     uvicorn --reload 在 Windows 给服务端 SelectorEventLoop（其 use_subprocess 语义
@@ -76,8 +102,15 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
     K-050：SG_RUN_ID 透传——引擎报告目录与任务编号同名（报告/日志/run.json 一线索）。
     T-312：SG_OVERRIDES 透传——确认弹窗输入的变量覆盖（账号/env 键），
     conftest env_config fixture 合并进环境配置（与 K-056 SG_ACCOUNT_OVERRIDE 同模式）。
+    T-971 断链修复：SPEC_GUARD_SYSTEM 按触发工作区注入（此前只加 SG_ENV，
+    RunControl 主执行链永远跑后端进程 env，工作区绑定的 system 形同虚设）；
+    SG_SCENARIOS_ROOT 同理（工作区场景库存在时子进程加载工作区场景）。
     """
     child_env = {**os.environ, "SG_ENV": env, "SG_REPORTS_ROOT": str(_get_reports_root())}
+    if system:
+        child_env["SPEC_GUARD_SYSTEM"] = system
+    if scenarios_root:
+        child_env["SG_SCENARIOS_ROOT"] = scenarios_root
     if run_id:
         child_env["SG_RUN_ID"] = run_id
     if account_override:
@@ -101,12 +134,15 @@ def _spawn_pytest(cmd: list[str], env: str, run_id: str = "",
     )
 
 
-async def push_run_notifications(reports_root: Path, run_id: str) -> None:
+async def push_run_notifications(reports_root: Path, run_id: str,
+                                 system: str = "") -> None:
     """T-304：D2 场景级通知推送（runner 与 plan_executor 共用单一实现）。
 
     读 {reports_root}/{run_id}/cases 的 verdicts，按反馈路径注册表推送：
     FAIL→fail，DRIFT/ORPHANED→drift，SKIP/BLOCKED→skip；
     任何异常只记 WARN，不影响执行收尾。
+    system：本次执行的被测系统（T-971——通知口径跟随运行而非后端进程 env，
+    未传时按 resolve_system() 兜底）。
     """
     try:
         import json as _json
@@ -120,7 +156,9 @@ async def push_run_notifications(reports_root: Path, run_id: str) -> None:
         if not registry.list_webhooks():  # 未注册 webhook 时零成本退出
             return
 
-        system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+        if not system:
+            from specstd.workspace import resolve_system
+            system = resolve_system()
         event_map = {"FAIL": "fail", "DRIFT": "drift", "ORPHANED": "drift",
                      "SKIP": "skip", "BLOCKED": "skip"}
         for cases_dir in case_dirs:
@@ -161,6 +199,9 @@ class RunManager:
         # 多用户队列（M8）：当前执行的归属与持久化队列项
         self.current_emp_no: str = ""
         self.current_workspace: str = ""
+        # T-971：当前执行的被测系统与场景库根（断链修复——spawn/通知/断点上下文共用）
+        self.current_system: str = ""
+        self._run_scenarios_root: str = ""
         self._queue_id: Optional[int] = None
         self._scope: str = ""
         # 断点状态
@@ -255,6 +296,8 @@ class RunManager:
                 account_override=account_override, overrides=overrides)
         self.current_emp_no = emp_no
         self.current_workspace = workspace
+        # T-971 断链修复：按触发工作区解析被测系统与场景库根，注入子进程
+        self.current_system, self._run_scenarios_root = _resolve_run_context(workspace)
 
         # 构建 pytest 命令（K-049：-s 关闭输出捕获，trace_id 等调用上下文实时流入执行日志）
         cmd = [sys.executable, "-m", "pytest", "-v", "--tb=short", "-s"]
@@ -293,7 +336,7 @@ class RunManager:
         self._write_trigger_context({
             "run_id": self.run_id, "scope": scope, "target": target,
             "selected_scenarios": target.split(" or ") if (scope == "scenario" and target) else [],
-            "env": env, "plan_id": plan_id,
+            "env": env, "plan_id": plan_id, "system": self.current_system,
             "prep_only": prep_only, "skip_upstream_verify": skip_upstream_verify,
             "strict_deps": strict_deps, "account_override": account_override,
             "overrides": overrides,
@@ -302,7 +345,9 @@ class RunManager:
 
         # 启动子进程（K-047：Popen；失败时队表标记 failed，不再遗留 running 卡死队列）
         try:
-            self.process = _spawn_pytest(cmd, env, self.run_id, account_override, overrides)
+            self.process = _spawn_pytest(cmd, env, self.run_id, account_override,
+                                         overrides, system=self.current_system,
+                                         scenarios_root=self._run_scenarios_root)
         except Exception as e:
             # T-115：spawn 失败补发终态广播（此前 started 先广播且无 finished →
             # 前端永久卡「执行中」显示一个不存在的任务号）
@@ -320,6 +365,8 @@ class RunManager:
                 self._queue_id = None
             self.current_emp_no = ""
             self.current_workspace = ""
+            self.current_system = ""
+            self._run_scenarios_root = ""
             # K-047：异常带类型名——空 str(e) 的异常（如 NotImplementedError）不再无法排查
             return {"ok": False, "error": f"启动失败: {type(e).__name__}: {e}"}
 
@@ -335,6 +382,8 @@ class RunManager:
         # T-310：日志头行带触发上下文（触发人/账号/工作区/选中场景）——
         # 此前只有 env + 命令，排错要另翻 trigger.json 才知道谁触发、什么账号
         ctx_parts = [f"env={env}"]
+        if self.current_system:
+            ctx_parts.append(f"system={self.current_system}")
         if scope == "scenario" and target:
             ctx_parts.append(f"选中={target}")
         if emp_no:
@@ -610,6 +659,8 @@ class RunManager:
                 workspace=workspace, status="running", overrides=overrides)
         self.current_emp_no = emp_no
         self.current_workspace = workspace
+        # T-971 断链修复：断点路径同样按工作区解析（批次 spawn 共用）
+        self.current_system, self._run_scenarios_root = _resolve_run_context(workspace)
 
         self.run_id = _new_run_id()
         self.plan_id = plan_id
@@ -628,7 +679,8 @@ class RunManager:
         self._write_trigger_context({
             "run_id": self.run_id, "scope": "breakpoint", "target": " or ".join(scenario_ids),
             "selected_scenarios": list(scenario_ids), "breakpoints": breakpoints,
-            "env": env, "plan_id": plan_id, "strict_deps": strict_deps,
+            "env": env, "plan_id": plan_id, "system": self.current_system,
+            "strict_deps": strict_deps,
             "emp_no": emp_no, "workspace": workspace, "started_at": self.started_at,
         })
 
@@ -724,7 +776,9 @@ class RunManager:
             try:
                 # 批次报告目录加 -bN 后缀：同属一个任务编号族，又避免批次间 run.json 相互覆盖
                 self.process = _spawn_pytest(cmd, env, f"{self.run_id}-b{batch_idx}",
-                                             overrides=getattr(self, "_overrides", None))
+                                             overrides=getattr(self, "_overrides", None),
+                                             system=self.current_system,
+                                             scenarios_root=self._run_scenarios_root)
             except Exception as e:
                 await self.broadcast({"type": "error", "message": f"批次 {batch_idx} 启动失败: {type(e).__name__}: {e}"})
                 # T-112：abort 后不再尝试下一批
@@ -803,6 +857,7 @@ class RunManager:
             "completed": self.completed_scenarios,
             "recent_verdicts": recent_verdicts[-10:],
             "output_tail": self._output_lines[-20:],
+            "system": self.current_system,
         }
 
     async def _finish_current_run(self, status: str = "done"):
@@ -817,6 +872,8 @@ class RunManager:
         self._queue_id = None
         self.current_emp_no = ""
         self.current_workspace = ""
+        self.current_system = ""
+        self._run_scenarios_root = ""
         await self._start_next_from_queue()
 
     async def _start_next_from_queue(self):
@@ -867,7 +924,8 @@ class RunManager:
         """
         if getattr(self, "_scope", "") == "engine_modes" or not self.run_id:
             return
-        await push_run_notifications(_get_reports_root(), self.run_id)
+        await push_run_notifications(_get_reports_root(), self.run_id,
+                                     system=self.current_system)
 
     async def resume(self) -> dict:
         """断点放行：继续执行下一批场景"""

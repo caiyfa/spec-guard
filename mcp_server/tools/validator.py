@@ -80,10 +80,10 @@ def _scenario_index() -> dict[str, dict]:
     except Exception:
         pass
     try:
-        # K-016 同构的场景库根（工作区有 scenarios/ 则用，否则 SpecGuard 仓库根）
+        # K-016 同构的场景库根（T-971 起统一 scenario_store.scenarios_root 口径）
+        from workbench.backend.services.scenario_store import _scenarios_cached, scenarios_root as _ss_root
         from sg_core.draft_promote import _scenarios_root
-        from workbench.backend.services.scenario_store import _scenarios_cached, SCENARIOS_ROOT as _SS_ROOT
-        if _scenarios_root() == _SS_ROOT:
+        if _scenarios_root() == _ss_root():
             # K-025：主路径走指纹缓存（此前每次 validate 全量重解析 90+ YAML）
             for s in _scenarios_cached():
                 index[str(s["id"])] = {"version": str(s.get("version", "0.1")), "source": "scenarios"}

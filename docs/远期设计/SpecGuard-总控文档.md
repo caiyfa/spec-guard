@@ -244,11 +244,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-962 | P0 | /quality 死菜单清理 | 主库小刀 | — | 未认领 | | 0.5 小时 |
 | T-963 | P0 | P0/P1 mark 断链修复（priority→mark 映射） | 主库小刀 | — | 未认领 | | 0.5 天 |
 | T-964 | P0 | clarity 假分数清理（specflow_ledger.py:179 占位 62.0） | 主库小刀 | — | 未认领 | | 0.5 天；08-21 知识库翻案新增 |
-| T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | 未认领 | | 1 天 |
-| T-971 | M-A | system 一等公民化（9 调用点归一+runner 断链+分键缓存） | wt/multi-system | T-970 | 未认领 | | 2-3 天；多用户多系统切换硬前置 |
-| T-972 | M-A | 引擎 TDM 泄漏清理 | wt/multi-system | — | 未认领 | | 1 天 |
-| T-973 | M-A | 系统包动态注册（分级：配置型 UI 即时生效/代码型评审后热加载） | wt/multi-system | T-970/T-971 | 未认领 | | 2-3 天；08-21 用户拍板分级方案 |
-| T-974 | M-A | 多系统 e2e 收口（新系统注册到跑通不重启） | wt/multi-system | T-971~T-973 | 未认领 | | 1 天 |
+| T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | ✅ 33682ba | sess-multi-system | 1 天；顺带修复plan_executor漏注册内置oracles漂移bug |
+| T-971 | M-A | system 一等公民化（9 调用点归一+runner 断链+分键缓存） | wt/multi-system | T-970 | ✅ 0fbcd9e | sess-multi-system | 2-3 天；多用户多系统切换硬前置 |
+| T-972 | M-A | 引擎 TDM 泄漏清理 | wt/multi-system | — | ✅ f52d3a9 | sess-multi-system | 1 天；format_spec 2.12.0 三同步 |
+| T-973 | M-A | 系统包动态注册（分级：配置型 UI 即时生效/代码型评审后热加载） | wt/multi-system | T-970/T-971 | ✅ 9d4bf6c | sess-multi-system | 2-3 天；08-21 用户拍板分级方案；sha256评审闸不可绕已测试锁定；前端管理页留M-E/T-996评估，API已全量落地 |
+| T-974 | M-A | 多系统 e2e 收口（新系统注册到跑通不重启） | wt/multi-system | T-971~T-973 | ✅ ea2b6c0 | sess-multi-system | 1 天；M-A 五任务全部完成，待主库验收合并 |
 | T-975 | M-B | 依赖倒挂翻正（sg_core 下沉，消灭 sys.path.insert） | wt/dep-inversion | — | 已完成 | sess-dep-inversion | 07becec2~a8d2f6f 三步：24 实体下沉+shim；全仓 insert ~200→2（main.py 组合根+backend 运维脚本）；pythonpath 归一；顺手修 audit_store 幽灵路径存量 bug |
 | T-976 | M-B | 解环（agent↔mcp_server、graph_index↔specflow）+ 环检查进 release_check | wt/dep-inversion | T-975 | 已完成 | sess-dep-inversion | 2208b0c：skill_loader/feishu_paths 下沉解两环；check_import_cycles 进 release_check ④；模块级无环+函数级回边3条白名单；离线 1599+236 全绿 |
 | T-980 | M-C | Agent 评测体系（轨迹断言 golden case + MockLLM 升基建 + metrics 工具维度） | wt/agent-eval | — | ✅ 2026-08-21 主库验收（a10105d：evals 3/3 + test_evals 36/36 + release_check PASS） | sess-agent-eval | 3-5 天；智能层后续一切的地基；T-982 解锁 |
@@ -270,6 +270,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 > 表行格式：`| 会话ID | 角色/方向 | 认领任务ID | 开工时间 | 备注 |`
 | 会话ID | 角色/方向 | 认领任务ID | 开工时间 | 备注 |
 |---|---|---|---|---|
+| sess-multi-system | M-A 多系统贯通施工 | T-970（✅33682ba）→ T-971（✅0fbcd9e）→ T-972（✅f52d3a9）→ T-973（✅9d4bf6c）→ T-974（✅ea2b6c0） | 2026-08-21 | M-A 全部完成待验收。要点：bootstrap组合根（顺带修复plan_executor漏注册oracles）、resolve_system唯一口径+runner断链修复（SPEC_GUARD_SYSTEM/SG_SCENARIOS_ROOT按工作区注入）、引擎grep零tdm（format_spec 2.12.0/2.13.0三同步）、系统包分级动态注册（sha256评审闸不可绕）；离线全绿227+39+1622+release_check PASS |
 | sess-lark-dev | 飞书 CLI 集成施工 | T-701 → T-702 → T-703 | 2026-08-11 | T-701→T-702→T-703 顺序施工，与 S8 主线全程并行；依赖 T-602 ✅ |
 | sess-agentchat-material | AgentChat 材料工作流 + purpose 面板装配施工 | T-930（✅）→ T-931/T-932（✅）→ T-937~T-942（✅）→ T-933 ~ T-935（未开工） | 2026-08-17 | T-930 监听选择器+可读层（aefd802/e4633a2/b1d15ff）；T-931/T-932 面板装配（42c851a）；T-937 同步设置体验（b002749）；T-938 群聊后台预热（cdf8d6e）；T-939 材料原文+图片直出（f66330b+1c90b83）；T-940 监听用户视图+按人切换+飞书直链（4a7f656）；T-941 同步设置去重+错误人话化+搜索解耦（871d64c）；T-942 授权闭环入弹层（006c5c2）；T-933~T-935 对话内上传/read_material/e2e 待排期，T-936 储备 |
 | | | | | |

@@ -44,10 +44,12 @@ def mgr(monkeypatch, tmp_path):
     spawns: list = []
     spawn_args: list = []
 
-    def fake_spawn(cmd, env, run_id="", account_override="", overrides=None):
+    def fake_spawn(cmd, env, run_id="", account_override="", overrides=None,
+                   system="", scenarios_root=""):
         spawns.append(run_id)
         spawn_args.append({"run_id": run_id, "account_override": account_override,
-                           "overrides": overrides})
+                           "overrides": overrides, "system": system,
+                           "scenarios_root": scenarios_root})
         return FakeProc()
 
     monkeypatch.setattr(runner_mod, "_spawn_pytest", fake_spawn)
@@ -324,6 +326,55 @@ class TestVariableOverrides:
 
         asyncio.run(run())
         assert mgr._spawn_args[-1]["overrides"] is None
+
+
+class TestSystemInjection:
+    """T-971 断链修复：RunControl 触发的执行按工作区 system 跑。
+
+    此前 _spawn_pytest 只注入 SG_ENV——工作区绑定的 system 形同虚设，
+    pytest 子进程永远跑后端进程 env（默认 tdm）。
+    """
+
+    def _stub(self, m, monkeypatch):
+        TestVariableOverrides()._stub(m, monkeypatch)
+
+    def test_spawn_gets_workspace_system(self, mgr, monkeypatch, tmp_path):
+        """工作区绑定 system=hr 且有 scenarios/ → spawn 收到 system + 场景库根。"""
+        import specstd.workspace as wsm
+        monkeypatch.setattr(wsm, "REGISTRY_PATH", tmp_path / "registry.yaml")
+        ws = tmp_path / "ws1"
+        (ws / "scenarios").mkdir(parents=True)
+        wsm.register_local("ws1", str(ws), "hr", activate=True)
+        self._stub(mgr, monkeypatch)
+        monkeypatch.delenv("SPEC_GUARD_SYSTEM", raising=False)
+
+        async def run():
+            return await mgr.trigger(scope="scenario", target="X-001",
+                                     env="sit", emp_no="u1", workspace="ws1")
+
+        result = asyncio.run(run())
+        assert result["ok"] is True
+        args = mgr._spawn_args[-1]
+        assert args["system"] == "hr", "spawn 应收到工作区绑定的 system"
+        assert args["scenarios_root"] == str(ws / "scenarios"), \
+            "工作区有 scenarios/ 时应传场景库根"
+
+    def test_spawn_unknown_workspace_falls_back(self, mgr, monkeypatch, tmp_path):
+        """工作区名不存在 → resolve_system 兜底（空注册表 + 无 env → tdm）。"""
+        import specstd.workspace as wsm
+        monkeypatch.setattr(wsm, "REGISTRY_PATH", tmp_path / "registry.yaml")
+        self._stub(mgr, monkeypatch)
+        monkeypatch.delenv("SPEC_GUARD_SYSTEM", raising=False)
+
+        async def run():
+            return await mgr.trigger(scope="scenario", target="X-001",
+                                     env="sit", emp_no="u1", workspace="ghost")
+
+        result = asyncio.run(run())
+        assert result["ok"] is True
+        args = mgr._spawn_args[-1]
+        assert args["system"] == "tdm"
+        assert args["scenarios_root"] == ""
 
 
 class TestSpawnFailureBroadcast:

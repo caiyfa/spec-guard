@@ -28,9 +28,11 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.11.0"
+SPEC_VERSION = "2.13.0"
 SPEC_UPDATED = "2026-08-21"
 SPEC_CHANGELOG = [
+    ("2.13.0", "2026-08-21", "tool 限定名与动态系统包（T-973）：tool 信封 use 支持多系统同名消歧的限定写法 `system:name`（裸名唯一命中时行为不变）；tool 目录按系统命名空间组织（本表「归属系统」列，动态系统包注册的工具自动可见）；系统包 manifest 契约（config/template/code 三级——模板断言 assertions.yaml 经 SELECT-only 确定性校验注册为 oracle，代码型 extensions.py 评审闸后热加载）。语法层兼容扩展，存量 YAML 无需修改"),
+    ("2.12.0", "2026-08-21", "引擎去领域化（T-972）：call/poll 的 service 缺省值由「内置 tdm」改为「env 配置 default_service 声明的默认服务名」（未声明且场景未写 service 时 SKIP——环境配置缺口）；{{env.resource_code}} 不再内置 TDM 兜底资源码（env 必配 default_resource_code，缺失时预检预警）；random 词库由系统适配包注入（YAML 语法与 tdm 可用池名不变）。语法层零变更，YAML 无需修改"),
     ("2.11.0", "2026-08-21", "DB 截断可见性（ENG-T06/ENG-BUG-009）：db_query 超过 max_rows=1000 的截断不再静默——db_traces 落 `truncated: true`、执行日志打 WARN、case JSON 顶层 `warnings` 挂截断条目（计数类断言将失真的显式告警）；新增 `allow_truncate: true` 显式豁免（落痕保留、告警消失，用于只取样本的正当场景，默认 false）"),
     ("2.10.0", "2026-08-21", "渲染与断言防呆（ENG-T05）：插值残留扫描——渲染后仍含 {{ 抛 RenderError（FAIL/scenario_error，请求不发出），字面量 {{ 暂无转义语法；poll call 段补 service 路由与 headers/cookies 透传；poll until 配置错误（jsonpath 拼错等）第一轮快速失败而非轮询至超时；T9 lint——≥2 个带 save 步骤 + 无 of 断言 WARN 提示显式指定；python 步骤文档补浅拷贝注意事项（勿对上游 dict/list 原地修改）"),
     ("2.9.0", "2026-08-20", "call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试。新增场景级软看门狗 SG_SCENARIO_TIMEOUT（秒，默认 300）：超阈值在步骤/断言/poll 边界抛 ScenarioTimeout（FAIL/env_error）；call 文件字段与 binary body 改传 bytes（fd 不泄漏、401 重试重发字节完整）"),
@@ -345,7 +347,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 
 **call 原语（Apifox 风格参数体系）**：
 - `as`：账号别名（default 等），`none`/`anonymous` 表示不带 token 的匿名调用；`internal` = internal token 服务凭证（K-055，无用户身份，限参数驱动接口）
-- `service`：服务前缀路由（K-055，默认 tdm）——取 env 配置 `{service}_base`（如 hr_center/oss/uac），场景只写服务内相对路径，服务段不再丢失
+- `service`：服务前缀路由（K-055；2.12.0 起缺省用 env 配置 `default_service` 声明的默认服务名，引擎不内置系统名；未声明且场景未写 `service` 时 SKIP——环境配置缺口）——取 env 配置 `{service}_base`（如 hr_center/oss/uac），场景只写服务内相对路径，服务段不再丢失
 - `headers` / `cookies`：KV dict，支持 `{{var}}` 插值；`headers` 可显式覆盖 `Authorization`（负向测试用）
 - `retry` / `idempotent`（2.9.0，幂等重试声明，二选一）：`retry: {times: N, backoff?: 秒（默认 1.0）, on_status?: [状态码]（默认 [500,502,503,504]）}`；`idempotent: true` 等价 `times: 1` 的语义糖。**GET/HEAD/OPTIONS 默认自动重试一次**（`retry: {times: 0}` 显式关闭）；其他方法（POST/PUT/DELETE…）必须显式声明才重试——重试意味着请求可能被重复发送，幂等性由作者担保。网络异常（连接失败/超时）总是可重试；4xx 永不重试（401 刷新逻辑除外）；每次重试在执行日志打 `WARN 重试第N次` 留痕。`poll` 步骤内部固定不重试（轮询本身就是重试语义）
 - `body_type`（默认按 `json` 字段推断）：
@@ -359,9 +361,9 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 | `binary` | `file: "path/to/file"` | 文件字节流 body（octet-stream） |
 
 - `db_query.sql`：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，支持 `{{var}}` 插值
-- `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / tdm / uac），未配置该连接时场景 SKIP
+- `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / biz / uac），未配置该连接时场景 SKIP
 - `db_query.allow_truncate`（2.11.0，默认 false）：查询超过 max_rows=1000 时截断**三层落痕**——db_traces `truncated: true`、执行日志 WARN、case JSON 顶层 `warnings` 截断条目（`$.length()`/`len_eq` 等计数断言将失真）；声明 `allow_truncate: true` 豁免告警（落痕保留），用于"只取前 N 行看样本"的正当场景
-- `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）。**call 段参数**（2.10.0 起与 call 步骤对齐一部分）：`as`（账号）、`service`（服务前缀路由，默认 tdm）、`headers`/`cookies`（KV dict，支持插值）、`timeout`；**until 配置错误快速失败**——jsonpath 拼错等非"条件不满足"异常第一轮即 FAIL（scenario_error），不再轮询至超时掩盖错误（jsonpath 无匹配仍按"未满足"继续轮询）
+- `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）。**call 段参数**（2.10.0 起与 call 步骤对齐一部分）：`as`（账号）、`service`（服务前缀路由，2.12.0 起缺省用 env `default_service`）、`headers`/`cookies`（KV dict，支持插值）、`timeout`；**until 配置错误快速失败**——jsonpath 拼错等非"条件不满足"异常第一轮即 FAIL（scenario_error），不再轮询至超时掩盖错误（jsonpath 无匹配仍按"未满足"继续轮询）
 - **场景级软看门狗**（2.9.0）：环境变量 `SG_SCENARIO_TIMEOUT`（秒，默认 300）——场景累计耗时超阈值时在**步骤/断言/poll 轮询边界**抛 `ScenarioTimeout`（FAIL/env_error，消息带超时提示）。注意：`python` 脚本内死循环（不回到步骤边界）软看门狗拦不住，进程级兜底用 workbench 执行控制的 run 级看门狗（settings `run_timeout_sec` / 环境变量 `SG_RUN_TIMEOUT`，默认 0=禁用，建议生产开启）
 
 ### 1.7 断言类型（verify 断言）

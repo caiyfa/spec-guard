@@ -1,11 +1,11 @@
 """SpecGuard pytest 装配：加载系统适配包 + session 级运行上下文。
 
 环境变量：
-- SPEC_GUARD_SYSTEM  被测系统适配包名（默认 tdm）
+- SPEC_GUARD_SYSTEM  被测系统适配包名（默认 tdm；runner 按触发工作区注入，T-971）
 - SG_ENV             目标环境（默认 sit），也可用 --env 覆盖
+- SG_SCENARIOS_ROOT  场景库根（runner 按触发工作区注入；缺省仓库根 scenarios/）
 """
 
-import importlib
 import os
 from datetime import datetime
 
@@ -13,16 +13,18 @@ import pytest
 
 SG_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-from engine.registry import Registry                          # noqa: E402
-from engine.token_provider import TokenProvider               # noqa: E402
-from engine.db_oracle import ReadOnlyDb                       # noqa: E402
-from engine.scenario_loader import load_scenarios             # noqa: E402
-from engine.dependency_graph import DependencyGraph           # noqa: E402
-from engine.scenario_runner import RunContext, register_builtin_steps, run_teardowns  # noqa: E402
-from engine.schema_match import register_builtin_oracles  # noqa: E402
-from engine import report_writer                              # noqa: E402
+from engine import report_writer  # noqa: E402
+from engine.bootstrap import (  # noqa: E402
+    build_registry,
+    build_scenario_graph,
+    build_token_provider,
+    load_system_env,
+)
+from engine.scenario_runner import RunContext, run_teardowns  # noqa: E402
 
-SCENARIOS_ROOT = os.path.join(SG_ROOT, "scenarios")
+# T-971：SG_SCENARIOS_ROOT 与 SG_REPORTS_ROOT 同模式（F-1-2）——RunControl
+# 按触发工作区注入工作区场景库；CLI 直跑缺省仓库根 scenarios/
+SCENARIOS_ROOT = os.environ.get("SG_SCENARIOS_ROOT") or os.path.join(SG_ROOT, "scenarios")
 # F-1-2: 支持 runner.py 通过环境变量指定报告目录（落 .specguard/reports/）
 REPORTS_ROOT = os.environ.get("SG_REPORTS_ROOT") or os.path.join(SG_ROOT, "reports")
 
@@ -52,13 +54,7 @@ def env_config(sg_system, pytestconfig):
     将其配置重映射到 default 别名（场景 as: default 即以所选账号执行）。
     """
     env_name = pytestconfig.getoption("--env")
-    mod = importlib.import_module(f"systems.{sg_system}")
-    if hasattr(mod, "load_env"):
-        cfg = mod.load_env(env_name)
-    else:
-        # 适配包未暴露 load_env 时退回 config 模块
-        cfg_mod = importlib.import_module(f"systems.{sg_system}.config")
-        cfg = cfg_mod.load_env(env_name)
+    cfg = load_system_env(sg_system, env_name)
     override = os.environ.get("SG_ACCOUNT_OVERRIDE", "").strip()
     if override:
         accounts = cfg.get("accounts") or {}
@@ -107,27 +103,18 @@ def db(db_registry):
 @pytest.fixture(scope="session")
 def registry(sg_system, env_config, db):
     """引擎内置注册 + 系统适配包注册（传入 db 供系统包构建工号池/查询库）"""
-    reg = Registry()
-    register_builtin_steps(reg)
-    register_builtin_oracles(reg)
-    mod = importlib.import_module(f"systems.{sg_system}")
-    if hasattr(mod, "register"):
-        mod.register(reg, env_config, db)
-    return reg
+    return build_registry(sg_system, env_config, db)
 
 
 @pytest.fixture(scope="session")
 def token_provider(env_config):
-    sso = env_config.get("sso") or {}
-    return TokenProvider(sso.get("domain", ""), sso.get("app_id", ""), sso.get("password", ""),
-                         internal_token_cfg=env_config.get("internal_token"))
+    return build_token_provider(env_config)
 
 
 @pytest.fixture(scope="session")
 def scenario_graph():
     """全场景库 + DAG（依赖解析需要跨模块可见）"""
-    scenarios = load_scenarios(SCENARIOS_ROOT)
-    return DependencyGraph(scenarios)
+    return build_scenario_graph(SCENARIOS_ROOT)
 
 
 @pytest.fixture(scope="session")

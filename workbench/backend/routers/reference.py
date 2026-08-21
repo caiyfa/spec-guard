@@ -237,13 +237,17 @@ def list_envs():
 
     systems/{system}/config/env.*.yaml 为系统专属；systems/_shared/config/env.*.yaml
     为跨系统通用（共享打底，系统覆盖）。systems 字段为全系统枚举（注册/切换数据源）。
+    T-971：默认系统去 tdm 硬编码——按当前工作区 resolve_system() 解析。
     """
     from services.systems_catalog import list_systems as _catalog_systems
-    files = sorted((_SYSTEMS_ROOT / "tdm" / "config").glob(_ENV_GLOB))
+    from specstd.workspace import resolve_system
+    system = resolve_system()
+    files = sorted((_SYSTEMS_ROOT / system / "config").glob(_ENV_GLOB)) \
+        if (_SYSTEMS_ROOT / system / "config").is_dir() else []
     envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in files]
     shared_files = sorted(_SHARED_CONFIG_DIR.glob(_ENV_GLOB)) if _SHARED_CONFIG_DIR.is_dir() else []
     shared_envs = [{"name": f.stem[len("env."):], "path": str(f)} for f in shared_files]
-    return {"system": "tdm", "envs": envs, "shared_envs": shared_envs,
+    return {"system": system, "envs": envs, "shared_envs": shared_envs,
             "current": envs[0]["name"] if envs else "sit",
             "systems": _catalog_systems()}
 

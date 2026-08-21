@@ -89,6 +89,28 @@ def get_context_workspace() -> Optional[str]:
     return _CTX_WORKSPACE.get()
 
 
+def resolve_system(system: str = "") -> str:
+    """被测系统唯一解析口径（T-971 system 一等公民化）。
+
+    优先级：显式参数 > 当前工作区 system（contextvar / SG_WORKSPACE / 注册表
+    active，即 get_active_workspace 的解析链）> SPEC_GUARD_SYSTEM 环境变量 >
+    "tdm"。此前该口径散落 workbench/MCP 九处各自解析、顺序不一，多系统部署
+    下锁死单系统；全仓调用点一律经此收口。
+
+    例外：conftest（pytest 子进程）保持读 SPEC_GUARD_SYSTEM 环境变量——
+    runner 按触发工作区注入该变量（子进程契约，见 services.runner._spawn_pytest）。
+    """
+    if system:
+        return system
+    try:
+        ws = get_active_workspace()
+        if ws and ws.system:
+            return ws.system
+    except Exception:
+        pass  # 注册表不可读时降级环境变量口径，不让 system 解析阻断调用方
+    return os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+
+
 def _validate_name(name: str) -> Optional[str]:
     """校验工作区名称合法性（黑名单式：防路径穿越，放行中文等任意字符）。
 

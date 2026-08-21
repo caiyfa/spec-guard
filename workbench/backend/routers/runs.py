@@ -153,10 +153,13 @@ def api_preflight(scenarios: str = "", env: str = ""):
     纯读：不触发执行、不落盘。
     """
     from services import preflight
+    from specstd.workspace import resolve_system
     ids = [s.strip() for s in (scenarios or "").split(",") if s.strip()]
     if not ids:
         return {"error": "缺少 scenarios 参数（逗号分隔的场景 ID 列表）"}
-    return preflight.scan_dependencies(ids, env_name=env or os.environ.get("SG_ENV", "sit"))
+    # T-971：预检传 system（此前不传退回环境变量，工作区绑定形同虚设）
+    return preflight.scan_dependencies(ids, env_name=env or os.environ.get("SG_ENV", "sit"),
+                                       system=resolve_system())
 
 
 @router.get("/accounts", dependencies=[Depends(get_current_user)])
@@ -167,9 +170,9 @@ def api_run_accounts(workspace: str = Depends(optional_workspace)):
     不必每次改系统设置。
     """
     import importlib
-    from specstd.workspace import get_active_workspace
+    from specstd.workspace import get_active_workspace, resolve_system
     ws = get_active_workspace()
-    system = (ws.system if ws else "") or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    system = resolve_system(ws.system if ws else "")
     try:
         mod = importlib.import_module(f"systems.{system}")
         env_config = mod.load_env(os.environ.get("SG_ENV", "sit"))

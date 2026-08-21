@@ -19,6 +19,22 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SCENARIOS_ROOT = SG_ROOT / "scenarios"
 REPORTS_ROOT = SG_ROOT / "reports"
 
+
+def scenarios_root() -> Path:
+    """场景库根（T-971 口径统一——draft_promote/plan_executor/validator/runner 注入同源）。
+
+    工作区 scenarios/ 存在则用（spec 工作区自带场景库），否则回退 SCENARIOS_ROOT
+    （仓库根；测试重定向模块属性依然生效）。缓存按根键控，切换工作区自动重扫。
+    """
+    try:
+        from specstd.workspace import get_workspace_root
+        ws = get_workspace_root()
+        if ws and (ws / "scenarios").is_dir():
+            return ws / "scenarios"
+    except Exception:
+        pass
+    return SCENARIOS_ROOT
+
 _YAML_LOADER = yaml.CSafeLoader if hasattr(yaml, "CSafeLoader") else yaml.SafeLoader
 
 
@@ -68,7 +84,7 @@ def _infer_category(raw: dict) -> str:
 def _scan_scenarios() -> list[dict]:
     """扫描全部场景 YAML，返回元信息列表"""
     scenarios = []
-    for dirpath, _dirs, filenames in os.walk(SCENARIOS_ROOT):
+    for dirpath, _dirs, filenames in os.walk(scenarios_root()):
         suite_meta = {}
         suite_file = os.path.join(dirpath, "_suite.yaml")
         if os.path.isfile(suite_file):
@@ -96,7 +112,7 @@ def _scan_scenarios() -> list[dict]:
                 rel_path = str(Path(path).relative_to(SG_ROOT))
             except ValueError:
                 # 根被重定向的场景（测试/多库场景）：相对场景库根
-                rel_path = str(Path(path).relative_to(SCENARIOS_ROOT))
+                rel_path = str(Path(path).relative_to(scenarios_root()))
             scenarios.append({
                 "id": sid,
                 "title": raw.get("title", ""),
@@ -161,7 +177,9 @@ class _DegradedGraph:
 
 
 def _scenarios_cached() -> list[dict]:
-    fp = _dir_fingerprint(SCENARIOS_ROOT)
+    root = scenarios_root()
+    # T-971：指纹含根路径——工作区切换（根变化）即失效重扫，缓存跨根不串
+    fp = (str(root),) + _dir_fingerprint(root)
     if _cache["fingerprint"] != fp or _cache["scenarios"] is None:
         _cache["fingerprint"] = fp
         _cache["scenarios"] = _scan_scenarios()  # 唯一真实扫描点
@@ -193,7 +211,7 @@ def _engine_graph():
         from engine.scenario_loader import load_scenarios
         from engine.dependency_graph import DependencyGraph, CycleError
         try:
-            _cache["graph"] = DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+            _cache["graph"] = DependencyGraph(load_scenarios(str(scenarios_root())))
         except CycleError as e:
             print(f"[SpecGuard WARN] 场景库存在依赖环，DAG 仲裁降级: {e}")
             _cache["graph"] = _DegradedGraph()

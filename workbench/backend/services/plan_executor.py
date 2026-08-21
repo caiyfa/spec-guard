@@ -7,7 +7,6 @@
 """
 
 import asyncio
-import importlib
 import os
 from datetime import datetime
 from pathlib import Path
@@ -15,20 +14,19 @@ from pathlib import Path
 # 确保仓库根在 sys.path
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-from engine.registry import Registry                          # noqa: E402
-from engine.token_provider import TokenProvider               # noqa: E402
-from engine.db_oracle import ReadOnlyDb                       # noqa: E402
-from engine.scenario_loader import load_scenarios             # noqa: E402
-from engine.dependency_graph import DependencyGraph           # noqa: E402
-from engine.scenario_runner import (                          # noqa: E402
-    RunContext, register_builtin_steps, run_single, run_teardowns,
+from engine import report_writer  # noqa: E402
+from engine.execution_record import (  # noqa: E402
+    VERDICT_BLOCKED,
+    VERDICT_DRIFT,
+    VERDICT_FAIL,
+    VERDICT_ORPHANED,
+    VERDICT_SKIP,
 )
-from engine import report_writer                              # noqa: E402
-from engine.execution_record import (                         # noqa: E402
-    VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIP, VERDICT_BLOCKED,
-    VERDICT_DRIFT, VERDICT_ORPHANED,
+from engine.scenario_runner import (  # noqa: E402
+    RunContext,
+    run_single,
+    run_teardowns,
 )
-
 
 # ══════════════════════════════════════════════════════════
 # 引擎运行时装配（复刻 conftest.py 的 session 级装配）
@@ -38,24 +36,28 @@ def _setup_runtime(system: str, env: str, scenarios_root: Path,
                    strict_deps: bool = False):
     """装配引擎运行时（registry / env_config / token_provider / db / graph）。
 
-    复刻 conftest.py 的 session 级 fixture 装配逻辑，供 plan_executor 独立使用。
+    T-970 装配归一：与 conftest.py / live_registry.py 统一走 engine.bootstrap
+    组合根（此前复刻装配漏注册内置 oracles，引擎直跑计划里 schema_match 等
+    断言器不可用，归一后修复）。
 
     Args:
         system: 被测系统适配包名（如 tdm）
         env: 目标环境名（如 sit）
         scenarios_root: 场景库根路径
-        strict_deps: 严格依赖模式
+        strict_deps: 严格依赖模式（装配不使用，保留签名兼容）
 
     Returns:
-        (env_config, db, registry, token_provider, graph)
+        (env_config, db, registry, token_provider, graph, dbs)
     """
+    from engine.bootstrap import (
+        build_registry,
+        build_scenario_graph,
+        build_token_provider,
+        load_system_env,
+    )
+
     # 1. 环境配置
-    mod = importlib.import_module(f"systems.{system}")
-    if hasattr(mod, "load_env"):
-        env_config = mod.load_env(env)
-    else:
-        cfg_mod = importlib.import_module(f"systems.{system}.config")
-        env_config = cfg_mod.load_env(env)
+    env_config = load_system_env(system, env)
 
     # 2. DB（K-055：多 schema 命名连接注册表，与 conftest 共用装配函数；
     #    单个连接失败降级跳过，不阻断其他 schema）
@@ -63,21 +65,14 @@ def _setup_runtime(system: str, env: str, scenarios_root: Path,
     dbs, default_name = build_db_connections(env_config.get("db"))
     db = dbs.get(default_name)
 
-    # 3. Registry（引擎内置 + 系统适配包）
-    registry = Registry()
-    register_builtin_steps(registry)
-    if hasattr(mod, "register"):
-        mod.register(registry, env_config, db)
+    # 3. Registry（引擎内置 steps+oracles + 系统适配包）
+    registry = build_registry(system, env_config, db)
 
     # 4. TokenProvider
-    sso = env_config.get("sso") or {}
-    token_provider = TokenProvider(
-        sso.get("domain", ""), sso.get("app_id", ""), sso.get("password", ""),
-        internal_token_cfg=env_config.get("internal_token"))
+    token_provider = build_token_provider(env_config)
 
     # 5. 场景库 + DAG（依赖解析需要跨模块可见 → 加载全部场景）
-    scenarios = load_scenarios(str(scenarios_root))
-    graph = DependencyGraph(scenarios)
+    graph = build_scenario_graph(scenarios_root)
 
     return env_config, db, registry, token_provider, graph, dbs
 
@@ -112,7 +107,10 @@ async def execute_plan(plan_id: str, workspace: str = "",
     """
     from services import plan_store
     from specstd.workspace import (
-        get_workspace, get_active_workspace, set_context_workspace,
+        get_active_workspace,
+        get_workspace,
+        resolve_system,
+        set_context_workspace,
     )
 
     # ── 设置工作区上下文 ──
@@ -126,8 +124,8 @@ async def execute_plan(plan_id: str, workspace: str = "",
         return {"run_id": "", "status": "failed",
                 "error": "无激活工作区", "results": []}
 
-    ws_root = ws_info.root
-    system = ws_info.system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    # T-971：system 经 resolve_system 唯一口径解析（contextvar 已设工作区）
+    system = resolve_system()
 
     # ── 1. 加载 plan ──
     plan = plan_store.get_plan(plan_id)
@@ -145,7 +143,10 @@ async def execute_plan(plan_id: str, workspace: str = "",
                 "error": "计划无场景", "results": []}
 
     # ── 2. 装配引擎运行时 ──
-    scenarios_root = ws_root / "scenarios"
+    # T-971 口径统一：与 draft_promote._scenarios_root / scenario_store 同源——
+    # 工作区 scenarios/ 存在则用（plan 场景 ID 属于工作区库），否则回退仓库根
+    from services.draft_promote import _scenarios_root
+    scenarios_root = _scenarios_root()
     if not scenarios_root.is_dir():
         return {"run_id": "", "status": "failed",
                 "error": f"场景库目录不存在: {scenarios_root}", "results": []}
@@ -317,7 +318,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
     # 事件的用户收不到定时执行的通知；即时 plan_failure 通知保留（调度路径价值）
     try:
         from services.runner import push_run_notifications
-        await push_run_notifications(reports_root, f"{plan_id}/{run_id}")
+        await push_run_notifications(reports_root, f"{plan_id}/{run_id}", system=system)
     except Exception as e:
         print(f"[SpecGuard WARN] 场景级通知推送失败（不影响执行结论）: {type(e).__name__}: {e}")
 
@@ -362,7 +363,7 @@ async def _notify_failure(plan_id: str, plan_name: str, scenario_id: str,
     """
     try:
         from feedback.notify import send_notification
-        from services.notify_config import get_configs_by_event, get_config
+        from services.notify_config import get_config, get_configs_by_event
 
         # 解析通知配置列表
         if notify_config_id:
@@ -403,7 +404,7 @@ async def _notify_success(plan_id: str, plan_name: str, scenario_count: int,
     """全部场景通过后发送成功通知。"""
     try:
         from feedback.notify import send_notification
-        from services.notify_config import get_configs_by_event, get_config
+        from services.notify_config import get_config, get_configs_by_event
 
         if notify_config_id:
             cfg = get_config(notify_config_id)

@@ -23,8 +23,8 @@ VALID_CLEANUP = ("teardown", "explicit")
 
 def _find_pool() -> dict:
     """读取适配包 emp-pool.yaml（只读；读不到返回空结构——校验降级为跳过池检查）。"""
-    import os
-    system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    from specstd.workspace import resolve_system
+    system = resolve_system()
     pool_file = SG_ROOT / "systems" / system / "config" / "emp-pool.yaml"
     try:
         import yaml
@@ -123,5 +123,5 @@ def validate_data_contract(raw: dict, pool: dict | None = None) -> dict:
 
 
 def _system_name() -> str:
-    import os
-    return os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    from specstd.workspace import resolve_system
+    return resolve_system()

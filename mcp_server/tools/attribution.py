@@ -388,7 +388,8 @@ def _handle_db_evidence(arguments: dict) -> list[TextContent]:
         BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 
         from engine.db_oracle import ReadOnlyDb, normalize_db_config
-        system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+        from specstd.workspace import resolve_system
+        system = resolve_system()
         env_name = os.environ.get("SG_ENV", "sit")
         env_cfg = importlib.import_module(f"systems.{system}").load_env(env_name) or {}
         conns, default_name = normalize_db_config(env_cfg.get("db"))
