@@ -220,6 +220,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - Python 开发工具链（生产不装）：`pip install -r requirements-dev.txt`（ruff/hypothesis/pytest-cov/vulture；pypi 超时加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`）
 - Node 18+（前端构建）；前端测试/lint 需 Node 20+（vitest 4 要求，24 实测可用）
 - 联网场景需可达 SIT 网关 + SIT MySQL；DB 密码自动回退读 `~/.qoder/skills/devops/scripts/.env.devops`，可用环境变量 `SG_DB_PASSWORD` / `SG_SSO_PASSWORD` 覆盖。
+- T-960 凭据出库：`internal_token.client_secret`（internal 账号 SSO client-credentials）不硬编码仓库，回退链 = 环境变量 `SG_TDM_CLIENT_SECRET` → devops `.env.devops` 同名键；缺省时 token 获取诚实报错提示配置（不发空 secret 请求）。
 
 ---
 

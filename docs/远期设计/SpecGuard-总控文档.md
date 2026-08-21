@@ -239,7 +239,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 任务ID | 阶段 | 任务 | worktree | 依赖 | 状态 | 会话ID | 备注 |
 |---|---|---|---|---|---|---|---|
-| T-960 | P0 | 凭据出库（env.sit.yaml client_secret→环境变量回退） | 主库小刀 | — | 待总控人定 | | 0.5 天；凭据红线涉 Ask First（internal_token 注释自称「SIT 默认值非敏感」，client_secret 是否真敏感值待拍板——出库改 ${SG_TDM_CLIENT_SECRET:} 回退 vs 确认为 SIT 公开值保留） |
+| T-960 | P0 | 凭据出库（env.sit.yaml client_secret→环境变量回退） | 主库小刀 | — | ✅ 08-21 主库清 | sess-acceptance | 总控人拍板：SIT 公开值但不硬编码仓库——env.sit.yaml client_secret 改 `${SG_TDM_CLIENT_SECRET:}`（仓库零明文），config.py 加回退链（环境变量→devops .env.devops），token_provider 空 secret 诚实报错不发空请求，AGENTS.md 部署要点补说明；实证 load_env 端到端（无变量留空/设 SG_TDM_CLIENT_SECRET 正确注入）+ token/config/env 116 绿 |
 | T-961 | P0 | 飞书池 API 绑定 RBAC + 三处错位绑定对齐 | 主库小刀 | — | ✅ 08-21（随 T-996 闭环） | sess-acceptance | feishu-pool→menu-feishu-pool 补绑、三处错位（spec/specflow/zentao/knowledge/workspace→menu-agent、coverage→menu-lifecycle、notify→menu-feedback）随 T-996 menu_guard 对齐一并修正 |
 | T-962 | P0 | /quality 死菜单清理 | 主库小刀 | — | ✅ 08-21（随 T-996 闭环） | sess-acceptance | menu-quality 死菜单（/quality 无路由）随 T-996 SEED_MENUS 迁移移除并映射授权至 menu-dashboard，menus 表已无该项 |
 | T-963 | P0 | P0/P1 mark 断链修复（priority→mark 映射） | 主库小刀 | — | ✅ 08-21 主库清 | sess-acceptance | scenario_loader priority 注入 tags（P0/P1 已注册 mark）；实证 pytest -m P0 选中 22/-m P1 选中 40（修复前 -m P0 为 0） |

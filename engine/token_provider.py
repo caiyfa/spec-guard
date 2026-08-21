@@ -75,6 +75,11 @@ class TokenProvider:
             if exp and exp - int(time.time()) > self.REFRESH_MARGIN_SECONDS:
                 return token
         cfg = self._internal_cfg
+        if not cfg.get("client_secret"):
+            # T-960 凭据出库：client_secret 走环境变量/devops 凭据回退，缺省时诚实报错（不发空 secret 请求）
+            raise TokenError(
+                "internal_token.client_secret 未配置（T-960 已出库）——"
+                "请设环境变量 SG_TDM_CLIENT_SECRET，或在 devops 凭据 ~/.qoder/skills/devops/scripts/.env.devops 补 SG_TDM_CLIENT_SECRET")
         url = (f"{cfg['url']}?clientId={cfg['client_id']}"
                f"&clientSecret={cfg['client_secret']}&scope={cfg.get('scope', 'internal')}")
         resp = requests.post(url, timeout=15)

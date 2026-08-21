@@ -66,6 +66,16 @@ def load_env(env_name="sit"):
     # T-309：共享通用配置打底（不存在返回 {}），系统键覆盖共享同键
     cfg = merge_env(load_shared_env(env_name), system_cfg)
 
+    # T-960 凭据出库：internal_token.client_secret 回退——
+    # env yaml ${SG_TDM_CLIENT_SECRET:} 为空 → devops .env.devops（与 DB 密码同模式）
+    it_cfg = cfg.get("internal_token")
+    if isinstance(it_cfg, dict) and not it_cfg.get("client_secret"):
+        devops_it = _read_devops_env()
+        it_cfg["client_secret"] = (
+            os.environ.get("SG_TDM_CLIENT_SECRET", "")
+            or devops_it.get("SG_TDM_CLIENT_SECRET", "")
+        )
+
     # DB 密码回退（K-055 多 schema 感知）：逐连接回退——
     # env yaml 为空 → SG_DB_PASSWORD_{SCHEMA} → SG_DB_PASSWORD → devops .env.devops
     from engine.db_oracle import normalize_db_config
