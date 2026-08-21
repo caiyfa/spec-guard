@@ -5,6 +5,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { specflowApi, type GateCard, type GateDockResp } from '../api';
 import GateCardView from '../components/GateCardView';
+import MaterialsPanel from './MaterialsPanel';
+import ScoreFreezePanel from './ScoreFreezePanel';
+import ZentaoPanel from './ZentaoPanel';
+
+// T-996 菜单收缩：材料管理/评分冻结/禅道集成 收操作台子页签（原独立菜单页）
+const GATE_TABS = [
+  { id: 'gates', label: '🎛 闸门' },
+  { id: 'materials', label: '📦 材料' },
+  { id: 'scores', label: '⚖️ 评分冻结' },
+  { id: 'zentao', label: '🐞 禅道' },
+] as const;
+type GateTab = typeof GATE_TABS[number]['id'];
 
 interface Props {
   sessionId: string;
@@ -13,6 +25,11 @@ interface Props {
 }
 
 export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props) {
+  const [tab, setTab] = useState<GateTab>(() => {
+    const saved = localStorage.getItem('sg_gatedock_tab');
+    return (GATE_TABS.some(t => t.id === saved) ? saved : 'gates') as GateTab;
+  });
+  useEffect(() => { localStorage.setItem('sg_gatedock_tab', tab); }, [tab]);
   const [interview, setInterview] = useState<GateDockResp['interview']>(null);
   const [cards, setCards] = useState<GateCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,6 +55,21 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
   useEffect(() => { load(); }, [load]);
 
   return (
+    <div className="flex flex-col h-full">
+      {/* 子页签条（闸门/材料/评分冻结/禅道） */}
+      <div className="flex gap-1 px-1 py-1 border-b border-border/50 flex-shrink-0">
+        {GATE_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-2 py-1 text-[11px] rounded ${tab === t.id ? 'bg-info/15 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === 'materials' && <MaterialsPanel />}
+        {tab === 'scores' && <ScoreFreezePanel />}
+        {tab === 'zentao' && <ZentaoPanel />}
+        {tab === 'gates' && (
     <div className="p-2 space-y-2">
       {/* 上下文标头 */}
       <div className="flex items-center justify-between px-1">
@@ -71,6 +103,9 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
         <GateCardView key={`${c.kind}:${c.ref_id}`} card={c}
           onAskAgent={onAskAgent} onDone={load} onError={onError} />
       ))}
+    </div>
+        )}
+      </div>
     </div>
   );
 }

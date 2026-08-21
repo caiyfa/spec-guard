@@ -1,13 +1,11 @@
-"""反哺闭环 API：台账管理 + 飞书通知配置 + 事件推送。
+"""反哺闭环 API：台账管理 + 用例级通知手动触发 + 送达回执。
 
 端点：
   GET    /api/feedback/ledger           列出台账条目
   POST   /api/feedback/ledger            创建台账条目
   POST   /api/feedback/ledger/{spq_id}/transition  状态流转
-  GET    /api/feedback/notify            列出 webhook 配置
-  POST   /api/feedback/notify            注册 webhook
-  DELETE /api/feedback/notify/{wid}       注销 webhook
-  POST   /api/feedback/notify/send       发送通知
+  POST   /api/feedback/notify/send       手动触发用例级通知（T-996：webhook CRUD 收编 /api/notify/configs）
+  GET    /api/feedback/receipts          送达回执
 """
 
 from pathlib import Path
@@ -26,19 +24,13 @@ router = APIRouter(
 SG_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 from feedback.ledger import FeedbackLedger
-from feedback.notify import NotifyRegistry
 
 FEEDBACK_DIR = SG_ROOT / "feedback"
 LEDGER_PATH = FEEDBACK_DIR / "ledger.json"
-REGISTRY_PATH = FEEDBACK_DIR / "registry.json"
 
 
 def _get_ledger():
     return FeedbackLedger(LEDGER_PATH)
-
-
-def _get_registry():
-    return NotifyRegistry(REGISTRY_PATH)
 
 
 # ══════════════════════════════════════════════════════════
@@ -221,15 +213,9 @@ def transition_ledger(spq_id: str, body: TransitionBody):
 
 
 # ══════════════════════════════════════════════════════════
-# 通知配置
+# 通知配置（T-996 二合一：webhook CRUD 收编至 /api/notify/configs，
+# 此处仅保留手动触发发送 + 送达回执查询）
 # ══════════════════════════════════════════════════════════
-
-class RegisterWebhookBody(BaseModel):
-    system: str
-    scenario_pattern: str
-    url: str
-    events: list[str] = ["fail", "drift", "skip"]
-
 
 class SendNotifyBody(BaseModel):
     system: str
@@ -240,40 +226,11 @@ class SendNotifyBody(BaseModel):
     report_link: str = ""
 
 
-@router.get("/notify")
-def list_webhooks():
-    """列出 webhook 配置（掩码 URL）。"""
-    reg = _get_registry()
-    return {"webhooks": reg.list_webhooks()}
-
-
-@router.post("/notify")
-def register_webhook(body: RegisterWebhookBody):
-    """注册 webhook（URL 须过 SSRF 校验）。"""
-    reg = _get_registry()
-    try:
-        entry = reg.register(body.system, body.scenario_pattern, body.url, body.events)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    # 返回时掩码 URL
-    entry.pop("url", None)
-    return entry
-
-
-@router.delete("/notify/{webhook_id}")
-def unregister_webhook(webhook_id: str):
-    """注销 webhook。"""
-    reg = _get_registry()
-    if not reg.unregister(webhook_id):
-        raise HTTPException(status_code=404, detail=f"webhook 不存在: {webhook_id}")
-    return {"ok": True}
-
-
 @router.post("/notify/send")
-def send_notification(body: SendNotifyBody):
-    """发送通知（仅出站，消息只含 ID/结论/链接）。"""
-    reg = _get_registry()
-    results = reg.send_notification(
+async def send_notification(body: SendNotifyBody):
+    """手动触发用例级通知（走统一 notify_configs 存储，仅出站，消息只含 ID/结论/链接）。"""
+    from feedback.notify import notify_case_event
+    results = await notify_case_event(
         body.system, body.scenario_id, body.event,
         body.verdict, body.conclusion, body.report_link,
     )

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { lifecycleApi } from '../api';
+import CoveragePanel from './CoveragePanel';
 import type { LifecycleItem, LifecycleSummary, LifecycleDetail } from '../api';
 
 const VERDICT_STYLE: Record<string, string> = {
@@ -50,7 +51,7 @@ function fmtAt(iso: string): string {
   return m ? `${m[1].slice(2)} ${m[2]}` : iso;
 }
 
-export default function Lifecycle() {
+function LifecycleBoard() {
   const navigate = useNavigate();
   const [items, setItems] = useState<LifecycleItem[]>([]);
   const [summary, setSummary] = useState<LifecycleSummary | null>(null);
@@ -303,6 +304,42 @@ export default function Lifecycle() {
             <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">加载详情…</div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── T-996：覆盖与生命周期一页两 tab（生命周期台账 + 覆盖缺口），?tab= 深链 + localStorage 记忆 ──
+const LC_TABS = [
+  { id: 'lifecycle', label: '🧪 测试生命周期' },
+  { id: 'coverage', label: '🕳 覆盖缺口' },
+] as const;
+type LcTab = typeof LC_TABS[number]['id'];
+
+export default function Lifecycle() {
+  const [tab, setTab] = useState<LcTab>(() => {
+    const q = new URLSearchParams(window.location.search).get('tab');
+    const saved = localStorage.getItem('sg_lifecycle_tab');
+    const valid = (v: string | null): v is LcTab => LC_TABS.some(t => t.id === v);
+    if (valid(q)) return q;
+    if (valid(saved)) return saved;
+    return 'lifecycle';
+  });
+  useEffect(() => { localStorage.setItem('sg_lifecycle_tab', tab); }, [tab]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex gap-1 mb-4 flex-shrink-0">
+        {LC_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === 'lifecycle' && <LifecycleBoard />}
+        {tab === 'coverage' && <CoveragePanel />}
       </div>
     </div>
   );

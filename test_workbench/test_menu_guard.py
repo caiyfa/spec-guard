@@ -56,16 +56,22 @@ def _run(mw, scope):
 
 
 def test_match_rules(db):
-    assert menu_guard.menu_key_for_path("/api/plans") == "menu-plans"
-    assert menu_guard.menu_key_for_path("/api/plans/PP-001") == "menu-plans"
-    assert menu_guard.menu_key_for_path("/api/agent/audit") == "menu-audit"  # 前两段精确优先
-    assert menu_guard.menu_key_for_path("/api/agent/chat") == "menu-agent"
-    # spec 前缀细分：push 归 agent（仅 AgentChat 页调用），其余归合规校验
-    assert menu_guard.menu_key_for_path("/api/spec/push") == "menu-agent"
-    assert menu_guard.menu_key_for_path("/api/spec/validate") == "menu-spec"
-    assert menu_guard.menu_key_for_path("/api/spec/deltas") == "menu-spec"
-    assert menu_guard.menu_key_for_path("/api/health") is None
-    assert menu_guard.menu_key_for_path("/api/feishu-pool/x") is None  # 未绑定放行
+    assert menu_guard.menu_keys_for_path("/api/plans") == ("menu-plans",)
+    assert menu_guard.menu_keys_for_path("/api/plans/PP-001") == ("menu-plans",)
+    assert menu_guard.menu_keys_for_path("/api/agent/audit") == ("menu-audit",)  # 前两段精确优先
+    assert menu_guard.menu_keys_for_path("/api/agent/chat") == ("menu-agent",)
+    # spec 前缀细分：push 归 agent（仅 AgentChat 页调用）；T-996 合规校验整体收编 agent
+    assert menu_guard.menu_keys_for_path("/api/spec/push") == ("menu-agent",)
+    assert menu_guard.menu_keys_for_path("/api/spec/validate") == ("menu-agent",)
+    assert menu_guard.menu_keys_for_path("/api/spec/deltas") == ("menu-agent",)
+    # T-996 共享前缀并集：/api/runs 同时服务测试执行与执行中心
+    assert menu_guard.menu_keys_for_path("/api/runs/history") == ("menu-run", "menu-history")
+    # T-996 补绑漏洞与新增页
+    assert menu_guard.menu_keys_for_path("/api/feishu-pool/x") == ("menu-feishu-pool",)
+    assert menu_guard.menu_keys_for_path("/api/systems") == ("menu-systems",)
+    assert menu_guard.menu_keys_for_path("/api/users/audit-log") == ("menu-audit",)
+    assert menu_guard.menu_keys_for_path("/api/health") == ()
+    assert menu_guard.menu_keys_for_path("/api/data-fab/x") == ()  # 未绑定放行
 
 
 def test_guard_allow_with_grant(db, monkeypatch):
@@ -131,7 +137,18 @@ def test_guard_whitelist_and_unbound(db, monkeypatch):
     assert _run(mw, _scope("/api/health"))[0] == 200
     assert _run(mw, _scope("/api/auth/config"))[0] == 200
     assert _run(mw, _scope("/api/menus/me", "mock-u1"))[0] == 200
-    assert _run(mw, _scope("/api/feishu-pool/x", "mock-u1"))[0] == 200
+    assert _run(mw, _scope("/api/data-fab/x", "mock-u1"))[0] == 200  # 未绑定放行
+    assert _run(mw, _scope("/api/feishu-pool/x", "mock-u1"))[0] == 403  # T-996 补绑后无授权拦截
+
+
+def test_guard_shared_prefix_any_grant(db, monkeypatch):
+    """共享前缀并集：/api/runs 归属 menu-run ∪ menu-history，任一授权即放行。"""
+    user_store.upsert_user("u1", "u1", db)
+    user_store.set_roles("u1", ["tester"], "u1", db)
+    rbac_store.set_role_menus("tester", ["menu-history"], db)  # 仅执行中心授权
+    monkeypatch.setenv("SG_AUTH_MODE", "mock")
+    mw = menu_guard.MenuGuardMiddleware(DummyApp())
+    assert _run(mw, _scope("/api/runs/history", "mock-u1"))[0] == 200
 
 
 def test_guard_admin_system_menu_bootstrap(db, monkeypatch):

@@ -20,6 +20,8 @@ for _p in (str(BACKEND_DIR), str(SG_ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -31,10 +33,59 @@ from services.menu_guard import MenuGuardMiddleware
 # T-975：自定义角色校验钩子注册（sg_core.user_store 不反向依赖 workbench，组装根注入）
 user_store.set_role_validator(rbac_store.role_exists)
 
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """启动初始化：建表 + 清理遗留 running 队列项 + 旧会话迁移 + webhook 注册表迁移
+    （T-996 二合一）+ 启动调度器；关停：调度器/watcher 优雅停。"""
+    user_store.init_db()
+    rbac_store.init_db()  # RBAC 三表 + 幂等种子（全新配置：仅 admin 保底两条授权）
+    # K-xxx：业务台账投影层建表（场景/草稿/运行/会话台账，文件仍是真相源）
+    from services import ledger_store
+    ledger_store.ensure_tables()
+    # T-061: sg_draft_gates 三闸状态机建表
+    from services import draft_gates
+    draft_gates.ensure_tables()
+    user_store.fail_stale_running()
+    _migrate_legacy_sessions()
+    # S2: specflow sf_* 表初始化
+    from workbench.backend.services.specflow import sf_store
+    sf_store.init_tables()
+    from specflow.interview.decision_ledger import init_tables as dl_init
+    import sqlite3
+    from pathlib import Path
+    try:
+        conn = sqlite3.connect(str(Path(__file__).resolve().parent / "data" / "workbench.db"))
+        dl_init(conn)
+        conn.close()
+    except Exception:
+        pass
+    # T-996: 旧 webhook 注册表（registry.json）一次性迁移进 notify_configs
+    from feedback.notify import migrate_registry_to_configs
+    migrate_registry_to_configs(SG_ROOT)
+    # I-2: 启动定时任务调度器
+    from services.scheduler import start_scheduler
+    start_scheduler()
+    # T-082: MCP 调用审计表初始化
+    from services import audit_store
+    audit_store.ensure_tables()
+    # T-919（飞书知识图谱二期）：事件监听托管——单用户守卫，未配置静默跳过
+    from services.specflow import feishu_watcher
+    feishu_watcher.start_background(SG_ROOT)
+    yield
+    # I-2: 停止定时任务调度器
+    from services.scheduler import shutdown_scheduler
+    shutdown_scheduler()
+    # T-919：watcher 优雅停（关 stdin → EOF 优雅退出，禁 kill -9）
+    from services.specflow import feishu_watcher
+    feishu_watcher.stop_background()
+
+
 app = FastAPI(
     title="SpecGuard Workbench API",
     description="SpecGuard 测试流水线工作台后端：多用户 + RBAC + 执行控制 / 场景管理 / 实时流",
     version="2.0.0",
+    lifespan=_lifespan,
 )
 
 # CORS：允许前端 dev server 跨域
@@ -72,51 +123,6 @@ class WorkspaceContextMiddleware:
 app.add_middleware(WorkspaceContextMiddleware)
 # RBAC 菜单守卫（前后端双控后端侧）：按 API path 匹配菜单授权，无权限 403
 app.add_middleware(MenuGuardMiddleware)
-
-# 启动初始化：建表 + 清理上一生命周期遗留的 running 队列项 + 旧会话迁移 + 启动调度器
-@app.on_event("startup")
-def _startup():
-    user_store.init_db()
-    rbac_store.init_db()  # RBAC 三表 + 幂等种子（全新配置：仅 admin 保底两条授权）
-    # K-xxx：业务台账投影层建表（场景/草稿/运行/会话台账，文件仍是真相源）
-    from services import ledger_store
-    ledger_store.ensure_tables()
-    # T-061: sg_draft_gates 三闸状态机建表
-    from services import draft_gates
-    draft_gates.ensure_tables()
-    user_store.fail_stale_running()
-    _migrate_legacy_sessions()
-    # S2: specflow sf_* 表初始化
-    from workbench.backend.services.specflow import sf_store
-    sf_store.init_tables()
-    from specflow.interview.decision_ledger import init_tables as dl_init
-    import sqlite3
-    from pathlib import Path
-    try:
-        conn = sqlite3.connect(str(Path(__file__).resolve().parent / "data" / "workbench.db"))
-        dl_init(conn)
-        conn.close()
-    except Exception:
-        pass
-    # I-2: 启动定时任务调度器
-    from services.scheduler import start_scheduler
-    start_scheduler()
-    # T-082: MCP 调用审计表初始化
-    from services import audit_store
-    audit_store.ensure_tables()
-    # T-919（飞书知识图谱二期）：事件监听托管——单用户守卫，未配置静默跳过
-    from services.specflow import feishu_watcher
-    feishu_watcher.start_background(SG_ROOT)
-
-
-@app.on_event("shutdown")
-def _shutdown():
-    # I-2: 停止定时任务调度器
-    from services.scheduler import shutdown_scheduler
-    shutdown_scheduler()
-    # T-919：watcher 优雅停（关 stdin → EOF 优雅退出，禁 kill -9）
-    from services.specflow import feishu_watcher
-    feishu_watcher.stop_background()
 
 
 def _migrate_legacy_sessions():

@@ -213,18 +213,14 @@ class TestBatchNotifications:
 
         calls: list = []
 
-        class FakeRegistry:
-            def __init__(self, path):
-                pass
-
-            def list_webhooks(self):
-                return [{"id": 1}]
-
-            def send_notification(self, *a):
-                calls.append(a)
-
         import feedback.notify as notify_mod
-        monkeypatch.setattr(notify_mod, "NotifyRegistry", FakeRegistry)
+        # T-996：存储换轨 notify_configs，桩打到新入口
+        monkeypatch.setattr(notify_mod, "case_webhook_count", lambda: 1)
+
+        async def fake_notify(*a):
+            calls.append(a)
+
+        monkeypatch.setattr(notify_mod, "notify_case_event", fake_notify)
 
         asyncio.run(mgr._push_run_notifications())
         # 主目录 + 批次目录各一条，链接指向各自报告目录

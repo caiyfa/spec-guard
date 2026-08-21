@@ -7,6 +7,9 @@ import type { DocHunk } from '../../components/FileViewer';
 import ReadingPanel from '../../components/ReadingPanel';
 import type { DocReadItem } from '../../components/ReadingPanel';
 import GateDockPanel from '../GateDockPanel';
+import Skills from '../Skills';
+import SpecValidation from '../SpecValidation';
+import Knowledge from '../Knowledge';
 import { FocusGraphTab } from '../../components/FocusGraph';
 import type { AgentStats, ChatMessage, ChatReference, CtxUsage, DocWriteItem, FileTab } from './types';
 import { ContextPanel } from './ContextPanel';
@@ -29,6 +32,10 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[]
   { id: 'gates',   label: '🎛 操作台',     scope: 'universal' },
   { id: 'reading', label: '📖 阅读',       scope: 'universal' },
   { id: 'drafts',  label: '📝 更新与产物', scope: 'universal' },
+  // T-996 菜单收缩收编：技能（只读）/合规校验/知识 收进对话页通用页签
+  { id: 'skills',  label: '🛠 技能',       scope: 'universal' },
+  { id: 'spec',    label: '📏 合规',       scope: 'universal' },
+  { id: 'knowledge', label: '🧠 知识',     scope: 'universal' },
   { id: 'pack',    label: '📦 信息包',     scope: 'purpose' },
   { id: 'focus',   label: '◎ 图谱',        scope: 'purpose' },
   { id: 'materials', label: '📎 材料',     scope: 'purpose' },
@@ -152,6 +159,9 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
         {activeTab === 'gates' && (
           <GateDockPanel sessionId={sessionId} onAskAgent={onAskAgentGuide || (() => {})} onError={onError} />
         )}
+        {activeTab === 'skills' && <Skills />}
+        {activeTab === 'spec' && <SpecValidation />}
+        {activeTab === 'knowledge' && <Knowledge />}
         {activeTab === 'focus' && <FocusGraphTab messages={messages} />}
         {activeTab === 'materials' && (
           <MaterialsRefPanel sessionId={sessionId} references={references} onError={onError} />

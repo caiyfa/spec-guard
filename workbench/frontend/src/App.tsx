@@ -7,30 +7,18 @@ import RunControl from './pages/RunControl';
 import DagEditor from './pages/DagEditor';
 import History from './pages/History';
 import Settings from './pages/Settings';
-import SpecValidation from './pages/SpecValidation';
 import AgentChat from './pages/AgentChat';
 import Home from './pages/Home';
-import Attribution from './pages/Attribution';
-import CoveragePanel from './pages/CoveragePanel';
-import WorkspaceCenter from './pages/WorkspaceCenter';
-import GitLog from './pages/GitLog';
 import Feedback from './pages/Feedback';
-import NotifyConfigs from './pages/NotifyConfigs';
-import Schedules from './pages/Schedules';
 import Drafts from './pages/Drafts';
 import Login from './pages/Login';
 import AdminUsers from './pages/AdminUsers';
-import ZentaoPanel from './pages/ZentaoPanel';
-import MaterialsPanel from './pages/MaterialsPanel';
 import FeishuPool from './pages/FeishuPool';
-import ScoreFreezePanel from './pages/ScoreFreezePanel';
 import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
-import Knowledge from './pages/Knowledge';  // T-509：知识维护页（一页三区）
-import Skills from './pages/Skills';
 import MenuRoles from './pages/MenuRoles';
+import SystemsAdmin from './pages/SystemsAdmin';
 import GraphPanorama from './pages/GraphPanorama';
-import LineageStory from './pages/LineageStory';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import { authApi, session, menusApi } from './api';
@@ -38,9 +26,23 @@ import type { CurrentUser, NavGroup } from './api';
 import { removeCookie } from './utils/cookie';
 
 // 隐藏 Redirect 路由的目标菜单（允许访问时按目标校验）
+// T-996 菜单收缩：被收编/删除的页面路由全部 301 到幸存页（带 tab 深链）
 const REDIRECT_TARGETS: Record<string, string> = {
   '/scenario-create': '/plans',
-  '/spec-center': '/workspace',
+  '/spec-center': '/dashboard',
+  '/lineage': '/graph',                    // 血缘链并入全景图谱镜头
+  '/coverage': '/lifecycle?tab=coverage',  // 覆盖缺口并入生命周期页
+  '/schedules': '/history?tab=schedules',  // 定时任务并入执行中心
+  '/attribution': '/history?tab=attribution',  // 失败归因并入执行中心
+  '/notify': '/feedback?tab=notify',       // 通知配置并入反哺闭环
+  '/skills': '/agent',                     // 技能收对话页签
+  '/materials': '/agent',                  // 材料管理收操作台页签
+  '/scores': '/agent',                     // 评分冻结收操作台页签
+  '/zentao': '/agent',                     // 禅道收操作台页签
+  '/spec': '/agent',                       // 合规校验收对话页签
+  '/knowledge': '/agent',                  // 知识收对话页签
+  '/workspace': '/dashboard',              // 工作区中心让位（T-1000 重建后挂回）
+  '/workspace/git-log': '/dashboard',      // GitLog 已删除
 };
 
 // 免权页面（登录即用，无需菜单授权）：路由守卫直接放行
@@ -347,36 +349,28 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/agent" element={<AgentChat />} />
               <Route path="/dashboard" element={<Dashboard />} />  {/* 仪表盘（原首页） */}
               <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
-              <Route path="/lineage" element={<LineageStory />} />  {/* T-073：血缘链审计追溯 */}
+
               <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
-              <Route path="/spec" element={<SpecValidation />} />
-              <Route path="/materials" element={<MaterialsPanel />} />
+
               <Route path="/feishu-pool" element={<FeishuPool />} />  {/* T-929：飞书材料池总览 */}
-              <Route path="/scores" element={<ScoreFreezePanel />} />
-              <Route path="/zentao" element={<ZentaoPanel />} />
+
               <Route path="/plans" element={<Scenarios />} />
-              <Route path="/coverage" element={<CoveragePanel />} />
-              <Route path="/knowledge" element={<Knowledge />} />  {/* T-509：知识维护页 */}
+
               <Route path="/run" element={<RunControl />} />
               <Route path="/dag" element={<DagEditor />} />
               <Route path="/history" element={<History />} />
               <Route path="/drafts" element={<Drafts />} />
-              {/* /scenario-create 已合并到 /plans */}
-              <Route path="/scenario-create" element={<RedirectToPlans />} />
-              {/* K-009：/spec-center 已合并到 /workspace（工作区中心） */}
-              <Route path="/spec-center" element={<RedirectToWorkspace />} />
-              <Route path="/attribution" element={<Attribution />} />
-              <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />
-              <Route path="/workspace/git-log" element={<GitLog />} />  {/* git 提交历史（SourceTree 风格） */}
               <Route path="/feedback" element={<Feedback />} />
-              <Route path="/notify" element={<NotifyConfigs />} />
-              <Route path="/schedules" element={<Schedules />} />
               <Route path="/admin-users" element={<AdminUsers />} />
               <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
               <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
-              <Route path="/skills" element={<Skills />} />  {/* T-080：Skill 注册表 */}
               <Route path="/menu-roles" element={<MenuRoles />} />  {/* RBAC：菜单管理 + 角色授权 */}
               <Route path="/settings" element={<Settings />} />
+              <Route path="/systems" element={<SystemsAdmin />} />  {/* T-973：系统包管理（挂「系统管理」分组） */}
+              {/* T-996：被收编/删除的路由统一重定向（矩阵见 REDIRECT_TARGETS） */}
+              {Object.entries(REDIRECT_TARGETS).map(([from, to]) => (
+                <Route key={from} path={from} element={<RedirectTo to={to} />} />
+              ))}
             </Routes>
           </main>
         )}
@@ -385,14 +379,8 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
   );
 }
 
-function RedirectToPlans() {
+function RedirectTo({ to }: { to: string }) {
   const navigate = useNavigate();
-  useEffect(() => { navigate('/plans'); }, [navigate]);
-  return null;
-}
-
-function RedirectToWorkspace() {
-  const navigate = useNavigate();
-  useEffect(() => { navigate('/workspace'); }, [navigate]);
+  useEffect(() => { navigate(to); }, [navigate, to]);
   return null;
 }

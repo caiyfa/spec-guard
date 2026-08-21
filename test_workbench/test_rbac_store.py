@@ -14,7 +14,7 @@ def test_seed_idempotent(db):
     rbac_store.init_db(db)  # 重复 init 不重复写
     menus = rbac_store.list_menus(db)
     roles = rbac_store.list_roles(db)
-    assert len(menus) >= 33  # 7 分组 + 26 菜单项（含新增 menu-menu-manage）
+    assert len(menus) == 22  # T-996：5 分组 + 17 菜单项（29 叶收缩，含新增 menu-systems）
     assert {r["role_key"] for r in roles} == {"admin", "tester", "viewer", "product"}
     assert all(r["is_builtin"] for r in roles)
     # admin 保底两条授权
@@ -77,7 +77,7 @@ def test_user_has_menu_and_menus_for_user(db):
     assert rbac_store.user_has_menu(["admin"], "menu-users", db)
     assert not rbac_store.user_has_menu(["admin"], "menu-graph", db)
     # 可见树：visible=0 与无授权不返回；公开菜单恒含；分组无可见子项不返回
-    rbac_store.set_role_menus("tester", ["menu-plans", "menu-run", "menu-schedules"], db)
+    rbac_store.set_role_menus("tester", ["menu-plans", "menu-run", "menu-history"], db)
     groups = rbac_store.menus_for_user(["tester"], db)
     labels = [g["label"] for g in groups]
     assert "场景" in labels and "执行" in labels      # 授权分组
@@ -118,3 +118,50 @@ def test_seed_dashboard_path_migrated(db):
     # 幂等：重复 init 不破坏
     rbac_store.init_db(db)
     assert rbac_store.get_menu("menu-dashboard", db)["path"] == "/dashboard"
+
+
+def test_t996_menu_shrink_migration(db):
+    """T-996 信息架构收缩迁移：旧菜单授权无损映射到幸存菜单，旧键/旧分组清除，幂等。"""
+    import sqlite3
+    now = "2026-08-21 00:00:00"
+    # 构造存量库旧键（模拟 8 组 29 叶时代遗留）
+    legacy = [
+        ("menu-lineage", "血缘链", "/lineage", "group-overview"),
+        ("menu-schedules", "定时任务", "/schedules", "group-execution"),
+        ("menu-attribution", "失败归因", "/attribution", "group-execution"),
+        ("menu-notify", "通知配置", "/notify", "group-feedback"),
+        ("menu-quality", "质量中心", "/quality", "group-quality"),
+        ("menu-coverage", "覆盖缺口", "/coverage", "group-scenario"),
+        ("group-feedback", "反哺", "", ""),
+        ("group-quality", "质量", "", ""),
+    ]
+    with sqlite3.connect(str(db)) as c:
+        c.row_factory = sqlite3.Row
+        for key, label, path, parent in legacy:
+            c.execute("INSERT OR IGNORE INTO menus (menu_key,label,icon,path,parent_key,sort,visible,is_system,created_at,updated_at)"
+                      " VALUES (?,?,'',?,?,0,1,0,?,?)", (key, label, path, parent, now, now))
+        c.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES ('tester','menu-lineage')")
+        c.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES ('tester','menu-schedules')")
+        c.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES ('tester','menu-notify')")
+        c.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES ('tester','menu-quality')")
+        c.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES ('tester','menu-coverage')")
+    rbac_store.init_db(db)
+    grants = set(rbac_store.list_role_menus("tester", db))
+    # 无损映射：lineage→graph、schedules→history、notify→feedback、quality→dashboard、coverage→lifecycle
+    assert {"menu-graph", "menu-history", "menu-feedback", "menu-dashboard", "menu-lifecycle"} <= grants
+    # 旧键清除（菜单行 + 授权残留）
+    keys = {m["menu_key"] for m in rbac_store.list_menus(db)}
+    for old in ("menu-lineage", "menu-schedules", "menu-notify", "menu-quality",
+                "menu-coverage", "group-feedback", "group-quality"):
+        assert old not in keys
+        assert old not in grants
+    # 新增/改挂就位
+    assert rbac_store.get_menu("menu-systems", db)["is_system"] == 1
+    assert rbac_store.get_menu("menu-lifecycle", db)["label"] == "覆盖与生命周期"
+    assert rbac_store.get_menu("menu-drafts", db)["parent_key"] == "group-agent"
+    assert rbac_store.get_menu("menu-feishu-pool", db)["parent_key"] == "group-scenario"
+    # 幂等：再次 init 不复活旧键、不重复授权
+    rbac_store.init_db(db)
+    keys2 = {m["menu_key"] for m in rbac_store.list_menus(db)}
+    assert "menu-lineage" not in keys2
+    assert len(keys2) == 22

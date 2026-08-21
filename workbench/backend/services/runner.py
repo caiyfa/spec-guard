@@ -151,9 +151,8 @@ async def push_run_notifications(reports_root: Path, run_id: str,
         case_dirs = [root / run_id / "cases"]
         case_dirs += [d / "cases" for d in sorted(root.glob(f"{run_id}-b*"))]
 
-        from feedback.notify import NotifyRegistry
-        registry = NotifyRegistry(SG_ROOT / "feedback" / "registry.json")
-        if not registry.list_webhooks():  # 未注册 webhook 时零成本退出
+        from feedback import notify as _notify
+        if not _notify.case_webhook_count():  # 未配置用例级 webhook 时零成本退出
             return
 
         if not system:
@@ -176,8 +175,7 @@ async def push_run_notifications(reports_root: Path, run_id: str,
                 scenario_id = case.get("scenario_id", case_file.stem)
                 failure = case.get("failure") or {}
                 conclusion = failure.get("category") or case.get("skip_reason") or f"判定 {verdict}"
-                await asyncio.to_thread(
-                    registry.send_notification,
+                await _notify.notify_case_event(
                     system, scenario_id, event, verdict,
                     str(conclusion)[:200], f"reports/{cases_dir.parent.name}/report.md",
                 )

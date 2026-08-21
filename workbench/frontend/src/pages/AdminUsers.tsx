@@ -1,4 +1,5 @@
-// 用户与工作区授权管理（admin 专属）：用户角色 + 工作区授权 + 审计日志
+// 用户与工作区授权管理（admin 专属）：用户角色 + 工作区授权
+// T-996 双审计统一：管理操作审计移至审计日志页第二页签（/audit?tab=admin）
 
 import { useCallback, useEffect, useState } from 'react';
 import { usersApi, workspaceApi, rolesApi } from '../api';
@@ -9,20 +10,17 @@ export default function AdminUsers() {
   const [grants, setGrants] = useState<GrantItem[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);  // RBAC：角色源动态化（内置 + 自定义）
-  const [audit, setAudit] = useState<any[]>([]);
-  const [tab, setTab] = useState<'users' | 'audit'>('users');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   const refresh = useCallback(async () => {
     try {
-      const [u, g, w, a, r] = await Promise.all([
-        usersApi.list(), usersApi.grants(), workspaceApi.list(), usersApi.auditLog(50), rolesApi.list(),
+      const [u, g, w, r] = await Promise.all([
+        usersApi.list(), usersApi.grants(), workspaceApi.list(), rolesApi.list(),
       ]);
       setUsers(u.users);
       setGrants(g.grants);
       setWorkspaces(w.workspaces);
-      setAudit(a.entries);
       setRoles(r.roles);
     } catch (e: any) {
       setError(e.message || '加载失败');
@@ -92,19 +90,12 @@ export default function AdminUsers() {
         </div>
       )}
 
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab('users')}
-          className={`px-3 py-1.5 text-sm rounded ${tab === 'users' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>
-          用户与授权 ({users.length})
-        </button>
-        <button onClick={() => setTab('audit')}
-          className={`px-3 py-1.5 text-sm rounded ${tab === 'audit' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>
-          审计日志 ({audit.length})
-        </button>
+      <div className="flex gap-2 mb-4 items-center">
+        <span className="text-sm text-gray-400">用户与授权 ({users.length})</span>
+        <a href="/audit?tab=admin" className="text-xs text-gray-600 hover:text-info underline ml-auto">管理操作审计已移至「审计日志」页 →</a>
       </div>
 
-      {tab === 'users' && (
-        <div className="space-y-3">
+      <div className="space-y-3">
           {users.map(u => (
             <div key={u.emp_no} className="bg-surface-2 border border-border rounded-lg p-4">
               <div className="flex items-center gap-3 mb-2">
@@ -174,38 +165,7 @@ export default function AdminUsers() {
           {users.length === 0 && (
             <div className="text-center text-gray-600 text-sm py-10">暂无用户（用户首次登录后出现在此）</div>
           )}
-        </div>
-      )}
-
-      {tab === 'audit' && (
-        <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-gray-500 border-b border-border">
-                <th className="px-3 py-2">时间</th>
-                <th className="px-3 py-2">操作人</th>
-                <th className="px-3 py-2">动作</th>
-                <th className="px-3 py-2">对象</th>
-                <th className="px-3 py-2">详情</th>
-              </tr>
-            </thead>
-            <tbody>
-              {audit.map((a, i) => (
-                <tr key={i} className="border-b border-border/50 text-gray-400">
-                  <td className="px-3 py-1.5 font-mono">{a.created_at}</td>
-                  <td className="px-3 py-1.5">{a.emp_no}</td>
-                  <td className="px-3 py-1.5">{a.action}</td>
-                  <td className="px-3 py-1.5">{a.target}</td>
-                  <td className="px-3 py-1.5 truncate max-w-[16rem]">{a.detail}</td>
-                </tr>
-              ))}
-              {audit.length === 0 && (
-                <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-600">暂无审计记录</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

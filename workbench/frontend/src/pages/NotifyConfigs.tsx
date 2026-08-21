@@ -1,4 +1,6 @@
 // 通知配置管理：钉钉/飞书 webhook 配置 + 测试发送（J-3）
+// T-996：二合一后作为反哺闭环「通知配置」页签内嵌（embedded），
+// 补 system/scenario_pattern 用例级过滤维度 + fail/drift/skip 事件。
 
 import { useState, useEffect } from 'react';
 import { notifyApi, type NotifyConfig } from '../api';
@@ -12,9 +14,15 @@ const EVENT_LABELS: Record<string, string> = {
   vulnerability: '漏洞',
   plan_failure: '任务失败',
   plan_success: '任务成功',
+  fail: '场景失败',
+  drift: '场景漂移',
+  skip: '场景跳过',
 };
 
-export default function NotifyConfigs() {
+// 用例级事件（订阅任一即展示 system/scenario_pattern 过滤字段）
+const CASE_EVENTS = ['fail', 'drift', 'skip'];
+
+export default function NotifyConfigs({ embedded = false }: { embedded?: boolean }) {
   const [configs, setConfigs] = useState<NotifyConfig[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -31,6 +39,8 @@ export default function NotifyConfigs() {
   const [mentionMobiles, setMentionMobiles] = useState('');
   const [events, setEvents] = useState<string[]>(['plan_failure', 'vulnerability']);
   const [enabled, setEnabled] = useState(true);
+  const [system, setSystem] = useState('');
+  const [pattern, setPattern] = useState('*');
 
   const load = async () => {
     try {
@@ -46,6 +56,7 @@ export default function NotifyConfigs() {
   const resetForm = () => {
     setName(''); setChannel('feishu'); setWebhookUrl(''); setSecret('');
     setMentionMobiles(''); setEvents(['plan_failure', 'vulnerability']); setEnabled(true);
+    setSystem(''); setPattern('*');
     setEditing(null);
   };
 
@@ -58,6 +69,7 @@ export default function NotifyConfigs() {
     setName(cfg.name); setChannel(cfg.channel); setWebhookUrl(cfg.webhook_url);
     setSecret(''); setMentionMobiles(cfg.mention_mobiles);
     setEvents(cfg.events); setEnabled(cfg.enabled);
+    setSystem(cfg.system || ''); setPattern(cfg.scenario_pattern || '*');
     setEditing(cfg);
     setShowForm(true);
   };
@@ -68,7 +80,7 @@ export default function NotifyConfigs() {
     setSubmitting(true);
     setError(''); setSuccess('');
     try {
-      const body = { name, channel, webhook_url: webhookUrl, secret: secret || undefined, mention_mobiles: mentionMobiles, events, enabled };
+      const body = { name, channel, webhook_url: webhookUrl, secret: secret || undefined, mention_mobiles: mentionMobiles, events, enabled, system, scenario_pattern: pattern || '*' };
       if (editing) {
         await notifyApi.update(editing.id, body);
         setSuccess(`配置 ${name} 更新成功`);
@@ -119,16 +131,25 @@ export default function NotifyConfigs() {
   };
 
   return (
-    <div className="flex flex-col h-full max-w-4xl">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-200">🔔 通知配置</h2>
-          <p className="text-xs text-gray-500 mt-1">配置钉钉/飞书群聊 webhook，接收漏洞和任务失败通知</p>
+    <div className={embedded ? 'flex flex-col' : 'flex flex-col h-full max-w-4xl'}>
+      {!embedded && (
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-gray-200">🔔 通知配置</h2>
+            <p className="text-xs text-gray-500 mt-1">配置钉钉/飞书群聊 webhook，接收漏洞和任务失败通知</p>
+          </div>
+          <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90">
+            + 新建配置
+          </button>
         </div>
-        <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90">
-          + 新建配置
-        </button>
-      </div>
+      )}
+      {embedded && (
+        <div className="mb-3 flex justify-end">
+          <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90">
+            + 新建配置
+          </button>
+        </div>
+      )}
 
       {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-sm">{error}</div>}
       {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-sm">{success}</div>}
@@ -152,6 +173,9 @@ export default function NotifyConfigs() {
                   <div className="text-xs text-gray-600 mt-1">
                     {cfg.events.map(e => EVENT_LABELS[e] || e).join(' · ')}
                     {cfg.mention_mobiles && <span className="ml-2">@{cfg.mention_mobiles}</span>}
+                    {cfg.events.some(e => CASE_EVENTS.includes(e)) && (
+                      <span className="ml-2 text-gray-700">范围: {cfg.system || '全部系统'} / {cfg.scenario_pattern || '*'}</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -211,7 +235,7 @@ export default function NotifyConfigs() {
 
               <div>
                 <label className="text-xs text-gray-500">订阅事件</label>
-                <div className="flex gap-2 mt-1">
+                <div className="flex gap-2 mt-1 flex-wrap">
                   {Object.entries(EVENT_LABELS).map(([event, label]) => (
                     <button key={event} onClick={() => toggleEvent(event)}
                       className={`px-3 py-1.5 text-xs rounded ${events.includes(event) ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500'}`}>
@@ -220,6 +244,22 @@ export default function NotifyConfigs() {
                   ))}
                 </div>
               </div>
+
+              {/* 用例级过滤：订阅 fail/drift/skip 时生效 */}
+              {events.some(e => CASE_EVENTS.includes(e)) && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500">系统过滤（空 = 全部）</label>
+                    <input value={system} onChange={e => setSystem(e.target.value)} placeholder="tdm"
+                      className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">场景 pattern（fnmatch）</label>
+                    <input value={pattern} onChange={e => setPattern(e.target.value)} placeholder="PP-*"
+                      className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs text-gray-500">启用</label>
