@@ -1,7 +1,9 @@
 # SpecGuard Vision · 开发总控文档
 
 > **本文档是所有开发会话的唯一协调中心。任何开发会话开工前必须完整阅读 §1-§4，并按 §3 协议注册会话、认领任务、登记文件变更。**
-> 版本：v1.28 · 2026-08-17 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+> 版本：v1.29 · 2026-08-21 ｜ 配套：`sg-hash.py`（文件指纹工具）｜ 上游依据：《研发顺序与里程碑验收》、13 份模块设计（M01-M13）、00 统一约定
+>
+> **v1.29 决策（2026-08-21，sess-arch-breakdown，总控人指令）**：新增 §4.11「架构反馈升级施工块」（T-960~T-999，依据《架构反馈升级/2026-08-21-模块化任务拆分.md》——08-20 架构体检+八点反馈判定归档 + 08-21 知识库核验翻案与总控人拍板）。六功能域六 worktree：M-A 多系统贯通（wt/multi-system，含 T-973 系统包动态注册——总控人拍板分级方案：配置型系统 UI 注册即时生效、代码型评审后热加载免重启）/ M-B 依赖翻正（wt/dep-inversion）/ M-C 智能层可信度（wt/agent-eval + wt/test-taxonomy + wt/tool-consolidation）/ M-D 材料池演进（wt/material-pool，吞并 T-933~T-935）/ M-E 前端 IA（wt/frontend-ia）/ M-F 收尾填料。P0 五项（T-960~T-964）主库小刀当天清，含 08-21 知识库翻案新增的 T-964 clarity 假分数清理。待拍板决策剩 3 项（话题 FR 锚点派生/闲聊默认过滤/管理菜单收低频区），认领 T-991/T-992/T-996 前先过。
 >
 > **v1.28 决策（2026-08-17，sess-agentchat-material，总控人指令）**：两件事——① §4.9 补登 T-930「监听选择器+可读层」已 ✅（aefd802 后端 / e4633a2 前端 / b1d15ff 文档）：watch v2 用户维度（open_id+scopes：group_sender/minutes/docs）+ 群聊/用户/用户文档三选择器端点（CLI --filter owner_ids 实测不生效→应用侧过滤定案）+ 直写授权校验（修复全量落池隐患）+ 材料列表标题/摘要可读层 + 同步设置共享组件（入口移入材料池页）；② 新增 §4.10「AgentChat 材料工作流与 purpose 面板装配」支线（T-931~T-936，依据《远期设计/SpecGuard-AgentChat材料工作流与purpose面板装配专项设计.md》）——对话内材料上传+引用进面试上下文（read_material 工具）+ purposes.panels 消费（页签注册表通用/专用分层装配，解决选方向面板不变+防膨胀）；MaterialsPanel 瘦身为储备 T-936。
 >
@@ -157,7 +159,7 @@ flowchart LR
 
 > 状态值：`未认领` / `进行中` / `已完成` / `阻塞`（阻塞须在备注写原因）
 > 表行格式固定，只允许更新「状态/会话ID/备注」三列；新增任务由总控人追加。
-> 分区：**§4.1 打磨期**（✅ 归档）｜**§4.2 远期升级期**（已完成归档，储备保留）｜**§4.3 引擎演进补点**（储备）｜**§4.4 知识体系**（✅ 归档）｜**§4.5 瘦身任务块**（✅ 归档）｜**§4.6 飞书 CLI 集成**（进行中）｜**§4.7 规模化升级**（触发制）｜**§4.8 对话操作台 GateDock**（✅ T-900~T-902 全完成）。
+> 分区：**§4.1 打磨期**（✅ 归档）｜**§4.2 远期升级期**（已完成归档，储备保留）｜**§4.3 引擎演进补点**（储备）｜**§4.4 知识体系**（✅ 归档）｜**§4.5 瘦身任务块**（✅ 归档）｜**§4.6 飞书 CLI 集成**（进行中）｜**§4.7 规模化升级**（触发制）｜**§4.8 对话操作台 GateDock**（✅ T-900~T-902 全完成）｜**§4.11 架构反馈升级施工块**（T-960~T-999，认领中）。
 > **已完成任务明细（含验收备注/修复记录）统一见归档文件**：`docs/历史区/SpecGuard-总控文档-归档-2026-08-13.md`。
 
 ### 4.1 打磨期（P0，✅ 2026-08-07 结束，已归档）
@@ -289,6 +291,38 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-951 | 补丁包 | 用户实测反馈四项：模型接入/布局收敛/MiniMax 兕底/跨天话题 | TopicWorkspace/TopicCard/api/llm_client/model_config/topic_cluster | ①话题页签单一双栏（卡片流并入工作台右栏+状态筛选 chips，页签不再分上下两层）；②MiniMax-M3 接入：OpenAI 兼容端点零适配直配（base_url=https://api.minimaxi.com），LLMClient 出口 _strip_think_tags 兕底（M3 thinking 默认开启混入 think 标签）；③模型用途别名（get_model text/vision 按 name 回退——设置页建模型 name 填 text/vision 即绑定，修「设置页模型永远无法命中用途链路」缺口）；④T-951c 跨天话题：介入工作台多日窗口（日期下拉近3/7天=最近 N 个有快照日；_load_window_source 多日 JSONL 拼接行带 MM-DD 前缀，msg_lines 跨日锚定，window 取真实 ts，卡片 days 字段；commit 清理窗口内各日旧卡；regen 跨日拼接重提炼；prompt 明确「跨天延续讨论聚为同一话题段」） | T-950 | 已完成 | sess-t948-dev | P1 ✅ 2026-08-19（4 提交至 b2a6bbd；test_specstd 1589 绿含 4 新多日用例；tsc 0 错+build 成功+oxlint 基线持平；自动聚类链路保持按天分片控成本，跨天聚合走介入口） |
 | T-952 | 体验收敛 | 聊天真实内容渲染+单群更新+定时同步+多模态透明化（图片tab退役） | chat_store/sync/watcher/路由/TopicWorkspace/FeishuPool/FeishuWatchSettings | 用户反馈四点：①post/file 消息渲染真实内容（实测契约：post=markdown 文本+![Image](key) 内嵌多图，file=<file key name/> 自描述——normalize 提取 image_keys/file_name，MessageBody 富渲染：post 文本+内嵌图缩略+转述 caption、file 文件卡、image 图；图片按 media_key 直取端点 /chat-image 与 imgmap 解耦）；②单群更新（sync_all chat_id 过滤+工作台「↻更新本群」按钮秒级反馈）；③定时同步可配置（watch.chat_sync_minutes，watcher interval job，同步设置弹层输入框，0=关保留每日校对）；④多模态技术对用户透明（同步后自动触发图片转述 maybe_transcribe_async，图片描述独立 tab 退役——caption 融入时间轴展示，转述是技术侧实现细节不应作为用户操作面） | T-951 | 已完成 | sess-t948-dev | P1 ✅ 2026-08-19（4 提交至 bd10c30；契约固化 POST_MESSAGE/FILE_MESSAGE；test_specstd 1598 绿+release_check PASS；tsc 0 错+build 成功+oxlint 基线；遗留：caption 内联编辑入口后续补——当前展示已有，编辑暂经详情弹层） |
 | T-955 | 排版打磨 | 消息时间轴排版五项优化（用户实测反馈） | TopicWorkspace/MessageBody/api/feishu_sync_service/路由 | ①两行制排版（头行「昵称·时间」+正文独立行，昵称按 sender 哈希稳定配色 IM 惯例）；②时间格式 MM-DD HH:MM（去 ISO T）；③图片三态（加载中/失败/成功，失败显式红框提示不再永「加载中」；成功可点击新标签大图）；④附件可下载（im +messages-resources-download，fetch_chat_file 磁盘缓存，GET /chat-file 附件流，卡片点击即下载）；⑤长操作耗时提示（busy 时 elapsed 秒数实时刷新：「分类中… 12s」） | T-954 | 已完成 | sess-t948-dev | P1 ✅ 2026-08-19（提交 46a8933；tsc 0+build 成功+oxlint 基线+test 44 绿+release_check PASS） |
+
+### 4.11 架构反馈升级施工块（v1.29 新增，T-960~T-999）
+
+> 依据：《架构反馈升级/2026-08-21-模块化任务拆分.md》（任务明细/验收要点/粒度/顺序约束全在该文档，此处只登记状态）。来源：08-20 架构体检+八点反馈判定归档 + 08-21 知识库核验与用户拍板（系统包分级注册）。
+> 施工纪律：一功能域一棵 worktree（建树 `pwsh new-worktree.ps1 <域>`），主库只验收；提交即推 feature/<域>。
+
+| 任务ID | 阶段 | 任务 | worktree | 依赖 | 状态 | 会话ID | 备注 |
+|---|---|---|---|---|---|---|---|
+| T-960 | P0 | 凭据出库（env.sit.yaml client_secret→环境变量回退） | 主库小刀 | — | 未认领 | | 0.5 天 |
+| T-961 | P0 | 飞书池 API 绑定 RBAC + 三处错位绑定对齐 | 主库小刀 | — | 未认领 | | 0.5 天 |
+| T-962 | P0 | /quality 死菜单清理 | 主库小刀 | — | 未认领 | | 0.5 小时 |
+| T-963 | P0 | P0/P1 mark 断链修复（priority→mark 映射） | 主库小刀 | — | 未认领 | | 0.5 天 |
+| T-964 | P0 | clarity 假分数清理（specflow_ledger.py:179 占位 62.0） | 主库小刀 | — | 未认领 | | 0.5 天；08-21 知识库翻案新增 |
+| T-970 | M-A | 装配归一 bootstrap.py | wt/multi-system | — | 未认领 | | 1 天 |
+| T-971 | M-A | system 一等公民化（9 调用点归一+runner 断链+分键缓存） | wt/multi-system | T-970 | 未认领 | | 2-3 天；多用户多系统切换硬前置 |
+| T-972 | M-A | 引擎 TDM 泄漏清理 | wt/multi-system | — | 未认领 | | 1 天 |
+| T-973 | M-A | 系统包动态注册（分级：配置型 UI 即时生效/代码型评审后热加载） | wt/multi-system | T-970/T-971 | 未认领 | | 2-3 天；08-21 用户拍板分级方案 |
+| T-974 | M-A | 多系统 e2e 收口（新系统注册到跑通不重启） | wt/multi-system | T-971~T-973 | 未认领 | | 1 天 |
+| T-975 | M-B | 依赖倒挂翻正（sg_core 下沉，消灭 sys.path.insert） | wt/dep-inversion | — | 未认领 | | 3-5 天；动作最大提交即推 |
+| T-976 | M-B | 解环（agent↔mcp_server、graph_index↔specflow）+ 环检查进 release_check | wt/dep-inversion | T-975 | 未认领 | | 1-2 天 |
+| T-980 | M-C | Agent 评测体系（轨迹断言 golden case + MockLLM 升基建 + metrics 工具维度） | wt/agent-eval | — | 未认领 | | 3-5 天；智能层后续一切的地基 |
+| T-981 | M-C | 测试类型学（dimensions 受控词表+维度断言映射，format_spec 三同步） | wt/test-taxonomy | — | 未认领 | | 3-4 天；与 T-980 并行 |
+| T-982 | M-C | 工具收敛（79→≤30，元数据派生 RBAC/写工具登记，eval 集验证收益） | wt/tool-consolidation | T-980 | 未认领 | | 5-8 天 |
+| T-990 | M-D | 群类型标签 + 吞并 T-933/T-934/T-935（对话内上传/read_material/e2e） | wt/material-pool | — | 未认领 | | 2-3 天 |
+| T-991 | M-D | 话题 category/priority（schema v3，闲聊保留默认过滤） | wt/material-pool | T-990 | 未认领 | | 2-3 天；拍板③前置 |
+| T-992 | M-D | link 死链修复 + 话题模块 FR 锚点派生 | wt/material-pool | T-991 | 未认领 | | 1-2 天；拍板②前置 |
+| T-993 | M-D | 跨群话题关联（先设计文档） | wt/material-pool | T-992 | 未认领 | | 3-5 天 |
+| T-995 | M-E | 拆 AgentChat.tsx（行为零变化纯重构） | wt/frontend-ia | T-990 | 未认领 | | 2-3 天；或与 M-D 排他约定 |
+| T-996 | M-E | 菜单收缩 29→15 + SEED_MENUS 迁移 + lifespan 换 on_event | wt/frontend-ia | T-995 | 未认领 | | 3-5 天；拍板④前置 |
+| T-997 | M-E | api.ts 按域拆分 + 前端关键路径 vitest | wt/frontend-ia | — | 未认领 | | 2 天 |
+| T-998 | M-F | 文档滞后批量修 + 总控状态对账（T-701~703） | 任意树空窗 | — | 未认领 | | 0.5 天 |
+| T-999 | M-F | workspace.py 拆分 / scenario_runner 抽插值器 / print→logging / user_store 治理 | 任意树空窗 | — | 未认领 | | 各 1-2 天分次 |
 
 ---
 
