@@ -14,7 +14,7 @@ import { DEFAULT_CTX_LIMIT, PURPOSE_TITLE_FALLBACK } from './agentChat/types';
 import { ArtifactCtx, GateDockCtx } from './agentChat/contexts';
 import type { ArtifactCtxValue } from './agentChat/contexts';
 import { stripRefBlock, extractPlan } from './agentChat/utils';
-import { groupMessages } from './agentChat/groupMessages';
+import { groupMessages, draftWriteUndo } from './agentChat/groupMessages';
 import { MarkdownText } from './agentChat/MarkdownText';
 import { ArtifactCard } from './agentChat/ArtifactCard';
 import { PurposeCards } from './agentChat/PurposeCards';
@@ -85,8 +85,9 @@ export default function AgentChat() {
       for (const tc of m.tool_calls) {
         try {
           const args = JSON.parse(tc.function.arguments);
-          if (tc.function.name === 'write_draft' && args.filename) files.set(args.filename, order++);
-          else if (tc.function.name === 'undo_draft' && args.filename) files.delete(args.filename);
+          const da = draftWriteUndo(tc.function.name, args);  // T-982：draft action 判定
+          if (da === 'write' && args.filename) files.set(args.filename, order++);
+          else if (da === 'undo' && args.filename) files.delete(args.filename);
         } catch { /* 参数解析失败忽略（工具结果渲染已展示原文） */ }
       }
     }
@@ -532,7 +533,7 @@ export default function AgentChat() {
       debugSentRef.current = true;
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
-        const msg = `定时任务运行失败，请分析运行 ${debugRunId} 的失败原因。使用 read_run_report 工具读取运行报告，定位失败场景和错误根因，给出修复建议。`;
+        const msg = `定时任务运行失败，请分析运行 ${debugRunId} 的失败原因。使用 attribution(action=report) 工具读取运行报告，定位失败场景和错误根因，给出修复建议。`;
         setLoading(true); setError(''); setPlanItems([]);  // K-xxx：待办不再预填固定模板——由模型 todo_write/<plan> 输出，避免「刚发消息就出写死待办」 setCtxUsage(null);
         setMessages(prev => [...prev, { role: 'user', content: msg }]);
         ws.send(JSON.stringify({
@@ -848,9 +849,9 @@ export default function AgentChat() {
     for (const m of messages) {
       if (m.role !== 'assistant' || !m.tool_calls) continue;
       for (const tc of m.tool_calls) {
-        if (tc.function.name !== 'write_draft') continue;
         try {
           const args = JSON.parse(tc.function.arguments);
+          if (draftWriteUndo(tc.function.name, args) !== 'write') continue;  // T-982
           if (args.filename && typeof args.content === 'string') map.set(args.content.trim(), args.filename);
         } catch { /* 参数解析失败忽略 */ }
       }

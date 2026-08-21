@@ -22,23 +22,53 @@ const DEFAULT_PLANS: string[] = [
 
 // 工具名 → 待办步骤序号映射（供 groupMessages 把工具调用归到对应步骤展示）
 const TOOL_TO_STEP: Record<string, number> = {
+  // T-982：合并工具按 "name.action" 键映射；legacy 名保留（历史会话回放兼容）
+  'info_pack.read': 0, 'spec.read': 0, 'spec.list': 0,
   read_info_pack: 0, read_spec: 0, list_spec_files: 0,
   query_registry: 1,
+  'scenario.list': 2, 'scenario.read': 2,
   list_scenarios: 2, read_scenario: 2,
+  'scenario.next_id': 3,
   next_scenario_id: 3,
   validate: 5,
+  'draft.write': 6, 'draft.promote': 6, 'draft.promote_batch': 6, 'draft.undo': 6,
   write_draft: 6, promote_draft: 6, promote_drafts: 6,
+  'info_pack.add': 0,
   add_to_info_pack: 0,
   undo_draft: 6,
   // 归因/调试类工具 → DB 证据查询步骤
+  'attribution.report': 11, 'attribution.db': 11, 'attribution.log': 11,
+  'attribution.failures': 11, 'attribution.executions': 11,
   read_run_report: 11, db_evidence: 11, read_run_log: 11,
   list_failures: 11, list_executions: 11,
   // K-xxx：DAG 编排链路分组锚点
+  'scenario.suggest_deps': 7,
   suggest_deps: 7,
+  'scenario.edit': 8,
   edit_dependency: 8,
+  'scenario.check_dag': 9,
   check_dag: 9,
+  'scenario.run': 10,
   run_scenario: 10,
 };
+
+// T-982：合并工具查步骤用 "name.action" 键（无 action 或历史会话 legacy 名直接命中）
+function toolStepKey(tc: { function: { name: string; arguments: string } }): string {
+  const n = tc.function.name;
+  try {
+    const a = JSON.parse(tc.function.arguments)?.action;
+    if (a && `${n}.${a}` in TOOL_TO_STEP) return `${n}.${a}`;
+  } catch { /* 参数解析失败按工具名查 */ }
+  return n;
+}
+
+// T-982：draft 合并工具按 action 判定写/撤销（兼容历史会话 write_draft/undo_draft 名）
+export function draftWriteUndo(name: string, args: Record<string, unknown> | null): 'write' | 'undo' | null {
+  if (name === 'write_draft') return 'write';
+  if (name === 'undo_draft') return 'undo';
+  if (name === 'draft' && (args?.action === 'write' || args?.action === 'undo')) return args.action as 'write' | 'undo';
+  return null;
+}
 
 // ── 将扁平消息列表分组（按待办步骤关联 + 完成提示） ──
 export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
@@ -53,8 +83,9 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
     for (const tc of m.tool_calls) {
       try {
         const args = JSON.parse(tc.function.arguments);
-        if (tc.function.name === 'write_draft' && args.filename) liveDrafts.add(args.filename);
-        else if (tc.function.name === 'undo_draft' && args.filename) liveDrafts.delete(args.filename);
+        const da = draftWriteUndo(tc.function.name, args);  // T-982：draft action 判定
+        if (da === 'write' && args.filename) liveDrafts.add(args.filename);
+        else if (da === 'undo' && args.filename) liveDrafts.delete(args.filename);
       } catch { /* 参数解析失败忽略 */ }
     }
   }
@@ -73,8 +104,8 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
       // write_draft 产物卡片（独立于折叠工具组常驻可见，点击右侧页签预览）
       const artifacts: ArtifactInfo[] = [];
       for (const t of currentToolGroup.tools || []) {
-        if (t.name !== 'write_draft' || !t.result) continue;
         const args = tryParseJson(t.args);
+        if (draftWriteUndo(t.name, args) !== 'write' || !t.result) continue;  // T-982
         const res = tryParseJson(t.result);
         const fn = args?.filename;
         if (!fn || !liveDrafts.has(fn) || res?.ok === false) continue;
@@ -110,8 +141,7 @@ export function groupMessages(messages: ChatMessage[]): GroupedItem[] {
           groups.push({ type: 'assistant-text', content: cleanContent, thought: true });
         }
         // 根据第一个工具名推断步骤
-        const firstName = msg.tool_calls[0].function.name;
-        const stepIdx = TOOL_TO_STEP[firstName];
+        const stepIdx = TOOL_TO_STEP[toolStepKey(msg.tool_calls[0])];  // T-982：name.action 键
         const stepLabel = stepIdx !== undefined ? DEFAULT_PLANS[stepIdx] : undefined;
         // 如果步骤变化了，先 flush 上一组
         if (currentToolGroup && stepIdx !== undefined && currentToolGroup.stepIdx !== undefined && stepIdx !== currentToolGroup.stepIdx) {
