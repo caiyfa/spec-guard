@@ -223,8 +223,8 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
     # 全库场景 YAML（id → raw）
     scenarios: dict = {}
     if root is None:
-        from services.scenario_store import SCENARIOS_ROOT
-        root = Path(SCENARIOS_ROOT)
+        from services.scenario_store import scenarios_root as _ss_root
+        root = Path(_ss_root())
     for dirpath, _dirs, filenames in os.walk(root):
         for fn in sorted(filenames):
             if not fn.endswith((".yaml", ".yml")) or fn.startswith("_"):
@@ -293,9 +293,10 @@ def scan_dependencies(scenario_ids, env_name="sit", scenarios_root=None,
         return [{key_name: k, "scenarios": sorted(v)} for k, v in m.items()]
 
     has_gaps = any(it["has_gaps"] for it in items)
+    from specstd.workspace import resolve_system
     return {
         "env": env_name,
-        "system": system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm"),
+        "system": resolve_system(system),
         "selected": list(scenario_ids),
         "scenario_count": len(closure),
         "scenarios": items,
@@ -327,8 +328,8 @@ def scan_compliance(scenarios_root=None) -> dict:
     """
     root = Path(scenarios_root) if scenarios_root else None
     if root is None:
-        from services.scenario_store import SCENARIOS_ROOT
-        root = Path(SCENARIOS_ROOT)
+        from services.scenario_store import scenarios_root as _ss_root
+        root = Path(_ss_root())
 
     scenarios: dict = {}
     for dirpath, _dirs, filenames in os.walk(root):
@@ -438,7 +439,8 @@ def apply_overrides(cfg: dict, overrides) -> dict:
 def _load_env(env_name: str, system: str) -> dict:
     """加载环境配置（与 runs/accounts 端点同源）。失败时告警并返回空（不抛）。"""
     import importlib
-    sys_name = system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    from specstd.workspace import resolve_system
+    sys_name = resolve_system(system)
     try:
         mod = importlib.import_module(f"systems.{sys_name}")
         return mod.load_env(env_name) or {}

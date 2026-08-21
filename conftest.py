@@ -1,8 +1,9 @@
 """SpecGuard pytest 装配：加载系统适配包 + session 级运行上下文。
 
 环境变量：
-- SPEC_GUARD_SYSTEM  被测系统适配包名（默认 tdm）
+- SPEC_GUARD_SYSTEM  被测系统适配包名（默认 tdm；runner 按触发工作区注入，T-971）
 - SG_ENV             目标环境（默认 sit），也可用 --env 覆盖
+- SG_SCENARIOS_ROOT  场景库根（runner 按触发工作区注入；缺省仓库根 scenarios/）
 """
 
 import os
@@ -24,7 +25,9 @@ from engine.bootstrap import (  # noqa: E402
 )
 from engine.scenario_runner import RunContext, run_teardowns  # noqa: E402
 
-SCENARIOS_ROOT = os.path.join(SG_ROOT, "scenarios")
+# T-971：SG_SCENARIOS_ROOT 与 SG_REPORTS_ROOT 同模式（F-1-2）——RunControl
+# 按触发工作区注入工作区场景库；CLI 直跑缺省仓库根 scenarios/
+SCENARIOS_ROOT = os.environ.get("SG_SCENARIOS_ROOT") or os.path.join(SG_ROOT, "scenarios")
 # F-1-2: 支持 runner.py 通过环境变量指定报告目录（落 .specguard/reports/）
 REPORTS_ROOT = os.environ.get("SG_REPORTS_ROOT") or os.path.join(SG_ROOT, "reports")
 

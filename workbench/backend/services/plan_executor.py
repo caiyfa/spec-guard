@@ -112,6 +112,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
     from specstd.workspace import (
         get_active_workspace,
         get_workspace,
+        resolve_system,
         set_context_workspace,
     )
 
@@ -126,8 +127,8 @@ async def execute_plan(plan_id: str, workspace: str = "",
         return {"run_id": "", "status": "failed",
                 "error": "无激活工作区", "results": []}
 
-    ws_root = ws_info.root
-    system = ws_info.system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    # T-971：system 经 resolve_system 唯一口径解析（contextvar 已设工作区）
+    system = resolve_system()
 
     # ── 1. 加载 plan ──
     plan = plan_store.get_plan(plan_id)
@@ -145,7 +146,10 @@ async def execute_plan(plan_id: str, workspace: str = "",
                 "error": "计划无场景", "results": []}
 
     # ── 2. 装配引擎运行时 ──
-    scenarios_root = ws_root / "scenarios"
+    # T-971 口径统一：与 draft_promote._scenarios_root / scenario_store 同源——
+    # 工作区 scenarios/ 存在则用（plan 场景 ID 属于工作区库），否则回退仓库根
+    from services.draft_promote import _scenarios_root
+    scenarios_root = _scenarios_root()
     if not scenarios_root.is_dir():
         return {"run_id": "", "status": "failed",
                 "error": f"场景库目录不存在: {scenarios_root}", "results": []}
@@ -317,7 +321,7 @@ async def execute_plan(plan_id: str, workspace: str = "",
     # 事件的用户收不到定时执行的通知；即时 plan_failure 通知保留（调度路径价值）
     try:
         from services.runner import push_run_notifications
-        await push_run_notifications(reports_root, f"{plan_id}/{run_id}")
+        await push_run_notifications(reports_root, f"{plan_id}/{run_id}", system=system)
     except Exception as e:
         print(f"[SpecGuard WARN] 场景级通知推送失败（不影响执行结论）: {type(e).__name__}: {e}")
 

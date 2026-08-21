@@ -245,8 +245,8 @@ def api_edit_dep(scenario_id: str, body: DepEditBody):
         # 环校验：dep 的依赖闭包中若已含本场景，新增边将成环
         from engine.scenario_loader import load_scenarios
         from engine.dependency_graph import DependencyGraph
-        from services.scenario_store import SCENARIOS_ROOT
-        graph = DependencyGraph(load_scenarios(str(SCENARIOS_ROOT)))
+        from services.scenario_store import scenarios_root
+        graph = DependencyGraph(load_scenarios(str(scenarios_root())))
         if scenario_id in graph.closure(body.dep_id):
             raise HTTPException(
                 status_code=409,
@@ -285,10 +285,10 @@ def api_suggest_deps(scenario_id: str):
     匹配 save 生产者给出建议边（含理由/置信度）；已覆盖/自依赖/成环的自动剔除。
     """
     from services import dep_suggest
-    from services.scenario_store import SCENARIOS_ROOT
+    from services.scenario_store import scenarios_root
     from specstd.workspace import drafts_dir
     try:
         d_root = drafts_dir()
     except Exception:
         d_root = None
-    return dep_suggest.suggest_deps(SCENARIOS_ROOT, d_root, target_id=scenario_id)
+    return dep_suggest.suggest_deps(scenarios_root(), d_root, target_id=scenario_id)

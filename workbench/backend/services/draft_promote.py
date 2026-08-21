@@ -50,16 +50,14 @@ def _drafts_root() -> Path:
 
 
 def _scenarios_root() -> Path:
-    """场景库目录（工作区 scenarios/ 存在则用，否则回退 SpecGuard 仓库 scenarios/）。
+    """场景库目录（T-971 起委托 scenario_store.scenarios_root 统一口径）。
 
-    K-016 修复：spec 工作区克隆通常没有 scenarios/（场景库在 SpecGuard 仓库根，
+    K-016 修复史：spec 工作区克隆通常没有 scenarios/（场景库在 SpecGuard 仓库根，
     scenario_store/DagEditor/plan_executor 都读 SG_ROOT/scenarios），
     此前解析到不存在的目录 → /drafts/modules 返回空 → 入库按钮静默无反应。
     """
-    ws = get_workspace_root()
-    if ws and (ws / "scenarios").is_dir():
-        return ws / "scenarios"
-    return SG_ROOT / "scenarios"
+    from services.scenario_store import scenarios_root
+    return scenarios_root()
 
 
 def _guard_filename(filename: str) -> Path:

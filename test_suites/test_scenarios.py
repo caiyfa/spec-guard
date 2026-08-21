@@ -26,7 +26,9 @@ from engine.execution_record import (                        # noqa: E402
     VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIP, VERDICT_BLOCKED,
 )
 
-SCENARIOS = load_scenarios(os.path.join(SG_ROOT, "scenarios"))
+# T-971：SG_SCENARIOS_ROOT 尊重 runner 注入（与 conftest 同口径）；CLI 直跑回退仓库根
+SCENARIOS = load_scenarios(os.environ.get("SG_SCENARIOS_ROOT")
+                           or os.path.join(SG_ROOT, "scenarios"))
 
 
 def _params():

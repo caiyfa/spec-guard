@@ -16,21 +16,32 @@ SG_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(SG_ROOT) not in sys.path:
     sys.path.insert(0, str(SG_ROOT))
 
-_CACHE = {}
+_CACHE: dict = {}
 
 
-def get_live_registry():
+def _resolve_system(system: str = "") -> str:
+    """system 解析（容错）：specstd.resolve_system 唯一口径，导入失败回退环境变量。"""
+    try:
+        from specstd.workspace import resolve_system
+        return resolve_system(system)
+    except Exception:
+        return system or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+
+
+def get_live_registry(system: str = ""):
     """构建并缓存活注册表。失败时返回 None（调用方自行降级）。
 
     T-970 装配归一：统一走 engine.bootstrap 组合根（db=None，仅注册元数据，
     不触网/连库；环境配置缺失时降级空 dict，注册元数据通常不依赖配置值）。
+    T-971：按 system 分键缓存——多系统部署下切换 system 各自持有注册快照，
+    不再进程级单键锁死；invalidate(system) 供系统包热重建（T-973 接缝）。
     """
-    if "registry" in _CACHE:
-        return _CACHE["registry"]
+    system = _resolve_system(system)
+    if system in _CACHE:
+        return _CACHE[system]
     try:
         from engine.bootstrap import build_registry, load_system_env
 
-        system = os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
         env_name = os.environ.get("SG_ENV", "sit")
         try:
             env_config = load_system_env(system, env_name)
@@ -38,11 +49,19 @@ def get_live_registry():
             env_config = {}
 
         reg = build_registry(system, env_config, None)
-        _CACHE["registry"] = reg
+        _CACHE[system] = reg
         return reg
     except Exception:
-        _CACHE["registry"] = None
+        _CACHE[system] = None
         return None
+
+
+def invalidate_live_registry(system: str = "") -> None:
+    """失效某系统（空 = 全部）的活注册表缓存——系统包重建/热加载后调用。"""
+    if system:
+        _CACHE.pop(system, None)
+    else:
+        _CACHE.clear()
 
 
 def list_oracles() -> list[dict]:

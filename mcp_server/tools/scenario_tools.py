@@ -424,7 +424,8 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"错误：场景库目录不存在: {scenarios_root}")]
 
     ws = get_active_workspace()
-    system = (ws.system if ws else "") or os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+    from specstd.workspace import resolve_system
+    system = resolve_system(ws.system if ws else "")
 
     try:
         env_config, db, registry, token_provider, graph, dbs = _setup_runtime(
