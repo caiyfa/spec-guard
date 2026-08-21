@@ -1,0 +1,85 @@
+{
+  "id": "EVAL-003",
+  "name": "draft-write-validate",
+  "description": "生成类任务完整轨迹：读 Spec（mock，离线免克隆扫描）→ 写草稿（mock，不落盘）→ validate 自校验（真实工具）。产物断言复用 validator：write_draft 参数中的 YAML 必须校验 PASS。验证 mock 与真实工具混排、写后自校验的正确工具序列。",
+  "task_prompt": "spec 里的 FR-EVAL-DEMO 是「按工号查询员工档案」的需求。请为它生成一份查询场景草稿：写入草稿区，然后自校验确认无误后再告诉我结论。",
+  "max_turns": 8,
+  "llm_script": [
+    {
+      "role": "assistant",
+      "content": "先读 Spec 中 FR-EVAL-DEMO 的需求内容。",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "read_spec",
+            "arguments": { "path": "specs/eval-demo/spec.md", "anchor": "FR-EVAL-DEMO" }
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "需求明确，按格式规范生成场景草稿并写入草稿区。",
+      "tool_calls": [
+        {
+          "id": "c2",
+          "type": "function",
+          "function": {
+            "name": "write_draft",
+            "arguments": {
+              "filename": "EVAL-DEMO-001.yaml",
+              "content": "id: EVAL-DEMO-001\ntitle: 评测样例-按工号查询员工档案\nversion: 0.1\npriority: P1\ntags: [eval]\ndoc:\n  given: 员工档案库中已存在工号 10086 的员工\n  when: 按工号查询该员工的档案全景\n  then: 返回该员工的档案数据且结构符合契约\n  covers: [FR-EVAL-DEMO]\nflow:\n  - tool:\n      use: select_emp\n      with:\n        empNo: \"10086\"\nverify:\n  - oracle: schema_match\n    expect:\n      code: 0\n"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "草稿已写入，现在自校验。",
+      "tool_calls": [
+        {
+          "id": "c3",
+          "type": "function",
+          "function": {
+            "name": "validate",
+            "arguments": {
+              "content": "id: EVAL-DEMO-001\ntitle: 评测样例-按工号查询员工档案\nversion: 0.1\npriority: P1\ntags: [eval]\ndoc:\n  given: 员工档案库中已存在工号 10086 的员工\n  when: 按工号查询该员工的档案全景\n  then: 返回该员工的档案数据且结构符合契约\n  covers: [FR-EVAL-DEMO]\nflow:\n  - tool:\n      use: select_emp\n      with:\n        empNo: \"10086\"\nverify:\n  - oracle: schema_match\n    expect:\n      code: 0\n"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "草稿 EVAL-DEMO-001 已写入草稿区并通过校验（无 ERROR，仅少量 WARN），可以提交人工评审。"
+    }
+  ],
+  "tool_mocks": {
+    "read_spec": {
+      "json": {
+        "path": "specs/eval-demo/spec.md",
+        "anchor": "FR-EVAL-DEMO",
+        "lines": "12-18",
+        "content": "### FR-EVAL-DEMO: 按工号查询员工档案\n- AC-1: 输入存在的工号，返回该员工的档案全景数据\n- AC-2: 工号不存在时返回明确的错误码\n（评测 mock：spec 内容仅供轨迹回放）"
+      }
+    },
+    "write_draft": {
+      "json": {
+        "ok": true,
+        "filename": "EVAL-DEMO-001.yaml",
+        "bytes": 415,
+        "mode": "create",
+        "note": "（评测 mock：未真实落盘）"
+      }
+    }
+  },
+  "expect": [
+    { "type": "tool_sequence", "expect": ["read_spec", "write_draft", "validate"] },
+    { "type": "artifact_validate", "source_tool": "write_draft", "content_key": "content", "expect_verdict": "PASS" },
+    { "type": "tool_result", "tool": "validate", "jsonpath": "$.verdict", "equals": "PASS" },
+    { "type": "tool_result", "tool": "validate", "jsonpath": "$.scenario", "equals": "EVAL-DEMO-001" }
+  ]
+}

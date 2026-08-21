@@ -1,0 +1,34 @@
+{
+  "id": "EVAL-001",
+  "name": "list-scenarios",
+  "description": "查询类任务基线：Agent 应调用 list_scenarios（真实工具，离线只读），并基于真实返回作答。验证评测基建能驱动真实工具链路。",
+  "task_prompt": "帮我看看当前场景库里有哪些场景，按模块给我一个汇总。",
+  "max_turns": 6,
+  "llm_script": [
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "list_scenarios",
+            "arguments": {}
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "已列出场景库全部场景（汇总如上）。"
+    }
+  ],
+  "tool_mocks": {},
+  "expect": [
+    { "type": "tool_sequence", "expect": ["list_scenarios"] },
+    { "type": "tools_required", "expect": ["list_scenarios"] },
+    { "type": "tool_result", "tool": "list_scenarios", "jsonpath": "$.total", "min": 1 },
+    { "type": "tool_result", "tool": "list_scenarios", "jsonpath": "$.summary.by_module", "contains": "employee" }
+  ]
+}

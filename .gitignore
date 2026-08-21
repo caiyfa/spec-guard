@@ -44,6 +44,9 @@ specstd/workspaces/_anchors/
 # ── Agent 会话文件（不入 git，多用户按工号分目录）──
 agent/sessions/
 
+# ── Agent 评测运行产物（T-980：metrics/report 每次运行重新生成，不入 git）──
+evals/results/
+
 # ── Workbench 多用户数据（SQLite，不入 git）──
 workbench/backend/data/
 

@@ -1,0 +1,37 @@
+{
+  "id": "EVAL-002",
+  "name": "validate-rejects-hallucination",
+  "description": "校验类任务：用户提供含幻觉 tool/oracle 与不存在 FR 的场景 YAML，Agent 应调用 validate（真实工具），validator 应确定性 REJECT 并在报错中点名幻觉名称。回答「调没调指定工具」与「校验是否诚实拦截」。",
+  "task_prompt": "请校验下面这份场景 YAML 是否可以入库，有问题请明确指出：\n\n```yaml\nid: EVAL-BAD-9001\ntitle: 评测样例-幻觉工具引用\nversion: 0.1\ndoc:\n  covers: [FR-EVAL-NOT-EXIST]\nflow:\n  - tool:\n      use: fetch_emp_magic\n      with:\n        empNo: \"10086\"\nverify:\n  - oracle: oracle_no_such\n```",
+  "max_turns": 6,
+  "llm_script": [
+    {
+      "role": "assistant",
+      "content": "我先用 validate 校验这份 YAML。",
+      "tool_calls": [
+        {
+          "id": "c1",
+          "type": "function",
+          "function": {
+            "name": "validate",
+            "arguments": {
+              "content": "id: EVAL-BAD-9001\ntitle: 评测样例-幻觉工具引用\nversion: 0.1\ndoc:\n  covers: [FR-EVAL-NOT-EXIST]\nflow:\n  - tool:\n      use: fetch_emp_magic\n      with:\n        empNo: \"10086\"\nverify:\n  - oracle: oracle_no_such\n"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "校验未通过（REJECT）：flow 引用了未注册的 tool「fetch_emp_magic」，verify 引用了未注册的 oracle「oracle_no_such」，均属幻觉引用，请改用注册表内的名称后再校验。"
+    }
+  ],
+  "tool_mocks": {},
+  "expect": [
+    { "type": "tool_sequence", "expect": ["validate"] },
+    { "type": "tools_required", "expect": ["validate"] },
+    { "type": "tool_result", "tool": "validate", "jsonpath": "$.verdict", "equals": "REJECT" },
+    { "type": "tool_result", "tool": "validate", "jsonpath": "$.summary.error", "min": 1 },
+    { "type": "tool_result", "tool": "validate", "jsonpath": "$.findings", "contains": "fetch_emp_magic" }
+  ]
+}
