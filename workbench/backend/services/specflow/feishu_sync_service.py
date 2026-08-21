@@ -35,6 +35,9 @@ _DEFAULT_WATCH = {"chats": [], "docs": [], "users": [],
 
 _USER_SCOPES = {"group_sender", "minutes", "docs"}
 
+# T-990 群类型标签（话题分类的强先验：测试群话题大概率 test 类，T-991 优先级信号之一）
+_CHAT_KINDS = {"测试", "产研", "用户", "项目", "运维", "迭代"}
+
 
 def _clean_users(raw_users) -> list[dict]:
     """users 归一化（设计 §3）：open_id 必填、scopes 合法枚举过滤、
@@ -50,6 +53,28 @@ def _clean_users(raw_users) -> list[dict]:
         out[open_id] = {"open_id": open_id,
                         "name": str(u.get("name", "") or ""),
                         "scopes": scopes}
+    return list(out.values())
+
+
+def _clean_chats(raw_chats) -> list[dict]:
+    """chats 归一化（T-990）：chat_id 必填、kind 合枚举过滤（空=未标注）、
+    topic_days 归一为非负 int（缺省 7），按 chat_id 去重（后写覆盖）。"""
+    out: dict[str, dict] = {}
+    for c in raw_chats or []:
+        if not isinstance(c, dict):
+            continue
+        chat_id = str(c.get("chat_id", "")).strip()
+        if not chat_id:
+            continue
+        kind = str(c.get("kind", "") or "")
+        try:
+            days = max(0, int(c.get("topic_days", 7)))
+        except (TypeError, ValueError):
+            days = 7
+        out[chat_id] = {"chat_id": chat_id,
+                        "name": str(c.get("name", "") or ""),
+                        "kind": kind if kind in _CHAT_KINDS else "",
+                        "topic_days": days}
     return list(out.values())
 
 
@@ -72,6 +97,7 @@ def load_watch_config(specflow_emp_base: Path) -> dict:
     cfg = dict(_DEFAULT_WATCH)
     cfg.update({k: v for k, v in raw.items() if k in _DEFAULT_WATCH})
     cfg["users"] = _clean_users(cfg.get("users"))
+    cfg["chats"] = _clean_chats(cfg.get("chats"))
     return cfg
 
 
@@ -81,6 +107,7 @@ def save_watch_config(specflow_emp_base: Path, cfg: dict) -> dict:
     clean = dict(_DEFAULT_WATCH)
     clean.update({k: v for k, v in (cfg or {}).items() if k in _DEFAULT_WATCH})
     clean["users"] = _clean_users(clean.get("users"))
+    clean["chats"] = _clean_chats(clean.get("chats"))
     path.write_text(yaml.safe_dump(clean, allow_unicode=True, sort_keys=False),
                     encoding="utf-8")
     return clean
@@ -307,6 +334,7 @@ def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
         from specflow.feishu_pool import topic_cluster as tc
         from specflow.feishu_pool.pool_store import chat_sha8
         chat_windows = {}
+        chat_kinds = {}
         for c in (load_watch_config(emp_base).get("chats") or []):
             cid = str(c.get("chat_id", ""))
             if cid:
@@ -314,9 +342,13 @@ def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
                     chat_windows[chat_sha8(cid)] = int(c.get("topic_days", 7) or 0)
                 except (TypeError, ValueError):
                     chat_windows[chat_sha8(cid)] = 7
+                # T-991：群类型标签随聚类下传（priority 推导信号；多 emp 同群
+                # 配置以最后处理的 watch 为准——kind 语义通常一致）
+                chat_kinds[chat_sha8(cid)] = str(c.get("kind") or "")
         material_root = Path(material_base) if material_base else emp_base
         tc.cluster_chat_snapshots(material_root, LLMClient(model_id="text"),
-                                  chat_windows=chat_windows, default_days=7)
+                                  chat_windows=chat_windows, default_days=7,
+                                  chat_kinds=chat_kinds or None)
     except Exception as e:
         log.warning("话题聚类失败（不阻断同步）: %s", e)
 

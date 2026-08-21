@@ -1269,3 +1269,89 @@ class TestLLMRetry429:
         llm = LLMClient(base_url="https://test.api", api_key="key", model="gpt-4o")
         with pytest.raises(httpx.HTTPStatusError):
             llm.chat([{"role": "user", "content": "hi"}])
+
+
+# ══════════════════════════════════════════════════════════
+# T-935：对话内材料链路 e2e（上传 → 引用注入 → read_material 贯通）
+# ══════════════════════════════════════════════════════════
+
+class TestMaterialE2E:
+    @pytest.fixture(autouse=True)
+    def _material_env(self, tmp_path, monkeypatch):
+        """隔离 DB + 工作区 + contextvar（上传/引用/读回同一上下文）。"""
+        import specstd.workspace as wsm
+        monkeypatch.setattr(wsm, "REGISTRY_PATH", tmp_path / "registry.yaml")
+        monkeypatch.setattr(wsm, "CLONES_DIR", tmp_path / "_clones")
+        from workbench.backend.services.specflow import sf_store
+        monkeypatch.setattr(sf_store, "DB_PATH", tmp_path / "workbench.db")
+
+        from test_specstd.helpers import create_valid_workspace
+        ws_path = create_valid_workspace(tmp_path / "ws")
+        wsm.register_local("test-t935", str(ws_path), "tdm", activate=True)
+        tok_ws = wsm.set_context_workspace("test-t935")
+        tok_emp = wsm.set_context_emp_no("E10001")
+        yield tmp_path
+        wsm.reset_context_workspace(tok_ws)
+        wsm.reset_context_emp_no(tok_emp)
+        wsm.unregister("test-t935")
+
+    def _upload(self):
+        """开标 + 服务层上传一份 md 材料（对话内 🧾 上传的服务层等效路径）。"""
+        from specstd.workspace import specflow_dir
+        from workbench.backend.services.specflow.interview_service import open_interview
+        from workbench.backend.services.specflow.materials_service import db_upload_material
+        iv = open_interview(title="绩效域调整", initiator_emp="E10001",
+                            initiator_role="product",
+                            source=[{"type": "prd_section", "ref": "PRD §2.7"}],
+                            session_id="SESS-T935", workspace="test-t935",
+                            specflow_base=specflow_dir())
+        result = db_upload_material(
+            iv["iv_id"], "test-t935", "e2e-notes.md",
+            ("# 绩效方案要点\n\n绩效阈值调整讨论纪要。" * 30).encode("utf-8"),
+            "E10001", specflow_dir())
+        return iv["iv_id"], result["material"]
+
+    def test_upload_reference_read_material_chain(self):
+        """贯通主路径：上传 → material 引用注入标识块 → agent（purpose 白名单
+        + product RBAC）经 read_material 读回解析摘要。"""
+        _iv_id, mat = self._upload()
+        mid = mat["material_id"]
+
+        # ① 引用注入：material 分支产出标识提示块（不注入全文）
+        from workbench.backend.routers.agent import _process_references
+        scenario_id, block, structured = _process_references(
+            [{"type": "material", "id": mid, "path": mid}], "")
+        assert scenario_id == ""                       # material 不接管场景
+        assert "[材料引用]" in block
+        assert mid in block and "e2e-notes.md" in block
+        assert "read_material" in block                # 引导 agent 按需读取
+        assert structured[0]["type"] == "material"
+        assert structured[0]["label"] == "e2e-notes.md"
+        assert structured[0]["sha"] == mat["sha256_12"]
+
+        # ② 贯通：requirement_interview purpose + product 角色 → read_material 可用
+        tool_call = {"id": "c1", "type": "function",
+                     "function": {"name": "read_material",
+                                  "arguments": json.dumps(
+                                      {"material_id": mid, "section": "summary"})}}
+        mock = MockLLM([
+            {"role": "assistant", "content": "", "tool_calls": [tool_call]},
+            {"role": "assistant", "content": "已读取材料摘要"},
+        ])
+        runtime = AgentRuntime(mock, max_turns=4,
+                               purpose_name="requirement_interview",
+                               user_roles=["product"])
+        messages = runtime.run("sys", f"请查看材料 {mid}")
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        assert len(tool_msgs) >= 1
+        assert "'status': 'indexed'" in tool_msgs[0]["content"]
+        assert "绩效方案要点" in tool_msgs[0]["content"]
+        assert "'summary':" in tool_msgs[0]["content"]
+
+    def test_reference_missing_material_honest(self):
+        """引用不存在的材料 → 诚实标记缺失（不静默跳过）。"""
+        from workbench.backend.routers.agent import _process_references
+        _, block, structured = _process_references(
+            [{"type": "material", "id": "MAT-999", "path": "MAT-999"}], "")
+        assert "[材料不存在或不可读]" in block
+        assert structured[0]["missing"] is True

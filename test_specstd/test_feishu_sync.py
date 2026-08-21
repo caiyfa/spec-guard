@@ -48,6 +48,36 @@ def test_watch_users_roundtrip(tmp_path):
     assert loaded["users"][0]["open_id"] == "ou_a"
     assert loaded["users"][0]["scopes"] == ["group_sender", "minutes"]
 
+
+def test_watch_chats_kind_roundtrip(tmp_path):
+    """T-990 群类型标签：kind 读写 roundtrip + 非法枚举归空 + 脏数据归一。"""
+    base = tmp_path / ".specflow" / "u1"
+    cfg = {"chats": [{"chat_id": "oc_abc", "name": "测试讨论群",
+                      "kind": "测试", "topic_days": 14},
+                     {"chat_id": "oc_bad", "name": "脏数据", "kind": "不存在的类型"},
+                     {"chat_id": "oc_days", "name": "窗口修复", "topic_days": "30"}],
+           "docs": [], "minutes_days": 30, "chat_days": 7}
+    svc.save_watch_config(base, cfg)
+    loaded = svc.load_watch_config(base)
+    by_id = {c["chat_id"]: c for c in loaded["chats"]}
+    assert by_id["oc_abc"]["kind"] == "测试"
+    assert by_id["oc_abc"]["topic_days"] == 14
+    assert by_id["oc_bad"]["kind"] == ""            # 非法枚举 → 未标注
+    assert by_id["oc_days"]["topic_days"] == 30     # 字符串数字归一为 int
+
+
+def test_watch_chats_legacy_without_kind(tmp_path):
+    """旧配置（chats 无 kind 字段）加载补 kind=''，不报错。"""
+    base = tmp_path / ".specflow" / "u1"
+    base.mkdir(parents=True)
+    (base / "feishu_watch.yaml").write_text(
+        "chats:\n  - chat_id: oc_abc\n    name: 需求群\n"
+        "docs: []\nminutes_days: 30\nchat_days: 7\n", encoding="utf-8")
+    loaded = svc.load_watch_config(base)
+    assert loaded["chats"][0]["kind"] == ""
+    assert loaded["chats"][0]["topic_days"] == 7   # 缺省补默认
+
+
 def test_watch_users_legacy_config_default(tmp_path):
     """旧配置（无 users 字段）加载自动补齐 users: []。"""
     base = tmp_path / ".specflow" / "u1"

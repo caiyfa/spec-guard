@@ -17,6 +17,22 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   rejected: { label: '已拒绝', cls: 'bg-gray-600/30 text-gray-500 line-through' },
 };
 
+// T-991：五分类徽标（chat 闲聊默认过滤——工作台开关控制，卡片侧只如实呈现）
+const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
+  chat: { label: '闲聊', cls: 'bg-gray-600/30 text-gray-500' },
+  routine: { label: '沟通', cls: 'bg-sky-500/15 text-sky-400' },
+  requirement: { label: '需求', cls: 'bg-amber-500/15 text-amber-300' },
+  test: { label: '测试', cls: 'bg-blue-500/15 text-blue-400' },
+  solution: { label: '方案', cls: 'bg-violet-500/15 text-violet-400' },
+};
+
+// T-991：优先级徽标（初值信号推导，人工可改）
+const PRIORITY_BADGE: Record<string, { label: string; cls: string }> = {
+  high: { label: '高优', cls: 'text-red-400' },
+  normal: { label: '中', cls: 'text-gray-500' },
+  low: { label: '低', cls: 'text-gray-600' },
+};
+
 const ACTION_LABEL: Record<string, string> = {
   create: '自动聚类生成', cluster: '系统聚类修订', draft: '生成分段草案',
   commit: '人工提交', edit: '人工编辑', regen: '重新生成',
@@ -34,6 +50,9 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
   const [draftTitle, setDraftTitle] = useState(t.title);
   const [draftSummary, setDraftSummary] = useState(t.summary);
   const [draftKeywords, setDraftKeywords] = useState((t.keywords || []).join('，'));
+  // T-991：分类/优先级编辑态（空串=不改，沿用现值）
+  const [draftCategory, setDraftCategory] = useState(t.category || '');
+  const [draftPriority, setDraftPriority] = useState(t.priority || '');
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   const [history, setHistory] = useState<FeishuTopicHistoryItem[] | null>(null);
@@ -44,13 +63,16 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
     setDraftTitle(t.title);
     setDraftSummary(t.summary);
     setDraftKeywords((t.keywords || []).join('，'));
-  }, [t.title, t.summary, t.keywords]);
+    setDraftCategory(t.category || '');
+    setDraftPriority(t.priority || '');
+  }, [t.title, t.summary, t.keywords, t.category, t.priority]);
 
   const saveEdit = async () => {
     setBusy('edit'); setErr('');
     try {
       const kws = draftKeywords.split(/[，,]/).map(s => s.trim()).filter(Boolean);
-      await feishuPoolApi.editTopicCard(t.id, draftTitle, draftSummary, kws, t.rev);
+      await feishuPoolApi.editTopicCard(t.id, draftTitle, draftSummary, kws, t.rev,
+        draftCategory, draftPriority);
       setEditing(false);
       onRefresh();
     } catch (e: any) {
@@ -117,6 +139,17 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
             {badge.label}
           </span>
         )}
+        {t.category && (
+          <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${(CATEGORY_BADGE[t.category] || CATEGORY_BADGE.routine).cls}`}>
+            {(CATEGORY_BADGE[t.category] || CATEGORY_BADGE.routine).label}
+          </span>
+        )}
+        {t.priority && t.priority !== 'normal' && (
+          <span className={`text-[10px] shrink-0 ${(PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.normal).cls}`}
+            title={`优先级：${t.priority}（信号推导初值，可编辑）`}>
+            {(PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.normal).label}
+          </span>
+        )}
         {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续</span>}
         <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500">
           {t.message_count} 条 · {t.participants_count} 人
@@ -129,6 +162,26 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
             value={draftSummary} onChange={e => setDraftSummary(e.target.value)} />
           <input className={`${input} w-full mt-1`} placeholder="关键词（逗号分隔，2~5 个）"
             value={draftKeywords} onChange={e => setDraftKeywords(e.target.value)} />
+          <div className="flex gap-2 mt-1">
+            <select className={`${input} flex-1`} value={draftCategory}
+              onChange={e => setDraftCategory(e.target.value)}
+              title="话题分类（五分类；空=不改）">
+              <option value="">分类：不改</option>
+              <option value="chat">闲聊</option>
+              <option value="routine">沟通</option>
+              <option value="requirement">需求</option>
+              <option value="test">测试</option>
+              <option value="solution">方案</option>
+            </select>
+            <select className={`${input} flex-1`} value={draftPriority}
+              onChange={e => setDraftPriority(e.target.value)}
+              title="优先级（信号推导初值，可人工改；空=不改）">
+              <option value="">优先级：不改</option>
+              <option value="high">高</option>
+              <option value="normal">中</option>
+              <option value="low">低</option>
+            </select>
+          </div>
           {origin && (
             <div className="mt-1 p-1.5 rounded bg-surface-3/60 border border-border/50">
               <div className="text-[10px] text-gray-500 mb-0.5">

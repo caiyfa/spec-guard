@@ -364,7 +364,8 @@ def test_cluster_once_no_text_model(monkeypatch):
     assert called == []
 
 def test_cluster_once_with_text_model(monkeypatch):
-    """已配置 text 模型 → cluster_chat_snapshots 被调（T-946：带按群窗口+默认7天）。"""
+    """已配置 text 模型 → cluster_chat_snapshots 被调（T-946：带按群窗口+默认7天；
+    T-991：带按群类型标签 chat_kinds——priority 推导信号下传）。"""
     called = {}
 
     class _FakeLLM:
@@ -375,12 +376,13 @@ def test_cluster_once_with_text_model(monkeypatch):
     monkeypatch.setattr("agent.llm_client.LLMClient", _FakeLLM)
     monkeypatch.setattr(
         "specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
-        lambda base, llm, days=None, chat_windows=None, default_days=0:
+        lambda base, llm, days=None, chat_windows=None, default_days=0,
+               chat_kinds=None:
             called.update(args=(base, llm), windows=chat_windows,
-                          default=default_days) or [])
+                          default=default_days, kinds=chat_kinds) or [])
     monkeypatch.setattr(svc, "load_watch_config", lambda base: {
-        "chats": [{"chat_id": "oc_a", "topic_days": 30},
-                  {"chat_id": "oc_b"}],          # 缺省 7
+        "chats": [{"chat_id": "oc_a", "topic_days": 30, "kind": "测试"},
+                  {"chat_id": "oc_b"}],          # 缺省 7 / kind 未标注
         "docs": [], "users": [], "minutes_days": 30, "chat_days": 7})
     from specflow.feishu_pool.pool_store import chat_sha8
     svc._cluster_once(Path("/tmp/emp"))
@@ -388,6 +390,8 @@ def test_cluster_once_with_text_model(monkeypatch):
     assert called["args"][0] == Path("/tmp/emp")
     assert called["default"] == 7
     assert called["windows"] == {chat_sha8("oc_a"): 30, chat_sha8("oc_b"): 7}
+    # T-991：kind 随聚类下传（未标注为空串）
+    assert called["kinds"] == {chat_sha8("oc_a"): "测试", chat_sha8("oc_b"): ""}
 
 def test_cluster_once_error_swallowed(monkeypatch):
     """聚类抛异常不外溢（异步线程内失败仅记日志，不阻断后续）。"""

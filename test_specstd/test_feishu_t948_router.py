@@ -109,3 +109,32 @@ def test_chat_messages_endpoint(tmp_path):
         rp.chat_messages(sha8="../..", day="20260807",
                          user=_USER, workspace="tdm")
     assert getattr(ei.value, "status_code", None) == 404
+
+
+# ══════════════════════════════════════════════════════════
+# T-991：卡片编辑 category/priority（schema v3）
+# ══════════════════════════════════════════════════════════
+
+def test_update_card_category_priority_ok(tmp_path):
+    """编辑分类/优先级成功：卡片更新 + rev 推进。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_topic_file(emp)
+    body = rp.CardUpdate(id="tp:3f9a2c-20260807-01", category="test",
+                         priority="high", base_rev=3)
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp):
+        t = rp.update_topic_card(body, user=_USER, workspace="tdm")
+    assert t["category"] == "test" and t["priority"] == "high"
+    assert t["rev"] == 4
+
+
+def test_update_card_invalid_category_400(tmp_path):
+    """非法枚举 → 400（诚实报错，不静默归默认）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_topic_file(emp)
+    body = rp.CardUpdate(id="tp:3f9a2c-20260807-01", category="bogus",
+                         base_rev=3)
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp), \
+         pytest.raises(Exception) as ei:
+        rp.update_topic_card(body, user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 400
+    assert "category" in str(ei.value.detail)

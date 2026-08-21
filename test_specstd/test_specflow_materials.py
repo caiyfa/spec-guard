@@ -349,6 +349,66 @@ class TestMCPPack:
         assert "尚无信息包" in r[0].text
 
 
+def _mcp_upload_md(iv_id="IV-001", filename="read-me.md"):
+    """服务层直传 md 材料（read_material 测试数据源，走完整解析管线）。"""
+    from specstd.workspace import specflow_dir
+    from workbench.backend.services.specflow.materials_service import db_upload_material
+    result = db_upload_material(
+        iv_id, "test-s3", filename,
+        ("# 绩效方案要点\n\n" + ("正文讨论内容。" * 400)).encode("utf-8"),
+        "E10001", specflow_dir())
+    return result["material"]
+
+
+class TestReadMaterial:
+    """T-934 read_material：三视图 / raw 分页 / 未知 id 诚实报错。"""
+
+    def test_summary_view(self, mcp_env):
+        m = _mcp_upload_md()
+        r = _call(specflow_pack, "read_material", {"material_id": m["material_id"]})
+        text = r[0].text
+        assert "'section'" not in text          # 默认视图非 raw
+        assert "'status': 'indexed'" in text
+        assert "'summary': '# 绩效方案要点" in text
+        assert "'total_chars':" in text and "'chunks':" in text
+        assert "'hint'" in text                 # 提示 raw 分页入口
+
+    def test_topics_view(self, mcp_env):
+        from workbench.backend.services.specflow.materials_service import db_add_topic
+        m = _mcp_upload_md()
+        db_add_topic(material_id=m["material_id"], iv_id=m["iv_id"],
+                     workspace="test-s3", title="绩效阈值调整")
+        r = _call(specflow_pack, "read_material",
+                  {"material_id": m["material_id"], "section": "topics"})
+        assert "'count': 1" in r[0].text
+        assert "绩效阈值调整" in r[0].text
+        assert "'confirmed': 0" in r[0].text
+
+    def test_raw_pagination(self, mcp_env):
+        m = _mcp_upload_md()
+        mid = m["material_id"]
+        p1 = _call(specflow_pack, "read_material",
+                   {"material_id": mid, "section": "raw", "offset": 0, "limit": 500})
+        assert "'has_more': True" in p1[0].text
+        total = int(p1[0].text.split("'total_chars': ")[1].split(",")[0])
+        last_offset = max(0, total - 100)
+        p2 = _call(specflow_pack, "read_material",
+                   {"material_id": mid, "section": "raw",
+                    "offset": last_offset, "limit": 100})
+        assert "'has_more': False" in p2[0].text
+        assert f"'offset': {last_offset}" in p2[0].text
+
+    def test_unknown_material_honest_error(self, mcp_env):
+        r = _call(specflow_pack, "read_material", {"material_id": "MAT-999"})
+        assert "材料不存在: MAT-999" in r[0].text
+
+    def test_invalid_section(self, mcp_env):
+        m = _mcp_upload_md()
+        r = _call(specflow_pack, "read_material",
+                  {"material_id": m["material_id"], "section": "full"})
+        assert "section 仅支持 summary|topics|raw" in r[0].text
+
+
 # ══════════════════════════════════════════════════════════
 # REST 层（上传/列表/闸门）
 # ══════════════════════════════════════════════════════════

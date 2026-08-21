@@ -2,7 +2,7 @@
 // LLM 候选边（依据+置信度）→ 人批量复核 → 共享区事实源 → 图谱派生。
 // 同步范围即授权范围（watch 配置 = 显式授权载体）。
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { feishuPoolApi, type FeishuReviewItem } from '../api';
 import FeishuWatchSettings from './FeishuWatchSettings';
 
@@ -30,21 +30,32 @@ export default function FeishuReviewPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
+  // T-991：复核队列范围（mine=我的私有队列默认 / shared=共享队列——多人协作
+  // 互相复核；体验基线①持久化，进入恢复上次选择）
+  const [scope, setScope] = useState<'mine' | 'shared'>(() => {
+    try {
+      return localStorage.getItem('sg-review-scope') === 'shared' ? 'shared' : 'mine';
+    } catch { return 'mine'; }
+  });
   // T-927：确认后可选入包（默认不勾，人拍板不绕闸门）
   const [ivPrompt, setIvPrompt] = useState<{ iv_id: string; title: string }[]>([]);
   const [ivChecked, setIvChecked] = useState<Set<string>>(new Set());
 
   const keyOf = (it: FeishuReviewItem) => `${it.src}||${it.dst}`;
 
-  const load = async () => {
+  useEffect(() => {
+    try { localStorage.setItem('sg-review-scope', scope); } catch { /* 忽略 */ }
+  }, [scope]);
+
+  const load = useCallback(async () => {
     try {
-      const { items } = await feishuPoolApi.reviewQueue();
+      const { items } = await feishuPoolApi.reviewQueue(scope);
       setItems(items);
       setSelected(new Set());
     } catch (e: any) { setError(e.message); }
-  };
+  }, [scope]);
 
-  useEffect(() => { setError(''); load(); }, []);
+  useEffect(() => { setError(''); void load(); }, [load]);
 
   const visible = useMemo(
     () => items.filter(i => i.status === 'pending' && i.confidence >= threshold),
@@ -96,8 +107,8 @@ export default function FeishuReviewPanel() {
     try {
       const r: { confirmed?: number; rejected?: number; skipped: number } =
         action === 'confirm'
-          ? await feishuPoolApi.confirm(pairsOf(selected))
-          : await feishuPoolApi.reject(pairsOf(selected));
+          ? await feishuPoolApi.confirm(pairsOf(selected), scope)
+          : await feishuPoolApi.reject(pairsOf(selected), scope);
       const n = action === 'confirm' ? (r.confirmed ?? 0) : (r.rejected ?? 0);
       setNotice(`${action === 'confirm' ? '确认' : '拒绝'} ${n} 条`
         + (r.skipped ? `，跳过 ${r.skipped} 条（invalid/不存在）` : '')
@@ -121,6 +132,14 @@ export default function FeishuReviewPanel() {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold">🔗 关联复核（飞书材料 → FR）</h2>
         <div className="flex items-center gap-2">
+          {/* T-991：队列范围切换（默认我的；共享=多人协作互相复核建边建议） */}
+          <select className="bg-surface-3 border border-border rounded px-2 py-1 text-[11px] text-gray-300 outline-none focus:border-info"
+            value={scope}
+            onChange={e => setScope(e.target.value as 'mine' | 'shared')}
+            title="我的=仅本人同步产生的建议（默认）；共享=工作区共享队列（多人协作可互相复核）">
+            <option value="mine">我的队列</option>
+            <option value="shared">共享队列</option>
+          </select>
           <button className={btn} onClick={handleSync} disabled={busy === 'sync'}>
             {busy === 'sync' ? '同步中…' : '立即同步'}
           </button>

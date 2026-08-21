@@ -1,9 +1,13 @@
-"""topic_cluster.py — LLM 话题聚类作业（飞书知识图谱一期 T6；T-948 schema v2）。
+"""topic_cluster.py — LLM 话题聚类作业（飞书知识图谱一期 T6；T-948 schema v2；
+T-991 schema v3：category 五分类 + priority 信号推导）。
 
 输入：私有区群聊快照 chats/{chat_sha8}/{yyyymmdd}.md（[HH:MM] 发言人: 内容 行格式）
 产出：话题卡片写 _topics.yaml（状态制单文件；T-948 取代候选/确认双轨：
 status: draft|confirmed|rejected，卡片带 keywords/author/rev（乐观锁）/
-agent_origin（agent 原稿，人工编辑不动它），全部变更追加 _topic_history.jsonl）。
+agent_origin（agent 原稿，人工编辑不动它），全部变更追加 _topic_history.jsonl。
+T-991 v3：每卡携带 category（chat|routine|requirement|test|solution 五分类，
+闲聊从「prompt 丢弃」改为「分类保留」——默认视图过滤在前端，可审计）与
+priority（high|normal|low，确定性信号推导初值，人工可改）。
 
 id 稳定性铁律：图谱从文件派生而非重跑 LLM——新候选与已有话题归并
 （同 chat_sha8 + 标题相似 + 同日 → 沿用旧 id），全新话题按当日 seq 分配。
@@ -26,23 +30,76 @@ _MSG_RE = re.compile(r"^\[(\d{2}:\d{2})\]\s")
 _TITLE_SIMILARITY = 0.6
 
 # prompt 版本（agent_origin 归因对比依据；改 prompt 语义时递增）
-_PROMPT_VERSION = "pv2"
+# pv3：T-991 五分类 rubric + priority_hint（闲聊保留为 chat 类，不再丢弃）
+_PROMPT_VERSION = "pv3"
 
 _STATUS_ENUM = ("draft", "confirmed", "rejected")
+# T-991 schema v3：分类/优先级枚举（闲聊保留默认过滤——拍板③）
+_CATEGORY_ENUM = ("chat", "routine", "requirement", "test", "solution")
+_PRIORITY_ENUM = ("high", "normal", "low")
 _SYSTEM_EDITOR = {"emp": "", "name": "system"}
 
 # 最近一次聚类的错误清单（诚实呈现；模块级，调用方聚类后可读）
 _LAST_ERRORS: list[str] = []
 
+# T-991：五分类操作化定义（rubric）+ few-shot——封闭集分类可靠性取决于定义
+# 清晰度（与测试维度受控词表同理）；三处 prompt 共用。
+_CATEGORY_RUBRIC = """category 必须从以下封闭枚举中选（操作化定义 + 示例）：
+- chat：闲聊寒暄（吃饭/问候/段子/表情刷屏），无任何工作信息。示例：「中午吃啥」「早上好」
+- routine：日常协作沟通（排期/通知/状态同步/找人），有工作信息但无需求/方案/测试实质。示例：「周四上线前把材料补齐」「测试环境今天重启」
+- requirement：需求相关（新需求讨论/需求变更/口径确认/优先级争议）。示例：「绩效阈值要从 3.5 调到 3.8」
+- test：测试相关（bug 现象/用例讨论/测试数据/验证结论/环境问题）。示例：「这个 bug 在 SIT 复现了，返回码 500」
+- solution：方案相关（技术方案/设计讨论/架构决策/实现路径）。示例：「分库分表按 hash 还是范围切」"""
+
+
+def derive_priority(category: str, message_count: int, participants_count: int,
+                    chat_kind: str = "", llm_hint: str = "") -> str:
+    """T-991 priority 初值：确定性信号推导（非纯 LLM 拍脑袋）。
+
+    信号与权重：消息量（≥30 条 +1 / ≥10 条 +0.5）、参与人数（≥5 人 +1 /
+    ≥3 人 +0.5）、来源群类型（测试/产研/用户群 +0.5，T-990 kind）、分类语义
+    （requirement/test/solution +0.5）、LLM 提示（high +0.5 / low -0.5 微调）。
+    闲聊恒 low；阈值：≥2 → high，≥1 → normal，否则 low。
+    人工可改（edit_candidate）；T-992 关联 FR 的 P0/P1 信号纳入后可再校准。
+    """
+    if category == "chat":
+        return "low"
+    score = 0.0
+    mc = int(message_count or 0)
+    pc = int(participants_count or 0)
+    score += 1.0 if mc >= 30 else (0.5 if mc >= 10 else 0.0)
+    score += 1.0 if pc >= 5 else (0.5 if pc >= 3 else 0.0)
+    if str(chat_kind) in ("测试", "产研", "用户"):
+        score += 0.5
+    if category in ("requirement", "test", "solution"):
+        score += 0.5
+    score += {"high": 0.5, "normal": 0.0, "low": -0.5}.get(str(llm_hint), 0.0)
+    return "high" if score >= 2.0 else ("normal" if score >= 1.0 else "low")
+
+
+def _norm_category(v) -> str:
+    """LLM 输出/存量数据 → 合法分类（非法值保守归 routine，诚实不抛）。"""
+    s = str(v or "")
+    return s if s in _CATEGORY_ENUM else "routine"
+
+
+def _norm_priority(v) -> str:
+    s = str(v or "")
+    return s if s in _PRIORITY_ENUM else "normal"
+
+
 _PROMPT = """你是话题聚类助手。阅读以下群聊记录（每行格式：[HH:MM] 发言人: 内容，
 每行开头的序号是该消息的行号），把语义相关的消息聚成话题。要求：
-1. 只聚类有实质讨论内容的消息（需求/方案/决策/问题）；闲聊（吃饭问候等）不聚类
+1. 所有话题都要聚（含闲聊——闲聊聚成 category=chat 的话题卡，供过滤与噪声统计，
+   不要丢弃）；跨天延续的同一讨论聚为同一个话题
 2. 每个话题给出：title（≤20字）、summary（≤80字结论摘要）、
    keywords（2~5个关键词）、msg_lines（该话题覆盖的消息行号列表，
-   行号从 1 起始，如 [1,2,3]）、participants_count（参与人数）
-3. 若某话题是近期已有话题的延续讨论，附 continues: "已有话题id"（只能从下面清单选，禁止编造）：
+   行号从 1 起始，如 [1,2,3]）、participants_count（参与人数）、
+   priority_hint（high|normal|low，你对重要程度的直觉判断）
+3. {category_rubric}
+4. 若某话题是近期已有话题的延续讨论，附 continues: "已有话题id"（只能从下面清单选，禁止编造）：
 {existing_topics}
-4. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
+5. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
 
 群聊记录（{day}）：
 {content}"""
@@ -88,12 +145,17 @@ class RevConflict(Exception):
 
 
 def _normalize_card(t: dict) -> dict:
-    """卡片字段归一化：T-948 新字段补默认（存量卡 status=draft/rev=1/keywords=[]）。"""
+    """卡片字段归一化：T-948 新字段补默认（存量卡 status=draft/rev=1/keywords=[]）；
+    T-991 v3 补 category（存量卡保守归 routine）/priority（normal），非法值归默认。"""
     t.setdefault("status", "draft")
     t.setdefault("rev", 1)
     t.setdefault("keywords", [])
+    t.setdefault("category", "routine")
+    t.setdefault("priority", "normal")
     if t.get("status") not in _STATUS_ENUM:
         t["status"] = "draft"
+    t["category"] = _norm_category(t.get("category"))
+    t["priority"] = _norm_priority(t.get("priority"))
     return t
 
 
@@ -242,7 +304,8 @@ def _merge_one(existing: list[dict], chat_sha8: str, day: str,
 def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                            days: list[str] | None = None,
                            chat_windows: dict[str, int] | None = None,
-                           default_days: int = 0) -> list[dict]:
+                           default_days: int = 0,
+                           chat_kinds: dict[str, str] | None = None) -> list[dict]:
     """聚类私有区群聊快照，候选话题归并写回 _candidate_topics.yaml。
 
     分片语义：按「群 × 天」逐文件独立聚类（天然分片，单文件单次 LLM 调用，
@@ -256,6 +319,8 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
             话题生成；缺省键回退 default_days
         default_days: T-946 默认时效窗口（近 N 天的快照才聚类，过期数据
             不提取；<=0 = 不限，向后兼容）
+        chat_kinds: T-991 按群类型标签 {chat_sha8: kind}（priority 信号之一；
+            缺省键 = 未标注，不加分）
 
     Returns:
         本次新增/修订的话题列表（含稳定 id）
@@ -267,6 +332,7 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
     _LAST_ERRORS = []
     chats_root = pool_dirs(specflow_emp_base)["chats"]
     existing = _load_candidates(specflow_emp_base)
+    kinds = chat_kinds or {}
     produced: list[dict] = []
     if not chats_root.is_dir():
         return produced
@@ -305,7 +371,8 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
             try:
                 resp = llm.chat([{"role": "user", "content": _PROMPT.format(
                     day=day, content=_numbered_lines(content),
-                    existing_topics=_existing_topics_digest(existing, chat_sha8))}])
+                    existing_topics=_existing_topics_digest(existing, chat_sha8),
+                    category_rubric=_CATEGORY_RUBRIC)}])
                 raw_topics = _parse_llm_json(_llm_content(resp))
             except Exception as e:
                 _LAST_ERRORS.append(f"{chat_sha8}/{day}: LLM 聚类失败: {e}")
@@ -314,15 +381,23 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                 msg_range = rt.get("msg_range") or []
                 keywords = [str(k) for k in (rt.get("keywords") or []) if str(k)]
                 ids = _msg_lines_to_ids(rt.get("msg_lines"), line_ids)
+                category = _norm_category(rt.get("category"))
+                msg_count = (len(ids) if ids
+                             else _count_messages(content, msg_range))
+                participants = int(rt.get("participants_count") or 0)
                 candidate = {
                     "title": str(rt.get("title", "")),
                     "summary": str(rt.get("summary", "")),
                     "keywords": keywords,
+                    "category": category,
+                    "priority": derive_priority(
+                        category, msg_count, participants,
+                        chat_kind=str(kinds.get(chat_sha8, "")),
+                        llm_hint=str(rt.get("priority_hint") or "")),
                     "chat_sha8": chat_sha8,
                     "window": _window_of(day, msg_range),
-                    "message_count": len(ids) if ids
-                    else _count_messages(content, msg_range),
-                    "participants_count": int(rt.get("participants_count") or 0),
+                    "message_count": msg_count,
+                    "participants_count": participants,
                     "source": f"chats/{chat_sha8}/{day}.md",
                     "status": "draft",
                     "author": dict(_SYSTEM_EDITOR),
@@ -335,11 +410,17 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                 cont = str(rt.get("continues") or "")
                 if cont and any(t.get("id") == cont for t in existing):
                     candidate["continues"] = cont
+                old_by_id = {t.get("id"): t for t in existing}
                 merged = _merge_one(existing, chat_sha8, day, candidate)
-                is_new = merged.get("id") not in {t.get("id") for t in existing}
+                is_new = merged.get("id") not in old_by_id
                 if is_new:
                     existing.append(merged)
                 else:
+                    # T-991：聚类修订沿用旧卡 priority（初值语义——人工改过
+                    # 不被重算覆盖；category 属 agent 语义随修订更新）
+                    old_priority = (old_by_id.get(merged.get("id")) or {}).get("priority")
+                    if old_priority:
+                        merged["priority"] = old_priority
                     existing = [merged if t.get("id") == merged.get("id") else t
                                 for t in existing]
                 _append_history(
@@ -359,12 +440,14 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
 
 _DRAFT_PROMPT = """你是话题分段助手。阅读以下群聊记录（每行格式：[MM-DD HH:MM] 发言人: 内容，
 每行开头的序号是该消息的行号），把语义相关的消息聚成候选话题段。要求：
-1. 只聚类有实质讨论内容的消息（需求/方案/决策/问题）；闲聊（吃饭问候等）不聚类；
+1. 所有话题段都要聚（含闲聊——闲聊聚成 category=chat 的段，供过滤与噪声统计）；
    跨天延续的同一讨论应聚为**同一个话题段**（不要按天拆开）
 2. 每个话题段给出：title（≤20字）、summary（≤80字结论摘要）、
    keywords（2~5个关键词）、msg_lines（该段覆盖的消息行号列表，
-   行号从 1 起始，如 [1,2,3]）、participants_count（参与人数）
-3. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
+   行号从 1 起始，如 [1,2,3]）、participants_count（参与人数）、
+   priority_hint（high|normal|low，你对重要程度的直觉判断）
+3. {category_rubric}
+4. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
 
 群聊记录（{day}）：
 {content}"""
@@ -457,9 +540,11 @@ def _msg_lines_to_ids(msg_lines, line_ids: list[str] | None) -> list[str]:
 
 _REGEN_PROMPT = """你是话题提炼助手。阅读以下群聊记录片段（{day}，时间窗 {window}），
 只针对该时间窗重新提炼一个话题。要求给出：
-title（≤20字）、summary（≤80字结论摘要）、
+title（≤20字）、summary（≤80字结论摘要）、category（五分类）、
+priority_hint（high|normal|low 直觉判断）、
 msg_range（该话题首条与末条消息的时间戳，格式 ["[HH:MM]", "[HH:MM]"]）、
 participants_count（参与人数）。
+{category_rubric}
 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容。
 
 群聊记录片段：
@@ -507,6 +592,7 @@ def _make_agent_origin(rt: dict, llm=None) -> dict:
         "title": str(rt.get("title", "")),
         "summary": str(rt.get("summary", "")),
         "keywords": [str(k) for k in (rt.get("keywords") or []) if str(k)],
+        "category": _norm_category(rt.get("category")),
         "model": str(getattr(llm, "model_id", "") or getattr(llm, "model", "") or ""),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "prompt_version": _PROMPT_VERSION,
@@ -515,13 +601,15 @@ def _make_agent_origin(rt: dict, llm=None) -> dict:
 
 def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
                         days: list[str],
-                        material_base: Path | None = None) -> list[dict]:
+                        material_base: Path | None = None,
+                        chat_kind: str = "") -> list[dict]:
     """对单群多日窗口跑 LLM 分段，返回段列表并落 _topic_drafts.yaml（不动话题库）。
 
     T-948：chats/话题库读材料区（material_base），草案落私有区。
     T-951c：days 列表（单日传 [day]）；多日时行带 [MM-DD HH:MM] 日期前缀，
     msg_lines 跨日行号锚定，window 取真实 ts（跨零点话题正确表达），
     段附 days 字段（跨日卡标识，regen/展示用）。
+    T-991：段带 category/priority（priority 按信号推导，chat_kind 参与）。
     """
     mroot = _mroot(emp_base, material_base)
     single_day = days[0] if len(days) == 1 else None
@@ -534,7 +622,8 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
             mroot, chat_sha8, days)
         line_ids = ids
     resp = llm.chat([{"role": "user", "content": _DRAFT_PROMPT.format(
-        day="~".join(used_days), content=_numbered_lines(content))}])
+        day="~".join(used_days), content=_numbered_lines(content),
+        category_rubric=_CATEGORY_RUBRIC)}])
     raw_topics = _parse_llm_json(_llm_content(resp))
     existing = _load_candidates(mroot)
     segments: list[dict] = []
@@ -549,15 +638,22 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
                 else _window_of(used_days[0], msg_range)
         else:
             window = _window_of(used_days[0], msg_range)
+        category = _norm_category(rt.get("category"))
+        msg_count = (len(ids) if ids
+                     else _count_messages(content, msg_range))
+        participants = int(rt.get("participants_count") or 0)
         seg = {
             "title": str(rt.get("title", "")),
             "summary": str(rt.get("summary", "")),
             "keywords": [str(k) for k in (rt.get("keywords") or []) if str(k)],
+            "category": category,
+            "priority": derive_priority(
+                category, msg_count, participants, chat_kind=chat_kind,
+                llm_hint=str(rt.get("priority_hint") or "")),
             "chat_sha8": chat_sha8,
             "window": window,
-            "message_count": len(ids) if ids
-            else _count_messages(content, msg_range),
-            "participants_count": int(rt.get("participants_count") or 0),
+            "message_count": msg_count,
+            "participants_count": participants,
             "source": f"chats/{chat_sha8}/{used_days[0]}.md",
             "agent_origin": _make_agent_origin(rt, llm),
         }
@@ -623,6 +719,9 @@ def commit_drafts(emp_base: Path, sha8: str, day: str,
         candidate["author"] = dict(author)
         candidate["rev"] = 1
         candidate.setdefault("keywords", [])
+        # T-991 v3：旧草案（pv2 前）无分类/优先级 → 兜底补默认
+        candidate["category"] = _norm_category(candidate.get("category"))
+        candidate["priority"] = _norm_priority(candidate.get("priority"))
         if "agent_origin" not in candidate:
             candidate["agent_origin"] = {
                 "title": candidate.get("title", ""),
@@ -645,13 +744,20 @@ def edit_candidate(emp_base: Path, topic_id: str,
                    keywords: list[str] | None = None,
                    base_rev: int | None = None,
                    editor: dict | None = None,
-                   material_base: Path | None = None) -> dict:
-    """人工编辑卡片 title/summary/keywords（T-948 R7；agent_origin 永不改动）。
+                   material_base: Path | None = None,
+                   category: str = "", priority: str = "") -> dict:
+    """人工编辑卡片 title/summary/keywords/category/priority（T-948 R7 +
+    T-991；agent_origin 永不改动）。
 
     乐观锁：base_rev 与卡片 rev 不符 → RevConflict（携带最新卡片，路由层转 409）；
     成功 → rev+1、last_edited_* 更新、history(action=edit, changes from/to)。
-    空串/None 表示该字段不改。T-949：话题库随 material_base（共享区）。
+    空串/None 表示该字段不改。category/priority 非法枚举 → ValueError（路由 400）。
+    T-949：话题库随 material_base（共享区）。
     """
+    if category and category not in _CATEGORY_ENUM:
+        raise ValueError(f"非法 category: {category}（合法：{'/'.join(_CATEGORY_ENUM)}）")
+    if priority and priority not in _PRIORITY_ENUM:
+        raise ValueError(f"非法 priority: {priority}（合法：{'/'.join(_PRIORITY_ENUM)}）")
     mroot = _mroot(emp_base, material_base)
     existing = _load_candidates(mroot)
     topic = next((t for t in existing if t.get("id") == topic_id), None)
@@ -670,6 +776,12 @@ def edit_candidate(emp_base: Path, topic_id: str,
         changes["keywords"] = {"from": list(topic.get("keywords") or []),
                               "to": list(keywords)}
         topic["keywords"] = list(keywords)
+    if category and category != topic.get("category"):
+        changes["category"] = {"from": topic.get("category"), "to": category}
+        topic["category"] = category
+    if priority and priority != topic.get("priority"):
+        changes["priority"] = {"from": topic.get("priority"), "to": priority}
+        topic["priority"] = priority
     if not changes:
         return topic                              # 无实际变化：不推 rev 不落历史
     topic["rev"] = int(topic.get("rev") or 1) + 1
@@ -743,7 +855,8 @@ def regen_candidate(emp_base: Path, llm, topic_id: str,
                if len(window) == 2 else "")
     resp = llm.chat([{"role": "user", "content": _REGEN_PROMPT.format(
         day="~".join(regen_days) if regen_days else day,
-        window=win_str, content=content)}])
+        window=win_str, content=content,
+        category_rubric=_CATEGORY_RUBRIC)}])
     raw_topics = _parse_llm_json(_llm_content(resp))
     if not raw_topics:
         raise ValueError("LLM 未返回话题")
@@ -756,6 +869,17 @@ def regen_candidate(emp_base: Path, llm, topic_id: str,
     topic["summary"] = str(rt.get("summary", topic.get("summary", "")))
     topic["keywords"] = [str(k) for k in (rt.get("keywords")
                                           or topic.get("keywords") or []) if str(k)]
+    # T-991：分类随重生成更新（agent 语义字段）；priority 按新信号重推导
+    # （regen 是用户显式动作，重算覆盖旧值——与 title/summary 同语义）
+    topic["category"] = _norm_category(rt.get("category") or topic.get("category"))
+    regen_count = (len(regen_ids) if regen_ids
+                   else _count_messages(content, msg_range))
+    regen_participants = int(
+        rt.get("participants_count")
+        or topic.get("participants_count", 0))
+    topic["priority"] = derive_priority(
+        topic["category"], regen_count, regen_participants,
+        llm_hint=str(rt.get("priority_hint") or ""))
     topic["agent_origin"] = new_origin
     if regen_ids and line_ts:
         idxs = [i for i in range(len(line_ids)) if line_ids[i] in set(regen_ids)]

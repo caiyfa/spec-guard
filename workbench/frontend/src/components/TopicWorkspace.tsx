@@ -18,12 +18,20 @@ import TopicCard from './TopicCard';
 import ModelSetupModal from './ModelSetupModal';
 import ImageLightbox from './ImageLightbox';
 
-// 泳道分配：话题按 window 起止排序，贪心放入首个无时间重叠的泳道
+// 泳道分配：话题按优先级 + window 起止排序（T-991：high 提前占前排泳道），
+// 贪心放入首个无时间重叠的泳道
 type Laned = { card: FeishuTopic | FeishuTopicDraft; lane: number; key: string };
 
+// T-991：优先级排序权重（high 先行；无值按 normal）
+const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
+
 function assignLanes(cards: (FeishuTopic | FeishuTopicDraft)[]): Laned[] {
-  const sorted = [...cards].sort((a, b) =>
-    String(a.window?.[0] || '').localeCompare(String(b.window?.[0] || '')));
+  const sorted = [...cards].sort((a, b) => {
+    const pr = (PRIORITY_RANK[(a as FeishuTopic).priority || 'normal'] ?? 1)
+      - (PRIORITY_RANK[(b as FeishuTopic).priority || 'normal'] ?? 1);
+    if (pr !== 0) return pr;
+    return String(a.window?.[0] || '').localeCompare(String(b.window?.[0] || ''));
+  });
   const laneEnds: string[] = [];      // 每泳道当前占用末端（ISO HH:MM）
   return sorted.map(card => {
     const start = String(card.window?.[0] || '');
@@ -41,8 +49,11 @@ function assignLanes(cards: (FeishuTopic | FeishuTopicDraft)[]): Laned[] {
 }
 
 // T-953：操作状态持久化（UX 连续性——进入页面恢复上次选择，不重新选）
+// T-991：追加 categoryFilter（分类筛选）与 hideChat（闲聊默认过滤开关，拍板③）
 const WORKSPACE_STORE_KEY = 'sg-feishu-workspace';
-function loadWorkspacePersisted(): { sha8?: string; daySel?: string } {
+function loadWorkspacePersisted(): {
+  sha8?: string; daySel?: string; categoryFilter?: string; hideChat?: boolean;
+} {
   try {
     return JSON.parse(localStorage.getItem(WORKSPACE_STORE_KEY) || '{}');
   } catch { return {}; }
@@ -64,6 +75,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  // T-991：分类筛选 + 闲聊默认过滤（拍板③：分类保留、默认隐藏可开关）
+  const [categoryFilter, setCategoryFilter] = useState(
+    () => loadWorkspacePersisted().categoryFilter ?? 'all');
+  const [hideChat, setHideChat] = useState(
+    () => loadWorkspacePersisted().hideChat ?? true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -87,12 +103,13 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   // T-954：模型缺失就地配置弹层（体验基线②③——不报错踢人去设置页）
   const [modelSetup, setModelSetup] = useState<'text' | 'vision' | null>(null);
 
-  // T-953：选择变更即写入（进入页面恢复上次群/日期窗口）
+  // T-953：选择变更即写入（进入页面恢复上次群/日期窗口；T-991 含分类筛选/闲聊开关）
   useEffect(() => {
     try {
-      localStorage.setItem(WORKSPACE_STORE_KEY, JSON.stringify({ sha8, daySel }));
+      localStorage.setItem(WORKSPACE_STORE_KEY, JSON.stringify(
+        { sha8, daySel, categoryFilter, hideChat }));
     } catch { /* 隐私模式/配额：跳过不阻断 */ }
-  }, [sha8, daySel]);
+  }, [sha8, daySel, categoryFilter, hideChat]);
 
   // T-953：恢复值有效性校验——选项就绪后失效则诚实回退默认（不报错不空白）
   useEffect(() => {
@@ -240,17 +257,24 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   }, [topics, sha8, selectedDays]);
 
   // T-951：状态筛选作用右栏卡片流（drafts 草案不受筛选影响——未提交非状态卡）
+  // T-991：叠加分类筛选 + 闲聊默认过滤（拍板③；草案同步受闲聊过滤影响）
   const shownTopics = useMemo(
-    () => statusFilter === 'all'
-      ? dayTopics
-      : dayTopics.filter(t => (t.status || 'draft') === statusFilter),
-    [dayTopics, statusFilter]);
+    () => dayTopics.filter(t =>
+      (statusFilter === 'all' || (t.status || 'draft') === statusFilter)
+      && (categoryFilter === 'all' || (t.category || 'routine') === categoryFilter)
+      && !(hideChat && (t.category || 'routine') === 'chat')),
+    [dayTopics, statusFilter, categoryFilter, hideChat]);
+  const shownDrafts = useMemo(
+    () => hideChat
+      ? drafts.filter(d => (d.category || 'routine') !== 'chat')
+      : drafts,
+    [drafts, hideChat]);
   const statusCount = (key: string) => key === 'all'
     ? dayTopics.length
     : dayTopics.filter(t => (t.status || 'draft') === key).length;
 
   const laned = useMemo(
-    () => assignLanes([...shownTopics, ...drafts]), [shownTopics, drafts]);
+    () => assignLanes([...shownTopics, ...shownDrafts]), [shownTopics, shownDrafts]);
   const activeKey = hoverKey ?? selectedKey;
   const activeCard = laned.find(l => l.key === activeKey)?.card as FeishuTopic | undefined;
 
@@ -346,7 +370,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
           <option value="">— 选择群 —</option>
           {chatOptions.map(c => (
             <option key={c.chat_sha8} value={c.chat_sha8}>
-              {c.name} ({c.chat_sha8})
+              {c.name}{c.kind ? ` · ${c.kind}` : ''} ({c.chat_sha8})
             </option>
           ))}
         </select>
@@ -379,7 +403,24 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
           </button>
         )}
         {sha8 && daySel && (
-          <span className="ml-auto flex items-center gap-1">
+          <span className="ml-auto flex items-center gap-1.5">
+            <select className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-info"
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              title="按五分类筛选话题">
+              <option value="all">全部分类</option>
+              <option value="requirement">需求</option>
+              <option value="test">测试</option>
+              <option value="solution">方案</option>
+              <option value="routine">沟通</option>
+              <option value="chat">闲聊</option>
+            </select>
+            <label className="flex items-center gap-1 text-[11px] text-gray-400 cursor-pointer"
+              title="闲聊话题分类保留但默认隐藏（可审计/统计群噪声率）——拍板③">
+              <input type="checkbox" checked={hideChat}
+                onChange={e => setHideChat(e.target.checked)} />
+              隐藏闲聊
+            </label>
             {TOPIC_STATUS_TABS.map(s => (
               <button key={s.key}
                 className={`px-2 py-0.5 rounded text-[11px] ${

@@ -506,3 +506,133 @@ def test_draft_segments_message_ids(tmp_path):
         ' "msg_range": ["[15:00]", "[15:00]"], "participants_count": 1}]}')
     out = tc.draft_chat_segments(emp, llm, "3f9a2c", ["20260807"])
     assert out[0]["message_ids"] == ["om_c"]
+
+
+# ══════════════════════════════════════════════════════════
+# T-991：schema v3（category 五分类 + priority 信号推导）
+# ══════════════════════════════════════════════════════════
+
+class TestSchemaV3:
+    def test_derive_priority_unit(self):
+        """信号推导：闲聊恒 low；阈值映射；LLM hint 微调；群类型加分。"""
+        # 闲聊无视一切信号
+        assert tc.derive_priority("chat", 99, 9, chat_kind="测试",
+                                  llm_hint="high") == "low"
+        # 全信号拉满 → high（1+1+0.5+0.5+0.5=3.5）
+        assert tc.derive_priority("requirement", 30, 5, chat_kind="测试",
+                                  llm_hint="high") == "high"
+        # 中档（0.5+0.5=1）→ normal
+        assert tc.derive_priority("routine", 10, 3) == "normal"
+        # 无信号 → low
+        assert tc.derive_priority("routine", 5, 2) == "low"
+        # LLM low 微调下压（1-0.5=0.5）→ low
+        assert tc.derive_priority("routine", 10, 3, llm_hint="low") == "low"
+
+    def test_cluster_category_priority_and_chat_kept(self, tmp_path):
+        """聚类产出带 category/priority；闲聊保留（拍板③：分类不丢弃）恒 low。"""
+        emp = _make_emp(tmp_path)
+        llm = _llm_returning(
+            '{"topics": [{'
+            ' "title": "导出权限过滤", "summary": "按 corpCode 过滤",'
+            ' "category": "requirement", "priority_hint": "high",'
+            ' "participants_count": 6, "msg_range": ["[14:00]", "[14:01]"]}, {'
+            ' "title": "午饭吃啥", "summary": "闲聊", "category": "chat",'
+            ' "participants_count": 9, "msg_range": ["[15:00]", "[15:00]"]}]}')
+        out = tc.cluster_chat_snapshots(
+            emp, llm, days=["20260807"], chat_kinds={"3f9a2c": "测试"})
+        by_title = {t["title"]: t for t in out}
+        req = by_title["导出权限过滤"]
+        assert req["category"] == "requirement"
+        # pc6=1 + kind测试=0.5 + requirement=0.5 + hint high=0.5 → 2.5 high
+        assert req["priority"] == "high"
+        assert req["agent_origin"]["category"] == "requirement"
+        chat = by_title["午饭吃啥"]
+        assert chat["category"] == "chat" and chat["priority"] == "low"
+
+    def test_cluster_invalid_category_falls_back(self, tmp_path):
+        """LLM 输出非法分类 → 保守归 routine（不抛错不丢卡）。"""
+        emp = _make_emp(tmp_path)
+        llm = _llm_returning(
+            '{"topics": [{"title": "奇怪分类", "summary": "s",'
+            ' "category": "不存在的类", "participants_count": 1,'
+            ' "msg_range": ["[14:00]", "[14:01]"]}]}')
+        out = tc.cluster_chat_snapshots(emp, llm, days=["20260807"])
+        assert out[0]["category"] == "routine"
+
+    def test_cluster_revision_preserves_edited_priority(self, tmp_path):
+        """聚类修订沿用旧卡 priority（初值语义——人工改过不被重算覆盖）。"""
+        emp = _make_emp(tmp_path)
+        payload = ('{"topics": [{"title": "导出权限过滤", "summary": "s",'
+                   ' "category": "requirement", "priority_hint": "high",'
+                   ' "participants_count": 6,'
+                   ' "msg_range": ["[14:00]", "[14:01]"]}]}')
+        tc.cluster_chat_snapshots(emp, _llm_returning(payload), days=["20260807"])
+        tid = tc._load_candidates(emp)[0]["id"]
+        # 人工降级
+        tc.edit_candidate(emp, tid, priority="low", editor={"emp": "u1", "name": "一"})
+        # 重新聚类（同标题相似 → 归并修订）
+        out = tc.cluster_chat_snapshots(emp, _llm_returning(payload),
+                                        days=["20260807"])
+        assert out[0]["id"] == tid
+        assert out[0]["priority"] == "low"
+
+    def test_normalize_legacy_cards_default_v3(self, tmp_path):
+        """存量卡（无 category/priority）加载补默认 routine/normal；非法值归默认。"""
+        emp = _make_emp(tmp_path)
+        topics_yaml = emp / "feishu_pool" / "_topics.yaml"
+        topics_yaml.write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:3f9a2c-20260807-01\n    title: 旧卡\n    chat_sha8: 3f9a2c\n"
+            "    window: ['2026-08-07T14:00', '2026-08-07T14:01']\n"
+            "  - id: tp:3f9a2c-20260807-02\n    title: 脏卡\n    chat_sha8: 3f9a2c\n"
+            "    category: bogus\n    priority: super\n"
+            "    window: ['2026-08-07T15:00', '2026-08-07T15:00']\n",
+            encoding="utf-8")
+        cards = {t["title"]: t for t in tc._load_candidates(emp)}
+        assert cards["旧卡"]["category"] == "routine"
+        assert cards["旧卡"]["priority"] == "normal"
+        assert cards["脏卡"]["category"] == "routine"
+        assert cards["脏卡"]["priority"] == "normal"
+
+    def test_edit_candidate_category_priority(self, tmp_path):
+        """edit_candidate 支持两字段：合法改 + changes 留痕；非法枚举 ValueError。"""
+        emp = _make_emp(tmp_path)
+        llm = _llm_returning(_OK_PAYLOAD)
+        tc.cluster_chat_snapshots(emp, llm, days=["20260807"])
+        tid = tc._load_candidates(emp)[0]["id"]
+        t = tc.edit_candidate(emp, tid, category="test", priority="high",
+                              editor={"emp": "u1", "name": "一"})
+        assert t["category"] == "test" and t["priority"] == "high"
+        assert t["rev"] == 2
+        with pytest.raises(ValueError):
+            tc.edit_candidate(emp, tid, category="bogus")
+        with pytest.raises(ValueError):
+            tc.edit_candidate(emp, tid, priority="super")
+
+    def test_draft_segments_carry_v3_fields(self, tmp_path):
+        """人工分段草案带 category/priority（chat_kind 参与推导）。"""
+        emp = _make_emp(tmp_path)
+        llm = _llm_returning(
+            '{"topics": [{"title": "方案讨论", "summary": "分库分表",'
+            ' "category": "solution", "priority_hint": "normal",'
+            ' "msg_lines": [1, 2], "participants_count": 3}]}')
+        segs = tc.draft_chat_segments(emp, llm, "3f9a2c", ["20260807"],
+                                      chat_kind="产研")
+        # mc2=0 + pc3=0.5 + 产研0.5 + solution0.5 = 1.5 → normal
+        assert segs[0]["category"] == "solution"
+        assert segs[0]["priority"] == "normal"
+
+    def test_regen_updates_category_and_priority(self, tmp_path):
+        """regen 更新分类并按新信号重推导优先级。"""
+        emp = _make_emp(tmp_path)
+        tc.cluster_chat_snapshots(emp, _llm_returning(_OK_PAYLOAD),
+                                  days=["20260807"])
+        tid = tc._load_candidates(emp)[0]["id"]
+        regen_payload = ('{"topics": [{"title": "导出权限细化", "summary": "s2",'
+                         ' "category": "test", "priority_hint": "high",'
+                         ' "msg_range": ["[14:00]", "[14:01]"],'
+                         ' "participants_count": 5}]}')
+        t = tc.regen_candidate(emp, _llm_returning(regen_payload), tid)
+        assert t["category"] == "test"
+        # mc2=0 + pc5=1 + test0.5 + high0.5 = 2 → high
+        assert t["priority"] == "high"

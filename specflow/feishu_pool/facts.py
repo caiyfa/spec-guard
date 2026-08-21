@@ -20,10 +20,12 @@ _LINK_KEY_FIELDS = ("src", "dst", "edge", "confidence", "evidence",
                     "status", "confirmed_by", "confirmed_at")
 # T-948：话题卡 v2 字段入白名单（keywords/message_ids/status/author/rev/
 # agent_origin/last_edited_*——确认提升时不丢用户编辑与 agent 原稿）
+# T-991 v3：category/priority 入白名单（确认提升不丢分类与优先级）
 _TOPIC_KEY_FIELDS = ("id", "title", "summary", "keywords", "chat_sha8", "window",
                      "message_ids", "message_count", "participants_count",
                      "source", "continues", "status", "author", "rev",
-                     "agent_origin", "last_edited_by", "last_edited_at")
+                     "agent_origin", "last_edited_by", "last_edited_at",
+                     "category", "priority")
 
 
 def _now() -> str:

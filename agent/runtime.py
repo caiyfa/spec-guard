@@ -76,6 +76,8 @@ _RBAC_READONLY_TOOLS = frozenset({
     # 材料包工具
     "pack_assemble", "pack_read_section", "material_parse_status",
     "material_extract_topics", "pack_freshness_check",
+    # 材料解析产物读取（T-934，纯读：summary/topics/raw 三视图）
+    "read_material",
     # info_pack 工具
     "read_info_pack", "add_to_info_pack", "list_info_pack_artifacts",
     # GateDock 对话操作台状态查询（T-901，纯读）
@@ -203,10 +205,12 @@ _FALLBACK_PROMPT_TEMPLATE = """你是 SpecGuard 智能测试助手——契约�
 
 ## 用户引用（@）
 
-用户可在消息中用 @ 引用信息包 / 工作区文件 / 草稿。文件与草稿引用的内容会以
+用户可在消息中用 @ 引用信息包 / 工作区文件 / 草稿 / 材料。文件与草稿引用的内容会以
 <references> 块注入该条消息（标头含路径与内容指纹 sha）：
 - 这是用户显式提供的上下文，优先采信，无需重复读取同一文件
 - @信息包 会把当前对话关联到对应场景，其文件清单见「基础信息包」段（如有）
+- @材料（对话内上传）只注入标识与状态，正文不注入——需要原文证据时用
+  read_material 工具按需读取（summary 概览 / topics 候选 / raw 分页）
 
 ## 待办系统（H-4）
 

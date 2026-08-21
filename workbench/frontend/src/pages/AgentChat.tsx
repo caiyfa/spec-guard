@@ -11,8 +11,8 @@ import '@xyflow/react/dist/style.css';
 import ScenarioNode from '../components/ScenarioNode';
 import { layoutDagByELK } from '../utils/elkLayout';
 import { useJsTokens } from '../theme';
-import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi, settingsApi, specApi, rebaseApi } from '../api';
-import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData, GitLogResponse, GateCard } from '../api';
+import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi, scenariosApi, settingsApi, specApi, rebaseApi, specflowApi } from '../api';
+import type { ScenarioMeta, ModelConfig, DraftItem, InfoPackFreshness, ValidateReport, TrialRunResult, DagData, GitLogResponse, GateCard, MaterialItem } from '../api';
 import SessionTree from '../components/SessionTree';
 import TodoPanel from '../components/TodoPanel';
 import type { StructuredTodo } from '../components/TodoPanel';
@@ -25,10 +25,10 @@ import GateCardView, { GateExecCard } from '../components/GateCardView';
 import { FocusGraphTab } from '../components/FocusGraph';
 
 interface ChatReference {
-  type: 'info_pack' | 'file' | 'draft';
-  path: string;          // file=相对路径 / draft=文件名 / info_pack=SG-META-xxxx
+  type: 'info_pack' | 'file' | 'draft' | 'material';
+  path: string;          // file=相对路径 / draft=文件名 / info_pack=SG-META-xxxx / material=MAT-xxx
   sha: string;           // 引用时的内容指纹（info_pack 为 ""）
-  label?: string;        // K-015: 展示名（信息包为场景名，持久化 refs 无此字段时回退 path）
+  label?: string;        // K-015: 展示名（信息包为场景名，材料为文件名；持久化 refs 无此字段时回退 path）
   missing?: boolean;
 }
 
@@ -1993,7 +1993,7 @@ interface FileTab {
 
 // T-932：页签注册表（页签 id 单一事实源）——通用页签所有 purpose 恒显，
 // 专用页签由 purpose 的 panels 声明驱动（∩ 本注册表，未知 id 静默忽略）。
-// materials 页签随 T-933 实现（panels 已声明，注册表补行即生效）。
+// materials 页签 T-933 落地（requirement_interview panels 已声明）。
 const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[] = [
   { id: 'todos',   label: '📋 待办',       scope: 'universal' },
   { id: 'gates',   label: '🎛 操作台',     scope: 'universal' },
@@ -2001,9 +2001,104 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[]
   { id: 'drafts',  label: '📝 更新与产物', scope: 'universal' },
   { id: 'pack',    label: '📦 信息包',     scope: 'purpose' },
   { id: 'focus',   label: '◎ 图谱',        scope: 'purpose' },
+  { id: 'materials', label: '📎 材料',     scope: 'purpose' },
   { id: 'deps',    label: '🕸 依赖图',     scope: 'purpose' },
   { id: 'history', label: '📜 提交历史',   scope: 'purpose' },
 ];
+
+// T-933：材料状态徽标配色（与独立材料管理页语义一致）
+const MAT_STATUS_COLOR: Record<string, string> = {
+  uploaded: 'text-gray-500', parsing: 'text-amber-400', parsed: 'text-blue-400',
+  indexed: 'text-green-500', packed: 'text-info', failed: 'text-red-400',
+};
+
+// T-933：材料页签——本会话绑定面试的材料清单（标题/解析状态/摘要），
+// 会话消息里引用过的材料加 📌 标记；未绑定面试诚实空态引导（不报错）。
+function MaterialsRefPanel({ sessionId, references, onError }: {
+  sessionId: string; references: ChatReference[]; onError: (msg: string) => void;
+}) {
+  const [items, setItems] = useState<MaterialItem[] | null>(null);
+  const [ivTitle, setIvTitle] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [heads, setHeads] = useState<Record<string, string>>({});
+  const [loadErr, setLoadErr] = useState('');
+
+  const load = useCallback(async () => {
+    if (!sessionId) { setItems(null); setLoadErr(''); return; }
+    setLoading(true); setLoadErr('');
+    try {
+      const dock = await specflowApi.gateDock({ session_id: sessionId });
+      const iv = dock.interview;
+      if (!iv) { setItems(null); setIvTitle(''); return; }   // 未绑定面试 → 空态引导
+      setIvTitle(iv.title || iv.iv_id);
+      const r = await specflowApi.listMaterials(iv.iv_id);
+      setItems(r.materials || []);
+      // 摘要：逐材料 preview 头部 120 字（前 20 条；单条失败不阻断）
+      const next: Record<string, string> = {};
+      await Promise.all((r.materials || []).slice(0, 20).map(async m => {
+        try {
+          const p = await specflowApi.previewMaterial(m.mid);
+          const t = (p.text || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+          if (t) next[m.mid] = t;
+        } catch { /* 单条摘要失败静默 */ }
+      }));
+      setHeads(next);
+    } catch (e: any) {
+      setLoadErr(e.message || '加载失败');
+      onError(`材料列表加载失败: ${e.message}`);
+    } finally { setLoading(false); }
+  }, [sessionId, onError]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const refMids = new Set(references.filter(r => r.type === 'material').map(r => r.path));
+
+  return (
+    <div className="p-2 space-y-1">
+      <div className="flex items-center gap-2 text-[11px] text-gray-500 pb-1 border-b border-border">
+        <span>📎 会话材料{ivTitle ? `（${ivTitle}）` : ''}</span>
+        <button className="ml-auto text-gray-500 hover:text-info" onClick={() => void load()}
+          title="刷新材料列表与状态">⟳ 刷新</button>
+      </div>
+      {loading && <div className="text-xs text-gray-500 text-center py-4">材料加载中…</div>}
+      {!loading && loadErr && (
+        <div className="text-xs text-red-400 text-center py-4">材料列表加载失败：{loadErr}</div>
+      )}
+      {!loading && !loadErr && items === null && (
+        <div className="text-xs text-gray-600 text-center py-4">
+          当前会话未绑定需求面试——材料随面试归档；
+          <br />在输入区点 🧾 上传前，先在对话中开标（如「开启需求面试」）
+        </div>
+      )}
+      {!loading && !loadErr && items !== null && items.length === 0 && (
+        <div className="text-xs text-gray-600 text-center py-4">
+          面试尚未上传材料——点输入区 🧾 选择文件上传，上传成功自动挂入引用
+        </div>
+      )}
+      {!loading && (items || []).map(m => (
+        <div key={m.mid} className="px-2 py-1.5 rounded bg-surface-3/60 border border-border/50">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-gray-200 truncate" title={m.filename}>{m.filename}</span>
+            {refMids.has(m.mid) && (
+              <span className="text-[10px] text-info shrink-0" title="已在对话消息中引用">📌</span>
+            )}
+            <span className={`ml-auto shrink-0 text-[10px] ${MAT_STATUS_COLOR[m.status] || 'text-gray-500'}`}>
+              {m.status}{m.fmt ? ` · ${m.fmt}` : ''}
+            </span>
+          </div>
+          {heads[m.mid] && (
+            <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{heads[m.mid]}</div>
+          )}
+          {m.parse_error && (
+            <div className="text-[10px] text-red-400/80 mt-0.5 truncate" title={m.parse_error}>
+              {m.parse_error}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, onAskAgentGuide, purposePanels }: {
   ctxUsage: CtxUsage | null;
@@ -2122,6 +2217,9 @@ function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ct
           <GateDockPanel sessionId={sessionId} onAskAgent={onAskAgentGuide || (() => {})} onError={onError} />
         )}
         {activeTab === 'focus' && <FocusGraphTab messages={messages} />}
+        {activeTab === 'materials' && (
+          <MaterialsRefPanel sessionId={sessionId} references={references} onError={onError} />
+        )}
         {activeTab === 'reading' && (
           <ReadingPanel items={readingFeed} onOpen={onOpenDocRead} onRefresh={onRefreshReadingFeed} />
         )}
@@ -2309,12 +2407,14 @@ interface ChatInputProps {
   onModelChange: (id: string) => void;
   quickText?: string;             // S0.6：外部注入文本（如「让 Agent 修复」带失败原因），注入后自动清空
   onQuickTextHandled?: () => void;
+  sessionId: string;              // T-933：材料上传按会话反查绑定面试（sf_interviews）
+  onMaterialUploaded?: () => void;  // T-933：上传成功后展开材料页签刷新
 }
 
 function ChatInput({
   wsState, loading, models, currentModelId,
   onSend, onStop, onNewSession, onClearMessages, onExportSession, onModelChange,
-  quickText, onQuickTextHandled,
+  quickText, onQuickTextHandled, sessionId, onMaterialUploaded,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
@@ -2338,6 +2438,9 @@ function ChatInput({
   const [references, setReferences] = useState<ChatReference[]>([]);
   const [attaching, setAttaching] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  // T-933：材料上传入口（S3 端点，区别于 📎 信息包附件）
+  const matInputRef = useRef<HTMLInputElement>(null);
+  const [matNotice, setMatNotice] = useState<{ text: string; error: boolean } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // 斜杠命令过滤
@@ -2479,6 +2582,50 @@ function ChatInput({
     }
   };
 
+  // T-933：对话内材料上传——按会话反查绑定面试（sf_interviews），走 S3 既有上传
+  // 端点；成功挂 material 引用卡片随下一条消息进 references（Agent 用 read_material 读）
+  const handleMaterialFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (!sessionId) {
+      setMatNotice({ text: '会话尚未建立——先发送一条消息（选定用途）再上传材料', error: false });
+      return;
+    }
+    setAttaching(true); setMatNotice(null);
+    try {
+      const dock = await specflowApi.gateDock({ session_id: sessionId });
+      const iv = dock.interview;
+      if (!iv) {
+        setMatNotice({ text: '当前会话未开启需求面试——材料随面试归档，先在对话中开标（如「开启需求面试」）再上传', error: false });
+        return;
+      }
+      const failed: string[] = [];
+      let okCount = 0;
+      for (const f of Array.from(files)) {
+        try {
+          const r = await specflowApi.uploadMaterial(iv.iv_id, f);
+          setReferences(prev => prev.some(x => x.type === 'material' && x.path === r.material.mid)
+            ? prev
+            : [...prev, { type: 'material', path: r.material.mid,
+                          sha: r.material.sha256_12 || '', label: r.material.filename }]);
+          okCount += 1;
+        } catch (e: any) {
+          failed.push(`${f.name}: ${e.message}`);
+        }
+      }
+      if (failed.length) {
+        setMatNotice({ text: `上传失败 ${failed.length} 个——${failed.join('；')}`, error: true });
+      } else if (okCount > 0) {
+        setMatNotice({ text: `已上传 ${okCount} 个材料并挂入引用（随下一条消息进入对话上下文）`, error: false });
+        onMaterialUploaded?.();
+      }
+    } catch (e: any) {
+      setMatNotice({ text: `材料上传失败: ${e.message}`, error: true });
+    } finally {
+      setAttaching(false);
+      if (matInputRef.current) matInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="flex-shrink-0 border-t border-border p-3 relative">
       {/* slash 命令弹出层 */}
@@ -2512,13 +2659,23 @@ function ChatInput({
         </div>
       )}
 
+      {/* T-933：材料上传反馈（就地提示不踢人；失败红/引导黄） */}
+      {matNotice && (
+        <div className={`mb-2 px-2 py-1 rounded text-[11px] ${
+          matNotice.error ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-300'}`}>
+          {matNotice.text}
+          <button className="ml-2 text-gray-500 hover:text-gray-300"
+            onClick={() => setMatNotice(null)}>✕</button>
+        </div>
+      )}
+
       {/* 已选引用 chips */}
       {references.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {references.map((r, i) => (
             <span key={`${r.type}:${r.path}`}
               className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/30 font-mono">
-              {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'} {r.label || r.path}
+              {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : r.type === 'material' ? '🧾' : '📄'} {r.label || r.path}
               <button onClick={() => setReferences(prev => prev.filter((_, j) => j !== i))}
                 className="text-info/60 hover:text-fail">✕</button>
             </span>
@@ -2526,7 +2683,7 @@ function ChatInput({
         </div>
       )}
 
-      {/* 输入框 + 附件 + 发送/停止按钮 */}
+      {/* 输入框 + 附件/材料 + 发送/停止按钮 */}
       <div className="flex gap-2 items-end">
         <input
           ref={attachInputRef}
@@ -2542,6 +2699,22 @@ function ChatInput({
           className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">📎</span>}
+        </button>
+        {/* T-933：材料上传（进当前面试材料池，Agent 可 read_material 读取） */}
+        <input
+          ref={matInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={e => handleMaterialFiles(e.target.files)}
+        />
+        <button
+          onClick={() => matInputRef.current?.click()}
+          disabled={attaching || loading || wsState !== 'open'}
+          title="上传材料（进入当前需求面试的材料池，随引用进入对话，Agent 可用 read_material 读取原文）"
+          className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">🧾</span>}
         </button>
         <textarea
           ref={inputRef}
@@ -3883,6 +4056,8 @@ export default function AgentChat() {
             onModelChange={setCurrentModelId}
             quickText={quickText}
             onQuickTextHandled={() => setQuickText('')}
+            sessionId={sessionId}
+            onMaterialUploaded={() => expandSideTo('materials')}
           />
         </div>
 
