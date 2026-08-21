@@ -294,6 +294,10 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 - **主库 = master 验收线**：主库 checkout 永远停在 `master` 且工作树保持干净；用途仅限拉取最新代码 + 整体测试验收 + 联网场景串行执行。**禁止在主库直接开发**（AI 会话同样禁止——接到开发任务时，先确认目标 worktree，去那里动手）。
 - **一个功能域一棵 worktree，长期复用**：按功能域建树（如 `wt/engine-upgrade`），不随单个任务新建，管控树数量。建树一律走 `pwsh new-worktree.ps1 <功能域>`——自动从主库同步本地运行状态（workbench.db / specstd/workspaces / .lark-cli 等，node_modules 除外）；**禁止手工 `git worktree add`**（漏掉状态同步，新树跑不了工作台与工作区相关功能）。
 - **会话工作方式**：开发会话统一在主目录打开；agent 自行进入对应 worktree 开发——文件读写一律用 worktree 绝对路径（`D:\work\tdm-code\wt\<域>\...`），bash/git 命令用 `git -C <树路径>` 或先 `cd`。验收与联网测试指令回到主库执行。
+- **树与分支的对应关系**：建树脚本幂等——分支已存在则直接挂载、不存在才从 master 新建；git 不允许同一分支挂两棵树，所以**一棵树建一次长期复用，后续会话直接进树目录工作**，树永远停在自己的 `feature/<域>` 分支上，会话无需也不应切分支。同名再建树会报路径已存在（重同步用 `-SyncOnly`）。
+- **开工三件事（跨树可见性纪律）**：会话进树第一件事——① `git fetch origin` ② `git worktree list`（看在册树）③ 读**主库**总控文档 §4 任务表的状态列（主库那份是权威，树内副本是分支点冻结快照，可能滞后）。30 秒建立「哪些域活跃、进行到哪」的全局视野，不建立不得动手。
+- **认领/状态回写走 push 通道，不靠跨树改文件**：wt 会话认领任务 = 改**自己树里**总控 §4 对应行的状态+会话ID → 提交 → 立刻 push `feature/<域>`（与「提交即推」同一纪律）。其他会话 fetch 后即可见；状态行随分支验收合并自然回到 master 的总控，不需要单独同步动作。每域只改自己的任务行，合并冲突概率极低。
+- **总控 §6 文件登记表的作用域**：只协调**同树内**会话（它是分支内文件，A 树的登记 B 树看不到）。跨树防撞靠两道：①任务划分时按功能域文件邻区事前隔离 ②验收合并时 git 冲突兜底。不要以为在 §6 登记了就跨树安全。
 - **提交即推功能分支（备份线，防本地对象库损坏）**：worktree 与主库**共享同一个 `.git` 对象库**——本地对象库损坏会同时摧毁全部树（2026-08 已发生一次，恢复时只能全量入库、丢失提交细节与 message）。worktree 内每完成一次提交立刻 `git -C <树路径> push origin feature/<域>`；目的是备份，不要求 PR、不触发合并。远端功能分支合入 master 后可随手删（本地分支随树继续复用，下次推送会重建）。
 - **master 前进只在主库、验收之后**：主库 `git pull` 后在 master 上 `git merge feature/<域>`（本地分支与 origin 同名分支内容一致，用哪个都行）→ 整体测试验收 → 通过才 `git push origin master`（pre-push 门禁照常）；验收不过 `git reset --hard ORIG_HEAD`，远端 master 零污染。需要 PR 评审留痕或跨机器协作时，改走"远端合并 → 主库 pull"备选路径。
 - **worktree 分支回同步**：master 前进后，worktree 继续复用前 `git -C <树路径> fetch origin && git -C <树路径> rebase origin/master`。若合入方式是 squash（远端或本地 `--squash`）导致 rebase 假冲突、且本地改动已全部入库：`git -C <树路径> switch -C feature/<域> origin/master` 重置分支再出发；功能域分支不删，随树长期复用。
@@ -336,3 +340,4 @@ Agent 对话**实时落盘**（`agent/runtime.py` 每轮消息/tool 后增量 `s
 - [2026-08-05] AGENTS.md 新增「角色认知」章节：理清开发角色（本文件读者，不注入 agent 对话）与使用角色（agent 对话测试助手，规则知识来自 system prompt + 被测系统工作区 AGENTS.md）的边界，防止角色混淆。
 - [2026-08-19] 飞书材料池共享化（T-949）：chats/docs/minutes 快照与话题库/历史落**工作区共享材料区**（`{ws}/.specflow/feishu_pool/`，即 `specflow_dir("")`）；watch 配置与话题草案留私有区（谁配置谁拉）。**授权语义升级为工作区级**：docs/minutes 对用户的可见性跟随飞书侧权限元数据（perm meta，需 `docs:permission.member:retrieve`/`docs:permission.setting:read` scope，缺失时保守仅 owner 可见）；chats 快照对工作区全员可见（拉取者必在群内，办公转述语义）。多用户重复同步靠 message_id 幂等合并无害化。
 - [2026-08-20] 多会话并行确立 git worktree 规程（Git Workflow §多会话并行开发）：主库永驻 master 只做验收，功能域 worktree 长期复用、建树走 `new-worktree.ps1`（同步 workbench.db/workspaces 等本地状态；lefthook pre-push 钩子硬编码主树二进制路径，worktree 内 push 门禁天然有效）。此前多会话同树开发出过事故；另本地对象库曾损坏（36f8108 恢复性全量入库），教训沉淀为「提交即推功能分支——worktree 共享主库对象库，不是备份，远端是唯一的提交细节备份线」。
+- [2026-08-21] worktree 规程补三条跨树协调纪律：①树与分支 1:1 长期复用，会话进树不切分支；②开工三件事（fetch→worktree list→读主库总控状态列）建立跨树视野；③认领/状态回写走 push 通道（改自己树的总控状态行→提交即推），总控 §6 文件登记表只协调同树内会话——跨树防撞靠功能域文件邻区事前隔离 + 合并验收 git 兜底，**不复制总控到各树**（事实源分裂比没有更糟）。
