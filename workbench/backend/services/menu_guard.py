@@ -28,7 +28,7 @@ API_MENU_BINDINGS: dict[str, str | tuple[str, ...]] = {
     "specflow": ("menu-agent", "menu-drafts"),
     "drafts": "menu-drafts",
     "agent": "menu-agent",
-    "workspace": "menu-agent",
+    "workspace": ("menu-agent", "menu-workspace"),
     "knowledge": "menu-agent",
     "feedback": "menu-feedback",
     "notify": "menu-feedback",
@@ -44,6 +44,7 @@ API_MENU_BINDINGS: dict[str, str | tuple[str, ...]] = {
     "quality": "menu-dashboard",
     "systems": "menu-systems",
     "feishu-pool": "menu-feishu-pool",
+    "products": "menu-activity",
     # data-fab 无前端消费方，保持未绑定放行（存量行为）
 }
 

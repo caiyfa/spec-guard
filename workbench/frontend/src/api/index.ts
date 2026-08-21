@@ -25,3 +25,4 @@ export * from './lark';
 export * from './knowledge';
 export * from './feishuPool';
 export * from './systems';
+export * from './products';

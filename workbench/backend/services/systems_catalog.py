@@ -110,7 +110,12 @@ def get_system_detail(system: str) -> dict | None:
 
 
 def validate_system(system: str) -> None:
-    """系统标识硬校验：合法 Python 模块名 + 系统包存在（注册期防线，防运行期 ModuleNotFoundError）。"""
+    """系统标识硬校验：合法 Python 模块名 + 系统包存在（运行期防线，防 ModuleNotFoundError）。
+
+    T-1000 起，工作区注册不再走本硬校验（走 system_ready 软校验，允许 system_pending
+    待接入态）；本函数保留给「包必须已就绪」的运行期路径（assertions/extensions 写入、
+    env-config 写入、热重建等）。
+    """
     if not SYSTEM_NAME_RE.match(system):
         raise HTTPException(status_code=400,
                             detail=f"系统标识非法: {system}（须为字母/数字/下划线组成的 Python 模块名）")
@@ -118,3 +123,11 @@ def validate_system(system: str) -> None:
     if not package_dir(system).is_dir():
         raise HTTPException(status_code=400,
                             detail=f"系统适配包不存在: systems/{system}/（可用 GET /api/systems 查看可选值）")
+
+
+def system_ready(system: str) -> bool:
+    """T-1000 软校验：系统标识合法 + 适配包已建（不抛错，供注册期标 system_pending）。"""
+    if not SYSTEM_NAME_RE.match(system or ""):
+        return False
+    from engine.system_package import package_dir
+    return package_dir(system).is_dir()

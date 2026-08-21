@@ -260,10 +260,10 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-993 | M-D | 跨群话题关联（先设计文档） | wt/material-pool | T-992 | ✅ 08-21 主库验收（合并 3e6ae5b） | sess-material-pool | 3-5 天；设计稿《远期设计/SpecGuard-跨群话题关联设计-T993.md》08-21 总控人评审通过；当日完工（871f2a3） |
 | T-995 | M-E | 拆 AgentChat.tsx（行为零变化纯重构） | wt/frontend-ia | T-990 | ✅ 08-21 主库验收（ff 合并 ccb92ef） | sess-frontend-ia | 当日完工：4129→1390 行，22 模块入 pages/agentChat/；后端零改动；M-D 已收官排他约定满足 |
 | T-996 | M-E | 菜单收缩 29→15 + SEED_MENUS 迁移 + lifespan 换 on_event + T-973 系统包管理页挂「系统管理」分组 | wt/frontend-ia | T-995 | ✅ 08-21 主库验收（合并 95a4abf，1950 绿） | sess-frontend-ia | 08-21 完工：5 组 17 叶（总览/Agent/场景/执行/系统管理）；后端 f21152e（SEED_MENUS 幂等迁移授权无损映射 _MENU_REMAP_T996+menu_guard 绑定对齐+webhook 二合一+lifespan）+前端 8c380cf（重定向矩阵 14 条/History 三 tab/Lifecycle 两 tab/双审计统一/GitLog·WorkspaceCenter 删除/SystemsAdmin 系统包管理页接 T-973 九端点）；拍板④已过（08-21 按推荐方案）；主库验收：全量 1950 绿/release_check PASS/build 48s/lint 8 持平零新增/vitest 全绿 |
-| T-997 | M-E | api.ts 按域拆分 + 前端关键路径 vitest | wt/tool-consolidation（总控人 08-21 指令改挂） | — | 已完成（a/b 两提交见会话行，待主库验收） | sess-tool-consolidation | 当日完工 |
-| T-1000 | M-E | 工作区自管理 + 系统/工作区二级模型 + 产出反查 | wt/frontend-ia | T-995 | 未认领 | | 3-5 天；拍板已过（08-21 按推荐方案）；设计单《架构反馈升级/2026-08-21-M-E-工作区自管理与产出反查-设计单.md》 |
-| T-998 | M-F | 文档滞后批量修 + 总控状态对账（T-701~703） | wt/tool-consolidation（空窗复用） | — | 已完成（提交号见会话行，待主库验收） | sess-tool-consolidation | 0.5 天；当日完工 |
-| T-999 | M-F | workspace.py 拆分 / scenario_runner 抽插值器 / print→logging / user_store 治理 | wt/tool-consolidation（空窗复用） | — | 已完成（a dcf2254 / b c2f79af / c 0f6d2a4 / d 见会话行，待主库验收） | sess-tool-consolidation | 各 1-2 天分次；当日四分次全部完工 |
+| T-997 | M-E | api.ts 按域拆分 + 前端关键路径 vitest | wt/tool-consolidation（总控人 08-21 指令改挂） | — | 已完成（a e10153f / b 14372cc，待主库验收） | sess-tool-consolidation | 当日完工 |
+| T-1000 | M-E | 工作区自管理 + 系统/工作区二级模型 + 产出反查 | wt/frontend-ia | T-995 | 已完成（7843c5d+3fd88fc，验收：test_specstd 1720 绿/release_check PASS/build 50s/lint 8 持平零新增/vitest 12 绿，待主库验收） | sess-frontend-ia | 08-21 当日完工：F1 注册放开登录+owner_emp+system_pending 软校验（runner ensure_system_ready 诚实报错）/F2 /workspace/tree 分组+选择器二级+卡片墙/F3 product_index 三反查+我的活动页+audit 本人查自己；顺手修真 bug：ConformanceReport verdict 重算守卫失效（内容级 ERROR 从未生效）+STRUCT 缺失降级 WARN；拍板已过（08-21 按推荐方案）；设计单《架构反馈升级/2026-08-21-M-E-工作区自管理与产出反查-设计单.md》 |
+| T-998 | M-F | 文档滞后批量修 + 总控状态对账（T-701~703） | wt/tool-consolidation（空窗复用） | — | 已完成（3571663，待主库验收） | sess-tool-consolidation | 0.5 天；当日完工 |
+| T-999 | M-F | workspace.py 拆分 / scenario_runner 抽插值器 / print→logging / user_store 治理 | wt/tool-consolidation（空窗复用） | — | 已完成（a f3e077b / b fc81db0 / c 6c5374a / d 522808f，待主库验收） | sess-tool-consolidation | 各 1-2 天分次；当日四分次全部完工 |
 
 ---
 

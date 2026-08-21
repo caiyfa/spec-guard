@@ -300,6 +300,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         draft_path.write_text(content, encoding="utf-8")
         _record_meta(filename, scenario_id, source_files=source_files)
         _register_gates(filename, content)
+        _record_product_index(draft_path)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
             "path": _rel_path(draft_path), "size": len(content),
@@ -315,6 +316,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         draft_path.write_text(merged, encoding="utf-8")
         _record_meta(filename, scenario_id)
         _register_gates(filename, merged)
+        _record_product_index(draft_path)
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
             "path": _rel_path(draft_path), "size": len(merged),
@@ -322,6 +324,25 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         }, ensure_ascii=False, indent=2))]
 
     return [TextContent(type="text", text=f"错误：未知模式: {mode}")]
+
+
+def _record_product_index(draft_path):
+    """T-1000 F3：草稿产出登记 product_index（产物 → 会话/工号 反查）。
+
+    会话来自 session_context（agent runtime 注入），stdio/纯 API 路径为空串；
+    失败静默——索引是派生层，绝不阻断草稿写入主路径。
+    """
+    try:
+        from sg_core.product_index import record_product
+        from sg_core.emp_context import current_emp_no
+        from sg_core.session_context import current_session_id
+        from specstd.workspace import get_context_workspace
+        record_product(_rel_path(draft_path), "draft",
+                       session_id=current_session_id(),
+                       emp_no=current_emp_no(),
+                       workspace=get_context_workspace() or "")
+    except Exception:
+        pass
 
 
 def _register_gates(filename: str, content: str):

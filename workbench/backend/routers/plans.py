@@ -148,12 +148,22 @@ def api_import_confirm(delta_code: str, body: ImportConfirmBody):
 
 
 @router.post("/import/{delta_code}", dependencies=[Depends(require_role("admin", "tester"))])
-def api_import_plan(delta_code: str):
+def api_import_plan(delta_code: str, user=Depends(require_role("admin", "tester"))):
     """从 spec delta 导入生成测试计划"""
     _guard_plan_id(delta_code)
     result = import_from_delta(delta_code)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
+    # T-1000 F3：计划生成登记 product_index（失败静默不阻断）
+    try:
+        from sg_core.product_index import record_product
+        from specstd.workspace import get_context_workspace
+        record_product(f"plans/{delta_code}.yaml", "plan",
+                       emp_no=getattr(user, "emp_no", "") or "",
+                       workspace=get_context_workspace() or "",
+                       fr_anchor=delta_code)
+    except Exception:
+        pass
     return result
 
 

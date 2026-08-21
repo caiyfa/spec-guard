@@ -12,6 +12,8 @@ export interface WorkspaceInfo {
   system: string;
   source: { type: string; path?: string; url?: string; branch?: string; local_path?: string };
   last_commit: string;
+  owner_emp?: string;          // T-1000：注册人工号（空=存量/系统登记）
+  system_pending?: boolean;    // T-1000：系统适配包未建=待接入
 }
 
 export interface SystemInfo {
@@ -21,8 +23,16 @@ export interface SystemInfo {
   accounts: string[];
 }
 
+export interface WorkspaceTreeGroup {
+  system: string;
+  display_name: string;
+  system_pending: boolean;
+  workspaces: WorkspaceInfo[];
+}
+
 export const workspaceApi = {
   list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
+  tree: () => request<{ tree: WorkspaceTreeGroup[] }>('/workspace/tree'),
   systems: () => request<{ systems: SystemInfo[] }>('/workspace/systems'),
   registerLocal: (body: { name: string; path: string; system: string; activate?: boolean }) =>
     request<any>('/workspace/register-local', { method: 'POST', body: JSON.stringify(body) }),

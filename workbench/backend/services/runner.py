@@ -90,6 +90,10 @@ def _resolve_run_context(workspace: str) -> tuple[str, str]:
     if not system:
         from specstd.workspace import resolve_system
         system = resolve_system()
+    # T-1000：注册期已允许 system_pending（包未建）工作区，跑测试时必须适配包就绪，
+    # 此处诚实报错替代子进程 ModuleNotFoundError
+    from specstd.workspace import ensure_system_ready
+    ensure_system_ready(system)
     return system, scenarios_root
 
 

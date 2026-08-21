@@ -93,6 +93,7 @@ class WorkspaceInfo:
     branch: str = "main"               # git 型：分支
     local_path: str = ""               # git 型：克隆落点（相对仓库根）
     last_commit: str = ""              # 最近一次 commit SHA
+    owner_emp: str = ""                # T-1000：注册人工号（自管理归属；空=存量/系统登记）
 
     @property
     def root(self) -> Path:
@@ -116,6 +117,7 @@ class WorkspaceInfo:
                     "local_path": self.local_path} if self.source_type == "git" else {}),
             },
             "last_commit": self.last_commit,
+            "owner_emp": self.owner_emp,
         }
 
     @classmethod
@@ -130,6 +132,7 @@ class WorkspaceInfo:
             branch=source.get("branch", "main"),
             local_path=source.get("local_path", ""),
             last_commit=d.get("last_commit", ""),
+            owner_emp=d.get("owner_emp", ""),
         )
 
 
@@ -255,7 +258,8 @@ def unregister(name: str) -> bool:
 # ══════════════════════════════════════════════════════════
 
 def register_local(name: str, path: str, system: str,
-                   activate: bool = True, run_conformance: bool = True) -> dict:
+                   activate: bool = True, run_conformance: bool = True,
+                   owner_emp: str = "") -> dict:
     """注册本地文件夹工作区。
 
     参数：
@@ -285,7 +289,7 @@ def register_local(name: str, path: str, system: str,
     # 注册
     info = WorkspaceInfo(
         name=name, system=system, source_type="local",
-        source_path=str(ws_path),
+        source_path=str(ws_path), owner_emp=owner_emp,
     )
     registry = _load_registry()
     ws_dict = registry.setdefault("workspaces", {})
@@ -306,7 +310,7 @@ def register_local(name: str, path: str, system: str,
 
 def register_git(name: str, url: str, system: str, branch: str = "main",
                  activate: bool = True, run_conformance: bool = True,
-                 clone_dir: str = "") -> dict:
+                 clone_dir: str = "", owner_emp: str = "") -> dict:
     """注册 git 工作区（克隆仓库）。
 
     clone_dir 非空时克隆到自定义目录（必须绝对路径），留空克隆到
@@ -359,7 +363,7 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
                 name=name, system=system, source_type="git",
                 source_url=url, branch=branch,
                 local_path=str(clone_path) if clone_dir else str(clone_path.relative_to(_ws.SG_ROOT)),
-                last_commit=last_commit,
+                last_commit=last_commit, owner_emp=owner_emp,
             )
             registry = _load_registry()
             ws_dict = registry.setdefault("workspaces", {})
@@ -374,7 +378,7 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
         name=name, system=system, source_type="git",
         source_url=url, branch=branch,
         local_path=local_rel,
-        last_commit=last_commit,
+        last_commit=last_commit, owner_emp=owner_emp,
     )
     registry = _load_registry()
     ws_dict = registry.setdefault("workspaces", {})

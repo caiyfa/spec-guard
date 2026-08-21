@@ -36,6 +36,8 @@ SEED_MENUS: list[tuple] = [
     ("group-overview", "总览", "📊", "", "", 0, 1, 0),
     ("menu-dashboard", "仪表盘", "", "/dashboard", "group-overview", 0, 1, 0),
     ("menu-graph", "全景图谱", "", "/graph", "group-overview", 1, 1, 0),
+    ("menu-activity", "我的活动", "", "/my-activity", "group-overview", 2, 1, 0),
+    ("menu-workspace", "工作区中心", "", "/workspace", "group-overview", 3, 1, 0),
     ("group-agent", "Agent", "🤖", "", "", 1, 1, 0),
     ("menu-agent", "Agent 对话", "", "/agent", "group-agent", 0, 1, 0),
     ("menu-drafts", "草稿评审", "", "/drafts", "group-agent", 1, 1, 0),

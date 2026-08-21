@@ -18,6 +18,8 @@ import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
 import MenuRoles from './pages/MenuRoles';
 import SystemsAdmin from './pages/SystemsAdmin';
+import WorkspaceCenter from './pages/WorkspaceCenter';
+import MyActivity from './pages/MyActivity';
 import GraphPanorama from './pages/GraphPanorama';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
@@ -41,8 +43,7 @@ const REDIRECT_TARGETS: Record<string, string> = {
   '/zentao': '/agent',                     // 禅道收操作台页签
   '/spec': '/agent',                       // 合规校验收对话页签
   '/knowledge': '/agent',                  // 知识收对话页签
-  '/workspace': '/dashboard',              // 工作区中心让位（T-1000 重建后挂回）
-  '/workspace/git-log': '/dashboard',      // GitLog 已删除
+  '/workspace/git-log': '/workspace',      // GitLog 已删除，回工作区中心（T-1000 重建）
 };
 
 // 免权页面（登录即用，无需菜单授权）：路由守卫直接放行
@@ -367,6 +368,8 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/menu-roles" element={<MenuRoles />} />  {/* RBAC：菜单管理 + 角色授权 */}
               <Route path="/settings" element={<Settings />} />
               <Route path="/systems" element={<SystemsAdmin />} />  {/* T-973：系统包管理（挂「系统管理」分组） */}
+              <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />  {/* T-1000：工作区中心（系统分组卡片墙） */}
+              <Route path="/my-activity" element={<MyActivity />} />  {/* T-1000：我的活动（产出/会话/工具/执行） */}
               {/* T-996：被收编/删除的路由统一重定向（矩阵见 REDIRECT_TARGETS） */}
               {Object.entries(REDIRECT_TARGETS).map(([from, to]) => (
                 <Route key={from} path={from} element={<RedirectTo to={to} />} />

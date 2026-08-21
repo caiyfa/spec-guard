@@ -933,12 +933,14 @@ export default function AgentChat() {
   }, [sessionId, currentWorkspace]);
 
   // K-012: 页面刷新/服务重启后自动恢复上次会话（_store 为空时才补拉，SPA 内导航不触发）
+  // T-1000: ?session= 深链优先（「我的活动」产出溯源/会话列表跳入）
   useEffect(() => {
     if (messages.length > 0 || scenarioId || debugRunId) return;
-    const savedId = localStorage.getItem('sg_agent_session');
+    const urlSid = new URLSearchParams(window.location.search).get('session');
+    const savedId = urlSid || localStorage.getItem('sg_agent_session');
     if (!savedId) return;
     restoreSession(savedId, currentWorkspace)
-      .catch(() => localStorage.removeItem('sg_agent_session'));  // 会话已不存在则清键静默降级
+      .catch(() => { if (!urlSid) localStorage.removeItem('sg_agent_session'); });  // 会话已不存在则清键静默降级
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

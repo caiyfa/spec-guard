@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextvars
 import os
+import re
 from pathlib import Path
 
 # ══════════════════════════════════════════════════════════
@@ -88,6 +89,29 @@ def resolve_system(system: str = "") -> str:
     except Exception:
         pass  # 注册表不可读时降级环境变量口径，不让 system 解析阻断调用方
     return os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
+
+
+# T-1000：系统标识合法性格式（与 services.systems_catalog.SYSTEM_NAME_RE 同构，
+# specstd 不反向依赖 workbench，此处内联）
+_SYSTEM_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def ensure_system_ready(system: str) -> None:
+    """T-1000：跑测试等运行期路径的系统就绪硬校验（适配包未建 → 诚实报错）。
+
+    注册期已放宽为软校验（workspace router 标 system_pending），但 pytest 执行必须
+    有适配包——此处给出明确可操作的错误，替代运行期 ModuleNotFoundError。
+    """
+    if not _SYSTEM_NAME_RE.match(system or ""):
+        raise RuntimeError(f"系统标识非法: {system}（须为字母/数字/下划线组成的 Python 模块名）")
+    pkg = SG_ROOT / "systems" / system
+    import os as _os
+    dyn = _os.environ.get("SG_SYSTEMS_ROOT", "").strip()
+    dyn_pkg = Path(dyn) / system if dyn else None
+    if not pkg.is_dir() and not (dyn_pkg and dyn_pkg.is_dir()):
+        raise RuntimeError(
+            f"系统适配包未就绪: systems/{system}/ 不存在——该工作区注册时标记为待接入"
+            f"（system_pending），请先在「系统管理 → 系统包管理」创建适配包后再跑测试")
 
 
 
