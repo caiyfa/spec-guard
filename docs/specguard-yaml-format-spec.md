@@ -1,6 +1,6 @@
 # SpecGuard YAML 格式规范
 
-> **版本**：2.11.0 | **更新时间**：2026-08-21 | **生成方式**：SpecGuard Workbench 自动生成
+> **版本**：2.14.0 | **更新时间**：2026-08-21 | **生成方式**：SpecGuard Workbench 自动生成
 > **用途**：Agent 根据此规范生成合规的 test-case YAML 文件，SpecGuard 按此规范校验格式。
 > **结构**：第一~七章为语法层（冻结，变更需递增版本号）；第八章为 tool 目录（引擎注册表动态生成）。
 
@@ -8,6 +8,9 @@
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 2.14.0 | 2026-08-21 | 测试类型学（T-981）：doc 层新增选填字段 `dimensions` 测试维度受控词表（happy-path/negative/boundary/permission/security/state/isolation/regression 八维，标注 1~3 个）+ 维度↔断言模式映射（T10 测试设计自检 WARN，词表外值 ERROR）+ 覆盖面板按维度聚合。doc 层字段不进契约指纹，存量 YAML 语法零变更（补标注后享受维度聚合与自检） |
+| 2.13.0 | 2026-08-21 | tool 限定名与动态系统包（T-973）：tool 信封 use 支持多系统同名消歧的限定写法 `system:name`（裸名唯一命中时行为不变）；tool 目录按系统命名空间组织（本表「归属系统」列，动态系统包注册的工具自动可见）；系统包 manifest 契约（config/template/code 三级——模板断言 assertions.yaml 经 SELECT-only 确定性校验注册为 oracle，代码型 extensions.py 评审闸后热加载）。语法层兼容扩展，存量 YAML 无需修改 |
+| 2.12.0 | 2026-08-21 | 引擎去领域化（T-972）：call/poll 的 service 缺省值由「内置 tdm」改为「env 配置 default_service 声明的默认服务名」（未声明且场景未写 service 时 SKIP——环境配置缺口）；{{env.resource_code}} 不再内置 TDM 兜底资源码（env 必配 default_resource_code，缺失时预检预警）；random 词库由系统适配包注入（YAML 语法与 tdm 可用池名不变）。语法层零变更，YAML 无需修改 |
 | 2.11.0 | 2026-08-21 | DB 截断可见性（ENG-T06/ENG-BUG-009）：db_query 超过 max_rows=1000 的截断不再静默——db_traces 落 `truncated: true`、执行日志打 WARN、case JSON 顶层 `warnings` 挂截断条目（计数类断言将失真的显式告警）；新增 `allow_truncate: true` 显式豁免（落痕保留、告警消失，用于只取样本的正当场景，默认 false） |
 | 2.10.0 | 2026-08-21 | 渲染与断言防呆（ENG-T05）：插值残留扫描——渲染后仍含 {{ 抛 RenderError（FAIL/scenario_error，请求不发出），字面量 {{ 暂无转义语法；poll call 段补 service 路由与 headers/cookies 透传；poll until 配置错误（jsonpath 拼错等）第一轮快速失败而非轮询至超时；T9 lint——≥2 个带 save 步骤 + 无 of 断言 WARN 提示显式指定；python 步骤文档补浅拷贝注意事项（勿对上游 dict/list 原地修改） |
 | 2.9.0 | 2026-08-20 | call 新增幂等重试声明（ENG-T03）：`retry: {times: N, backoff?: 秒, on_status?: [状态码]}` 或 `idempotent: true`（=times=1 语义糖）；GET/HEAD/OPTIONS 默认自动重试一次，其他方法需显式声明；网络异常（连接失败/超时）总是可重试；每次重试打 WARN 日志留痕；poll 固定不重试。新增场景级软看门狗 SG_SCENARIO_TIMEOUT（秒，默认 300）：超阈值在步骤/断言/poll 边界抛 ScenarioTimeout（FAIL/env_error）；call 文件字段与 binary body 改传 bytes（fd 不泄漏、401 重试重发字节完整） |
@@ -44,6 +47,42 @@ scenarios/{模块}/{功能}/{场景ID}.yaml
 | `id` | string | 场景唯一标识，全局不可重复（格式：`{模块前缀}-{类型}-{序号}`，如 `PP-RC-001`） |
 | `title` | string | 场景标题（中文描述） |
 | `flow` | list | 执行步骤列表（flow 和 verify 至少有一个非空） |
+
+**doc 层选填字段**（给人看的测试设计层；除 covers 外均不进契约指纹，增删无需 bump version）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `doc.given` / `doc.when` / `doc.then` | string | 场景三段式描述（人读，生成必写） |
+| `doc.covers` | list | FR 锚点（场景↔Spec 强制关联，见「covers 锚点」规则） |
+| `doc.related_ac` | list | 关联 AC 编号（可选补充溯源） |
+| `doc.dimensions` | list | 测试维度受控词表（2.14.0，标注 1~3 个；覆盖面板按维度聚合的依据） |
+
+**`doc.dimensions` 受控词表**（词表外值 validate 报 ERROR；缺失报 WARN 提示补标）：
+
+| 维度 | 语义 | 典型场景 |
+|------|------|----------|
+| `happy-path` | 正向主流程：典型输入下的预期行为 | 主功能调用成功、prep 数据准备 |
+| `negative` | 负向异常：非法输入/错误状态被显式拒绝 | 404/400、必填校验报错、非法状态操作 |
+| `boundary` | 边界值：空值/特殊值/极限值的处理正确性 | "-"/空值导入、越界值、0 与 NULL 区分 |
+| `permission` | 权限过滤：数据权限裁剪与越权拒绝 | corpCode/vm 维度过滤、受限账号 |
+| `security` | 安全认证：认证拒绝与 fail-secure 不泄露 | 未登录拒绝、无权限资源码不返回数据 |
+| `state` | 状态一致性：DB/快照/状态流转的持久层校对 | 快照冻结、DB 字段比对、状态机流转 |
+| `isolation` | 数据隔离：行级/多主体对照（正常与异常并存） | 导入行级隔离（正常行入库/异常行拒绝） |
+| `regression` | 回归防护：历史缺陷复现防护 | 已修复 bug 的复现场景（标注语义） |
+
+**维度↔断言模式映射**（T10 测试设计自检，WARN 级非硬门禁）：声明维度后 verify 应有
+对应断言证据，缺失时 validate 提示（证据确实充分可忽略，如纯数据准备场景）：
+
+| 维度 | 期望断言证据（任一即过） |
+|------|--------------------------|
+| `happy-path` | status 2xx 或响应体 json 断言 |
+| `negative` | status ≥400，或包装协议错误码（`$.status`≠200），或错误消息/failCount 断言 |
+| `boundary` | json 断言或 DB 证据（边界值结果需显式校验） |
+| `permission` | DB 校对 oracle / `absent: true` / status ≥400 / 包装协议错误码 |
+| `security` | status ≥400 / 包装协议错误码 / `absent: true`（不泄露证据） |
+| `state` | oracle 断言器或 db_query 派生 json 断言（持久层证据） |
+| `isolation` | db_query 派生对照断言（正常/异常行比对）或 `absent: true` |
+| `regression` | 不检查——标注语义，任何 verify 均为证据 |
 
 ### 1.3 完整示例（场景测试 — 查询校验型）
 
@@ -154,7 +193,7 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 
 **call 原语（Apifox 风格参数体系）**：
 - `as`：账号别名（default 等），`none`/`anonymous` 表示不带 token 的匿名调用；`internal` = internal token 服务凭证（K-055，无用户身份，限参数驱动接口）
-- `service`：服务前缀路由（K-055，默认 tdm）——取 env 配置 `{service}_base`（如 hr_center/oss/uac），场景只写服务内相对路径，服务段不再丢失
+- `service`：服务前缀路由（K-055；2.12.0 起缺省用 env 配置 `default_service` 声明的默认服务名，引擎不内置系统名；未声明且场景未写 `service` 时 SKIP——环境配置缺口）——取 env 配置 `{service}_base`（如 hr_center/oss/uac），场景只写服务内相对路径，服务段不再丢失
 - `headers` / `cookies`：KV dict，支持 `{{var}}` 插值；`headers` 可显式覆盖 `Authorization`（负向测试用）
 - `retry` / `idempotent`（2.9.0，幂等重试声明，二选一）：`retry: {times: N, backoff?: 秒（默认 1.0）, on_status?: [状态码]（默认 [500,502,503,504]）}`；`idempotent: true` 等价 `times: 1` 的语义糖。**GET/HEAD/OPTIONS 默认自动重试一次**（`retry: {times: 0}` 显式关闭）；其他方法（POST/PUT/DELETE…）必须显式声明才重试——重试意味着请求可能被重复发送，幂等性由作者担保。网络异常（连接失败/超时）总是可重试；4xx 永不重试（401 刷新逻辑除外）；每次重试在执行日志打 `WARN 重试第N次` 留痕。`poll` 步骤内部固定不重试（轮询本身就是重试语义）
 - `body_type`（默认按 `json` 字段推断）：
@@ -168,9 +207,9 @@ flow/teardown 的每个步骤是单键 dict。语法层**冻结**为以下 5 种
 | `binary` | `file: "path/to/file"` | 文件字节流 body（octet-stream） |
 
 - `db_query.sql`：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，支持 `{{var}}` 插值
-- `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / tdm / uac），未配置该连接时场景 SKIP
+- `db_query.schema`：多库连接名（K-055，默认 default）——env db 段 dict-of-dicts 的键（如 default=hr_center / biz / uac），未配置该连接时场景 SKIP
 - `db_query.allow_truncate`（2.11.0，默认 false）：查询超过 max_rows=1000 时截断**三层落痕**——db_traces `truncated: true`、执行日志 WARN、case JSON 顶层 `warnings` 截断条目（`$.length()`/`len_eq` 等计数断言将失真）；声明 `allow_truncate: true` 豁免告警（落痕保留），用于"只取前 N 行看样本"的正当场景
-- `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）。**call 段参数**（2.10.0 起与 call 步骤对齐一部分）：`as`（账号）、`service`（服务前缀路由，默认 tdm）、`headers`/`cookies`（KV dict，支持插值）、`timeout`；**until 配置错误快速失败**——jsonpath 拼错等非"条件不满足"异常第一轮即 FAIL（scenario_error），不再轮询至超时掩盖错误（jsonpath 无匹配仍按"未满足"继续轮询）
+- `poll`：异步轮询。`on_timeout: fail`（默认，AssertionError）| `skip`（SKIP 场景）；每轮调用落 StepTrace（`poll:1`, `poll:2`...）。**call 段参数**（2.10.0 起与 call 步骤对齐一部分）：`as`（账号）、`service`（服务前缀路由，2.12.0 起缺省用 env `default_service`）、`headers`/`cookies`（KV dict，支持插值）、`timeout`；**until 配置错误快速失败**——jsonpath 拼错等非"条件不满足"异常第一轮即 FAIL（scenario_error），不再轮询至超时掩盖错误（jsonpath 无匹配仍按"未满足"继续轮询）
 - **场景级软看门狗**（2.9.0）：环境变量 `SG_SCENARIO_TIMEOUT`（秒，默认 300）——场景累计耗时超阈值时在**步骤/断言/poll 轮询边界**抛 `ScenarioTimeout`（FAIL/env_error，消息带超时提示）。注意：`python` 脚本内死循环（不回到步骤边界）软看门狗拦不住，进程级兜底用 workbench 执行控制的 run 级看门狗（settings `run_timeout_sec` / 环境变量 `SG_RUN_TIMEOUT`，默认 0=禁用，建议生产开启）
 
 ### 1.7 断言类型（verify 断言）
@@ -532,6 +571,7 @@ GET /api/reference/next-id?prefix=PP&type=RC
 | T5 | WARN | 无 depends_on 且非 prep 标签 → 疑似孤例 |
 | T6 | ERROR | 契约指纹已变更但 version 未 bump（比对 contracts_baseline.json） |
 | T7 | WARN | 依赖未声明版本期望（接受任意版本），建议补 version: ^X |
+| T10 | ERROR/WARN | doc.dimensions 受控词表（词表外值 ERROR；缺失 WARN 提示补标；维度↔断言映射自检 WARN，2.14.0） |
 
 **T8 补充（2.3.0）**：`requires` 段格式校验：
 - `accounts` 非空字符串数组；`env` 为点号路径（`vars.xxx` 合法）；`upstream` 必须指向
@@ -540,6 +580,11 @@ GET /api/reference/next-id?prefix=PP&type=RC
 
 **T6 补充**：version 已 bump 但契约未变化 → WARN（冗余 bump）；新场景未入基线 → INFO（需更新基线）。
 基线文件 `contracts_baseline.json` 随 git 提交，由迁移脚本或发布检查流程更新。
+
+**T10 补充（2.14.0）**：`doc.dimensions` 是测试维度的受控标注（词表见 §1.2 doc 层选填字段）——
+覆盖面板按维度聚合以发现测试设计盲区（如全是 happy-path、没有 boundary/negative）；
+维度↔断言模式映射是测试设计自检而非硬门禁，WARN 提示「标注与断言两张皮」；
+dimensions 在 doc 层不进契约指纹，增删无需 bump version。
 
 ---
 
@@ -593,16 +638,16 @@ source_delta: post-launch-fixes
 tool 是领域能力的插件化封装。新增能力 = 引擎/系统包注册新 tool，**语法层不变**。
 调用形式：`- tool: {use: 工具名, with: {参数...}, save: 变量名}`（save 可省略）。
 
-| tool | 说明 | 参数（with 段） | 产出变量 |
-|------|------|----------------|----------|
-| `fetch_permission` | 权限预言（抓取账号三维权限范围 corp/level/vm，作为权限断言的预期真相源） | `account`：账号别名（默认 default，须在 env accounts 配置 emp_no）<br>`resource_code`：资源码（可选，默认取 env.resource_code） | `corp_all`、`corp_codes`、`level_all`、`levels`、`vm_all`、`vm_codes`、`has_any` |
-| `oss_download` | 从 OSS 下载文件（预签名 URL），返回本地文件路径 | `ossKey`：OSS 文件 key（必填，支持 {{var}} 插值）<br>`output_dir`：下载目录（默认 downloads） | `file_path`、`file_size`、`ossKey`、`fileName` |
-| `oss_upload` | 上传本地文件到 OSS（multipart），返回 ossKey 供后续 API 调用 | `file`：本地文件路径（必填，相对项目根目录或绝对路径）<br>`tenant`：租户（默认 COREHR）<br>`public`：是否公开（bool，默认 false=私有） | `ossKey`、`fileName`、`fileSize` |
-| `precheck_permission` | 资源码权限预检（K-055：场景首步使用；账号无权限时立即 SKIP，替代跑到一半 FAIL） | `account`：账号别名（默认 default）<br>`resource_code`：资源码（可选，默认取 env.resource_code）<br>`corp_code`：要求平台在权限范围内（可选） | `corp_all`、`corp_codes`、`level_all`、`levels`、`vm_all`、`vm_codes`、`has_any` |
-| `random` | 随机数据生成（随机数/浮点/文本/词库抓取/UUID/列表抓取） | `type`：number|float|text|uuid|pick（默认 number）<br>`min/max`：数值范围（number/float，默认 1~100 / 0~100）<br>`precision`：浮点精度（默认 1）<br>`pool`：词库名（text 用：activity_name/department/person_name/eval_text/session_desc/tag）<br>`length`：随机字符串长度（text 无 pool 时，默认 8）<br>`suffix`：文本追加随机数字后缀（bool，保证唯一性）<br>`items`：自定义列表（type=pick 必填） | `（随机值本身，标量）` |
-| `resolve_account` | 动态账号解析（K-055：按资源码从权限体系找真实账号，权限表初筛 + data-info 复核，替代静态 accounts 配置；无候选时 SKIP） | `resource_code`：资源码（可选，默认取 env.resource_code）<br>`corp_code`：要求平台在权限范围内（可选）<br>`role_code`：限定角色 code（可选） | `emp_no`、`ad`、`emp_name`、`role_code` |
-| `select_emp` | 工号池选号（按角色筛选候选工号，执行前 DB 校验；独占模式跳过已租出工号） | `role`：工号角色（必填，如 snapshot_rich / no_snapshot_tdm / dhr_only）<br>`exclusive`：独占租约（bool，写型场景防互踩） | `no`、`role`、`activity_id`、`session_id`、`snapshot_type` |
-| `set_var` | 直接设置变量（常量或 {{var}} 插值表达式） | `vars`：{k: v} 映射，v 支持插值 | `vars 中每个 key 都是变量` |
+| tool | 归属系统 | 说明 | 参数（with 段） | 产出变量 |
+|------|----------|------|----------------|----------|
+| `random` | core | 随机数据生成（随机数/浮点/文本/词库抓取/UUID/列表抓取） | `type`：number|float|text|uuid|pick（默认 number）<br>`min/max`：数值范围（number/float，默认 1~100 / 0~100）<br>`precision`：浮点精度（默认 1）<br>`pool`：词库名（text 用：由系统适配包注入，如 activity_name/department/person_name）<br>`length`：随机字符串长度（text 无 pool 时，默认 8）<br>`suffix`：文本追加随机数字后缀（bool，保证唯一性）<br>`items`：自定义列表（type=pick 必填） | `（随机值本身，标量）` |
+| `set_var` | core | 直接设置变量（常量或 {{var}} 插值表达式） | `vars`：{k: v} 映射，v 支持插值 | `vars 中每个 key 都是变量` |
+| `fetch_permission` | tdm | 权限预言（抓取账号三维权限范围 corp/level/vm，作为权限断言的预期真相源） | `account`：账号别名（默认 default，须在 env accounts 配置 emp_no）<br>`resource_code`：资源码（可选，默认取 env.resource_code） | `corp_all`、`corp_codes`、`level_all`、`levels`、`vm_all`、`vm_codes`、`has_any` |
+| `oss_download` | tdm | 从 OSS 下载文件（预签名 URL），返回本地文件路径 | `ossKey`：OSS 文件 key（必填，支持 {{var}} 插值）<br>`output_dir`：下载目录（默认 downloads） | `file_path`、`file_size`、`ossKey`、`fileName` |
+| `oss_upload` | tdm | 上传本地文件到 OSS（multipart），返回 ossKey 供后续 API 调用 | `file`：本地文件路径（必填，相对项目根目录或绝对路径）<br>`tenant`：租户（默认 COREHR）<br>`public`：是否公开（bool，默认 false=私有） | `ossKey`、`fileName`、`fileSize` |
+| `precheck_permission` | tdm | 资源码权限预检（K-055：场景首步使用；账号无权限时立即 SKIP，替代跑到一半 FAIL） | `account`：账号别名（默认 default）<br>`resource_code`：资源码（可选，默认取 env.resource_code）<br>`corp_code`：要求平台在权限范围内（可选） | `corp_all`、`corp_codes`、`level_all`、`levels`、`vm_all`、`vm_codes`、`has_any` |
+| `resolve_account` | tdm | 动态账号解析（K-055：按资源码从权限体系找真实账号，权限表初筛 + data-info 复核，替代静态 accounts 配置；无候选时 SKIP） | `resource_code`：资源码（可选，默认取 env.resource_code）<br>`corp_code`：要求平台在权限范围内（可选）<br>`role_code`：限定角色 code（可选） | `emp_no`、`ad`、`emp_name`、`role_code` |
+| `select_emp` | tdm | 工号池选号（按角色筛选候选工号，执行前 DB 校验；独占模式跳过已租出工号） | `role`：工号角色（必填，如 snapshot_rich / no_snapshot_tdm / dhr_only）<br>`exclusive`：独占租约（bool，写型场景防互踩） | `no`、`role`、`activity_id`、`session_id`、`snapshot_type` |
 
 ### 8.1 tool 调用示例
 

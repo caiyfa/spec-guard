@@ -1,7 +1,7 @@
 ---
 name: generate-scenario
 description: 从需求文档生成 SpecGuard 测试场景 YAML
-version: 1.0.0
+version: 1.1.0
 author: platform-team
 depends_tools: [read_info_pack, read_spec, next_scenario_id, query_registry, list_scenarios, read_scenario, validate, write_draft, suggest_deps]
 trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、或使用场景创建向导时
@@ -100,6 +100,29 @@ keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个
   拿不准环境有没有该账号时，向用户确认或参考环境配置页。requires 不进契约指纹，
   增删无需 bump version；未声明时预检扫描器会从 flow 文本静态兜底提取。
 
+### 测试设计方法（dimensions，生成前必做维度思考）
+
+生成场景不是「把需求翻译成一次成功调用」——每个场景必须有明确的测试设计意图，
+并用 `doc.dimensions` 受控词表标注（覆盖面板按维度聚合，全是 happy-path 的模块
+会被一眼看出盲区）。生成一批场景时按下表做**维度搭配**，不要全堆正向：
+
+| 维度 | 什么时候标 | 断言要点（validate 的 T10 自检依据） |
+|------|-----------|--------------------------------------|
+| `happy-path` | 典型输入的预期行为、prep 数据准备 | status 2xx + 响应体字段断言 |
+| `negative` | 非法输入/错误状态被显式拒绝 | status ≥400，或包装协议错误码（`$.status`≠200），或错误消息/failCount 断言 |
+| `boundary` | 空值/特殊值/极限值（"-"、0、NULL、越界） | 边界结果的显式 json/DB 断言（不是「不报错就算过」） |
+| `permission` | 数据权限裁剪、受限账号、越权访问 | 权限 oracle / `absent: true` / 拒绝错误码 |
+| `security` | 未登录、fail-secure 不泄露 | 拒绝证据 + 不泄露证据（absent） |
+| `state` | DB 字段比对、快照冻结、状态机流转 | oracle 断言器或 db_query 派生 json 断言 |
+| `isolation` | 行级/多主体对照（正常与异常并存） | db_query 对照断言（正常行 vs 异常行） |
+| `regression` | 历史 bug 复现防护 | 标注语义为主，配合 doc.related_bug 溯源 |
+
+测试设计方法对应关系：**等价类划分** → 每个有效/无效等价类至少一个场景
+（happy-path + negative 搭配）；**边界值分析** → 对数值范围、必填可选、空/特殊字符
+必出 boundary 场景；**场景法** → 主流程 happy-path、备选/异常流程 negative/state；
+**错误推测** → 凭经验补权限、安全、隔离维度场景。标注 1~3 个维度/场景，
+validate 会对「声明维度但 verify 无对应证据」报 DIM_MAP WARN（测试设计自检）。
+
 ### 硬约束
 
 1. 场景 YAML 必须符合格式规范；doc.covers 中的 FR ID 必须在当前工作区的 spec.md 中存在
@@ -109,6 +132,8 @@ keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个
 5. **禁止连续生成多个场景** — 每个场景完成后必须暂停，等用户确认
 6. **doc.covers 必填**（1 个起步）——covers 是场景↔Spec 的强制锚点，覆盖分析、DAG 编排、
    delta 导入计划全部依赖它；无 covers 的场景等于断了溯源
+7. **doc.dimensions 必填**（受控词表 1~3 个）——测试维度是覆盖面板的聚合依据；
+   词表外值 validate 报 ERROR，缺失报 WARN；维度必须与 verify 断言证据一致（见上节映射表）
 
 ### 工具报错处理（K-020，必须遵守）
 

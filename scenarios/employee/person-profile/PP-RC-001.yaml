@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=xxx（不传 activityId）
   then: 返回 ProfileVO，basicInfo 及各业务模块完整；basicInfo 与员工表当前行一致
   covers: [FR-001, FR-004]
+  dimensions: [happy-path, state]
   related_ac: [AC-001]
 
 # ─────────── 机器读层：依赖 + 执行 + 验证 ───────────

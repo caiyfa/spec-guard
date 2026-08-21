@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=xxx
   then: 仅返回权限内平台的盘点结果，其余平台记录被过滤（permission_filtered 预言校验）
   covers: [FR-013, FR-015]
+  dimensions: [permission]
   related_ac: [AC-001]
   note: 依赖 env accounts.restricted 配置真实受限账号；未配置时场景 SKIP
 

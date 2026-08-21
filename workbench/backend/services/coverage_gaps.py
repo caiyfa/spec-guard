@@ -70,7 +70,7 @@ def _load_scenarios() -> list[dict]:
         from engine.scenario_loader import load_scenarios
         scs = load_scenarios(str(root))
         return [{"id": s.id, "covers": list(s.covers), "module": s.module,
-                 "path": s.path} for s in scs]
+                 "dimensions": list(s.dimensions), "path": s.path} for s in scs]
     except Exception:
         return []
 
@@ -184,6 +184,32 @@ def _load_p0_decisions() -> set:
         return set()
 
 
+def _dimension_stats(scenarios: list[dict]) -> dict:
+    """测试维度聚合（T-981）：按受控词表序输出各维度的场景数/场景ID/覆盖 FR。
+
+    只统计已入库场景（草稿未过三闸，不进维度分布）；未标注场景归入
+    unassigned——「标注缺失」在面板上可见而非静默。
+    """
+    from sg_core.test_dimensions import DIMENSIONS
+    stats = {d: {"count": 0, "scenarios": [], "frs": set()} for d in DIMENSIONS}
+    unassigned = []
+    for sc in scenarios:
+        dims = [d for d in (sc.get("dimensions") or []) if d in stats]
+        if not dims:
+            unassigned.append(sc["id"])
+        for d in dims:
+            st = stats[d]
+            st["count"] += 1
+            st["scenarios"].append(sc["id"])
+            st["frs"].update(sc.get("covers") or [])
+    lanes = [
+        {"dimension": d, "label": DIMENSIONS[d], "count": stats[d]["count"],
+         "scenarios": sorted(stats[d]["scenarios"]), "frs": sorted(stats[d]["frs"])}
+        for d in DIMENSIONS
+    ]
+    return {"lanes": lanes, "unassigned": sorted(unassigned)}
+
+
 def compute_coverage(module: str = "") -> dict:
     """三态聚合（M07 §4.1 响应结构）。
 
@@ -248,10 +274,12 @@ def compute_coverage(module: str = "") -> dict:
         "fr_total": len(anchors),
         "lanes": {"gap": gaps, "draft": draft_lane, "covered": covered},
         "suggested_order": [g["fr"] for g in rank_gaps(gaps)],
+        "dimensions": _dimension_stats(scenarios),
         "fingerprint": _fingerprint(
             json.dumps(sorted(anchors.keys()), ensure_ascii=False),
             json.dumps([[s["id"], s["covers"]] for s in scenarios], ensure_ascii=False),
             json.dumps([[d["draft_id"], d["covers"]] for d in drafts], ensure_ascii=False),
+            json.dumps([[s["id"], s.get("dimensions", [])] for s in scenarios], ensure_ascii=False),
         ),
     }
     return result

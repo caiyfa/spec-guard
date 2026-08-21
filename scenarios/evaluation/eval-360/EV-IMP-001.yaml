@@ -15,6 +15,7 @@ doc:
     ③ 维度表 3 行全入库（回归："-" 不再导致整个 Sheet 解析失败丢数据），"-"行得分 NULL、正常行 92.50/85.00 保留；
     ④ 价值观 2 行入库（dim_category='VALUES'）。
   covers: []
+  dimensions: [boundary, regression, state]
   related_bug: ["52648d4 360评价导入Excel中-字符导致整个Sheet解析失败丢数据"]
 
 # ─────────── 机器读层 ───────────

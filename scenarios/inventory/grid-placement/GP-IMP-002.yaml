@@ -14,6 +14,7 @@ doc:
     ② 行级隔离：r2（落位 7）正常入库；r1（落位 10）未入库。
   covers: []
 
+  dimensions: [boundary, negative, isolation]
 # ─────────── 机器读层 ───────────
 depends_on:
   - {id: IS-PREP-002, mode: exclusive, version: ^0}

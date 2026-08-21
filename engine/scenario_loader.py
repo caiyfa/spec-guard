@@ -35,6 +35,11 @@ class Scenario:
         return self.doc.get("covers", []) if self.doc else []
 
     @property
+    def dimensions(self):
+        """doc.dimensions 测试维度（受控词表见 sg_core.test_dimensions；缺省 []）。"""
+        return self.doc.get("dimensions", []) if self.doc else []
+
+    @property
     def module(self):
         return self.suite.get("module", "")
 

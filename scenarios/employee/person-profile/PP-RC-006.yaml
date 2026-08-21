@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=xxx&activityId=INVALID
   then: 自动回退返回该人员最新快照的 ProfileVO（页面正常展示数据而非报错）
   covers: [FR-002]
+  dimensions: [happy-path]
   related_ac: [AC-002, AC-003]
   related_edge: "archive test-cases TC-008"
 

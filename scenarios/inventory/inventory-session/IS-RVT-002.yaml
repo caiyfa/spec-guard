@@ -10,6 +10,7 @@ doc:
   when: PUT /api/inventory/sessions/{id}/revert
   then: 400，错误消息含「仅已启动状态允许退回」；会话状态不被改变（DB 仍 COMPLETED）
   covers: [FR-012]
+  dimensions: [negative, state]
   related_ac: [FR-012-验证2, FR-012-边界:活动状态非ACTIVE]
   note: revert 仅允许 ACTIVE（与 reopen 允许 ACTIVE/CLOSED 的差异点）
 

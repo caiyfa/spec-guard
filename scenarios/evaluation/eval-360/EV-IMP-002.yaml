@@ -14,6 +14,7 @@ doc:
     ② 行级隔离：r2 正常入库（tdm_eval_360 存在 SG-套卷E 记录，总分 80.00）；
     ③ r1 未入库（SG-套卷D 无记录）。
   covers: []
+  dimensions: [negative, isolation]
   note: 数值校验取消≠全部校验取消；类型/套卷名称仍为必填
 
 # ─────────── 机器读层 ───────────

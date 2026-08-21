@@ -28,9 +28,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.13.0"
+SPEC_VERSION = "2.14.0"
 SPEC_UPDATED = "2026-08-21"
 SPEC_CHANGELOG = [
+    ("2.14.0", "2026-08-21", "测试类型学（T-981）：doc 层新增选填字段 `dimensions` 测试维度受控词表（happy-path/negative/boundary/permission/security/state/isolation/regression 八维，标注 1~3 个）+ 维度↔断言模式映射（T10 测试设计自检 WARN，词表外值 ERROR）+ 覆盖面板按维度聚合。doc 层字段不进契约指纹，存量 YAML 语法零变更（补标注后享受维度聚合与自检）"),
     ("2.13.0", "2026-08-21", "tool 限定名与动态系统包（T-973）：tool 信封 use 支持多系统同名消歧的限定写法 `system:name`（裸名唯一命中时行为不变）；tool 目录按系统命名空间组织（本表「归属系统」列，动态系统包注册的工具自动可见）；系统包 manifest 契约（config/template/code 三级——模板断言 assertions.yaml 经 SELECT-only 确定性校验注册为 oracle，代码型 extensions.py 评审闸后热加载）。语法层兼容扩展，存量 YAML 无需修改"),
     ("2.12.0", "2026-08-21", "引擎去领域化（T-972）：call/poll 的 service 缺省值由「内置 tdm」改为「env 配置 default_service 声明的默认服务名」（未声明且场景未写 service 时 SKIP——环境配置缺口）；{{env.resource_code}} 不再内置 TDM 兜底资源码（env 必配 default_resource_code，缺失时预检预警）；random 词库由系统适配包注入（YAML 语法与 tdm 可用池名不变）。语法层零变更，YAML 无需修改"),
     ("2.11.0", "2026-08-21", "DB 截断可见性（ENG-T06/ENG-BUG-009）：db_query 超过 max_rows=1000 的截断不再静默——db_traces 落 `truncated: true`、执行日志打 WARN、case JSON 顶层 `warnings` 挂截断条目（计数类断言将失真的显式告警）；新增 `allow_truncate: true` 显式豁免（落痕保留、告警消失，用于只取样本的正当场景，默认 false）"),
@@ -237,6 +238,42 @@ scenarios/{模块}/{功能}/{场景ID}.yaml
 | `id` | string | 场景唯一标识，全局不可重复（格式：`{模块前缀}-{类型}-{序号}`，如 `PP-RC-001`） |
 | `title` | string | 场景标题（中文描述） |
 | `flow` | list | 执行步骤列表（flow 和 verify 至少有一个非空） |
+
+**doc 层选填字段**（给人看的测试设计层；除 covers 外均不进契约指纹，增删无需 bump version）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `doc.given` / `doc.when` / `doc.then` | string | 场景三段式描述（人读，生成必写） |
+| `doc.covers` | list | FR 锚点（场景↔Spec 强制关联，见「covers 锚点」规则） |
+| `doc.related_ac` | list | 关联 AC 编号（可选补充溯源） |
+| `doc.dimensions` | list | 测试维度受控词表（2.14.0，标注 1~3 个；覆盖面板按维度聚合的依据） |
+
+**`doc.dimensions` 受控词表**（词表外值 validate 报 ERROR；缺失报 WARN 提示补标）：
+
+| 维度 | 语义 | 典型场景 |
+|------|------|----------|
+| `happy-path` | 正向主流程：典型输入下的预期行为 | 主功能调用成功、prep 数据准备 |
+| `negative` | 负向异常：非法输入/错误状态被显式拒绝 | 404/400、必填校验报错、非法状态操作 |
+| `boundary` | 边界值：空值/特殊值/极限值的处理正确性 | "-"/空值导入、越界值、0 与 NULL 区分 |
+| `permission` | 权限过滤：数据权限裁剪与越权拒绝 | corpCode/vm 维度过滤、受限账号 |
+| `security` | 安全认证：认证拒绝与 fail-secure 不泄露 | 未登录拒绝、无权限资源码不返回数据 |
+| `state` | 状态一致性：DB/快照/状态流转的持久层校对 | 快照冻结、DB 字段比对、状态机流转 |
+| `isolation` | 数据隔离：行级/多主体对照（正常与异常并存） | 导入行级隔离（正常行入库/异常行拒绝） |
+| `regression` | 回归防护：历史缺陷复现防护 | 已修复 bug 的复现场景（标注语义） |
+
+**维度↔断言模式映射**（T10 测试设计自检，WARN 级非硬门禁）：声明维度后 verify 应有
+对应断言证据，缺失时 validate 提示（证据确实充分可忽略，如纯数据准备场景）：
+
+| 维度 | 期望断言证据（任一即过） |
+|------|--------------------------|
+| `happy-path` | status 2xx 或响应体 json 断言 |
+| `negative` | status ≥400，或包装协议错误码（`$.status`≠200），或错误消息/failCount 断言 |
+| `boundary` | json 断言或 DB 证据（边界值结果需显式校验） |
+| `permission` | DB 校对 oracle / `absent: true` / status ≥400 / 包装协议错误码 |
+| `security` | status ≥400 / 包装协议错误码 / `absent: true`（不泄露证据） |
+| `state` | oracle 断言器或 db_query 派生 json 断言（持久层证据） |
+| `isolation` | db_query 派生对照断言（正常/异常行比对）或 `absent: true` |
+| `regression` | 不检查——标注语义，任何 verify 均为证据 |
 
 ### 1.3 完整示例（场景测试 — 查询校验型）
 
@@ -725,6 +762,7 @@ GET /api/reference/next-id?prefix=PP&type=RC
 | T5 | WARN | 无 depends_on 且非 prep 标签 → 疑似孤例 |
 | T6 | ERROR | 契约指纹已变更但 version 未 bump（比对 contracts_baseline.json） |
 | T7 | WARN | 依赖未声明版本期望（接受任意版本），建议补 version: ^X |
+| T10 | ERROR/WARN | doc.dimensions 受控词表（词表外值 ERROR；缺失 WARN 提示补标；维度↔断言映射自检 WARN，2.14.0） |
 
 **T8 补充（2.3.0）**：`requires` 段格式校验：
 - `accounts` 非空字符串数组；`env` 为点号路径（`vars.xxx` 合法）；`upstream` 必须指向
@@ -733,6 +771,11 @@ GET /api/reference/next-id?prefix=PP&type=RC
 
 **T6 补充**：version 已 bump 但契约未变化 → WARN（冗余 bump）；新场景未入基线 → INFO（需更新基线）。
 基线文件 `contracts_baseline.json` 随 git 提交，由迁移脚本或发布检查流程更新。
+
+**T10 补充（2.14.0）**：`doc.dimensions` 是测试维度的受控标注（词表见 §1.2 doc 层选填字段）——
+覆盖面板按维度聚合以发现测试设计盲区（如全是 happy-path、没有 boundary/negative）；
+维度↔断言模式映射是测试设计自检而非硬门禁，WARN 提示「标注与断言两张皮」；
+dimensions 在 doc 层不进契约指纹，增删无需 bump version。
 
 ---
 

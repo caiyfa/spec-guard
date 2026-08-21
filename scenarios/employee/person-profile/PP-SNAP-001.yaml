@@ -14,6 +14,7 @@ doc:
     ③ eval360Detail 已废弃不展示（360 信息由 eval360Primary 承载）——正向断言为 null。
     与 PP-RC-005 互补：本场景聚焦快照冻结字段的保真性，RC-005 聚焦职责链路由。
   covers: [FR-002, FR-003]
+  dimensions: [state]
   related_ac: [AC-004]
 
 # ─────────── 机器读层 ───────────

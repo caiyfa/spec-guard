@@ -9,6 +9,7 @@ doc:
   when: 切片模式调用 GET /api/employee/profile?empNo=xxx&activityId=yyy
   then: 盘点结果类每条记录含 invActivityId/invActivityName/invCorpCode/invCorpName 上下文（FR-006）；annualPerf 记录不注入 inv*（跨活动时间序列数据与单一活动无关）；空模块跳过校验
   covers: [FR-006]
+  dimensions: [state]
   related_ac: [AC-002]
 
 # ─────────── 机器读层 ───────────

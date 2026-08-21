@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile/trend?empNo=xxx
   then: 返回 ActivityTrendItem 数组，全量不分页，按 inventoryDate 降序
   covers: [FR-002]
+  dimensions: [happy-path]
   related_ac: [AC-002]
 
 # ─────────── 机器读层 ───────────

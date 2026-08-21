@@ -13,6 +13,7 @@ doc:
     ② DB：session_status=IN_PROGRESS、completed_at IS NULL、reopen_flag 未设置（与 reopen 区分）；
     ③ 生命周期连续：退回后可再次完成（COMPLETED）。
   covers: [FR-012]
+  dimensions: [happy-path, state]
   related_ac: [FR-012-验证1, FR-012-验证4]
 
 # ─────────── 机器读层 ───────────

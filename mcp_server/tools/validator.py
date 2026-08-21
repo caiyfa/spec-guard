@@ -27,7 +27,8 @@ TOOLS = [
     Tool(
         name="validate",
         description="校验场景 YAML 内容：格式合规（T1-T7）+ covers 关联（FR 锚点存在性）"
-                    "+ 注册表引用有效性（tool/oracle 名称已注册）。编造的 FR 必报 COVER 错误并给 hint。",
+                    "+ 注册表引用有效性（tool/oracle 名称已注册）+ 测试维度（doc.dimensions "
+                    "受控词表与维度↔断言映射自检）。编造的 FR 必报 COVER 错误并给 hint。",
         inputSchema={
             "type": "object",
             "properties": {
@@ -163,6 +164,13 @@ def validate_scenario_content(content: str) -> dict:
                                     "缺失的场景无法参与覆盖分析与 DAG 编排。"
                                     "请补充当前工作区 spec.md 中真实存在的 FR ID"
                                     "（用 read_spec 核实，支持 anchor=FR-xxx 参数定位章节）"})
+
+    # T-981：测试维度（doc.dimensions 受控词表 + 维度↔断言模式映射自检）
+    try:
+        from sg_core.test_dimensions import check_dimensions
+        findings.extend(check_dimensions(raw))
+    except Exception:
+        pass  # 维度模块不可用时跳过（不阻断主校验）
 
     # T4/T7 依赖连通性与版本期望（K-021②：此前 Agent 的 validate 不查 depends_on，
     # 悬空依赖/版本不可满足要到 promote 的发布门禁才炸——反馈晚一阶段，

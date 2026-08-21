@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=xxx&resourceCode=SG_NONEXIST_RESOURCE
   then: 返回权限拒绝（统一包装协议：HTTP 200 + status=500000 + message 含"无数据权限"）；不返回任何人员数据（fail-secure）
   covers: [FR-013, FR-015]
+  dimensions: [security, permission]
   related_ac: [AC-001]
   note: 用不存在的假资源码模拟无权限，场景对任何测试账号都成立，不依赖账号的真实权限配置；TDM 错误语义在 body.status/message
 

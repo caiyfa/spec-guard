@@ -12,6 +12,7 @@ doc:
   given: 测试账号具备活动/会话管理权限（资源码 TDM_INV_ACTIVITY）
   when: 创建活动→启动→会话（corp 1002）→添加3人→锁定第1人→完成会话
   then: 会话状态 COMPLETED，completedAt 非空
+  dimensions: [happy-path]
   engine_deps: ["REQ-1(records[0].id 数组下标)", "REQ-2(fn.timestamp)", "REQ-4(写权限)"]
   note: 完成校验要求 ①今天≥盘点日期（2026-07-22）②至少1名已锁定人员
 

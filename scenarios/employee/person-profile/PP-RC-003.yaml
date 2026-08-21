@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=xxx
   then: 返回 ProfileVO，仅 basicInfo 有数据（DhrFallbackProfileResolver 实时查询 DHR），其余业务模块为 null；basicInfo 与 DHR 最新分区记录一致
   covers: [FR-001]
+  dimensions: [happy-path, state]
   related_ac: [AC-003]
   related_edge: "spec §6 无快照 / DHR 降级路径"
 

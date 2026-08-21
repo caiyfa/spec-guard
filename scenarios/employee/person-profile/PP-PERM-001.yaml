@@ -12,6 +12,7 @@ doc:
     - FR-013
     - FR-014
     - FR-015
+  dimensions: [permission]
   related_ac:
     - AC-001
 depends_on:

@@ -13,6 +13,7 @@ doc:
   given: 测试账号具备活动/会话管理权限（资源码 TDM_INV_ACTIVITY，权限预置见引擎 REQ-4）
   when: 创建活动（唯一名）→ 启动 → 创建会话（corp 1002 远东租赁）→ 添加人员 90024713/90027339/90027338
   then: 活动 201 创建成功，会话状态 IN_PROGRESS，人员 inserted=3
+  dimensions: [happy-path]
   engine_deps: ["REQ-2(fn.timestamp 唯一活动名)", "REQ-4(写权限)"]
   note: 盘点日期 2026-07-22（≤今天，保证 complete 可用；人员 DHR 数据按该日期查询）
 

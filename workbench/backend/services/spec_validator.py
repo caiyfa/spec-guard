@@ -130,6 +130,7 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
     T1 格式基本：YAML 可解析，有 id/flow 或 verify
     T4 连通性：depends_on 必须能解析到已存在的场景
     T5 无孤例：无 depends_on 且非 prep 标签，告警（疑似孤立场景）
+    T10 测试维度：doc.dimensions 受控词表合法性 + 维度↔断言模式映射自检（T-981）
     """
     root = scenarios_root or str(SG_ROOT / "scenarios")
     if not os.path.isdir(root):
@@ -209,6 +210,16 @@ def validate_test_cases(scenarios_root: Optional[str] = None) -> dict:
         if not deps and "prep" not in tags:
             findings.append({"level": "WARN", "vid": "T5", "scenario": sid,
                              "message": "无 depends_on 且非 prep 标签——疑似孤立场景，建议声明依赖或标记 prep"})
+
+        # T10 测试维度（T-981：doc.dimensions 受控词表 + 维度↔断言模式映射自检，
+        # 与 mcp validator 同源 sg_core.test_dimensions）
+        try:
+            from sg_core.test_dimensions import check_dimensions
+            for f in check_dimensions(raw):
+                findings.append({"level": f["level"], "vid": "T10",
+                                 "scenario": f["scenario"], "message": f["message"]})
+        except Exception:
+            pass
 
     # T6 契约指纹与版本一致性（契约变更必须 bump version）
     baseline = load_baseline(str(SG_ROOT))

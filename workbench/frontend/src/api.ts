@@ -815,6 +815,13 @@ export interface CoverageLaneItem {
   gates?: { g1: string; g2: string; g3: string };
   scenarios?: string[];
 }
+export interface CoverageDimensionStat {
+  dimension: string;
+  label: string;
+  count: number;
+  scenarios: string[];
+  frs: string[];
+}
 export interface CoverageGaps {
   module: string;
   fr_total: number;
@@ -824,6 +831,7 @@ export interface CoverageGaps {
     covered: CoverageLaneItem[];
   };
   suggested_order: string[];
+  dimensions?: { lanes: CoverageDimensionStat[]; unassigned: string[] };
   fingerprint: string;
 }
 export interface CoverageBacklink {

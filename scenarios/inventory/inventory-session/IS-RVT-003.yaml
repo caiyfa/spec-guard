@@ -10,6 +10,7 @@ doc:
   when: PUT /api/inventory/sessions/{id}/revert
   then: 400，错误消息含「仅已完成会话可退回」；会话状态保持 IN_PROGRESS
   covers: [FR-012]
+  dimensions: [negative]
   related_ac: [FR-012-边界:会话非COMPLETED]
 
 # ─────────── 机器读层 ───────────

@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=xxx
   then: 返回未认证错误（统一包装协议：HTTP 200 + body.status=401）
   covers: []
+  dimensions: [security]
   related_ac: [AC-001]
   note: 未认证错误同样被 BusinessResult 统一包装，401 语义在 body.status
 

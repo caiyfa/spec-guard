@@ -14,6 +14,7 @@ doc:
     ② DB 3 行全入库：90024713 落位="0"（没有分数）、90027339 落位=NULL（"-"视为没有分数）、
     90027338 落位="5"（正常值不受影响）。
   covers: []
+  dimensions: [boundary, regression, state]
   requirement: 九宫格盘点数值校验增加0或者"-"；"-"视为没有分数，等价于 null（2026-07-23 与需求方确认）
   known_gap: |
     当前实现（Step4ImportTaskService L928-939）对 "-" 仍报「必须为0-9的数字」。

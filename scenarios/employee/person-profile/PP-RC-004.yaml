@@ -9,6 +9,7 @@ doc:
   when: 调用 GET /api/employee/profile?empNo=NOTEXIST999
   then: 4 级回退解析链全部无法处理，返回人员不存在错误
   covers: [FR-001]
+  dimensions: [negative]
   related_ac: [AC-003]
   note: TDM 统一响应包装协议下错误语义为 HTTP 200 + body.status=500000 + message（非 HTTP 404）；与 api.yaml 声明的 404 存在表现形式差异，以 BusinessResult 实际协议为准
 

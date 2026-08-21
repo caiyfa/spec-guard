@@ -510,6 +510,19 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/backend/services/specflow/feishu_sync_service.py | sess-feishu-graph | 2026-08-14 | — | 4b48ba14394a | 已完成 | T-922：sync_recent_docs（d3a6ea4） |
 | test_specstd/test_feishu_transcribe.py | sess-feishu-graph | 2026-08-14 | NEW | c5d28b59f28e | 已完成 | T-920：转述用例 3 例（7189fd0） |
 | test_specstd/test_feishu_sync.py | sess-feishu-graph | 2026-08-14 | — | 242d95e91fd0 | 已完成 | T-922：轮询交集用例（d3a6ea4） |
+| sg_core/test_dimensions.py | sess-test-taxonomy | 2026-08-21 | NEW | f13ba260c0af | 已完成 | T-981：dimensions 受控词表+证据提取+映射检查 |
+| test_specstd/test_dimensions.py | sess-test-taxonomy | 2026-08-21 | NEW | d0fb48f262ed | 已完成 | T-981：维度词表/映射/存量标注回归测试 25 例 |
+| test_engine/test_dimensions.py | sess-test-taxonomy | 2026-08-21 | NEW | cc7202d56210 | 已完成 | T-981：loader dimensions property 测试 3 例 |
+| engine/scenario_loader.py | sess-test-taxonomy | 2026-08-21 | 27455b814da7 | 3b2674af034b | 已完成 | T-981：Scenario.dimensions 只读 property |
+| mcp_server/tools/validator.py | sess-test-taxonomy | 2026-08-21 | cb035f284120 | 207453609332 | 已完成 | T-981：validate 接入维度检查 |
+| workbench/backend/services/spec_validator.py | sess-test-taxonomy | 2026-08-21 | ee481a629526 | 8b28c27493e7 | 已完成 | T-981：全库校验接入 T10 |
+| workbench/backend/services/coverage_gaps.py | sess-test-taxonomy | 2026-08-21 | 4016b91ff88c | a1c28c48b0fb | 已完成 | T-981：compute_coverage 维度聚合 |
+| workbench/frontend/src/api.ts | sess-test-taxonomy | 2026-08-21 | a9d0966a5501 | 6160ff127475 | 已完成 | T-981：CoverageGaps.dimensions 类型 |
+| workbench/frontend/src/pages/CoveragePanel.tsx | sess-test-taxonomy | 2026-08-21 | 7ff1ddf86ba6 | 1a7fcdf845e7 | 已完成 | T-981：维度分布区块 |
+| sg_core/format_spec.py | sess-test-taxonomy | 2026-08-21 | 76b6d010e1df | d9db54a5feb3 | 已完成 | T-981：§1.2 doc 选填字段+§五 T10+2.14.0 三同步 |
+| docs/specguard-yaml-format-spec.md | sess-test-taxonomy | 2026-08-21 | c452d19cc3ee | df4e072d9841 | 已完成 | T-981：快照重导出 |
+| agent/skills/generate-scenario.md | sess-test-taxonomy | 2026-08-21 | 0639af8ae44d | 7310217168a3 | 已完成 | T-981：注入测试设计方法章节（1.1.0） |
+| scenarios/{employee,evaluation,inventory}/*/*.yaml（24 个场景文件） | sess-test-taxonomy | 2026-08-21 | —（doc 层补标注不进指纹，逐文件核对见提交） | —（每文件 +1 行 dimensions；契约指纹零漂移已用 build_baseline 全量比对证实） | 已完成 | T-981：存量补标注 doc.dimensions |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

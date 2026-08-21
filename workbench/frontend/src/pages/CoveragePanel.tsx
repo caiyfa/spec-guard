@@ -141,6 +141,33 @@ export default function CoveragePanel() {
             {' '}· 草稿不计覆盖（🟡 与 🔴 同 FR 可并存）
           </div>
 
+          {/* T-981：测试维度分布（按 doc.dimensions 聚合；0 计数 = 测试设计盲区） */}
+          {gaps.dimensions && (
+            <div className="bg-surface-1 rounded-lg border border-border p-3">
+              <div className="text-xs text-gray-500 mb-2">
+                测试维度分布（场景库按 doc.dimensions 聚合，0 = 盲区）
+                {gaps.dimensions.unassigned.length > 0 && (
+                  <span className="ml-2 text-yellow-400/80">
+                    ⚠ {gaps.dimensions.unassigned.length} 个场景未标注 dimensions：
+                    <span className="font-mono">{gaps.dimensions.unassigned.join(', ')}</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {gaps.dimensions.lanes.map(d => (
+                  <div key={d.dimension}
+                    className={`px-2 py-1.5 rounded border text-xs ${d.count > 0 ? 'border-border bg-surface-2' : 'border-dashed border-border/60 opacity-60'}`}
+                    title={d.count > 0
+                      ? `${d.label}\n${d.scenarios.join(', ')}\n覆盖 FR：${d.frs.join(', ') || '（无）'}`
+                      : `${d.label}\n（无场景——测试设计盲区）`}>
+                    <span className="text-gray-400">{d.dimension}</span>
+                    <span className={`ml-1.5 font-mono ${d.count > 0 ? 'text-info' : 'text-gray-600'}`}>{d.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 flex-1 min-h-0">
             {laneCard(gaps.lanes.gap, 'bg-red-900/50 text-red-400', '🔴 无覆盖')}
             {laneCard(gaps.lanes.draft, 'bg-yellow-900/50 text-yellow-400', '🟡 草稿待审')}

@@ -11,6 +11,7 @@ doc:
   covers:
     - FR-013
     - FR-015
+  dimensions: [permission]
   related_ac:
     - AC-002
 depends_on:
