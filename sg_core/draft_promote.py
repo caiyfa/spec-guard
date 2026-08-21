@@ -344,6 +344,17 @@ def promote(filename: str, module: str, skip_gate: bool = False, emp_no: str = "
     # K-026：模块元信息 + 入库血缘（信息包 → 场景正向链路）
     _ensure_suite_yaml(module_dir, module)
     _record_lineage([filename], [report.get("scenario", "")], module)
+    # T-1000 F3：场景入库登记 product_index（产物 → 会话/工号 反查，失败静默不阻断）
+    try:
+        from sg_core.product_index import record_product
+        from sg_core.session_context import current_session_id
+        from specstd.workspace import get_context_workspace
+        record_product(display_target, "scenario",
+                       session_id=current_session_id(),
+                       emp_no=emp_no,
+                       workspace=get_context_workspace() or "")
+    except Exception:
+        pass
     # K-xxx：草稿台账状态 → 已入库
     try:
         from sg_core import ledger_store

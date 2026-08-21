@@ -1,6 +1,7 @@
 """audit.py — MCP 调用审计查询 REST API（T-082）。
 
-前缀 /api/agent/audit，仅 admin 可查（审计日志敏感）。
+前缀 /api/agent/audit。T-1000：放开「本人查自己」（emp==当前用户非 admin 可用，
+越权查他人仍 403）；查他人/全量仍 admin。
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,8 +21,14 @@ def list_audit(
     offset: int = 0,
     user: CurrentUser = Depends(get_current_user),
 ):
-    """审计记录列表（按 emp/session/tool 过滤，倒序）。仅 admin 可查。"""
-    require_role(user, "admin")
+    """审计记录列表（按 emp/session/tool 过滤，倒序）。
+
+    T-1000：本人查自己放行（未带 emp 时非 admin 自动收窄为本人）；查他人须 admin。
+    """
+    if not user.is_admin:
+        if emp and emp != user.emp_no:
+            raise HTTPException(status_code=403, detail=f"无权查看他人审计记录: {emp}")
+        emp = user.emp_no  # 未显式指定时收窄为本人（杜绝全量枚举）
     from services.audit_store import query_calls
     limit = max(1, min(int(limit or 50), 200))
     offset = max(0, int(offset or 0))

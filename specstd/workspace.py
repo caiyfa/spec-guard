@@ -111,6 +111,29 @@ def resolve_system(system: str = "") -> str:
     return os.environ.get("SPEC_GUARD_SYSTEM", "tdm")
 
 
+# T-1000：系统标识合法性格式（与 services.systems_catalog.SYSTEM_NAME_RE 同构，
+# specstd 不反向依赖 workbench，此处内联）
+_SYSTEM_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def ensure_system_ready(system: str) -> None:
+    """T-1000：跑测试等运行期路径的系统就绪硬校验（适配包未建 → 诚实报错）。
+
+    注册期已放宽为软校验（workspace router 标 system_pending），但 pytest 执行必须
+    有适配包——此处给出明确可操作的错误，替代运行期 ModuleNotFoundError。
+    """
+    if not _SYSTEM_NAME_RE.match(system or ""):
+        raise RuntimeError(f"系统标识非法: {system}（须为字母/数字/下划线组成的 Python 模块名）")
+    pkg = SG_ROOT / "systems" / system
+    import os as _os
+    dyn = _os.environ.get("SG_SYSTEMS_ROOT", "").strip()
+    dyn_pkg = Path(dyn) / system if dyn else None
+    if not pkg.is_dir() and not (dyn_pkg and dyn_pkg.is_dir()):
+        raise RuntimeError(
+            f"系统适配包未就绪: systems/{system}/ 不存在——该工作区注册时标记为待接入"
+            f"（system_pending），请先在「系统管理 → 系统包管理」创建适配包后再跑测试")
+
+
 def _validate_name(name: str) -> Optional[str]:
     """校验工作区名称合法性（黑名单式：防路径穿越，放行中文等任意字符）。
 
@@ -174,6 +197,7 @@ class WorkspaceInfo:
     branch: str = "main"               # git 型：分支
     local_path: str = ""               # git 型：克隆落点（相对仓库根）
     last_commit: str = ""              # 最近一次 commit SHA
+    owner_emp: str = ""                # T-1000：注册人工号（自管理归属；空=存量/系统登记）
 
     @property
     def root(self) -> Path:
@@ -197,6 +221,7 @@ class WorkspaceInfo:
                     "local_path": self.local_path} if self.source_type == "git" else {}),
             },
             "last_commit": self.last_commit,
+            "owner_emp": self.owner_emp,
         }
 
     @classmethod
@@ -211,6 +236,7 @@ class WorkspaceInfo:
             branch=source.get("branch", "main"),
             local_path=source.get("local_path", ""),
             last_commit=d.get("last_commit", ""),
+            owner_emp=d.get("owner_emp", ""),
         )
 
 
@@ -336,7 +362,8 @@ def unregister(name: str) -> bool:
 # ══════════════════════════════════════════════════════════
 
 def register_local(name: str, path: str, system: str,
-                   activate: bool = True, run_conformance: bool = True) -> dict:
+                   activate: bool = True, run_conformance: bool = True,
+                   owner_emp: str = "") -> dict:
     """注册本地文件夹工作区。
 
     参数：
@@ -366,7 +393,7 @@ def register_local(name: str, path: str, system: str,
     # 注册
     info = WorkspaceInfo(
         name=name, system=system, source_type="local",
-        source_path=str(ws_path),
+        source_path=str(ws_path), owner_emp=owner_emp,
     )
     registry = _load_registry()
     ws_dict = registry.setdefault("workspaces", {})
@@ -387,7 +414,7 @@ def register_local(name: str, path: str, system: str,
 
 def register_git(name: str, url: str, system: str, branch: str = "main",
                  activate: bool = True, run_conformance: bool = True,
-                 clone_dir: str = "") -> dict:
+                 clone_dir: str = "", owner_emp: str = "") -> dict:
     """注册 git 工作区（克隆仓库）。
 
     clone_dir 非空时克隆到自定义目录（必须绝对路径），留空克隆到
@@ -440,7 +467,7 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
                 name=name, system=system, source_type="git",
                 source_url=url, branch=branch,
                 local_path=str(clone_path) if clone_dir else str(clone_path.relative_to(SG_ROOT)),
-                last_commit=last_commit,
+                last_commit=last_commit, owner_emp=owner_emp,
             )
             registry = _load_registry()
             ws_dict = registry.setdefault("workspaces", {})
@@ -455,7 +482,7 @@ def register_git(name: str, url: str, system: str, branch: str = "main",
         name=name, system=system, source_type="git",
         source_url=url, branch=branch,
         local_path=local_rel,
-        last_commit=last_commit,
+        last_commit=last_commit, owner_emp=owner_emp,
     )
     registry = _load_registry()
     ws_dict = registry.setdefault("workspaces", {})

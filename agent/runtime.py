@@ -654,9 +654,18 @@ class AgentRuntime:
 
         T-081：side_effect 检查——none 级工具执行后做指纹比对，变化即报错。
         T-082：每次调用落审计日志。
+        T-1000：注入会话上下文（session_context），写路径钩子据此把产物反挂到会话。
         """
         # 每次执行前刷新工具白名单（定义变动即时生效，不锁死会话创建时刻）
         self._refresh_whitelist()
+        from sg_core import session_context as _sc
+        _sc_tok = _sc.set_session_id(self._session_id or "")
+        try:
+            return self._execute_tool_inner(tool_call)
+        finally:
+            _sc.reset_session_id(_sc_tok)
+
+    def _execute_tool_inner(self, tool_call: dict) -> str:
         name = tool_call.get("function", {}).get("name", "")
         raw_args = tool_call.get("function", {}).get("arguments", "{}")
 

@@ -36,16 +36,20 @@ from services.auth import (  # noqa: E402
     CurrentUser, get_current_user, require_role, resolve_workspace,
 )
 from services import user_store  # noqa: E402
-from services.systems_catalog import list_systems, validate_system  # noqa: E402
+from services.systems_catalog import SYSTEM_NAME_RE, list_systems, system_ready  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════
-# 系统标识（适配包）校验（枚举实现见 services.systems_catalog）
+# 系统标识（T-1000：注册放宽为软校验——包未建标 system_pending 待接入；
+# 运行期「包必须就绪」的路径仍走 systems_catalog.validate_system 硬校验）
 # ══════════════════════════════════════════════════════════
 
-def _validate_system(body_system: str) -> None:
-    """系统标识硬校验（见 services.systems_catalog.validate_system）。"""
-    validate_system(body_system)
+def _check_system(body_system: str) -> bool:
+    """注册期软校验：标识非法 → 400；包未建 → 放行并标 system_pending=True。"""
+    if not SYSTEM_NAME_RE.match(body_system or ""):
+        raise HTTPException(status_code=400,
+                            detail=f"系统标识非法: {body_system}（须为字母/数字/下划线组成的 Python 模块名）")
+    return system_ready(body_system)
 
 
 # ══════════════════════════════════════════════════════════
@@ -90,17 +94,53 @@ class PullBody(BaseModel):
 
 @router.get("/list")
 def api_list_workspaces(user: CurrentUser = Depends(get_current_user)):
-    """列出工作区：admin 见全部；其他角色仅见已授权的。"""
+    """列出工作区：admin 见全部；其他角色见自己的（owner_emp）+ 已授权的（T-1000 自管理）。
+
+    每条工作区附 system_pending（系统适配包未建=待接入，跑测试时才要求就绪）。
+    """
+    from services.systems_catalog import system_ready
     workspaces = list_workspaces()
     if not user.is_admin:
         granted = {g["workspace_name"] for g in user_store.list_grants(emp_no=user.emp_no)}
-        workspaces = [w for w in workspaces if w.name in granted]
+        workspaces = [w for w in workspaces
+                      if w.name in granted or w.owner_emp == user.emp_no]
     db_user = user_store.get_user(user.emp_no) or {}
     return {
-        "workspaces": [w.to_dict() for w in workspaces],
+        "workspaces": [w.to_dict() | {"system_pending": not system_ready(w.system)}
+                       for w in workspaces],
         "active": get_active_workspace().name if get_active_workspace() else "",
         "my_default": db_user.get("default_workspace", ""),
     }
+
+
+@router.get("/tree")
+def api_workspace_tree(user: CurrentUser = Depends(get_current_user)):
+    """T-1000：系统 → 工作区二级树。按系统分组（复用 T-973 系统目录取展示名），
+    未建包系统归「待接入」组，无系统归「未绑定」组。可见范围与 /list 一致。"""
+    from services.systems_catalog import system_ready
+    workspaces = list_workspaces()
+    if not user.is_admin:
+        granted = {g["workspace_name"] for g in user_store.list_grants(emp_no=user.emp_no)}
+        workspaces = [w for w in workspaces
+                      if w.name in granted or w.owner_emp == user.emp_no]
+    display = {s["name"]: s.get("display_name") or s["name"] for s in list_systems()}
+    groups: dict[str, list] = {}
+    for w in workspaces:
+        groups.setdefault(w.system, []).append(
+            w.to_dict() | {"system_pending": not system_ready(w.system)})
+    tree = []
+    for sys_name in sorted(groups):
+        pending = bool(sys_name) and not system_ready(sys_name)
+        label = display.get(sys_name) or ("未绑定" if not sys_name else f"{sys_name}（待接入）")
+        tree.append({
+            "system": sys_name,
+            "display_name": label,
+            "system_pending": pending,
+            "workspaces": sorted(groups[sys_name], key=lambda x: x["name"]),
+        })
+    # 「未绑定」组排最后
+    tree.sort(key=lambda g: (not g["system"], g["system"]))
+    return {"tree": tree}
 
 
 @router.get("/active")
@@ -120,13 +160,22 @@ def api_list_systems(user: CurrentUser = Depends(get_current_user)):
 
 @router.post("/register-local")
 def api_register_local(body: RegisterLocalBody,
-                       admin: CurrentUser = Depends(require_role("admin"))):
-    """注册本地文件夹工作区（合规校验强制执行，任一 ERROR 拒绝接入）。"""
-    _validate_system(body.system)
+                       user: CurrentUser = Depends(get_current_user)):
+    """注册本地文件夹工作区（合规校验强制执行，任一 ERROR 拒绝接入）。
+
+    T-1000 自管理：登录即可注册（不再 admin 专属），注册人记 owner_emp 并自动
+    授权自己；系统包未建不拒绝（标 system_pending 待接入，跑测试时才要求就绪）。
+    """
+    ready = _check_system(body.system)
     result = register_local(body.name, body.path, body.system,
-                            activate=body.activate, run_conformance=True)
+                            activate=body.activate, run_conformance=True,
+                            owner_emp=user.emp_no)
     if result.get("ok"):
-        user_store.audit(admin.emp_no, "register_workspace", body.name, "local")
+        result["system_pending"] = not ready
+        user_store.audit(user.emp_no, "register_workspace", body.name,
+                         f"local owner={user.emp_no}" + (" system_pending" if not ready else ""))
+        # 自助授权：注册人立即可见（授权过滤按 owner+grants 双通道）
+        user_store.grant_workspace(body.name, user.emp_no, user.emp_no)
         # K-007: 建立初始 spec 签名基线（此后 spec 变更才可被检测，避免新注册误路由 audit）
         try:
             from services import spec_baseline
@@ -145,14 +194,17 @@ def api_register_local(body: RegisterLocalBody,
 
 @router.post("/register-git")
 def api_register_git(body: RegisterGitBody,
-                     admin: CurrentUser = Depends(require_role("admin"))):
-    """注册 git 工作区（克隆仓库，合规校验强制执行）。"""
-    _validate_system(body.system)
+                     user: CurrentUser = Depends(get_current_user)):
+    """注册 git 工作区（克隆仓库，合规校验强制执行）。T-1000：登录即可 + owner_emp。"""
+    ready = _check_system(body.system)
     result = register_git(body.name, body.url, body.system, body.branch,
                           activate=body.activate, run_conformance=True,
-                          clone_dir=body.clone_dir)
+                          clone_dir=body.clone_dir, owner_emp=user.emp_no)
     if result.get("ok"):
-        user_store.audit(admin.emp_no, "register_workspace", body.name, "git")
+        result["system_pending"] = not ready
+        user_store.audit(user.emp_no, "register_workspace", body.name,
+                         f"git owner={user.emp_no}" + (" system_pending" if not ready else ""))
+        user_store.grant_workspace(body.name, user.emp_no, user.emp_no)
         # K-007: 建立初始 spec 签名基线（此后 spec 变更才可被检测，避免新注册误路由 audit）
         try:
             from services import spec_baseline
@@ -214,10 +266,19 @@ def api_browse_dir(path: str = "",
     return {"ok": True, "current": str(target), "parent": parent, "entries": entries}
 
 
-@router.post("/activate", dependencies=[Depends(require_role("admin"))])
-def api_activate(body: ActivateBody):
-    """【遗留·仅 admin】设置全局激活工作区（MCP stdio POC 模式用；
-    多用户 Web 模式用个人默认工作区 + X-SG-Workspace header，不走此接口）。"""
+@router.post("/activate")
+def api_activate(body: ActivateBody, user: CurrentUser = Depends(get_current_user)):
+    """设置全局激活工作区（MCP stdio POC 模式用；多用户 Web 模式用个人默认工作区
+    + X-SG-Workspace header，不走此接口）。
+
+    T-1000：放开登录即可，但只能激活自己可见的工作区（owner/被授权/admin），
+    防止把全局 active 指向他人空间（POC 模式全进程生效）。
+    """
+    if not user.is_admin:
+        ws = get_workspace(body.name)
+        granted = {g["workspace_name"] for g in user_store.list_grants(emp_no=user.emp_no)}
+        if not ws or (ws.owner_emp != user.emp_no and ws.name not in granted):
+            raise HTTPException(status_code=403, detail=f"无权激活工作区: {body.name}")
     if not set_active(body.name):
         raise HTTPException(status_code=404, detail=f"工作区不存在: {body.name}")
     return {"ok": True, "active": body.name}
