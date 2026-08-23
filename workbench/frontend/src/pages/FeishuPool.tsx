@@ -17,10 +17,13 @@ import {
   type CrossChatCandidate,
   type FeishuMaterialContent,
   type FeishuWatch,
+  type FeishuChatMessage,
 } from '../api';
 import FeishuWatchSettings from '../components/FeishuWatchSettings';
 import TopicWorkspace from '../components/TopicWorkspace';
 import { dedupeTopics } from '../components/topicList';
+import { MessageBody, useChatMedia, senderColor } from '../components/ChatMessageView';
+import ImageLightbox from '../components/ImageLightbox';
 
 type Tab = 'materials' | 'topics';
 
@@ -62,6 +65,41 @@ function inlineImages(content: string, imgUrls: Record<string, string>) {
     imgUrls[ph] ? `![${ph}](${imgUrls[ph]})` : `*（${ph} 图片暂不可见）*`);
 }
 
+// T-1006：群聊详情消息流（与话题工作台时间轴/编辑弹框同源渲染——
+// JSONL 事实源逐条呈现：发送人配色 / 图片真实加载·失败标注·转述 caption /
+// 附件下载；单日 isMulti=false 只显 HH:MM）
+function ChatDetailView({ rows, sha8, day }: {
+  rows: FeishuChatMessage[]; sha8: string; day: string;
+}) {
+  const { imgUrls, imgFailed, captions } = useChatMedia(rows, sha8, [day]);
+  const [previewImg, setPreviewImg] = useState<{ url: string; caption: string } | null>(null);
+  return (
+    <div className="space-y-0.5">
+      {rows.map((m, i) => (
+        <div key={`${m.message_id}-${i}`}
+          className="text-[11px] leading-relaxed px-1.5 py-1 rounded hover:bg-black/20">
+          <div className="flex items-baseline gap-1.5 text-gray-500">
+            <span className="font-medium"
+              style={{ color: senderColor(m.sender_id || m.sender_name || '') }}>
+              {m.sender_name || m.sender_id || '?'}
+            </span>
+            <span className="text-[10px] text-gray-600">{(m.ts || '').slice(11, 16)}</span>
+          </div>
+          <div className="text-gray-300">
+            <MessageBody msg={m} imgUrls={imgUrls} imgFailed={imgFailed}
+              captions={captions} highlight={false}
+              onImageClick={(url, caption) => setPreviewImg({ url, caption })} />
+          </div>
+        </div>
+      ))}
+      {previewImg && (
+        <ImageLightbox url={previewImg.url} caption={previewImg.caption}
+          onClose={() => setPreviewImg(null)} />
+      )}
+    </div>
+  );
+}
+
 
 export default function FeishuPool() {
   // T-953：页签持久化（恢复上次所在页；T-1005：默认/非法值回退话题页——
@@ -83,7 +121,8 @@ export default function FeishuPool() {
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
   // T-993：确定性预筛的跨群候选（list_pool_topics 附带，透传给工作台推荐位）
   const [crossSuggestions, setCrossSuggestions] = useState<CrossChatCandidate[]>([]);
-  const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null; imgUrls: Record<string, string> } | null>(null);
+  const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null;
+    imgUrls: Record<string, string>; chatRows: FeishuChatMessage[] | null } | null>(null);
   const [busy, setBusy] = useState('');
   // T-1001 F1：话题工作台专注模式（类 AgentChat K-039——临时态不持久化，
   // 隐藏页头/状态卡/监听范围卡/页签条，工作台双栏占满视口；ESC 退出）
@@ -122,12 +161,23 @@ export default function FeishuPool() {
 
   const openDetail = async (m: FeishuPoolMaterial) => {
     setError('');
-    setDetail({ m, data: null, imgUrls: {} });
+    setDetail({ m, data: null, imgUrls: {}, chatRows: null });
     try {
-      const d = await feishuPoolApi.materialContent(m.file);
+      // T-1006：群聊类详情并行拉 JSONL 事实源（消息流渲染取代整段 md 文本——
+      // 时间轴同款富渲染：图片真实加载/失败标注/发送人配色；失败回退 md 视图）
+      const chatMatch = m.type === 'chat'
+        ? m.file.match(/^chats\/([0-9a-f]{8})\/(\d{8})\.md$/) : null;
+      const [d, chatRows] = await Promise.all([
+        feishuPoolApi.materialContent(m.file),
+        chatMatch
+          ? feishuPoolApi.chatMessages(chatMatch[1], chatMatch[2])
+              .then(r => (r.items || []).length ? r.items : null)
+              .catch(() => null)
+          : Promise.resolve(null),
+      ]);
       if (!d.ok) throw new Error(d.error || '材料读取失败');
       const urls = await loadImages(m.file, d.images || []);
-      setDetail({ m, data: d, imgUrls: urls });
+      setDetail({ m, data: d, imgUrls: urls, chatRows });
     } catch (e: any) { setError(e.message); setDetail(null); }
   };
 
@@ -312,12 +362,31 @@ export default function FeishuPool() {
               </div>
             ) : (
               <>
-                <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
-                  [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
-                  <Markdown remarkPlugins={[remarkGfm]}>
-                    {inlineImages(detail.data.content, detail.imgUrls)}
-                  </Markdown>
-                </div>
+                {/* T-1006：群聊类有 JSONL 事实源 → 消息流呈现（不再是整段 md 一坨）；
+                    md 视图收折叠底稿（占位符口径原文，供对照） */}
+                {detail.m.type === 'chat' && detail.chatRows ? (
+                  <>
+                    <ChatDetailView rows={detail.chatRows}
+                      sha8={detail.m.file.match(/^chats\/([0-9a-f]{8})\//)?.[1] || ''}
+                      day={detail.m.file.match(/\/(\d{8})\.md$/)?.[1] || ''} />
+                    <details className="mt-3">
+                      <summary className="text-[11px] text-gray-500 cursor-pointer">md 底稿（占位符口径）</summary>
+                      <div className="mt-2 text-xs text-gray-400 prose prose-invert prose-sm max-w-none
+                        [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
+                        <Markdown remarkPlugins={[remarkGfm]}>
+                          {inlineImages(detail.data.content, detail.imgUrls)}
+                        </Markdown>
+                      </div>
+                    </details>
+                  </>
+                ) : (
+                  <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
+                    [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
+                    <Markdown remarkPlugins={[remarkGfm]}>
+                      {inlineImages(detail.data.content, detail.imgUrls)}
+                    </Markdown>
+                  </div>
+                )}
                 {detail.data.type === 'feishu_minutes' && detail.data.raw && (
                   <details className="mt-3">
                     <summary className="text-[11px] text-gray-500 cursor-pointer">原始 JSON</summary>
