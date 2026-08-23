@@ -20,9 +20,11 @@ import {
 import { useChatOptions, sha256Hex8 } from './useChatOptions';
 import TopicCard from './TopicCard';
 import TopicEditModal from './TopicEditModal';
+import ComposeTopicModal from './ComposeTopicModal';
 import ModelSetupModal from './ModelSetupModal';
 import ImageLightbox from './ImageLightbox';
-import { loadChatMessages, MessageBody, useChatMedia, senderColor, fmtMsgTime }
+import { loadChatMessages, MessageBody, useChatMedia, senderColor, fmtMsgTime,
+  isPseudoMessageId }
   from './ChatMessageView';
 import { filterAndSortTopics, filterTopics, TOPIC_SORT_OPTIONS,
   dedupeTopics, collectKeywords, type TopicSortKey }
@@ -59,7 +61,8 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [msgEmpty, setMsgEmpty] = useState(false);     // 区分「加载中」与「无消息快照」
   const [drafts, setDrafts] = useState<FeishuTopicDraft[]>([]);
   const [checked, setChecked] = useState<Set<number>>(new Set());
-  const [hoverKey, setHoverKey] = useState<string | null>(null);
+  // T-1001 追修：hover 高亮退役（总控人拍板）——联动改为「定位原文」按钮
+  // 显式驱动（selectedKey = 当前定位/选中的卡）；列表 hover 仅 CSS 背景。
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   // T-991：分类筛选 + 闲聊默认过滤（拍板③：分类保留、默认隐藏可开关）
@@ -79,6 +82,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // T-1002：勾选原文消息生成话题（显式「✓ 勾选生成」模式——消息行出现勾选框，
+  // 选 ≥1 条后可生成话题卡并补充背景；md 伪 id 不可作事实 id，模式禁用）
+  const [pickMode, setPickMode] = useState(false);
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [composeOpen, setComposeOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [reloadKey, setReloadKey] = useState(0);       // T-952：单群刷新后重拉窗口
   // T-993：跨群关联——confirmed 边 / 推荐面板 / 关联抽屉
@@ -214,8 +222,9 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
 
   useEffect(() => {
     setError(''); setNotice(''); setDrafts([]); setChecked(new Set());
-    setHoverKey(null); setSelectedKey(null); setPreviewImg(null);
+    setSelectedKey(null); setPreviewImg(null);
     setEditingTopic(null);
+    setPickMode(false); setPickedIds(new Set()); setComposeOpen(false);
     if (!sha8 || !daySel) {
       setMessages(null); setMsgEmpty(false);
       return;
@@ -270,14 +279,13 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const toggleTag = (kw: string) =>
     setTags(prev => prev.includes(kw) ? prev.filter(x => x !== kw) : [...prev, kw]);
 
-  const activeKey = hoverKey ?? selectedKey;
   const activeCard = useMemo(() => {
     const pool: (FeishuTopic | FeishuTopicDraft)[] = [...shownDrafts, ...shownTopics];
     const t = pool.find(c => (c as FeishuTopic).id
-      ? (c as FeishuTopic).id === activeKey
-      : `draft-${c.window?.[0] || ''}-${c.title}` === activeKey);
+      ? (c as FeishuTopic).id === selectedKey
+      : `draft-${c.window?.[0] || ''}-${c.title}` === selectedKey);
     return t as FeishuTopic | undefined;
-  }, [shownDrafts, shownTopics, activeKey]);
+  }, [shownDrafts, shownTopics, selectedKey]);
 
   // 高亮集合：message_ids 精确（跨日天然支持）；无则 window 完整 ts 比较兜底
   const highlightIdx = useMemo(() => {
@@ -304,6 +312,20 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
     const first = timelineRef.current.querySelector('[data-hl="1"]');
     first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [highlightIdx]);
+
+  // T-1002：勾选模式可用性——md 回退伪 id（md-line-N）不能作为重关联/生卡
+  // 的事实 id（行号换日即漂移），禁用并提示更新本群
+  const pickUsable = !!messages && messages.length > 0
+    && !messages.some(m => isPseudoMessageId(m.message_id));
+  const pickedMsgs = useMemo(
+    () => (messages || []).filter(m => pickedIds.has(m.message_id)),
+    [messages, pickedIds]);
+  const togglePick = (id: string) =>
+    setPickedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   const runDraft = async () => {
     if (!sha8 || selectedDays.length === 0) return;
@@ -354,14 +376,12 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
 
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
-  // T-1001：专注模式双栏吃满视口（默认 560px 上限）
-  const paneH = focus ? 'h-[calc(100vh-170px)]' : 'max-h-[560px]';
 
   return (
     <div className="bg-surface-2 border border-border rounded-lg p-4">
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className="text-sm font-semibold">人工介入工作台</span>
-        <span className="text-[11px] text-gray-500">左栏原文时间轴 × 右栏话题列表（搜索/排序定位；hover/点击行高亮对应消息）</span>
+        <span className="text-[11px] text-gray-500">左栏原文时间轴 × 右栏话题列表（搜索/排序定位；「⌖ 定位原文」高亮对应消息）</span>
         {onToggleFocus && (
           <button
             className={`ml-auto transition-colors px-1 rounded hover:bg-surface-3
@@ -450,9 +470,32 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       </div>
       {sha8 && daySel ? (
         <div className="flex gap-3">
-          {/* 左栏：消息时间轴（多日拼接；行带 MM-DD 日期前缀跨日不歧义） */}
-          <div ref={timelineRef}
-            className={`w-[46%] shrink-0 border border-border rounded p-2 bg-surface-3 overflow-auto ${paneH}`}>
+          {/* 左栏：消息时间轴（多日拼接；行带 MM-DD 日期前缀跨日不歧义；
+              T-1002：勾选模式生成话题） */}
+          <div className={`w-[46%] shrink-0 flex flex-col ${focus ? '' : 'max-h-[560px]'}`}>
+            <div className="flex items-center gap-2 mb-1.5 text-[11px]">
+              <span className="text-gray-500">原文消息</span>
+              <span className="text-gray-600">
+                {pickMode && pickedIds.size > 0 ? `已选 ${pickedIds.size} 条` : ''}
+              </span>
+              {pickUsable && (
+                <button className={`ml-auto px-2 py-0.5 rounded text-[11px] ${
+                  pickMode ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400 hover:text-info'}`}
+                  title={pickMode ? '退出勾选模式'
+                    : '勾选任意消息生成话题卡（可补充背景，LLM 据此出标题/摘要/关键词）'}
+                  onClick={() => { setPickMode(v => !v); setPickedIds(new Set()); }}>
+                  {pickMode ? '✕ 退出勾选' : '✓ 勾选生成话题'}
+                </button>
+              )}
+              {!pickUsable && messages !== null && messages.length > 0 && (
+                <span className="ml-auto text-[10px] text-amber-400"
+                  title="旧快照为 md 视图（无精确消息 id）——「↻ 更新本群」重建快照后可勾选">
+                  勾选不可用（需更新本群）
+                </span>
+              )}
+            </div>
+            <div ref={timelineRef}
+              className={`flex-1 min-h-0 border border-border rounded p-2 bg-surface-3 overflow-auto`}>
             {messages === null ? (
               <div className="text-xs text-gray-500">消息加载中…</div>
             ) : msgEmpty ? (
@@ -463,14 +506,21 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
               messages.map((m, i) => (
                 <div key={`${m.message_id}-${i}`} data-hl={highlightIdx.has(i) ? '1' : '0'}
                   className={`text-[11px] leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
-                    highlightIdx.has(i)
+                    highlightIdx.has(i) || pickedIds.has(m.message_id)
                       ? 'bg-info/20'
                       : 'hover:bg-black/20'
                   }`}>
                   {/* T-955：两行制排版——头行「昵称 · 时间」（昵称按发送人稳定配色），
-                      正文独立成行，消息可读性与 IM 应用一致 */}
+                      正文独立成行，消息可读性与 IM 应用一致；
+                      T-1002：勾选模式下头行前出现勾选框（勾选=纳入新话题原文） */}
                   <div className={`flex items-baseline gap-1.5 ${
-                    highlightIdx.has(i) ? 'text-info' : 'text-gray-500'}`}>
+                    highlightIdx.has(i) || pickedIds.has(m.message_id)
+                      ? 'text-info' : 'text-gray-500'}`}>
+                    {pickMode && (
+                      <input type="checkbox" className="align-middle shrink-0"
+                        checked={pickedIds.has(m.message_id)}
+                        onChange={() => togglePick(m.message_id)} />
+                    )}
                     <span className="font-medium"
                       style={{ color: highlightIdx.has(i) ? undefined : senderColor(m.sender_id || m.sender_name || '') }}>
                       {m.sender_name || m.sender_id || '?'}
@@ -486,6 +536,26 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                   </div>
                 </div>
               ))
+            )}
+            </div>
+            {/* T-1002：勾选模式底部动作条（选中数 + 全选/清空 + 生成话题入口） */}
+            {pickMode && (
+              <div className="flex items-center gap-2 mt-1.5 text-[11px]">
+                <span className="text-gray-500">已选 {pickedIds.size} 条</span>
+                <button className="text-info hover:underline"
+                  onClick={() => setPickedIds(new Set((messages || []).map(m => m.message_id)))}>
+                  全选
+                </button>
+                <button className="text-gray-500 hover:text-red-400"
+                  onClick={() => setPickedIds(new Set())}>
+                  清空
+                </button>
+                <button className={`ml-auto ${btn}`} disabled={pickedIds.size === 0}
+                  title="按勾选消息生成话题卡（可补充背景说明）"
+                  onClick={() => setComposeOpen(true)}>
+                  生成话题（{pickedIds.size}）→
+                </button>
+              </div>
             )}
           </div>
           {/* 右栏：话题列表（T-1001 F2：搜索 + 排序 + 紧凑行；唯一卡片流） */}
@@ -552,12 +622,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                   )}
                   {shownDrafts.map(d => (
                     <label key={`draft-${d.window?.[0] || ''}-${d.title}`}
-                      className="flex items-start gap-2 cursor-pointer"
-                      onMouseEnter={() => setHoverKey(`draft-${d.window?.[0] || ''}-${d.title}`)}
-                      onMouseLeave={() => setHoverKey(null)}
-                      onClick={() => setSelectedKey(prev =>
-                        prev === `draft-${d.window?.[0] || ''}-${d.title}` ? null
-                          : `draft-${d.window?.[0] || ''}-${d.title}`)}>
+                      className="flex items-start gap-2 cursor-pointer">
                       <input type="checkbox" className="mt-2.5 shrink-0"
                         checked={checked.has(drafts.indexOf(d))}
                         onChange={() => {
@@ -569,7 +634,12 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                           });
                         }} />
                       <div className="flex-1 min-w-0">
-                        <TopicCard topic={d as FeishuTopic} draft onRefresh={onCommitted} />
+                        <TopicCard topic={d as FeishuTopic} draft
+                          onRefresh={onCommitted}
+                          selected={selectedKey === `draft-${d.window?.[0] || ''}-${d.title}`}
+                          onLocate={() => setSelectedKey(prev =>
+                            prev === `draft-${d.window?.[0] || ''}-${d.title}`
+                              ? null : `draft-${d.window?.[0] || ''}-${d.title}`)} />
                       </div>
                     </label>
                   ))}
@@ -577,16 +647,13 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                     <div className="text-[10px] text-gray-500 pt-1.5">话题卡</div>
                   )}
                   {shownTopics.map(t => (
-                    <div key={t.id}
-                      onMouseEnter={() => setHoverKey(t.id || '')}
-                      onMouseLeave={() => setHoverKey(null)}
-                      onClick={() => setSelectedKey(prev => prev === t.id ? null : t.id)}>
+                    <div key={t.id}>
                       <TopicCard topic={t} onRefresh={onCommitted}
                         selected={selectedKey === t.id}
-                        onSelect={() => setSelectedKey(prev => prev === t.id ? null : t.id)}
                         relatedCount={(relatedMap[t.id] || []).length}
                         onOpenRelations={() => setRelateDrawer(t)}
-                        onEdit={() => setEditingTopic(t)} />
+                        onEdit={() => setEditingTopic(t)}
+                        onLocate={() => setSelectedKey(prev => prev === t.id ? null : t.id)} />
                     </div>
                   ))}
                 </>
@@ -596,6 +663,17 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
         </div>
       ) : (
         <div className="text-xs text-gray-500">请先选择群聊与日期。</div>
+      )}
+      {/* T-1002：按勾选原文生成话题（左已选右表单；补充说明拼入 LLM 输入） */}
+      {composeOpen && (
+        <ComposeTopicModal chatSha8={sha8} days={selectedDays}
+          picked={pickedMsgs}
+          onClose={() => setComposeOpen(false)}
+          onDone={() => {
+            setPickMode(false); setPickedIds(new Set());
+            setNotice('已生成候选话题段（右栏「候选段」勾选后点「生成话题卡」提交入库）');
+            void runDraft();
+          }} />
       )}
       {/* T-1001 F3：编辑弹框（左原文右话题并排；F4 勾选消息手动重关联） */}
       {editingTopic && (

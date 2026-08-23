@@ -133,6 +133,16 @@ export const feishuPoolApi = {
   draftTopics: (chat_sha8: string, days: string[]) =>
     request<{ items: FeishuTopicDraft[] }>('/feishu-pool/topics/draft', {
       method: 'POST', body: JSON.stringify({ chat_sha8, days }) }),
+  // T-1002：按勾选原文消息生成话题（extra_context 作为附加上下文拼入 LLM 输入；
+  // title/summary/keywords 留空=LLM 生成——与重新 AI 分类同一份生成逻辑）
+  composeTopic: (p: { chatSha8: string; days: string[]; messageIds: string[];
+                      title?: string; summary?: string; keywords?: string[];
+                      extraContext?: string }) =>
+    request<FeishuTopicDraft>('/feishu-pool/topics/compose', {
+      method: 'POST', body: JSON.stringify({
+        chat_sha8: p.chatSha8, days: p.days, message_ids: p.messageIds,
+        title: p.title || '', summary: p.summary || '',
+        keywords: p.keywords || [], extra_context: p.extraContext || '' }) }),
   commitTopics: (chat_sha8: string, day: string, picked: FeishuTopicDraft[],
                  days?: string[]) =>
     request<{ items: FeishuTopic[] }>('/feishu-pool/topics/commit', {

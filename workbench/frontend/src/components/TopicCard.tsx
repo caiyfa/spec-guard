@@ -3,6 +3,8 @@
 // TopicEditModal：原文与话题内容并排、支持手动重关联）。
 // 状态徽标（draft/confirmed/rejected）+ confirm/reject + 重新生成 +
 // 历史展开（多用户留痕）。409 乐观锁冲突：提示「已被他人编辑」并刷新。
+// T-1001 追修：hover 联动退役（总控人拍板）——原文定位改「⌖ 定位原文」
+// 按钮显式触发（入库卡与草案段一致），不再鼠标挪上即高亮时间轴。
 
 import { useState } from 'react';
 import {
@@ -49,16 +51,16 @@ function fmtWindow(t: FeishuTopic): string {
   return `${s.slice(5, 16)}~${e.slice(5, 16)}`;
 }
 
-export default function TopicCard({ topic: t, draft, selected, onSelect, onRefresh,
-                                     relatedCount, onOpenRelations, onEdit }: {
+export default function TopicCard({ topic: t, draft, selected, onRefresh,
+                                     relatedCount, onOpenRelations, onEdit, onLocate }: {
   topic: FeishuTopic;
   draft?: boolean;             // 介入工作区草案段（未提交，仅展示）
   selected?: boolean;
-  onSelect?: () => void;
   onRefresh: () => void;
   relatedCount?: number;       // T-993：跨群关联数（relates_to 边连通方）
   onOpenRelations?: () => void;  // T-993：打开关联抽屉（并排多群证据）
   onEdit?: () => void;         // T-1001：打开编辑弹框（左原文右话题并排+重关联）
+  onLocate?: () => void;       // T-1001 追修：定位原文（显式按钮，取代 hover 联动）
 }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
@@ -105,8 +107,7 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
   return (
     <div className={`min-w-0 w-full text-xs rounded-lg border p-2 transition-colors
       ${selected ? 'border-info/60 bg-info/10' : 'border-border bg-surface-3 hover:border-gray-500'}
-      ${status === 'rejected' ? 'opacity-50' : ''}`}
-      onClick={onSelect}>
+      ${status === 'rejected' ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`font-medium truncate ${selected ? 'text-info' : 'text-gray-200'}`}
           title={t.title}>
@@ -177,9 +178,18 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
         </div>
       )}
       {err && <div className="text-[10px] text-red-400 mt-1">{err}</div>}
+      {onLocate && (
+        <div className="flex items-center gap-2 mt-1 text-[10px]">
+          <button className={`${selected ? 'text-info underline' : 'text-info hover:underline'}`}
+            onClick={onLocate}
+            title={selected ? '取消定位（时间轴高亮与滚动定位解除）'
+              : '在时间轴中高亮并滚动到本话题关联的原文消息'}>
+            ⌖ {selected ? '取消定位' : '定位原文'}
+          </button>
+        </div>
+      )}
       {!draft && (
-        <div className="flex items-center gap-2 mt-1 text-[10px]"
-          onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2 mt-1 text-[10px]">
           {onEdit && (
             <button className="text-info hover:underline" onClick={onEdit}
               title="弹框编辑：左原文右话题并排，可修正 AI 关联错的原文">

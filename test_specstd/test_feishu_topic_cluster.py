@@ -692,3 +692,80 @@ class TestEditCandidateRelateMessages:
             tc.edit_candidate(emp, "tp:3f9a2c-20260807-01",
                               message_ids=["om_a"],
                               window=["2026-08-07T14:00"], editor=_EDITOR)
+
+
+# ══════════════════════════════════════════════════════════
+# T-1002：勾选原文消息生成话题（compose_topic_from_messages）
+# ══════════════════════════════════════════════════════════
+
+_COMPOSE_LLM_PAYLOAD = ('{"topics": [{"title": "导出权限过滤讨论",'
+                        ' "summary": "按 corpCode+groupLevel 过滤",'
+                        ' "keywords": ["导出", "权限"],'
+                        ' "category": "requirement", "priority_hint": "normal"}]}')
+
+
+class TestComposeFromMessages:
+    """勾选原文生成话题：范围由用户勾选的 message_ids 决定（不再全量聚类）。"""
+
+    def test_compose_llm_fills_and_extra_context_in_prompt(self, tmp_path):
+        """空 title/summary/keywords → LLM 补全；extra_context 拼入 prompt；
+        window/message_ids/participants 由勾选消息事实源推导。"""
+        emp = _make_emp_with_jsonl(tmp_path)
+        llm = _llm_returning(_COMPOSE_LLM_PAYLOAD)
+        out = tc.compose_topic_from_messages(
+            emp, llm, "3f9a2c", ["om_a", "om_b"], ["20260807"],
+            extra_context="这是 817 上线的回归问题")
+        assert out["title"] == "导出权限过滤讨论"
+        assert out["keywords"] == ["导出", "权限"]
+        assert out["message_ids"] == ["om_a", "om_b"]
+        assert out["window"] == ["2026-08-07T14:00:00", "2026-08-07T14:01:00"]
+        assert out["message_count"] == 2
+        assert out["participants_count"] == 2
+        assert out["category"] == "requirement"
+        prompt = llm.chat.call_args[0][0][0]["content"]
+        assert "这是 817 上线的回归问题" in prompt       # extra_context 入 prompt
+        assert "导出要按平台过滤吗" in prompt            # 勾选消息行入 prompt
+        assert "中午吃什么" not in prompt                # 未勾选消息不入
+        # 草案落盘（同键位追加），不动话题库
+        drafts = tc._load_drafts(emp)
+        assert len(drafts["3f9a2c/20260807"]) == 1
+        assert tc._load_candidates(emp) == []
+
+    def test_compose_manual_fields_skip_llm(self, tmp_path):
+        """title/summary/keywords 全填 → 不调 LLM（诚实省调用），字段取用户值。"""
+        emp = _make_emp_with_jsonl(tmp_path)
+        llm = _llm_returning(_COMPOSE_LLM_PAYLOAD)
+        out = tc.compose_topic_from_messages(
+            emp, llm, "3f9a2c", ["om_a"], ["20260807"],
+            title="手动标题", summary="手动摘要", keywords=["手动词"])
+        assert llm.chat.call_count == 0
+        assert out["title"] == "手动标题"
+        assert out["summary"] == "手动摘要"
+        assert out["keywords"] == ["手动词"]
+        assert out["message_ids"] == ["om_a"]
+
+    def test_compose_missing_id_raises(self, tmp_path):
+        """任一 message_id 不在快照 → KeyError（路由 404，防静默丢关联）。"""
+        emp = _make_emp_with_jsonl(tmp_path)
+        llm = _llm_returning(_COMPOSE_LLM_PAYLOAD)
+        with pytest.raises(KeyError):
+            tc.compose_topic_from_messages(
+                emp, llm, "3f9a2c", ["om_a", "om_ghost"], ["20260807"])
+
+    def test_compose_empty_ids_rejected(self, tmp_path):
+        """空 message_ids → ValueError（话题至少关联一条消息）。"""
+        emp = _make_emp_with_jsonl(tmp_path)
+        with pytest.raises(ValueError):
+            tc.compose_topic_from_messages(
+                emp, None, "3f9a2c", [], ["20260807"])
+
+    def test_compose_appends_to_existing_draft_key(self, tmp_path):
+        """同窗口已有 AI 分段草案 → 勾选生成草案追加同键（右栏同列展示）。"""
+        emp = _make_emp_with_jsonl(tmp_path)
+        llm = _llm_returning(_OK_PAYLOAD)
+        tc.draft_chat_segments(emp, llm, "3f9a2c", ["20260807"])
+        tc.compose_topic_from_messages(
+            emp, _llm_returning(_COMPOSE_LLM_PAYLOAD), "3f9a2c",
+            ["om_c"], ["20260807"])
+        drafts = tc._load_drafts(emp)
+        assert len(drafts["3f9a2c/20260807"]) == 2       # AI 段 + 勾选段并存

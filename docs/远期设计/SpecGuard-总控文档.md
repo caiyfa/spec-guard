@@ -621,6 +621,14 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | 28f6956c7c0c | 55545bbfd445 | 已完成 | T-1001 追修：allTopicCards 内联 byId 收敛为 dedupeTopics（零漂移） |
 | docs/经验包/2026-08-23-话题列表搜索排序看似未生效-同id双份key撞车.md | sess-acceptance | 2026-08-23 | NEW | 0e6d1dfe4c41 | 已完成 | T-1001 追修排障闭环经验包 |
 | docs/经验包/README.md | sess-acceptance | 2026-08-23 | f1a311807972 | abdc33ba36d6 | 已完成 | T-1001 追修：经验包索引行 |
+| workbench/frontend/src/components/TopicWorkspace.tsx | sess-acceptance | 2026-08-23 | df44ce328be4 | ea89aa9ec809 | 已完成 | T-1002：hover 联动退役改定位按钮接线 + 勾选生成话题（模式开关/行勾选框/动作条/ComposeModal 接线） |
+| workbench/frontend/src/components/TopicCard.tsx | sess-acceptance | 2026-08-23 | 00c59164123e | ca81ea735718 | 已完成 | T-1002：onSelect/hover 退役，「⌖ 定位原文」按钮（入库卡+草案段一致） |
+| workbench/frontend/src/components/ComposeTopicModal.tsx | sess-acceptance | 2026-08-23 | NEW | 588dbdea2b19 | 已完成 | T-1002：生成话题弹框（左已选可移除/右表单+补充说明拼 LLM 输入） |
+| workbench/frontend/src/api/feishuPool.ts | sess-acceptance | 2026-08-23 | 30f569d8f430 | a1dd903abaa3 | 已完成 | T-1002：composeTopic API |
+| specflow/feishu_pool/topic_cluster.py | sess-acceptance | 2026-08-23 | 58b3116935fd | 318f090ceb95 | 已完成 | T-1002：compose_topic_from_messages（id 反查所属日/缺失 KeyError/草案追加同键） |
+| workbench/backend/routers/feishu_pool.py | sess-acceptance | 2026-08-23 | ba119d550b0c | 1c15bb4f7553 | 已完成 | T-1002：/topics/compose 端点（空关联 400/缺失 404/模型未配 400） |
+| test_specstd/test_feishu_topic_cluster.py | sess-acceptance | 2026-08-23 | 5fba340a353b | e051c5da6aa7 | 已完成 | T-1002：compose 服务测试 5 例 |
+| test_specstd/test_feishu_t948_router.py | sess-acceptance | 2026-08-23 | d739b6c5f7ea | c7822d2e20eb | 已完成 | T-1002：compose 路由测试 4 例（get_model 打桩隔离） |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

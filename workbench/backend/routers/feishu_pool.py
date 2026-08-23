@@ -224,6 +224,16 @@ class DraftRequest(BaseModel):
     days: list[str] = []                # T-951c：多日窗口（非空优先于 day）
 
 
+class ComposeRequest(BaseModel):
+    chat_sha8: str
+    days: list[str] = []                # T-1002：message_id 反查所属日的检索范围
+    message_ids: list[str] = []         # 勾选原文（至少一条；须全在快照中否则 404）
+    title: str = ""                     # 空=LLM 生成
+    summary: str = ""                   # 空=LLM 生成
+    keywords: list[str] = []            # 空=LLM 生成
+    extra_context: str = ""             # 用户补充说明（拼入 LLM 输入）
+
+
 class CommitRequest(BaseModel):
     chat_sha8: str
     day: str
@@ -306,6 +316,50 @@ def draft_topics(body: DraftRequest,
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     return {"items": out}
+
+
+@router.post("/topics/compose")
+def compose_topic(body: ComposeRequest,
+                  user: CurrentUser = Depends(get_current_user),
+                  workspace: str = Depends(resolve_workspace)):
+    """T-1002：按勾选原文消息生成话题草案（人工指定范围 + extra_context 补充
+    上下文；title/summary/keywords 留空字段由 LLM 补全）。草案落 _topic_drafts.yaml
+    （不动话题库——提交走 /topics/commit 既有通道）。消息不在快照 → 404；
+    空关联 → 400；text 模型未配置 → 400（前端弹层就地配置）。"""
+    from services import model_config
+
+    from agent.llm_client import LLMClient
+    from specflow.feishu_pool import topic_cluster as tc
+
+    if not body.message_ids:
+        raise HTTPException(status_code=400, detail="message_ids 至少勾选一条")
+    need_llm = not (body.title and body.summary and body.keywords)
+    if need_llm and not model_config.get_model("text"):
+        raise HTTPException(
+            status_code=400,
+            detail="未配置 text 模型（设置页 model_configs 加 model_id=text）")
+    chat_kind = ""
+    try:
+        from specflow.feishu_pool.pool_store import chat_sha8 as _sha8
+        for c in (sync_svc.load_watch_config(_sf_base()).get("chats") or []):
+            cid = str(c.get("chat_id") or "")
+            if cid and _sha8(cid) == body.chat_sha8:
+                chat_kind = str(c.get("kind") or "")
+                break
+    except Exception:
+        pass
+    try:
+        out = tc.compose_topic_from_messages(
+            _sf_base(), LLMClient(model_id="text") if need_llm else None,
+            body.chat_sha8, body.message_ids, body.days,
+            title=body.title, summary=body.summary, keywords=body.keywords,
+            extra_context=body.extra_context,
+            material_base=_material_base(), chat_kind=chat_kind)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    return out
 
 
 @router.post("/topics/commit")
