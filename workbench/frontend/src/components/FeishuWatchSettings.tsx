@@ -2,11 +2,21 @@
 // T-944 分 tab（群聊/监听用户/监听文档）降信息密度：①群聊先加载最近
 // 活跃 10 群秒出、后台继续取全量，搜索为前端本地过滤；②单聊本期不支持
 // 不显示；③授权块/保存栏常显不受 tab 切换影响。授权闭环见 T-942 注释。
+// T-1004（总控人拍板）：「监听运行中」状态条与「当前监听范围」只读摘要
+// 从主页收进本弹层——主页不再常驻两块卡，状态/范围与配置入口同处。
 
 import { useEffect, useRef, useState } from 'react';
 import { feishuPoolApi, FEISHU_CHAT_KINDS, type FeishuWatch,
         type FeishuWatchUser, type FeishuChatItem, type FeishuUserItem,
         type FeishuUserDocItem, type LarkStatus, type LarkLoginResult } from '../api';
+
+// T-1004：监听范围用户 scope 标签（主页摘要同款口径）
+const SCOPE_LABEL: Record<string, string> = {
+  group_sender: '群消息', minutes: '妙记', docs: '文档',
+};
+
+type WatcherStatus = { running: boolean; count: number;
+  watchers: { emp: string; events_received: number; last_event_at: string }[] };
 
 export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -36,6 +46,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   const [notice, setNotice] = useState('');
   // T-942：飞书授权闭环（用户接触不到服务器——未绑定/缺权限在弹层内直接授权）
   const [authStatus, setAuthStatus] = useState<LarkStatus | null>(null);
+  // T-1004：监听运行状态（主页状态卡迁入；开弹层即拉）
+  const [watcher, setWatcher] = useState<WatcherStatus | null>(null);
   const [authPending, setAuthPending] = useState<LarkLoginResult | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -64,6 +76,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
     void loadWatch();
     void loadChatsQuick();     // T-944：先出最近活跃 10 群，全量后台补齐
     larkStatus().then(setAuthStatus).catch(() => setAuthStatus(null));
+    feishuPoolApi.watcherStatus().then(setWatcher).catch(() => setWatcher(null));
   };
 
   const larkStatus = () => feishuPoolApi.authStatus();   // feishu-pool 前缀（登录即可，无菜单门槛）
@@ -302,6 +315,59 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold">同步设置（同步范围即授权范围 · 保存即拉起监听）</h3>
+
+            {/* T-1004：监听运行状态条（主页迁入——状态与配置同处查看） */}
+            <div className="mb-2 px-3 py-2 rounded bg-surface-3/60 border border-border/50 flex items-center gap-3 text-[11px] flex-wrap">
+              {watcher?.running ? (
+                <>
+                  <span className="text-green-400">● 监听运行中（{watcher.count} 用户）</span>
+                  {watcher.watchers.map((w: any) => (
+                    <span key={w.emp} className="text-gray-500">
+                      {w.emp} · 事件 {w.events_received} · 最近 {w.last_event_at || '—'}
+                    </span>
+                  ))}
+                </>
+              ) : (
+                <span className="text-gray-500">○ 监听未启动（保存同步范围后自动拉起）</span>
+              )}
+            </div>
+
+            {/* T-1004：当前监听范围只读摘要（主页范围卡迁入；编辑走下方三个页签） */}
+            {watch && (
+              <div className="mb-3 px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-[11px] space-y-1.5">
+                <div className="flex items-start gap-2 flex-wrap">
+                  <span className="text-gray-500 shrink-0 mt-0.5">监听用户</span>
+                  {watchUsers.length === 0
+                    ? <span className="text-gray-600">无（「👤 监听用户」页签添加）</span>
+                    : watchUsers.map(u => (
+                      <span key={u.open_id}
+                        className="px-2 py-0.5 rounded border border-border text-gray-300">
+                        {u.name || u.open_id}
+                        <span className="ml-1 text-gray-500">
+                          {u.scopes.map(x => SCOPE_LABEL[x] || x).join('/') || '无监听项'}
+                        </span>
+                      </span>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-gray-500 shrink-0">授权群聊</span>
+                  {(watch.chats || []).length === 0
+                    ? <span className="text-gray-600">无（「💬 授权群聊」页签添加）</span>
+                    : (watch.chats || []).map(c => (
+                      <span key={c.chat_id}
+                        className="px-2 py-0.5 rounded border border-border text-gray-300">
+                        {c.kind && <span className="text-info mr-1">{c.kind}</span>}
+                        {c.name || c.chat_id}
+                      </span>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 shrink-0">监听文档</span>
+                  <span className="text-gray-300">{docSel.size} 篇</span>
+                  <span className="text-gray-600">（「📄 监听文档」页签添加）</span>
+                </div>
+              </div>
+            )}
               <div className="flex gap-2">
                 <button className={btn} onClick={saveWatch}
                   disabled={busy === 'watch' || !watch}>保存</button>
