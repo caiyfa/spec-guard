@@ -1,8 +1,10 @@
-// TopicWorkspace.tsx — 人工介入工作台（T-950 双栏重构）：
-// 左栏消息时间轴（JSONL 事实源精确渲染）+ 右栏话题泳道色卡。
-// git-log 类比：话题=commit（色卡/泳道），消息=hunk；hover/点击色卡 →
+// TopicWorkspace.tsx — 人工介入工作台（T-950 双栏重构；T-1001 列表化+专注模式）：
+// 左栏消息时间轴（JSONL 事实源精确渲染）+ 右栏话题列表（搜索/排序快速定位）。
+// git-log 类比：话题=commit，消息=hunk；hover/点击列表行 →
 // 左栏对应消息精确高亮（message_ids 集合匹配，window 时间窗兜底）+ 滚动定位。
-// window 重叠的话题分泳道（lane）水平铺排——并行话题一眼可辨。
+// T-1001：泳道色卡平铺改紧凑列表行（话题多时配合搜索/排序）；
+// 编辑迁入 TopicEditModal 弹框（左原文右话题并排 + 手动重关联）；
+// focus 专注模式由页面层（FeishuPool）驱动——隐藏页头/状态卡占满视口。
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -17,44 +19,21 @@ import {
 } from '../api';
 import { useChatOptions, sha256Hex8 } from './useChatOptions';
 import TopicCard from './TopicCard';
+import TopicEditModal from './TopicEditModal';
 import ModelSetupModal from './ModelSetupModal';
 import ImageLightbox from './ImageLightbox';
-
-// 泳道分配：话题按优先级 + window 起止排序（T-991：high 提前占前排泳道），
-// 贪心放入首个无时间重叠的泳道
-type Laned = { card: FeishuTopic | FeishuTopicDraft; lane: number; key: string };
-
-// T-991：优先级排序权重（high 先行；无值按 normal）
-const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
-
-function assignLanes(cards: (FeishuTopic | FeishuTopicDraft)[]): Laned[] {
-  const sorted = [...cards].sort((a, b) => {
-    const pr = (PRIORITY_RANK[(a as FeishuTopic).priority || 'normal'] ?? 1)
-      - (PRIORITY_RANK[(b as FeishuTopic).priority || 'normal'] ?? 1);
-    if (pr !== 0) return pr;
-    return String(a.window?.[0] || '').localeCompare(String(b.window?.[0] || ''));
-  });
-  const laneEnds: string[] = [];      // 每泳道当前占用末端（ISO HH:MM）
-  return sorted.map(card => {
-    const start = String(card.window?.[0] || '');
-    const end = String(card.window?.[1] || start);
-    let lane = laneEnds.findIndex(le => !le || start > le);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(end);
-    } else {
-      laneEnds[lane] = end;
-    }
-    const t = card as FeishuTopic;
-    return { card, lane, key: t.id || `draft-${start}-${t.title}` };
-  });
-}
+import { loadChatMessages, MessageBody, useChatMedia, senderColor, fmtMsgTime }
+  from './ChatMessageView';
+import { filterAndSortTopics, TOPIC_SORT_OPTIONS, type TopicSortKey }
+  from './topicList';
 
 // T-953：操作状态持久化（UX 连续性——进入页面恢复上次选择，不重新选）
 // T-991：追加 categoryFilter（分类筛选）与 hideChat（闲聊默认过滤开关，拍板③）
+// T-1001：追加 query/sortKey（列表搜索与排序——话题多时快速定位）
 const WORKSPACE_STORE_KEY = 'sg-feishu-workspace';
 function loadWorkspacePersisted(): {
   sha8?: string; daySel?: string; categoryFilter?: string; hideChat?: boolean;
+  query?: string; sortKey?: TopicSortKey;
 } {
   try {
     return JSON.parse(localStorage.getItem(WORKSPACE_STORE_KEY) || '{}');
@@ -62,12 +41,14 @@ function loadWorkspacePersisted(): {
 }
 
 export default function TopicWorkspace({ materials, watchCfg, topics, onCommitted,
-                                          crossSuggestions }: {
+                                          crossSuggestions, focus, onToggleFocus }: {
   materials: FeishuPoolMaterial[];
   watchCfg: FeishuWatch | null;
   topics: { candidates: FeishuTopic[]; confirmed: FeishuTopic[] };
   onCommitted: () => void;
   crossSuggestions?: CrossChatCandidate[];   // T-993：确定性预筛（list_pool_topics 附带）
+  focus?: boolean;                           // T-1001：专注模式（页面层驱动，临时态不持久化）
+  onToggleFocus?: () => void;
 }) {
   const chatOptions = useChatOptions(materials, watchCfg);
   const [sha8, setSha8] = useState(() => loadWorkspacePersisted().sha8 || '');
@@ -84,14 +65,14 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
     () => loadWorkspacePersisted().categoryFilter ?? 'all');
   const [hideChat, setHideChat] = useState(
     () => loadWorkspacePersisted().hideChat ?? true);
+  // T-1001 F2：列表搜索 + 排序（状态/分类/闲聊筛选取既有控件；此处文本搜索与排序键）
+  const [query, setQuery] = useState(() => loadWorkspacePersisted().query || '');
+  const [sortKey, setSortKey] = useState<TopicSortKey>(
+    () => loadWorkspacePersisted().sortKey || 'time-desc');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const timelineRef = useRef<HTMLDivElement>(null);
-  // T-952：富渲染——图片 objectURL（mediaKey→URL）与转述 caption（mediaKey→描述）
-  const [imgUrls, setImgUrls] = useState<Record<string, string>>({});
-  const [imgFailed, setImgFailed] = useState<Set<string>>(new Set());   // T-955：图片三态之失败态
-  const [captions, setCaptions] = useState<Record<string, string>>({});
   const [reloadKey, setReloadKey] = useState(0);       // T-952：单群刷新后重拉窗口
   // T-993：跨群关联——confirmed 边 / 推荐面板 / 关联抽屉
   const [relations, setRelations] = useState<TopicRelation[]>([]);
@@ -100,6 +81,8 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [refining, setRefining] = useState(false);
   const [unrefined, setUnrefined] = useState(false);
   const [relateDrawer, setRelateDrawer] = useState<FeishuTopic | null>(null);
+  // T-1001 F3：编辑弹框（左原文右话题并排 + 手动重关联）
+  const [editingTopic, setEditingTopic] = useState<FeishuTopic | null>(null);
   useEffect(() => {
     feishuPoolApi.topicRelations()
       .then(r => setRelations(r.items || []))
@@ -168,13 +151,14 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   // T-954：模型缺失就地配置弹层（体验基线②③——不报错踢人去设置页）
   const [modelSetup, setModelSetup] = useState<'text' | 'vision' | null>(null);
 
-  // T-953：选择变更即写入（进入页面恢复上次群/日期窗口；T-991 含分类筛选/闲聊开关）
+  // T-953：选择变更即写入（进入页面恢复上次群/日期窗口；T-991 含分类筛选/闲聊开关；
+  // T-1001 含搜索/排序）
   useEffect(() => {
     try {
       localStorage.setItem(WORKSPACE_STORE_KEY, JSON.stringify(
-        { sha8, daySel, categoryFilter, hideChat }));
+        { sha8, daySel, categoryFilter, hideChat, query, sortKey }));
     } catch { /* 隐私模式/配额：跳过不阻断 */ }
-  }, [sha8, daySel, categoryFilter, hideChat]);
+  }, [sha8, daySel, categoryFilter, hideChat, query, sortKey]);
 
   // T-953：恢复值有效性校验——选项就绪后失效则诚实回退默认（不报错不空白）
   useEffect(() => {
@@ -224,93 +208,26 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   useEffect(() => {
     setError(''); setNotice(''); setDrafts([]); setChecked(new Set());
     setHoverKey(null); setSelectedKey(null); setPreviewImg(null);
+    setEditingTopic(null);
     if (!sha8 || !daySel) {
       setMessages(null); setMsgEmpty(false);
       return;
     }
     setMessages(null); setMsgEmpty(false);
     let cancelled = false;
-    // T-951c：多日窗口逐日拉取拼接（空日跳过；行号跨日连续）
+    // T-1001：加载逻辑抽至 ChatMessageView.loadChatMessages（多日 JSONL 拼接 +
+    // md 视图回退——与编辑弹框共用同一份事实）
     (async () => {
-      const rows: FeishuChatMessage[] = [];
-      let any = false;
-      for (const d of selectedDays) {
-        try {
-          const r = await feishuPoolApi.chatMessages(sha8, d);
-          if (cancelled) return;
-          if ((r.items || []).length) { rows.push(...r.items); any = true; }
-        } catch { /* 无快照日跳过 */ }
-      }
-      if (any) {
-        setMessages(rows); setMsgEmpty(false);
-        return;
-      }
-      // 全部无 JSONL：回退读 md 视图（单日旧数据兼容）
-      try {
-        const d = selectedDays[selectedDays.length - 1];
-        const md = await feishuPoolApi.materialContent(`chats/${sha8}/${d}.md`);
-        if (cancelled) return;
-        if (!md.ok) { setMessages([]); setMsgEmpty(true); return; }
-        const mdRows: FeishuChatMessage[] = (md.content || '').split('\n')
-          .filter(l => /^\[\d{2}:\d{2}\]/.test(l))
-          .map((l, i) => {
-            const m = l.match(/^\[(\d{2}:\d{2})\]\s([^:]+):\s([\s\S]*)$/) || [];
-            return {
-              message_id: `md-line-${i + 1}`,   // 行号伪 id（回退高亮按行匹配）
-              ts: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}T${m[1] || '??:??'}:00`,
-              sender_name: m[2] || '?', msg_type: 'text', content: m[3] || l,
-            };
-          });
-        setMessages(mdRows);
-        setMsgEmpty(mdRows.length === 0);
-      } catch {
-        if (cancelled) return;
-        setMessages([]); setMsgEmpty(true);
-      }
+      const r = await loadChatMessages(sha8, selectedDays);
+      if (cancelled) return;
+      setMessages(r.rows);
+      setMsgEmpty(r.empty);
     })();
     return () => { cancelled = true; };
   }, [sha8, daySel, selectedDays, reloadKey]);
 
-  // T-952：富渲染素材——窗口内全部图片 (message_id, key) 配对懒拉字节 + imgmap captions
-  useEffect(() => {
-    if (!messages) return;
-    const pairs = new Set<string>();            // "mid|key"（图属消息——im 下载需配对）
-    messages.forEach(m => {
-      (m.image_keys || []).forEach(k => k && pairs.add(`${m.message_id}|${k}`));
-      if (m.image_key && m.message_id) pairs.add(`${m.message_id}|${m.image_key}`);
-    });
-    let cancelled = false;
-    pairs.forEach(pk => {
-      const [mid, k] = pk.split('|');
-      feishuPoolApi.fetchChatImageBlob(mid, k).then(blob => {
-        if (!cancelled) {
-          const url = URL.createObjectURL(blob);
-          setImgUrls(prev => prev[k] ? (URL.revokeObjectURL(url), prev) : { ...prev, [k]: url });
-        }
-      }).catch(() => {
-        // T-955：失败态显式标记（三态分离——不再永远「加载中」）
-        if (!cancelled) setImgFailed(prev => new Set(prev).add(k));
-      });
-    });
-    // captions：逐日报 imgmap（key→caption）
-    (async () => {
-      const cap: Record<string, string> = {};
-      for (const d of selectedDays) {
-        try {
-          const r = await feishuPoolApi.materialContent(`chats/${sha8}/${d}.md`);
-          if (cancelled) return;
-          (r.images || []).forEach((i: any) => {
-            if (i.media_key && i.caption) cap[i.media_key] = i.caption;
-          });
-        } catch { /* 无快照日跳过 */ }
-      }
-      if (!cancelled && Object.keys(cap).length) setCaptions(prev => ({ ...prev, ...cap }));
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint 无 imgUrls 依赖：函数式更新 + 卸载时由窗口切换的下一个 effect 清理
-  }, [messages, sha8, selectedDays]);
+  // T-952/T-1001：富渲染素材（图片三态 + 转述 caption）——抽至 useChatMedia 共享
+  const { imgUrls, imgFailed, captions } = useChatMedia(messages, sha8, selectedDays);
 
   // 该群窗口内已入库卡片（含状态制全部状态——rejected 灰显留痕）
   const dayTopics = useMemo(() => {
@@ -321,29 +238,30 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
           || (t.days || []).some(d => selectedDays.includes(d))));
   }, [topics, sha8, selectedDays]);
 
-  // T-951：状态筛选作用右栏卡片流（drafts 草案不受筛选影响——未提交非状态卡）
+  // T-951：状态筛选作用右栏卡片流（drafts 草案不受状态筛选影响——未提交非状态卡）
   // T-991：叠加分类筛选 + 闲聊默认过滤（拍板③；草案同步受闲聊过滤影响）
-  const shownTopics = useMemo(
-    () => dayTopics.filter(t =>
-      (statusFilter === 'all' || (t.status || 'draft') === statusFilter)
-      && (categoryFilter === 'all' || (t.category || 'routine') === categoryFilter)
-      && !(hideChat && (t.category || 'routine') === 'chat')),
-    [dayTopics, statusFilter, categoryFilter, hideChat]);
-  const shownDrafts = useMemo(
-    () => hideChat
-      ? drafts.filter(d => (d.category || 'routine') !== 'chat')
-      : drafts,
-    [drafts, hideChat]);
-  const statusCount = (key: string) => key === 'all'
+  // T-1001 F2：改为 filterAndSortTopics 纯函数（追加文本搜索 + 排序）
+  const statusCountNum = (key: string) => key === 'all'
     ? dayTopics.length
     : dayTopics.filter(t => (t.status || 'draft') === key).length;
+  const shownTopics = useMemo(
+    () => filterAndSortTopics(dayTopics,
+      { status: statusFilter, category: categoryFilter, hideChat, query }, sortKey),
+    [dayTopics, statusFilter, categoryFilter, hideChat, query, sortKey]);
+  const shownDrafts = useMemo(
+    () => filterAndSortTopics(drafts, { hideChat, query }, sortKey),
+    [drafts, hideChat, query, sortKey]);
 
-  const laned = useMemo(
-    () => assignLanes([...shownTopics, ...shownDrafts]), [shownTopics, shownDrafts]);
   const activeKey = hoverKey ?? selectedKey;
-  const activeCard = laned.find(l => l.key === activeKey)?.card as FeishuTopic | undefined;
+  const activeCard = useMemo(() => {
+    const pool: (FeishuTopic | FeishuTopicDraft)[] = [...shownDrafts, ...shownTopics];
+    const t = pool.find(c => (c as FeishuTopic).id
+      ? (c as FeishuTopic).id === activeKey
+      : `draft-${c.window?.[0] || ''}-${c.title}` === activeKey);
+    return t as FeishuTopic | undefined;
+  }, [shownDrafts, shownTopics, activeKey]);
 
-  // 高亮集合：message_ids 精确（跨日天然支持）；无则 window 完整 ts 比较兑底
+  // 高亮集合：message_ids 精确（跨日天然支持）；无则 window 完整 ts 比较兜底
   const highlightIdx = useMemo(() => {
     const set = new Set<number>();
     if (!activeCard || !messages) return set;
@@ -418,13 +336,23 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
 
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
-  const laneCount = Math.max(1, ...laned.map(l => l.lane + 1));
+  // T-1001：专注模式双栏吃满视口（默认 560px 上限）
+  const paneH = focus ? 'h-[calc(100vh-170px)]' : 'max-h-[560px]';
 
   return (
     <div className="bg-surface-2 border border-border rounded-lg p-4">
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className="text-sm font-semibold">人工介入工作台</span>
-        <span className="text-[11px] text-gray-500">左栏原文时间轴 × 右栏话题色卡（并行话题分泳道）；hover/点击色卡高亮对应消息</span>
+        <span className="text-[11px] text-gray-500">左栏原文时间轴 × 右栏话题列表（搜索/排序定位；hover/点击行高亮对应消息）</span>
+        {onToggleFocus && (
+          <button
+            className={`ml-auto transition-colors px-1 rounded hover:bg-surface-3
+              ${focus ? 'text-info' : 'text-gray-500 hover:text-info'}`}
+            onClick={onToggleFocus}
+            title={focus ? '退出专注，恢复页面结构' : '专注模式：隐藏页头/状态卡/页签，工作台占满视口'}>
+            {focus ? '⤡ 退出专注' : '⤢ 专注'}
+          </button>
+        )}
       </div>
       {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
       {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
@@ -496,7 +424,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                 className={`px-2 py-0.5 rounded text-[11px] ${
                   statusFilter === s.key ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400'}`}
                 onClick={() => setStatusFilter(s.key)}>
-                {s.label}{statusCount(s.key) > 0 ? ` ${statusCount(s.key)}` : ''}
+                {s.label}{statusCountNum(s.key) > 0 ? ` ${statusCountNum(s.key)}` : ''}
               </button>
             ))}
           </span>
@@ -506,7 +434,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
         <div className="flex gap-3">
           {/* 左栏：消息时间轴（多日拼接；行带 MM-DD 日期前缀跨日不歧义） */}
           <div ref={timelineRef}
-            className="w-[46%] shrink-0 border border-border rounded p-2 bg-surface-3 max-h-[560px] overflow-auto">
+            className={`w-[46%] shrink-0 border border-border rounded p-2 bg-surface-3 overflow-auto ${paneH}`}>
             {messages === null ? (
               <div className="text-xs text-gray-500">消息加载中…</div>
             ) : msgEmpty ? (
@@ -522,7 +450,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                       : 'hover:bg-black/20'
                   }`}>
                   {/* T-955：两行制排版——头行「昵称 · 时间」（昵称按发送人稳定配色），
-                      正文独立成行，消息问读性与 IM 应用一致 */}
+                      正文独立成行，消息可读性与 IM 应用一致 */}
                   <div className={`flex items-baseline gap-1.5 ${
                     highlightIdx.has(i) ? 'text-info' : 'text-gray-500'}`}>
                     <span className="font-medium"
@@ -542,65 +470,91 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
               ))
             )}
           </div>
-          {/* 右栏：话题泳道色卡（该日全部状态卡 + 分类草案；唯一卡片流） */}
-          <div className="flex-1 min-w-0 space-y-2 max-h-[560px] overflow-auto pr-1">
-            {laned.length === 0 ? (
-              <div className="text-xs text-gray-500">
-                {statusFilter === 'all'
-                  ? '窗口内暂无话题卡——「重新 AI 分类」生成分段，或等待同步后自动聚类'
-                  : `该状态暂无卡片（全部 ${dayTopics.length} 张）`}
-              </div>
-            ) : (
-              Array.from({ length: laneCount }, (_, lane) => (
-                <div key={lane}
-                  className="flex gap-2 items-stretch pb-1">
-                  {laned.filter(l => l.lane === lane).map(l => {
-                    const t = l.card as FeishuTopic;
-                    const isDraft = !t.id;
-                    const active = activeKey === l.key;
-                    const st = t.status || 'draft';
-                    return (
-                      <div key={l.key}
-                        onMouseEnter={() => setHoverKey(l.key)}
-                        onMouseLeave={() => setHoverKey(null)}
-                        onClick={() => setSelectedKey(prev => prev === l.key ? null : l.key)}
-                        className={`min-w-[240px] max-w-[360px] shrink-0 rounded-lg border p-2
-                          cursor-pointer transition-all
-                          ${active ? 'border-info/60 bg-info/10 shadow-[0_0_0_1px_rgba(59,130,246,0.3)]' : 'border-border bg-surface-3 hover:border-gray-500'}
-                          ${st === 'rejected' ? 'opacity-50' : ''}`}
-                        style={{ borderLeft: '3px solid', borderLeftColor: laneColor(lane) }}>
-                        {isDraft ? (
-                          <label className="flex items-start gap-2 cursor-pointer"
-                            onClick={e => e.stopPropagation()}>
-                            <input type="checkbox" className="mt-0.5"
-                              checked={checked.has(drafts.indexOf(l.card as FeishuTopicDraft))}
-                              onChange={() => {
-                                const di = drafts.indexOf(l.card as FeishuTopicDraft);
-                                setChecked(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(di)) next.delete(di); else next.add(di);
-                                  return next;
-                                });
-                              }} />
-                            <TopicCard topic={l.card as FeishuTopic} draft onRefresh={onCommitted} />
-                          </label>
-                        ) : (
-                          <TopicCard topic={t} onRefresh={onCommitted}
-                            selected={selectedKey === l.key}
-                            onSelect={() => setSelectedKey(prev => prev === l.key ? null : l.key)}
-                            relatedCount={(relatedMap[t.id] || []).length}
-                            onOpenRelations={() => setRelateDrawer(t)} />
-                        )}
-                      </div>
-                    );
-                  })}
+          {/* 右栏：话题列表（T-1001 F2：搜索 + 排序 + 紧凑行；唯一卡片流） */}
+          <div className={`flex-1 min-w-0 flex flex-col ${focus ? '' : 'max-h-[560px]'}`}>
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <input className={`${input} w-48`} placeholder="搜索标题/摘要/关键词…"
+                value={query} onChange={e => setQuery(e.target.value)}
+                title="支持多词（空格分隔，AND 语义）；命中标题/摘要/关键词" />
+              <select className="bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] text-gray-300 outline-none focus:border-info"
+                value={sortKey} onChange={e => setSortKey(e.target.value as TopicSortKey)}
+                title="列表排序">
+                {TOPIC_SORT_OPTIONS.map(o => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
+              <span className="text-[10px] text-gray-600">
+                {shownDrafts.length + shownTopics.length} 项
+              </span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto pr-1 space-y-1.5">
+              {shownDrafts.length === 0 && shownTopics.length === 0 ? (
+                <div className="text-xs text-gray-500">
+                  {query
+                    ? '无匹配话题（调整搜索词或筛选条件）'
+                    : statusFilter === 'all'
+                      ? '窗口内暂无话题卡——「重新 AI 分类」生成分段，或等待同步后自动聚类'
+                      : `该状态暂无卡片（全部 ${dayTopics.length} 张）`}
                 </div>
-              ))
-            )}
+              ) : (
+                <>
+                  {shownDrafts.length > 0 && (
+                    <div className="text-[10px] text-gray-500 pt-0.5">
+                      候选段（勾选后「生成话题卡」；未提交不入库）
+                    </div>
+                  )}
+                  {shownDrafts.map(d => (
+                    <label key={`draft-${d.window?.[0] || ''}-${d.title}`}
+                      className="flex items-start gap-2 cursor-pointer"
+                      onMouseEnter={() => setHoverKey(`draft-${d.window?.[0] || ''}-${d.title}`)}
+                      onMouseLeave={() => setHoverKey(null)}
+                      onClick={() => setSelectedKey(prev =>
+                        prev === `draft-${d.window?.[0] || ''}-${d.title}` ? null
+                          : `draft-${d.window?.[0] || ''}-${d.title}`)}>
+                      <input type="checkbox" className="mt-2.5 shrink-0"
+                        checked={checked.has(drafts.indexOf(d))}
+                        onChange={() => {
+                          const di = drafts.indexOf(d);
+                          setChecked(prev => {
+                            const next = new Set(prev);
+                            if (next.has(di)) next.delete(di); else next.add(di);
+                            return next;
+                          });
+                        }} />
+                      <div className="flex-1 min-w-0">
+                        <TopicCard topic={d as FeishuTopic} draft onRefresh={onCommitted} />
+                      </div>
+                    </label>
+                  ))}
+                  {shownDrafts.length > 0 && shownTopics.length > 0 && (
+                    <div className="text-[10px] text-gray-500 pt-1.5">话题卡</div>
+                  )}
+                  {shownTopics.map(t => (
+                    <div key={t.id}
+                      onMouseEnter={() => setHoverKey(t.id || '')}
+                      onMouseLeave={() => setHoverKey(null)}
+                      onClick={() => setSelectedKey(prev => prev === t.id ? null : t.id)}>
+                      <TopicCard topic={t} onRefresh={onCommitted}
+                        selected={selectedKey === t.id}
+                        onSelect={() => setSelectedKey(prev => prev === t.id ? null : t.id)}
+                        relatedCount={(relatedMap[t.id] || []).length}
+                        onOpenRelations={() => setRelateDrawer(t)}
+                        onEdit={() => setEditingTopic(t)} />
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
         </div>
       ) : (
         <div className="text-xs text-gray-500">请先选择群聊与日期。</div>
+      )}
+      {/* T-1001 F3：编辑弹框（左原文右话题并排；F4 勾选消息手动重关联） */}
+      {editingTopic && (
+        <TopicEditModal topic={editingTopic}
+          onClose={() => setEditingTopic(null)}
+          onSaved={onCommitted} />
       )}
       {/* T-954：模型缺失就地配置弹层（保存后自动重试分类） */}
       {modelSetup && (
@@ -728,124 +682,3 @@ const TOPIC_STATUS_TABS: { key: string; label: string }[] = [
   { key: 'confirmed', label: '已确认' },
   { key: 'rejected', label: '已拒绝' },
 ];
-
-// 泳道配色（lane 序号 → 色相环取色，稳定可辨）
-export function laneColor(lane: number): string {
-  const palette = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444',
-    '#14b8a6', '#eab308', '#6366f1'];
-  return palette[lane % palette.length];
-}
-
-// T-952：消息体真实内容渲染——post 文本+内嵌图 / file 文件卡（可下载）/ image 图。
-// 图片三态（加载中/失败/成功——体验基线③）；转述 caption 展示在图下（agent
-// 检索与用户审阅同一份描述——技术侧转述对用户透明，无独立维护入口）。
-function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onImageClick }: {
-  msg: FeishuChatMessage;
-  imgUrls: Record<string, string>;
-  imgFailed: Set<string>;
-  captions: Record<string, string>;
-  highlight: boolean;
-  onImageClick: (url: string, caption: string) => void;
-}) {
-  const imgCls = 'max-h-28 rounded border border-border mt-1 mr-1 inline-block align-top cursor-pointer';
-  const capCls = `text-[10px] mt-0.5 ${highlight ? 'text-info/80' : 'text-gray-500'}`;
-  const renderImgs = (keys: (string | undefined)[]) => (
-    keys.filter(Boolean).map(k => {
-      const key = k as string;
-      return (
-        <span key={key} className="inline-block mr-1 align-top">
-          {imgUrls[key] ? (
-            <img src={imgUrls[key]} alt="聊天图片"
-              className={imgCls}
-              title={captions[key] || 'AI 转述生成中…'}
-              onClick={e => {
-                // 点击大图预览（弹层就地放大；ESC/点遮罩关闭，不跳新标签页）
-                e.stopPropagation();
-                onImageClick(imgUrls[key], captions[key] || '');
-              }} />
-          ) : imgFailed.has(key) ? (
-            <span className="inline-block w-16 h-16 leading-[3.5rem] text-center rounded
-              border border-red-500/30 bg-red-500/5 text-[10px] text-red-400 align-top"
-              title="图片加载失败（当前飞书账号无该图权限或下载失败，刷新页面重试）">加载失败</span>
-          ) : (
-            <span className="inline-block w-16 h-16 leading-[4rem] text-center rounded
-              border border-border bg-black/30 text-[10px] text-gray-600 align-top">加载中…</span>
-          )}
-          {captions[key] && (
-            <div className={capCls}>{captions[key]}</div>
-          )}
-        </span>
-      );
-    })
-  );
-  if (msg.msg_type === 'image') {
-    return <>{renderImgs([msg.image_key])}</>;
-  }
-  if (msg.msg_type === 'post') {
-    // 文本主体（内嵌图引用剔除——图单独渲染）
-    const text = (msg.content || '')
-      .replace(/!\[Image\]\([^)]*\)/g, '').trim();
-    return (
-      <>
-        {text && <span className="whitespace-pre-wrap break-all">{text}</span>}
-        {(msg.image_keys || []).length > 0 && <div>{renderImgs(msg.image_keys)}</div>}
-      </>
-    );
-  }
-  if (msg.msg_type === 'file') {
-    if (!msg.file_key || !msg.message_id) {
-      // 旧快照无附件信息（T-952a 前落盘）——提示重拉而非静默无响应
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded mt-1
-          bg-black/20 border border-border"
-          title="旧快照无附件下载信息——点「↻ 更新本群」重新同步后可下载">
-          <span className="text-[13px]">📎</span>
-          <span className="text-gray-300">{msg.file_name || '文件'}</span>
-          <span className="text-[10px] text-amber-500/80">需更新后可下载</span>
-        </span>
-      );
-    }
-    return (
-      // T-955：附件可下载（blob 拉取 + a.download；失败如实提示）
-      <button
-        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded mt-1
-          ${highlight ? 'bg-info/15' : 'bg-black/20 border border-border hover:border-info/50'}`}
-        title="点击下载附件"
-        onClick={e => {
-          e.stopPropagation();
-          const name = msg.file_name || 'attachment';
-          feishuPoolApi.fetchChatFileBlob(msg.message_id!, msg.file_key!, name)
-            .then(blob => {
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url; a.download = name;
-              a.click();
-              setTimeout(() => URL.revokeObjectURL(url), 30_000);
-            })
-            .catch(() => { /* 下载失败：提示由调用方 notice 承担（本组件无 state） */ });
-        }}>
-        <span className="text-[13px]">📎</span>
-        <span className="text-gray-300">{msg.file_name || '文件'}</span>
-        <span className="text-[10px] text-gray-600">点击下载</span>
-      </button>
-    );
-  }
-  return <span className="whitespace-pre-wrap break-all">{msg.content}</span>;
-}
-
-// T-955：消息时间格式化（单日 HH:MM；多日 MM-DD HH:MM——去 ISO 的 T）
-function fmtMsgTime(ts: string, isMulti: boolean): string {
-  if (!ts) return '';
-  return isMulti
-    ? `${ts.slice(5, 10)} ${ts.slice(11, 16)}`
-    : ts.slice(11, 16);
-}
-
-// T-955：发送人稳定配色（按 id 哈希取色相环——IM 惯例，一眼区分谁在说话）
-const SENDER_PALETTE = ['#60a5fa', '#f59e0b', '#34d399', '#a78bfa', '#f87171',
-  '#22d3ee', '#eab308', '#f472b6'];
-function senderColor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return SENDER_PALETTE[h % SENDER_PALETTE.length];
-}

@@ -264,7 +264,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-998 | M-F | 文档滞后批量修 + 总控状态对账（T-701~703） | wt/tool-consolidation（空窗复用） | — | ✅ 08-21 主库验收（合并含） | sess-tool-consolidation | 0.5 天；当日完工 |
 | T-999 | M-F | workspace.py 拆分 / scenario_runner 抽插值器 / print→logging / user_store 治理 | wt/tool-consolidation（空窗复用） | — | ✅ 08-21 主库验收（合并含；冲突修正 6a0ebc4+1ef8d9c） | sess-tool-consolidation | 各 1-2 天分次；当日四分次全部完工（a print→logging / b user_store 公共化 / c scenario_runner 抽插值器+实例池 / d workspace.py 拆四块） |
 | T-1000 | M-E | 工作区自管理 + 系统/工作区二级模型 + 产出反查 | wt/frontend-ia | T-995 | ✅ 08-21 主库验收（合并 177e57c，test_specstd 1720 绿） | sess-frontend-ia | 08-21 当日完工：F1 注册放开登录+owner_emp+system_pending 软校验（runner ensure_system_ready 诚实报错）/F2 /workspace/tree 分组+选择器二级+卡片墙/F3 product_index 三反查+我的活动页+audit 本人查自己；顺手修真 bug：ConformanceReport verdict 重算守卫失效（内容级 ERROR 从未生效）+STRUCT 缺失降级 WARN；合并冲突：与 T-999d/T-999b 交叉——workspace.py 取 T-999d 拆分门面形态+移植 ensure_system_ready、ws_registry 补 owner_emp 五处、api.ts 取 T-997 api/ 目录形态+改动移植 workspace.ts+新 products.ts、product_index/notify 测试 user_store 旧名 _connect/_LOCK→db_connect/DB_LOCK（修正 6a0ebc4/1ef8d9c）；拍板已过（08-21 按推荐方案）；设计单《架构反馈升级/2026-08-21-M-E-工作区自管理与产出反查-设计单.md》 |
-| T-1001 | M-D | 话题工作台体验升级：专注模式 + 话题列表化（搜索/排序）+ 编辑弹框（原文并排）+ 手动重关联原文 | wt/material-pool | T-993 | 🚧 施工中 | sess-material-pool | 总控人 08-23 直接派工（四点需求）。F1 页面级专注模式（类 AgentChat K-039：临时态不持久化，隐藏页头/状态卡/监听范围卡/页签条）/F2 右栏泳道卡片平铺→紧凑列表行 + 搜索（标题/摘要/关键词）+ 排序（时间/消息数/优先级）/F3 编辑改弹框：左原文右话题内容并排/F4 message_ids 手动重关联（edit_candidate 扩参 + 前端按话题全日加载消息，md 伪 id 诚实禁改） |
+| T-1001 | M-D | 话题工作台体验升级：专注模式 + 话题列表化（搜索/排序）+ 编辑弹框（原文并排）+ 手动重关联原文 | wt/material-pool | T-993 | ✅ 已完工待验收 | sess-material-pool | 08-23 当日完工（总控人直接派工四点需求）。F1 页面级专注模式（类 AgentChat K-039：临时态不持久化+ESC 退出，隐藏页头/状态卡/监听卡/页签条，双栏 h-calc 占满）/F2 泳道平铺→紧凑列表行+搜索（标题/摘要/关键词多词AND）+排序（时间双向/消息数/优先级）+搜索排序持久化（体验基线①），筛选逻辑抽 topicList.ts 纯函数 10 单测/F3 TopicEditModal 编辑弹框：左原文右话题并排（1080px/70vh，消息渲染抽 ChatMessageView.tsx 共享：loadChatMessages+useChatMedia+MessageBody）/F4 message_ids 勾选重关联（按话题全日加载防静默丢关联；window/days 前端按选中消息换算；md 伪 id 诚实禁改提示更新本群；快照缺失关联如实计数提示；edit_candidate 扩参+空集 400）；验证：test_specstd 1726 绿（+6）/vitest 83 绿（+10）/build 成功/lint 8 errors 持平零新增/release_check PASS |
 
 ---
 
@@ -603,17 +603,18 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | docs/specguard-yaml-format-spec.md | sess-test-taxonomy | 2026-08-21 | c452d19cc3ee | df4e072d9841 | 已完成 | T-981：快照重导出 |
 | agent/skills/generate-scenario.md | sess-test-taxonomy | 2026-08-21 | 0639af8ae44d | 7310217168a3 | 已完成 | T-981：注入测试设计方法章节（1.1.0） |
 | scenarios/{employee,evaluation,inventory}/*/*.yaml（24 个场景文件） | sess-test-taxonomy | 2026-08-21 | —（doc 层补标注不进指纹，逐文件核对见提交） | —（每文件 +1 行 dimensions；契约指纹零漂移已用 build_baseline 全量比对证实） | 已完成 | T-981：存量补标注 doc.dimensions |
-| specflow/feishu_pool/topic_cluster.py | sess-material-pool | 2026-08-23 | ed300417f3d7 | | 登记中 | T-1001 F4：edit_candidate 扩 message_ids/window/days 重关联参数 |
-| workbench/backend/routers/feishu_pool.py | sess-material-pool | 2026-08-23 | 9901c72cb301 | | 登记中 | T-1001 F4：CardUpdate 扩参透传 |
-| workbench/frontend/src/components/TopicWorkspace.tsx | sess-material-pool | 2026-08-23 | 3223e898263e | | 登记中 | T-1001 F1/F2：右栏列表化+搜索排序+专注模式+编辑弹框接线 |
-| workbench/frontend/src/components/TopicCard.tsx | sess-material-pool | 2026-08-23 | 4df8474ddb93 | | 登记中 | T-1001 F2/F3：卡片改紧凑列表行，编辑迁出到弹框 |
-| workbench/frontend/src/components/ChatMessageView.tsx | sess-material-pool | 2026-08-23 | NEW | | 登记中 | T-1001：MessageBody+useChatMedia 从 TopicWorkspace 抽离共享（弹框复用富渲染） |
-| workbench/frontend/src/components/TopicEditModal.tsx | sess-material-pool | 2026-08-23 | NEW | | 登记中 | T-1001 F3/F4：编辑弹框（左原文右话题并排+勾选重关联） |
-| workbench/frontend/src/components/topicList.ts | sess-material-pool | 2026-08-23 | NEW | | 登记中 | T-1001 F2：搜索/排序纯函数（可测） |
-| workbench/frontend/src/components/topicList.test.ts | sess-material-pool | 2026-08-23 | NEW | | 登记中 | T-1001 F2：搜索/排序单测 |
-| workbench/frontend/src/pages/FeishuPool.tsx | sess-material-pool | 2026-08-23 | 8c1a8138a1df | | 登记中 | T-1001 F1：页面级专注模式（隐藏页头/状态卡/监听卡/页签条） |
-| workbench/frontend/src/api/feishuPool.ts | sess-material-pool | 2026-08-23 | b083f0cfdc37 | | 登记中 | T-1001：editTopicCard 改参数对象+message_ids/window/days |
-| test_specstd/test_feishu_topic_cluster.py | sess-material-pool | 2026-08-23 | ad57c201c8f1 | | 登记中 | T-1001 F4：重关联用例（成功/校验/历史） |
+| specflow/feishu_pool/topic_cluster.py | sess-material-pool | 2026-08-23 | ed300417f3d7 | 58b3116935fd | 已完成 | T-1001 F4：edit_candidate 扩 message_ids/window/days 重关联参数 |
+| workbench/backend/routers/feishu_pool.py | sess-material-pool | 2026-08-23 | 9901c72cb301 | ba119d550b0c | 已完成 | T-1001 F4：CardUpdate 扩参透传 |
+| workbench/frontend/src/components/TopicWorkspace.tsx | sess-material-pool | 2026-08-23 | 3223e898263e | 6d1d4f1e3be4 | 已完成 | T-1001 F1/F2：右栏列表化+搜索排序+专注模式+编辑弹框接线 |
+| workbench/frontend/src/components/TopicCard.tsx | sess-material-pool | 2026-08-23 | 4df8474ddb93 | 00c59164123e | 已完成 | T-1001 F2/F3：卡片改紧凑列表行，编辑迁出到弹框 |
+| workbench/frontend/src/components/ChatMessageView.tsx | sess-material-pool | 2026-08-23 | NEW | 8e9ffa85ea2e | 已完成 | T-1001：MessageBody+useChatMedia+loadChatMessages 从 TopicWorkspace 抽离共享（弹框复用富渲染） |
+| workbench/frontend/src/components/TopicEditModal.tsx | sess-material-pool | 2026-08-23 | NEW | 609bd88026f3 | 已完成 | T-1001 F3/F4：编辑弹框（左原文右话题并排+勾选重关联） |
+| workbench/frontend/src/components/topicList.ts | sess-material-pool | 2026-08-23 | NEW | 67b5b1173113 | 已完成 | T-1001 F2：搜索/排序纯函数（可测） |
+| workbench/frontend/src/components/topicList.test.ts | sess-material-pool | 2026-08-23 | NEW | 0142e8ae326d | 已完成 | T-1001 F2：搜索/排序单测 10 例 |
+| workbench/frontend/src/pages/FeishuPool.tsx | sess-material-pool | 2026-08-23 | 8c1a8138a1df | 28f6956c7c0c | 已完成 | T-1001 F1：页面级专注模式（隐藏页头/状态卡/监听卡/页签条，ESC 退出） |
+| workbench/frontend/src/api/feishuPool.ts | sess-material-pool | 2026-08-23 | b083f0cfdc37 | 30f569d8f430 | 已完成 | T-1001：editTopicCard 改参数对象+messageIds/window/days |
+| test_specstd/test_feishu_topic_cluster.py | sess-material-pool | 2026-08-23 | ad57c201c8f1 | 5fba340a353b | 已完成 | T-1001 F4：重关联用例（成功/未变不推rev/空集拒绝/坏window拒绝） |
+| test_specstd/test_feishu_t948_router.py | sess-material-pool | 2026-08-23 | 0af0ba15ed19 | d739b6c5f7ea | 已完成 | T-1001 F4：路由层重关联透传+空集 400 两例 |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

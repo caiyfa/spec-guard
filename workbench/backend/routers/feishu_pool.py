@@ -239,6 +239,9 @@ class CardUpdate(BaseModel):
     category: str = ""                # T-991：空=不改（chat|routine|requirement|test|solution）
     priority: str = ""                # T-991：空=不改（high|normal|low）
     base_rev: int | None = None       # T-948 乐观锁：与卡片 rev 不符 → 409
+    message_ids: list[str] | None = None  # T-1001：None/缺省=不改；传入即整体重关联（须非空）
+    window: list[str] = []            # T-1001：随重关联更新 [start,end]（空=不改）
+    days: list[str] = []              # T-1001：随重关联更新跨日窗口（空=不改）
 
 
 class RegenRequest(BaseModel):
@@ -322,8 +325,9 @@ def commit_topics(body: CommitRequest,
 def update_topic_card(body: CardUpdate,
                       user: CurrentUser = Depends(get_current_user),
                       workspace: str = Depends(resolve_workspace)):
-    """单卡编辑 title/summary/keywords/category/priority（T-948 R7 + T-991；
-    乐观锁冲突 → 409 带最新卡片；非法枚举 → 400）。"""
+    """单卡编辑 title/summary/keywords/category/priority（T-948 R7 + T-991）
+    + 手动重关联原文 message_ids/window/days（T-1001 F4）；
+    乐观锁冲突 → 409 带最新卡片；非法枚举/空关联 → 400）。"""
     from specflow.feishu_pool import topic_cluster as tc
     editor = {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
     try:
@@ -331,7 +335,9 @@ def update_topic_card(body: CardUpdate,
             _sf_base(), body.id, title=body.title, summary=body.summary,
             keywords=body.keywords or None, base_rev=body.base_rev,
             editor=editor, material_base=_material_base(),
-            category=body.category, priority=body.priority)
+            category=body.category, priority=body.priority,
+            message_ids=body.message_ids,
+            window=body.window or None, days=body.days or None)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     except ValueError as e:

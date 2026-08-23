@@ -636,3 +636,59 @@ class TestSchemaV3:
         assert t["category"] == "test"
         # mc2=0 + pc5=1 + test0.5 + high0.5 = 2 → high
         assert t["priority"] == "high"
+
+
+class TestEditCandidateRelateMessages:
+    """T-1001 F4：手动重关联原文（message_ids/window/days 随编辑更新）。"""
+
+    def _mk(self, tmp_path):
+        emp = _make_emp_for_draft(tmp_path)
+        (emp / "feishu_pool" / "_topics.yaml").write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:3f9a2c-20260807-01\n    title: t\n    summary: s\n"
+            "    chat_sha8: 3f9a2c\n    rev: 1\n    status: draft\n"
+            "    message_ids: [om_a, om_b]\n"
+            "    window: ['2026-08-07T14:00', '2026-08-07T14:01']\n"
+            "    message_count: 2\n    participants_count: 2\n"
+            "    source: chats/3f9a2c/20260807.md\n", encoding="utf-8")
+        return emp
+
+    def test_reassociate_updates_card_and_history(self, tmp_path):
+        """重关联成功：message_ids/window/days 更新 + rev+1 + 历史 from/to。"""
+        emp = self._mk(tmp_path)
+        t = tc.edit_candidate(
+            emp, "tp:3f9a2c-20260807-01",
+            message_ids=["om_b", "om_c"],
+            window=["2026-08-07T14:01", "2026-08-07T15:30"],
+            days=["20260807"], base_rev=1, editor=_EDITOR)
+        assert t["message_ids"] == ["om_b", "om_c"]
+        assert t["window"] == ["2026-08-07T14:01", "2026-08-07T15:30"]
+        assert t["days"] == ["20260807"]
+        assert t["rev"] == 2
+        hist = tc.list_history(emp, "tp:3f9a2c-20260807-01")
+        assert hist[0]["action"] == "edit"
+        assert hist[0]["changes"]["message_ids"]["from"] == ["om_a", "om_b"]
+        assert hist[0]["changes"]["message_ids"]["to"] == ["om_b", "om_c"]
+
+    def test_reassociate_only_when_changed(self, tmp_path):
+        """集合未变 → 不推 rev 不落历史（与其他字段口径一致）。"""
+        emp = self._mk(tmp_path)
+        t = tc.edit_candidate(emp, "tp:3f9a2c-20260807-01",
+                              message_ids=["om_a", "om_b"], editor=_EDITOR)
+        assert t["rev"] == 1
+        assert tc.list_history(emp, "tp:3f9a2c-20260807-01") == []
+
+    def test_reassociate_empty_ids_rejected(self, tmp_path):
+        """空 message_ids → ValueError（话题至少关联一条消息）。"""
+        emp = self._mk(tmp_path)
+        with pytest.raises(ValueError):
+            tc.edit_candidate(emp, "tp:3f9a2c-20260807-01",
+                              message_ids=[], editor=_EDITOR)
+
+    def test_reassociate_bad_window_rejected(self, tmp_path):
+        """window 非 [start, end] 两元素 → ValueError。"""
+        emp = self._mk(tmp_path)
+        with pytest.raises(ValueError):
+            tc.edit_candidate(emp, "tp:3f9a2c-20260807-01",
+                              message_ids=["om_a"],
+                              window=["2026-08-07T14:00"], editor=_EDITOR)

@@ -211,3 +211,31 @@ def test_relate_topics_unknown_id_404(tmp_path):
          pytest.raises(Exception) as ei:
         rp.relate_topics(body, user=_USER, workspace="tdm")
     assert getattr(ei.value, "status_code", None) == 404
+
+
+def test_update_card_reassociate_messages(tmp_path):
+    """T-1001 F4：CardUpdate 带 message_ids/window/days → edit_candidate 透传。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_topic_file(emp)
+    body = rp.CardUpdate(id="tp:3f9a2c-20260807-01",
+                         message_ids=["om_x", "om_y"],
+                         window=["2026-08-07T14:00", "2026-08-07T14:20"],
+                         days=["20260807"], base_rev=3)
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp):
+        t = rp.update_topic_card(body, user=_USER, workspace="tdm")
+    assert t["message_ids"] == ["om_x", "om_y"]
+    assert t["window"] == ["2026-08-07T14:00", "2026-08-07T14:20"]
+    assert t["days"] == ["20260807"]
+    assert t["rev"] == 4
+
+
+def test_update_card_empty_message_ids_400(tmp_path):
+    """空 message_ids → 400（至少关联一条）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_topic_file(emp)
+    body = rp.CardUpdate(id="tp:3f9a2c-20260807-01", message_ids=[], base_rev=3)
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp), \
+         pytest.raises(Exception) as ei:
+        rp.update_topic_card(body, user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 400
+    assert "message_ids" in str(ei.value.detail)

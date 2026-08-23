@@ -84,6 +84,15 @@ export default function FeishuPool() {
   const [crossSuggestions, setCrossSuggestions] = useState<CrossChatCandidate[]>([]);
   const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null; imgUrls: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState('');
+  // T-1001 F1：话题工作台专注模式（类 AgentChat K-039——临时态不持久化，
+  // 隐藏页头/状态卡/监听范围卡/页签条，工作台双栏占满视口；ESC 退出）
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    if (!focusMode) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setFocusMode(false); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [focusMode]);
 
   // T-951：全部话题卡计数（页签 badge；卡片流本体在工作台右栏）
   const allTopicCards = useMemo(() => {
@@ -152,7 +161,10 @@ export default function FeishuPool() {
   );
 
   return (
-    <div className="p-4 max-w-[1100px] mx-auto">
+    <div className={focusMode ? 'p-2' : 'p-4 max-w-[1100px] mx-auto'}>
+      {/* T-1001：专注模式隐藏页面骨架（页头/状态卡/监听范围卡/页签条） */}
+      {!focusMode && (
+        <>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-bold">🪺 飞书材料池</h1>
         <div className="flex items-center gap-2">
@@ -229,14 +241,18 @@ export default function FeishuPool() {
           <div className="text-gray-500">监听配置加载中…</div>
         )}
       </div>
+        </>
+      )}
 
       {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
       {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
 
-      <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
-        {tabBtn('materials', `📦 材料池（${materials.length}）`)}
-        {tabBtn('topics', `💬 话题（${allTopicCards.length}）`)}
-      </div>
+      {!focusMode && (
+        <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
+          {tabBtn('materials', `📦 材料池（${materials.length}）`)}
+          {tabBtn('topics', `💬 话题（${allTopicCards.length}）`)}
+        </div>
+      )}
 
       {/* 页签 1：材料池清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
       {tab === 'materials' && (
@@ -298,15 +314,17 @@ export default function FeishuPool() {
         </div>
       )}
 
-      {/* 页签 2：话题工作台（T-951：单一双栏——消息时间轴×话题色卡，
-          卡片流收进右栏，页签不再分上下两层） */}
+      {/* 页签 2：话题工作台（T-951：单一双栏——消息时间轴×话题列表；
+          T-1001 F1 专注模式由本页驱动：隐藏骨架 + 双栏占满视口） */}
       {tab === 'topics' && (
         <TopicWorkspace
           materials={materials}
           watchCfg={watchCfg}
           topics={topics}
           onCommitted={loadTopics}
-          crossSuggestions={crossSuggestions} />
+          crossSuggestions={crossSuggestions}
+          focus={focusMode}
+          onToggleFocus={() => setFocusMode(v => !v)} />
       )}
 
       {/* 材料详情弹层（原文 + 图片内嵌） */}

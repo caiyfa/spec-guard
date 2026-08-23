@@ -745,19 +745,31 @@ def edit_candidate(emp_base: Path, topic_id: str,
                    base_rev: int | None = None,
                    editor: dict | None = None,
                    material_base: Path | None = None,
-                   category: str = "", priority: str = "") -> dict:
+                   category: str = "", priority: str = "",
+                   message_ids: list[str] | None = None,
+                   window: list[str] | None = None,
+                   days: list[str] | None = None) -> dict:
     """人工编辑卡片 title/summary/keywords/category/priority（T-948 R7 +
-    T-991；agent_origin 永不改动）。
+    T-991；agent_origin 永不改动）+ 手动重关联原文（T-1001 F4：
+    message_ids 整体替换，window/days 随新关联集合更新——由前端按
+    消息事实源换算后传入）。
 
     乐观锁：base_rev 与卡片 rev 不符 → RevConflict（携带最新卡片，路由层转 409）；
     成功 → rev+1、last_edited_* 更新、history(action=edit, changes from/to)。
     空串/None 表示该字段不改。category/priority 非法枚举 → ValueError（路由 400）。
+    message_ids 非 None 时必须非空（话题至少关联一条消息）；window 非空时须为
+    [start, end] 两元素 → 否则 ValueError（路由 400）。
     T-949：话题库随 material_base（共享区）。
     """
     if category and category not in _CATEGORY_ENUM:
         raise ValueError(f"非法 category: {category}（合法：{'/'.join(_CATEGORY_ENUM)}）")
     if priority and priority not in _PRIORITY_ENUM:
         raise ValueError(f"非法 priority: {priority}（合法：{'/'.join(_PRIORITY_ENUM)}）")
+    if message_ids is not None and (not message_ids
+            or not all(isinstance(m, str) and m.strip() for m in message_ids)):
+        raise ValueError("message_ids 需至少一条非空消息 id（话题不能零关联）")
+    if window and len(window) != 2:
+        raise ValueError("window 需为 [start, end] 两元素（ISO 时间戳）")
     mroot = _mroot(emp_base, material_base)
     existing = _load_candidates(mroot)
     topic = next((t for t in existing if t.get("id") == topic_id), None)
@@ -782,6 +794,18 @@ def edit_candidate(emp_base: Path, topic_id: str,
     if priority and priority != topic.get("priority"):
         changes["priority"] = {"from": topic.get("priority"), "to": priority}
         topic["priority"] = priority
+    if message_ids is not None and list(message_ids) != list(topic.get("message_ids") or []):
+        changes["message_ids"] = {"from": list(topic.get("message_ids") or []),
+                                  "to": list(message_ids)}
+        topic["message_ids"] = list(message_ids)
+    if window and list(window) != list(topic.get("window") or []):
+        changes["window"] = {"from": list(topic.get("window") or []),
+                             "to": list(window)}
+        topic["window"] = list(window)
+    if days and list(days) != list(topic.get("days") or []):
+        changes["days"] = {"from": list(topic.get("days") or []),
+                           "to": list(days)}
+        topic["days"] = list(days)
     if not changes:
         return topic                              # 无实际变化：不推 rev 不落历史
     topic["rev"] = int(topic.get("rev") or 1) + 1

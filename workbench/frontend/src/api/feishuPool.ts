@@ -137,12 +137,22 @@ export const feishuPoolApi = {
                  days?: string[]) =>
     request<{ items: FeishuTopic[] }>('/feishu-pool/topics/commit', {
       method: 'POST', body: JSON.stringify({ chat_sha8, day, days: days || [], picked }) }),
-  editTopicCard: (id: string, title?: string, summary?: string,
-                  keywords?: string[], baseRev?: number,
-                  category?: string, priority?: string) =>
+  // T-1001：参数对象形态（字段多，位置参不可维护）；messageIds/window/days
+  // 仅手动重关联时传（不传=不改——后端 None 语义）。
+  editTopicCard: (p: {
+    id: string; title?: string; summary?: string; keywords?: string[];
+    baseRev?: number; category?: string; priority?: string;
+    messageIds?: string[]; window?: string[]; days?: string[];
+  }) =>
     request<FeishuTopic>('/feishu-pool/topics/card', {
-      method: 'PUT', body: JSON.stringify({ id, title, summary, keywords,
-        base_rev: baseRev, category: category || '', priority: priority || '' }) }),
+      method: 'PUT', body: JSON.stringify({
+        id: p.id, title: p.title || '', summary: p.summary || '',
+        keywords: p.keywords || [], base_rev: p.baseRev,
+        category: p.category || '', priority: p.priority || '',
+        message_ids: p.messageIds ?? null,
+        window: p.messageIds ? (p.window || []) : [],
+        days: p.messageIds ? (p.days || []) : [],
+      }) }),
   regenTopicCard: (id: string) =>
     request<FeishuTopic>('/feishu-pool/topics/regen', {
       method: 'POST', body: JSON.stringify({ id }) }),

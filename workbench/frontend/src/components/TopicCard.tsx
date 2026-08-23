@@ -1,9 +1,10 @@
-// TopicCard.tsx — 话题卡片（T-950 增强版）：
-// 状态徽标（draft/confirmed/rejected）+ confirm/reject + 编辑
-// （title/summary/keywords + AI 原稿对照）+ 重生成 + 历史抽屉（多用户留痕）。
-// 409 乐观锁冲突：提示「已被他人编辑」并刷新（服务端拒绝静默覆盖）。
+// TopicCard.tsx — 话题列表行（T-950 卡片；T-1001 F2 从泳道色卡平铺改为
+// 紧凑列表行——话题多时配合搜索/排序快速定位；F3 编辑迁出到弹框
+// TopicEditModal：原文与话题内容并排、支持手动重关联）。
+// 状态徽标（draft/confirmed/rejected）+ confirm/reject + 重新生成 +
+// 历史展开（多用户留痕）。409 乐观锁冲突：提示「已被他人编辑」并刷新。
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   feishuPoolApi,
   type FeishuTopic,
@@ -39,8 +40,17 @@ const ACTION_LABEL: Record<string, string> = {
   confirm: '确认', reject: '拒绝', reopen: '重新打开',
 };
 
+// 行 meta 用时间：window 首末取 MM-DD HH:MM（跨日显示区间）
+function fmtWindow(t: FeishuTopic): string {
+  const s = String(t.window?.[0] || '');
+  const e = String(t.window?.[1] || '');
+  if (!s) return '';
+  if (!e || e.slice(0, 10) === s.slice(0, 10)) return s.slice(5, 16);
+  return `${s.slice(5, 16)}~${e.slice(5, 16)}`;
+}
+
 export default function TopicCard({ topic: t, draft, selected, onSelect, onRefresh,
-                                     relatedCount, onOpenRelations }: {
+                                     relatedCount, onOpenRelations, onEdit }: {
   topic: FeishuTopic;
   draft?: boolean;             // 介入工作区草案段（未提交，仅展示）
   selected?: boolean;
@@ -48,42 +58,13 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
   onRefresh: () => void;
   relatedCount?: number;       // T-993：跨群关联数（relates_to 边连通方）
   onOpenRelations?: () => void;  // T-993：打开关联抽屉（并排多群证据）
+  onEdit?: () => void;         // T-1001：打开编辑弹框（左原文右话题并排+重关联）
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draftTitle, setDraftTitle] = useState(t.title);
-  const [draftSummary, setDraftSummary] = useState(t.summary);
-  const [draftKeywords, setDraftKeywords] = useState((t.keywords || []).join('，'));
-  // T-991：分类/优先级编辑态（空串=不改，沿用现值）
-  const [draftCategory, setDraftCategory] = useState(t.category || '');
-  const [draftPriority, setDraftPriority] = useState(t.priority || '');
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
   const [history, setHistory] = useState<FeishuTopicHistoryItem[] | null>(null);
   // T-954：模型缺失就地配置弹层（regen 未配置时不报错踢人）
   const [modelSetup, setModelSetup] = useState(false);
-
-  useEffect(() => {
-    setDraftTitle(t.title);
-    setDraftSummary(t.summary);
-    setDraftKeywords((t.keywords || []).join('，'));
-    setDraftCategory(t.category || '');
-    setDraftPriority(t.priority || '');
-  }, [t.title, t.summary, t.keywords, t.category, t.priority]);
-
-  const saveEdit = async () => {
-    setBusy('edit'); setErr('');
-    try {
-      const kws = draftKeywords.split(/[，,]/).map(s => s.trim()).filter(Boolean);
-      await feishuPoolApi.editTopicCard(t.id, draftTitle, draftSummary, kws, t.rev,
-        draftCategory, draftPriority);
-      setEditing(false);
-      onRefresh();
-    } catch (e: any) {
-      // 409（已被他人编辑）/ 其他错误都如实提示；卡片刷新后 rev 对齐可重试
-      setErr(e.message);
-      onRefresh();
-    } finally { setBusy(''); }
-  };
 
   const regen = async () => {
     setBusy('regen'); setErr('');
@@ -117,29 +98,28 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
     } catch (e: any) { setErr(e.message); }
   };
 
-  const input = 'bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info';
   const status = t.status || 'draft';
   const badge = STATUS_BADGE[status] || STATUS_BADGE.draft;
-  const origin = t.agent_origin;
-  // AI 原稿对照：人工当前值 vs agent 原稿（差异字段标 amber——R8 的查看入口）
-  const diff = (cur: string, orig?: string) =>
-    orig !== undefined && orig !== cur;
+  const time = fmtWindow(t);
 
   return (
-    <div className="min-w-0 w-full text-xs"
+    <div className={`min-w-0 w-full text-xs rounded-lg border p-2 transition-colors
+      ${selected ? 'border-info/60 bg-info/10' : 'border-border bg-surface-3 hover:border-gray-500'}
+      ${status === 'rejected' ? 'opacity-50' : ''}`}
       onClick={onSelect}>
       <div className="flex items-center gap-2 flex-wrap">
-        {editing ? (
-          <input className={`${input} flex-1 min-w-[120px]`}
-            value={draftTitle} onChange={e => setDraftTitle(e.target.value)} />
-        ) : (
-          <span className={`font-medium ${selected ? 'text-info' : 'text-gray-200'}`}>
-            {t.title}
-          </span>
-        )}
+        <span className={`font-medium truncate ${selected ? 'text-info' : 'text-gray-200'}`}
+          title={t.title}>
+          {t.title}
+        </span>
         {!draft && (
           <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${badge.cls}`}>
             {badge.label}
+          </span>
+        )}
+        {draft && (
+          <span className="px-1.5 py-0.5 rounded text-[10px] shrink-0 bg-info/10 text-info">
+            草案
           </span>
         )}
         {t.category && (
@@ -161,81 +141,34 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
           </button>
         )}
         {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续</span>}
-        <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500">
-          {t.message_count} 条 · {t.participants_count} 人
+        <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500 shrink-0">
+          {time && <span>{time}</span>}
+          <span>{t.message_count} 条 · {t.participants_count} 人</span>
           {t.rev !== undefined && t.rev > 1 && <span title="乐观锁版本">v{t.rev}</span>}
         </span>
       </div>
-      {editing ? (
-        <>
-          <textarea className={`${input} w-full mt-1`} rows={2}
-            value={draftSummary} onChange={e => setDraftSummary(e.target.value)} />
-          <input className={`${input} w-full mt-1`} placeholder="关键词（逗号分隔，2~5 个）"
-            value={draftKeywords} onChange={e => setDraftKeywords(e.target.value)} />
-          <div className="flex gap-2 mt-1">
-            <select className={`${input} flex-1`} value={draftCategory}
-              onChange={e => setDraftCategory(e.target.value)}
-              title="话题分类（五分类；空=不改）">
-              <option value="">分类：不改</option>
-              <option value="chat">闲聊</option>
-              <option value="routine">沟通</option>
-              <option value="requirement">需求</option>
-              <option value="test">测试</option>
-              <option value="solution">方案</option>
-            </select>
-            <select className={`${input} flex-1`} value={draftPriority}
-              onChange={e => setDraftPriority(e.target.value)}
-              title="优先级（信号推导初值，可人工改；空=不改）">
-              <option value="">优先级：不改</option>
-              <option value="high">高</option>
-              <option value="normal">中</option>
-              <option value="low">低</option>
-            </select>
-          </div>
-          {origin && (
-            <div className="mt-1 p-1.5 rounded bg-surface-3/60 border border-border/50">
-              <div className="text-[10px] text-gray-500 mb-0.5">
-                AI 原稿对照（人工修改处标黄，生成优化依据）：
-              </div>
-              <div className={`text-[10px] ${diff(draftTitle, origin.title) ? 'text-amber-300' : 'text-gray-500'}`}>
-                题目：{origin.title}
-              </div>
-              <div className={`text-[10px] ${diff(draftSummary, origin.summary) ? 'text-amber-300' : 'text-gray-500'}`}>
-                摘要：{origin.summary}
-              </div>
-              <div className="text-[10px] text-gray-600">
-                {origin.model && `模型 ${origin.model} · `}生成于 {origin.generated_at || '—'}
-                {origin.prompt_version && ` · ${origin.prompt_version}`}
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <p className={`mt-1 ${status === 'rejected' ? 'text-gray-600' : 'text-gray-400'}`}>
-            {t.summary}
-          </p>
-          {(t.keywords || []).length > 0 && (
-            <div className="flex gap-1 flex-wrap mt-1">
-              {t.keywords.map(k => (
-                <span key={k} className="px-1.5 py-0.5 rounded bg-surface-3 border border-border text-[10px] text-gray-400">
-                  {k}
-                </span>
-              ))}
-            </div>
+      <p className={`mt-1 truncate ${status === 'rejected' ? 'text-gray-600' : 'text-gray-400'}`}
+        title={t.summary}>
+        {t.summary}
+      </p>
+      {((t.keywords || []).length > 0 || (t.modules || []).length > 0) && (
+        <div className="flex gap-1 flex-wrap mt-1">
+          {(t.keywords || []).slice(0, 4).map(k => (
+            <span key={k} className="px-1.5 py-0.5 rounded bg-surface-3 border border-border text-[10px] text-gray-400">
+              {k}
+            </span>
+          ))}
+          {(t.keywords || []).length > 4 && (
+            <span className="text-[10px] text-gray-600">+{t.keywords!.length - 4}</span>
           )}
           {/* T-992：功能模块（FR 锚点派生，拍板②——非自由字段；留空不显示） */}
-          {(t.modules || []).length > 0 && (
-            <div className="flex gap-1 flex-wrap mt-1">
-              {t.modules.map(m => (
-                <span key={m} className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-400"
-                  title="功能模块：由已确认的话题→FR 关联边派生（FR 模块目录）">
-                  🏷 {m}
-                </span>
-              ))}
-            </div>
-          )}
-        </>
+          {(t.modules || []).map(m => (
+            <span key={m} className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-400"
+              title="功能模块：由已确认的话题→FR 关联边派生（FR 模块目录）">
+              🏷 {m}
+            </span>
+          ))}
+        </div>
       )}
       {(t.last_edited_by?.name || t.author?.name) && (
         <div className="text-[10px] text-gray-600 mt-1">
@@ -245,41 +178,33 @@ export default function TopicCard({ topic: t, draft, selected, onSelect, onRefre
       )}
       {err && <div className="text-[10px] text-red-400 mt-1">{err}</div>}
       {!draft && (
-        <div className="flex items-center gap-2 mt-1 text-[10px]">
-          {editing ? (
-            <>
-              <button className="text-info hover:underline" onClick={saveEdit}
-                disabled={busy === 'edit'}>
-                {busy === 'edit' ? '保存中…' : '保存'}
-              </button>
-              <button className="text-gray-500 hover:underline"
-                onClick={() => setEditing(false)}>取消</button>
-            </>
-          ) : (
-            <>
-              <button className="text-info hover:underline"
-                onClick={() => setEditing(true)}>编辑</button>
-              <button className="text-info hover:underline" onClick={regen}
-                disabled={busy === 'regen'}>
-                {busy === 'regen' ? '生成中…' : '重新生成'}
-              </button>
-              {status !== 'confirmed' && (
-                <button className="text-green-400 hover:underline" onClick={() => flip('confirm')}
-                  disabled={busy === 'confirm'}>
-                  {busy === 'confirm' ? '确认中…' : '✓ 确认'}
-                </button>
-              )}
-              {status !== 'rejected' && (
-                <button className="text-red-400 hover:underline" onClick={() => flip('reject')}
-                  disabled={busy === 'reject'}>
-                  {busy === 'reject' ? '…' : '✕ 拒绝'}
-                </button>
-              )}
-              <button className="text-gray-500 hover:underline" onClick={loadHistory}>
-                {history !== null ? '收起历史' : '历史'}
-              </button>
-            </>
+        <div className="flex items-center gap-2 mt-1 text-[10px]"
+          onClick={e => e.stopPropagation()}>
+          {onEdit && (
+            <button className="text-info hover:underline" onClick={onEdit}
+              title="弹框编辑：左原文右话题并排，可修正 AI 关联错的原文">
+              编辑
+            </button>
           )}
+          <button className="text-info hover:underline" onClick={regen}
+            disabled={busy === 'regen'}>
+            {busy === 'regen' ? '生成中…' : '重新生成'}
+          </button>
+          {status !== 'confirmed' && (
+            <button className="text-green-400 hover:underline" onClick={() => flip('confirm')}
+              disabled={busy === 'confirm'}>
+              {busy === 'confirm' ? '确认中…' : '✓ 确认'}
+            </button>
+          )}
+          {status !== 'rejected' && (
+            <button className="text-red-400 hover:underline" onClick={() => flip('reject')}
+              disabled={busy === 'reject'}>
+              {busy === 'reject' ? '…' : '✕ 拒绝'}
+            </button>
+          )}
+          <button className="text-gray-500 hover:underline" onClick={loadHistory}>
+            {history !== null ? '收起历史' : '历史'}
+          </button>
         </div>
       )}
       {history !== null && (
