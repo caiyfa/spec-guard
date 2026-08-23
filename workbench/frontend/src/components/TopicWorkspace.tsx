@@ -309,8 +309,14 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
 
   useEffect(() => {
     if (highlightIdx.size === 0 || !timelineRef.current) return;
-    const first = timelineRef.current.querySelector('[data-hl="1"]');
-    first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const box = timelineRef.current;
+    const first = box.querySelector('[data-hl="1"]') as HTMLElement | null;
+    if (!first) return;
+    // T-1009：容器内滚动定位（不 scrollIntoView）——scrollIntoView 会连带滚
+    // 动页面祖先，把右栏话题卡顶出视口（总控人实测「找到原文但话题没了」）
+    const delta = first.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    box.scrollTo({ top: box.scrollTop + delta - box.clientHeight / 2,
+                   behavior: 'smooth' });
   }, [highlightIdx]);
 
   // T-1002：勾选模式可用性——md 回退伪 id（md-line-N）不能作为重关联/生卡
@@ -469,10 +475,13 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
         )}
       </div>
       {sha8 && daySel ? (
-        <div className="flex gap-3">
+        // T-1009：专注模式行高钉死视口（此前内容撑高——时间轴几千 px、右栏
+        // 话题卡停在行顶，定位滚动后右栏只剩拉伸空白「话题没了」）；两栏
+        // 各自内部滚动，右栏话题列表原地不动
+        <div className={`flex gap-3 ${focus ? 'h-[calc(100vh-130px)]' : ''}`}>
           {/* 左栏：消息时间轴（多日拼接；行带 MM-DD 日期前缀跨日不歧义；
               T-1002：勾选模式生成话题） */}
-          <div className={`w-[46%] shrink-0 flex flex-col ${focus ? '' : 'max-h-[560px]'}`}>
+          <div className={`w-[46%] shrink-0 flex flex-col min-h-0 ${focus ? '' : 'max-h-[560px]'}`}>
             <div className="flex items-center gap-2 mb-1.5 text-[11px]">
               <span className="text-gray-500">原文消息</span>
               <span className="text-gray-600">
@@ -559,7 +568,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
             )}
           </div>
           {/* 右栏：话题列表（T-1001 F2：搜索 + 排序 + 紧凑行；唯一卡片流） */}
-          <div className={`flex-1 min-w-0 flex flex-col ${focus ? '' : 'max-h-[560px]'}`}>
+          <div className={`flex-1 min-w-0 flex flex-col min-h-0 ${focus ? '' : 'max-h-[560px]'}`}>
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <input className={`${input} w-48`} placeholder="搜索标题/摘要/关键词…"
                 value={query} onChange={e => setQuery(e.target.value)}
