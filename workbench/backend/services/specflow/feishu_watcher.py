@@ -155,6 +155,156 @@ def chats_warmup_job(emp: str):
         log.warning("群聊列表预热失败 emp=%s: %s", emp, out["errors"])
 
 
+# ══════════════════════════════════════════════════════════
+# T-1008 事件直写驱动的自动话题分类（双阈值：条数 / 时间）
+# ══════════════════════════════════════════════════════════
+#
+# 背景：事件直写让群消息秒级入池，但话题聚类此前只挂在「手动/定时同步」
+# 与「每日 03:00 校对」尾部——不开定时同步的部署里，白天积累的消息要等
+# 次晨才出话题；且少量消息也可能已构成一个完整话题（条数触发覆盖不到）。
+# 设计（总控人 08-23 拍板）：直写计数，单群积累 ≥ topic_auto_count 条即
+# scoped 重聚该群；未达条数但距上次聚类 ≥ topic_auto_minutes 分钟且有新
+# 消息时也触发（auto_cluster_job 按固定节拍检查，配置每次运行现读——
+# 保存即生效，无需重启 watcher；两阈值各自 0=关闭）。
+# 状态按 emp 私有持久化（{emp_base}/.auto_cluster.json）：多用户 watcher
+# 各自记账，共享池聚类幂等兜底（重复触发只多一次 LLM 调用，不坏数据）。
+
+AUTO_CLUSTER_CHECK_MINUTES = 10        # 时间触发检查节拍（测试可 patch）
+
+_AUTO_LOCK = threading.Lock()
+_AUTO_STATE: dict[str, dict] = {}      # emp_base_str -> {"pending": {chat_id: n},
+                                       #                   "last_cluster": {chat_id: iso}}
+
+
+def _auto_state_path(emp_base_str: str) -> Path:
+    return Path(emp_base_str) / ".auto_cluster.json"
+
+
+def _load_auto_state(emp_base_str: str) -> dict:
+    with _AUTO_LOCK:
+        st = _AUTO_STATE.get(emp_base_str)
+        if st is not None:
+            return st
+    st = {"pending": {}, "last_cluster": {}}
+    try:
+        raw = json.loads(_auto_state_path(emp_base_str).read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            st["pending"] = {str(k): int(v) for k, v
+                             in (raw.get("pending") or {}).items()}
+            st["last_cluster"] = {str(k): str(v) for k, v
+                                  in (raw.get("last_cluster") or {}).items()}
+    except Exception:
+        pass                            # 缺文件/坏文件 → 空状态重计（校对兜底）
+    with _AUTO_LOCK:
+        _AUTO_STATE[emp_base_str] = st
+    return st
+
+
+def _save_auto_state(emp_base_str: str):
+    try:
+        with _AUTO_LOCK:
+            st = dict(_AUTO_STATE.get(emp_base_str) or {})
+        _auto_state_path(emp_base_str).write_text(
+            json.dumps(st, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        log.warning("自动聚类状态落盘失败（不阻断）: %s", e)
+
+
+def note_chat_message(emp_base_str: str, chat_id: str):
+    """事件直写记账：单群新消息 +1，达 topic_auto_count 即 scoped 触发聚类。
+
+    topic_days=0（该群关闭话题）或已退出 watch 配置的群不记账——避免
+    禁用群 pending 无限累积空转触发检查。
+    """
+    from services.specflow import feishu_sync_service as svc
+    try:
+        cfg = svc.load_watch_config(Path(emp_base_str))
+    except Exception:
+        cfg = {}
+    topic_days = {str(c.get("chat_id", "")): int(c.get("topic_days", 7) or 0)
+                  for c in cfg.get("chats") or []}
+    if topic_days.get(chat_id, 0) <= 0:
+        return
+    st = _load_auto_state(emp_base_str)
+    with _AUTO_LOCK:
+        st["pending"][chat_id] = st["pending"].get(chat_id, 0) + 1
+        pending = st["pending"][chat_id]
+    threshold = int(cfg.get("topic_auto_count") or 0)
+    if threshold > 0 and pending >= threshold:
+        _fire_auto_cluster(emp_base_str, [chat_id])
+    else:
+        _save_auto_state(emp_base_str)
+
+
+def auto_cluster_job(emp_base_str: str):
+    """时间阈值检查 job（模块级——APScheduler 可序列化铁律，禁闭包）。
+
+    固定节拍 AUTO_CLUSTER_CHECK_MINUTES 挂载；topic_auto_minutes 每次现读
+    （保存配置即生效，不经 watcher 重启）。对「pending>0 且距上次聚类
+    ≥ topic_auto_minutes」的群 scoped 触发；不在 watch 配置或
+    topic_days=0（该群关闭话题）的 stale 记账直接清除。
+    """
+    from services.specflow import feishu_sync_service as svc
+    try:
+        cfg = svc.load_watch_config(Path(emp_base_str))
+    except Exception as e:
+        log.warning("自动聚类检查读配置失败 %s: %s", emp_base_str, e)
+        return
+    minutes = int(cfg.get("topic_auto_minutes") or 0)
+    st = _load_auto_state(emp_base_str)
+    topic_days = {str(c.get("chat_id", "")): int(c.get("topic_days", 7) or 0)
+                  for c in cfg.get("chats") or []}
+    # 清理已退出监听范围的记账
+    stale = [cid for cid in st["pending"] if cid not in topic_days]
+    if stale:
+        with _AUTO_LOCK:
+            for cid in stale:
+                st["pending"].pop(cid, None)
+                st["last_cluster"].pop(cid, None)
+        _save_auto_state(emp_base_str)
+    if minutes <= 0:
+        return
+    now = datetime.now()
+    due = []
+    for cid, n in list(st["pending"].items()):
+        if n <= 0 or topic_days.get(cid, 0) == 0:
+            continue
+        last = st["last_cluster"].get(cid, "")
+        try:
+            last_dt = datetime.fromisoformat(last) if last else datetime.min
+        except ValueError:
+            last_dt = datetime.min
+        if (now - last_dt).total_seconds() >= minutes * 60:
+            due.append(cid)
+    if due:
+        _fire_auto_cluster(emp_base_str, due)
+
+
+def _fire_auto_cluster(emp_base_str: str, chat_ids: list[str]):
+    """触发 scoped 聚类：先清记账再打时间戳（失败下轮重触发；每日校对兜底）。"""
+    from services.specflow import feishu_sync_service as svc
+    try:
+        cfg = svc.load_watch_config(Path(emp_base_str))
+    except Exception:
+        cfg = {}
+    topic_days = {str(c.get("chat_id", "")): int(c.get("topic_days", 7) or 0)
+                  for c in cfg.get("chats") or []}
+    fire = [c for c in chat_ids if topic_days.get(c, 0) > 0]
+    if not fire:
+        return
+    st = _load_auto_state(emp_base_str)
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with _AUTO_LOCK:
+        for cid in fire:
+            st["pending"][cid] = 0
+            st["last_cluster"][cid] = now_iso
+    _save_auto_state(emp_base_str)
+    log.info("自动话题分类触发（emp_base=%s，群数=%d）", emp_base_str, len(fire))
+    svc.maybe_cluster_async(Path(emp_base_str),
+                            material_base=resolve_material_base(),
+                            only_chat_ids=set(fire))
+
+
 class FeishuWatcher:
     def __init__(self, sg_root: Path):
         self.sg_root = Path(sg_root)
@@ -182,6 +332,7 @@ class FeishuWatcher:
         self._schedule_chat_proofread()
         self._schedule_user_materials()
         self._schedule_chats_warmup()
+        self._schedule_auto_cluster()
         for key, identity in EVENT_KEYS:
             self._launch(key, identity)
         log.info("feishu_watcher 已启动（emp=%s，%d 路事件）", self.emp, len(EVENT_KEYS))
@@ -266,6 +417,32 @@ class FeishuWatcher:
                 id=f"feishu-chats-warmup-{self.emp}", replace_existing=True)
         except Exception as e:
             log.warning("feishu_watcher 群聊预热 job 挂载失败（不阻断监听）: %s", e)
+
+    def _schedule_auto_cluster(self):
+        """T-1008：自动话题分类时间阈值检查（固定节拍；阈值每次运行现读配置）。
+
+        条数触发走事件直写即时记账（note_chat_message），不经本 job；
+        两阈值均 0 时 job 空转（每次仅读配置+状态，代价可忽略），
+        避免 chat_sync_minutes 式「改配置需重启才生效」的挂载缺口。
+        """
+        try:
+            from services.scheduler import get_scheduler
+            emp_base = self.sg_root / ".specflow" / self.emp
+            get_scheduler().add_job(
+                auto_cluster_job, args=[str(emp_base)],
+                trigger="interval", minutes=AUTO_CLUSTER_CHECK_MINUTES,
+                id=f"feishu-auto-cluster-{self.emp}", replace_existing=True)
+        except Exception as e:
+            log.warning("feishu_watcher 自动聚类 job 挂载失败（不阻断监听）: %s", e)
+
+    def reschedule_jobs(self):
+        """配置热重载（T-1008）：重挂配置相关 job，不动事件子进程与 catch-up。
+
+        PUT /watch 时调用——修复 T-952 缺口：此前 start_user 幂等跳过导致
+        运行中 watcher 修改 chat_sync_minutes 要等进程重启才生效。
+        """
+        self._schedule_chat_sync()
+        self._schedule_auto_cluster()
 
     def stop(self):
         """优雅停：先关 stdin（EOF 触发优雅退出），10s 超时再 terminate。禁 kill。"""
@@ -412,6 +589,8 @@ class FeishuWatcher:
         day_file = pool_dirs(material_root)["chats"] / cs8 / f"{day}.jsonl"
         chat_store.merge_chat_jsonl(day_file, [row])
         chat_store.rebuild_views(day_file)
+        # T-1008：直写记账——积累达 topic_auto_count 即 scoped 自动聚类
+        note_chat_message(str(emp_base), chat_id)
 
     def _authorized_for_direct_write(self, emp_base: Path, chat_id: str,
                                      sender_id: str) -> bool:
@@ -510,6 +689,14 @@ class WatcherRegistry:
         if not w.start(emp=emp):
             return False
         self.watchers[emp] = w
+        return True
+
+    def reconfigure_user(self, emp: str) -> bool:
+        """运行中 watcher 配置热重载（T-1008；未在跑 → False，走 start_user）。"""
+        w = self.watchers.get(emp)
+        if w is None:
+            return False
+        w.reschedule_jobs()
         return True
 
     def stop_user(self, emp: str) -> bool:

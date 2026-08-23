@@ -31,7 +31,23 @@ _IMG_PLACEHOLDER_RE = re.compile(r"\[(图片#\d+)\]")
 
 _DEFAULT_WATCH = {"chats": [], "docs": [], "users": [],
                   "minutes_days": 30, "chat_days": 7,
-                  "chat_sync_minutes": 0}
+                  "chat_sync_minutes": 0,
+                  # T-1008：事件直写驱动的自动话题分类双阈值（0=各自关闭）
+                  "topic_auto_count": 50,       # 单群积累 N 条新消息即触发
+                  "topic_auto_minutes": 60}     # 未达条数但距上次分类 M 分钟且有新消息也触发
+
+# 数值型配置键（load/save 双侧归一为非负 int；坏值回退 _DEFAULT_WATCH 默认）
+_WATCH_INT_KEYS = ("minutes_days", "chat_days", "chat_sync_minutes",
+                   "topic_auto_count", "topic_auto_minutes")
+
+
+def _clean_watch_ints(cfg: dict) -> dict:
+    for k in _WATCH_INT_KEYS:
+        try:
+            cfg[k] = max(0, int(cfg.get(k, _DEFAULT_WATCH[k])))
+        except (TypeError, ValueError):
+            cfg[k] = _DEFAULT_WATCH[k]
+    return cfg
 
 _USER_SCOPES = {"group_sender", "minutes", "docs"}
 
@@ -98,7 +114,7 @@ def load_watch_config(specflow_emp_base: Path) -> dict:
     cfg.update({k: v for k, v in raw.items() if k in _DEFAULT_WATCH})
     cfg["users"] = _clean_users(cfg.get("users"))
     cfg["chats"] = _clean_chats(cfg.get("chats"))
-    return cfg
+    return _clean_watch_ints(cfg)
 
 
 def save_watch_config(specflow_emp_base: Path, cfg: dict) -> dict:
@@ -108,6 +124,7 @@ def save_watch_config(specflow_emp_base: Path, cfg: dict) -> dict:
     clean.update({k: v for k, v in (cfg or {}).items() if k in _DEFAULT_WATCH})
     clean["users"] = _clean_users(clean.get("users"))
     clean["chats"] = _clean_chats(clean.get("chats"))
+    clean = _clean_watch_ints(clean)
     path.write_text(yaml.safe_dump(clean, allow_unicode=True, sort_keys=False),
                     encoding="utf-8")
     return clean
@@ -316,13 +333,16 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None,
     return out
 
 
-def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
+def _cluster_once(emp_base: Path, material_base: Path | None = None,
+                  only_chat_ids: set[str] | None = None) -> None:
     """单次聚类（可同步测试）：text 模型未配置→跳过；异常吞掉只记日志。
 
     T-946：从 watch 配置构造按群窗口——chats[].topic_days（缺省 7：只聚
     近 7 天快照；0=该群关闭）；未入 watch 的历史群回退默认 7 天（过期
     数据不提取，控制 LLM 成本）。
     T-949：窗口读私有 watch（emp_base），快照与话题库读材料区（material_base）。
+    T-1008：only_chat_ids 非空时只聚指定群（事件直写双阈值自动触发——
+    单群 scoped 重聚，避免全量窗口重复 LLM 调用）；None=全量（同步后默认）。
     """
     try:
         from services import model_config
@@ -337,14 +357,18 @@ def _cluster_once(emp_base: Path, material_base: Path | None = None) -> None:
         chat_kinds = {}
         for c in (load_watch_config(emp_base).get("chats") or []):
             cid = str(c.get("chat_id", ""))
-            if cid:
-                try:
-                    chat_windows[chat_sha8(cid)] = int(c.get("topic_days", 7) or 0)
-                except (TypeError, ValueError):
-                    chat_windows[chat_sha8(cid)] = 7
-                # T-991：群类型标签随聚类下传（priority 推导信号；多 emp 同群
-                # 配置以最后处理的 watch 为准——kind 语义通常一致）
-                chat_kinds[chat_sha8(cid)] = str(c.get("kind") or "")
+            if not cid or (only_chat_ids is not None and cid not in only_chat_ids):
+                continue
+            try:
+                chat_windows[chat_sha8(cid)] = int(c.get("topic_days", 7) or 0)
+            except (TypeError, ValueError):
+                chat_windows[chat_sha8(cid)] = 7
+            # T-991：群类型标签随聚类下传（priority 推导信号；多 emp 同群
+            # 配置以最后处理的 watch 为准——kind 语义通常一致）
+            chat_kinds[chat_sha8(cid)] = str(c.get("kind") or "")
+        if only_chat_ids is not None and not chat_windows:
+            log.info("话题聚类跳过：指定群不在 watch 配置或均已关闭（topic_days=0 由触发侧过滤）")
+            return
         material_root = Path(material_base) if material_base else emp_base
         tc.cluster_chat_snapshots(material_root, LLMClient(model_id="text"),
                                   chat_windows=chat_windows, default_days=7,
@@ -432,9 +456,14 @@ def _suggest_links_for_pool(emp_base: Path, material_root: Path) -> None:
         log.warning("建边建议失败（不阻断同步）: %s", e)
 
 
-def maybe_cluster_async(emp_base: Path, material_base: Path | None = None) -> None:
-    """异步触发聚类（daemon 线程，不阻塞 sync 返回；同步完成后话题页稍后可见）。"""
-    threading.Thread(target=_cluster_once, args=(emp_base, material_base),
+def maybe_cluster_async(emp_base: Path, material_base: Path | None = None,
+                        only_chat_ids: set[str] | None = None) -> None:
+    """异步触发聚类（daemon 线程，不阻塞 sync 返回；同步完成后话题页稍后可见）。
+
+    T-1008：only_chat_ids 非空时 scoped 单群聚类（事件直写自动触发用）。
+    """
+    threading.Thread(target=_cluster_once, args=(emp_base, material_base,
+                                                 only_chat_ids),
                      daemon=True, name="feishu-topic-cluster").start()
 
 

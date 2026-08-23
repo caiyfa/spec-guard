@@ -89,6 +89,9 @@ class WatchConfig(BaseModel):
     minutes_days: int = 30
     chat_days: int = 7
     chat_sync_minutes: int = 0      # T-952：定时同步间隔（0=关，分钟）
+    # T-1008：事件直写驱动的自动话题分类双阈值（0=各自关闭）
+    topic_auto_count: int = 50      # 单群积累 N 条新消息即触发
+    topic_auto_minutes: int = 60    # 未达条数但距上次分类 M 分钟且有新消息也触发
 
 
 class ReviewPairs(BaseModel):
@@ -108,6 +111,8 @@ def put_watch(cfg: WatchConfig,
               workspace: str = Depends(resolve_workspace)):
     saved = sync_svc.save_watch_config(_sf_base(), cfg.model_dump())
     # T-924 配置驱动启停：保存配置即尝试拉起该用户监听（幂等；失败不阻断保存）
+    # T-1008：已在跑则热重载 job（修 T-952 缺口——运行中改 chat_sync_minutes
+    # 此前要等进程重启才生效）；三态返回供前端诚实提示。
     watcher_state = "skipped"
     try:
         from services.specflow import feishu_watcher as fw
@@ -116,7 +121,10 @@ def put_watch(cfg: WatchConfig,
         reg = fw.get_registry()
         emp = get_context_emp_no() or ""
         if reg is not None and emp:
-            watcher_state = "started" if reg.start_user(emp) else "skipped"
+            if reg.start_user(emp):
+                watcher_state = "started"
+            elif reg.reconfigure_user(emp):
+                watcher_state = "reloaded"
     except Exception:
         watcher_state = "failed"
     return {**saved, "watcher": watcher_state}
@@ -502,8 +510,8 @@ def topic_relations(user: CurrentUser = Depends(get_current_user),
                     workspace: str = Depends(resolve_workspace)):
     """全部已确认跨群关联边（前端「N 群」徽标与关联抽屉数据源）。纯读。"""
     from specflow.feishu_pool import facts
-    items = [l for l in facts.load_links(_ws_root())
-             if l.get("edge") == "relates" and l.get("status") == "confirmed"]
+    items = [link for link in facts.load_links(_ws_root())
+             if link.get("edge") == "relates" and link.get("status") == "confirmed"]
     return {"items": items}
 
 
@@ -516,7 +524,6 @@ def cross_refine(user: CurrentUser = Depends(get_current_user),
     hit = _XREFINE_CACHE.get(workspace)
     if hit and _time.time() - hit[0] < _XREFINE_TTL:
         return {"items": hit[1], "cached": True}
-    from specflow.feishu_pool import facts
     out = sync_svc.list_pool_topics(_material_base(), _ws_root())
     candidates = out.get("cross_suggestions") or []
     cards = ([t for t in out.get("candidates", [])
@@ -543,13 +550,17 @@ def cross_refine(user: CurrentUser = Depends(get_current_user),
 @router.get("/watcher-status")
 def watcher_status(user: CurrentUser = Depends(get_current_user),
                    workspace: str = Depends(resolve_workspace)):
-    """监听状态（注册表内存快照；未启动 → running=false）。纯读。"""
+    """监听状态（注册表内存快照）。纯读。
+
+    T-1008 诚实口径：running=有用户在监（count>0）——注册表常驻创建，
+    此前 registry 存活即 running=true，0 用户也显示「监听运行中」误导。
+    """
     from services.specflow import feishu_watcher as fw
     reg = fw.get_registry()
     if reg is None:
         return {"running": False, "count": 0, "watchers": []}
     st = reg.status()
-    return {"running": True, **st}
+    return {"running": st["count"] > 0, **st}
 
 
 class CaptionUpdate(BaseModel):
