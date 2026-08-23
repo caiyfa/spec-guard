@@ -24,16 +24,18 @@ import ModelSetupModal from './ModelSetupModal';
 import ImageLightbox from './ImageLightbox';
 import { loadChatMessages, MessageBody, useChatMedia, senderColor, fmtMsgTime }
   from './ChatMessageView';
-import { filterAndSortTopics, TOPIC_SORT_OPTIONS, type TopicSortKey }
+import { filterAndSortTopics, filterTopics, TOPIC_SORT_OPTIONS,
+  dedupeTopics, collectKeywords, type TopicSortKey }
   from './topicList';
 
 // T-953：操作状态持久化（UX 连续性——进入页面恢复上次选择，不重新选）
 // T-991：追加 categoryFilter（分类筛选）与 hideChat（闲聊默认过滤开关，拍板③）
 // T-1001：追加 query/sortKey（列表搜索与排序——话题多时快速定位）
+// T-1001 追修：追加 tags（标签筛选，多选 AND）
 const WORKSPACE_STORE_KEY = 'sg-feishu-workspace';
 function loadWorkspacePersisted(): {
   sha8?: string; daySel?: string; categoryFilter?: string; hideChat?: boolean;
-  query?: string; sortKey?: TopicSortKey;
+  query?: string; sortKey?: TopicSortKey; tags?: string[];
 } {
   try {
     return JSON.parse(localStorage.getItem(WORKSPACE_STORE_KEY) || '{}');
@@ -69,6 +71,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [query, setQuery] = useState(() => loadWorkspacePersisted().query || '');
   const [sortKey, setSortKey] = useState<TopicSortKey>(
     () => loadWorkspacePersisted().sortKey || 'time-desc');
+  // T-1001 追修：标签筛选（多选 AND；恢复值非数组时诚实回退空集）
+  const [tags, setTags] = useState<string[]>(() => {
+    const t = loadWorkspacePersisted().tags;
+    return Array.isArray(t) ? t.filter(x => typeof x === 'string' && x) : [];
+  });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -152,13 +159,13 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const [modelSetup, setModelSetup] = useState<'text' | 'vision' | null>(null);
 
   // T-953：选择变更即写入（进入页面恢复上次群/日期窗口；T-991 含分类筛选/闲聊开关；
-  // T-1001 含搜索/排序）
+  // T-1001 含搜索/排序；追修含标签筛选）
   useEffect(() => {
     try {
       localStorage.setItem(WORKSPACE_STORE_KEY, JSON.stringify(
-        { sha8, daySel, categoryFilter, hideChat, query, sortKey }));
+        { sha8, daySel, categoryFilter, hideChat, query, sortKey, tags }));
     } catch { /* 隐私模式/配额：跳过不阻断 */ }
-  }, [sha8, daySel, categoryFilter, hideChat, query, sortKey]);
+  }, [sha8, daySel, categoryFilter, hideChat, query, sortKey, tags]);
 
   // T-953：恢复值有效性校验——选项就绪后失效则诚实回退默认（不报错不空白）
   useEffect(() => {
@@ -230,8 +237,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   const { imgUrls, imgFailed, captions } = useChatMedia(messages, sha8, selectedDays);
 
   // 该群窗口内已入库卡片（含状态制全部状态——rejected 灰显留痕）
+  // T-1001 追修：candidates/confirmed 同 id 双份（confirmed 卡两存：私有区
+  // _topics.yaml + 共享区 facts）——先按 id 去重（candidates 副本胜出，与页头
+  // byId 同口径），否则列表 key 撞车撕裂渲染（搜索/排序看似不生效的根因）。
   const dayTopics = useMemo(() => {
-    const all = [...topics.candidates, ...topics.confirmed];
+    const all = dedupeTopics([...topics.confirmed, ...topics.candidates]);
     if (!sha8 || selectedDays.length === 0) return [];
     return all.filter(t => t.chat_sha8 === sha8
       && (selectedDays.some(d => String(t.id).includes(`-${d}-`))
@@ -241,16 +251,24 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   // T-951：状态筛选作用右栏卡片流（drafts 草案不受状态筛选影响——未提交非状态卡）
   // T-991：叠加分类筛选 + 闲聊默认过滤（拍板③；草案同步受闲聊过滤影响）
   // T-1001 F2：改为 filterAndSortTopics 纯函数（追加文本搜索 + 排序）
+  // T-1001 追修：叠加 tags 标签筛选（多选 AND）
   const statusCountNum = (key: string) => key === 'all'
     ? dayTopics.length
     : dayTopics.filter(t => (t.status || 'draft') === key).length;
   const shownTopics = useMemo(
     () => filterAndSortTopics(dayTopics,
-      { status: statusFilter, category: categoryFilter, hideChat, query }, sortKey),
-    [dayTopics, statusFilter, categoryFilter, hideChat, query, sortKey]);
+      { status: statusFilter, category: categoryFilter, hideChat, query, tags }, sortKey),
+    [dayTopics, statusFilter, categoryFilter, hideChat, query, tags, sortKey]);
   const shownDrafts = useMemo(
-    () => filterAndSortTopics(drafts, { hideChat, query }, sortKey),
-    [drafts, hideChat, query, sortKey]);
+    () => filterAndSortTopics(drafts, { hideChat, query, tags }, sortKey),
+    [drafts, hideChat, query, tags, sortKey]);
+  // 标签芯片行：分面计数口径——状态/分类/闲聊/搜索已生效、标签筛选未生效的集合
+  const tagFacets = useMemo(
+    () => collectKeywords(filterTopics(dayTopics,
+      { status: statusFilter, category: categoryFilter, hideChat, query })),
+    [dayTopics, statusFilter, categoryFilter, hideChat, query]);
+  const toggleTag = (kw: string) =>
+    setTags(prev => prev.includes(kw) ? prev.filter(x => x !== kw) : [...prev, kw]);
 
   const activeKey = hoverKey ?? selectedKey;
   const activeCard = useMemo(() => {
@@ -487,14 +505,43 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                 {shownDrafts.length + shownTopics.length} 项
               </span>
             </div>
+            {/* T-1001 追修：标签筛选芯片行（词频降序；点选 toggle，多选 AND；
+                计数为分面口径——其他筛选已生效、标签未生效） */}
+            {tagFacets.length > 0 && (
+              <div className="flex items-center gap-1 mb-2 flex-wrap">
+                <span className="text-[10px] text-gray-600 shrink-0">标签</span>
+                {tagFacets.map(f => {
+                  const on = tags.includes(f.kw);
+                  return (
+                    <button key={f.kw}
+                      className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+                        on ? 'border-info/60 bg-info/20 text-info'
+                           : 'border-border bg-surface-3 text-gray-400 hover:border-gray-500'}`}
+                      title={`${f.n} 张话题卡含此标签（点选筛选，多选为 AND）`}
+                      onClick={() => toggleTag(f.kw)}>
+                      {f.kw} {f.n}
+                    </button>
+                  );
+                })}
+                {tags.length > 0 && (
+                  <button className="text-[10px] text-gray-500 hover:text-red-400 shrink-0"
+                    title="清除全部已选标签"
+                    onClick={() => setTags([])}>
+                    清除
+                  </button>
+                )}
+              </div>
+            )}
             <div className="flex-1 min-h-0 overflow-auto pr-1 space-y-1.5">
               {shownDrafts.length === 0 && shownTopics.length === 0 ? (
                 <div className="text-xs text-gray-500">
                   {query
                     ? '无匹配话题（调整搜索词或筛选条件）'
-                    : statusFilter === 'all'
-                      ? '窗口内暂无话题卡——「重新 AI 分类」生成分段，或等待同步后自动聚类'
-                      : `该状态暂无卡片（全部 ${dayTopics.length} 张）`}
+                    : tags.length > 0
+                      ? '无同时命中所选标签的话题（减少标签或清除筛选）'
+                      : statusFilter === 'all'
+                        ? '窗口内暂无话题卡——「重新 AI 分类」生成分段，或等待同步后自动聚类'
+                        : `该状态暂无卡片（全部 ${dayTopics.length} 张）`}
                 </div>
               ) : (
                 <>

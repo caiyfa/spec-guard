@@ -20,6 +20,7 @@ import {
 } from '../api';
 import FeishuWatchSettings from '../components/FeishuWatchSettings';
 import TopicWorkspace from '../components/TopicWorkspace';
+import { dedupeTopics } from '../components/topicList';
 
 type Tab = 'materials' | 'topics';
 
@@ -95,12 +96,12 @@ export default function FeishuPool() {
   }, [focusMode]);
 
   // T-951：全部话题卡计数（页签 badge；卡片流本体在工作台右栏）
-  const allTopicCards = useMemo(() => {
-    const byId = new Map<string, FeishuTopic>();
-    topics.confirmed.forEach(t => byId.set(t.id, { ...t, status: 'confirmed' }));
-    topics.candidates.forEach(t => byId.set(t.id, t));
-    return Array.from(byId.values());
-  }, [topics]);
+  // T-1001 追修：byId 内联去重收敛为 dedupeTopics 同语义（同 id 后值覆盖先值、
+  // 位置保持首次——confirmed 先入、candidates 覆盖胜出，行为零漂移）
+  const allTopicCards = useMemo(() => dedupeTopics([
+    ...topics.confirmed.map(t => ({ ...t, status: 'confirmed' as const })),
+    ...topics.candidates,
+  ]), [topics]);
 
   const loadWatcher = useCallback(() => {
     feishuPoolApi.watcherStatus().then(setWatcher).catch(e => setError(String(e?.message || e)));

@@ -615,6 +615,12 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/api/feishuPool.ts | sess-material-pool | 2026-08-23 | b083f0cfdc37 | 30f569d8f430 | 已完成 | T-1001：editTopicCard 改参数对象+messageIds/window/days |
 | test_specstd/test_feishu_topic_cluster.py | sess-material-pool | 2026-08-23 | ad57c201c8f1 | 5fba340a353b | 已完成 | T-1001 F4：重关联用例（成功/未变不推rev/空集拒绝/坏window拒绝） |
 | test_specstd/test_feishu_t948_router.py | sess-material-pool | 2026-08-23 | 0af0ba15ed19 | d739b6c5f7ea | 已完成 | T-1001 F4：路由层重关联透传+空集 400 两例 |
+| workbench/frontend/src/components/topicList.ts | sess-acceptance | 2026-08-23 | 67b5b1173113 | 9895d8028225 | 已完成 | T-1001 追修：dedupeTopics 同 id 去重 + collectKeywords 词频 + filterTopics tags 参（AND） |
+| workbench/frontend/src/components/topicList.test.ts | sess-acceptance | 2026-08-23 | 0142e8ae326d | 62704049dc32 | 已完成 | T-1001 追修：去重/词频/标签单测 +9 例（83→92） |
+| workbench/frontend/src/components/TopicWorkspace.tsx | sess-acceptance | 2026-08-23 | 6d1d4f1e3be4 | df44ce328be4 | 已完成 | T-1001 追修：dayTopics 按 id 去重（根因修复）+ 标签芯片行 + tags 持久化 |
+| workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | 28f6956c7c0c | 55545bbfd445 | 已完成 | T-1001 追修：allTopicCards 内联 byId 收敛为 dedupeTopics（零漂移） |
+| docs/经验包/2026-08-23-话题列表搜索排序看似未生效-同id双份key撞车.md | sess-acceptance | 2026-08-23 | NEW | 0e6d1dfe4c41 | 已完成 | T-1001 追修排障闭环经验包 |
+| docs/经验包/README.md | sess-acceptance | 2026-08-23 | f1a311807972 | abdc33ba36d6 | 已完成 | T-1001 追修：经验包索引行 |
 | | | | | | | |
 
 ## 7. 冲突与异常处理
