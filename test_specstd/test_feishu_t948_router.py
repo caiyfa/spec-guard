@@ -239,3 +239,73 @@ def test_update_card_empty_message_ids_400(tmp_path):
         rp.update_topic_card(body, user=_USER, workspace="tdm")
     assert getattr(ei.value, "status_code", None) == 400
     assert "message_ids" in str(ei.value.detail)
+
+
+# ══════════════════════════════════════════════════════════
+# T-1002：勾选原文生成话题路由（/topics/compose）
+# ══════════════════════════════════════════════════════════
+
+def _mk_chat_jsonl(emp: Path):
+    """造 JSONL 事实源（compose 反查 message_id 所属日用）。"""
+    from specflow.feishu_pool import chat_store as cs
+    day_file = emp / "feishu_pool" / "chats" / "3f9a2c" / "20260807.jsonl"
+    rows = []
+    for i, (mid, hhmm, sender) in enumerate(
+            [("om_a", "14:00", "张三"), ("om_b", "14:01", "李四")], start=1):
+        rows.append({"message_id": mid, "position": str(i),
+                     "sender_id": f"ou_{i}", "sender_name": sender,
+                     "ts": f"2026-08-07T{hhmm}:00", "msg_type": "text",
+                     "content": f"内容{i}", "image_key": "", "reply_to": "",
+                     "mentions": [], "origin": "pull"})
+    cs.merge_chat_jsonl(day_file, rows)
+    cs.rebuild_views(day_file)
+
+
+def test_compose_manual_fields_no_llm_needed(tmp_path):
+    """title/summary/keywords 全填 → 未配置 text 模型也可生成（不调 LLM）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_chat_jsonl(emp)
+    body = rp.ComposeRequest(chat_sha8="3f9a2c", days=["20260807"],
+                             message_ids=["om_a", "om_b"],
+                             title="手动标题", summary="手动摘要",
+                             keywords=["手动词"], extra_context="")
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp):
+        out = rp.compose_topic(body, user=_USER, workspace="tdm")
+    assert out["title"] == "手动标题"
+    assert out["message_ids"] == ["om_a", "om_b"]
+    assert out["message_count"] == 2
+
+
+def test_compose_empty_ids_400(tmp_path):
+    """空 message_ids → 400（至少勾选一条）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    body = rp.ComposeRequest(chat_sha8="3f9a2c", days=["20260807"],
+                             message_ids=[])
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp),          pytest.raises(Exception) as ei:
+        rp.compose_topic(body, user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 400
+
+
+def test_compose_missing_id_404(tmp_path):
+    """message_id 不在快照 → 404（防静默丢关联；全填字段免 LLM 依赖）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_chat_jsonl(emp)
+    body = rp.ComposeRequest(chat_sha8="3f9a2c", days=["20260807"],
+                             message_ids=["om_a", "om_ghost"],
+                             title="t", summary="s", keywords=["k"])
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp),          pytest.raises(Exception) as ei:
+        rp.compose_topic(body, user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 404
+
+
+def test_compose_llm_needed_but_unconfigured_400(tmp_path):
+    """留空字段需 LLM 补全但 text 模型未配置 → 400（前端弹层就地配置）。
+    get_model 打桩隔离——真实库有无配置/密钥可用不影响断言。"""
+    emp = tmp_path / ".specflow" / "u1"
+    _mk_chat_jsonl(emp)
+    body = rp.ComposeRequest(chat_sha8="3f9a2c", days=["20260807"],
+                             message_ids=["om_a"], title="", summary="")
+    with patch.object(rp, "_sf_base", return_value=emp), _patch_bases(emp),          patch("services.model_config.get_model", return_value=None),          pytest.raises(Exception) as ei:
+        rp.compose_topic(body, user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 400
+    assert "未配置 text 模型" in str(ei.value.detail)

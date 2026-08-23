@@ -672,6 +672,104 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
     return segments
 
 
+# T-1002：勾选原文生成话题的 prompt（行格式与 _DRAFT_PROMPT 一致，
+# 但范围是用户已勾选的消息子集，不再要求全量聚类；附加上下文来自用户补充）
+_COMPOSE_PROMPT = """你是话题归纳助手。用户从群聊记录中勾选了以下消息，认为它们属于同一个话题。
+请根据这些消息归纳一个话题卡。要求：
+1. 给出：title（≤20字）、summary（≤80字结论摘要）、keywords（2~5个关键词）、
+   category（五分类之一）、priority_hint（high|normal|low 重要程度直觉）
+2. {category_rubric}
+3. 严格输出 JSON：{{"topics": [...]}}（只输出一个话题），不要输出任何其他内容
+{extra_block}
+勾选的消息（{day}）：
+{content}"""
+
+
+def compose_topic_from_messages(emp_base: Path, llm, chat_sha8: str,
+                                message_ids: list[str],
+                                days: list[str],
+                                title: str = "", summary: str = "",
+                                keywords: list[str] | None = None,
+                                extra_context: str = "",
+                                material_base: Path | None = None,
+                                chat_kind: str = "") -> dict:
+    """T-1002：按勾选原文消息生成单个话题草案（人工指定范围 + 可补充上下文）。
+
+    message_ids 全部定位到其所属日（JSONL 事实源），任一 id 找不到 → KeyError
+    （路由 404，防静默丢关联）；找不到的 md 回退快照（无 JSONL 行）由调用方
+    前端拦截（伪 id 不入）。title/summary/keywords 为空字段交 LLM 补全
+    （extra_context 作为附加上下文拼入 prompt——用户纠正归类/补充背景）。
+    草案落 _topic_drafts.yaml（与 AI 分段同键位），不动话题库。
+    """
+    from specflow.feishu_pool import chat_store
+    if not message_ids or not all(str(m).strip() for m in message_ids):
+        raise ValueError("message_ids 需至少一条非空消息 id（话题不能零关联）")
+    mroot = _mroot(emp_base, material_base)
+    chats_root = pool_dirs(mroot)["chats"]
+    # 逐日收集行：id → 行（message_id 所属日由事实源反查，不信任调用方断言）
+    wanted = {str(m) for m in message_ids}
+    found: dict[str, dict] = {}
+    for day in sorted(set(days or [])):
+        jsonl = chats_root / chat_sha8 / f"{day}.jsonl"
+        if not jsonl.is_file():
+            continue
+        for r in chat_store.load_chat_jsonl(jsonl):
+            mid = str(r.get("message_id") or "")
+            if mid in wanted:
+                found[mid] = dict(r, _day=day)
+    missing = wanted - set(found)
+    if missing:
+        raise KeyError(f"消息不在快照中（可能已撤回或需更新本群）: {sorted(missing)}")
+    rows = sorted(found.values(), key=chat_store._sort_key)
+    used_days = sorted({str(r["_day"]) for r in rows})
+    # prompt 行（沿用多日窗口格式——带日期前缀跨日不歧义；非文本行如实标注类型）
+    lines: list[str] = []
+    for r in rows:
+        ts = str(r.get("ts") or "")
+        sender = str(r.get("sender_name") or r.get("sender_id") or "?")
+        mtype = str(r.get("msg_type") or "text")
+        body = (str(r.get("content") or "") if mtype == "text"
+                else f"[{mtype}消息]")
+        lines.append(f"[{ts[5:10] or '??-??'} {ts[11:16] or '??:??'}] {sender}: {body}")
+    extra_block = (f"\n用户补充说明（作为归纳的重要参考）：\n{extra_context.strip()}\n"
+                   if extra_context.strip() else "")
+    rt: dict = {}
+    if not (title and summary and keywords):
+        resp = llm.chat([{"role": "user", "content": _COMPOSE_PROMPT.format(
+            day="~".join(used_days), content="\n".join(lines),
+            category_rubric=_CATEGORY_RUBRIC, extra_block=extra_block)}])
+        raw = _parse_llm_json(_llm_content(resp))
+        rt = raw[0] if raw else {}
+    category = _norm_category(rt.get("category"))
+    participants = len({str(r.get("sender_id") or r.get("sender_name") or "")
+                       for r in rows} - {""})
+    kws = [str(k) for k in (keywords if keywords else (rt.get("keywords") or []))
+           if str(k)]
+    seg = {
+        "title": str(title or rt.get("title", "")),
+        "summary": str(summary or rt.get("summary", "")),
+        "keywords": kws,
+        "category": category,
+        "priority": derive_priority(
+            category, len(rows), participants, chat_kind=chat_kind,
+            llm_hint=str(rt.get("priority_hint") or "")),
+        "chat_sha8": chat_sha8,
+        "window": [str(rows[0].get("ts") or ""), str(rows[-1].get("ts") or "")],
+        "message_count": len(rows),
+        "participants_count": participants,
+        "source": f"chats/{chat_sha8}/{used_days[0]}.md",
+        "agent_origin": _make_agent_origin(rt, llm),
+    }
+    if len(used_days) > 1:
+        seg["days"] = used_days
+    seg["message_ids"] = [str(r.get("message_id")) for r in rows]
+    drafts = _load_drafts(emp_base)
+    key = f"{chat_sha8}/{'~'.join(used_days)}"
+    drafts.setdefault(key, []).append(seg)
+    _save_drafts(emp_base, drafts)
+    return seg
+
+
 def _mroot(emp_base: Path, material_base: Path | None) -> Path:
     """T-949：材料/话题库所在根——material_base 优先（共享材料区），
     None 回退私有区（向后兼容单用户模式）。"""
