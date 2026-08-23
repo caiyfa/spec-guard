@@ -37,6 +37,11 @@ const SCOPE_LABEL: Record<string, string> = {
   group_sender: '群消息', minutes: '妙记', docs: '文档',
 };
 
+// T-1007：材料类型 tab 维度与分页大小（组件外常量——组件内声明类型会
+// 被转译为 const 触发 TS2304）
+type MatType = 'all' | 'chat' | 'feishu_doc' | 'feishu_minutes';
+const MAT_PAGE_SIZE = 10;
+
 function fmtTime(ts: number) {
   if (!ts) return '—';
   return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false });
@@ -117,6 +122,19 @@ export default function FeishuPool() {
   const [notice, setNotice] = useState('');
   const [watchCfg, setWatchCfg] = useState<FeishuWatch | null>(null);
   const [ownerFilter, setOwnerFilter] = useState('');
+  // T-1007：材料类型 tab + 分页（群聊日快照量大时不再顶掉文档/妙记；
+  // tab 选择持久化——体验基线①；筛选/换 tab 页码回 1）
+  const [matType, setMatType] = useState<MatType>(() => {
+    try {
+      const v = localStorage.getItem('sg-feishu-mattype') || '';
+      return (['all', 'chat', 'feishu_doc', 'feishu_minutes'] as MatType[])
+        .includes(v as MatType) ? (v as MatType) : 'all';
+    } catch { return 'all'; }
+  });
+  const [matPage, setMatPage] = useState(1);
+  useEffect(() => {
+    try { localStorage.setItem('sg-feishu-mattype', matType); } catch { /* 跳过 */ }
+  }, [matType]);
   const [materials, setMaterials] = useState<FeishuPoolMaterial[]>([]);
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
   // T-993：确定性预筛的跨群候选（list_pool_topics 附带，透传给工作台推荐位）
@@ -198,6 +216,17 @@ export default function FeishuPool() {
   const filteredMaterials = ownerFilter
     ? materials.filter(m => m.type !== 'chat' && m.owner_open_id === ownerFilter)
     : materials;
+  // T-1007：类型 tab 过滤（ownerFilter 作用于全集后，tab 再切——计数为口径内）
+  const typeMaterials = matType === 'all'
+    ? filteredMaterials : filteredMaterials.filter(m => m.type === matType);
+  const matTypeCount = (t: MatType) => t === 'all'
+    ? filteredMaterials.length
+    : filteredMaterials.filter(m => m.type === t).length;
+  const matPageCount = Math.max(1, Math.ceil(typeMaterials.length / MAT_PAGE_SIZE));
+  const matPageSafe = Math.min(matPage, matPageCount);
+  const pageMaterials = typeMaterials.slice(
+    (matPageSafe - 1) * MAT_PAGE_SIZE, matPageSafe * MAT_PAGE_SIZE);
+  useEffect(() => { setMatPage(1); }, [matType, ownerFilter]);
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
   const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
@@ -244,9 +273,24 @@ export default function FeishuPool() {
         </div>
       )}
 
-      {/* 页签 1：话题材料清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
+      {/* 页签 1：话题材料清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照；
+          T-1007：类型 tab + 分页——群聊日快照不再顶掉文档/妙记） */}
       {tab === 'materials' && (
         <div className={card}>
+          <div className="flex items-center gap-1.5 mb-2 border-b border-border pb-2 flex-wrap">
+            {([['all', '全部'], ['chat', '群聊'], ['feishu_doc', '文档'],
+               ['feishu_minutes', '妙记']] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setMatType(id)}
+                className={`px-2.5 py-1 rounded text-[11px] ${matType === id
+                  ? 'bg-info/15 text-info font-medium'
+                  : 'text-gray-400 hover:text-gray-200'}`}>
+                {label}（{matTypeCount(id)}）
+              </button>
+            ))}
+            <span className="ml-auto text-[10px] text-gray-600">
+              群聊按「群 × 日」快照（同一消息只存一份，与话题卡引用不重复——话题只存 message_id 指针）
+            </span>
+          </div>
           {/* T-1004：监听用户筛选芯片行（原监听范围卡的「只看产出」入口保留在
               其作用对象旁——材料清单；范围展示本身已收进同步设置弹层） */}
           {watchUsers.length > 0 && (
@@ -274,15 +318,19 @@ export default function FeishuPool() {
           )}
           {materials.length === 0 ? (
             <div className="text-xs text-gray-500">暂无话题材料——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
-          ) : filteredMaterials.length === 0 ? (
-            <div className="text-xs text-gray-500">该用户暂无产出材料（重新同步后新落盘材料才带归属）</div>
+          ) : typeMaterials.length === 0 ? (
+            <div className="text-xs text-gray-500">
+              {ownerFilter
+                ? '该用户暂无产出材料（重新同步后新落盘材料才带归属）'
+                : `该类型暂无材料（全部 ${filteredMaterials.length} 条）`}
+            </div>
           ) : (
             <table className="w-full">
               <thead>
                 <tr><th className={th}>类型</th><th className={th}>标题 / 摘要</th><th className={th}>产出人</th><th className={th}>大小</th><th className={th}>更新时间</th><th className={th}></th></tr>
               </thead>
               <tbody>
-                {filteredMaterials.map(m => (
+                {pageMaterials.map(m => (
                   <tr key={m.id} className="cursor-pointer hover:bg-surface-3/60" onClick={() => openDetail(m)}>
                     <td className={td}>
                       <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[m.type]?.cls || ''}`}>
@@ -318,6 +366,20 @@ export default function FeishuPool() {
                 ))}
               </tbody>
             </table>
+          )}
+          {/* T-1007：分页条（>1 页才出现；页码随 tab/筛选变化自动收敛） */}
+          {typeMaterials.length > MAT_PAGE_SIZE && (
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
+              <span>共 {typeMaterials.length} 条 · 第 {matPageSafe}/{matPageCount} 页</span>
+              <span className="ml-auto flex items-center gap-1">
+                <button className="px-2 py-0.5 rounded border border-border hover:border-gray-500 disabled:opacity-40"
+                  disabled={matPageSafe <= 1}
+                  onClick={() => setMatPage(matPageSafe - 1)}>‹ 上一页</button>
+                <button className="px-2 py-0.5 rounded border border-border hover:border-gray-500 disabled:opacity-40"
+                  disabled={matPageSafe >= matPageCount}
+                  onClick={() => setMatPage(matPageSafe + 1)}>下一页 ›</button>
+              </span>
+            </div>
           )}
         </div>
       )}
