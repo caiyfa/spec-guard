@@ -640,6 +640,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/backend/services/rbac_store.py | sess-acceptance | 2026-08-23 | c789a19ffb5e | 619cf42c8148 | 已完成 | T-1003：菜单种子 label 改「飞书话题」（_migrate_menus_t996 启动同步存量库，已实证） |
 | workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | a88b4443d91f | ecb0c3942871 | 已完成 | T-1004：主页移除监听状态/范围两卡，材料页签承接用户筛选芯片行，watcher 状态清理 |
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-acceptance | 2026-08-23 | 4fe721777def | 01909d515269 | 已完成 | T-1004：弹层顶部加监听运行状态条+当前监听范围只读摘要（开弹层拉 watcherStatus） |
+| workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | ecb0c3942871 | 7a135c71a67c | 已完成 | T-1005：页签顺序对调（话题在前）+默认落地页改话题 |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

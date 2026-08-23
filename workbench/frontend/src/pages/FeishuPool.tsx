@@ -64,12 +64,13 @@ function inlineImages(content: string, imgUrls: Record<string, string>) {
 
 
 export default function FeishuPool() {
-  // T-953：页签持久化（恢复上次所在页；非法值/隐私模式回退话题材料页）
+  // T-953：页签持久化（恢复上次所在页；T-1005：默认/非法值回退话题页——
+  // 话题是主工作面，材料池为话题服务）
   const [tab, setTab] = useState<Tab>(() => {
     try {
       const saved = localStorage.getItem('sg-feishu-tab');
-      return saved === 'topics' ? 'topics' : 'materials';
-    } catch { return 'materials'; }
+      return saved === 'materials' ? 'materials' : 'topics';
+    } catch { return 'topics'; }
   });
   useEffect(() => {
     try { localStorage.setItem('sg-feishu-tab', tab); } catch { /* 跳过 */ }
@@ -188,8 +189,8 @@ export default function FeishuPool() {
 
       {!focusMode && (
         <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
-          {tabBtn('materials', `📦 话题材料（${materials.length}）`)}
           {tabBtn('topics', `💬 话题（${allTopicCards.length}）`)}
+          {tabBtn('materials', `📦 话题材料（${materials.length}）`)}
         </div>
       )}
 
