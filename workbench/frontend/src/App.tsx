@@ -353,7 +353,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
 
               <Route path="/lifecycle" element={<Lifecycle />} />  {/* K-xxx：测试生命周期监控 */}
 
-              <Route path="/feishu-pool" element={<FeishuPool />} />  {/* T-929：飞书材料池总览 */}
+              <Route path="/feishu-pool" element={<FeishuPool />} />  {/* T-929：飞书话题总览（T-1003 改名） */}
 
               <Route path="/plans" element={<Scenarios />} />
 

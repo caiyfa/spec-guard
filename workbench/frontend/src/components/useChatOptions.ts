@@ -1,5 +1,5 @@
 // useChatOptions.ts — 介入工作区群/日期选项（T-948 从 FeishuPool 提取复用）。
-// days 来自材料池已有 chat 快照文件；watch 授权群补充（无快照时 days 为空）。
+// days 来自话题材料已有 chat 快照文件；watch 授权群补充（无快照时 days 为空）。
 
 import { useEffect, useState } from 'react';
 import {

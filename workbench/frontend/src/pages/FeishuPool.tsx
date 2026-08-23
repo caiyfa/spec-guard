@@ -1,7 +1,7 @@
-// 飞书材料池总览页（飞书知识图谱三期 T-929；T-939 体验重构；T-950 话题工作台重构；
+// 飞书话题总览页（原「飞书材料池」，T-1003 总控人拍板改名；飞书知识图谱三期 T-929；T-939 体验重构；T-950 话题工作台重构；
 // T-952 体验收敛）：
 // 状态卡条（watcher 运行/事件数/最近事件）+ 两页签：
-// ① 材料池清单（点击行看原文，图片内嵌直出；T-949 perm 徽标）
+// ① 话题材料清单（点击行看原文，图片内嵌直出；T-949 perm 徽标）
 // ② 话题工作台（人工介入双栏：时间轴×泳道色卡；T-952 富渲染：
 //    post 文本+内嵌图 / file 文件卡 / image 图+转述 caption——
 //    图片描述维护融入时间轴展示，独立 tab 退役：多模态转述是技术侧
@@ -64,7 +64,7 @@ function inlineImages(content: string, imgUrls: Record<string, string>) {
 
 
 export default function FeishuPool() {
-  // T-953：页签持久化（恢复上次所在页；非法值/隐私模式回退材料池）
+  // T-953：页签持久化（恢复上次所在页；非法值/隐私模式回退话题材料页）
   const [tab, setTab] = useState<Tab>(() => {
     try {
       const saved = localStorage.getItem('sg-feishu-tab');
@@ -167,7 +167,7 @@ export default function FeishuPool() {
       {!focusMode && (
         <>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-bold">🪺 飞书材料池</h1>
+        <h1 className="text-base font-bold">🪺 飞书话题</h1>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-gray-500">为 agent 对话提供背景信息源 · 复核建边在「材料管理」页</span>
           <button className={btn} onClick={syncNow} disabled={busy === 'sync'}>
@@ -250,12 +250,12 @@ export default function FeishuPool() {
 
       {!focusMode && (
         <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
-          {tabBtn('materials', `📦 材料池（${materials.length}）`)}
+          {tabBtn('materials', `📦 话题材料（${materials.length}）`)}
           {tabBtn('topics', `💬 话题（${allTopicCards.length}）`)}
         </div>
       )}
 
-      {/* 页签 1：材料池清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
+      {/* 页签 1：话题材料清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
       {tab === 'materials' && (
         <div className={card}>
           {ownerFilter && (
@@ -266,7 +266,7 @@ export default function FeishuPool() {
             </div>
           )}
           {materials.length === 0 ? (
-            <div className="text-xs text-gray-500">材料池为空——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
+            <div className="text-xs text-gray-500">暂无话题材料——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
           ) : filteredMaterials.length === 0 ? (
             <div className="text-xs text-gray-500">该用户暂无产出材料（重新同步后新落盘材料才带归属）</div>
           ) : (

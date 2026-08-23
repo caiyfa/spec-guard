@@ -631,6 +631,13 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/backend/routers/feishu_pool.py | sess-acceptance | 2026-08-23 | ba119d550b0c | 1c15bb4f7553 | 已完成 | T-1002：/topics/compose 端点（空关联 400/缺失 404/模型未配 400） |
 | test_specstd/test_feishu_topic_cluster.py | sess-acceptance | 2026-08-23 | 5fba340a353b | e051c5da6aa7 | 已完成 | T-1002：compose 服务测试 5 例 |
 | test_specstd/test_feishu_t948_router.py | sess-acceptance | 2026-08-23 | d739b6c5f7ea | c7822d2e20eb | 已完成 | T-1002：compose 路由测试 4 例（get_model 打桩隔离） |
+| workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | 55545bbfd445 | a88b4443d91f | 已完成 | T-1003：页面标题/页签/空态文案「飞书材料池→飞书话题」 |
+| workbench/frontend/src/App.tsx | sess-acceptance | 2026-08-23 | 434bafab2ac5 | 4476d4670c31 | 已完成 | T-1003：路由注释同步 |
+| workbench/frontend/src/api/feishuPool.ts | sess-acceptance | 2026-08-23 | a1dd903abaa3 | 9c172f82b76e | 已完成 | T-1003：API 区块注释同步 |
+| workbench/frontend/src/components/useChatOptions.ts | sess-acceptance | 2026-08-23 | 4de23f8b2c46 | d20c6080aae6 | 已完成 | T-1003：注释同步 |
+| workbench/backend/routers/feishu_pool.py | sess-acceptance | 2026-08-23 | 1c15bb4f7553 | f78ae1fa6204 | 已完成 | T-1003：模块 docstring 同步 |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-acceptance | 2026-08-23 | e5d6e83591a4 | ffee0894c24e | 已完成 | T-1003：模块 docstring 同步 |
+| workbench/backend/services/rbac_store.py | sess-acceptance | 2026-08-23 | c789a19ffb5e | 619cf42c8148 | 已完成 | T-1003：菜单种子 label 改「飞书话题」（_migrate_menus_t996 启动同步存量库，已实证） |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

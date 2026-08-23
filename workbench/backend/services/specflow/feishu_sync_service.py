@@ -1,4 +1,4 @@
-"""feishu_sync_service.py — 飞书材料池拉取入库编排（飞书知识图谱一期 T4）。
+"""feishu_sync_service.py — 飞书话题材料拉取入库编排（原飞书材料池，T-1003 改名；飞书知识图谱一期 T4）。
 
 三通道只读拉取（docs +fetch / minutes +search+detail / im +chat-messages-list），
 产物落私有区材料池（.specflow/{emp}/feishu_pool/）。

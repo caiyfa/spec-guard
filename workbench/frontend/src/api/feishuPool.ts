@@ -3,7 +3,7 @@ import { request } from './core';
 import { encodeWorkspaceHeader, session } from './core';
 import type { LarkLoginResult, LarkStatus } from './lark';
 
-// ── 飞书材料池（飞书知识图谱一期 T-912/T-915）──
+// ── 飞书话题（原飞书材料池，T-1003 改名；飞书知识图谱一期 T-912/T-915）──
 export interface FeishuWatchUser {
   open_id: string;
   name?: string;
@@ -121,7 +121,7 @@ export const feishuPoolApi = {
   transcribe: () =>
     request<{ status: string; reason?: string; done: number; failed: number; total: number }>(
       '/feishu-pool/transcribe', { method: 'POST' }),
-  // ── T-929 材料池总览页 ──
+  // ── T-929 话题总览页 ──
   poolMaterials: () =>
     request<{ items: FeishuPoolMaterial[] }>('/feishu-pool/materials'),
   poolTopics: () =>

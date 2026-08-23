@@ -1,4 +1,4 @@
-"""feishu_pool.py — 飞书材料池 REST（飞书知识图谱一期 T4/T5）。
+"""feishu_pool.py — 飞书话题 REST（原飞书材料池，T-1003 改名；飞书知识图谱一期 T4/T5）。
 
 端点：
 - GET/PUT /watch          watch 配置（feishu_watch.yaml = 显式授权载体）

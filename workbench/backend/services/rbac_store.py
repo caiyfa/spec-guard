@@ -44,7 +44,7 @@ SEED_MENUS: list[tuple] = [
     ("group-scenario", "场景", "🧩", "", "", 2, 1, 0),
     ("menu-plans", "场景管理", "", "/plans", "group-scenario", 0, 1, 0),
     ("menu-dag", "DAG 编排", "", "/dag", "group-scenario", 1, 1, 0),
-    ("menu-feishu-pool", "飞书材料池", "", "/feishu-pool", "group-scenario", 2, 1, 0),
+    ("menu-feishu-pool", "飞书话题", "", "/feishu-pool", "group-scenario", 2, 1, 0),   # T-1003：原「飞书材料池」改名（种子 label 每次启动同步存量 menus 表，见 _migrate_menus_t996 UPDATE 分支）
     ("menu-lifecycle", "覆盖与生命周期", "", "/lifecycle", "group-scenario", 3, 1, 0),
     ("group-execution", "执行", "▶️", "", "", 3, 1, 0),
     ("menu-run", "测试执行", "", "/run", "group-execution", 0, 1, 0),
