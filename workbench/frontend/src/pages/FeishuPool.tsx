@@ -1,6 +1,6 @@
 // 飞书话题总览页（原「飞书材料池」，T-1003 总控人拍板改名；飞书知识图谱三期 T-929；T-939 体验重构；T-950 话题工作台重构；
 // T-952 体验收敛）：
-// 状态卡条（watcher 运行/事件数/最近事件）+ 两页签：
+// 计数条（材料/话题数）+ 两页签（T-1004：监听运行状态/监听范围收进同步设置弹层）：
 // ① 话题材料清单（点击行看原文，图片内嵌直出；T-949 perm 徽标）
 // ② 话题工作台（人工介入双栏：时间轴×泳道色卡；T-952 富渲染：
 //    post 文本+内嵌图 / file 文件卡 / image 图+转述 caption——
@@ -76,7 +76,6 @@ export default function FeishuPool() {
   }, [tab]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [watcher, setWatcher] = useState<any>(null);
   const [watchCfg, setWatchCfg] = useState<FeishuWatch | null>(null);
   const [ownerFilter, setOwnerFilter] = useState('');
   const [materials, setMaterials] = useState<FeishuPoolMaterial[]>([]);
@@ -104,8 +103,7 @@ export default function FeishuPool() {
   ]), [topics]);
 
   const loadWatcher = useCallback(() => {
-    feishuPoolApi.watcherStatus().then(setWatcher).catch(e => setError(String(e?.message || e)));
-    feishuPoolApi.getWatch().then(setWatchCfg)   // T-940：监听范围卡数据源
+    feishuPoolApi.getWatch().then(setWatchCfg)   // 监听用户筛选芯片数据源
       .catch(e => setError(String(e?.message || e)));
   }, []);
   const loadMaterials = useCallback(() => {
@@ -177,70 +175,10 @@ export default function FeishuPool() {
         </div>
       </div>
 
-      {/* 状态卡条 */}
+      {/* 计数条（T-1004：监听运行中/监听范围两卡收进「⚙ 同步设置」弹层——
+          主页只留材料/话题计数） */}
       <div className={`${card} flex items-center gap-4 text-xs`}>
-        {watcher?.running ? (
-          <>
-            <span className="text-green-400">● 监听运行中（{watcher.count} 用户）</span>
-            {watcher.watchers.map((w: any) => (
-              <span key={w.emp} className="text-gray-400">
-                {w.emp} · 事件 {w.events_received} · 最近 {w.last_event_at || '—'}
-              </span>
-            ))}
-          </>
-        ) : (
-          <span className="text-gray-500">○ 监听未启动（配置同步范围后自动拉起）</span>
-        )}
         <span className="ml-auto text-gray-500">材料 {materials.length} · 候选话题 {topics.candidates.length} · 已确认话题 {topics.confirmed.length}</span>
-      </div>
-
-      {/* 监听范围卡（T-940）：监听用户/授权群/文档一目了然 + 就近维护入口 */}
-      <div className={card + ' text-xs'}>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-gray-500">监听范围</span>
-          <span className="text-gray-600">（同步范围即授权范围）</span>
-          <span className="ml-auto text-gray-500">在页面右上「⚙ 同步设置」维护</span>
-        </div>
-        {watchCfg ? (
-          <div className="space-y-1.5">
-            <div className="flex items-start gap-2 flex-wrap">
-              <span className="text-gray-500 shrink-0 mt-0.5">监听用户</span>
-              {watchUsers.length === 0
-                ? <span className="text-gray-600">无（点右上「⚙ 同步设置」添加）</span>
-                : watchUsers.map(u => (
-                  <button key={u.open_id}
-                    onClick={() => setOwnerFilter(ownerFilter === u.open_id ? '' : u.open_id)}
-                    className={'px-2 py-0.5 rounded border text-[11px] '
-                      + (ownerFilter === u.open_id
-                        ? 'bg-info/20 text-info border-info/40'
-                        : 'text-gray-300 border-border hover:border-gray-500')}>
-                    {u.name || u.open_id}
-                    <span className="ml-1 text-gray-500">
-                      {u.scopes.map(s => SCOPE_LABEL[s] || s).join('/') || '无监听项'}
-                    </span>
-                  </button>
-                ))}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-gray-500 shrink-0">授权群聊</span>
-              {(watchCfg.chats || []).length === 0
-                ? <span className="text-gray-600">无</span>
-                : (watchCfg.chats || []).map(c => (
-                  <span key={c.chat_id} className="px-2 py-0.5 rounded border border-border text-[11px] text-gray-300">
-                    {c.kind && <span className="text-info mr-1">{c.kind}</span>}
-                    {c.name || c.chat_id}
-                  </span>
-                ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 shrink-0">监听文档</span>
-              <span className="text-gray-300">{(watchCfg.docs || []).length} 篇</span>
-              <span className="text-gray-600">（粘贴链接/按用户检索添加）</span>
-            </div>
-          </div>
-        ) : (
-          <div className="text-gray-500">监听配置加载中…</div>
-        )}
       </div>
         </>
       )}
@@ -258,6 +196,24 @@ export default function FeishuPool() {
       {/* 页签 1：话题材料清单（监听用户筛选 + 飞书原文直链 + 行点击本地快照） */}
       {tab === 'materials' && (
         <div className={card}>
+          {/* T-1004：监听用户筛选芯片行（原监听范围卡的「只看产出」入口保留在
+              其作用对象旁——材料清单；范围展示本身已收进同步设置弹层） */}
+          {watchUsers.length > 0 && (
+            <div className="mb-2 flex items-center gap-2 flex-wrap text-[11px]">
+              <span className="text-gray-500 shrink-0">按监听用户筛选</span>
+              {watchUsers.map(u => (
+                <button key={u.open_id}
+                  onClick={() => setOwnerFilter(ownerFilter === u.open_id ? '' : u.open_id)}
+                  title={`${u.scopes.map(x => SCOPE_LABEL[x] || x).join('/') || '无监听项'}（点选只看其文档+妙记产出）`}
+                  className={'px-2 py-0.5 rounded border '
+                    + (ownerFilter === u.open_id
+                      ? 'bg-info/20 text-info border-info/40'
+                      : 'text-gray-300 border-border hover:border-gray-500')}>
+                  {u.name || u.open_id}
+                </button>
+              ))}
+            </div>
+          )}
           {ownerFilter && (
             <div className="mb-2 flex items-center gap-2 text-[11px] text-info">
               ▸ 只看 {(watchUsers.find(u => u.open_id === ownerFilter)?.name) || ownerFilter} 的产出（文档+妙记）
