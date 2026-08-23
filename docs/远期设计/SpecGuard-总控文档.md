@@ -648,6 +648,13 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | a977f86d1a94 | 3c60d9181a03 | 已完成 | T-1007：材料列表分类型 tab+分页（MatType 外提/const 断言坑记录） |
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-acceptance | 2026-08-23 | 4fe721777def | 01909d515269 | 已完成 | T-1004：弹层顶部加监听运行状态条+当前监听范围只读摘要（开弹层拉 watcherStatus） |
 | workbench/frontend/src/pages/FeishuPool.tsx | sess-acceptance | 2026-08-23 | ecb0c3942871 | 7a135c71a67c | 已完成 | T-1005：页签顺序对调（话题在前）+默认落地页改话题 |
+| workbench/backend/services/specflow/feishu_sync_service.py | sess-material-pool | 2026-08-23 | ffee0894c24e | 07de9fb0dee8 | 已完成 | T-1008：watch 配置加 topic_auto_count/minutes 双阈值+数值键归一；_cluster_once/maybe_cluster_async 支持 only_chat_ids scoped 聚类 |
+| workbench/backend/services/specflow/feishu_watcher.py | sess-material-pool | 2026-08-23 | 474345626522 | cb6bae8ba6fb | 已完成 | T-1008：事件直写记账 note_chat_message+auto_cluster_job 时间阈值检查+_fire_auto_cluster；_schedule_auto_cluster/reschedule_jobs；registry.reconfigure_user |
+| workbench/backend/routers/feishu_pool.py | sess-material-pool | 2026-08-23 | f78ae1fa6204 | e1afcb6be129 | 已完成 | T-1008：WatchConfig 双阈值字段；put_watch 热重载三态；watcher-status 诚实 running=count>0；顺手修 F401/E741 |
+| test_specstd/test_feishu_sync.py | sess-material-pool | 2026-08-23 | bf18754d1624 | 08bf1ecb187c | 已完成 | T-1008：默认字典纳新键/归一化/scoped 聚类 3 新测；顺手修 F401/I001 |
+| test_specstd/test_feishu_watcher.py | sess-material-pool | 2026-08-23 | 82f24276dac9 | 93c4096c4485 | 已完成 | T-1008：TestAutoCluster 7 例（条数/时间/禁用/stale/持久化）+reconfigure 热重载 1 例；顺手修 I001 |
+| workbench/frontend/src/api/feishuPool.ts | sess-material-pool | 2026-08-23 | 9c172f82b76e | 969ab784807f | 已完成 | T-1008：FeishuWatch 双阈值字段+FeishuWatcherState 三态类型 |
+| workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-material-pool | 2026-08-23 | 01909d515269 | ad5c47d5f899 | 已完成 | T-1008：弹层 4 tab（通用 tab 承接状态/摘要/定时/自动分类阈值）+footer 保存+tab 持久化+监听用户空态引导+保存三态诚实提示 |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

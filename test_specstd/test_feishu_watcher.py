@@ -9,6 +9,7 @@
 
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +17,7 @@ SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 
 from services.specflow import feishu_watcher as fw  # noqa: E402
+
 
 def _mk_user(root: Path, emp: str, with_watch=True):
     (root / ".lark-cli" / emp).mkdir(parents=True)
@@ -408,6 +410,19 @@ class TestRegistry:
         assert "started_at" in st["watchers"][0]
         fw.stop_background()
 
+    def test_reconfigure_user_reschedules_jobs(self, tmp_path):
+        """T-1008：运行中 watcher 保存配置 → 热重挂 job（修 T-952 缺口：
+        此前 start_user 幂等跳过，改 chat_sync_minutes 要进程重启才生效）。"""
+        _mk_user(tmp_path, "u1")
+        with patch.object(fw, "_token_valid", return_value=True), \
+             patch.object(fw.FeishuWatcher, "start", return_value=True), \
+             patch.object(fw.FeishuWatcher, "reschedule_jobs") as rs:
+            reg = fw.WatcherRegistry(tmp_path)
+            assert reg.start_user("u1") is True
+            assert reg.reconfigure_user("u1") is True
+            rs.assert_called_once()
+            assert reg.reconfigure_user("u2") is False   # 未在跑 → 走 start_user
+
 # ══════════════════════════════════════════════════════════
 # T-928：三期 e2e 贯通（多用户事件→直写→聚类 continues→图谱 evolves→确认 suggest_ivs）
 # ══════════════════════════════════════════════════════════
@@ -506,3 +521,105 @@ def test_p3_e2e_pipeline(tmp_path):
         mentions = store.list_edges("mentions")
         assert any(e["src"] == produced[0]["id"] and e["dst"] == "FR-012"
                    for e in mentions)
+
+# ══════════════════════════════════════════════════════════
+# T-1008：事件直写驱动的自动话题分类（条数/时间双阈值）
+# ══════════════════════════════════════════════════════════
+
+def _mk_auto_emp(root: Path, extra_yaml: str = "") -> Path:
+    """T-1008 夹具：emp 私有区 + watch 配置（oc_a 正常 / oc_b topic_days=0）。"""
+    sf = root / ".specflow" / "u1"
+    sf.mkdir(parents=True)
+    (sf / "feishu_watch.yaml").write_text(
+        "chats:\n  - chat_id: oc_a\n  - chat_id: oc_b\n    topic_days: 0\n"
+        "docs: []\n" + extra_yaml, encoding="utf-8")
+    return sf
+
+
+def _capture_cluster(fired: list):
+    return lambda b, material_base=None, only_chat_ids=None: \
+        fired.append(only_chat_ids)
+
+
+class TestAutoCluster:
+    def teardown_method(self):
+        fw._AUTO_STATE.clear()               # 模块级记账跨用例清理
+
+    def test_count_threshold_fires_scoped_cluster(self, tmp_path):
+        """条数触发：单群积累 ≥ topic_auto_count → scoped 聚类该群并重置记账。"""
+        emp = _mk_auto_emp(tmp_path, "topic_auto_count: 2\n")
+        fired = []
+        with patch("services.specflow.feishu_sync_service.maybe_cluster_async",
+                   side_effect=_capture_cluster(fired)):
+            fw.note_chat_message(str(emp), "oc_a")
+            assert fired == []                           # 1 条未达阈值
+            fw.note_chat_message(str(emp), "oc_a")       # 第 2 条达阈值
+        assert fired == [{"oc_a"}]
+        st = fw._load_auto_state(str(emp))
+        assert st["pending"]["oc_a"] == 0                # 触发后重置
+        assert st["last_cluster"]["oc_a"]                # 时间戳已打
+
+    def test_count_trigger_skips_topic_days_zero(self, tmp_path):
+        """topic_days=0（该群关闭话题）不记账不触发。"""
+        emp = _mk_auto_emp(tmp_path, "topic_auto_count: 1\n")
+        fired = []
+        with patch("services.specflow.feishu_sync_service.maybe_cluster_async",
+                   side_effect=_capture_cluster(fired)):
+            fw.note_chat_message(str(emp), "oc_b")       # topic_days: 0
+        assert fired == []
+        assert "oc_b" not in fw._load_auto_state(str(emp))["pending"]
+
+    def test_time_threshold_fires_below_count(self, tmp_path):
+        """时间触发：未达条数但距上次聚类 ≥ topic_auto_minutes 且有新消息
+        （少消息也可能已是一个话题——总控人 08-23 拍板语义）。"""
+        emp = _mk_auto_emp(tmp_path,
+                           "topic_auto_count: 0\ntopic_auto_minutes: 30\n")
+        fired = []
+        with patch("services.specflow.feishu_sync_service.maybe_cluster_async",
+                   side_effect=_capture_cluster(fired)):
+            fw.note_chat_message(str(emp), "oc_a")       # 记账 1 条（count=0 不触发）
+            assert fired == []
+            fw.auto_cluster_job(str(emp))                # 从未聚类 → epoch 起算到期
+        assert fired == [{"oc_a"}]
+
+    def test_time_trigger_respects_interval(self, tmp_path):
+        """距上次聚类不足 topic_auto_minutes → 不触发，记账保留。"""
+        emp = _mk_auto_emp(tmp_path,
+                           "topic_auto_count: 0\ntopic_auto_minutes: 30\n")
+        fired = []
+        with patch("services.specflow.feishu_sync_service.maybe_cluster_async",
+                   side_effect=_capture_cluster(fired)):
+            fw.note_chat_message(str(emp), "oc_a")
+            st = fw._load_auto_state(str(emp))
+            st["last_cluster"]["oc_a"] = datetime.now().isoformat(timespec="seconds")
+            fw.auto_cluster_job(str(emp))
+        assert fired == []
+        assert fw._load_auto_state(str(emp))["pending"]["oc_a"] == 1
+
+    def test_time_trigger_disabled_when_zero(self, tmp_path):
+        """topic_auto_minutes=0 → 时间触发关闭（条数触发不受影响）。"""
+        emp = _mk_auto_emp(tmp_path,
+                           "topic_auto_count: 0\ntopic_auto_minutes: 0\n")
+        fired = []
+        with patch("services.specflow.feishu_sync_service.maybe_cluster_async",
+                   side_effect=_capture_cluster(fired)):
+            fw.note_chat_message(str(emp), "oc_a")
+            fw.auto_cluster_job(str(emp))
+        assert fired == []
+
+    def test_stale_pending_cleaned(self, tmp_path):
+        """已退出 watch 配置的群记账被清除，不参与触发。"""
+        emp = _mk_auto_emp(tmp_path, "topic_auto_minutes: 1\n")
+        st = fw._load_auto_state(str(emp))
+        st["pending"]["oc_gone"] = 5                     # 不在 watch 配置
+        fw.auto_cluster_job(str(emp))
+        assert "oc_gone" not in fw._load_auto_state(str(emp))["pending"]
+
+    def test_state_persisted_across_reload(self, tmp_path):
+        """记账落盘：清内存后从 .auto_cluster.json 恢复（重启不丢时间戳）。"""
+        emp = _mk_auto_emp(tmp_path, "topic_auto_count: 0\n")
+        with patch("services.specflow.feishu_sync_service.maybe_cluster_async"):
+            fw.note_chat_message(str(emp), "oc_a")
+        fw._AUTO_STATE.clear()
+        st = fw._load_auto_state(str(emp))
+        assert st["pending"]["oc_a"] == 1

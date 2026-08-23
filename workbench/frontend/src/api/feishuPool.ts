@@ -21,7 +21,14 @@ export interface FeishuWatch {
   minutes_days: number;
   chat_days: number;
   chat_sync_minutes?: number;   // T-952：定时同步间隔（0=关，分钟）
+  // T-1008：事件直写驱动的自动话题分类双阈值（0=各自关闭）
+  topic_auto_count?: number;    // 单群积累 N 条新消息即触发
+  topic_auto_minutes?: number;  // 未达条数但距上次分类 M 分钟且有新消息也触发
 }
+
+// T-1008：PUT /watch 返回的监听启停三态（started=新拉起 / reloaded=运行中热更新 /
+// skipped=未拉起（身份或服务未就绪）/ failed=拉起异常），供保存后诚实提示
+export type FeishuWatcherState = 'started' | 'reloaded' | 'skipped' | 'failed';
 
 export interface FeishuChatItem {
   chat_id: string; name: string; chat_mode: string; peer_open_id?: string;
@@ -102,7 +109,8 @@ function blobHeaders(): Record<string, string> {
 export const feishuPoolApi = {
   getWatch: () => request<FeishuWatch>('/feishu-pool/watch'),
   putWatch: (cfg: FeishuWatch) =>
-    request<FeishuWatch>('/feishu-pool/watch', { method: 'PUT', body: JSON.stringify(cfg) }),
+    request<FeishuWatch & { watcher?: FeishuWatcherState }>(
+      '/feishu-pool/watch', { method: 'PUT', body: JSON.stringify(cfg) }),
   syncNow: (chatId = '') =>
     request<{ docs: number; minutes: number; chats: number;
               chats_empty?: number; days_pulled?: number; errors: string[] }>(

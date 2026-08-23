@@ -9,15 +9,14 @@
 """
 
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 SG_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = SG_ROOT / "workbench" / "backend"
 TEST_DIR = Path(__file__).resolve().parent
 
 from services.specflow import feishu_sync_service as svc  # noqa: E402
+
 
 def test_watch_config_roundtrip(tmp_path):
     base = tmp_path / ".specflow" / "u1"
@@ -33,7 +32,53 @@ def test_watch_config_default_when_missing(tmp_path):
     loaded = svc.load_watch_config(tmp_path / ".specflow" / "u1")
     assert loaded == {"chats": [], "docs": [], "users": [],
                       "minutes_days": 30, "chat_days": 7,
-                      "chat_sync_minutes": 0}   # T-952：定时同步默认关
+                      "chat_sync_minutes": 0,   # T-952：定时同步默认关
+                      # T-1008：自动话题分类双阈值默认（条数 50 / 时间 60 分钟）
+                      "topic_auto_count": 50, "topic_auto_minutes": 60}
+
+
+def test_watch_auto_cluster_keys_normalized(tmp_path):
+    """T-1008：自动聚类阈值归一——字符串数字转 int、负值钳 0、坏值回退默认。"""
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [], "docs": [],
+                                 "topic_auto_count": "30",
+                                 "topic_auto_minutes": -5,
+                                 "chat_sync_minutes": "abc"})
+    loaded = svc.load_watch_config(base)
+    assert loaded["topic_auto_count"] == 30
+    assert loaded["topic_auto_minutes"] == 0      # 负值钳 0=关
+    assert loaded["chat_sync_minutes"] == 0       # 坏值回退默认
+
+
+def test_cluster_once_scoped_to_only_chat_ids(tmp_path):
+    """T-1008：only_chat_ids 限定 scoped 聚类——窗口只含指定群，全量参数不受污染。"""
+    from specflow.feishu_pool.pool_store import chat_sha8
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {
+        "chats": [{"chat_id": "oc_a", "topic_days": 7},
+                  {"chat_id": "oc_b", "topic_days": 3}],
+        "docs": []})
+    captured = {}
+    with patch("services.model_config.get_model", return_value={"model": "m"}), \
+         patch("agent.llm_client.LLMClient", return_value=MagicMock()), \
+         patch("specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
+               side_effect=lambda root, llm, **kw: captured.update(kw) or []), \
+         patch("services.specflow.feishu_sync_service._suggest_links_for_pool"):
+        svc._cluster_once(base, only_chat_ids={"oc_a"})
+    assert set(captured["chat_windows"]) == {chat_sha8("oc_a")}
+    assert captured["chat_windows"][chat_sha8("oc_a")] == 7
+
+
+def test_cluster_once_scoped_empty_when_chat_not_watched(tmp_path):
+    """T-1008：指定群不在 watch 配置 → 跳过不调 LLM（防误全量）。"""
+    base = tmp_path / ".specflow" / "u1"
+    svc.save_watch_config(base, {"chats": [{"chat_id": "oc_a"}], "docs": []})
+    called = []
+    with patch("services.model_config.get_model", return_value={"model": "m"}), \
+         patch("specflow.feishu_pool.topic_cluster.cluster_chat_snapshots",
+               side_effect=lambda *a, **kw: called.append(1) or []):
+        svc._cluster_once(base, only_chat_ids={"oc_gone"})
+    assert called == []
 
 def test_watch_users_roundtrip(tmp_path):
     """watch v2：users 维度读写（open_id/name/scopes）。"""
@@ -310,14 +355,14 @@ def test_sync_user_docs_owner_filter(tmp_path):
 # ══════════════════════════════════════════════════════════
 
 def test_e2e_pipeline(tmp_path):
-    from unittest.mock import MagicMock
-    from specflow.feishu_pool import link_suggest as ls
-    from specflow.feishu_pool import topic_cluster as tc
-    from specstd.anchors import scan_anchors
     from services.specflow import feishu_review_service as rev
+
     from graph_index.builder import build_index
     from graph_index.service import focus_subgraph, index_path
     from graph_index.store import GraphStore
+    from specflow.feishu_pool import link_suggest as ls
+    from specflow.feishu_pool import topic_cluster as tc
+    from specstd.anchors import scan_anchors
 
     emp = tmp_path / ".specflow" / "u1"
     ws = tmp_path / "ws"
