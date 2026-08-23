@@ -650,6 +650,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_feishu_watcher.py | sess-material-pool | 2026-08-23 | 82f24276dac9 | 93c4096c4485 | 已完成 | T-1008：TestAutoCluster 7 例（条数/时间/禁用/stale/持久化）+reconfigure 热重载 1 例；顺手修 I001 |
 | workbench/frontend/src/api/feishuPool.ts | sess-material-pool | 2026-08-23 | 9c172f82b76e | 969ab784807f | 已完成 | T-1008：FeishuWatch 双阈值字段+FeishuWatcherState 三态类型 |
 | workbench/frontend/src/components/FeishuWatchSettings.tsx | sess-material-pool | 2026-08-23 | 01909d515269 | ad5c47d5f899 | 已完成 | T-1008：弹层 4 tab（通用 tab 承接状态/摘要/定时/自动分类阈值）+footer 保存+tab 持久化+监听用户空态引导+保存三态诚实提示 |
+| workbench/frontend/src/components/TopicWorkspace.tsx | sess-material-pool | 2026-08-23 | ea89aa9ec809 | 1f5465e49309 | 已完成 | T-1009：专注模式双栏行高钉死视口（两栏各自内滚）+定位改容器内 scrollTo（修「定位找到原文但话题没了」） |
 | | | | | | | |
 
 ## 7. 冲突与异常处理
