@@ -24,7 +24,7 @@ scenarios/ 文件；草稿阶段把 depends_on 写进 draft YAML，见 generate-
    自依赖、会成环的自动剔除）——**不要肉眼扫插值猜依赖**。采纳后：
    - 库内场景 → `scenario(action=edit)` 落地
    - 建议被拒时向用户说明理由，不静默丢弃
-4. **落地单条边**：`scenario(action=edit, scenario_id=下游, action=add/remove, dep_id=上游,
+4. **落地单条边**：`scenario(action=edit, op=add/remove, scenario_id=下游, dep_id=上游,
    mode=shared|exclusive)`——自带守卫：自依赖拒绝、目标不存在拒绝、循环依赖 409、
    版本期望自动按上游推导 `^主版本`。remove 后若场景仍在插值引用该上游，提示用户
    该场景会出现运行时「变量未定义」（诚实提示，不擅自改场景内容）

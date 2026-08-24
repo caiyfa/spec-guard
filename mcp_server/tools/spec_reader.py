@@ -1,6 +1,7 @@
 """spec_reader — 读取当前工作区的 spec 文件 + SpecGuard 仓库内容（K-021 双根）。
 >
-> T-982 收敛：3 工具合并为单 spec 工具（action=read/list/sync，原工具名为 legacy）。
+> T-982 收敛：合并为单 spec 工具（action=read/list/sync/dismiss，原工具名为 legacy）；
+> T-982b：sync/dismiss 由 params 注入 legacy 参数（sync_workspace 自带 action 参数名碰撞）。
 
 工具：
   read_spec: 读取单个文件（只读，越界/敏感路径拒绝）
@@ -17,12 +18,15 @@ K-021：Agent 能力设定为「能获取 SpecGuard 所有内容」——read_sp
 import json
 from pathlib import Path
 
-from mcp.types import Tool, TextContent
-from mcp_server.tools.tool_meta import ActionMeta, SIDE_DRAFT, consolidate  # T-982
+from mcp.types import TextContent, Tool
 
+from mcp_server.tools.tool_meta import ActionMeta, consolidate  # T-982
 from specstd.workspace import (
-    safe_resolve, get_active_workspace,
-    is_sync_dismissed, mark_sync_dismissed, pull,
+    get_active_workspace,
+    is_sync_dismissed,
+    mark_sync_dismissed,
+    pull,
+    safe_resolve,
 )
 
 SG_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -148,7 +152,6 @@ def _read_text_guarded(resolved: Path, display_path: str) -> list[TextContent]:
     ext = resolved.suffix.lower()
     if ext in {".xlsx", ".docx", ".pdf"}:
         try:
-            BACKEND_DIR = SG_ROOT / "workbench" / "backend"
             from sg_core import file_preview
             _fmt, text = file_preview.preview_text(resolved)
             note = f"[{ext} 已转换为文本预览，大文件可能截断]\n\n"
@@ -183,7 +186,6 @@ def _migration_hint(path: str) -> str:
         return ""
     sid = name.rsplit(".", 1)[0]
     try:
-        BACKEND_DIR = SG_ROOT / "workbench" / "backend"
         from sg_core import ledger_store
         # 1) 场景台账：同 ID 已入库 → 指向库内当前路径（file_path 为相对仓库根路径）
         for r in ledger_store.query_scenarios():
@@ -227,9 +229,9 @@ def _read_with_remote_status(resolved: Path, display_path: str) -> list[TextCont
         note = (
             "[远程状态] 远程仓库中该文件有更新版本，本地内容可能过时。\n"
             "请征询用户是否同步工作区：\n"
-            '- 用户同意 → 调用 sync_workspace(action="sync")，'
+            '- 用户同意 → 调用 spec(action="sync")，'
             "同步成功后重新 read_spec 获取最新内容；\n"
-            '- 用户拒绝 → 调用 sync_workspace(action="dismiss")，'
+            '- 用户拒绝 → 调用 spec(action="dismiss")，'
             "本次会话不再提醒。\n\n"
             "（下方为本地当前内容，供用户拒绝同步时直接使用。）\n\n"
         )
@@ -369,16 +371,20 @@ def _handle_list_spec_files(arguments: dict) -> list[TextContent]:
 
 
 # ══════════════════════════════════════════════════════════
-# T-982 工具收敛：read/list/sync 合并为单 spec 工具（action 参数化）
+# T-982 工具收敛：read/list/sync/dismiss 合并为单 spec 工具（action 参数化）
+# T-982b：sync_workspace 自带 action 参数（sync/dismiss）与合并层碰撞——拆为两个
+# 合并 action，委派时经 ActionMeta.params 注入 legacy 参数值。
 # ══════════════════════════════════════════════════════════
 TOOLS, handle = consolidate(
     "spec",
     "工作区 spec 读取与同步：read 读文件（K-021 双根：工作区未命中回退 SpecGuard 仓库根，"
-    "sg:// 强制仓库根；anchor/section 取章节省 token）、list 列文件树、sync 同步工作区（git pull）。",
+    "sg:// 强制仓库根；anchor/section 取章节省 token）、list 列文件树、"
+    "sync 同步工作区（git pull）、dismiss 本次会话不再提醒远端更新。",
     actions={
         "read": ActionMeta(legacy="read_spec", doc_track="read"),
         "list": ActionMeta(legacy="list_spec_files"),
-        "sync": ActionMeta(legacy="sync_workspace"),
+        "sync": ActionMeta(legacy="sync_workspace", params={"action": "sync"}),
+        "dismiss": ActionMeta(legacy="sync_workspace", params={"action": "dismiss"}),
     },
     decls=_TOOL_DECLS,
     legacy_handle=_legacy_handle,

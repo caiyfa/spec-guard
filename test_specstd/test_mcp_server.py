@@ -222,6 +222,27 @@ class TestSpecReader:
                         "anchor": "FR-001", "section": "功能描述"})
         assert "互斥" in result[0].text
 
+    # ── T-982b：合并面回归——legacy 工具自带 action 参数名碰撞 ──
+    # （会话 20260824_144100_41c23c7c 实录：spec(action=sync) 报「未知 action: 空」）
+
+    def test_merged_spec_actions_enum(self):
+        """合并面 action 枚举：sync/dismiss 双 action（dismiss 在合并面找回）。"""
+        tool = next(t for t in spec_reader.TOOLS if t.name == "spec")
+        enum = tool.inputSchema["properties"]["action"]["enum"]
+        assert enum == ["read", "list", "sync", "dismiss"]
+
+    def test_merged_spec_sync_reaches_branch(self, workspace, monkeypatch):
+        """spec(action=sync) 直达 sync 分支（params 注入，不再「未知 action」）。"""
+        monkeypatch.setattr(spec_reader, "get_active_workspace", lambda: None)
+        r = _call(spec_reader, "spec", {"action": "sync"})
+        assert "无激活的工作区" in r[0].text
+
+    def test_merged_spec_dismiss_reaches_branch(self, workspace, monkeypatch):
+        """spec(action=dismiss) 直达 dismiss 分支。"""
+        monkeypatch.setattr(spec_reader, "mark_sync_dismissed", lambda: None)
+        r = _call(spec_reader, "spec", {"action": "dismiss"})
+        assert "无法标记" in r[0].text
+
 
 # ══════════════════════════════════════════════════════════
 # scenario_tools
@@ -402,6 +423,29 @@ class TestScenarioTools:
         r3 = _call(scenario_tools, "edit_dependency",
                    {"scenario_id": "B-001", "action": "add", "dep_id": "NOPE-999"})
         assert "不存在" in r3[0].text
+
+    # ── T-982b：合并面回归——edit_dependency 内层 action(add/remove) 参数名碰撞 ──
+
+    def test_merged_scenario_edit_op_add(self, dag_lib):
+        """scenario(action=edit, op=add)：op 可表达且直达 legacy handler。"""
+        r = _call(scenario_tools, "scenario",
+                  {"action": "edit", "op": "add", "scenario_id": "B-001", "dep_id": "A-001"})
+        data = json.loads(r[0].text)
+        assert data["ok"], data
+        assert any(d["id"] == "A-001" and d["version"] == "^1" for d in data["depends_on"])
+
+    def test_merged_scenario_edit_schema_has_op(self):
+        """合并 schema 必须暴露 op(add/remove 枚举)，否则 LLM 无法表达加边/删边。"""
+        tool = next(t for t in scenario_tools.TOOLS if t.name == "scenario")
+        props = tool.inputSchema["properties"]
+        assert props["op"]["enum"] == ["add", "remove"]
+
+    def test_edit_dependency_legacy_action_still_works(self, dag_lib):
+        """legacy 通道 edit_dependency(action=add) 不受 op 改名影响（存量兼容）。"""
+        r = _call(scenario_tools, "edit_dependency",
+                  {"action": "add", "scenario_id": "B-001", "dep_id": "A-001"})
+        data = json.loads(r[0].text)
+        assert data["ok"], data
 
 
 # ══════════════════════════════════════════════════════════
@@ -685,10 +729,11 @@ class TestSyncWorkspace:
         # 强制 remote_file_marks 报告远端有更新（模拟 git 工作区远端领先场景）
         monkeypatch.setattr(ws_mod, "remote_file_marks",
                             lambda paths, name=None: {paths[0]: "[远程已更新]"})
-        # dismiss 前：read_spec 应含远程状态决策提示 + sync_workspace 引导
+        # dismiss 前：read_spec 应含远程状态决策提示 + 合并面 spec 工具引导
+        # （T-982b：引导文案随工具收敛改为 spec(action=…)）
         r1 = _call(spec_reader, "read_spec", {"path": "AGENTS.md"})
         assert "[远程状态]" in r1[0].text
-        assert "sync_workspace" in r1[0].text
+        assert 'spec(action="sync")' in r1[0].text
         # 用户拒绝同步 → dismiss
         r_d = _call(spec_reader, "sync_workspace", {"action": "dismiss"})
         d = json.loads(r_d[0].text)

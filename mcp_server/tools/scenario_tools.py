@@ -107,15 +107,15 @@ _TOOL_DECLS = [
             "properties": {
                 "scenario_id": {"type": "string",
                                 "description": "下游场景 ID（depends_on 写在它身上）"},
-                "action": {"type": "string", "enum": ["add", "remove"],
-                           "description": "add=添加依赖边 / remove=移除依赖边"},
+                "op": {"type": "string", "enum": ["add", "remove"],
+                       "description": "add=添加依赖边 / remove=移除依赖边"},
                 "dep_id": {"type": "string",
                            "description": "上游场景 ID（被依赖方）"},
                 "mode": {"type": "string", "enum": ["shared", "exclusive"],
                          "description": "依赖模式（默认 shared 只读共享；写型消费用 exclusive）",
                          "default": "shared"}
             },
-            "required": ["scenario_id", "action", "dep_id"]
+            "required": ["scenario_id", "op", "dep_id"]
         }
     ),
     Tool(
@@ -548,9 +548,12 @@ def _handle_edit_dependency(arguments: dict) -> list[TextContent]:
     与 routers/scenarios.py 的 /deps 端点同一语义（自依赖/存在性/环校验），
     供 Agent 直接编排库内场景 DAG——此前只能给新草稿声明 depends_on，
     已入库场景的依赖边只能在画布上手工连线。
+
+    T-982b：参数名 action→op（与合并层 scenario(action=edit) 的 action 碰撞）；
+    legacy 直通通道仍接受旧名 action（双读兼容，REST /deps 端点各自独立不受影响）。
     """
     scenario_id = str(arguments.get("scenario_id", "") or "")
-    action = str(arguments.get("action", "") or "")
+    action = str(arguments.get("op", "") or arguments.get("action", "") or "")
     dep_id = str(arguments.get("dep_id", "") or "")
     mode = str(arguments.get("mode", "") or "shared")
 

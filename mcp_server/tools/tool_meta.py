@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
 _log = logging.getLogger("tool_meta")
 
@@ -45,6 +45,10 @@ class ActionMeta:
     side_effect: str = ""        # "" = 继承工具级
     rbac: str = ""               # "" = 继承工具级
     doc_track: str = ""          # "" = 继承工具级；read/write 上足迹
+    params: dict = field(default_factory=dict)
+                                  # 委派 legacy handler 时注入的固定参数（T-982b：
+                                  # legacy 工具自带 action 参数名碰撞时，由合并层
+                                  # 声明注入值，如 spec(sync/dismiss)→sync_workspace)
 
 
 @dataclass(frozen=True)
@@ -274,7 +278,7 @@ def consolidate(name: str, description: str, *,
     props: dict = {"action": {
         "type": "string", "enum": list(actions),
         "description": "要执行的操作（各 action 的参数与必填项见工具描述）"}}
-    for a, am in actions.items():
+    for am in actions.values():
         schema = by_legacy[am.legacy].inputSchema or {}
         for pn, pd in (schema.get("properties") or {}).items():
             if pn not in props:
@@ -302,12 +306,16 @@ def consolidate(name: str, description: str, *,
         args = dict(arguments or {})
         if tool_name == name:
             action = str(args.pop("action", "") or "")
-            legacy = actions[action].legacy if action in actions else ""
-            if not legacy:
+            am = actions.get(action)
+            if am is None:
                 return [TextContent(type="text", text=(
                     f"错误：未知 action: {action!r}；"
                     f"可用: {'、'.join(actions)}"))]
-            return await legacy_handle(legacy, args)
+            # T-982b：params 注入——legacy 工具自带 action 参数名碰撞时，
+            # 合并层 pop 掉的 action 键需按声明回填（用户显式传参优先）
+            for k, v in am.params.items():
+                args.setdefault(k, v)
+            return await legacy_handle(am.legacy, args)
         # legacy 工具名直通（测试/脚本兼容通道）；未知名由 legacy_handle 返回 []
         return await legacy_handle(tool_name, args)
 
