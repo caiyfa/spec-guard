@@ -518,12 +518,16 @@ def sync_recent_docs(specflow_emp_base: Path, days: int = 1) -> dict:
     return out
 
 
-def sync_user_materials(specflow_emp_base: Path) -> dict:
+def sync_user_materials(specflow_emp_base: Path,
+                        material_base: Path | None = None) -> dict:
     """用户材料轮询（设计 §4.3）：按 users[].scopes 拉指定用户妙记/文档落池。
 
     单用户/单文档失败记 errors 不中断（诚实呈现）。
+    T-1011 波及面修复：watch 配置读私有区（specflow_emp_base），材料落盘走
+    material_root（共享材料区；material_base 缺省回退私有区=单用户兼容）。
     """
     cfg = load_watch_config(specflow_emp_base)
+    material_root = Path(material_base) if material_base else specflow_emp_base
     out = {"minutes": 0, "docs": 0, "errors": []}
     minutes_days = int(cfg.get("minutes_days") or 0)
     for u in cfg.get("users") or []:
@@ -535,11 +539,11 @@ def sync_user_materials(specflow_emp_base: Path) -> dict:
         if "minutes" in scopes:
             try:
                 out["minutes"] += len(sync_minutes(
-                    specflow_emp_base, minutes_days, owner_ids=[open_id]))
+                    material_root, minutes_days, owner_ids=[open_id]))
             except Exception as e:
                 out["errors"].append(f"minutes {label}: {e}")
         if "docs" in scopes:
-            r = _sync_user_docs(specflow_emp_base, open_id)
+            r = _sync_user_docs(material_root, open_id)
             out["docs"] += r["docs"]
             out["errors"].extend(f"docs {label}: {e}" for e in r["errors"])
     return out
@@ -631,38 +635,44 @@ def _read_meta_sidecar(f: Path) -> dict:
 
 def migrate_legacy_pool(specflow_emp_base: Path,
                         material_base: Path | None = None) -> dict:
-    """T-949 存量迁移：私有区 chats/话题库/历史 → 共享材料区（幂等可重跑）。
+    """T-949 存量迁移：私有区三通道快照/话题库/历史 → 共享材料区（幂等可重跑）。
 
-    - chats：逐文件 move（目标已存在则跳过——共享版本优先）；
+    - chats/docs/minutes：逐文件 move（目标已存在则跳过——共享版本优先；
+      docs/minutes 的 .meta.json/.imgmap.json sidecar 随正文一同迁移）。
+      T-1011 波及面修复补 docs/minutes——T-949 版只迁 chats，而
+      specflow_dir 解析根因（验收钉案）致 docs/minutes 同样落私有区；
     - 话题库：私有 _topics.yaml/_candidate_topics.yaml 存在且共享无 → move；
       共享已有 → 按 id 合并（冲突共享优先）后删私有文件；
     - 历史：整行去重 append 合并后删私有文件。
-    返回 {chats_files, topic_store}。watch 配置/草案不迁（设计 D2：留私有）。
+    返回 {chats_files, docs_files, topic_store}。watch 配置/草案不迁（设计 D2：留私有）。
     """
     import shutil
 
     mroot = Path(material_base) if material_base else specflow_emp_base
-    out = {"chats_files": 0, "topic_store": False}
+    out = {"chats_files": 0, "docs_files": 0, "topic_store": False}
     if mroot == Path(specflow_emp_base):
         return out                                  # 同区无需迁移
     src_pool = Path(specflow_emp_base) / "feishu_pool"
     dst_pool = mroot / "feishu_pool"
     if not src_pool.is_dir():
         return out
-    # ① chats
-    src_chats = src_pool / "chats"
-    if src_chats.is_dir():
-        for f in sorted(src_chats.rglob("*")):
+    # ① 三通道快照（chats/docs/minutes 同语义：共享优先，sidecar 随附）
+    for sub, key in (("chats", "chats_files"), ("docs", "docs_files"),
+                     ("minutes", "docs_files")):
+        src_dir = src_pool / sub
+        if not src_dir.is_dir():
+            continue
+        for f in sorted(src_dir.rglob("*")):
             if not f.is_file():
                 continue
-            dst = dst_pool / "chats" / f.relative_to(src_chats)
+            dst = dst_pool / sub / f.relative_to(src_dir)
             if dst.is_file():
                 f.unlink()                           # 共享版本优先，丢弃私有副本
-                out["chats_files"] += 1
+                out[key] += 1
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(f), str(dst))
-            out["chats_files"] += 1
+            out[key] += 1
     # ② 话题库（_topics.yaml 优先，回退旧 _candidate_topics.yaml）
     from specflow.feishu_pool import topic_cluster as tc
     src_store = next((p for p in (src_pool / "_topics.yaml",
@@ -698,6 +708,33 @@ def migrate_legacy_pool(specflow_emp_base: Path,
                 for ln in adds:
                     fh.write(ln + "\n")
         src_hist.unlink()
+    return out
+
+
+def migrate_all_private_pools(sf_shared_root: Path,
+                              material_base: Path | None = None) -> dict:
+    """T-1011 波及面修复：枚举 .specflow 下全部 emp 私有区，逐个迁移材料池到
+    共享区（复用 migrate_legacy_pool 幂等语义，可重跑）。
+
+    背景：specflow_dir("") 在 emp 请求上下文下恒解析私有区（T-1011 验收打回
+    根因），T-949 以来全部同步产出实际落在各 emp 私有池；解析修复后须把存量
+    归拢共享区，否则话题页/召回读到空库。
+    sf_shared_root = 共享 .specflow 根（枚举其一级子目录中的 emp 私有区）。
+    返回 {emps, chats_files, topic_store}。
+    """
+    root = Path(sf_shared_root)
+    out = {"emps": 0, "chats_files": 0, "docs_files": 0, "topic_store": 0}
+    if not root.is_dir():
+        return out
+    for d in sorted(root.iterdir()):
+        if not d.is_dir() or not (d / "feishu_pool").is_dir():
+            continue
+        r = migrate_legacy_pool(d, material_base=material_base)
+        moved = r["chats_files"] or r["docs_files"] or r["topic_store"]
+        out["emps"] += int(bool(moved))   # 只计有实际迁移的（空目录不算，保幂等零增量）
+        out["chats_files"] += r["chats_files"]
+        out["docs_files"] += r["docs_files"]
+        out["topic_store"] += int(bool(r["topic_store"]))
     return out
 
 

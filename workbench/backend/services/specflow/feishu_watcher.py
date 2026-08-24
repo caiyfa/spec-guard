@@ -92,10 +92,12 @@ def resolve_material_base() -> Path | None:
 
     工作台进程内必然有激活工作区；独立 CLI/测试场景无注册表 → None，
     调用方回退各 emp 私有区（向后兼容单用户模式）。
+    T-1011 波及面修复：必须 force_shared——空 emp 会回退请求上下文工号，
+    登录态/定时任务下恒解析私有区，共享材料区不可达（验收钉案根因）。
     """
     try:
         from specstd.workspace import specflow_dir
-        return specflow_dir("")
+        return specflow_dir("", force_shared=True)
     except Exception:
         return None
 
@@ -135,9 +137,13 @@ def chat_proofread_job(emp_base_str: str):
 
 
 def user_materials_job(emp_base_str: str):
-    """每日用户材料轮询 job（模块级——APScheduler 需可序列化 callable，禁闭包）。"""
+    """每日用户材料轮询 job（模块级——APScheduler 需可序列化 callable，禁闭包）。
+
+    T-1011 波及面修复：材料落盘走共享材料区（watch 配置仍读 emp 私有区）。
+    """
     from services.specflow import feishu_sync_service as svc
-    out = svc.sync_user_materials(Path(emp_base_str))
+    out = svc.sync_user_materials(Path(emp_base_str),
+                                  material_base=resolve_material_base())
     if out.get("errors"):
         log.warning("用户材料轮询部分失败: %s", out["errors"])
 
@@ -625,15 +631,20 @@ class FeishuWatcher:
         self._trigger_pull(**pull_kw)
 
     def _trigger_pull(self, kind: str, **kw):
-        """重拉（复用一期 sync 服务，单一代码路径）。"""
+        """重拉（复用一期 sync 服务，单一代码路径）。
+
+        T-1011 波及面修复：落盘根走共享材料区（此前直传 emp 私有区——
+        事件直写旁路是 90000001 材料落私有区的实证来源）。
+        """
         from services.specflow import feishu_sync_service as svc
         emp_base = self.sg_root / ".specflow" / self.emp
+        material_root = resolve_material_base() or emp_base
         try:
             if kind == "chat":
-                svc.sync_chat(emp_base, kw["chat_id"],
+                svc.sync_chat(material_root, kw["chat_id"],
                               datetime.now().strftime("%Y%m%d"))
             elif kind == "minutes":
-                svc.sync_minutes(emp_base, days=3)
+                svc.sync_minutes(material_root, days=3)
         except Exception as e:
             log.warning("feishu_watcher 重拉失败 %s: %s", kw, e)
 
@@ -668,7 +679,18 @@ class WatcherRegistry:
         self.watchers: dict[str, FeishuWatcher] = {}
 
     def start_all(self) -> list[str]:
-        """启动全部满足条件的用户（软上限内），返回成功启动的 emp 列表。"""
+        """启动全部满足条件的用户（软上限内），返回成功启动的 emp 列表。
+
+        启动时先跑一次全员私有池 → 共享区迁移（T-1011 波及面修复，幂等）：
+        T-949 以来同步产出实际落各 emp 私有池，不迁则话题页/召回读空库。
+        """
+        try:
+            from services.specflow import feishu_sync_service as svc
+            mb = resolve_material_base()
+            if mb:
+                svc.migrate_all_private_pools(mb, material_base=mb)
+        except Exception as e:
+            log.warning("私有材料池全员迁移失败（不阻断监听启动）: %s", e)
         started = []
         for emp in resolve_watch_users(self.sg_root):
             if len(self.watchers) >= MAX_WATCHERS:

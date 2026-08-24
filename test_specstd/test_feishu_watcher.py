@@ -331,15 +331,20 @@ def test_direct_write_creates_jsonl_fact_source(tmp_path):
     assert "张三: 事实源消息" in md
 
 def test_user_materials_job_calls_sync(tmp_path):
-    """模块级 job：委托 sync_user_materials（APScheduler 可序列化铁律）。"""
+    """模块级 job：委托 sync_user_materials（APScheduler 可序列化铁律）。
+
+    T-1011 波及面修复：material_base 随 job 透传（无工作区上下文时 None，
+    sync 侧回退私有区=单用户兼容）。
+    """
     emp = tmp_path / ".specflow" / "u1"
     emp.mkdir(parents=True)
     called = []
     with patch("services.specflow.feishu_sync_service.sync_user_materials",
-               side_effect=lambda b: called.append(b)
+               side_effect=lambda b, material_base=None:
+               called.append((b, material_base))
                or {"minutes": 0, "docs": 0, "errors": []}):
         fw.user_materials_job(str(emp))
-    assert called == [emp]
+    assert called == [(emp, None)]
 
 def test_chats_warmup_job_calls_list():
     """T-938 模块级预热 job：委托 list_my_chats(emp=...)（身份隔离 + 可序列化铁律）。"""

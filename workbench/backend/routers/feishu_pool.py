@@ -35,9 +35,11 @@ def _sf_base():
 
 def _material_base():
     """T-949 共享材料区根（{ws}/.specflow/）：chats/docs/minutes 快照与
-    话题库/历史所在；watch 配置与话题草案仍走 _sf_base() 私有区。"""
+    话题库/历史所在；watch 配置与话题草案仍走 _sf_base() 私有区。
+    T-1011 波及面修复：必须 force_shared——空 emp 会回退请求上下文工号，
+    登录态下恒解析私有区，共享话题库不可达（验收钉案根因）。"""
     from specstd.workspace import specflow_dir
-    return specflow_dir("")
+    return specflow_dir("", force_shared=True)
 
 
 _POOL_VIEWER_CACHE: dict[str, tuple[float, dict]] = {}
@@ -141,12 +143,14 @@ def sync_now(body: SyncRequest | None = None,
     """手动立即同步（按 watch 配置三通道拉取；单通道失败记 errors 不中断）。
 
     T-949：快照落共享材料区（多用户复用；watch 仍读私有区——谁配置谁拉）；
-    同步前幂等迁移存量私有区数据（migrate_legacy_pool）。
+    同步前幂等迁移存量私有区数据（T-1011 波及面修复：migrate_all_private_pools
+    全员枚举——T-949 以来产出实际落各 emp 私有池，须归拢共享区）。
     T-952：body.chat_id 非空时单群模式（只拉该群，秒级反馈——介入工作台
     「更新本群」入口）。
     """
     chat_id = (body.chat_id if body else "") or ""
-    sync_svc.migrate_legacy_pool(_sf_base(), material_base=_material_base())
+    sync_svc.migrate_all_private_pools(_material_base(),
+                                       material_base=_material_base())
     return sync_svc.sync_all(_sf_base(), material_base=_material_base(),
                              chat_id=chat_id)
 

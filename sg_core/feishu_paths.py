@@ -1,7 +1,9 @@
 """feishu_paths — 飞书材料池路径函数（唯一事实源；T-976 下沉中立层解 graph_index↔specflow 环）。
 
-私有区：.specflow/{emp}/feishu_pool/（随用户，原始快照永不出私有区）
-共享区：{workspace}/.specguard/feishu/（随工作区，复核确认后提升）
+共享材料区：{ws}/.specflow/feishu_pool/（T-949 起 chats/docs/minutes 快照与话题库
+落此——工作区公共资产，pool_dirs 的 base 传共享区根即共享读写）；
+私有区：.specflow/{emp}/feishu_pool/（watch 配置与话题草案；单用户兼容回退）。
+共享区事实源：{workspace}/.specguard/feishu/（复核确认后提升）。
 """
 
 from __future__ import annotations

@@ -44,8 +44,9 @@ def workspace(tmp_path):
 
 class TestToolRegistration:
     def test_11_tools_registered(self):
-        # T-982 工具收敛：stdio 92 → 39（对内 24 合并工具 + S8 open/ 15 契约面不变）
-        assert len(ALL_TOOLS) == 39
+        # T-982 工具收敛：stdio 92 → 40（对内 25 合并工具——T-1011 新增 meta 域
+        # topic 通用召回 + S8 open/ 15 契约面不变）
+        assert len(ALL_TOOLS) == 40
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -60,7 +61,7 @@ class TestToolRegistration:
             "graph", "lineage",
             "knowledge",
             "audit", "scan_compliance", "query_coverage_gaps",
-            "todo_write", "gate_dock_status",
+            "todo_write", "gate_dock_status", "topic",
             # S8 open/ 对外开放面（15 新名，对外契约不变；read_run_report 复用内部映射）
             "get_frozen_spec", "get_proposal", "query_decisions",
             "get_interview_status", "get_delta_contract",
