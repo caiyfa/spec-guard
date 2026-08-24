@@ -39,9 +39,11 @@ _USER_LOCKS: dict[str, threading.Lock] = {}
 _LARK_TIMEOUT = 90  # login 两阶段放宽
 
 # T-943：材料池链路必需 scope（缺失→对应功能不可用；刚授权仍缺→审核中）。
-# 名单来自 2026-08-18 实测 auth status 的 scope 全集逐一核对。
+# 名单按 auth status 实际返回的授权清单命名核对（飞书官方命名，带冒号层级）——
+# contact:user:search 曾照抄网关报错文本误写 contactuser:search，致已授权用户
+# 恒报缺 1 项（T-1012，08-24 实测授权全集 200 项含 contact:user:search 钉案）。
 _REQUIRED_SCOPES = (
-    "contactuser:search",            # 通讯录搜索（监听用户选择）
+    "contact:user:search",           # 通讯录搜索（监听用户选择）
     "im:chat:read",                  # 群聊列表
     "docs:document.content:read",   # 文档正文
     "docs:document.media:download",  # 图片下载（原文内嵌图）

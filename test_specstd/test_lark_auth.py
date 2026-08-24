@@ -220,13 +220,36 @@ class TestStatusParseAndReviewing:
         assert "im:chat:read" in st["scopes"]
 
     def test_status_missing_and_reviewing(self, tmp_path, monkeypatch):
-        """缺 contactuser:search 等 → missing_scopes；刚授权 → reviewing=True（审核中）。"""
+        """缺 contact:user:search 等 → missing_scopes；刚授权 → reviewing=True（审核中）。"""
         self._mk_user(tmp_path, monkeypatch)
         lark_auth._mark_auth_done("u1")          # 刚授权完成（写 last_auth）
         st = lark_auth.do_status("u1")
-        assert "contactuser:search" in st["missing_scopes"]
+        assert "contact:user:search" in st["missing_scopes"]
         assert "minutes:minutes.search:read" in st["missing_scopes"]
         assert st["reviewing"] is True
+
+    def test_status_contact_scope_canonical_name(self, tmp_path, monkeypatch):
+        """T-1012 回归：auth status 实际返回飞书官方命名 contact:user:search
+        （带冒号）。必需清单曾照抄网关报错文本误写 contactuser:search，致已授权
+        用户恒报「缺 1 项权限」（90024166/90000001 实测授权全集含 contact:user:search
+        且 contact +search-user 调用成功）。此处用实测原始名钉死，防改名回潮。"""
+        payload = {"identities": {"user": {
+            "status": "ready", "available": True, "openId": "ou_x",
+            "userName": "n", "tokenStatus": "valid",
+            "scope": ("contact:user:search im:chat:read "
+                      "docs:document.content:read docs:document.media:download "
+                      "search:docs:read wiki:node:read "
+                      "minutes:minutes.search:read minutes:minutes.artifacts:read "
+                      "drive:file:download docs:permission.member:retrieve "
+                      "docs:permission.setting:read")}}}
+        monkeypatch.setattr(lark_auth, "_LARK_DIR", tmp_path)
+        d = tmp_path / "u1"
+        d.mkdir(parents=True)
+        (d / "token.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(lark_auth, "_run_lark", lambda e, a, **kw: payload)
+        st = lark_auth.do_status("u1")
+        assert st["missing_scopes"] == []
+        assert st["reviewing"] is False
 
     def test_status_missing_without_recent_auth(self, tmp_path, monkeypatch):
         """无近期授权 + 缺失 → reviewing=False（未授权全，非审核）。"""
