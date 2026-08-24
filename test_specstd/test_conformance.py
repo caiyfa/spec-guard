@@ -63,7 +63,7 @@ class TestConformance:
         assert any("术语" in f.message for f in agents_errors), "错误消息应提及术语"
 
     def test_anchor_violation(self, tmp_path):
-        """ANCHOR 违规：FR 锚点重复应报 ERROR。"""
+        """ANCHOR 违规：同一 spec.md 内 FR 锚点重复应报 ERROR。"""
         ws = create_anchor_violation(tmp_path / "anchor")
         report = check_conformance(ws, "test-anchor")
         anchor_errors = [
@@ -72,6 +72,96 @@ class TestConformance:
         ]
         assert len(anchor_errors) > 0, "应检测到 ANCHOR 违规"
         assert any("FR-001" in f.message for f in anchor_errors), "错误消息应提及 FR-001"
+
+    def test_anchor_cross_feature_same_id_allowed(self, tmp_path):
+        """模块内唯一口径（用户拍板 2026-08-24）：跨功能/跨模块同名 FR 编号不报错。
+
+        TDM 等工作区约定：每个功能目录 FR 编号本地起步（FR-001 各自独立），
+        新格式 FR-{功能}-{迭代}-{流水} 天然全局唯一不受影响。
+        """
+        ws = create_valid_workspace(tmp_path / "crossmod")
+        # module1/feature1 已有 FR-001（合法样例）；再建跨功能/跨模块同名
+        for mod, feat in (("module1", "feature2"), ("module2", "feature1"),
+                          ("module3", "feature9")):
+            d = ws / "specs" / mod / feat
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "spec.md").write_text(
+                f"# {mod}/{feat}\n\n### FR-001: 本地编号\nAC-001\n", encoding="utf-8")
+
+        report = check_conformance(ws, "test-crossmod")
+        anchor_errors = [f for f in report.findings
+                         if f.rule == RuleName.ANCHOR.value]
+        assert anchor_errors == [], \
+            f"跨功能同名 FR 不应报错: {[f.message for f in anchor_errors]}"
+        assert report.verdict == "PASS"
+
+    def test_anchor_duplicate_message_compact(self, tmp_path):
+        """锚点重复消息瘦身（会话 20260824_153425_a3d53352）：
+
+        同一 spec.md 内 FR-001 出现 7 次时，消息用相对路径 + 重复次数计数，
+        不再拼接绝对路径清单（旧全局唯一口径下 16 条消息 ≈ 25KB 触发截断）。
+        """
+        ws = create_valid_workspace(tmp_path / "dup7")
+        spec = ws / "specs" / "module1" / "feature1" / "spec.md"
+        spec.write_text(
+            spec.read_text(encoding="utf-8")
+            + "\n".join(f"### FR-001: 重复{i}\nAC-001\n" for i in range(2, 8)),
+            encoding="utf-8")
+
+        report = check_conformance(ws, "test-dup7")
+        dup = [f for f in report.findings
+               if f.rule == RuleName.ANCHOR.value and "FR-001" in f.message]
+        assert dup, "应报告 FR-001 重复"
+        msg = dup[0].message
+        assert str(tmp_path).replace("\\", "/") not in msg.replace("\\", "/"), \
+            f"消息不应含工作区绝对前缀: {msg[:120]}"
+        assert "specs/module1/feature1/spec.md" in msg, \
+            f"消息应含相对路径: {msg}"
+        assert "重复定义 7 次" in msg, f"应报重复次数: {msg}"
+        assert len(msg) < 200, f"消息应可控（实测 {len(msg)}）: {msg}"
+
+    def test_anchor_duplicate_detail_relative_full(self, tmp_path):
+        """detail 结构化字段：files 相对路径 + occurrences 计数 + module/feature。"""
+        ws = create_valid_workspace(tmp_path / "dup3")
+        spec = ws / "specs" / "module1" / "feature1" / "spec.md"
+        spec.write_text(
+            spec.read_text(encoding="utf-8") + "### FR-002: 重复\nAC-003\n" * 2,
+            encoding="utf-8")
+
+        report = check_conformance(ws, "test-dup3")
+        dup = [f for f in report.findings
+               if f.rule == RuleName.ANCHOR.value and "FR-002" in f.message]
+        assert dup, "应报告 FR-002 重复"
+        d = dup[0].detail
+        assert d["fr_id"] == "FR-002"
+        assert d["module"] == "module1" and d["feature"] == "feature1"
+        assert d["files"] == ["specs/module1/feature1/spec.md"], d
+        assert d["occurrences"] == 3, d
+
+    def test_delta_missing_files_warn_not_reject(self, tmp_path):
+        """delta 必备件缺失降级 WARN（2026-08-24 拍板）：
+
+        TDM 等工作区的 delta 结构由其 AGENTS.md 自定义（proposal 或 spec.md /
+        delta-specs/ 子目录等），SpecGuard 不强推三件套模板；缺件不再 REJECT，
+        也不再卡 delta_committer 的受限提交门禁（门禁只看 ERROR）。
+        """
+        ws = create_valid_workspace(tmp_path / "delta-missing")
+        for f in ("proposal.md", "delta-spec.md", "delta.manifest.yaml"):
+            (ws / "changes" / "delta001" / f).unlink()
+
+        report = check_conformance(ws, "test-delta-missing")
+        struct_err = [f for f in report.findings
+                      if f.rule == RuleName.STRUCT.value
+                      and f.level == RuleLevel.ERROR.value
+                      and "缺少必备文件" in f.message]
+        assert not struct_err, \
+            f"缺件应降级 WARN 不再 ERROR: {[f.message for f in struct_err]}"
+        warn = [f for f in report.findings
+                if f.rule == RuleName.STRUCT.value
+                and f.level == RuleLevel.WARN.value
+                and "缺少必备文件" in f.message]
+        assert len(warn) == 3, "三件套缺件各报一条 WARN"
+        assert report.verdict == "PASS", "纯 WARN 不应 REJECT"
 
     def test_manifest_violation(self, tmp_path):
         """MANIFEST 违规：manifest 与 delta-spec 不一致应报 ERROR。"""

@@ -195,12 +195,15 @@ def create_agents_violation(path: Path) -> Path:
 
 
 def create_anchor_violation(path: Path) -> Path:
-    """ANCHOR 违规：FR 锚点重复。"""
+    """ANCHOR 违规：FR 锚点重复（同一 spec.md 内 FR-001 出现两次）。
+
+    唯一性边界为功能目录（specs/{module}/{feature}/，用户拍板 2026-08-24）：
+    跨功能/跨模块同名 FR 编号（TDM 各功能 FR-001 本地起步约定）合法。
+    """
     ws = create_valid_workspace(path)
-    # 在另一个 feature 中重复定义 FR-001
-    (ws / "specs" / "module1" / "feature2").mkdir(parents=True, exist_ok=True)
-    (ws / "specs" / "module1" / "feature2" / "spec.md").write_text(
-        "# Module1 - Feature2\n\n### FR-001: 重复的查询功能\nAC-001\n",
+    spec = ws / "specs" / "module1" / "feature1" / "spec.md"
+    spec.write_text(
+        spec.read_text(encoding="utf-8") + "\n### FR-001: 重复的查询功能\nAC-001\n",
         encoding="utf-8",
     )
     return ws

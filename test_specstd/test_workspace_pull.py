@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 import specstd.workspace as wsm
+from specstd.ws_registry import _SYNC_REPORT_MAX_FINDINGS
 from test_specstd.conftest import create_valid_workspace
 
 
@@ -97,3 +98,34 @@ class TestPull:
         result = wsm.pull("ws_local")
         assert result["ok"] is False
         assert "不是 git 型" in result["error"]
+
+    def test_pull_report_slimmed(self, git_workspace, tmp_path, monkeypatch):
+        """pull 附带合规自检摘要化（会话 20260824_153425_a3d53352）：
+
+        findings 超 _SYNC_REPORT_MAX_FINDINGS 时只返回前 N 条 + omitted 计数，
+        不再全量返回（曾致 47 条 findings 50KB+ 触发会话层截断）。
+        唯一性边界为功能目录：同一 spec.md 内 12 个编号各重复 2 次 → 12 条 ANCHOR。
+        """
+        src, name = git_workspace
+        # 重写 module1/feature1/spec.md：FR-001..FR-012 每个出现 2 次
+        body = "\n".join(
+            f"### FR-{i:03d}: 重复A\nAC-001\n\n### FR-{i:03d}: 重复B\nAC-001\n"
+            for i in range(1, 13))
+        (src / "specs" / "module1" / "feature1" / "spec.md").write_text(
+            f"# Module1 - Feature1\n\n{body}\n", encoding="utf-8")
+        _git(["add", "-A"], cwd=src)
+        _git(["commit", "-m", "dup anchors"], cwd=src)
+
+        result = wsm.pull(name)
+        assert result["ok"] is True
+        report = result["report"]
+        assert report["verdict"] == "REJECT"
+        assert report["summary"]["error"] >= 12
+        assert len(report["findings"]) == _SYNC_REPORT_MAX_FINDINGS
+        assert report["omitted"] >= 12 - _SYNC_REPORT_MAX_FINDINGS
+        assert "validate" in report["note"]
+        # 样本消息是相对路径瘦身版（无工作区绝对前缀）
+        anchor_msgs = [f["message"] for f in report["findings"]
+                       if f["rule"] == "ANCHOR"]
+        assert anchor_msgs, "样本中应含 ANCHOR 条目"
+        assert all(str(tmp_path) not in m for m in anchor_msgs)

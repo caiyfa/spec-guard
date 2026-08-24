@@ -45,6 +45,10 @@ from specstd.anchors import (
 # 主入口
 # ══════════════════════════════════════════════════════════
 
+# 锚点重复消息里最多列出的文件数（超出部分汇总为「等 N 个文件」——消息瘦身）
+_ANCHOR_MSG_FILES = 5
+
+
 def check_conformance(workspace_root: Path, workspace_name: str = "") -> ConformanceReport:
     """执行完整合规校验，返回结构化整改报告。
 
@@ -163,9 +167,16 @@ def _check_agents(report: ConformanceReport, ws_root: Path):
 # ══════════════════════════════════════════════════════════
 
 def _check_anchor(report: ConformanceReport, ws_root: Path) -> dict[str, AnchorInfo]:
-    """检查所有 spec.md 的 FR 锚点格式有效且全局唯一。
+    """检查所有 spec.md 的 FR 锚点格式有效且功能目录内唯一。
 
-    返回 FR ID → AnchorInfo 映射（供 covers 校验使用）。
+    唯一性边界 = specs/{module}/{feature}/（用户拍板 2026-08-24「模块内唯一」）：
+    TDM 等工作区约定 FR 编号功能内本地起步（各功能 FR-001 各自独立），
+    跨功能/跨模块同名编号合法；新格式 FR-{功能}-{迭代}-{流水} 天然全局唯一
+    不受影响。标准目录结构下一功能仅一个 spec.md，实际拦下的是同一文件内
+    同名 FR 锚点重复（复制粘贴错误）。
+
+    返回 FR ID → AnchorInfo 映射（供 covers 校验使用——存在性语义，跨功能
+    同名时保留首个）。
     """
     specs_dir = ws_root / DIR_SPECS
     if not specs_dir.is_dir():
@@ -176,21 +187,39 @@ def _check_anchor(report: ConformanceReport, ws_root: Path) -> dict[str, AnchorI
     for spec_md in sorted(specs_dir.rglob(FILE_SPEC_MD)):
         all_anchors.extend(parse_spec_md(spec_md))
 
-    # 检查格式：FR ID 应匹配 FR-\d+ 或 FR-\w+-\d+（已在正则中保证）
-    # 检查全局唯一性
-    fr_locations: dict[str, list[str]] = {}
+    # 功能目录内唯一性：group key = (module, feature, fr_id)
+    fr_locations: dict[tuple[str, str, str], list[str]] = {}
     for info in all_anchors:
-        fr_locations.setdefault(info.fr_id, []).append(info.file_path)
+        key = (info.module, info.feature, info.fr_id)
+        fr_locations.setdefault(key, []).append(info.file_path)
 
-    for fr_id, paths in fr_locations.items():
+    for (module, feature, fr_id), paths in sorted(fr_locations.items()):
         if len(paths) > 1:
+            # 消息瘦身（会话 20260824_153425_a3d53352）：相对工作区根路径——
+            # 旧口径绝对路径全量拼接曾致单条消息 2KB+、sync 返回体膨胀 50KB
+            rel_paths = [str(Path(p).relative_to(ws_root)).replace("\\", "/")
+                         for p in paths]
+            uniq_files = list(dict.fromkeys(rel_paths))
+            if len(uniq_files) == 1:
+                # 标准形态：同一 spec.md 内多次出现
+                message = f"FR 锚点 '{fr_id}' 在 {uniq_files[0]} 中重复定义 {len(paths)} 次"
+            else:
+                # 防御分支（嵌套 spec.md 等异常结构致同功能目录多文件）
+                shown = uniq_files[:_ANCHOR_MSG_FILES]
+                more = (f" 等 {len(uniq_files)} 个文件"
+                        if len(uniq_files) > _ANCHOR_MSG_FILES else "")
+                scope = "/".join(x for x in (module, feature) if x) or "(specs 根)"
+                message = (f"FR 锚点 '{fr_id}' 在功能 '{scope}' 内的 "
+                           f"{len(uniq_files)} 个文件中重复定义: "
+                           f"{', '.join(shown)}{more}")
             report.add(
                 RuleName.ANCHOR.value, RuleLevel.ERROR.value,
-                f"FR 锚点 '{fr_id}' 在多个文件中重复定义: {', '.join(p for p in paths)}",
-                detail={"fr_id": fr_id, "files": paths},
+                message,
+                detail={"fr_id": fr_id, "module": module, "feature": feature,
+                        "files": uniq_files, "occurrences": len(paths)},
             )
 
-    # 返回去重后的映射（保留第一个）
+    # 返回去重后的映射（保留第一个；跨功能同名时 covers 按存在性解析）
     anchors: dict[str, AnchorInfo] = {}
     for info in all_anchors:
         if info.fr_id not in anchors:
@@ -220,12 +249,16 @@ def _check_delta(report: ConformanceReport, delta_dir: Path):
             detail={"delta_code": delta_code},
         )
 
-    # STRUCT — delta 必备文件
+    # STRUCT — delta 必备文件（2026-08-24 拍板降级 WARN，同 T-1000 缺失类不阻断先例：
+    # TDM 等工作区的 delta 结构由其 AGENTS.md 自定义——proposal 或 spec.md 声明
+    # 影响范围、delta-specs/ 子目录分模块等均合法；SpecGuard 不强推三件套模板，
+    # 缺件以 WARN 提示，不再 REJECT 阻断 delta_committer 的受限提交门禁）
     for f in DELTA_REQUIRED_FILES:
         if not (delta_dir / f).is_file():
             report.add(
-                RuleName.STRUCT.value, RuleLevel.ERROR.value,
-                f"delta '{delta_code}' 缺少必备文件: {f}",
+                RuleName.STRUCT.value, RuleLevel.WARN.value,
+                f"delta '{delta_code}' 缺少必备文件: {f}（SpecGuard 模板件，"
+                f"自定义结构的 delta 可忽略；Agent 工具起草会自动补齐）",
                 path=f"{DIR_CHANGES}/{delta_code}/{f}",
             )
 

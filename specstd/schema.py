@@ -264,10 +264,16 @@ class ConformanceReport:
         else:
             self.verdict = "PASS"
 
-    def add(self, rule: str, level: str, message: str, path: str = "", **detail):
-        """添加一条 finding。"""
+    def add(self, rule: str, level: str, message: str, path: str = "",
+            detail: dict | None = None, **extra):
+        """添加一条 finding。
+
+        detail 为结构化附加详情（如 fr_id/files）；历史上 **detail 形参会把
+        调用方的 detail={...} 再包一层（detail.detail）——显式参数消除嵌套，
+        **extra 保留旧式零散关键字兼容。
+        """
         self.findings.append(Finding(rule=rule, level=level, message=message,
-                                     path=path, detail=detail))
+                                     path=path, detail={**(detail or {}), **extra}))
         # 重算 summary 和 verdict
         self.__post_init__()
 

@@ -29,6 +29,10 @@ _WINDOWS_RESERVED = {"CON", "PRN", "AUX", "NUL",
 # 注册表读写锁（V17 修复：并发请求防写坏）
 _REGISTRY_LOCK = threading.RLock()
 
+# sync（pull）附带合规自检的最大样本条数（超出部分只给 omitted 计数——
+# 拉取语义不需要全量整改报告，完整报告走 validate/合规页）
+_SYNC_REPORT_MAX_FINDINGS = 10
+
 
 def _validate_name(name: str) -> str | None:
     """校验工作区名称合法性（黑名单式：防路径穿越，放行中文等任意字符）。
@@ -438,15 +442,28 @@ def pull(name: str) -> dict:
         ws_dict[name]["last_commit"] = new_commit
         _save_registry(registry)
 
-    # 执行合规校验
+    # 执行合规校验（摘要化：sync 语义是拉取，附带健康度自检只给 verdict +
+    # 计数 + 前 N 条样本——会话 20260824_153425_a3d53352：多模块工作区锚点重复
+    # 曾致 47 条 findings 全量返回 50KB+，触发会话层截断且对「拉取」任务无信息量）
     report = check_conformance(clone_path, name)
+    rd = report.to_dict()
+    findings = rd.get("findings") or []
+    report_slim = {
+        "verdict": rd.get("verdict"),
+        "summary": rd.get("summary") or {},
+        "findings": findings[:_SYNC_REPORT_MAX_FINDINGS],
+    }
+    if len(findings) > _SYNC_REPORT_MAX_FINDINGS:
+        report_slim["omitted"] = len(findings) - _SYNC_REPORT_MAX_FINDINGS
+        report_slim["note"] = (f"仅显示前 {_SYNC_REPORT_MAX_FINDINGS} 条，"
+                                f"完整合规报告用 validate 工具或工作台合规页查询")
 
     return {
         "ok": True,
         "old_commit": old_commit,
         "new_commit": new_commit,
         "changed": old_commit != new_commit,
-        "report": report.to_dict(),
+        "report": report_slim,
     }
 
 
