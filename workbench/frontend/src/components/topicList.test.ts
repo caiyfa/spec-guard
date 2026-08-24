@@ -3,8 +3,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { filterTopics, sortTopics, filterAndSortTopics, dedupeTopics,
-  collectKeywords } from './topicList';
-import type { FeishuTopic } from '../api';
+  collectKeywords, buildTagIndex, groupTagFacets, tagNormalizeHints }
+  from './topicList';
+import type { FeishuTopic, FeishuTagRegistry } from '../api';
 
 function topic(p: Partial<FeishuTopic>): FeishuTopic {
   return {
@@ -141,5 +142,103 @@ describe('filterTopics tags 标签筛选（AND 语义）', () => {
 
   it('未命中任何话题返回空（诚实空态，不兜底放开）', () => {
     expect(filterTopics(TAGGED, { tags: ['不存在标签'] })).toHaveLength(0);
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+// tag-taxonomy：词表索引（别名归一 / 域分组）
+// ══════════════════════════════════════════════════════════
+
+const REG: FeishuTagRegistry = {
+  version: 1,
+  tags: {
+    '权限': { aliases: ['数据权限', '权限需求'], domain: '平台权限', status: 'active' },
+    'Bug#140594': { aliases: ['Bug 140594', '140594'], domain: '', status: 'active' },
+    '新指标': { aliases: [], domain: '', status: 'pending' },
+  },
+  domains: { '平台权限': { status: 'active' } },
+};
+
+describe('buildTagIndex + collectKeywords 别名归一（tag-taxonomy）', () => {
+  it('别名归并到主标签下聚合计数（同卡多个别名只计一次）', () => {
+    const idx = buildTagIndex(REG);
+    const items = [
+      topic({ id: 'a', keywords: ['数据权限'] }),
+      topic({ id: 'b', keywords: ['权限需求', '权限'] }),
+      topic({ id: 'c', keywords: ['Bug 140594', '140594'] }),
+    ];
+    expect(collectKeywords(items, idx)).toEqual([
+      { kw: '权限', n: 2 }, { kw: 'Bug#140594', n: 1 },
+    ]);
+  });
+
+  it('无索引时原样词频（向后兼容）', () => {
+    const items = [topic({ id: 'a', keywords: ['数据权限'] })];
+    expect(collectKeywords(items)).toEqual([{ kw: '数据权限', n: 1 }]);
+  });
+
+  it('查找键忽略空白与大小写（与后端 _norm_key 同口径）', () => {
+    const idx = buildTagIndex(REG);
+    expect(idx.canonOf('bug140594')).toBe('Bug#140594');
+    expect(idx.canonOf(' 权限 ')).toBe('权限');
+    expect(idx.canonOf('未登记词')).toBe('未登记词');
+    expect(idx.statusOf('新指标')).toBe('pending');
+    expect(idx.domainOf('数据权限')).toBe('平台权限');
+  });
+});
+
+describe('filterTopics tags 经别名索引匹配（tag-taxonomy）', () => {
+  it('话题携带别名关键词也命中主标签筛选', () => {
+    const idx = buildTagIndex(REG);
+    const items = [
+      topic({ id: 'a', keywords: ['数据权限'] }),
+      topic({ id: 'b', keywords: ['同步'] }),
+    ];
+    expect(filterTopics(items, { tags: ['权限'], tagIndex: idx })
+      .map(t => t.id)).toEqual(['a']);
+  });
+});
+
+describe('groupTagFacets 按域分组（tag-taxonomy 两级展示）', () => {
+  it('按域聚合总量降序、未分组殿后；组内计数降序并携带状态', () => {
+    const idx = buildTagIndex(REG);
+    const facets = [
+      { kw: '权限', n: 2 },        // domain 平台权限
+      { kw: '同步', n: 5 },        // 未登记 → 未分组
+      { kw: 'Bug#140594', n: 3 },  // domain ''
+      { kw: '新指标', n: 1 },      // pending, domain ''
+    ];
+    const groups = groupTagFacets(facets, idx);
+    expect(groups.map(g => g.domain)).toEqual(['平台权限', '']);
+    expect(groups[0].total).toBe(2);
+    expect(groups[0].items[0]).toEqual({ kw: '权限', n: 2, status: 'active' });
+    expect(groups[1].items.map(i => i.kw)).toEqual(['同步', 'Bug#140594', '新指标']);
+    expect(groups[1].items.find(i => i.kw === '新指标')?.status).toBe('pending');
+  });
+
+  it('全域为空（词表未建档）→ 单一未分组组（调用方退化为平铺）', () => {
+    const groups = groupTagFacets([{ kw: '同步', n: 1 }], buildTagIndex(null));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].domain).toBe('');
+  });
+});
+
+describe('tagNormalizeHints 归一提示（tag-taxonomy 验收优化 T1）', () => {
+  it('命中别名的词提示归一到主标签；主标签与未知词不提示', () => {
+    const idx = buildTagIndex(REG);
+    expect(tagNormalizeHints('数据权限，权限，全新词', idx))
+      .toEqual([{ from: '数据权限', to: '权限' }]);
+  });
+
+  it('空白/大小写差异也命中（canonOf 同口径）；同主标签只提示一次', () => {
+    const idx = buildTagIndex(REG);
+    expect(tagNormalizeHints('bug 140594, BUG140594', idx))
+      .toEqual([{ from: 'bug 140594', to: 'Bug#140594' }]);
+  });
+
+  it('无索引或空输入 → 空列表（诚实降级不提示）', () => {
+    expect(tagNormalizeHints('数据权限')).toEqual([]);
+    expect(tagNormalizeHints('', buildTagIndex(REG))).toEqual([]);
+    expect(tagNormalizeHints('  ， ', buildTagIndex(REG))).toEqual([]);
   });
 });

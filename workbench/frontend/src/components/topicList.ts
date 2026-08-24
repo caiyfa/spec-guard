@@ -1,7 +1,7 @@
 // topicList.ts — 话题列表筛选/排序纯函数（T-1001 F2：卡片平铺改列表，
 // 话题多时可搜索定位）。纯函数无副作用，单测见 topicList.test.ts。
 
-import type { FeishuTopic, FeishuTopicDraft } from '../api';
+import type { FeishuTopic, FeishuTopicDraft, FeishuTagRegistry } from '../api';
 
 export type TopicLike = FeishuTopic | FeishuTopicDraft;
 
@@ -26,14 +26,101 @@ export function dedupeTopics<T extends TopicLike>(items: T[]): T[] {
 
 // T-1001 追修（标签筛选）：汇总话题关键词词频（降序，同频按字符序）——
 // 供标签芯片行展示；调用方传入「其他过滤已生效」的集合（分面计数口径）。
-export function collectKeywords(items: TopicLike[]): { kw: string; n: number }[] {
+// tag-taxonomy：传 tagIndex 时按词表别名归并到主标签下聚合（同卡多个
+// 别名归一并后只计一次——计数语义=含该标签的话题卡数）。
+export function collectKeywords(items: TopicLike[], idx?: TagIndex): { kw: string; n: number }[] {
   const freq = new Map<string, number>();
-  items.forEach(t => (t.keywords || []).forEach(k => {
-    if (k) freq.set(k, (freq.get(k) || 0) + 1);
-  }));
+  items.forEach(t => {
+    const kws = (t.keywords || []).filter(Boolean);
+    if (idx) {
+      new Set(kws.map(k => idx.canonOf(k))).forEach(c => {
+        freq.set(c, (freq.get(c) || 0) + 1);
+      });
+    } else {
+      kws.forEach(k => freq.set(k, (freq.get(k) || 0) + 1));
+    }
+  });
   return [...freq.entries()]
     .map(([kw, n]) => ({ kw, n }))
     .sort((a, b) => b.n - a.n || a.kw.localeCompare(b.kw));
+}
+
+// ══════════════════════════════════════════════════════════
+// tag-taxonomy：标签词表索引（别名归一 + 域分组；与后端 tag_registry 同口径）
+// ══════════════════════════════════════════════════════════
+
+export interface TagIndex {
+  canonOf: (kw: string) => string;    // 任意写法 → 主标签（未登记原样返回）
+  domainOf: (kw: string) => string;   // → 所属域（''=未分组）
+  statusOf: (kw: string) => string;   // → active|pending（未登记 ''）
+}
+
+// 与后端 tag_registry._norm_key 同口径：剔除全部空白 + 小写（仅匹配用）
+const normTagKey = (s: string) => String(s || '').replace(/\s+/g, '').toLowerCase();
+
+export function buildTagIndex(reg?: FeishuTagRegistry | null): TagIndex {
+  // 主标签键优先建档，别名不覆盖主标签键（与后端 canonical_map 同口径）
+  const canon: Record<string, string> = {};
+  const meta: Record<string, { domain: string; status: string }> = {};
+  if (reg?.tags) {
+    Object.keys(reg.tags).forEach(name => { canon[normTagKey(name)] = name; });
+    Object.entries(reg.tags).forEach(([name, e]) => {
+      (e.aliases || []).forEach(a => {
+        const k = normTagKey(a);
+        if (!(k in canon)) canon[k] = name;
+      });
+      meta[name] = { domain: e.domain || '', status: e.status || 'active' };
+    });
+  }
+  const lookup = (kw: string) => canon[normTagKey(kw)] || '';
+  return {
+    canonOf: kw => lookup(kw) || String(kw || '').trim(),
+    domainOf: kw => meta[lookup(kw)]?.domain || '',
+    statusOf: kw => meta[lookup(kw)]?.status || '',
+  };
+}
+
+export interface TagGroup {
+  domain: string;                 // ''=未分组（恒殿后）
+  total: number;
+  items: { kw: string; n: number; status: string }[];
+}
+
+// tag-taxonomy T1：关键词输入原文 → 归一提示列表（命中词表别名的词
+// 将归一为主标签；提示供编辑/勾选弹层就地展示，后端 canonicalize 语义不变）。
+// 拆分口径与弹层提交一致（逗号分隔）；同主标签只提示一次；无索引/空输入 → 空。
+export function tagNormalizeHints(input: string,
+                                  idx?: TagIndex): { from: string; to: string }[] {
+  if (!idx) return [];
+  const out: { from: string; to: string }[] = [];
+  const seenTo = new Set<string>();
+  String(input || '').split(/[，,]/).forEach(raw => {
+    const w = raw.trim();
+    if (!w) return;
+    const canon = idx.canonOf(w);
+    if (canon === w || seenTo.has(canon)) return;
+    seenTo.add(canon);
+    out.push({ from: w, to: canon });
+  });
+  return out;
+}
+
+// 标签分面按域分组（两级展示依据）：组按总量降序，未分组殿后；
+// 组内保持传入序（collectKeywords 已是计数降序）
+export function groupTagFacets(facets: { kw: string; n: number }[],
+                               idx?: TagIndex): TagGroup[] {
+  const groups = new Map<string, TagGroup>();
+  facets.forEach(f => {
+    const d = idx ? idx.domainOf(f.kw) : '';
+    const g = groups.get(d) || { domain: d, total: 0, items: [] };
+    g.total += f.n;
+    g.items.push({ kw: f.kw, n: f.n, status: idx ? idx.statusOf(f.kw) : '' });
+    groups.set(d, g);
+  });
+  return [...groups.values()].sort((a, b) => {
+    if (!a.domain !== !b.domain) return a.domain ? -1 : 1;
+    return b.total - a.total || a.domain.localeCompare(b.domain);
+  });
 }
 
 export type TopicSortKey =
@@ -64,6 +151,7 @@ export function filterTopics<T extends TopicLike>(items: T[], opts: {
   hideChat?: boolean;     // 闲聊默认过滤（拍板③）
   query?: string;
   tags?: string[];        // 选中标签集合（空=不筛选）
+  tagIndex?: TagIndex;    // tag-taxonomy：传入后按词表别名归一匹配
 }): T[] {
   const q = (opts.query || '').trim().toLowerCase();
   const terms = q ? q.split(/\s+/).filter(Boolean) : [];
@@ -76,8 +164,10 @@ export function filterTopics<T extends TopicLike>(items: T[], opts: {
         && (t.category || 'routine') !== opts.category) return false;
     if (opts.hideChat && (t.category || 'routine') === 'chat') return false;
     if (tags.length) {
-      const kws = t.keywords || [];
-      if (!tags.every(tag => kws.includes(tag))) return false;
+      const kws = (t.keywords || []).filter(Boolean);
+      // tag-taxonomy：有索引时话题侧关键词先归一到主标签再比对
+      const canonKws = opts.tagIndex ? kws.map(k => opts.tagIndex!.canonOf(k)) : kws;
+      if (!tags.every(tag => canonKws.includes(tag))) return false;
     }
     if (terms.length) {
       const hay = [t.title, t.summary, ...(t.keywords || [])]

@@ -8,6 +8,11 @@ agent_origin（agent 原稿，人工编辑不动它），全部变更追加 _top
 T-991 v3：每卡携带 category（chat|routine|requirement|test|solution 五分类，
 闲聊从「prompt 丢弃」改为「分类保留」——默认视图过滤在前端，可审计）与
 priority（high|normal|low，确定性信号推导初值，人工可改）。
+tag-taxonomy（pv4）：keywords 收口到词表（specflow.feishu_pool.tag_registry，
+与话题库同域 _tags.yaml）——prompt 注入既有标签清单引导复用，落卡前
+canonicalize（别名→主标签），未知词自动入 pending 待人工收录/归并；
+agent_origin 保留 LLM 原词（原稿不动）。卡片两级结构 = keywords（二级）×
+词表 domain（一级，前端分组展示派生，不落卡——存量卡词表建档即归组）。
 
 id 稳定性铁律：图谱从文件派生而非重跑 LLM——新候选与已有话题归并
 （同 chat_sha8 + 标题相似 + 同日 → 沿用旧 id），全新话题按当日 seq 分配。
@@ -24,6 +29,7 @@ from pathlib import Path
 
 import yaml
 
+from specflow.feishu_pool import tag_registry as tr
 from specflow.feishu_pool.paths import pool_dirs
 
 _MSG_RE = re.compile(r"^\[(\d{2}:\d{2})\]\s")
@@ -31,7 +37,8 @@ _TITLE_SIMILARITY = 0.6
 
 # prompt 版本（agent_origin 归因对比依据；改 prompt 语义时递增）
 # pv3：T-991 五分类 rubric + priority_hint（闲聊保留为 chat 类，不再丢弃）
-_PROMPT_VERSION = "pv3"
+# pv4：tag-taxonomy 词表复用块（known_tags）注入聚类/分段/勾选三处 prompt
+_PROMPT_VERSION = "pv4"
 
 _STATUS_ENUM = ("draft", "confirmed", "rejected")
 # T-991 schema v3：分类/优先级枚举（闲聊保留默认过滤——拍板③）
@@ -93,9 +100,13 @@ _PROMPT = """你是话题聚类助手。阅读以下群聊记录（每行格式�
 1. 所有话题都要聚（含闲聊——闲聊聚成 category=chat 的话题卡，供过滤与噪声统计，
    不要丢弃）；跨天延续的同一讨论聚为同一个话题
 2. 每个话题给出：title（≤20字）、summary（≤80字结论摘要）、
-   keywords（2~5个关键词）、msg_lines（该话题覆盖的消息行号列表，
+   keywords（2~5个关键词——优先从下方既有标签清单选取，语义相同/相近
+   即用清单原词，禁止另造近义词；括号内为别名，命中别名请输出主标签名；
+   清单没有匹配再新造）、msg_lines（该话题覆盖的消息行号列表，
    行号从 1 起始，如 [1,2,3]）、participants_count（参与人数）、
    priority_hint（high|normal|low，你对重要程度的直觉判断）
+   既有标签清单：
+{known_tags}
 3. {category_rubric}
 4. 若某话题是近期已有话题的延续讨论，附 continues: "已有话题id"（只能从下面清单选，禁止编造）：
 {existing_topics}
@@ -117,6 +128,31 @@ def _existing_topics_digest(existing: list[dict], chat_sha8: str) -> str:
         summary = str(t.get("summary", ""))[:80]
         rows.append(f"- {t.get('id')} | {t.get('title')} | {summary}")
     return "\n".join(rows) if rows else _NO_EXISTING
+
+
+_NO_TAGS = "（空——可自行新造，新词将入词表待收录区）"
+
+
+def _tag_canonicalizer(mroot: Path):
+    """词表加载 + (digest, canonicalize, flush)——批量路径一次加载、末尾落盘。
+
+    digest：prompt 注入的既有标签清单（空词表给占位行，诚实告知可新造）；
+    canonicalize：词列表 → 主标签列表（未知词暂存内存）；flush：暂存新词
+    统一入 pending 落盘（无新词不写盘；自动注册不落历史——tag_registry 决策）。
+    """
+    reg = tr.load_registry(mroot)
+    pending_new: list[str] = []
+
+    def _canon(words) -> list[str]:
+        canon, unknown = tr.canonicalize(reg, words)
+        pending_new.extend(unknown)
+        return canon
+
+    def _flush(source: str):
+        if tr.register_pending(reg, pending_new, source=source):
+            tr.save_registry(mroot, reg)
+
+    return tr.known_tags_digest(reg) or _NO_TAGS, _canon, _flush
 
 
 def last_errors() -> list[str]:
@@ -332,6 +368,8 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
     _LAST_ERRORS = []
     chats_root = pool_dirs(specflow_emp_base)["chats"]
     existing = _load_candidates(specflow_emp_base)
+    # tag-taxonomy：词表随话题库同域（生产=共享材料区，见 _cluster_once 传参）
+    tag_digest, _canon_tags, _flush_tags = _tag_canonicalizer(specflow_emp_base)
     kinds = chat_kinds or {}
     produced: list[dict] = []
     if not chats_root.is_dir():
@@ -372,14 +410,15 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                 resp = llm.chat([{"role": "user", "content": _PROMPT.format(
                     day=day, content=_numbered_lines(content),
                     existing_topics=_existing_topics_digest(existing, chat_sha8),
-                    category_rubric=_CATEGORY_RUBRIC)}])
+                    category_rubric=_CATEGORY_RUBRIC, known_tags=tag_digest)}])
                 raw_topics = _parse_llm_json(_llm_content(resp))
             except Exception as e:
                 _LAST_ERRORS.append(f"{chat_sha8}/{day}: LLM 聚类失败: {e}")
                 continue
             for rt in raw_topics:
                 msg_range = rt.get("msg_range") or []
-                keywords = [str(k) for k in (rt.get("keywords") or []) if str(k)]
+                keywords = _canon_tags(
+                    [str(k) for k in (rt.get("keywords") or []) if str(k)])
                 ids = _msg_lines_to_ids(rt.get("msg_lines"), line_ids)
                 category = _norm_category(rt.get("category"))
                 msg_count = (len(ids) if ids
@@ -431,6 +470,7 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                 produced.append(merged)
 
     _save_candidates(specflow_emp_base, existing)
+    _flush_tags("llm")                        # 本批新词统一入词表待收录
     return produced
 
 
@@ -443,9 +483,13 @@ _DRAFT_PROMPT = """你是话题分段助手。阅读以下群聊记录（每行�
 1. 所有话题段都要聚（含闲聊——闲聊聚成 category=chat 的段，供过滤与噪声统计）；
    跨天延续的同一讨论应聚为**同一个话题段**（不要按天拆开）
 2. 每个话题段给出：title（≤20字）、summary（≤80字结论摘要）、
-   keywords（2~5个关键词）、msg_lines（该段覆盖的消息行号列表，
+   keywords（2~5个关键词——优先从下方既有标签清单选取，语义相同/相近
+   即用清单原词，禁止另造近义词；括号内为别名，命中别名请输出主标签名；
+   清单没有匹配再新造）、msg_lines（该段覆盖的消息行号列表，
    行号从 1 起始，如 [1,2,3]）、participants_count（参与人数）、
    priority_hint（high|normal|low，你对重要程度的直觉判断）
+   既有标签清单：
+{known_tags}
 3. {category_rubric}
 4. 严格输出 JSON：{{"topics": [...]}}，不要输出任何其他内容
 
@@ -621,9 +665,10 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
         content, ids, line_ts, used_days = _load_window_source(
             mroot, chat_sha8, days)
         line_ids = ids
+    tag_digest, _canon_tags, _flush_tags = _tag_canonicalizer(mroot)
     resp = llm.chat([{"role": "user", "content": _DRAFT_PROMPT.format(
         day="~".join(used_days), content=_numbered_lines(content),
-        category_rubric=_CATEGORY_RUBRIC)}])
+        category_rubric=_CATEGORY_RUBRIC, known_tags=tag_digest)}])
     raw_topics = _parse_llm_json(_llm_content(resp))
     existing = _load_candidates(mroot)
     segments: list[dict] = []
@@ -645,7 +690,8 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
         seg = {
             "title": str(rt.get("title", "")),
             "summary": str(rt.get("summary", "")),
-            "keywords": [str(k) for k in (rt.get("keywords") or []) if str(k)],
+            "keywords": _canon_tags(
+                [str(k) for k in (rt.get("keywords") or []) if str(k)]),
             "category": category,
             "priority": derive_priority(
                 category, msg_count, participants, chat_kind=chat_kind,
@@ -669,6 +715,7 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
     # T-951c：草案键携带窗口标识（单日 "sha8/day"；多日 "sha8/d1~d2"）
     drafts[f"{chat_sha8}/{'~'.join(used_days)}"] = segments
     _save_drafts(emp_base, drafts)
+    _flush_tags("llm")
     return segments
 
 
@@ -676,10 +723,14 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
 # 但范围是用户已勾选的消息子集，不再要求全量聚类；附加上下文来自用户补充）
 _COMPOSE_PROMPT = """你是话题归纳助手。用户从群聊记录中勾选了以下消息，认为它们属于同一个话题。
 请根据这些消息归纳一个话题卡。要求：
-1. 给出：title（≤20字）、summary（≤80字结论摘要）、keywords（2~5个关键词）、
-   category（五分类之一）、priority_hint（high|normal|low 重要程度直觉）
+1. 给出：title（≤20字）、summary（≤80字结论摘要）、keywords（2~5个关键词——
+   优先从下方既有标签清单选取，语义相同/相近即用清单原词，命中别名输出
+   主标签名，清单没有再新造）、category（五分类之一）、
+   priority_hint（high|normal|low 重要程度直觉）
 2. {category_rubric}
 3. 严格输出 JSON：{{"topics": [...]}}（只输出一个话题），不要输出任何其他内容
+既有标签清单：
+{known_tags}
 {extra_block}
 勾选的消息（{day}）：
 {content}"""
@@ -733,18 +784,24 @@ def compose_topic_from_messages(emp_base: Path, llm, chat_sha8: str,
         lines.append(f"[{ts[5:10] or '??-??'} {ts[11:16] or '??:??'}] {sender}: {body}")
     extra_block = (f"\n用户补充说明（作为归纳的重要参考）：\n{extra_context.strip()}\n"
                    if extra_context.strip() else "")
+    tag_digest = tr.known_tags_digest(tr.load_registry(mroot)) or _NO_TAGS
     rt: dict = {}
     if not (title and summary and keywords):
         resp = llm.chat([{"role": "user", "content": _COMPOSE_PROMPT.format(
             day="~".join(used_days), content="\n".join(lines),
-            category_rubric=_CATEGORY_RUBRIC, extra_block=extra_block)}])
+            category_rubric=_CATEGORY_RUBRIC, known_tags=tag_digest,
+            extra_block=extra_block)}])
         raw = _parse_llm_json(_llm_content(resp))
         rt = raw[0] if raw else {}
     category = _norm_category(rt.get("category"))
     participants = len({str(r.get("sender_id") or r.get("sender_name") or "")
                        for r in rows} - {""})
-    kws = [str(k) for k in (keywords if keywords else (rt.get("keywords") or []))
-           if str(k)]
+    # 词表归一：手工关键词 source=human，LLM 补全 source=llm（pending 溯源）
+    kws = tr.canonicalize_and_register(
+        mroot,
+        [str(k) for k in (keywords if keywords else (rt.get("keywords") or []))
+         if str(k)],
+        source="human" if keywords else "llm")
     seg = {
         "title": str(title or rt.get("title", "")),
         "summary": str(summary or rt.get("summary", "")),
@@ -805,7 +862,7 @@ def commit_drafts(emp_base: Path, sha8: str, day: str,
                             changes={"status": {"from": t.get("status"),
                                                 "to": "rejected"}})
             t["status"] = "rejected"
-    existing = [t for t in existing]              # 全部保留（状态制）
+    existing = list(existing)                     # 全部保留（状态制）
     produced: list[dict] = []
     for seg in picked:
         if not isinstance(seg, dict):
@@ -817,6 +874,10 @@ def commit_drafts(emp_base: Path, sha8: str, day: str,
         candidate["author"] = dict(author)
         candidate["rev"] = 1
         candidate.setdefault("keywords", [])
+        if candidate["keywords"]:
+            # tag-taxonomy 兜底：旧草案/外部传入的词过词表归一（新生段已归一）
+            candidate["keywords"] = tr.canonicalize_and_register(
+                mroot, candidate["keywords"], source="llm")
         # T-991 v3：旧草案（pv2 前）无分类/优先级 → 兜底补默认
         candidate["category"] = _norm_category(candidate.get("category"))
         candidate["priority"] = _norm_priority(candidate.get("priority"))
@@ -882,10 +943,14 @@ def edit_candidate(emp_base: Path, topic_id: str,
     if summary and summary != topic.get("summary"):
         changes["summary"] = {"from": topic.get("summary"), "to": summary}
         topic["summary"] = summary
-    if keywords is not None and list(keywords) != list(topic.get("keywords") or []):
-        changes["keywords"] = {"from": list(topic.get("keywords") or []),
-                              "to": list(keywords)}
-        topic["keywords"] = list(keywords)
+    if keywords is not None:
+        # tag-taxonomy：人工编辑关键词同样过词表（别名归一 + 新词入待收录）
+        keywords = tr.canonicalize_and_register(mroot, list(keywords),
+                                                source="human")
+        if list(keywords) != list(topic.get("keywords") or []):
+            changes["keywords"] = {"from": list(topic.get("keywords") or []),
+                                  "to": list(keywords)}
+            topic["keywords"] = list(keywords)
     if category and category != topic.get("category"):
         changes["category"] = {"from": topic.get("category"), "to": category}
         topic["category"] = category
@@ -989,8 +1054,11 @@ def regen_candidate(emp_base: Path, llm, topic_id: str,
     new_origin = _make_agent_origin(rt, llm)
     topic["title"] = str(rt.get("title", topic.get("title", "")))
     topic["summary"] = str(rt.get("summary", topic.get("summary", "")))
-    topic["keywords"] = [str(k) for k in (rt.get("keywords")
-                                          or topic.get("keywords") or []) if str(k)]
+    topic["keywords"] = tr.canonicalize_and_register(
+        mroot,
+        [str(k) for k in (rt.get("keywords") or topic.get("keywords") or [])
+         if str(k)],
+        source="llm")
     # T-991：分类随重生成更新（agent 语义字段）；priority 按新信号重推导
     # （regen 是用户显式动作，重算覆盖旧值——与 title/summary 同语义）
     topic["category"] = _norm_category(rt.get("category") or topic.get("category"))

@@ -185,6 +185,21 @@ export const feishuPoolApi = {
   topicHistory: (id: string) =>
     request<{ items: FeishuTopicHistoryItem[] }>(
       `/feishu-pool/topics/history?topic_id=${encodeURIComponent(id)}`),
+  // ── tag-taxonomy：标签词表（归并/收录/设域/丢弃）──
+  tagRegistry: () =>
+    request<FeishuTagRegistry>('/feishu-pool/tags'),
+  mergeTag: (source: string, target: string) =>
+    request<{ ok: boolean }>('/feishu-pool/tags/merge', {
+      method: 'POST', body: JSON.stringify({ source, target }) }),
+  promoteTag: (name: string) =>
+    request<{ ok: boolean }>('/feishu-pool/tags/promote', {
+      method: 'POST', body: JSON.stringify({ name }) }),
+  dropTag: (name: string) =>
+    request<{ ok: boolean }>('/feishu-pool/tags/drop', {
+      method: 'POST', body: JSON.stringify({ name }) }),
+  setTagDomain: (name: string, domain: string) =>
+    request<{ ok: boolean }>('/feishu-pool/tags/domain', {
+      method: 'POST', body: JSON.stringify({ name, domain }) }),
   // T-993：跨群关联——确认/忽略（忽略写 rejected 防重复推荐）+ 关联边清单 + LLM 精筛
   relateTopics: (a: string, b: string, confirmed: boolean) =>
     request<{ a: string; b: string; status: string }>('/feishu-pool/topics/relate', {
@@ -323,6 +338,21 @@ export interface FeishuTopic {
 }
 
 export type FeishuTopicDraft = Omit<FeishuTopic, 'id'>;
+
+// tag-taxonomy：标签词表（_tags.yaml；别名归并 + 状态制 active/pending +
+// domain 一级域——话题标签爆炸收口，详见 specflow/feishu_pool/tag_registry.py）
+export interface FeishuTagEntry {
+  aliases: string[];
+  domain: string;                 // 一级域（''=未分组）
+  status: 'active' | 'pending';
+  source?: string;                // llm | human
+  created_at?: string;
+}
+export interface FeishuTagRegistry {
+  version: number;
+  tags: Record<string, FeishuTagEntry>;
+  domains: Record<string, { status: string; created_at?: string }>;
+}
 
 // T-993：跨群关联（relates_to 边——只推荐不合并，人确认后生效）
 export interface TopicRelation {

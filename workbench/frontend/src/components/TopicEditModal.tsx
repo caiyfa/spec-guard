@@ -7,9 +7,11 @@
 // 「更新本群」后可用；已入库但快照中找不到的关联如实计数提示。
 
 import { useEffect, useMemo, useState } from 'react';
-import { feishuPoolApi, type FeishuTopic, type FeishuChatMessage } from '../api';
+import { feishuPoolApi, type FeishuTopic, type FeishuChatMessage,
+  type FeishuTagRegistry } from '../api';
 import { loadChatMessages, isPseudoMessageId, MessageBody, useChatMedia,
   senderColor, fmtMsgTime } from './ChatMessageView';
+import { buildTagIndex, tagNormalizeHints } from './topicList';
 import ImageLightbox from './ImageLightbox';
 
 // 话题覆盖的日子：跨日卡显式 days；单日卡从 id（tp:{sha8}-{yyyymmdd}-{seq}）取
@@ -36,10 +38,11 @@ function deriveWindowDays(sel: FeishuChatMessage[]): {
   };
 }
 
-export default function TopicEditModal({ topic, onClose, onSaved }: {
+export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
   topic: FeishuTopic;
   onClose: () => void;
   onSaved: () => void;       // 保存成功/409 后刷新话题清单（父层重拉）
+  tagReg?: FeishuTagRegistry | null;  // tag-taxonomy T1：词表（父层下传，不自拉）
 }) {
   const [title, setTitle] = useState(topic.title);
   const [summary, setSummary] = useState(topic.summary);
@@ -54,6 +57,14 @@ export default function TopicEditModal({ topic, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [previewImg, setPreviewImg] = useState<{ url: string; caption: string } | null>(null);
+
+  // tag-taxonomy T1：关键词补全（词表 active 主标签）+ 别名归一提示；
+  // tagReg 缺失 → 恒等索引 → 无提示，诚实降级
+  const tagIdx = useMemo(() => buildTagIndex(tagReg), [tagReg]);
+  const tagOptions = useMemo(() => Object.entries(tagReg?.tags || {})
+    .filter(([, e]) => e.status === 'active').map(([n]) => n).sort(), [tagReg]);
+  const tagHints = useMemo(() => tagNormalizeHints(keywords, tagIdx),
+    [keywords, tagIdx]);
 
   const days = useMemo(() => topicDays(topic), [topic]);
   const isMulti = days.length > 1;
@@ -237,8 +248,16 @@ export default function TopicEditModal({ topic, onClose, onSaved }: {
             <textarea className={input} rows={5} value={summary}
               onChange={e => setSummary(e.target.value)} />
             <label className="text-[11px] text-gray-500">关键词（逗号分隔，2~5 个）</label>
-            <input className={input} value={keywords}
+            <input className={input} value={keywords} list="tag-active-edit"
               onChange={e => setKeywords(e.target.value)} />
+            <datalist id="tag-active-edit">
+              {tagOptions.map(n => <option key={n} value={n} />)}
+            </datalist>
+            {tagHints.length > 0 && (
+              <div className="text-[10px] text-amber-400/90 -mt-1">
+                将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
+              </div>
+            )}
             <div className="flex gap-2">
               <select className={`${input} flex-1`} value={category}
                 onChange={e => setCategory(e.target.value)}

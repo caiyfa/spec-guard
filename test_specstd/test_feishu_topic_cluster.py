@@ -347,7 +347,6 @@ def test_commit_drafts_status_regime(tmp_path):
 
 def test_edit_candidate_keywords_rev_history(tmp_path):
     """编辑 title+keywords（带 base_rev/editor）→ rev+1、last_edited_*、历史落 from/to。"""
-    import json as _json
     emp = _make_emp_for_draft(tmp_path)
     (emp / "feishu_pool" / "_topics.yaml").write_text(
         "version: 1\ntopics:\n"
@@ -769,3 +768,112 @@ class TestComposeFromMessages:
             ["om_c"], ["20260807"])
         drafts = tc._load_drafts(emp)
         assert len(drafts["3f9a2c/20260807"]) == 2       # AI 段 + 勾选段并存
+
+
+# ══════════════════════════════════════════════════════════
+# tag-taxonomy：词表收口（prompt 复用既有标签 + keywords 归一 + 新词入待收录）
+# ══════════════════════════════════════════════════════════
+
+def _make_emp_with_registry(tmp_path, tags: dict):
+    """带词表的私有区（_tags.yaml 与话题库同域落 feishu_pool/ 根）。"""
+    emp = _make_emp_for_draft(tmp_path)
+    (emp / "feishu_pool" / "_tags.yaml").write_text(
+        yaml.safe_dump({"version": 1, "tags": tags}, allow_unicode=True),
+        encoding="utf-8")
+    return emp
+
+
+class TestTagTaxonomy:
+    def test_cluster_prompt_lists_known_tags(self, tmp_path):
+        """聚类 prompt 注入既有标签清单（主标签 + 别名标注），引导复用而非新造。"""
+        emp = _make_emp_with_registry(tmp_path, {
+            "权限": {"aliases": ["数据权限"], "status": "active"}})
+        llm = _llm_returning(_OK_PAYLOAD)
+        tc.cluster_chat_snapshots(emp, llm, days=["20260807"])
+        prompt = llm.chat.call_args[0][0][0]["content"]
+        assert "既有标签" in prompt
+        assert "- 权限（别名: 数据权限）" in prompt
+
+    def test_cluster_keywords_canonicalized_origin_keeps_raw(self, tmp_path):
+        """卡片 keywords 归一到主标签；agent_origin 保留 LLM 原词（归因不动原稿）；
+        未知词自动入 pending。"""
+        emp = _make_emp_with_registry(tmp_path, {
+            "权限": {"aliases": ["数据权限"], "status": "active"}})
+        llm = _llm_returning(
+            '{"topics": [{"title": "导出权限过滤", "summary": "s",'
+            ' "keywords": ["数据权限", "新指标"],'
+            ' "msg_range": ["[14:00]", "[14:01]"], "participants_count": 2}]}')
+        out = tc.cluster_chat_snapshots(emp, llm, days=["20260807"])
+        assert out[0]["keywords"] == ["权限", "新指标"]
+        assert out[0]["agent_origin"]["keywords"] == ["数据权限", "新指标"]
+        saved = yaml.safe_load(
+            (emp / "feishu_pool" / "_tags.yaml").read_text(encoding="utf-8"))
+        assert saved["tags"]["新指标"]["status"] == "pending"
+
+    def test_cluster_prompt_version_pv4(self, tmp_path):
+        """词表复用块进 prompt → prompt 语义变更，版本升 pv4（归因对比依据）。"""
+        emp = _make_emp_for_draft(tmp_path)
+        out = tc.cluster_chat_snapshots(emp, _llm_returning(_OK_PAYLOAD),
+                                        days=["20260807"])
+        assert out[0]["agent_origin"]["prompt_version"] == "pv4"
+
+    def test_draft_segments_prompt_and_canonicalize(self, tmp_path):
+        """人工分段（重新 AI 分类）prompt 同样带既有标签；段 keywords 归一。"""
+        emp = _make_emp_with_registry(tmp_path, {
+            "权限": {"aliases": ["数据权限"], "status": "active"}})
+        llm = _llm_returning(
+            '{"topics": [{"title": "权限过滤", "summary": "s",'
+            ' "keywords": ["数据权限"], "msg_lines": [1, 2],'
+            ' "participants_count": 2}]}')
+        segs = tc.draft_chat_segments(emp, llm, "3f9a2c", ["20260807"])
+        assert segs[0]["keywords"] == ["权限"]
+        prompt = llm.chat.call_args[0][0][0]["content"]
+        assert "既有标签" in prompt and "权限" in prompt
+
+    def test_compose_manual_keywords_canonicalized(self, tmp_path):
+        """勾选生成（手工关键词）同样过词表归一。"""
+        emp = _make_emp_with_jsonl(tmp_path)
+        (emp / "feishu_pool" / "_tags.yaml").write_text(
+            yaml.safe_dump({"version": 1, "tags": {
+                "权限": {"aliases": ["数据权限"], "status": "active"}}},
+                allow_unicode=True), encoding="utf-8")
+        out = tc.compose_topic_from_messages(
+            emp, None, "3f9a2c", ["om_a"], ["20260807"],
+            title="手动", summary="手动", keywords=["数据权限"])
+        assert out["keywords"] == ["权限"]
+
+    def test_edit_keywords_canonicalized(self, tmp_path):
+        """人工编辑关键词 → 归一后落卡，历史记归一后的值。"""
+        emp = _make_emp_with_registry(tmp_path, {
+            "权限": {"aliases": ["数据权限"], "status": "active"}})
+        (emp / "feishu_pool" / "_topics.yaml").write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:3f9a2c-20260807-01\n    title: t\n    summary: s\n"
+            "    keywords: [旧词]\n    chat_sha8: 3f9a2c\n    rev: 1\n    status: draft\n"
+            "    window: ['2026-08-07T14:00', '2026-08-07T14:00']\n"
+            "    message_count: 1\n    participants_count: 1\n"
+            "    source: chats/3f9a2c/20260807.md\n", encoding="utf-8")
+        t = tc.edit_candidate(emp, "tp:3f9a2c-20260807-01",
+                              keywords=["数据权限"], editor=_EDITOR)
+        assert t["keywords"] == ["权限"]
+        hist = tc.list_history(emp, "tp:3f9a2c-20260807-01")
+        assert hist[0]["changes"]["keywords"]["to"] == ["权限"]
+
+    def test_regen_keywords_canonicalized(self, tmp_path):
+        """单卡重生成返回的关键词同样归一（落卡值，origin 留原词）。"""
+        emp = _make_emp_with_registry(tmp_path, {
+            "权限": {"aliases": ["数据权限"], "status": "active"}})
+        (emp / "feishu_pool" / "_topics.yaml").write_text(
+            "version: 1\ntopics:\n"
+            "  - id: tp:3f9a2c-20260807-01\n    title: t\n    summary: s\n"
+            "    chat_sha8: 3f9a2c\n    rev: 1\n    status: draft\n"
+            "    window: ['2026-08-07T14:00', '2026-08-07T14:01']\n"
+            "    message_count: 2\n    participants_count: 2\n"
+            "    source: chats/3f9a2c/20260807.md\n", encoding="utf-8")
+        llm = _llm_returning(
+            '{"topics": [{"title": "新标题", "summary": "s2",'
+            ' "keywords": ["数据权限"], "msg_range": ["[14:00]", "[14:01]"],'
+            ' "participants_count": 2}]}')
+        t = tc.regen_candidate(emp, llm, "tp:3f9a2c-20260807-01")
+        assert t["keywords"] == ["权限"]
+        assert t["agent_origin"]["keywords"] == ["数据权限"]
