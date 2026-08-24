@@ -104,6 +104,8 @@ def resolve_tools(purpose_tools: list, user_roles: list,
     - rbac 全量（admin/tester）= 角色层不额外收窄
     - 合并工具部分 action 可见时裁剪 schema 的 action 枚举（下发 LLM 的
       工具面与执行层白名单同源）
+    - 用途收窄时 meta 域工具无条件并入（T-1011：通用能力常驻槽——与用途无关的
+      纯读面如 topic/gate_dock_status；不挤 purpose ≤15 领域名额，仍受 RBAC 交集）
     - 返回过滤后的 Tool 列表（保持 ALL_TOOLS 顺序）
     """
     rbac_units = rbac_visible_tools(user_roles)
@@ -112,6 +114,11 @@ def resolve_tools(purpose_tools: list, user_roles: list,
     purpose_units = set(purpose_tools or [])
     if purpose_domains:
         purpose_units |= domain_tools(ALL_TOOLS, purpose_domains)
+    if purpose_units:
+        # T-1011：meta 域无条件并入（通用能力常驻槽——topic/gate_dock_status
+        # 等与用途无关的纯读面；不挤 purpose ≤15 领域名额，仍受 RBAC 交集）。
+        # 用途不收窄（units 空）时 allowed=rbac 全集本已含 meta 工具，无需处理。
+        purpose_units |= domain_tools(ALL_TOOLS, ["meta"])
     allowed: Optional[set[str]] = rbac_units
     if purpose_units:
         allowed = purpose_units if allowed is None \
@@ -237,7 +244,8 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
     if is_product_purpose and skills_xml and skills_xml != "（无）":
         # 保留产品相关技能，移除技术执行类技能
         product_skills = {"analyze-workspace", "spec-chat", "audit-spec",
-                         "validate-conformance", "zentao-story-point", "feishu-chat"}
+                         "validate-conformance", "zentao-story-point", "feishu-chat",
+                         "feishu-topic"}
         kept = []
         for line in skills_xml.splitlines():
             if not line.strip().startswith("<skill"):
@@ -250,10 +258,19 @@ def build_system_prompt(format_spec_text: str = "", agents_md: str = "",
         if skills_xml.strip() in ("<skills>", "<skills></skills>"):
             skills_xml = "（当前用途下无可展示技能）"
 
+    # T-1011：飞书话题摘要注入（通用背景，全用途；无工作区/无话题诚实空态。
+    # 时效分级+30s TTL 缓存，loader 内部兜底，不让话题库异常炸会话构建）
+    try:
+        from specflow.feishu_pool import topic_digest as _td
+        feishu_topics = _td.build_digest() or "（近期无非闲聊话题，或话题库尚未聚类）"
+    except Exception:
+        feishu_topics = "（话题摘要加载失败，可用 topic(action=list) 重试查询）"
+
     prompt = (_load_prompt_template()
               .replace("{{ format_spec }}", format_spec_text)
               .replace("{{ agents_md }}", agents_md)
-              .replace("{{ skills_xml }}", skills_xml))
+              .replace("{{ skills_xml }}", skills_xml)
+              .replace("{{ feishu_topics }}", feishu_topics))
 
     # 追加场景上下文（基础信息包）（最易变，放最后保前缀缓存）
     if scenario_context:
@@ -378,12 +395,28 @@ class AgentRuntime:
         # K-xxx：技能确定性触发——用户消息关键词命中技能 frontmatter keywords 时，
         # 以 system 消息注入提示（前端 groupMessages 跳过 system 消息不显示，LLM 可见）
         skill_hint = match_skills_hint(user_message)
+        # T-1011：话题关键词命中——用户消息命中近期话题 keywords/title 时，
+        # 把命中卡以 system 消息注入该轮（与 skill_hint 同通道，前端不显示）。
+        # 摘要分级集合内匹配（时效与 prompt 注入同口径），loader 兜底不炸会话
+        topic_hint = ""
+        try:
+            from specflow.feishu_pool import topic_digest as _td
+            hits = _td.match_topic_cards(user_message)
+            if hits:
+                lines = ["[话题命中] 用户消息命中以下飞书话题（工作区群聊背景，"
+                         "优先采信；需细节/原文用 topic(action=read/messages)）："]
+                lines += [_td.digest_line(c) for c in hits]
+                topic_hint = "\n".join(lines)
+        except Exception:
+            topic_hint = ""
         messages = [
             {"role": "system", "content": system_prompt},
             user_msg,
         ]
         if skill_hint:
             messages.insert(1, {"role": "system", "content": skill_hint})
+        if topic_hint:
+            messages.insert(1, {"role": "system", "content": topic_hint})
 
         # T-508：用户消息入口知识 nudge（每篇每会话一次、总量 ≤4KB）
         nudge = self._nudge_for_user(user_message)

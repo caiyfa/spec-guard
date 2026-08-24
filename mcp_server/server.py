@@ -3,8 +3,9 @@
 启动方式（T-975 起须从仓库根启动，模块内不再做 sys.path 引导）：
     python -m mcp_server.server          # stdio 模式（Qoder 等宿主挂载）
 
-Qoder 挂载后 list_tools 可见 39 个工具（T-982 收敛：对内 24 个合并工具
-（action 参数化）+ S8 open/ 15 个对外开放面；收敛前 92 个碎片化工具）。
+Qoder 挂载后 list_tools 可见 40 个工具（T-982 收敛：对内 25 个合并工具
+（action 参数化；T-1011 新增 meta 域 topic）+ S8 open/ 15 个对外开放面；
+收敛前 92 个碎片化工具）。
 """
 
 import asyncio
@@ -42,6 +43,7 @@ from mcp_server.tools import (  # noqa: E402
     delta_doc_writer,
     spec_search,
     gate_dock,
+    topic_query,
 )
 from mcp_server.tools.open import (  # noqa: E402  S8 对外开放面（T-083/T-085，L0 只读）
     specflow_refs as open_specflow_refs,
@@ -88,6 +90,8 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         spec_search,
         # GateDock 对话操作台状态查询（T-901，纯读）
         gate_dock,
+        # 飞书话题通用召回（T-1011，纯读 meta 域常驻）
+        topic_query,
         # S8 对外开放面（T-083/T-085）：L0 五模块，全部 side_effect: none
         open_specflow_refs,
         open_quality_query,
