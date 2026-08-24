@@ -754,3 +754,35 @@ class TestFeishuNodes:
                 == {("tp:3f9a2c-0807-01", "tp:9b1e4d-0807-01")}
             men = store.list_edges("mentions")
             assert {e["src"] for e in men} == {"tp:3f9a2c-0807-01"}   # 无 edge 回退
+
+    # ── T-1014：references 边（话题→文档/妙记材料） ──
+
+    def test_references_edges_derived(self, fake_ws):
+        """confirmed references（tp→fd/fm）→ 图谱 references 边；断链/rejected 不建边。"""
+        self._add_feishu_facts(fake_ws)   # 已含 tp:3f9a2c-0807-01 + fd:tokABC
+        fe = fake_ws["ws"] / ".specguard" / "feishu"
+        (fe / "materials" / "fd-tokDEF.md").write_text("# 口径说明\n",
+                                                       encoding="utf-8")
+        (fe / "material_links.yaml").write_text(
+            "version: 1\nlinks:\n"
+            # 合法：tp→fd confirmed → references
+            "  - src: tp:3f9a2c-0807-01\n    dst: fd:tokABC\n"
+            "    edge: references\n    confidence: 1.0\n    evidence: ''\n"
+            "    status: confirmed\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-24T10:00:00'\n"
+            # rejected 不进图谱
+            "  - src: tp:3f9a2c-0807-01\n    dst: fd:tokDEF\n"
+            "    edge: references\n    confidence: 0.0\n    evidence: ''\n"
+            "    status: rejected\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-24T10:01:00'\n"
+            # 断链：dst 材料节点不存在 → 不建边
+            "  - src: tp:3f9a2c-0807-01\n    dst: fd:ghost\n"
+            "    edge: references\n    confidence: 1.0\n    evidence: ''\n"
+            "    status: confirmed\n    confirmed_by: u1\n"
+            "    confirmed_at: '2026-08-24T10:02:00'\n",
+            encoding="utf-8")
+        _build(fake_ws)
+        with GraphStore(fake_ws["index"]) as store:
+            refs = store.list_edges("references")
+            assert {(e["src"], e["dst"]) for e in refs} \
+                == {("tp:3f9a2c-0807-01", "fd:tokABC")}
