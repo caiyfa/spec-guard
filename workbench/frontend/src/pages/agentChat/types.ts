@@ -35,8 +35,8 @@ export interface CtxUsage {
   total_tokens: number;
 }
 
-// ── 模型上下文窗口默认值 ──
-export const DEFAULT_CTX_LIMIT = 128000;
+// ── 模型上下文窗口默认值（未配置 max_context_tokens 时的回退，与设置页下拉「未设置」档一致）──
+export const DEFAULT_CTX_LIMIT = 200000;
 
 // ── 消息分组类型 ──
 export interface ToolItem {

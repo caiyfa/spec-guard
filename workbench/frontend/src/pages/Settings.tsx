@@ -57,6 +57,27 @@ export default function Settings() {
 
 type ModelForm = Omit<ModelConfig, 'id' | 'is_default' | 'created_at' | 'updated_at'> & { has_api_key: boolean };
 
+// 上下文窗口经典档位：[label, 存储值]；空串 = 未设置（AgentChat 回退 DEFAULT_CTX_LIMIT=200k）
+const CTX_OPTIONS: Array<[string, string]> = [
+  ['未设置（默认 200k）', ''],
+  ['200k', '200000'],
+  ['400k', '400000'],
+  ['1M', '1000000'],
+];
+
+// 最大输出档位：各模型典型最大输出满档 + 半档（如 1M 满档 + 512k 半档），合并去重；空串 = 不携带 max_tokens 跟随模型默认
+const OUTPUT_OPTIONS: Array<[string, string]> = [
+  ['未设置（跟随模型默认）', ''],
+  ['4k', '4000'],
+  ['8k', '8000'],
+  ['16k', '16000'],
+  ['32k', '32000'],
+  ['64k', '64000'],
+  ['128k', '128000'],
+  ['512k', '512000'],
+  ['1M', '1000000'],
+];
+
 const EMPTY_MODEL: ModelForm = {
   name: '', base_url: '', api_key: '', model: '', timeout: '120',
   max_context_tokens: '', max_output_tokens: '', thinking_enabled: 'false', reasoning_effort: '',
@@ -200,8 +221,8 @@ function ModelsTab() {
               <Field label="API Key" value={editForm.api_key} onChange={(v) => setEditForm(p => ({ ...p, api_key: v }))} type="password" placeholder={editForm.has_api_key ? '已保存，留空则不修改' : 'sk-xxx'} />
               <Field label="Model" value={editForm.model} onChange={(v) => setEditForm(p => ({ ...p, model: v }))} placeholder="deepseek-v4-flash" />
               <Field label="Timeout (s)" value={editForm.timeout} onChange={(v) => setEditForm(p => ({ ...p, timeout: v }))} placeholder="120" />
-              <Field label="上下文窗口" value={editForm.max_context_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_context_tokens: v }))} placeholder="1048576" />
-              <Field label="最大输出" value={editForm.max_output_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_output_tokens: v }))} placeholder="262144" />
+              <SelectField label="上下文窗口" value={editForm.max_context_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_context_tokens: v }))} options={CTX_OPTIONS} />
+              <SelectField label="最大输出" value={editForm.max_output_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_output_tokens: v }))} options={OUTPUT_OPTIONS} />
               {/* 思考开关 */}
               <div>
                 <label className="block text-[10px] text-gray-500 mb-0.5">启用思考</label>
@@ -450,6 +471,24 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
       <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
+    </div>
+  );
+}
+
+// 下拉档位选择（模型 token 参数用）
+function SelectField({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: Array<[string, string]>;
+}) {
+  // 存量值兜底：已保存的旧值（如 1048576）不在档位中时追加「自定义」项——select 非命中值会白屏显示首项，不丢值不静默改
+  const known = options.some(([, v]) => v === value);
+  const items = known ? options : [...options, [`自定义: ${value}`, value]];
+  return (
+    <div>
+      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono">
+        {items.map(([l, v]) => <option key={v} value={v}>{l}</option>)}
+      </select>
     </div>
   );
 }
