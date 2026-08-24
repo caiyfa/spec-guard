@@ -14,6 +14,7 @@ import asyncio
 import json
 from datetime import date, timedelta
 
+import pytest
 import yaml
 
 from specflow.feishu_pool import topic_digest as td
@@ -284,3 +285,44 @@ class TestPromptInjection:
         from agent.runtime import build_system_prompt
         prompt = build_system_prompt(format_spec_text="fmt", agents_md="rules")
         assert "话题摘要加载失败" in prompt
+
+
+# ══════════════════════════════════════════════════════════
+# T-1011 验收打回根因回归：emp 请求上下文下必须读共享区
+# （specflow_dir 空 emp 回退上下文工号，曾恒解析私有区致共享话题库不可达）
+# ══════════════════════════════════════════════════════════
+
+class TestSharedRootUnderEmpContext:
+    @pytest.fixture
+    def shared_ws(self, tmp_path, monkeypatch):
+        """激活工作区 + emp 请求上下文（模拟 Web 登录态），返回共享区根。"""
+        monkeypatch.setattr("specstd.workspace.get_workspace_root",
+                            lambda name=None: tmp_path)
+        from specstd import workspace as wmod
+        token = wmod.set_context_emp_no("90000001")
+        yield tmp_path
+        wmod.reset_context_emp_no(token)
+
+    def test_specflow_dir_force_shared(self, shared_ws):
+        from specstd.workspace import specflow_dir
+        assert specflow_dir("") == shared_ws / ".specflow" / "90000001"  # 默认仍私有
+        assert specflow_dir("", force_shared=True) == shared_ws / ".specflow"
+
+    def test_digest_reads_shared_under_emp(self, shared_ws):
+        _write_pool(shared_ws / ".specflow",
+                    [_card("tp-1", 1, priority="high")])
+        out = td.build_digest(today=TODAY)  # 不显式传 root，走生产解析路径
+        assert "- tp-1 |" in out
+
+    def test_match_reads_shared_under_emp(self, shared_ws):
+        _write_pool(shared_ws / ".specflow",
+                    [_card("tp-1", 0, keywords=["九宫格"])])
+        hits = td.match_topic_cards("九宫格怎么看", today=TODAY)
+        assert [c["id"] for c in hits] == ["tp-1"]
+
+    def test_tool_reads_shared_under_emp(self, shared_ws):
+        """端到端：emp 上下文 + 生产 _root 解析，topic(action=list) 命中共享库。"""
+        _write_pool(shared_ws / ".specflow",
+                    [_card("tp-1", 0, priority="high")])
+        out = json.loads(_run_tool("topic", {"action": "list"})[0].text)
+        assert out["ok"] and out["count"] == 1

@@ -99,9 +99,11 @@ _SEARCH_CAP = 20
 
 
 def _root() -> Path | None:
+    # 必须 force_shared（T-1011 验收打回根因修复）：specflow_dir 空 emp 会回退
+    # 请求上下文工号，Web 登录态下恒解析私有区，共享话题库永不可达
     from specstd.workspace import specflow_dir
     try:
-        return specflow_dir("")
+        return specflow_dir("", force_shared=True)
     except Exception:
         return None
 

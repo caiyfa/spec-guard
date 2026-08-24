@@ -241,16 +241,21 @@ def uploads_dir(emp: str = "") -> Path:
     return specguard_dir(emp=emp) / "uploads"
 
 
-def specflow_dir(emp: str = "") -> Path:
+def specflow_dir(emp: str = "", force_shared: bool = False) -> Path:
     """获取工作区的 .specflow 目录（S2，需求侧产物，双系统分离）。
 
     emp 非空（或请求上下文有 emp）时返回用户私有区 {ws}/.specflow/{emp}/，
     否则返回工作区级共享区 {ws}/.specflow/（向后兼容）。
+    force_shared=True 时无视 emp/上下文强制共享区——天然共享产物
+    （feishu_pool 材料池/话题库，T-949 定位即工作区公共资产）专用；
+    T-1011 验收打回根因修复：空 emp 会回退请求上下文工号，Web 登录态下
+    恒解析私有区，共享话题库永不可达（同 T-014 reports_dir 事故形态）。
     specflow_dir 不走 specguard_dir 路径——.specflow/ 是需求侧独立的目录树。
     首次创建时自动生成 README + .gitignore。
 
     Args:
         emp: 用户工号（空串时尝试请求上下文；均空 = 共享区）
+        force_shared: 强制共享区（忽略 emp 与请求上下文）
 
     Returns:
         .specflow 目录路径
@@ -261,6 +266,8 @@ def specflow_dir(emp: str = "") -> Path:
     sf_dir = ws / ".specflow"
     sf_dir.mkdir(parents=True, exist_ok=True)
     _ensure_specguard_meta(sf_dir)
+    if force_shared:
+        return sf_dir
     return _emp_subdir(sf_dir, _resolve_emp(emp))
 
 

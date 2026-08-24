@@ -31,10 +31,15 @@ _cache: dict[tuple[str, float], tuple[float, list[dict]]] = {}
 
 
 def _material_root() -> Path | None:
-    """共享材料区根（无激活工作区 → None，诚实降级为空摘要）。"""
+    """共享材料区根（无激活工作区 → None，诚实降级为空摘要）。
+
+    必须 force_shared（T-1011 验收打回根因修复）：specflow_dir 空 emp 会
+    回退请求上下文工号，Web 登录态下恒解析 {emp}/ 私有区，共享话题库
+    永不可达；feishu_pool 是工作区公共资产（T-949），天然共享产物。
+    """
     try:
         from specstd.workspace import specflow_dir
-        return specflow_dir("")
+        return specflow_dir("", force_shared=True)
     except Exception:
         return None
 
