@@ -764,7 +764,8 @@ def material_visible(item: dict, viewer_open_id: str,
 
 
 def list_pool_materials(specflow_emp_base: Path,
-                        viewer: dict | None = None) -> list[dict]:
+                        viewer: dict | None = None,
+                        watch_base: Path | None = None) -> list[dict]:
     """材料池清单（三通道快照：id/类型/标题/摘要/文件/sha/大小/mtime，时间倒序）。
 
     title/summary 是人可读层（T-930 可读性补强）：minutes 取 title+artifacts.summary、
@@ -773,13 +774,17 @@ def list_pool_materials(specflow_emp_base: Path,
     与飞书原文直链；存量无 meta 降级空串）。
     T-949：附 perm 摘要；viewer（{"open_id", "chats"}）非空时按飞书权限过滤，
     None 不过滤（向后兼容/管理员视图）。
+    T-1011 波及面回归修复：群名来源 watch_base 单独指定——watch 配置居私有区
+    （谁配置谁拉），池 base 拨正为共享区后若仍从池 base 读配置，群名全灭、
+    群聊下拉回退日期文件名；缺省 = 池 base（向后兼容单区形态）。
     """
     from specflow.feishu_pool.paths import pool_dirs
     pool = pool_dirs(specflow_emp_base)
+    cfg_base = Path(watch_base) if watch_base is not None else specflow_emp_base
     chat_names: dict[str, str] = {}
     try:
         from specflow.feishu_pool.pool_store import chat_sha8
-        for c in load_watch_config(specflow_emp_base).get("chats") or []:
+        for c in load_watch_config(cfg_base).get("chats") or []:
             name = str(c.get("name") or "")
             if name:
                 chat_names[chat_sha8(str(c.get("chat_id", "")))] = name

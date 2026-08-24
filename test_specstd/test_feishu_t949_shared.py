@@ -18,6 +18,7 @@ from test_specstd.feishu_cli_contract import pull_messages  # noqa: E402
 from services.specflow import feishu_sync_service as svc  # noqa: E402
 
 from specflow.feishu_pool import topic_cluster as tc  # noqa: E402
+from specflow.feishu_pool import pool_store  # noqa: E402
 
 def _fake_lark_with_msgs(msgs):
     def _fake(args, timeout=90):
@@ -251,6 +252,30 @@ def test_list_pool_materials_viewer_filter(tmp_path):
     assert {i["id"] for i in bob} == {"fd:tokP"}      # 仅被授权的 P 可见
     owner = svc.list_pool_materials(base, viewer={"open_id": "ou_own", "chats": set()})
     assert {i["id"] for i in owner} == {"fd:tokP"}    # owner 可见 P；Q 无 owner 且 perm 缺失不可见
+
+
+def test_list_pool_materials_chat_name_from_watch_base(tmp_path):
+    """T-1011 波及面回归：池读共享区、群名必须取自 watch_base 私有区。
+
+    生产形态（pool_materials 路由）：list_pool_materials(共享, watch_base=私有)。
+    修复前服务从池 base 读 watch 配置——T-1011 波及面把池 base 拨正为共享区后，
+    共享区无 watch 配置（谁配置谁拉、配置居私有），群名全灭、群聊下拉回退日期。
+    """
+    shared = tmp_path / ".specflow"
+    emp = shared / "90024166"
+    # 共享区：无 # 标题的群聊快照（真实同步产物形态，首行即消息）
+    pool_store.save_chat_snapshot(shared, "oc_8786450d43fc1c453beb1c147d947c03",
+                                  "20260818", "[08:45] 马泽龙: 客观标签全量重跑\n")
+    # 群名只存在于私有 watch 配置
+    svc.save_watch_config(emp, {"chats": [{"chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+                                           "name": "干部盘点产研测对齐沟通"}],
+                                "docs": [], "minutes_days": 30, "chat_days": 7})
+    items = svc.list_pool_materials(shared, watch_base=emp)
+    chat = next(i for i in items if i["type"] == "chat")
+    assert chat["title"] == "干部盘点产研测对齐沟通"
+    # 不传 watch_base（兼容缺省=池 base）：共享区无配置 → 诚实回退日期文件名
+    legacy = svc.list_pool_materials(shared)
+    assert next(i for i in legacy if i["type"] == "chat")["title"] == "20260818"
 
 # ══════════════════════════════════════════════════════════
 # T-949 T4：confirm 联动图谱事实源 + 存量私有区迁移

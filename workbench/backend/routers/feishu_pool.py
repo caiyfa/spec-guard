@@ -216,7 +216,7 @@ def pool_materials(user: CurrentUser = Depends(get_current_user),
     """材料池清单（三通道快照，时间倒序；T-949 材料在共享区 + 按当前用户
     的飞书权限可见性过滤）。纯读。"""
     return {"items": sync_svc.list_pool_materials(
-        _material_base(), viewer=_pool_viewer(user))}
+        _material_base(), viewer=_pool_viewer(user), watch_base=_sf_base())}
 
 
 @router.get("/topics")
