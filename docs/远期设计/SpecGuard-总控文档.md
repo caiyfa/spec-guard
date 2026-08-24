@@ -670,6 +670,8 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | systems/_shared/config/env.sit.yaml | sess-system-config | 2026-08-24 | 2df1327fccdb | 6c3f64b650f2 | 已完成 | T-1010：internal_token 段迁入（通用配置） |
 | systems/tdm/config/env.sit.yaml | sess-system-config | 2026-08-24 | 29a2a2db363f | 0347b19db146 | 已完成 | T-1010：internal_token 段迁出（搬至 _shared） |
 | test_specstd/test_menu_migration.py | sess-system-config | 2026-08-24 | 199a33bacc03 | 199a33bacc03 | 已完成 | T-1010：新增——菜单迁移 4 测试（映射删除/label/幂等/全新库） |
+| workbench/backend/services/menu_guard.py | sess-system-config | 2026-08-24 | f7ad58eeced2 | 612a0bd87df1 | 已完成 | T-1010：API_MENU_BINDINGS 三旧键改 menu-system-config（验收实测 /api/systems 403 抓到） |
+| test_workbench/test_menu_guard.py | sess-system-config | 2026-08-24 | e905415a3dbe | 1196a5efd46f | 已完成 | T-1010：/api/systems 绑定断言同步 menu-system-config |
 | | | | | | | |
 
 ## 7. 冲突与异常处理

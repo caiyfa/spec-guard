@@ -23,12 +23,12 @@ API_MENU_BINDINGS: dict[str, str | tuple[str, ...]] = {
     "runs": ("menu-run", "menu-history"),
     "executions": "menu-history",
     "schedules": "menu-history",
-    "reference": ("menu-plans", "menu-env-config", "menu-settings"),
+    "reference": ("menu-plans", "menu-system-config", "menu-settings"),  # T-1010：env-config 收编
     "spec": "menu-agent",
     "specflow": ("menu-agent", "menu-drafts"),
     "drafts": "menu-drafts",
     "agent": "menu-agent",
-    "workspace": ("menu-agent", "menu-workspace"),
+    "workspace": ("menu-agent", "menu-system-config"),  # T-1010：workspace 收编（menu-agent 公开保底顶栏全站可用）
     "knowledge": "menu-agent",
     "feedback": "menu-feedback",
     "notify": "menu-feedback",
@@ -42,7 +42,7 @@ API_MENU_BINDINGS: dict[str, str | tuple[str, ...]] = {
     "coverage": "menu-lifecycle",
     "zentao": "menu-agent",
     "quality": "menu-dashboard",
-    "systems": "menu-systems",
+    "systems": "menu-system-config",  # T-1010：系统包管理收编系统配置
     "feishu-pool": "menu-feishu-pool",
     "products": "menu-activity",
     # data-fab 无前端消费方，保持未绑定放行（存量行为）

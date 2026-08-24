@@ -68,7 +68,7 @@ def test_match_rules(db):
     assert menu_guard.menu_keys_for_path("/api/runs/history") == ("menu-run", "menu-history")
     # T-996 补绑漏洞与新增页
     assert menu_guard.menu_keys_for_path("/api/feishu-pool/x") == ("menu-feishu-pool",)
-    assert menu_guard.menu_keys_for_path("/api/systems") == ("menu-systems",)
+    assert menu_guard.menu_keys_for_path("/api/systems") == ("menu-system-config",)  # T-1010 收编
     assert menu_guard.menu_keys_for_path("/api/users/audit-log") == ("menu-audit",)
     assert menu_guard.menu_keys_for_path("/api/health") == ()
     assert menu_guard.menu_keys_for_path("/api/data-fab/x") == ()  # 未绑定放行
