@@ -173,6 +173,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
         } else {
           setSuccess(`工作区 ${regName} 注册成功${result.system_pending ? '（系统适配包待接入，跑测试前请先在栏1注册系统）' : ''}`);
           setRegName(''); setRegPath(''); setRegSpecguardPath('');
+          setShowRegister(false);
           load();
         }
       } else {
@@ -184,6 +185,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
         } else {
           setSuccess(`工作区 ${regName} 克隆成功${result.system_pending ? '（系统适配包待接入）' : ''}`);
           setRegName(''); setRegUrl(''); setRegSpecguardPath(''); setRegCloneDir('');
+          setShowRegister(false);
           load();
         }
       }
@@ -225,9 +227,9 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <span className="text-xs font-medium text-gray-300">🗂 工作区（{system || '—'}）</span>
-        <button onClick={() => setShowRegister(v => !v)}
+        <button onClick={() => setShowRegister(true)}
           className="px-2 py-1 bg-info text-white rounded text-xs hover:bg-info/90">
-          {showRegister ? '收起注册' : '+ 注册工作区'}
+          + 注册工作区
         </button>
       </div>
 
@@ -283,60 +285,6 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* 注册新工作区（登录即可，可折叠） */}
-        {showRegister && (
-          <div className="bg-surface-1 rounded-lg border border-border p-3">
-            <div className="text-xs text-gray-500 mb-3">注册新工作区（注册人即归属人，系统包未建可先用待接入态）</div>
-            <div className="flex gap-2 mb-3">
-              <button onClick={() => setRegType('local')} className={`px-3 py-1 text-xs rounded ${regType === 'local' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>本地文件夹</button>
-              <button onClick={() => setRegType('git')} className={`px-3 py-1 text-xs rounded ${regType === 'git' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>Git 仓库</button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="工作区名称" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-              {systems.length > 0 ? (
-                <select value={regSystem} onChange={e => setRegSystem(e.target.value)} title="归属系统（默认跟随栏1选中）"
-                  className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300">
-                  {systems.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                  {!systems.some(s => s.name === regSystem) && regSystem && <option value={regSystem}>{regSystem}（待接入）</option>}
-                </select>
-              ) : (
-                <input value={regSystem} onChange={e => setRegSystem(e.target.value)} placeholder="系统标识 (tdm)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-              )}
-              {(() => {
-                const cur = systems.find(s => s.name === regSystem);
-                return cur ? (
-                  <div className="col-span-2 text-[11px] text-gray-500 bg-surface-2/50 rounded px-2 py-1">
-                    环境: {cur.envs.join(', ') || '无'} · 账号别名: {cur.accounts.join(', ') || '无'}
-                  </div>
-                ) : (
-                  <div className="col-span-2 text-[11px] text-amber-500/80 bg-amber-900/10 rounded px-2 py-1">
-                    ⏳ 系统「{regSystem}」适配包未建——工作区可先注册（待接入），跑测试前需先在栏1注册系统
-                  </div>
-                );
-              })()}
-              {regType === 'local' ? (
-                <div className="col-span-2 flex gap-2">
-                  <input value={regPath} onChange={e => setRegPath(e.target.value)} placeholder="本地路径 (D:/work/spec-tdm)" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                  <button onClick={() => setPickerFor('local')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
-                </div>
-              ) : (
-                <>
-                  <input value={regUrl} onChange={e => setRegUrl(e.target.value)} placeholder="Git URL" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                  <input value={regBranch} onChange={e => setRegBranch(e.target.value)} placeholder="分支 (main)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                  <div className="col-span-2 flex gap-2">
-                    <input value={regCloneDir} onChange={e => setRegCloneDir(e.target.value)} placeholder="克隆目录（可选，默认 {specguard}/workspaces/_clones/{名称}）" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                    <button onClick={() => setPickerFor('git')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
-                  </div>
-                </>
-              )}
-              <input value={regSpecguardPath} onChange={e => setRegSpecguardPath(e.target.value)} placeholder=".specguard 目录位置（可选，默认 {工作区}/.specguard/）" className="col-span-2 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-            </div>
-            <button onClick={handleRegister} disabled={submitting} className="mt-2 px-4 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40">
-              {submitting ? '处理中...' : regType === 'local' ? '注册' : '克隆并注册'}
-            </button>
           </div>
         )}
 
@@ -401,6 +349,67 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
           )}
         </div>
       </div>
+
+      {/* 注册工作区弹层（登录即可；z-40 让 DirectoryPicker 的 z-50 浮在上层） */}
+      {showRegister && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40" onClick={() => setShowRegister(false)}>
+          <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-gray-200 mb-1">注册工作区</h3>
+            <div className="text-xs text-gray-500 mb-3">注册人即归属人，系统包未建可先用待接入态</div>
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => setRegType('local')} className={`px-3 py-1 text-xs rounded ${regType === 'local' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>本地文件夹</button>
+              <button onClick={() => setRegType('git')} className={`px-3 py-1 text-xs rounded ${regType === 'git' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>Git 仓库</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="工作区名称" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+              {systems.length > 0 ? (
+                <select value={regSystem} onChange={e => setRegSystem(e.target.value)} title="归属系统（默认跟随栏1选中）"
+                  className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300">
+                  {systems.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  {!systems.some(s => s.name === regSystem) && regSystem && <option value={regSystem}>{regSystem}（待接入）</option>}
+                </select>
+              ) : (
+                <input value={regSystem} onChange={e => setRegSystem(e.target.value)} placeholder="系统标识 (tdm)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+              )}
+              {(() => {
+                const cur = systems.find(s => s.name === regSystem);
+                return cur ? (
+                  <div className="col-span-2 text-[11px] text-gray-500 bg-surface-2/50 rounded px-2 py-1">
+                    环境: {cur.envs.join(', ') || '无'} · 账号别名: {cur.accounts.join(', ') || '无'}
+                  </div>
+                ) : (
+                  <div className="col-span-2 text-[11px] text-amber-500/80 bg-amber-900/10 rounded px-2 py-1">
+                    ⏳ 系统「{regSystem}」适配包未建——工作区可先注册（待接入），跑测试前需先在栏1注册系统
+                  </div>
+                );
+              })()}
+              {regType === 'local' ? (
+                <div className="col-span-2 flex gap-2">
+                  <input value={regPath} onChange={e => setRegPath(e.target.value)} placeholder="本地路径 (D:/work/spec-tdm)" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  <button onClick={() => setPickerFor('local')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
+                </div>
+              ) : (
+                <>
+                  <input value={regUrl} onChange={e => setRegUrl(e.target.value)} placeholder="Git URL" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  <input value={regBranch} onChange={e => setRegBranch(e.target.value)} placeholder="分支 (main)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  <div className="col-span-2 flex gap-2">
+                    <input value={regCloneDir} onChange={e => setRegCloneDir(e.target.value)} placeholder="克隆目录（可选，默认 {specguard}/workspaces/_clones/{名称}）" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                    <button onClick={() => setPickerFor('git')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
+                  </div>
+                </>
+              )}
+              <input value={regSpecguardPath} onChange={e => setRegSpecguardPath(e.target.value)} placeholder=".specguard 目录位置（可选，默认 {工作区}/.specguard/）" className="col-span-2 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowRegister(false)} className="px-3 py-1.5 text-sm bg-surface-3 text-gray-400 rounded">取消</button>
+              <button onClick={handleRegister} disabled={submitting}
+                className="px-4 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40">
+                {submitting ? '处理中...' : regType === 'local' ? '注册' : '克隆并注册'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 目录选择弹窗（本地路径 / 克隆落点） */}
       <DirectoryPicker

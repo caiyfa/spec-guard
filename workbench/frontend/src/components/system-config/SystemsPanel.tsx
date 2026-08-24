@@ -11,6 +11,13 @@ const TIER_BADGE: Record<string, string> = {
   code: 'bg-purple-900/30 text-purple-400',
 };
 
+// T-1011：接入分级人话解释（注册弹层选项下随选随显）
+const TIER_DESC: Record<string, string> = {
+  config: '纯配置接入——只需环境配置（env.yaml：网关/账号池/资源码），注册后在栏3维护即可跑场景',
+  template: '配置 + 断言模板——额外提供 assertions.yaml（SELECT-only DB 断言模板），注册后在栏1详情区维护',
+  code: '代码扩展——额外提供 extensions.py（自定义步骤/断言器，Python 代码），走评审闸通过后热加载',
+};
+
 interface Props {
   systems: SystemEntry[];
   selected: string;
@@ -30,7 +37,6 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
   const [cDisplay, setCDisplay] = useState('');
   const [cTier, setCTier] = useState('config');
   const [cDesc, setCDesc] = useState('');
-  const [cEnvYaml, setCEnvYaml] = useState('');
 
   // 详情编辑
   const [assertRaw, setAssertRaw] = useState('');
@@ -56,10 +62,9 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
     if (!cName) { setError('请输入系统标识'); return; }
     await run('create', () => systemsApi.create({
       name: cName, display_name: cDisplay, tier: cTier, description: cDesc,
-      env_yaml: cEnvYaml || undefined,
     }), `系统 ${cName} 已注册`);
     setShowCreate(false);
-    setCName(''); setCDisplay(''); setCDesc(''); setCEnvYaml('');
+    setCName(''); setCDisplay(''); setCDesc('');
     onSelect(cName);
   };
 
@@ -188,7 +193,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-gray-200 mb-3">注册系统包</h3>
+            <h3 className="text-sm font-bold text-gray-200 mb-3">注册系统</h3>
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-gray-500">系统标识（Python 模块名）</label>
@@ -201,23 +206,22 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
               </div>
               <div>
-                <label className="text-xs text-gray-500">接入分级</label>
+                <label className="text-xs text-gray-500">接入分级（系统的扩展能力级别）</label>
                 <div className="flex gap-2 mt-1">
                   {(['config', 'template', 'code'] as const).map(t => (
                     <button key={t} onClick={() => setCTier(t)}
                       className={`px-3 py-1.5 text-xs rounded ${cTier === t ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>{t}</button>
                   ))}
                 </div>
+                <div className="text-[11px] text-gray-500 mt-1">{TIER_DESC[cTier]}</div>
               </div>
               <div>
                 <label className="text-xs text-gray-500">描述</label>
                 <input value={cDesc} onChange={e => setCDesc(e.target.value)}
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
               </div>
-              <div>
-                <label className="text-xs text-gray-500">首个环境配置（env.sit.yaml，可选；internal_token 等通用键请放栏3「通用配置」）</label>
-                <textarea value={cEnvYaml} onChange={e => setCEnvYaml(e.target.value)} rows={4}
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-xs font-mono text-gray-300" />
+              <div className="text-[11px] text-gray-600 border-t border-border/50 pt-2">
+                环境配置（网关/账号池/资源码/db）注册后到栏3维护；通用键（sso/internal_token）放栏3「通用配置」层。
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
