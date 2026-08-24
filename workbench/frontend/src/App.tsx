@@ -14,11 +14,9 @@ import Drafts from './pages/Drafts';
 import Login from './pages/Login';
 import AdminUsers from './pages/AdminUsers';
 import FeishuPool from './pages/FeishuPool';
-import EnvironmentConfig from './pages/EnvironmentConfig';
 import AuditLog from './pages/AuditLog';
 import MenuRoles from './pages/MenuRoles';
-import SystemsAdmin from './pages/SystemsAdmin';
-import WorkspaceCenter from './pages/WorkspaceCenter';
+import SystemConfig from './pages/SystemConfig';
 import MyActivity from './pages/MyActivity';
 import GraphPanorama from './pages/GraphPanorama';
 import WorkspaceSelector from './components/WorkspaceSelector';
@@ -43,7 +41,10 @@ const REDIRECT_TARGETS: Record<string, string> = {
   '/zentao': '/agent',                     // 禅道收操作台页签
   '/spec': '/agent',                       // 合规校验收对话页签
   '/knowledge': '/agent',                  // 知识收对话页签
-  '/workspace/git-log': '/workspace',      // GitLog 已删除，回工作区中心（T-1000 重建）
+  '/workspace/git-log': '/system-config',  // GitLog 已删除，回系统配置（T-1010 三栏合一）
+  '/workspace': '/system-config',          // T-1010：工作区中心并入系统配置栏2
+  '/systems': '/system-config',            // T-1010：系统包管理并入系统配置栏1
+  '/env-config': '/system-config',         // T-1010：环境配置并入系统配置栏3
 };
 
 // 免权页面（登录即用，无需菜单授权）：路由守卫直接放行
@@ -363,12 +364,10 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/drafts" element={<Drafts />} />
               <Route path="/feedback" element={<Feedback />} />
               <Route path="/admin-users" element={<AdminUsers />} />
-              <Route path="/env-config" element={<EnvironmentConfig />} />  {/* T-306：环境信息独立维护 */}
               <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
               <Route path="/menu-roles" element={<MenuRoles />} />  {/* RBAC：菜单管理 + 角色授权 */}
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/systems" element={<SystemsAdmin />} />  {/* T-973：系统包管理（挂「系统管理」分组） */}
-              <Route path="/workspace" element={<WorkspaceCenter role={user.role} />} />  {/* T-1000：工作区中心（系统分组卡片墙） */}
+              <Route path="/settings" element={<Settings />} />  {/* T-1010：基础设置（数据库 tab 已并入系统配置） */}
+              <Route path="/system-config" element={<SystemConfig role={user.role} />} />  {/* T-1010：系统配置三栏（系统/工作区/环境配置） */}
               <Route path="/my-activity" element={<MyActivity />} />  {/* T-1000：我的活动（产出/会话/工具/执行） */}
               {/* T-996：被收编/删除的路由统一重定向（矩阵见 REDIRECT_TARGETS） */}
               {Object.entries(REDIRECT_TARGETS).map(([from, to]) => (

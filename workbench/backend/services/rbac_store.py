@@ -37,7 +37,6 @@ SEED_MENUS: list[tuple] = [
     ("menu-dashboard", "仪表盘", "", "/dashboard", "group-overview", 0, 1, 0),
     ("menu-graph", "全景图谱", "", "/graph", "group-overview", 1, 1, 0),
     ("menu-activity", "我的活动", "", "/my-activity", "group-overview", 2, 1, 0),
-    ("menu-workspace", "工作区中心", "", "/workspace", "group-overview", 3, 1, 0),
     ("group-agent", "Agent", "🤖", "", "", 1, 1, 0),
     ("menu-agent", "Agent 对话", "", "/agent", "group-agent", 0, 1, 0),
     ("menu-drafts", "草稿评审", "", "/drafts", "group-agent", 1, 1, 0),
@@ -54,9 +53,8 @@ SEED_MENUS: list[tuple] = [
     ("menu-users", "用户管理", "", "/admin-users", "group-system", 0, 1, 1),
     ("menu-menu-manage", "菜单管理", "", "/menu-roles", "group-system", 1, 1, 1),
     ("menu-audit", "审计日志", "", "/audit", "group-system", 2, 1, 0),
-    ("menu-env-config", "环境配置", "", "/env-config", "group-system", 3, 1, 0),
-    ("menu-settings", "系统设置", "", "/settings", "group-system", 4, 1, 0),
-    ("menu-systems", "系统包管理", "", "/systems", "group-system", 5, 1, 1),
+    ("menu-system-config", "系统配置", "", "/system-config", "group-system", 3, 1, 0),  # T-1010：系统包+工作区+环境配置三栏合一
+    ("menu-settings", "基础设置", "", "/settings", "group-system", 4, 1, 0),  # T-1010：原「系统设置」（数据库 tab 已并入系统配置）
 ]
 
 SEED_ROLES: list[tuple] = [
@@ -146,8 +144,11 @@ _MENU_REMAP_T996: dict[str, str] = {
     "menu-zentao": "menu-agent",        # 禅道集成收对话页内
     "menu-spec": "menu-agent",          # 合规校验收对话页内
     "menu-knowledge": "menu-agent",     # 知识收对话页内
-    "menu-workspace": "menu-dashboard", # 工作区中心让位（T-1000 重建后挂回）
     "menu-quality": "menu-dashboard",   # 质量中心（死菜单，/quality 无路由）
+    # T-1010「系统配置」三栏合一：系统包管理/环境配置/工作区中心全部收编（授权无损映射）
+    "menu-workspace": "menu-system-config",    # 工作区中心并入系统配置中栏
+    "menu-env-config": "menu-system-config",   # 环境配置并入系统配置右栏
+    "menu-systems": "menu-system-config",      # 系统包管理并入系统配置左栏
 }
 # T-996 移除的分组（子项已全部迁出）
 _GROUPS_REMOVED_T996 = ("group-workspace", "group-requirement", "group-feedback", "group-quality")

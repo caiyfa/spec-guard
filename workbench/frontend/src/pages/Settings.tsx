@@ -1,18 +1,16 @@
-/** Settings — 系统设置（SpecGuard 自身运行基础信息：数据库连接 / 模型配置 / 审计 / 执行参数）。
+/** Settings — 基础设置（SpecGuard 自身运行基础信息：模型配置 / 审计 / 执行参数 / Git）。
  *
- * 职责边界（T-308）：
- * - 本页 = SpecGuard 运行所需：DB 校验连接（引擎只读断言数据源）、LLM 模型、审计开关、看门狗超时
- * - 环境设置（🌐 环境配置页）= 测试执行基础信息：被测系统网关/账号池/资源码/SSO，按环境（sit/uat）维护
- * - 环境信息（YAML/SSO 预览）入口已迁移至「环境配置」页，本页不再重复
+ * 职责边界（T-308，T-1010 收窄）：
+ * - 本页 = SpecGuard 运行所需：LLM 模型、审计开关、看门狗超时、Git 推送凭据
+ * - 被测系统维度配置（系统包/工作区/环境 env/DB 校验连接）已并入「🧩 系统配置」页
  */
 import { useEffect, useState, useCallback } from 'react';
-import { referenceApi, modelApi, settingsApi } from '../api';
+import { modelApi, settingsApi } from '../api';
 import type { ModelConfig } from '../api';
 
-type Tab = 'db' | 'models' | 'audit' | 'run' | 'git';
+type Tab = 'models' | 'audit' | 'run' | 'git';
 
 const TAB_LABELS: Record<Tab, string> = {
-  db: '🗄 数据库',
   models: '🧠 模型配置',
   audit: '🔍 审计',
   run: '▶ 执行',
@@ -26,8 +24,8 @@ export default function Settings() {
     <div className="h-full flex flex-col">
       {/* 顶栏 */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">⚙️ 系统设置</h2>
-        <span className="text-[10px] text-gray-600">SpecGuard 运行基础信息 · 被测系统环境信息见「🌐 环境配置」</span>
+        <h2 className="text-lg font-semibold">⚙️ 基础设置</h2>
+        <span className="text-[10px] text-gray-600">SpecGuard 运行基础信息 · 被测系统配置见「🧩 系统配置」</span>
       </div>
 
       {/* Tab 栏 */}
@@ -44,110 +42,10 @@ export default function Settings() {
 
       {/* Tab 内容 */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'db' && <DbTab />}
         {tab === 'models' && <ModelsTab />}
         {tab === 'audit' && <AuditTab />}
         {tab === 'run' && <RunTab />}
         {tab === 'git' && <GitTab />}
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════
-// Tab 1: 数据库连接
-// ══════════════════════════════════════════════════════════
-
-function DbTab() {
-  const [dbForm, setDbForm] = useState({ host: '', port: 3306, user: '', password: '', name: 'hr_center', charset: 'utf8mb4' });
-  const [dbTestMsg, setDbTestMsg] = useState('');
-  const [env, setEnv] = useState('sit');
-  const [raw, setRaw] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    referenceApi.envConfig(env).then((r) => {
-      setRaw(r.raw);
-      const db = (r.parsed as Record<string, Record<string, unknown>>)?.db || {};
-      setDbForm({
-        host: String(db.host || ''), port: Number(db.port || 3306),
-        user: String(db.user || ''), password: String(db.password || ''),
-        name: String(db.name || 'hr_center'), charset: String(db.charset || 'utf8mb4'),
-      });
-    }).catch(() => {});
-  }, [env]);
-
-  const updateDb = (key: string, value: string | number) => {
-    const next = { ...dbForm, [key]: value };
-    setDbForm(next);
-    try {
-      const lines = raw.split('\n'); const newLines: string[] = [];
-      let inDb = false, dbWritten = false;
-      for (const line of lines) {
-        if (line.startsWith('db:')) { inDb = true; newLines.push('db:');
-          newLines.push(`  host: "${next.host}"`, `  port: ${next.port}`, `  user: "${next.user}"`,
-            `  password: "${next.password}"`, `  name: "${next.name}"`, `  charset: "${next.charset}"`);
-          dbWritten = true; continue; }
-        if (inDb && line.match(/^\s+\S/)) continue;
-        if (inDb && !line.match(/^\s/)) inDb = false;
-        newLines.push(line);
-      }
-      if (!dbWritten) { newLines.push('', 'db:',
-        `  host: "${next.host}"`, `  port: ${next.port}`, `  user: "${next.user}"`,
-        `  password: "${next.password}"`, `  name: "${next.name}"`, `  charset: "${next.charset}"`); }
-      setRaw(newLines.join('\n'));
-    } catch { /* ignore */ }
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setDbTestMsg('');
-    try {
-      await referenceApi.saveEnvConfig(raw, env);
-      setDbTestMsg('✓ 已保存（引擎只读校验连接，下次执行生效）');
-    } catch (e: unknown) {
-      setDbTestMsg(`❌ ${e instanceof Error ? e.message : '保存失败'}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const testDb = async () => {
-    setDbTestMsg('测试中…');
-    try {
-      const r = await referenceApi.testDb(env);
-      setDbTestMsg(r.ok ? `✅ ${r.message}` : `❌ ${r.error}`);
-    } catch (e: unknown) { setDbTestMsg(`❌ ${e instanceof Error ? e.message : '测试失败'}`); }
-  };
-
-  return (
-    <div className="bg-surface-2 border border-border rounded-lg p-4 max-w-2xl">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-gray-300">数据库连接配置</span>
-        <div className="flex items-center gap-2">
-          <select value={env} onChange={(e) => setEnv(e.target.value)}
-            className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[10px]"
-            title="按环境维护（env.{env}.yaml 的 db 段）">
-            <option value="sit">sit</option>
-            <option value="uat">uat</option>
-          </select>
-          <button onClick={save} disabled={saving}
-            className="text-[10px] px-2 py-1 rounded bg-pass/15 text-pass hover:bg-pass/25 disabled:opacity-50">💾 保存</button>
-          <button onClick={testDb} className="text-[10px] px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20">🔌 测试连接</button>
-          {dbTestMsg && <span className="text-[10px]">{dbTestMsg}</span>}
-        </div>
-      </div>
-      <p className="text-[10px] text-gray-600 mb-3">
-        SpecGuard 引擎只读校验连接（db_oracle 断言数据源）——属系统设置；
-        被测系统业务信息（网关/账号/资源码/SSO）在「🌐 环境配置」页维护。db 段物理存于 env.{env}.yaml。
-      </p>
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="主机" value={dbForm.host} onChange={(v) => updateDb('host', v)} />
-        <Field label="端口" value={String(dbForm.port)} onChange={(v) => updateDb('port', Number(v) || 3306)} />
-        <Field label="用户名" value={dbForm.user} onChange={(v) => updateDb('user', v)} />
-        <Field label="密码" value={dbForm.password} onChange={(v) => updateDb('password', v)} type="password" />
-        <Field label="数据库" value={dbForm.name} onChange={(v) => updateDb('name', v)} />
-        <Field label="字符集" value={dbForm.charset} onChange={(v) => updateDb('charset', v)} />
       </div>
     </div>
   );

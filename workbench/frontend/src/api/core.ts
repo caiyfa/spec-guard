@@ -14,7 +14,7 @@ export const session = {
   getWorkspace: () => localStorage.getItem('sg_workspace') || '',
   setWorkspace: (w: string) => {
     localStorage.setItem('sg_workspace', w);
-    // K-009：广播切换事件，已挂载页面（如工作区中心）可监听并自动重载
+    // K-009：广播切换事件，已挂载页面（如系统配置）可监听并自动重载
     window.dispatchEvent(new CustomEvent(WORKSPACE_CHANGED_EVENT, { detail: w }));
   },
 };

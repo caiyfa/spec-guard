@@ -63,7 +63,7 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
     setSaved(false);
   };
 
-  // K-009：其他页面（如工作区中心）切换工作区时联动刷新显示
+  // K-009：其他页面（如系统配置）切换工作区时联动刷新显示
   useEffect(() => {
     const onChanged = (e: Event) => {
       const name = (e as CustomEvent<string>).detail;
@@ -123,7 +123,7 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
       )}
       {saved && <span className="text-xs text-green-500">✓ 已设为默认</span>}
       {tree.every(g => g.workspaces.length === 0) && (
-        <span className="text-xs text-yellow-500">无可用工作区，请到「工作区中心」注册</span>
+        <span className="text-xs text-yellow-500">无可用工作区，请到「系统配置」注册</span>
       )}
     </div>
   );

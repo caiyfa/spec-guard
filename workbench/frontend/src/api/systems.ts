@@ -1,7 +1,7 @@
 /** api/systems — T-997 自 api.ts 按域拆分（行为零变化纯重构） */
 import { request } from './core';
 
-// ── T-996：系统包管理页（T-973 后端 /api/systems 9 端点的前端面）──
+// ── T-1010：系统配置页（T-973 后端 /api/systems 9 端点的前端面）──
 export interface ExtensionGate {
   present: boolean;
   sha256: string;
