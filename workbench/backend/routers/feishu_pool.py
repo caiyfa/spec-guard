@@ -282,6 +282,13 @@ class RelateRequest(BaseModel):
     confirmed: bool = True     # false = 忽略（rejected 留痕防重复推荐）
 
 
+# T-1014：话题↔材料关联（references 边）
+class MaterialRelateRequest(BaseModel):
+    topic_id: str
+    material_id: str                     # fd:xxx / fm:xxx
+    confirmed: bool = True
+
+
 _XREFINE_CACHE: dict[str, tuple[float, list[dict]]] = {}   # {ws: (ts, 精筛结果)}
 _XREFINE_TTL = 300.0          # 5 分钟（设计 D5：推荐不是事实，不落盘）
 
@@ -518,6 +525,41 @@ def topic_relations(user: CurrentUser = Depends(get_current_user),
     items = [link for link in facts.load_links(_ws_root())
              if link.get("edge") == "relates" and link.get("status") == "confirmed"]
     return {"items": items}
+
+
+# ══════════════════════════════════════════════════════════
+# T-1014：话题↔材料关联（references 边——只推荐不自动挂，人确认后生效）
+# ══════════════════════════════════════════════════════════
+
+@router.post("/topics/material-relate")
+def relate_topic_material(body: MaterialRelateRequest,
+                          user: CurrentUser = Depends(get_current_user),
+                          workspace: str = Depends(resolve_workspace)):
+    """人工确认/忽略话题↔材料关联：写 material_links.yaml 的 references 边
+    （confirmed=生效进图谱 + 材料副本提升图谱派生源 / rejected=留痕防重复
+    推荐）。只挂边不改材料本体；群聊材料不在范围（话题已 message_ids 直连）。
+    """
+    from specflow.feishu_pool import facts
+    from specflow.feishu_pool import topic_cluster as tc
+    known = {str(t.get("id")) for t in tc._load_candidates(_material_base())}
+    if body.topic_id not in known:
+        raise HTTPException(status_code=404,
+                            detail=f"话题不存在: {body.topic_id}")
+    mats = {str(m["id"]) for m in sync_svc.list_pool_materials(_material_base())
+            if m.get("type") in ("feishu_doc", "feishu_minutes")}
+    if body.material_id not in mats:
+        raise HTTPException(status_code=404,
+                            detail=f"材料不存在: {body.material_id}")
+    facts.append_link(_ws_root(), src=body.topic_id, dst=body.material_id,
+                      edge="references",
+                      confidence=1.0 if body.confirmed else 0.0,
+                      evidence="", confirmed_by=str(user.emp_no or ""),
+                      status="confirmed" if body.confirmed else "rejected")
+    if body.confirmed:
+        from services.specflow import feishu_review_service as rev_svc
+        rev_svc.promote_node(_material_base(), _ws_root(), body.material_id)
+    return {"src": body.topic_id, "dst": body.material_id,
+            "status": "confirmed" if body.confirmed else "rejected"}
 
 
 @router.post("/topics/cross-refine")

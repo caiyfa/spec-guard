@@ -117,6 +117,14 @@ def _promote_material(specflow_emp_base: Path, workspace_root: Path,
                 break
 
 
+def promote_node(specflow_emp_base: Path, workspace_root: Path,
+                 node_id: str) -> None:
+    """按节点 id 提升共享区图谱派生源（T-1014：/topics/material-relate 确认
+    时 fd/fm 材料副本进 {ws}/.specguard/feishu/materials/；语义与复核确认
+    提升一致，公开化复用）。"""
+    _promote_material(specflow_emp_base, workspace_root, node_id)
+
+
 def _find_active_ivs_for_fr(workspace: str, fr_id: str) -> list[dict]:
     """FR 落在哪些进行中面试的议题范围（T-927：suggest_ivs 数据源）。
 
