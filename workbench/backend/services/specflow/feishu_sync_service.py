@@ -283,8 +283,10 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None,
     T-948：群聊通道按 chat_days 天窗口逐日拉取（历史补拉能力）；
     返回 chats（有消息的 群×天 数）/ chats_empty（当日无消息的天数）/ days_pulled。
     T-949：material_base 非空时三通道快照落共享材料区。
-    T-952：chat_id 非空时**单群模式**——只拉该群（docs/minutes 跳过，
-    介入工作台「更新本群」入口，秒级反馈不拉全量）。
+    T-952：chat_id 非空时**单群模式**——群聊只拉该群（介入工作台「更新本群」
+    入口，秒级反馈不拉全量群聊）。
+    T-1013：docs/minutes 两通道不再因单群模式跳过（拍板：指定群更新也需要
+    更新文档和妙记——文档/妙记是全局资产不按群切；单群模式仅收窄群聊范围）。
     """
     from datetime import timedelta
 
@@ -297,23 +299,24 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None,
     days = [(today - timedelta(days=i)).strftime("%Y%m%d")
             for i in range(chat_days)]
     out["days_pulled"] = len(days)
-    if not chat_id:
-        for doc in cfg.get("docs") or []:
-            try:
-                sync_doc(material_root, str(doc.get("token", "")),
-                         url=str(doc.get("url", "")),
-                         meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
-                               "owner_name": str(doc.get("owner_name") or ""),
-                               "title": str(doc.get("title") or ""),
-                               "source_url": str(doc.get("url") or "")})
-                out["docs"] += 1
-            except Exception as e:
-                out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
+    # T-1013：docs/minutes 两通道不再因单群模式跳过（拍板 2026-08-24：指定群
+    # 更新也需要更新文档和妙记——全局资产不按群切；单群模式仅收窄群聊范围）
+    for doc in cfg.get("docs") or []:
         try:
-            out["minutes"] = len(sync_minutes(material_root,
-                                              int(cfg.get("minutes_days") or 0)))
+            sync_doc(material_root, str(doc.get("token", "")),
+                     url=str(doc.get("url", "")),
+                     meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
+                           "owner_name": str(doc.get("owner_name") or ""),
+                           "title": str(doc.get("title") or ""),
+                           "source_url": str(doc.get("url") or "")})
+            out["docs"] += 1
         except Exception as e:
-            out["errors"].append(f"minutes: {e}")
+            out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
+    try:
+        out["minutes"] = len(sync_minutes(material_root,
+                                          int(cfg.get("minutes_days") or 0)))
+    except Exception as e:
+        out["errors"].append(f"minutes: {e}")
     for chat in cfg.get("chats") or []:
         if chat_id and str(chat.get("chat_id", "")) != chat_id:
             continue                          # T-952：单群模式只拉指定群
@@ -583,12 +586,13 @@ def _sync_user_docs(specflow_emp_base: Path, open_id: str,
 # 材料池总览页服务函数（三期 T-929，只读 + caption 人工补写）
 # ══════════════════════════════════════════════════════════
 
-def _minutes_title_summary(f: Path) -> tuple[str, str]:
-    """妙记快照提取 title/summary（minutes 数组或裸对象兼容；artifacts.summary 优先）。"""
+def _minutes_digest(f: Path) -> tuple[str, str, list[str]]:
+    """妙记快照提取 title/summary/keywords（T-1014：artifacts.keywords 供
+    话题↔材料预筛；minutes 数组或裸对象兼容；坏 JSON 诚实降级空值）。"""
     try:
         data = json.loads(f.read_text(encoding="utf-8", errors="replace"))
     except Exception:
-        return "", ""
+        return "", "", []
     entries = data.get("minutes") if isinstance(data, dict) else None
     if not entries and isinstance(data, dict):
         entries = [data]
@@ -596,9 +600,16 @@ def _minutes_title_summary(f: Path) -> tuple[str, str]:
         if not isinstance(it, dict):
             continue
         arts = it.get("artifacts") or {}
+        kws = [str(k) for k in (arts.get("keywords") or []) if str(k)]
         return (str(it.get("title") or ""),
-                str(arts.get("summary") or it.get("summary") or ""))
-    return "", ""
+                str(arts.get("summary") or it.get("summary") or ""), kws)
+    return "", "", []
+
+
+def _minutes_title_summary(f: Path) -> tuple[str, str]:
+    """妙记快照提取 title/summary（minutes 数组或裸对象兼容；artifacts.summary 优先）。"""
+    t, s, _ = _minutes_digest(f)
+    return t, s
 
 
 def _md_title_summary(f: Path) -> tuple[str, str]:
@@ -802,13 +813,15 @@ def list_pool_materials(specflow_emp_base: Path,
             content = f.read_text(encoding="utf-8", errors="replace")
             if ntype == "feishu_doc":
                 title, summary = _md_title_summary(f)
+                keywords: list[str] = []
             else:
-                title, summary = _minutes_title_summary(f)
+                title, summary, keywords = _minutes_digest(f)
             m = _read_meta_sidecar(f)
             items.append({
                 "id": f"{prefix[:-1]}:{f.stem[len(prefix):]}",
                 "type": ntype, "file": f"{sub}/{f.name}",   # 带目录前缀（T-939：material-content 白名单/前端 imgmap 推导依赖）
                 "title": title, "summary": summary[:80],
+                "keywords": keywords,        # T-1014：妙记 artifacts.keywords（话题↔材料预筛）；文档恒空
                 "sha": pool_store.sha12(content),
                 "size": f.stat().st_size, "mtime": f.stat().st_mtime,
                 "source_url": str(m.get("source_url") or ""),
@@ -826,6 +839,7 @@ def list_pool_materials(specflow_emp_base: Path,
                 "id": f"chat:{f.parent.name}/{f.stem}", "type": "chat",
                 "file": f"chats/{f.parent.name}/{f.name}",
                 "title": title or f.stem, "summary": summary[:80],
+                "keywords": [],              # T-1014：形状统一（群聊无结构化关键词）
                 "sha": pool_store.sha12(f.read_text(encoding="utf-8",
                                                     errors="replace")),
                 "size": f.stat().st_size, "mtime": f.stat().st_mtime,
@@ -851,13 +865,13 @@ def _topic_modules(workspace_root: Path) -> dict[str, list[str]]:
         from specstd.anchors import scan_anchors
         anchors = scan_anchors(workspace_root)
         mods: dict[str, set[str]] = {}
-        for l in facts.load_links(workspace_root):
-            if l.get("status") != "confirmed" or l.get("edge") != "mentions":
+        for link in facts.load_links(workspace_root):
+            if link.get("status") != "confirmed" or link.get("edge") != "mentions":
                 continue
-            src = str(l.get("src", ""))
+            src = str(link.get("src", ""))
             if not src.startswith("tp:"):
                 continue
-            info = anchors.get(str(l.get("dst", "")))
+            info = anchors.get(str(link.get("dst", "")))
             mod = (getattr(info, "module", "") or "") if info else ""
             if mod:
                 mods.setdefault(src, set()).add(mod)
@@ -871,10 +885,14 @@ def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
     + 已确认（共享区；T-949 合并为单一存储后此区分退役）。
     T-992：每卡附 modules（FR 锚点派生，拍板②——关联不到留空）。
     T-993 D5：附 cross_suggestions（确定性预筛零 LLM——跨群候选关联，
-    rejected 对不重复推荐；LLM 精筛由 /topics/cross-refine 按需触发）。"""
+    rejected 对不重复推荐；LLM 精筛由 /topics/cross-refine 按需触发）。
+    T-1014：每卡附 materials（已确认 references 边 → fd/fm 材料，响应时
+    派生不落库，同 modules 口径）+ material_suggestions（话题×文档/妙记
+    确定性预筛，零 LLM；确认/忽略走 /topics/material-relate）。"""
     from specflow.feishu_pool import cross_chat as xc
     from specflow.feishu_pool import facts
     from specflow.feishu_pool import topic_cluster as tc
+    from specflow.feishu_pool import topic_material as tm
     candidates = tc._load_candidates(specflow_emp_base)   # 含旧文件迁移+字段归一化
     confirmed = facts.load_topics(workspace_root)
     mods = _topic_modules(workspace_root)
@@ -882,14 +900,28 @@ def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
         t["modules"] = mods.get(str(t.get("id")), [])
     for t in confirmed:
         t["modules"] = mods.get(str(t.get("id")), [])
+    links_all = facts.load_links(workspace_root)
     # 已处理对（confirmed 已关联 / rejected 已忽略）均不再重复推荐
-    done_pairs = {xc.pair_key(str(l.get("src", "")), str(l.get("dst", "")))
-                  for l in facts.load_links(workspace_root)
-                  if l.get("edge") == "relates"}
+    done_pairs = {xc.pair_key(str(link.get("src", "")), str(link.get("dst", "")))
+                  for link in links_all
+                  if link.get("edge") == "relates"}
     pool_cards = [t for t in candidates if t.get("status") != "rejected"] + confirmed
     suggestions = xc.suggest_cross_chat_relations(pool_cards, done_pairs)
+    # T-1014：话题↔材料（fd/fm）——references 边派生挂卡 + 候选预筛
+    pool_materials = list_pool_materials(specflow_emp_base)
+    mat_index = {str(m["id"]): m for m in pool_materials}
+    by_topic = tm.materials_by_topic(links_all, mat_index)
+    for t in candidates:
+        t["materials"] = by_topic.get(str(t.get("id")), [])
+    for t in confirmed:
+        t["materials"] = by_topic.get(str(t.get("id")), [])
+    done_refs = {(str(link.get("src", "")), str(link.get("dst", "")))
+                 for link in links_all if link.get("edge") == "references"}
+    material_sugs = tm.suggest_topic_materials(pool_cards, pool_materials,
+                                               done_refs)
     return {"candidates": candidates, "confirmed": confirmed,
-            "cross_suggestions": suggestions}
+            "cross_suggestions": suggestions,
+            "material_suggestions": material_sugs}
 
 
 def update_image_caption(specflow_emp_base: Path, material_stem: str,

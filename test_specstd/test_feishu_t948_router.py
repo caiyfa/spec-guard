@@ -309,3 +309,81 @@ def test_compose_llm_needed_but_unconfigured_400(tmp_path):
         rp.compose_topic(body, user=_USER, workspace="tdm")
     assert getattr(ei.value, "status_code", None) == 400
     assert "未配置 text 模型" in str(ei.value.detail)
+
+# ══════════════════════════════════════════════════════════
+# T-1014：话题↔材料关联端点（material-relate 确认/忽略）
+# ══════════════════════════════════════════════════════════
+
+def _mk_doc_material(emp: Path):
+    d = emp / "feishu_pool" / "docs"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "fd-tokABC.md").write_text("# 断档分析报告\n\n正文\n", encoding="utf-8")
+
+
+def test_material_relate_confirm_writes_references_and_promotes(tmp_path):
+    """确认 → references confirmed 边 + 材料副本提升图谱派生源。"""
+    from specflow.feishu_pool import facts
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_two_topic_file(emp)
+    _mk_doc_material(emp)
+    body = rp.MaterialRelateRequest(topic_id="tp:aaaaaa-20260807-01",
+                                    material_id="fd:tokABC", confirmed=True)
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws):
+        out = rp.relate_topic_material(body, user=_USER, workspace="tdm")
+    assert out["status"] == "confirmed"
+    links = facts.load_links(ws)
+    assert links[0]["edge"] == "references"
+    assert links[0]["src"] == "tp:aaaaaa-20260807-01"
+    assert links[0]["dst"] == "fd:tokABC"
+    assert links[0]["confirmed_by"] == "90000001"
+    promoted = ws / ".specguard" / "feishu" / "materials" / "fd-tokABC.md"
+    assert promoted.is_file()              # 图谱派生源节点材料就位
+
+
+def test_material_relate_reject_leaves_trace(tmp_path):
+    """忽略 → rejected 留痕（防重复推荐），不提升材料。"""
+    from specflow.feishu_pool import facts
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_two_topic_file(emp)
+    _mk_doc_material(emp)
+    body = rp.MaterialRelateRequest(topic_id="tp:aaaaaa-20260807-01",
+                                    material_id="fd:tokABC", confirmed=False)
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws):
+        rp.relate_topic_material(body, user=_USER, workspace="tdm")
+    links = facts.load_links(ws)
+    assert links[0]["edge"] == "references"
+    assert links[0]["status"] == "rejected"
+    assert not (ws / ".specguard" / "feishu" / "materials"
+                / "fd-tokABC.md").exists()
+
+
+def test_material_relate_unknown_404(tmp_path):
+    """话题/材料不存在 → 404（诚实报错）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_two_topic_file(emp)
+    _mk_doc_material(emp)
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws), \
+         pytest.raises(Exception) as ei:
+        rp.relate_topic_material(
+            rp.MaterialRelateRequest(topic_id="tp:ghost-20260807-99",
+                                     material_id="fd:tokABC", confirmed=True),
+            user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 404
+    with patch.object(rp, "_sf_base", return_value=emp), \
+         patch.object(rp, "_material_base", return_value=emp), \
+         patch.object(rp, "_ws_root", return_value=ws), \
+         pytest.raises(Exception) as ei:
+        rp.relate_topic_material(
+            rp.MaterialRelateRequest(topic_id="tp:aaaaaa-20260807-01",
+                                     material_id="fd:ghost", confirmed=True),
+            user=_USER, workspace="tdm")
+    assert getattr(ei.value, "status_code", None) == 404

@@ -821,3 +821,77 @@ def test_list_pool_topics_cross_suggestions(tmp_path):
         out2 = svc.list_pool_topics(emp, ws)
     # confirmed 对也不再进推荐（已是关联，无需再荐）
     assert out2["cross_suggestions"] == []
+
+# ══════════════════════════════════════════════════════════
+# T-1014：话题↔材料关联——/topics 响应派生（materials + material_suggestions）
+# ══════════════════════════════════════════════════════════
+
+def _mk_pool_with_doc_and_topic(emp, ws):
+    """T-1014 测试基建：池内一份文档 + 话题库一张卡（mtime 对齐话题窗口）。"""
+    import os
+    from datetime import datetime
+    d = emp / "feishu_pool" / "docs"
+    d.mkdir(parents=True, exist_ok=True)
+    doc = d / "fd-tokA.md"
+    doc.write_text("# 断档排查记录\n\n断档原因定位过程\n", encoding="utf-8")
+    ts = datetime(2026, 8, 7, 16, 0).timestamp()
+    os.utime(doc, (ts, ts))
+    (emp / "feishu_pool" / "_topics.yaml").write_text(
+        "version: 1\ntopics:\n"
+        "  - id: tp:aaaaaa-20260807-01\n    title: 断档排查讨论\n"
+        "    summary: s\n    keywords: [断档]\n    category: requirement\n"
+        "    status: draft\n    chat_sha8: aaaaaa\n    rev: 1\n"
+        "    window: ['2026-08-07T14:00', '2026-08-07T15:00']\n"
+        "    message_count: 5\n    participants_count: 2\n"
+        "    source: chats/aaaaaa/20260807.md\n", encoding="utf-8")
+
+
+def test_list_pool_topics_material_suggestions(tmp_path):
+    """T-1014：话题×材料预筛随 /topics 响应派生（关键词命中+时间接近）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_pool_with_doc_and_topic(emp, ws)
+    with patch("specstd.anchors.scan_anchors", lambda root: {}):
+        out = svc.list_pool_topics(emp, ws)
+    pairs = [(s["src"], s["dst"]) for s in out["material_suggestions"]]
+    assert ("tp:aaaaaa-20260807-01", "fd:tokA") in pairs
+    # 未确认前卡片 materials 为空
+    t = out["candidates"][0]
+    assert t["materials"] == []
+
+
+def test_list_pool_topics_materials_attached_after_confirm(tmp_path):
+    """T-1014：confirmed references 边 → 话题卡附 materials（响应时派生）。"""
+    from specflow.feishu_pool import facts
+    emp = tmp_path / ".specflow" / "u1"
+    ws = tmp_path / "ws"
+    _mk_pool_with_doc_and_topic(emp, ws)
+    facts.append_link(ws, src="tp:aaaaaa-20260807-01", dst="fd:tokA",
+                      edge="references", confidence=1.0, evidence="",
+                      confirmed_by="u1", status="confirmed")
+    with patch("specstd.anchors.scan_anchors", lambda root: {}):
+        out = svc.list_pool_topics(emp, ws)
+    t = out["candidates"][0]
+    assert t["materials"] == [{"id": "fd:tokA", "type": "feishu_doc",
+                               "title": "断档排查记录", "file": "docs/fd-tokA.md"}]
+    # 已确认对不再重复推荐
+    pairs = [(s["src"], s["dst"]) for s in out["material_suggestions"]]
+    assert ("tp:aaaaaa-20260807-01", "fd:tokA") not in pairs
+
+
+def test_list_pool_materials_minutes_keywords(tmp_path):
+    """T-1014：妙记条目附 artifacts.keywords（话题↔材料预筛数据源）。"""
+    emp = tmp_path / ".specflow" / "u1"
+    d = emp / "feishu_pool" / "minutes"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "fm-abc.json").write_text(json.dumps(
+        {"minutes": [{"minute_token": "abc", "title": "排查会",
+                      "artifacts": {"summary": "s",
+                                    "keywords": ["断档", "排期"]}}]},
+        ensure_ascii=False), encoding="utf-8")
+    pool_store.save_doc_snapshot(emp, "tokB", "# 文档B\n", source_url="u")
+    items = svc.list_pool_materials(emp)
+    fm = [i for i in items if i["type"] == "feishu_minutes"][0]
+    assert fm["keywords"] == ["断档", "排期"]
+    docs = [i for i in items if i["type"] == "feishu_doc"]
+    assert all(i["keywords"] == [] for i in docs)   # 文档恒空（形状统一）
