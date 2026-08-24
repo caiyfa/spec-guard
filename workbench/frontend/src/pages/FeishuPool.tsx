@@ -17,13 +17,10 @@ import {
   type CrossChatCandidate,
   type FeishuMaterialContent,
   type FeishuWatch,
-  type FeishuChatMessage,
 } from '../api';
 import FeishuWatchSettings from '../components/FeishuWatchSettings';
 import TopicWorkspace from '../components/TopicWorkspace';
 import { dedupeTopics } from '../components/topicList';
-import { MessageBody, useChatMedia, senderColor } from '../components/ChatMessageView';
-import ImageLightbox from '../components/ImageLightbox';
 
 type Tab = 'materials' | 'topics';
 
@@ -39,7 +36,7 @@ const SCOPE_LABEL: Record<string, string> = {
 
 // T-1007：材料类型 tab 维度与分页大小（组件外常量——组件内声明类型会
 // 被转译为 const 触发 TS2304）
-type MatType = 'all' | 'chat' | 'feishu_doc' | 'feishu_minutes';
+type MatType = 'all' | 'feishu_doc' | 'feishu_minutes';
 const MAT_PAGE_SIZE = 10;
 
 function fmtTime(ts: number) {
@@ -70,40 +67,6 @@ function inlineImages(content: string, imgUrls: Record<string, string>) {
     imgUrls[ph] ? `![${ph}](${imgUrls[ph]})` : `*（${ph} 图片暂不可见）*`);
 }
 
-// T-1006：群聊详情消息流（与话题工作台时间轴/编辑弹框同源渲染——
-// JSONL 事实源逐条呈现：发送人配色 / 图片真实加载·失败标注·转述 caption /
-// 附件下载；单日 isMulti=false 只显 HH:MM）
-function ChatDetailView({ rows, sha8, day }: {
-  rows: FeishuChatMessage[]; sha8: string; day: string;
-}) {
-  const { imgUrls, imgFailed, captions } = useChatMedia(rows, sha8, [day]);
-  const [previewImg, setPreviewImg] = useState<{ url: string; caption: string } | null>(null);
-  return (
-    <div className="space-y-0.5">
-      {rows.map((m, i) => (
-        <div key={`${m.message_id}-${i}`}
-          className="text-[11px] leading-relaxed px-1.5 py-1 rounded hover:bg-black/20">
-          <div className="flex items-baseline gap-1.5 text-gray-500">
-            <span className="font-medium"
-              style={{ color: senderColor(m.sender_id || m.sender_name || '') }}>
-              {m.sender_name || m.sender_id || '?'}
-            </span>
-            <span className="text-[10px] text-gray-600">{(m.ts || '').slice(11, 16)}</span>
-          </div>
-          <div className="text-gray-300">
-            <MessageBody msg={m} imgUrls={imgUrls} imgFailed={imgFailed}
-              captions={captions} highlight={false}
-              onImageClick={(url, caption) => setPreviewImg({ url, caption })} />
-          </div>
-        </div>
-      ))}
-      {previewImg && (
-        <ImageLightbox url={previewImg.url} caption={previewImg.caption}
-          onClose={() => setPreviewImg(null)} />
-      )}
-    </div>
-  );
-}
 
 
 export default function FeishuPool() {
@@ -127,7 +90,7 @@ export default function FeishuPool() {
   const [matType, setMatType] = useState<MatType>(() => {
     try {
       const v = localStorage.getItem('sg-feishu-mattype') || '';
-      return (['all', 'chat', 'feishu_doc', 'feishu_minutes'] as MatType[])
+      return (['all', 'feishu_doc', 'feishu_minutes'] as MatType[])
         .includes(v as MatType) ? (v as MatType) : 'all';
     } catch { return 'all'; }
   });
@@ -140,7 +103,7 @@ export default function FeishuPool() {
   // T-993：确定性预筛的跨群候选（list_pool_topics 附带，透传给工作台推荐位）
   const [crossSuggestions, setCrossSuggestions] = useState<CrossChatCandidate[]>([]);
   const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null;
-    imgUrls: Record<string, string>; chatRows: FeishuChatMessage[] | null } | null>(null);
+    imgUrls: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState('');
   // T-1001 F1：话题工作台专注模式（类 AgentChat K-039——临时态不持久化，
   // 隐藏页头/状态卡/监听范围卡/页签条，工作台双栏占满视口；ESC 退出）
@@ -179,23 +142,12 @@ export default function FeishuPool() {
 
   const openDetail = async (m: FeishuPoolMaterial) => {
     setError('');
-    setDetail({ m, data: null, imgUrls: {}, chatRows: null });
+    setDetail({ m, data: null, imgUrls: {} });
     try {
-      // T-1006：群聊类详情并行拉 JSONL 事实源（消息流渲染取代整段 md 文本——
-      // 时间轴同款富渲染：图片真实加载/失败标注/发送人配色；失败回退 md 视图）
-      const chatMatch = m.type === 'chat'
-        ? m.file.match(/^chats\/([0-9a-f]{8})\/(\d{8})\.md$/) : null;
-      const [d, chatRows] = await Promise.all([
-        feishuPoolApi.materialContent(m.file),
-        chatMatch
-          ? feishuPoolApi.chatMessages(chatMatch[1], chatMatch[2])
-              .then(r => (r.items || []).length ? r.items : null)
-              .catch(() => null)
-          : Promise.resolve(null),
-      ]);
+      const d = await feishuPoolApi.materialContent(m.file);
       if (!d.ok) throw new Error(d.error || '材料读取失败');
       const urls = await loadImages(m.file, d.images || []);
-      setDetail({ m, data: d, imgUrls: urls, chatRows });
+      setDetail({ m, data: d, imgUrls: urls });
     } catch (e: any) { setError(e.message); setDetail(null); }
   };
 
@@ -210,12 +162,16 @@ export default function FeishuPool() {
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
+  // T-1013：群聊快照下线本页签（与话题页签原文时间轴重复展示）——清单只承载
+  // 文档/妙记；materials 全集保留（TopicWorkspace 群/日选项派生依赖 chat 条目）
+  const listedMaterials = useMemo(
+    () => materials.filter(m => m.type !== 'chat'), [materials]);
   // 材料按监听用户筛选（T-940）：产出物归人（docs/minutes 带 owner meta），
   // 群聊不归人——选具体用户时只显示该用户产出；再点一次取消筛选。
   const watchUsers = watchCfg?.users || [];
   const filteredMaterials = ownerFilter
-    ? materials.filter(m => m.type !== 'chat' && m.owner_open_id === ownerFilter)
-    : materials;
+    ? listedMaterials.filter(m => m.owner_open_id === ownerFilter)
+    : listedMaterials;
   // T-1007：类型 tab 过滤（ownerFilter 作用于全集后，tab 再切——计数为口径内）
   const typeMaterials = matType === 'all'
     ? filteredMaterials : filteredMaterials.filter(m => m.type === matType);
@@ -269,7 +225,7 @@ export default function FeishuPool() {
       {!focusMode && (
         <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
           {tabBtn('topics', `💬 话题（${allTopicCards.length}）`)}
-          {tabBtn('materials', `📦 话题材料（${materials.length}）`)}
+          {tabBtn('materials', `📦 话题材料（${listedMaterials.length}）`)}
         </div>
       )}
 
@@ -278,7 +234,7 @@ export default function FeishuPool() {
       {tab === 'materials' && (
         <div className={card}>
           <div className="flex items-center gap-1.5 mb-2 border-b border-border pb-2 flex-wrap">
-            {([['all', '全部'], ['chat', '群聊'], ['feishu_doc', '文档'],
+            {([['all', '全部'], ['feishu_doc', '文档'],
                ['feishu_minutes', '妙记']] as const).map(([id, label]) => (
               <button key={id} onClick={() => setMatType(id)}
                 className={`px-2.5 py-1 rounded text-[11px] ${matType === id
@@ -288,7 +244,7 @@ export default function FeishuPool() {
               </button>
             ))}
             <span className="ml-auto text-[10px] text-gray-600">
-              群聊按「群 × 日」快照（同一消息只存一份，与话题卡引用不重复——话题只存 message_id 指针）
+              群聊快照不再重复展示——「话题」页签左侧原文时间轴按群+窗口查看（同一消息只存一份，话题只存 message_id 指针）
             </span>
           </div>
           {/* T-1004：监听用户筛选芯片行（原监听范围卡的「只看产出」入口保留在
@@ -424,31 +380,12 @@ export default function FeishuPool() {
               </div>
             ) : (
               <>
-                {/* T-1006：群聊类有 JSONL 事实源 → 消息流呈现（不再是整段 md 一坨）；
-                    md 视图收折叠底稿（占位符口径原文，供对照） */}
-                {detail.m.type === 'chat' && detail.chatRows ? (
-                  <>
-                    <ChatDetailView rows={detail.chatRows}
-                      sha8={detail.m.file.match(/^chats\/([0-9a-f]{8})\//)?.[1] || ''}
-                      day={detail.m.file.match(/\/(\d{8})\.md$/)?.[1] || ''} />
-                    <details className="mt-3">
-                      <summary className="text-[11px] text-gray-500 cursor-pointer">md 底稿（占位符口径）</summary>
-                      <div className="mt-2 text-xs text-gray-400 prose prose-invert prose-sm max-w-none
-                        [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
-                        <Markdown remarkPlugins={[remarkGfm]}>
-                          {inlineImages(detail.data.content, detail.imgUrls)}
-                        </Markdown>
-                      </div>
-                    </details>
-                  </>
-                ) : (
-                  <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
-                    [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
-                    <Markdown remarkPlugins={[remarkGfm]}>
-                      {inlineImages(detail.data.content, detail.imgUrls)}
-                    </Markdown>
-                  </div>
-                )}
+                <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
+                  [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
+                  <Markdown remarkPlugins={[remarkGfm]}>
+                    {inlineImages(detail.data.content, detail.imgUrls)}
+                  </Markdown>
+                </div>
                 {detail.data.type === 'feishu_minutes' && detail.data.raw && (
                   <details className="mt-3">
                     <summary className="text-[11px] text-gray-500 cursor-pointer">原始 JSON</summary>
