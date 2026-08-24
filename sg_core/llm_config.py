@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import time
 
-from sg_core.user_store import db_connect, DB_LOCK, init_db
+from sg_core.user_store import DB_LOCK, db_connect, init_db
 
 # 配置键常量（基础连接 + 模型能力）
 LLM_CONFIG_KEYS = (
@@ -123,7 +123,17 @@ def is_env_controlled() -> dict[str, bool]:
     }
 
 
-def probedb_connectivity(base_url: str, api_key: str, model: str,
+def chat_completions_url(base_url: str) -> str:
+    """拼接 OpenAI 兼容 chat/completions 端点。
+
+    base_url 末尾已含 /v1（OpenAI SDK 风格填法，如 https://api.minimaxi.com/v1）
+    时不再重复拼接，避免 /v1/v1/chat/completions 双重前缀 404。
+    """
+    base = base_url.rstrip("/")
+    return f"{base}/chat/completions" if base.endswith("/v1") else f"{base}/v1/chat/completions"
+
+
+def probe_connectivity(base_url: str, api_key: str, model: str,
                        timeout: int = 30) -> dict:
     """探测 LLM 连通性：发一条简短消息验证。
 
@@ -136,7 +146,7 @@ def probedb_connectivity(base_url: str, api_key: str, model: str,
     if not api_key:
         return {"ok": False, "message": "api_key 不能为空"}
 
-    url = f"{base_url.rstrip('/')}/v1/chat/completions"
+    url = chat_completions_url(base_url)
     body = {
         "model": model or "gpt-4o",
         "messages": [{"role": "user", "content": "hi"}],

@@ -19,6 +19,8 @@ from typing import Callable, Optional
 
 import httpx
 
+from sg_core.llm_config import chat_completions_url
+
 
 class _StreamUnavailable(Exception):
     """流式请求在建连/状态码阶段失败（未产出任何 delta）——安全回退非流式。"""
@@ -246,7 +248,7 @@ class LLMClient:
     def _call_api(self, messages: list[dict], tools: list[dict], temperature: float) -> dict:
         """调用 OpenAI 兼容 API（支持 thinking/reasoning 高级选项）。"""
         body = self._build_body(messages, tools, temperature)
-        url = f"{self.base_url.rstrip('/')}/v1/chat/completions"
+        url = chat_completions_url(self.base_url)
         resp = self._client.post(url, json=body, headers=self._headers())
         if resp.status_code != 200:
             # 捕获错误响应体，用于调试
@@ -270,7 +272,7 @@ class LLMClient:
         body = self._build_body(messages, tools, temperature)
         body["stream"] = True
         body["stream_options"] = {"include_usage": True}
-        url = f"{self.base_url.rstrip('/')}/v1/chat/completions"
+        url = chat_completions_url(self.base_url)
 
         content_parts: list[str] = []
         tool_calls_acc: dict[int, dict] = {}
