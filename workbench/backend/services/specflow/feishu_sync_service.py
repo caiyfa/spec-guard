@@ -865,13 +865,13 @@ def _topic_modules(workspace_root: Path) -> dict[str, list[str]]:
         from specstd.anchors import scan_anchors
         anchors = scan_anchors(workspace_root)
         mods: dict[str, set[str]] = {}
-        for l in facts.load_links(workspace_root):
-            if l.get("status") != "confirmed" or l.get("edge") != "mentions":
+        for link in facts.load_links(workspace_root):
+            if link.get("status") != "confirmed" or link.get("edge") != "mentions":
                 continue
-            src = str(l.get("src", ""))
+            src = str(link.get("src", ""))
             if not src.startswith("tp:"):
                 continue
-            info = anchors.get(str(l.get("dst", "")))
+            info = anchors.get(str(link.get("dst", "")))
             mod = (getattr(info, "module", "") or "") if info else ""
             if mod:
                 mods.setdefault(src, set()).add(mod)
@@ -902,9 +902,9 @@ def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
         t["modules"] = mods.get(str(t.get("id")), [])
     links_all = facts.load_links(workspace_root)
     # 已处理对（confirmed 已关联 / rejected 已忽略）均不再重复推荐
-    done_pairs = {xc.pair_key(str(l.get("src", "")), str(l.get("dst", "")))
-                  for l in links_all
-                  if l.get("edge") == "relates"}
+    done_pairs = {xc.pair_key(str(link.get("src", "")), str(link.get("dst", "")))
+                  for link in links_all
+                  if link.get("edge") == "relates"}
     pool_cards = [t for t in candidates if t.get("status") != "rejected"] + confirmed
     suggestions = xc.suggest_cross_chat_relations(pool_cards, done_pairs)
     # T-1014：话题↔材料（fd/fm）——references 边派生挂卡 + 候选预筛
@@ -915,8 +915,8 @@ def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
         t["materials"] = by_topic.get(str(t.get("id")), [])
     for t in confirmed:
         t["materials"] = by_topic.get(str(t.get("id")), [])
-    done_refs = {(str(l.get("src", "")), str(l.get("dst", "")))
-                 for l in links_all if l.get("edge") == "references"}
+    done_refs = {(str(link.get("src", "")), str(link.get("dst", "")))
+                 for link in links_all if link.get("edge") == "references"}
     material_sugs = tm.suggest_topic_materials(pool_cards, pool_materials,
                                                done_refs)
     return {"candidates": candidates, "confirmed": confirmed,

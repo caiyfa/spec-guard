@@ -112,11 +112,11 @@ def materials_by_topic(links: list[dict],
     断链诚实跳过（材料已删/未同步的 dst 不出渣数据）；同话题下按材料 id 排序。
     """
     out: dict[str, list[dict]] = {}
-    for l in links or []:
-        if str(l.get("edge") or "") != "references" \
-                or l.get("status") != "confirmed":
+    for link in links or []:
+        if str(link.get("edge") or "") != "references" \
+                or link.get("status") != "confirmed":
             continue
-        src, dst = str(l.get("src", "")), str(l.get("dst", ""))
+        src, dst = str(link.get("src", "")), str(link.get("dst", ""))
         if not src.startswith("tp:"):
             continue
         m = mat_index.get(dst)
