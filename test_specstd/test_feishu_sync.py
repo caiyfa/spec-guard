@@ -431,3 +431,157 @@ def test_e2e_pipeline(tmp_path):
         sub = focus_subgraph(store, "FR-012", depth=1)
         ids = {n["id"] for n in sub["nodes"]}
         assert {"fd:tokA", topic_id} <= ids
+
+
+# ══════════════════════════════════════════════════════════
+# T-1011 波及面修复：共享面目录解析与存量迁移
+# （specflow_dir("") 空 emp 回退上下文工号恒解析私有区——T-949 以来
+#  同步产出实际落各 emp 私有池，话题页/召回读空库）
+# ══════════════════════════════════════════════════════════
+
+def _seed_emp_pool(sf_root, emp, topic_id, day="20260823"):
+    """构造 emp 私有池：chats 一日 JSONL + 话题库一卡。"""
+    import json as _json
+
+    import yaml as _yaml
+    sha8 = emp.replace("0", "a")[:8].ljust(8, "b")  # 每 emp 独立群目录防撞名
+    pool = sf_root / emp / "feishu_pool"
+    chats = pool / "chats" / sha8
+    chats.mkdir(parents=True, exist_ok=True)
+    (chats / f"{day}.jsonl").write_text(
+        _json.dumps({"message_id": f"m-{emp}", "ts": "2026-08-23 10:00",
+                     "sender_name": "张三", "msg_type": "text",
+                     "content": f"{emp} 的消息"}, ensure_ascii=False) + "\n",
+        encoding="utf-8")
+    card = {"id": topic_id, "title": f"{emp} 话题", "summary": "结论",
+            "keywords": [], "category": "requirement", "priority": "high",
+            "status": "draft", "rev": 1, "chat_sha8": sha8,
+            "window": ["2026-08-23T10:00", "2026-08-23T11:00"],
+            "message_count": 1, "participants_count": 1,
+            "source": f"chats/{sha8}/{day}.md", "message_ids": [f"m-{emp}"]}
+    (pool / "_topics.yaml").write_text(
+        _yaml.safe_dump({"version": 1, "topics": [card]}, allow_unicode=True),
+        encoding="utf-8")
+
+
+class TestSpilloverResolverShared:
+    """emp 请求上下文下共享面 resolver 必须解析共享区（验收钉案根因回归）。"""
+
+    def test_watcher_resolve_material_base_shared_under_emp(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr("specstd.workspace.get_workspace_root",
+                            lambda name=None: tmp_path)
+        from services.specflow import feishu_watcher as fw
+
+        from specstd import workspace as wmod
+        token = wmod.set_context_emp_no("90000001")
+        try:
+            assert fw.resolve_material_base() == tmp_path / ".specflow"
+        finally:
+            wmod.reset_context_emp_no(token)
+
+    def test_router_material_base_shared_under_emp(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr("specstd.workspace.get_workspace_root",
+                            lambda name=None: tmp_path)
+        from routers import feishu_pool as fp_router
+
+        from specstd import workspace as wmod
+        token = wmod.set_context_emp_no("90000001")
+        try:
+            assert fp_router._material_base() == tmp_path / ".specflow"
+            # watch 配置/草案仍走私有区（设计不变）
+            assert fp_router._sf_base() == tmp_path / ".specflow" / "90000001"
+        finally:
+            wmod.reset_context_emp_no(token)
+
+
+class TestSpilloverWritePaths:
+    """事件直写/用户材料两个旁路必须落共享材料区。"""
+
+    def test_trigger_pull_writes_shared(self, tmp_path, monkeypatch):
+        from services.specflow import feishu_watcher as fw
+        shared = tmp_path / ".specflow"
+        monkeypatch.setattr(fw, "resolve_material_base", lambda: shared)
+        called = {}
+
+        def _fake_sync_chat(root, chat_id, day):
+            called["root"] = root
+            return {"messages": 1}
+        monkeypatch.setattr(
+            "services.specflow.feishu_sync_service.sync_chat", _fake_sync_chat)
+        w = fw.FeishuWatcher(tmp_path)
+        w.emp = "90000001"
+        w._trigger_pull("chat", chat_id="oc_x")
+        assert called["root"] == shared  # 此前直传 emp 私有区
+
+    def test_sync_user_materials_routes_material_root(
+            self, tmp_path, monkeypatch):
+        emp_base = tmp_path / ".specflow" / "90000001"
+        shared = tmp_path / ".specflow"
+        monkeypatch.setattr(svc, "load_watch_config",
+                            lambda b: {"users": [{"open_id": "ou_1",
+                                                  "scopes": ["minutes", "docs"]}],
+                                       "minutes_days": 7})
+        roots = []
+        monkeypatch.setattr(svc, "sync_minutes",
+                            lambda root, days, owner_ids=None:
+                            roots.append(("minutes", root)) or [])
+        monkeypatch.setattr(svc, "_sync_user_docs",
+                            lambda root, open_id:
+                            roots.append(("docs", root))
+                            or {"docs": 0, "errors": []})
+        svc.sync_user_materials(emp_base, material_base=shared)
+        assert roots == [("minutes", shared), ("docs", shared)]
+
+
+class TestMigrateAllPrivatePools:
+    """全员私有池 → 共享区迁移（幂等可重跑）。"""
+
+    def test_migrates_every_emp_and_idempotent(self, tmp_path):
+        sf_root = tmp_path / ".specflow"
+        _seed_emp_pool(sf_root, "90000001", "tp:a1b2c3d4-20260823-01")
+        _seed_emp_pool(sf_root, "admin", "tp:a1b2c3d4-20260823-02")
+        # 90000001 另有 docs 正文 + sidecar（T-949 版迁移只覆盖 chats 的缺口回归）
+        docs = sf_root / "90000001" / "feishu_pool" / "docs"
+        docs.mkdir(parents=True, exist_ok=True)
+        (docs / "fd-tok1.md").write_text("# PRD\n", encoding="utf-8")
+        (docs / "fd-tok1.meta.json").write_text("{}", encoding="utf-8")
+        (docs / "fd-tok1.imgmap.json").write_text("{}", encoding="utf-8")
+        shared_pool = sf_root / "feishu_pool"
+        out = svc.migrate_all_private_pools(sf_root, material_base=sf_root)
+        assert out["emps"] == 2
+        assert out["chats_files"] >= 2
+        assert out["docs_files"] == 3       # 正文 + meta + imgmap sidecar
+        # 共享区就位：两 emp 的卡 + 两 emp 的群聊文件 + docs 三件套
+        from specflow.feishu_pool import topic_cluster as tc
+        ids = {t["id"] for t in tc._load_candidates(sf_root)}
+        assert ids == {"tp:a1b2c3d4-20260823-01", "tp:a1b2c3d4-20260823-02"}
+        chats = list((shared_pool / "chats").rglob("*.jsonl"))
+        assert len(chats) == 2
+        assert (shared_pool / "docs" / "fd-tok1.md").is_file()
+        assert (shared_pool / "docs" / "fd-tok1.meta.json").is_file()
+        assert (shared_pool / "docs" / "fd-tok1.imgmap.json").is_file()
+        # 私有区已清空（文件级 move）
+        assert not (sf_root / "90000001" / "feishu_pool" / "_topics.yaml").exists()
+        assert not (sf_root / "90000001" / "feishu_pool" / "docs" / "fd-tok1.md").exists()
+        # 幂等重跑：零增量
+        out2 = svc.migrate_all_private_pools(sf_root, material_base=sf_root)
+        assert out2 == {"emps": 0, "chats_files": 0, "docs_files": 0,
+                        "topic_store": 0}
+
+    def test_shared_wins_on_topic_id_conflict(self, tmp_path):
+        sf_root = tmp_path / ".specflow"
+        _seed_emp_pool(sf_root, "90000001", "tp:dup")
+        # 共享区已有同 id 卡（标题不同）
+        import yaml as _yaml
+        shared_pool = sf_root / "feishu_pool"
+        shared_pool.mkdir(parents=True, exist_ok=True)
+        (shared_pool / "_topics.yaml").write_text(_yaml.safe_dump(
+            {"version": 1, "topics": [
+                {"id": "tp:dup", "title": "共享版本", "status": "confirmed"}]},
+            allow_unicode=True), encoding="utf-8")
+        svc.migrate_all_private_pools(sf_root, material_base=sf_root)
+        from specflow.feishu_pool import topic_cluster as tc
+        cards = {t["id"]: t for t in tc._load_candidates(sf_root)}
+        assert cards["tp:dup"]["title"] == "共享版本"

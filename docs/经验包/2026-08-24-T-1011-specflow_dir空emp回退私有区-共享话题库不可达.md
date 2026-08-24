@@ -42,6 +42,12 @@ test_engine 230 / release_check PASS），联网实测 FAIL——共享材料区
 - 修复后用验收留档种子（`_clones/tdm/.specflow/feishu_pool/`）在生产路径
   （激活 tdm 工作区 + emp 上下文）实测 A/B/C 全通
 - 提交：本分支修复提交（T-1011 打回复修，随复验合并入库）
+- **波及面已随 T-1011 同树修复**（总控人 08-24 指令）：路由 `_material_base()` /
+  watcher `resolve_material_base()` 改 force_shared；事件直写 `_trigger_pull` 与
+  `user_materials_job` 两个旁路补 material_root；`migrate_legacy_pool` 补
+  docs/minutes 迁移缺口（T-949 版只迁 chats——三通道 sidecar 随正文）+
+  新增 `migrate_all_private_pools` 全员枚举迁移（幂等，只计实际迁移量），
+  接线 sync 端点与 watcher start_all（启动自动归拢存量）
 
 ## 预防
 
@@ -50,8 +56,10 @@ test_engine 230 / release_check PASS），联网实测 FAIL——共享材料区
   该契约在 Web 登录态下不成立（每个请求都有上下文工号）
 - 新增共享区消费方时评审查一点：root 解析是否 force_shared；测试必须覆盖
   「emp 上下文 + 生产解析路径」用例（只测显式传 root = 没测解析）
-- 同根因波及面（另立任务，不并入 T-1011）：workbench `feishu_pool` 路由
-  `_material_base()` 与 `feishu_watcher.resolve_material_base()` 同为
-  `specflow_dir("")` 调用——T-949 存量面的共享读写疑似同样落在私有区
-  （验收实证 90000001 docs 落私有区、topics API 共享区有数据时返回空），
-  需统一改 force_shared 并评估存量私有区数据迁移
+- **「落盘根」类参数要随调用链全链路排查旁路**：resolver 修对不代表写路径
+  全对——`_trigger_pull`（事件直写）与定时 job 曾直传 emp 私有区绕过
+  resolver；写路径审计要搜「直接拼接 .specflow/{emp} 的调用点」不止搜
+  resolver 调用
+- **迁移函数的覆盖面要跟「写入面」对齐**：T-949 迁移只迁 chats 是因为当时
+  只审了 chats 写入面；docs/minutes 同根因落私有区却无迁移路径。改共享/
+  私有归属时，迁移清单 = 写入面清单，逐通道核对（含 sidecar 文件）
