@@ -4,18 +4,22 @@
 // 判断、补充话题背景知识的关键通道）。生成后落草案进入右栏候选段，
 // 勾选「生成话题卡」提交入库；md 伪 id 由父层拦截不进入本弹框。
 
-import { useEffect, useState } from 'react';
-import { feishuPoolApi, type FeishuChatMessage } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { feishuPoolApi, type FeishuChatMessage, type FeishuTagRegistry }
+  from '../api';
 import { MessageBody, useChatMedia, senderColor, fmtMsgTime } from './ChatMessageView';
+import { buildTagIndex, tagNormalizeHints } from './topicList';
 import ImageLightbox from './ImageLightbox';
 import ModelSetupModal from './ModelSetupModal';
 
-export default function ComposeTopicModal({ chatSha8, days, picked, onClose, onDone }: {
+export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
+                                            onDone, tagReg }: {
   chatSha8: string;
   days: string[];                       // 当前窗口（message_id 定位所属日用）
   picked: FeishuChatMessage[];          // 已勾选消息（父层按 ts 排序传入）
   onClose: () => void;
   onDone: () => void;                   // 生成成功（父层重拉草案+提示）
+  tagReg?: FeishuTagRegistry | null;    // tag-taxonomy T1：词表（父层下传）
 }) {
   const [msgs, setMsgs] = useState<FeishuChatMessage[]>(picked);
   const [title, setTitle] = useState('');
@@ -26,6 +30,13 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose, onD
   const [err, setErr] = useState('');
   const [previewImg, setPreviewImg] = useState<{ url: string; caption: string } | null>(null);
   const [modelSetup, setModelSetup] = useState(false);
+
+  // tag-taxonomy T1：关键词补全 + 别名归一提示（tagReg 缺失诚实降级无提示）
+  const tagIdx = useMemo(() => buildTagIndex(tagReg), [tagReg]);
+  const tagOptions = useMemo(() => Object.entries(tagReg?.tags || {})
+    .filter(([, e]) => e.status === 'active').map(([n]) => n).sort(), [tagReg]);
+  const tagHints = useMemo(() => tagNormalizeHints(keywords, tagIdx),
+    [keywords, tagIdx]);
 
   const isMulti = days.length > 1;
   const { imgUrls, imgFailed, captions } = useChatMedia(msgs, chatSha8, days);
@@ -124,9 +135,17 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose, onD
               onChange={e => setSummary(e.target.value)}
               placeholder="≤80 字结论摘要；留空自动生成" />
             <label className="text-[11px] text-gray-500">关键词（逗号分隔，留空由 LLM 生成）</label>
-            <input className={input} value={keywords}
+            <input className={input} value={keywords} list="tag-active-compose"
               onChange={e => setKeywords(e.target.value)}
               placeholder="2~5 个；留空自动生成" />
+            <datalist id="tag-active-compose">
+              {tagOptions.map(n => <option key={n} value={n} />)}
+            </datalist>
+            {tagHints.length > 0 && (
+              <div className="text-[10px] text-amber-400/90 -mt-1">
+                将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
+              </div>
+            )}
             <label className="text-[11px] text-gray-500">
               补充说明（拼入 LLM 输入——纠正归类判断、补充背景，如「这是 817 上线的回归问题」）
             </label>

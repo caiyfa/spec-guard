@@ -12,6 +12,7 @@ import {
   type FeishuTopic,
   type FeishuTopicHistoryItem,
 } from '../api';
+import type { TagIndex } from './topicList';
 import ModelSetupModal from './ModelSetupModal';
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -52,7 +53,8 @@ function fmtWindow(t: FeishuTopic): string {
 }
 
 export default function TopicCard({ topic: t, draft, selected, onRefresh,
-                                     relatedCount, onOpenRelations, onEdit, onLocate }: {
+                                     relatedCount, onOpenRelations, onEdit, onLocate,
+                                     tagIdx }: {
   topic: FeishuTopic;
   draft?: boolean;             // 介入工作区草案段（未提交，仅展示）
   selected?: boolean;
@@ -61,6 +63,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
   onOpenRelations?: () => void;  // T-993：打开关联抽屉（并排多群证据）
   onEdit?: () => void;         // T-1001：打开编辑弹框（左原文右话题并排+重关联）
   onLocate?: () => void;       // T-1001 追修：定位原文（显式按钮，取代 hover 联动）
+  tagIdx?: TagIndex;           // tag-taxonomy T2：关键词芯片 tooltip 携带域归属
 }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
@@ -154,11 +157,17 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
       </p>
       {((t.keywords || []).length > 0 || (t.modules || []).length > 0) && (
         <div className="flex gap-1 flex-wrap mt-1">
-          {(t.keywords || []).slice(0, 4).map(k => (
-            <span key={k} className="px-1.5 py-0.5 rounded bg-surface-3 border border-border text-[10px] text-gray-400">
-              {k}
-            </span>
-          ))}
+          {(t.keywords || []).slice(0, 4).map(k => {
+            // tag-taxonomy T2：芯片 tooltip 携带域（未分组/未登记只显标签名）
+            const dom = tagIdx?.domainOf(k) || '';
+            return (
+              <span key={k}
+                className="px-1.5 py-0.5 rounded bg-surface-3 border border-border text-[10px] text-gray-400"
+                title={dom ? `标签 ${k} · 域：${dom}` : k}>
+                {k}
+              </span>
+            );
+          })}
           {(t.keywords || []).length > 4 && (
             <span className="text-[10px] text-gray-600">+{t.keywords!.length - 4}</span>
           )}

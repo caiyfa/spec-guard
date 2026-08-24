@@ -612,6 +612,13 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                   <option key={o.key} value={o.key}>{o.label}</option>
                 ))}
               </select>
+              {/* tag-taxonomy T3：词表管理入口移到工具行——不受标签芯片行
+                  渲染条件（tagFacets 非空）限制，任何话题状态可达 */}
+              <button className="text-[10px] text-gray-500 hover:text-info"
+                title="标签词表管理（收录/归并/设域/丢弃——收口 AI 新词）"
+                onClick={() => setTagManageOpen(true)}>
+                词表管理
+              </button>
               <span className="text-[10px] text-gray-600">
                 {shownDrafts.length + shownTopics.length} 项
               </span>
@@ -619,16 +626,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
             {/* T-1001 追修：标签筛选芯片行（词频降序；点选 toggle，多选 AND；
                 计数为分面口径——其他筛选已生效、标签未生效）
                 tag-taxonomy：别名归一计数 + 按域分组（每组默认前 8 个、+N 展开）；
-                pending 待收录词虚线芯片标识；「词表管理」弹层收录/归并/设域 */}
+                pending 待收录词虚线芯片标识；T3：「词表管理」入口在上方工具行 */}
             {tagFacets.length > 0 && (
               <div className="mb-2">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] text-gray-600">标签</span>
-                  <button className="text-[10px] text-gray-500 hover:text-info"
-                    title="标签词表管理（收录/归并/设域/丢弃——收口 AI 新词）"
-                    onClick={() => setTagManageOpen(true)}>
-                    词表管理
-                  </button>
                   {tags.length > 0 && (
                     <button className="text-[10px] text-gray-500 hover:text-red-400"
                       title="清除全部已选标签"
@@ -720,7 +722,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                         }} />
                       <div className="flex-1 min-w-0">
                         <TopicCard topic={d as FeishuTopic} draft
-                          onRefresh={onCommitted}
+                          onRefresh={onCommitted} tagIdx={tagIdx}
                           selected={selectedKey === `draft-${d.window?.[0] || ''}-${d.title}`}
                           onLocate={() => setSelectedKey(prev =>
                             prev === `draft-${d.window?.[0] || ''}-${d.title}`
@@ -734,6 +736,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                   {shownTopics.map(t => (
                     <div key={t.id}>
                       <TopicCard topic={t} onRefresh={onCommitted}
+                        tagIdx={tagIdx}
                         selected={selectedKey === t.id}
                         relatedCount={(relatedMap[t.id] || []).length}
                         onOpenRelations={() => setRelateDrawer(t)}
@@ -752,7 +755,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       {/* T-1002：按勾选原文生成话题（左已选右表单；补充说明拼入 LLM 输入） */}
       {composeOpen && (
         <ComposeTopicModal chatSha8={sha8} days={selectedDays}
-          picked={pickedMsgs}
+          picked={pickedMsgs} tagReg={tagReg}
           onClose={() => setComposeOpen(false)}
           onDone={() => {
             setPickMode(false); setPickedIds(new Set());
@@ -762,7 +765,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       )}
       {/* T-1001 F3：编辑弹框（左原文右话题并排；F4 勾选消息手动重关联） */}
       {editingTopic && (
-        <TopicEditModal topic={editingTopic}
+        <TopicEditModal topic={editingTopic} tagReg={tagReg}
           onClose={() => setEditingTopic(null)}
           onSaved={onCommitted} />
       )}

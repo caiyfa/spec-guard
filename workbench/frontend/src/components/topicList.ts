@@ -86,6 +86,25 @@ export interface TagGroup {
   items: { kw: string; n: number; status: string }[];
 }
 
+// tag-taxonomy T1：关键词输入原文 → 归一提示列表（命中词表别名的词
+// 将归一为主标签；提示供编辑/勾选弹层就地展示，后端 canonicalize 语义不变）。
+// 拆分口径与弹层提交一致（逗号分隔）；同主标签只提示一次；无索引/空输入 → 空。
+export function tagNormalizeHints(input: string,
+                                  idx?: TagIndex): { from: string; to: string }[] {
+  if (!idx) return [];
+  const out: { from: string; to: string }[] = [];
+  const seenTo = new Set<string>();
+  String(input || '').split(/[，,]/).forEach(raw => {
+    const w = raw.trim();
+    if (!w) return;
+    const canon = idx.canonOf(w);
+    if (canon === w || seenTo.has(canon)) return;
+    seenTo.add(canon);
+    out.push({ from: w, to: canon });
+  });
+  return out;
+}
+
 // 标签分面按域分组（两级展示依据）：组按总量降序，未分组殿后；
 // 组内保持传入序（collectKeywords 已是计数降序）
 export function groupTagFacets(facets: { kw: string; n: number }[],

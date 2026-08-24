@@ -3,7 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { filterTopics, sortTopics, filterAndSortTopics, dedupeTopics,
-  collectKeywords, buildTagIndex, groupTagFacets } from './topicList';
+  collectKeywords, buildTagIndex, groupTagFacets, tagNormalizeHints }
+  from './topicList';
 import type { FeishuTopic, FeishuTagRegistry } from '../api';
 
 function topic(p: Partial<FeishuTopic>): FeishuTopic {
@@ -219,5 +220,25 @@ describe('groupTagFacets 按域分组（tag-taxonomy 两级展示）', () => {
     const groups = groupTagFacets([{ kw: '同步', n: 1 }], buildTagIndex(null));
     expect(groups).toHaveLength(1);
     expect(groups[0].domain).toBe('');
+  });
+});
+
+describe('tagNormalizeHints 归一提示（tag-taxonomy 验收优化 T1）', () => {
+  it('命中别名的词提示归一到主标签；主标签与未知词不提示', () => {
+    const idx = buildTagIndex(REG);
+    expect(tagNormalizeHints('数据权限，权限，全新词', idx))
+      .toEqual([{ from: '数据权限', to: '权限' }]);
+  });
+
+  it('空白/大小写差异也命中（canonOf 同口径）；同主标签只提示一次', () => {
+    const idx = buildTagIndex(REG);
+    expect(tagNormalizeHints('bug 140594, BUG140594', idx))
+      .toEqual([{ from: 'bug 140594', to: 'Bug#140594' }]);
+  });
+
+  it('无索引或空输入 → 空列表（诚实降级不提示）', () => {
+    expect(tagNormalizeHints('数据权限')).toEqual([]);
+    expect(tagNormalizeHints('', buildTagIndex(REG))).toEqual([]);
+    expect(tagNormalizeHints('  ， ', buildTagIndex(REG))).toEqual([]);
   });
 });
