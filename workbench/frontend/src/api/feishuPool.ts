@@ -134,7 +134,8 @@ export const feishuPoolApi = {
     request<{ items: FeishuPoolMaterial[] }>('/feishu-pool/materials'),
   poolTopics: () =>
     request<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[];
-              cross_suggestions: CrossChatCandidate[] }>('/feishu-pool/topics'),
+              cross_suggestions: CrossChatCandidate[];
+              material_suggestions: TopicMaterialCandidate[] }>('/feishu-pool/topics'),
   // ── T-947：话题人工介入工作区（T-951c：draft 支持 days 多日窗口） ──
   listTopicDrafts: () =>
     request<{ items: Record<string, FeishuTopicDraft[]> }>('/feishu-pool/topics/drafts'),
@@ -189,6 +190,12 @@ export const feishuPoolApi = {
   relateTopics: (a: string, b: string, confirmed: boolean) =>
     request<{ a: string; b: string; status: string }>('/feishu-pool/topics/relate', {
       method: 'POST', body: JSON.stringify({ a, b, confirmed }) }),
+  // T-1014：话题↔材料关联——确认/忽略（references 边；忽略留痕防重复推荐）
+  relateTopicMaterial: (topicId: string, materialId: string, confirmed: boolean) =>
+    request<{ src: string; dst: string; status: string }>(
+      '/feishu-pool/topics/material-relate',
+      { method: 'POST',
+        body: JSON.stringify({ topic_id: topicId, material_id: materialId, confirmed }) }),
   topicRelations: () =>
     request<{ items: TopicRelation[] }>('/feishu-pool/topics/relations'),
   crossRefine: () =>
@@ -274,6 +281,7 @@ export interface FeishuPoolMaterial {
   source_url?: string;      // T-940：飞书原文直链（meta sidecar；存量空串降级）
   owner_open_id?: string;   // T-940：产出人（按监听用户筛选）
   owner_name?: string;
+  keywords?: string[];        // T-1014：妙记 artifacts.keywords（话题↔材料预筛）；文档/群聊恒空
   perm?: {                   // T-949：飞书权限元数据（缺失时保守仅 owner 可见）
     pulled_at?: string | null;
     public?: boolean;
@@ -320,6 +328,7 @@ export interface FeishuTopic {
   priority?: FeishuTopicPriority;       // T-991：high|normal|low（初值信号推导）
   modules?: string[];           // T-992：FR 锚点派生（已确认 mentions 边→模块目录；
                                 // 响应时计算不落库，关联不到 FR 留空——拍板②）
+  materials?: FeishuTopicMaterialRef[];  // T-1014：已确认关联材料（references 边，响应时派生不落库）
 }
 
 export type FeishuTopicDraft = Omit<FeishuTopic, 'id'>;
@@ -341,6 +350,21 @@ export interface CrossChatCandidate {
   llm_same?: boolean;
   llm_confidence?: number;
   llm_reason?: string;
+}
+
+// T-1014：话题↔材料关联（references 边——只推荐不自动挂，人确认后生效）
+export interface TopicMaterialCandidate {
+  src: string;                 // tp id
+  dst: string;                 // 材料 id（fd:xxx / fm:xxx）
+  score: number;               // 确定性预筛分（0~1）
+  reasons: string[];
+}
+
+export interface FeishuTopicMaterialRef {
+  id: string;                  // fd:xxx / fm:xxx
+  type: 'feishu_doc' | 'feishu_minutes';
+  title: string;
+  file: string;                // 材料相对路径（详情弹层数据源）
 }
 
 // T-948：群聊消息 JSONL 事实源行（/chat-messages；时间轴渲染与精确高亮）

@@ -15,6 +15,7 @@ import {
   type FeishuPoolMaterial,
   type FeishuTopic,
   type CrossChatCandidate,
+  type TopicMaterialCandidate,
   type FeishuMaterialContent,
   type FeishuWatch,
 } from '../api';
@@ -102,6 +103,8 @@ export default function FeishuPool() {
   const [topics, setTopics] = useState<{ candidates: FeishuTopic[]; confirmed: FeishuTopic[] }>({ candidates: [], confirmed: [] });
   // T-993：确定性预筛的跨群候选（list_pool_topics 附带，透传给工作台推荐位）
   const [crossSuggestions, setCrossSuggestions] = useState<CrossChatCandidate[]>([]);
+  // T-1014：话题↔材料预筛候选（list_pool_topics 附带，透传工作台推荐位）
+  const [matSuggestions, setMatSuggestions] = useState<TopicMaterialCandidate[]>([]);
   const [detail, setDetail] = useState<{ m: FeishuPoolMaterial; data: FeishuMaterialContent | null;
     imgUrls: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState('');
@@ -133,7 +136,8 @@ export default function FeishuPool() {
   const loadTopics = useCallback(() => {
     feishuPoolApi.poolTopics()
       .then(r => { setTopics({ candidates: r.candidates, confirmed: r.confirmed });
-                   setCrossSuggestions(r.cross_suggestions || []); })
+                   setCrossSuggestions(r.cross_suggestions || []);
+                   setMatSuggestions(r.material_suggestions || []); })
       .catch(e => setError(String(e?.message || e)));
   }, []);
 
@@ -349,6 +353,11 @@ export default function FeishuPool() {
           topics={topics}
           onCommitted={loadTopics}
           crossSuggestions={crossSuggestions}
+          matSuggestions={matSuggestions}
+          onOpenMaterial={(ref) => {
+            const full = materials.find(x => x.id === ref.id);
+            if (full) void openDetail(full);
+          }}
           focus={focusMode}
           onToggleFocus={() => setFocusMode(v => !v)} />
       )}

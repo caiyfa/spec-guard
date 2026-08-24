@@ -16,6 +16,8 @@ import {
   type FeishuWatch,
   type TopicRelation,
   type CrossChatCandidate,
+  type TopicMaterialCandidate,
+  type FeishuTopicMaterialRef,
 } from '../api';
 import { useChatOptions, sha256Hex8 } from './useChatOptions';
 import TopicCard from './TopicCard';
@@ -45,7 +47,8 @@ function loadWorkspacePersisted(): {
 }
 
 export default function TopicWorkspace({ materials, watchCfg, topics, onCommitted,
-                                          crossSuggestions, focus, onToggleFocus }: {
+                                          crossSuggestions, focus, onToggleFocus,
+                                          matSuggestions, onOpenMaterial }: {
   materials: FeishuPoolMaterial[];
   watchCfg: FeishuWatch | null;
   topics: { candidates: FeishuTopic[]; confirmed: FeishuTopic[] };
@@ -53,6 +56,8 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   crossSuggestions?: CrossChatCandidate[];   // T-993：确定性预筛（list_pool_topics 附带）
   focus?: boolean;                           // T-1001：专注模式（页面层驱动，临时态不持久化）
   onToggleFocus?: () => void;
+  matSuggestions?: TopicMaterialCandidate[];  // T-1014：话题↔材料预筛（list_pool_topics 附带）
+  onOpenMaterial?: (m: FeishuTopicMaterialRef) => void;  // T-1014：材料详情（页面层弹层）
 }) {
   const chatOptions = useChatOptions(materials, watchCfg);
   const [sha8, setSha8] = useState(() => loadWorkspacePersisted().sha8 || '');
@@ -104,6 +109,18 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       .catch(() => setRelations([]));
   }, [topics]);
   useEffect(() => { setCrossSugg(crossSuggestions || []); }, [crossSuggestions]);
+// T-1014：话题↔材料预筛候选 + 关联确认（references 边；确认后材料挂卡 + 候选刷新）
+const [matSugg, setMatSugg] = useState<TopicMaterialCandidate[]>([]);
+const [matSuggOpen, setMatSuggOpen] = useState(false);
+useEffect(() => { setMatSugg(matSuggestions || []); }, [matSuggestions]);
+const materialById = useMemo(() => Object.fromEntries(
+  (materials || []).map(m => [m.id, m])), [materials]);
+const relateMaterial = async (topicId: string, materialId: string, confirmed: boolean) => {
+  try {
+    await feishuPoolApi.relateTopicMaterial(topicId, materialId, confirmed);
+    onCommitted();
+  } catch (e: any) { setError(e.message); }
+};
   // 关联邻接表 {topicId: [对方 id]}（连通分量入口——A-B、B-C 则 A 含 C）
   const relatedMap = useMemo(() => {
     const m: Record<string, string[]> = {};
@@ -445,6 +462,11 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
           title="跨群同主题话题候选（预筛 + 可选模型精筛；只推荐不合并，关联需人工确认）">
           🔗 跨群推荐{crossSugg.length > 0 ? `（${crossSugg.length}）` : ''}
         </button>
+        {/* T-1014：话题↔材料推荐入口（确定性预筛即时可见；确认后材料挂话题卡） */}
+        <button className={btn} onClick={() => setMatSuggOpen(v => !v)}
+          title="话题↔文档/妙记关联候选（确定性预筛；只推荐不自动挂，关联需人工确认）">
+          🗂 材料推荐{matSugg.length > 0 ? `（${matSugg.length}）` : ''}
+        </button>
         {sha8 && daySel && (
           <span className="ml-auto flex items-center gap-1.5">
             <select className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-info"
@@ -663,7 +685,8 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                         relatedCount={(relatedMap[t.id] || []).length}
                         onOpenRelations={() => setRelateDrawer(t)}
                         onEdit={() => setEditingTopic(t)}
-                        onLocate={() => setSelectedKey(prev => prev === t.id ? null : t.id)} />
+                        onLocate={() => setSelectedKey(prev => prev === t.id ? null : t.id)}
+                        onOpenMaterial={onOpenMaterial} />
                     </div>
                   ))}
                 </>
@@ -761,6 +784,50 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
                       <span className="ml-auto text-emerald-400">已关联 ✓</span>
                     )}
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {/* T-1014：材料推荐面板（话题↔文档/妙记候选；确认/忽略写 references 边） */}
+      {matSuggOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+          onClick={() => setMatSuggOpen(false)}>
+          <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold">🗂 话题↔材料关联候选（只推荐不自动挂，关联需人工确认）</span>
+              <button className="ml-auto text-gray-500 hover:text-gray-300"
+                onClick={() => setMatSuggOpen(false)}>✕</button>
+            </div>
+            {matSugg.length === 0 ? (
+              <div className="text-xs text-gray-500 text-center py-6">
+                暂无候选——话题与文档/妙记时间+关键词均不沾边，或均已处理
+              </div>
+            ) : matSugg.map(c => {
+              const tp = topicById[c.src];
+              const mat = materialById[c.dst];
+              return (
+                <div key={`${c.src}|${c.dst}`}
+                  className="mb-2 p-2 rounded border border-border bg-surface-3/60 flex items-center gap-2 text-xs">
+                  <span className="text-gray-200 truncate min-w-0 flex-1" title={c.src}>
+                    {tp?.title || c.src}
+                  </span>
+                  <span className="text-gray-600 shrink-0">↔</span>
+                  <span className="text-sky-400 truncate min-w-0 flex-1" title={c.dst}>
+                    {(mat?.type === 'feishu_doc' ? '📄 ' : '🎙 ') + (mat?.title || c.dst)}
+                  </span>
+                  <span className="text-[10px] text-gray-500 shrink-0">
+                    {c.reasons.join('；')} · 分 {c.score}
+                  </span>
+                  <span className="flex gap-2 shrink-0">
+                    <button className="text-emerald-400 hover:underline"
+                      onClick={() => relateMaterial(c.src, c.dst, true)}>🔗 关联</button>
+                    <button className="text-gray-500 hover:text-red-400"
+                      title="忽略（留痕，不再重复推荐）"
+                      onClick={() => relateMaterial(c.src, c.dst, false)}>忽略</button>
+                  </span>
                 </div>
               );
             })}

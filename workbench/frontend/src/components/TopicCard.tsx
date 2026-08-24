@@ -11,6 +11,7 @@ import {
   feishuPoolApi,
   type FeishuTopic,
   type FeishuTopicHistoryItem,
+  type FeishuTopicMaterialRef,
 } from '../api';
 import ModelSetupModal from './ModelSetupModal';
 
@@ -52,7 +53,8 @@ function fmtWindow(t: FeishuTopic): string {
 }
 
 export default function TopicCard({ topic: t, draft, selected, onRefresh,
-                                     relatedCount, onOpenRelations, onEdit, onLocate }: {
+                                     relatedCount, onOpenRelations, onEdit, onLocate,
+                                     onOpenMaterial }: {
   topic: FeishuTopic;
   draft?: boolean;             // 介入工作区草案段（未提交，仅展示）
   selected?: boolean;
@@ -61,6 +63,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
   onOpenRelations?: () => void;  // T-993：打开关联抽屉（并排多群证据）
   onEdit?: () => void;         // T-1001：打开编辑弹框（左原文右话题并排+重关联）
   onLocate?: () => void;       // T-1001 追修：定位原文（显式按钮，取代 hover 联动）
+  onOpenMaterial?: (m: FeishuTopicMaterialRef) => void;  // T-1014：关联材料点击（页面层详情弹层）
 }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
@@ -168,6 +171,19 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
               title="功能模块：由已确认的话题→FR 关联边派生（FR 模块目录）">
               🏷 {m}
             </span>
+          ))}
+        </div>
+      )}
+      {/* T-1014：关联材料（已确认 references 边；点击查看原文快照） */}
+      {(t.materials || []).length > 0 && (
+        <div className="flex gap-1 flex-wrap mt-1">
+          {(t.materials || []).map(m => (
+            <button key={m.id}
+              onClick={e => { e.stopPropagation(); onOpenMaterial?.(m); }}
+              className="px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-[10px] text-sky-400 hover:bg-sky-500/20"
+              title={`关联材料（人工确认）——点击查看原文快照\n${m.file}`}>
+              {m.type === 'feishu_doc' ? '📄' : '🎙'} {m.title || m.id}
+            </button>
           ))}
         </div>
       )}
