@@ -16,18 +16,21 @@ import {
   type FeishuWatch,
   type TopicRelation,
   type CrossChatCandidate,
+  type FeishuTagRegistry,
 } from '../api';
 import { useChatOptions, sha256Hex8 } from './useChatOptions';
 import TopicCard from './TopicCard';
 import TopicEditModal from './TopicEditModal';
 import ComposeTopicModal from './ComposeTopicModal';
+import TagRegistryModal from './TagRegistryModal';
 import ModelSetupModal from './ModelSetupModal';
 import ImageLightbox from './ImageLightbox';
 import { loadChatMessages, MessageBody, useChatMedia, senderColor, fmtMsgTime,
   isPseudoMessageId }
   from './ChatMessageView';
 import { filterAndSortTopics, filterTopics, TOPIC_SORT_OPTIONS,
-  dedupeTopics, collectKeywords, type TopicSortKey }
+  dedupeTopics, collectKeywords, buildTagIndex, groupTagFacets,
+  type TopicSortKey }
   from './topicList';
 
 // T-953：操作状态持久化（UX 连续性——进入页面恢复上次选择，不重新选）
@@ -35,9 +38,11 @@ import { filterAndSortTopics, filterTopics, TOPIC_SORT_OPTIONS,
 // T-1001：追加 query/sortKey（列表搜索与排序——话题多时快速定位）
 // T-1001 追修：追加 tags（标签筛选，多选 AND）
 const WORKSPACE_STORE_KEY = 'sg-feishu-workspace';
+// tag-taxonomy：标签栏每组默认展开的芯片数（溢出收进 +N，展开状态持久化）
+const TAG_GROUP_TOP_K = 8;
 function loadWorkspacePersisted(): {
   sha8?: string; daySel?: string; categoryFilter?: string; hideChat?: boolean;
-  query?: string; sortKey?: TopicSortKey; tags?: string[];
+  query?: string; sortKey?: TopicSortKey; tags?: string[]; tagGroups?: string[];
 } {
   try {
     return JSON.parse(localStorage.getItem(WORKSPACE_STORE_KEY) || '{}');
@@ -79,6 +84,14 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
     const t = loadWorkspacePersisted().tags;
     return Array.isArray(t) ? t.filter(x => typeof x === 'string' && x) : [];
   });
+  // tag-taxonomy：词表（别名归一展示 + 域分组 + 待收录管理弹层）；
+  // 拉取失败 → tagReg=null → 索引恒等 → 诚实降级为平铺原样
+  const [tagReg, setTagReg] = useState<FeishuTagRegistry | null>(null);
+  const [tagManageOpen, setTagManageOpen] = useState(false);
+  const [tagExpanded, setTagExpanded] = useState<string[]>(() => {
+    const t = loadWorkspacePersisted().tagGroups;
+    return Array.isArray(t) ? t.filter(x => typeof x === 'string') : [];
+  });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -103,6 +116,15 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       .then(r => setRelations(r.items || []))
       .catch(() => setRelations([]));
   }, [topics]);
+  // tag-taxonomy：词表随话题清单同节奏刷新（聚类/分段/编辑后可能新增待收录词）
+  useEffect(() => {
+    let cancelled = false;
+    feishuPoolApi.tagRegistry()
+      .then(r => { if (!cancelled) setTagReg(r); })
+      .catch(() => { if (!cancelled) setTagReg(null); });
+    return () => { cancelled = true; };
+  }, [topics]);
+  const tagIdx = useMemo(() => buildTagIndex(tagReg), [tagReg]);
   useEffect(() => { setCrossSugg(crossSuggestions || []); }, [crossSuggestions]);
   // 关联邻接表 {topicId: [对方 id]}（连通分量入口——A-B、B-C 则 A 含 C）
   const relatedMap = useMemo(() => {
@@ -171,9 +193,10 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
   useEffect(() => {
     try {
       localStorage.setItem(WORKSPACE_STORE_KEY, JSON.stringify(
-        { sha8, daySel, categoryFilter, hideChat, query, sortKey, tags }));
+        { sha8, daySel, categoryFilter, hideChat, query, sortKey, tags,
+          tagGroups: tagExpanded }));
     } catch { /* 隐私模式/配额：跳过不阻断 */ }
-  }, [sha8, daySel, categoryFilter, hideChat, query, sortKey, tags]);
+  }, [sha8, daySel, categoryFilter, hideChat, query, sortKey, tags, tagExpanded]);
 
   // T-953：恢复值有效性校验——选项就绪后失效则诚实回退默认（不报错不空白）
   useEffect(() => {
@@ -266,16 +289,25 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
     : dayTopics.filter(t => (t.status || 'draft') === key).length;
   const shownTopics = useMemo(
     () => filterAndSortTopics(dayTopics,
-      { status: statusFilter, category: categoryFilter, hideChat, query, tags }, sortKey),
-    [dayTopics, statusFilter, categoryFilter, hideChat, query, tags, sortKey]);
+      { status: statusFilter, category: categoryFilter, hideChat, query, tags,
+        tagIndex: tagIdx }, sortKey),
+    [dayTopics, statusFilter, categoryFilter, hideChat, query, tags, tagIdx, sortKey]);
   const shownDrafts = useMemo(
-    () => filterAndSortTopics(drafts, { hideChat, query, tags }, sortKey),
-    [drafts, hideChat, query, tags, sortKey]);
+    () => filterAndSortTopics(drafts, { hideChat, query, tags, tagIndex: tagIdx },
+      sortKey),
+    [drafts, hideChat, query, tags, tagIdx, sortKey]);
   // 标签芯片行：分面计数口径——状态/分类/闲聊/搜索已生效、标签筛选未生效的集合
+  // tag-taxonomy：计数按词表别名归一到主标签（展示层归并，卡片原词不改写）
   const tagFacets = useMemo(
     () => collectKeywords(filterTopics(dayTopics,
-      { status: statusFilter, category: categoryFilter, hideChat, query })),
-    [dayTopics, statusFilter, categoryFilter, hideChat, query]);
+      { status: statusFilter, category: categoryFilter, hideChat, query }), tagIdx),
+    [dayTopics, statusFilter, categoryFilter, hideChat, query, tagIdx]);
+  // tag-taxonomy：按域分组；词表未建档/全域为空 → 单组未分组，渲染退化为平铺
+  const tagGroups = useMemo(
+    () => groupTagFacets(tagFacets, tagIdx), [tagFacets, tagIdx]);
+  const flatTags = tagGroups.length === 1 && tagGroups[0].domain === '';
+  const toggleTagGroup = (d: string) =>
+    setTagExpanded(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   const toggleTag = (kw: string) =>
     setTags(prev => prev.includes(kw) ? prev.filter(x => x !== kw) : [...prev, kw]);
 
@@ -585,30 +617,74 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
               </span>
             </div>
             {/* T-1001 追修：标签筛选芯片行（词频降序；点选 toggle，多选 AND；
-                计数为分面口径——其他筛选已生效、标签未生效） */}
+                计数为分面口径——其他筛选已生效、标签未生效）
+                tag-taxonomy：别名归一计数 + 按域分组（每组默认前 8 个、+N 展开）；
+                pending 待收录词虚线芯片标识；「词表管理」弹层收录/归并/设域 */}
             {tagFacets.length > 0 && (
-              <div className="flex items-center gap-1 mb-2 flex-wrap">
-                <span className="text-[10px] text-gray-600 shrink-0">标签</span>
-                {tagFacets.map(f => {
-                  const on = tags.includes(f.kw);
-                  return (
-                    <button key={f.kw}
-                      className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
-                        on ? 'border-info/60 bg-info/20 text-info'
-                           : 'border-border bg-surface-3 text-gray-400 hover:border-gray-500'}`}
-                      title={`${f.n} 张话题卡含此标签（点选筛选，多选为 AND）`}
-                      onClick={() => toggleTag(f.kw)}>
-                      {f.kw} {f.n}
-                    </button>
-                  );
-                })}
-                {tags.length > 0 && (
-                  <button className="text-[10px] text-gray-500 hover:text-red-400 shrink-0"
-                    title="清除全部已选标签"
-                    onClick={() => setTags([])}>
-                    清除
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] text-gray-600">标签</span>
+                  <button className="text-[10px] text-gray-500 hover:text-info"
+                    title="标签词表管理（收录/归并/设域/丢弃——收口 AI 新词）"
+                    onClick={() => setTagManageOpen(true)}>
+                    词表管理
                   </button>
-                )}
+                  {tags.length > 0 && (
+                    <button className="text-[10px] text-gray-500 hover:text-red-400"
+                      title="清除全部已选标签"
+                      onClick={() => setTags([])}>
+                      清除
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {tagGroups.map(g => {
+                    const gKey = g.domain || '未分组';
+                    const expanded = tagExpanded.includes(gKey);
+                    const items = expanded ? g.items : g.items.slice(0, TAG_GROUP_TOP_K);
+                    const overflow = g.items.length - items.length;
+                    return (
+                      <div key={gKey} className="flex items-center gap-1 flex-wrap">
+                        {!flatTags && (
+                          <span className="text-[10px] text-amber-500/80 shrink-0"
+                            title={`域：${g.domain}（${g.total} 张话题卡）`}>
+                            {g.domain}
+                          </span>
+                        )}
+                        {items.map(f => {
+                          const on = tags.includes(f.kw);
+                          const pending = f.status === 'pending';
+                          return (
+                            <button key={f.kw}
+                              className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+                                on ? 'border-info/60 bg-info/20 text-info'
+                                   : pending
+                                     ? 'border-dashed border-border bg-surface-3 text-gray-500 hover:border-gray-500'
+                                     : 'border-border bg-surface-3 text-gray-400 hover:border-gray-500'}`}
+                              title={`${f.n} 张话题卡含此标签（点选筛选，多选为 AND）${
+                                pending ? '；待收录（词表管理可收录/归并）' : ''}`}
+                              onClick={() => toggleTag(f.kw)}>
+                              {f.kw} {f.n}
+                            </button>
+                          );
+                        })}
+                        {overflow > 0 && (
+                          <button className="text-[10px] text-gray-500 hover:text-gray-300"
+                            title="展开该组全部标签"
+                            onClick={() => toggleTagGroup(gKey)}>
+                            +{overflow}
+                          </button>
+                        )}
+                        {expanded && g.items.length > TAG_GROUP_TOP_K && (
+                          <button className="text-[10px] text-gray-500 hover:text-gray-300"
+                            onClick={() => toggleTagGroup(gKey)}>
+                            收起
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             <div className="flex-1 min-h-0 overflow-auto pr-1 space-y-1.5">
@@ -700,6 +776,14 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
       {previewImg && (
         <ImageLightbox url={previewImg.url} caption={previewImg.caption}
           onClose={() => setPreviewImg(null)} />
+      )}
+      {/* tag-taxonomy：标签词表管理（收录/归并/设域/丢弃；操作后重拉词表） */}
+      {tagManageOpen && (
+        <TagRegistryModal registry={tagReg}
+          onClose={() => setTagManageOpen(false)}
+          onChanged={() => {
+            feishuPoolApi.tagRegistry().then(setTagReg).catch(() => {});
+          }} />
       )}
       {/* T-993：跨群推荐面板（预筛清单 + 可选模型精筛 + 关联/忽略） */}
       {crossOpen && (

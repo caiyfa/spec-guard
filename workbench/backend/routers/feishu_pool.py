@@ -425,6 +425,98 @@ def topic_history(topic_id: str,
                                      material_base=_material_base())}
 
 
+# ══════════════════════════════════════════════════════════
+# tag-taxonomy：标签词表（标签爆炸收口——别名归并/收录/设域/丢弃；
+# 两级结构：domain 挂标签上，话题卡不动 schema。词表随话题库同域共享材料区）
+# ══════════════════════════════════════════════════════════
+
+class TagMergeRequest(BaseModel):
+    source: str                     # 任意写法（主标签/别名/pending 词）
+    target: str                     # 主标签名（未登记=人工新建 active 收录）
+
+
+class TagNameRequest(BaseModel):
+    name: str
+
+
+class TagDomainRequest(BaseModel):
+    name: str
+    domain: str = ""                # 空串=清除域
+
+
+def _editor_of(user: CurrentUser) -> dict:
+    return {"emp": user.emp_no, "name": getattr(user, "name", "") or ""}
+
+
+@router.get("/tags")
+def get_tag_registry(user: CurrentUser = Depends(get_current_user),
+                     workspace: str = Depends(resolve_workspace)):
+    """标签词表（tags 含 aliases/domain/status/source + domains）。纯读——
+    前端标签栏分组、别名归一展示与词表管理弹层的数据源。"""
+    from specflow.feishu_pool import tag_registry as tr
+    return tr.load_registry(_material_base())
+
+
+@router.post("/tags/merge")
+def merge_tag(body: TagMergeRequest,
+              user: CurrentUser = Depends(get_current_user),
+              workspace: str = Depends(resolve_workspace)):
+    """归并：source 变为 target 的别名（源自带别名随迁；目标 pending 转收录，
+    未登记则新建收录）。源未登记 → 404；源=目标 → 400。"""
+    from specflow.feishu_pool import tag_registry as tr
+    try:
+        entry = tr.merge_tag(_material_base(), body.source, body.target,
+                             editor=_editor_of(user))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    return {"ok": True, "entry": entry}
+
+
+@router.post("/tags/promote")
+def promote_tag(body: TagNameRequest,
+                user: CurrentUser = Depends(get_current_user),
+                workspace: str = Depends(resolve_workspace)):
+    """收录：pending → active。未登记 → 404。"""
+    from specflow.feishu_pool import tag_registry as tr
+    try:
+        entry = tr.promote_tag(_material_base(), body.name,
+                               editor=_editor_of(user))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    return {"ok": True, "entry": entry}
+
+
+@router.post("/tags/drop")
+def drop_tag(body: TagNameRequest,
+             user: CurrentUser = Depends(get_current_user),
+             workspace: str = Depends(resolve_workspace)):
+    """丢弃 pending 噪音词；active 只能被归并走 → 400。未登记 → 404。"""
+    from specflow.feishu_pool import tag_registry as tr
+    try:
+        tr.drop_tag(_material_base(), body.name, editor=_editor_of(user))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    return {"ok": True}
+
+
+@router.post("/tags/domain")
+def set_tag_domain(body: TagDomainRequest,
+                   user: CurrentUser = Depends(get_current_user),
+                   workspace: str = Depends(resolve_workspace)):
+    """设域（两级结构的一级）：域未建档自动创建；空串清除。未登记 → 404。"""
+    from specflow.feishu_pool import tag_registry as tr
+    try:
+        entry = tr.set_tag_domain(_material_base(), body.name, body.domain,
+                                  editor=_editor_of(user))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    return {"ok": True, "entry": entry}
+
+
 @router.post("/topics/regen")
 def regen_topic_card(body: RegenRequest,
                      user: CurrentUser = Depends(get_current_user),
