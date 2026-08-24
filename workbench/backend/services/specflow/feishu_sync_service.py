@@ -283,8 +283,10 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None,
     T-948：群聊通道按 chat_days 天窗口逐日拉取（历史补拉能力）；
     返回 chats（有消息的 群×天 数）/ chats_empty（当日无消息的天数）/ days_pulled。
     T-949：material_base 非空时三通道快照落共享材料区。
-    T-952：chat_id 非空时**单群模式**——只拉该群（docs/minutes 跳过，
-    介入工作台「更新本群」入口，秒级反馈不拉全量）。
+    T-952：chat_id 非空时**单群模式**——群聊只拉该群（介入工作台「更新本群」
+    入口，秒级反馈不拉全量群聊）。
+    T-1013：docs/minutes 两通道不再因单群模式跳过（拍板：指定群更新也需要
+    更新文档和妙记——文档/妙记是全局资产不按群切；单群模式仅收窄群聊范围）。
     """
     from datetime import timedelta
 
@@ -297,23 +299,24 @@ def sync_all(specflow_emp_base: Path, cfg: dict | None = None,
     days = [(today - timedelta(days=i)).strftime("%Y%m%d")
             for i in range(chat_days)]
     out["days_pulled"] = len(days)
-    if not chat_id:
-        for doc in cfg.get("docs") or []:
-            try:
-                sync_doc(material_root, str(doc.get("token", "")),
-                         url=str(doc.get("url", "")),
-                         meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
-                               "owner_name": str(doc.get("owner_name") or ""),
-                               "title": str(doc.get("title") or ""),
-                               "source_url": str(doc.get("url") or "")})
-                out["docs"] += 1
-            except Exception as e:
-                out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
+    # T-1013：docs/minutes 两通道不再因单群模式跳过（拍板 2026-08-24：指定群
+    # 更新也需要更新文档和妙记——全局资产不按群切；单群模式仅收窄群聊范围）
+    for doc in cfg.get("docs") or []:
         try:
-            out["minutes"] = len(sync_minutes(material_root,
-                                              int(cfg.get("minutes_days") or 0)))
+            sync_doc(material_root, str(doc.get("token", "")),
+                     url=str(doc.get("url", "")),
+                     meta={"owner_open_id": str(doc.get("owner_open_id") or ""),
+                           "owner_name": str(doc.get("owner_name") or ""),
+                           "title": str(doc.get("title") or ""),
+                           "source_url": str(doc.get("url") or "")})
+            out["docs"] += 1
         except Exception as e:
-            out["errors"].append(f"minutes: {e}")
+            out["errors"].append(f"doc {doc.get('token', '?')}: {e}")
+    try:
+        out["minutes"] = len(sync_minutes(material_root,
+                                          int(cfg.get("minutes_days") or 0)))
+    except Exception as e:
+        out["errors"].append(f"minutes: {e}")
     for chat in cfg.get("chats") or []:
         if chat_id and str(chat.get("chat_id", "")) != chat_id:
             continue                          # T-952：单群模式只拉指定群

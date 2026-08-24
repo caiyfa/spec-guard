@@ -480,30 +480,37 @@ def test_regen_multi_day_topic(tmp_path):
 # ══════════════════════════════════════════════════════════
 
 def test_sync_all_single_chat(tmp_path):
-    """chat_id 指定时只拉该群（docs/minutes 跳过）——介入工作台「更新本群」。"""
+    """T-1013：chat_id 指定时群聊只拉该群，docs/minutes 照常同步——
+    介入工作台「更新本群」与「立即同步」仅差群聊范围（2026-08-24 拍板：
+    指定群更新也需要更新文档和妙记）。"""
     emp = tmp_path / ".specflow" / "u1"
     svc.save_watch_config(emp, {
         "chats": [{"chat_id": "oc_a"}, {"chat_id": "oc_b"}],
         "docs": [{"token": "tokA"}], "minutes_days": 30, "chat_days": 1})
-    pulled = []
+    pulled, docs_pulled, minutes_pulled = [], [], []
 
     def _fake(args, timeout=90):
         if args[:2] == ["im", "+chat-messages-list"]:
             cid = args[args.index("--chat-id") + 1]
             pulled.append(cid)
             return {"ok": True, "data": {"messages": pull_messages()}}
-        if "docs" in args:
-            raise AssertionError("单群模式不应拉 docs")
+        if args[:2] == ["docs", "+fetch"]:
+            docs_pulled.append(args[args.index("--doc") + 1])
+            return {"ok": True, "data": {"content": "# 文档A\n正文"}}
         if args[:2] == ["minutes", "+search"]:
-            raise AssertionError("单群模式不应拉 minutes")
-        return {"ok": True, "data": {}}
+            minutes_pulled.append(1)
+            return {"ok": True, "data": {"items": []}}
+        return {"ok": True, "data": {}}   # perm 元数据探针等其余调用兜底
 
     with patch.object(svc, "_run_lark", side_effect=_fake), \
-         patch.object(svc, "maybe_cluster_async"):
+         patch.object(svc, "maybe_cluster_async"), \
+         patch.object(svc, "maybe_transcribe_async"):
         out = svc.sync_all(emp, material_base=tmp_path / ".specflow",
                            chat_id="oc_a")
-    assert pulled == ["oc_a"]                       # 只有 oc_a
-    assert out["chats"] == 1 and out["docs"] == 0 and out["minutes"] == 0
+    assert pulled == ["oc_a"]                  # 群聊仍只拉 oc_a
+    assert docs_pulled == ["tokA"]             # T-1013：docs 不再跳过
+    assert minutes_pulled == [1]               # T-1013：minutes 不再跳过
+    assert out["chats"] == 1 and out["docs"] == 1 and out["minutes"] == 0
 
 def test_fetch_image_by_key_cached(tmp_path):
     """图片按 (message_id, media_key) 经 im 通道下载（CLI 落 cwd 临时名→读回删）；

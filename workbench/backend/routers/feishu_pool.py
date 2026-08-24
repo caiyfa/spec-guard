@@ -147,6 +147,7 @@ def sync_now(body: SyncRequest | None = None,
     全员枚举——T-949 以来产出实际落各 emp 私有池，须归拢共享区）。
     T-952：body.chat_id 非空时单群模式（只拉该群，秒级反馈——介入工作台
     「更新本群」入口）。
+    T-1013：单群模式下 docs/minutes 通道照常同步（仅群聊收窄为单群）。
     """
     chat_id = (body.chat_id if body else "") or ""
     sync_svc.migrate_all_private_pools(_material_base(),
