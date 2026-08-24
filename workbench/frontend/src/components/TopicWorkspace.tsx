@@ -374,6 +374,7 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
     try {
       const r = await feishuPoolApi.syncNow(selectedChatId);
       setNotice(`本群已更新：${r.chats} 个有消息日 / ${r.chats_empty || 0} 个空日`
+        + ` / 文档 ${r.docs || 0} / 妙记 ${r.minutes || 0}`
         + (r.errors?.length ? `；${r.errors.length} 项失败` : ''));
       setReloadKey(k => k + 1);          // 重拉当前窗口（onCommitted 也拉话题）
       onCommitted();
@@ -425,10 +426,10 @@ export default function TopicWorkspace({ materials, watchCfg, topics, onCommitte
           onClick={runDraft}>
           {busy === 'draft' ? `分类中… ${elapsed}s` : '重新 AI 分类'}
         </button>
-        {/* T-952：单群刷新（秒级反馈——只拉选中群，不动 docs/minutes） */}
+        {/* T-952/T-1013：单群刷新（群聊只拉选中群；docs/minutes 照常同步） */}
         <button className={btn}
           disabled={!sha8 || busy === 'sync' || !selectedChatId}
-          title={selectedChatId ? '只同步当前群的聊天记录（chat_days 窗口内重建）'
+          title={selectedChatId ? '同步本群聊天记录 + 文档 + 妙记（chat_days 窗口内重建）'
                                 : '该群不在当前 watch 配置中（从同步设置添加后可刷新）'}
           onClick={syncOneChat}>
           {busy === 'sync' ? `更新中… ${elapsed}s` : '↻ 更新本群'}
