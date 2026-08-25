@@ -191,9 +191,11 @@ export function ChatInput({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   };
 
-  // 发送成功（onSend 返回 true）才清空输入框——发送被拒（断连/加载中）时保留草稿
+  // 发送成功（onSend 返回 true）才清空输入框与引用 chips——发送被拒（断连/加载中）时保留草稿；
+  // 引用是「随一条消息消费」的一次性载体（附件内容随当轮 user message 注入），不清空会
+  // 导致 chip 常驻输入区、后续每轮消息重复携带并触发后端重复读取注入（会话 20260825_151821_3178914e）
   const doSend = () => {
-    if (onSend(input.trim(), references)) setInput('');
+    if (onSend(input.trim(), references)) { setInput(''); setReferences([]); }
   };
 
   const handleAttachFiles = async (files: FileList | null) => {
