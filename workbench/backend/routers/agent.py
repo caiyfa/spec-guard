@@ -432,6 +432,67 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
     return scenario_id, block_text, structured
 
 
+# ══════════════════════════════════════════════════════════
+# 辅助会话：父会话每轮快照注入（设计 2026-08-25 §B4，主→辅单向通道）
+# ══════════════════════════════════════════════════════════
+
+_SNAPSHOT_MAX_CHARS = 8 * 1024
+
+
+def _parent_snapshot(sm: SessionManager, parent_sid: str, last_fp: str) -> tuple[str, str]:
+    """构造父会话最新快照。返回 (注入文本, 新指纹)。
+
+    - 父不可读 → 降级行（辅助会话继续不炸）
+    - 指纹与上轮相同 → 一行「无变更」（省 token）
+    - 内容：父会话 meta 概要 + 最新草稿足迹 + 最近 assistant 摘要（500 字符）
+    """
+    import hashlib
+    msgs = None
+    try:
+        msgs = sm.load(parent_sid)
+    except Exception:
+        msgs = None
+    if msgs is None:
+        return "[parent_context] 父会话不可读（可能已删除）\n", last_fp
+
+    parent_meta = sm._read_meta(sm.sessions_dir / f"{parent_sid}.jsonl") or {}
+
+    # 最新草稿足迹（write_draft 收集——与前端 sessionDrafts 同语义）
+    drafts: list[str] = []
+    for m in msgs:
+        if m.get("role") != "assistant" or not m.get("tool_calls"):
+            continue
+        for tc in m["tool_calls"]:
+            try:
+                args = json.loads(tc.get("function", {}).get("arguments", "{}"))
+            except (json.JSONDecodeError, TypeError):
+                continue
+            fname = tc.get("function", {}).get("name", "")
+            if (fname == "write_draft" or (fname == "draft" and args.get("action") == "write")) \
+                    and args.get("filename"):
+                drafts.append(str(args["filename"]))
+
+    last_assistant = ""
+    for m in reversed(msgs):
+        if m.get("role") == "assistant" and (m.get("content") or "").strip():
+            last_assistant = m["content"][:500]
+            break
+
+    parts = [
+        f"父会话 {parent_sid}（title={parent_meta.get('title', '')} "
+        f"purpose={parent_meta.get('purpose', '')}）最新快照：",
+        f"- 最新草稿文件: {', '.join(drafts[-5:]) or '（无）'}",
+        f"- 最近回复摘要: {last_assistant or '（无）'}",
+    ]
+    body = "\n".join(parts)
+    fp = hashlib.sha256(body.encode("utf-8")).hexdigest()[:12]
+    if last_fp and fp == last_fp:
+        return "[parent_context] 主会话自上轮起无变更\n", fp
+    if len(body) > _SNAPSHOT_MAX_CHARS:
+        body = body[:_SNAPSHOT_MAX_CHARS] + "\n…（截断）"
+    return f"<parent_context>\n{body}\n</parent_context>\n", fp
+
+
 def _iter_all_session_dirs() -> list[Path]:
     """全部用户会话目录（admin 视图）。"""
     if not SESSIONS_ROOT.is_dir():
@@ -844,6 +905,11 @@ async def agent_ws(websocket: WebSocket,
             purpose = data.get("purpose", "")  # T-010: 新建会话时可选传入用途
             references = data.get("references", [])  # K-013: @引用
 
+            # 辅助会话标记（设计 2026-08-25 §B4——快照注入依据；默认空=普通会话）
+            session_kind = ""
+            parent_sid = ""
+            last_parent_fp = ""
+
             if not message:
                 await websocket.send_json({"type": "error", "message": "缺少 message 参数"})
                 continue
@@ -886,9 +952,16 @@ async def agent_ws(websocket: WebSocket,
                     # M5：优先取创建期快照（purpose 定义热更新/文件变更不回流已建会话）；
                     # 旧会话无快照时才回退 load_purpose 现解
                     session_tools_snapshot = meta.get("tool_whitelist") or None
+                    # 辅助会话：恢复 kind/父链接/快照指纹（§B4）
+                    session_kind = meta.get("kind", "")
+                    parent_sid = meta.get("parent_session_id", "")
+                    last_parent_fp = meta.get("last_parent_fp", "")
                 except Exception:
                     session_purpose = ""
                     session_tools_snapshot = None
+                    session_kind = ""
+                    parent_sid = ""
+                    last_parent_fp = ""
             sid = session_id or sm.create(emp_no=emp_no, workspace=workspace, purpose=session_purpose)
             llm.set_metrics_file(sessions_dir / (f"{workspace}/" if workspace else "") / f"{sid}_metrics.jsonl")
             # T-010: 会话索引投影（失败静默）
@@ -944,7 +1017,15 @@ async def agent_ws(websocket: WebSocket,
             runtime = AgentRuntime(llm, tools=whitelist_tools, max_turns=max_turns,
                                    purpose_name=session_purpose or "",
                                    user_roles=list(_ws_roles or []))
-            ws_message = f"{ref_block}{message}" if ref_block else message
+            # 辅助会话：父会话每轮快照前缀注入（主→辅单向；设计 §B4）
+            parent_block = ""
+            if session_kind == "aux" and parent_sid:
+                parent_block, new_fp = _parent_snapshot(sm, parent_sid, last_parent_fp)
+                try:
+                    sm.set_meta_fields(sid, last_parent_fp=new_fp)
+                except Exception:
+                    pass
+            ws_message = f"{parent_block}{ref_block}{message}" if (parent_block or ref_block) else message
 
             # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）
             loop = asyncio.get_running_loop()

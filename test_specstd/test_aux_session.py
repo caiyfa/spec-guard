@@ -140,3 +140,37 @@ class TestSpawnApi:
         r = c.post("/api/agent/sessions/spawn",
                    json={"parent_session_id": parent, "purpose": "no_such_purpose"})
         assert r.status_code == 403
+
+
+class TestParentSnapshot:
+    def test_snapshot_changed_content(self, sm):
+        from test_specstd.routers_shim import _parent_snapshot
+        p = sm.create(emp_no="e", workspace="w1")
+        sm.save(p, [
+            {"role": "user", "content": "生成 HI-PERM-001"},
+            {"role": "assistant", "content": "场景清单已列出，等待拍板" + "x" * 600},
+        ], emp_no="e", workspace="w1")
+        block, fp = _parent_snapshot(sm, p, last_fp="")
+        assert block.startswith("<parent_context>")
+        assert "等待拍板" in block  # assistant 摘要可见
+        assert fp  # 新指纹非空
+
+    def test_snapshot_unchanged_returns_short_line(self, sm):
+        from test_specstd.routers_shim import _parent_snapshot
+        p = sm.create(emp_no="e", workspace="w1")
+        sm.save(p, [{"role": "assistant", "content": "hello"}], emp_no="e", workspace="w1")
+        _, fp = _parent_snapshot(sm, p, last_fp="")
+        block2, _ = _parent_snapshot(sm, p, last_fp=fp)
+        assert "无变更" in block2 and not block2.startswith("<parent_context>")
+
+    def test_snapshot_parent_missing_degrades(self, sm):
+        from test_specstd.routers_shim import _parent_snapshot
+        block, _ = _parent_snapshot(sm, "NOT_EXIST_1", last_fp="")
+        assert "父会话不可读" in block
+
+    def test_snapshot_truncated_to_8kb(self, sm):
+        from test_specstd.routers_shim import _parent_snapshot
+        p = sm.create(emp_no="e", workspace="w1")
+        sm.save(p, [{"role": "assistant", "content": "y" * 20000}], emp_no="e", workspace="w1")
+        block, _ = _parent_snapshot(sm, p, last_fp="")
+        assert len(block) <= 8 * 1024 + 200  # 8KB 上限 + 包裹标签余量
