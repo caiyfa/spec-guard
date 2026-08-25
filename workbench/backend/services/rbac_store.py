@@ -22,7 +22,7 @@ _LOCK = threading.RLock()
 # 系统保护菜单：admin 授权不可移除（自举保底，防管理员锁死）
 SYSTEM_MENUS = ("menu-menu-manage", "menu-users")
 # 公开菜单：登录即用，无需任何角色/菜单授权（首页对话页免权）
-PUBLIC_MENUS = ("menu-agent",)
+PUBLIC_MENUS = ("menu-agent", "menu-db-console")
 # 内置角色：不可删、key 不可改
 BUILTIN_ROLES = ("admin", "tester", "viewer", "product")
 ROLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
@@ -49,6 +49,7 @@ SEED_MENUS: list[tuple] = [
     ("menu-run", "测试执行", "", "/run", "group-execution", 0, 1, 0),
     ("menu-history", "执行中心", "", "/history", "group-execution", 1, 1, 0),
     ("menu-feedback", "反哺闭环", "", "/feedback", "group-execution", 2, 1, 0),
+    ("menu-db-console", "DB 证据", "🗄", "/db-console", "group-execution", 3, 1, 0),
     ("group-system", "系统管理", "⚙️", "", "", 4, 1, 0),
     ("menu-users", "用户管理", "", "/admin-users", "group-system", 0, 1, 1),
     ("menu-menu-manage", "菜单管理", "", "/menu-roles", "group-system", 1, 1, 1),

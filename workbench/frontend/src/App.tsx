@@ -6,6 +6,7 @@ import Scenarios from './pages/Scenarios';
 import RunControl from './pages/RunControl';
 import DagEditor from './pages/DagEditor';
 import History from './pages/History';
+import DbConsole from './pages/DbConsole';
 import Settings from './pages/Settings';
 import AgentChat from './pages/AgentChat';
 import Home from './pages/Home';
@@ -363,6 +364,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/history" element={<History />} />
               <Route path="/drafts" element={<Drafts />} />
               <Route path="/feedback" element={<Feedback />} />
+              <Route path="/db-console" element={<DbConsole />} />  {/* DB 证据面板（设计 2026-08-25） */}
               <Route path="/admin-users" element={<AdminUsers />} />
               <Route path="/audit" element={<AuditLog />} />  {/* T-082：MCP 调用审计 */}
               <Route path="/menu-roles" element={<MenuRoles />} />  {/* RBAC：菜单管理 + 角色授权 */}
