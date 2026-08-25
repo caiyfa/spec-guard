@@ -62,3 +62,81 @@ def test_set_meta_fields_roundtrip(sm):
 
 def test_set_meta_fields_missing_session(sm):
     assert sm.set_meta_fields("nonexistent_sid", kind="aux") is False
+
+# ══════════════════════════════════════════════════════════
+# spawn 派生 API（设计 2026-08-25 §B3）——TestClient 端到端，SG_AUX_TEST_TMP 隔离。
+# 适配说明：DB_PATH/SESSIONS_ROOT 均为模块常量（不读环境变量），隔离经
+# monkeypatch 落到 SG_AUX_TEST_TMP 目录；mock 登录走 /api/auth/mock-login。
+# ══════════════════════════════════════════════════════════
+import os
+
+_SPY_TMP = os.environ.get("SG_AUX_TEST_TMP")  # 隔离目录由运行命令注入
+
+if _SPY_TMP:
+    os.environ["SG_AUTH_MODE"] = "mock"
+
+
+@pytest.fixture()
+def aux_client(monkeypatch):
+    """装配 TestClient（隔离 DB + 隔离 sessions，全部落 SG_AUX_TEST_TMP）。"""
+    if not _SPY_TMP:
+        pytest.skip("需隔离环境（SG_AUX_TEST_TMP）")
+    base = Path(_SPY_TMP)
+    base.mkdir(parents=True, exist_ok=True)
+    from sg_core import user_store as us
+    monkeypatch.setattr(us, "DB_PATH", base / "wb.db")
+    us.init_db(base / "wb.db")
+    import services.auth as auth_mod
+    auth_mod._TOKEN_CACHE.clear()
+    from services import agent_session_store as ass
+    monkeypatch.setattr(ass, "DB_PATH", base / "wb.db")
+    from routers import agent as agent_router
+    monkeypatch.setattr(agent_router, "SESSIONS_ROOT", base / "sessions")
+    import specstd.workspace as wsm
+    monkeypatch.setattr(wsm, "REGISTRY_PATH", base / "registry.yaml")
+    monkeypatch.setattr(wsm, "CLONES_DIR", base / "_clones")
+    from main import app
+    from fastapi.testclient import TestClient
+    with TestClient(app) as c:
+        r = c.post("/api/auth/mock-login", json={"emp_no": "90000001", "name": "测试"})
+        assert r.status_code == 200, r.text
+        c.headers["Authorization"] = f"Bearer {r.json()['token']}"
+        yield c
+
+
+@pytest.mark.skipif(not _SPY_TMP, reason="需隔离环境（SG_AUX_TEST_TMP）")
+class TestSpawnApi:
+    def test_spawn_creates_aux_session(self, aux_client):
+        c = aux_client
+        parent = c.post("/api/agent/sessions",
+                        json={"purpose": "test_workbench"}).json()["session_id"]
+        r = c.post("/api/agent/sessions/spawn",
+                   json={"parent_session_id": parent, "purpose": "sql_assistant"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["created"] is True and body["session_id"] != parent
+
+    def test_spawn_idempotent_same_parent_purpose(self, aux_client):
+        c = aux_client
+        parent = c.post("/api/agent/sessions",
+                        json={"purpose": "test_workbench"}).json()["session_id"]
+        s1 = c.post("/api/agent/sessions/spawn",
+                    json={"parent_session_id": parent, "purpose": "sql_assistant"}).json()
+        s2 = c.post("/api/agent/sessions/spawn",
+                    json={"parent_session_id": parent, "purpose": "sql_assistant"}).json()
+        assert s1["session_id"] == s2["session_id"]
+        assert s2["created"] is False
+
+    def test_spawn_parent_not_found_404(self, aux_client):
+        c = aux_client
+        r = c.post("/api/agent/sessions/spawn",
+                   json={"parent_session_id": "NOT_EXIST_1", "purpose": "sql_assistant"})
+        assert r.status_code == 404
+
+    def test_spawn_bad_purpose_403(self, aux_client):
+        c = aux_client
+        parent = c.post("/api/agent/sessions",
+                        json={"purpose": "test_workbench"}).json()["session_id"]
+        r = c.post("/api/agent/sessions/spawn",
+                   json={"parent_session_id": parent, "purpose": "no_such_purpose"})
+        assert r.status_code == 403

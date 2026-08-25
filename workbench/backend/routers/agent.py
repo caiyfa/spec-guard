@@ -535,6 +535,49 @@ def create_session(body: dict, user: CurrentUser = Depends(get_current_user)):
     return {"ok": True, "session_id": sid, "session": created}
 
 
+@router.post("/sessions/spawn")
+def spawn_session(body: dict, user: CurrentUser = Depends(get_current_user)):
+    """辅助会话派生（设计 2026-08-25 §B3）：从主会话派生专职 purpose 的辅助会话。
+
+    幂等：同父会话 + 同 purpose 存在未归档 aux 会话 → 直接返回（created=False）；
+    父会话的 aux 已归档时再派生新的。父会话必须存在且属当前用户。
+    """
+    parent_sid = str(body.get("parent_session_id", "") or "").strip()
+    purpose = str(body.get("purpose", "") or "").strip()
+    workspace = str(body.get("workspace", "") or "").strip()
+    if not parent_sid or not purpose:
+        raise HTTPException(status_code=400, detail="parent_session_id 与 purpose 必填")
+    try:
+        _validate_session_id(parent_sid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法 parent_session_id")
+    pdef = load_purpose(purpose)
+    if pdef is None or not (set(user.roles) & set(pdef.roles)):
+        raise HTTPException(status_code=403, detail=f"用途不存在或无权限: {purpose}")
+    try:
+        sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"非法 workspace: {e}")
+    if sm.load(parent_sid) is None:
+        raise HTTPException(status_code=404, detail="父会话不存在")
+    # 幂等：同父 + 同 purpose 的未归档 aux 直接复用
+    for s in sm.list_sessions():
+        if (s.get("kind") == "aux"
+                and s.get("parent_session_id") == parent_sid
+                and s.get("purpose") == purpose
+                and not s.get("archived")):
+            return {"ok": True, "session_id": s["id"], "created": False}
+    sid = sm.create(
+        emp_no=user.emp_no, workspace=workspace, purpose=purpose,
+        extra_meta={"kind": "aux", "parent_session_id": parent_sid})
+    try:
+        from services import agent_session_store
+        agent_session_store.upsert_session(sid, user.emp_no, workspace, purpose, "")
+    except Exception:
+        pass
+    return {"ok": True, "session_id": sid, "created": True}
+
+
 @router.patch("/sessions/{session_id}")
 def patch_session(session_id: str, body: dict,
                   workspace: str = "",
