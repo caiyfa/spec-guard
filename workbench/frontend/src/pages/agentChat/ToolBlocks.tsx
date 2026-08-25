@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ToolItem } from './types';
-import { tryParseJson } from './utils';
+import { isToolError, tryParseJson } from './utils';
 
 /** 长文本截断 + 展开/收起 */
 function TruncText({ text, limit = 120, className = 'text-gray-400' }: { text: string; limit?: number; className?: string }) {
@@ -92,7 +92,7 @@ function ResultView({ result }: { result: string }) {
 function ToolCallBlock({ tool }: { tool: ToolItem }) {
   const [expanded, setExpanded] = useState(false);
   const hasResult = tool.result !== undefined;
-  const isError = hasResult && (tool.result!.includes('"error"') || tool.result!.includes('ERROR') || tool.result!.includes('❌'));
+  const isError = hasResult && isToolError(tool.result!);
   // 结果摘要：取首个非空行（截断），内联在头部行——工具点固定一行，不再独占两行
   const resultPreview = hasResult
     ? (tool.result!.split('\n').map(l => l.trim()).find(l => l && !l.startsWith('{') && !l.startsWith('[')) || tool.result!).substring(0, 60)
@@ -147,8 +147,8 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
 export function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLabel?: string }) {
   const [groupExpanded, setGroupExpanded] = useState(false);
   const allDone = tools.every(t => t.result !== undefined);
-  const hasError = tools.some(t => t.result && (t.result.includes('"error"') || t.result.includes('ERROR') || t.result.includes('❌')));
-  const successCount = tools.filter(t => t.result && !(t.result.includes('"error"') || t.result.includes('ERROR') || t.result.includes('❌'))).length;
+  const hasError = tools.some(t => t.result && isToolError(t.result));
+  const successCount = tools.filter(t => t.result && !isToolError(t.result)).length;
   // 工具名自描述：从组内工具自身取名称，不依赖外部映射表
   const uniqueNames = [...new Set(tools.map(t => t.name))];
   const toolLabel = uniqueNames.length === 1

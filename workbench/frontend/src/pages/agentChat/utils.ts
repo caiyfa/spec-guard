@@ -55,3 +55,19 @@ export function stripPlan(content: string): string {
 export function tryParseJson(text: string): any {
   try { return JSON.parse(text); } catch { return undefined; }
 }
+
+/**
+ * 工具结果语义判错：解析 JSON 后按协议字段判定，避免「"error": 0 计数键」被文本匹配误判为失败。
+ * 判定顺序：顶层 ok 字段 → 顶层 verdict 字段（REJECT/ERROR 才算错）→ 顶层 error 值非空 →
+ * 非 JSON 对象（纯文本/数组/解析失败）保留启发式兜底（含 ERROR / ❌）。
+ */
+export function isToolError(result: string): boolean {
+  const parsed = tryParseJson(result);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    if ('ok' in parsed) return parsed.ok !== true;
+    if ('verdict' in parsed) return parsed.verdict === 'REJECT' || parsed.verdict === 'ERROR';
+    if ('error' in parsed) return Boolean(parsed.error);
+    return false;
+  }
+  return result.includes('ERROR') || result.includes('❌');
+}
