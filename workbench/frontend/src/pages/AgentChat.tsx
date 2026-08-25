@@ -13,7 +13,7 @@ import type { ChatReference, ChatMessage, AgentStats, CtxUsage, GroupedItem, Doc
 import { DEFAULT_CTX_LIMIT, PURPOSE_TITLE_FALLBACK } from './agentChat/types';
 import { ArtifactCtx, GateDockCtx } from './agentChat/contexts';
 import type { ArtifactCtxValue } from './agentChat/contexts';
-import { stripRefBlock, extractPlan } from './agentChat/utils';
+import { stripRefBlock, extractPlan, filterTreeSessions } from './agentChat/utils';
 import { groupMessages, draftWriteUndo } from './agentChat/groupMessages';
 import { MarkdownText } from './agentChat/MarkdownText';
 import { ArtifactCard } from './agentChat/ArtifactCard';
@@ -188,7 +188,7 @@ export default function AgentChat() {
     try {
       // T-010 扩展：一次拉全（含归档），SessionTree 内部分组显示
       const r = await agentApi.listSessions('', '', true);
-      setSessions(r.sessions || []);
+      setSessions(filterTreeSessions(r.sessions || []));  // 辅助会话不进会话树（§B5）
     } catch { setSessions([]); }
   }, []);
 

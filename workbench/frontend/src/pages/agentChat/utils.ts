@@ -71,3 +71,8 @@ export function isToolError(result: string): boolean {
   }
   return result.includes('ERROR') || result.includes('❌');
 }
+
+/** 辅助会话不出现在会话树（设计 2026-08-25 §B5）。 */
+export function filterTreeSessions<T extends { kind?: string }>(sessions: T[]): T[] {
+  return sessions.filter(s => (s as any).kind !== 'aux');
+}
