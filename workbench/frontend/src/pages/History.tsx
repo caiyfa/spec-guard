@@ -4,6 +4,7 @@
  * 触发上下文（trigger.json）+ 单元测试清单（cases）+ 执行日志（output.log）。
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { runsApi, type RunSummary, type FailureEntry } from '../api';
 import Attribution from './Attribution';
 import Schedules from './Schedules';
@@ -30,10 +31,28 @@ const VERDICT_STYLE: Record<string, string> = {
 
 /** 单次执行详情（上下文 + 场景 + 日志） */
 function RunDetail({ runId }: { runId: string }) {
+  const navigate = useNavigate();
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [context, setContext] = useState<Record<string, unknown> | null>(null);
   const [log, setLog] = useState('');
   const [logTotal, setLogTotal] = useState(0);
+
+  // 「🗄 查 DB 证据」（设计 2026-08-25 §A4 入口②）：读 case 详情提取首个含 sql 的步骤，跳 DB 面板执行
+  const lookupDbSql = async (caseId: string) => {
+    try {
+      const detail = await runsApi.getCase(runId, `cases/${caseId}.json`);
+      const steps = (detail?.steps || []) as any[];
+      const dbStep = steps.find((s: any) => s.type === 'db_query' || s.sql);
+      const sql = dbStep?.sql || '';
+      if (!sql) {
+        setError('该 case 不含 db_query 步骤（无 SQL 可校对）');
+        return;
+      }
+      navigate(`/db-console?sql=${encodeURIComponent(sql)}`);
+    } catch (e: any) {
+      setError(e.message || '读取 case 详情失败');
+    }
+  };
   const [showLog, setShowLog] = useState(false);
   const [error, setError] = useState('');
 
@@ -92,6 +111,14 @@ function RunDetail({ runId }: { runId: string }) {
               <div className="flex items-center gap-2 text-xs">
                 <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
                 <span className="font-mono text-gray-300">{c.id}</span>
+                {['FAIL', 'BLOCKED', 'ERROR'].includes(c.verdict) && (
+                  <button type="button"
+                    onClick={() => lookupDbSql(c.id)}
+                    className="text-[10px] text-gray-500 hover:text-info ml-2"
+                    title="从 case 详情取 db_query SQL，跳 DB 证据面板执行">
+                    🗄 查 DB 证据
+                  </button>
+                )}
                 {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
               </div>
               {caseReason(c) && (

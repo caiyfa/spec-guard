@@ -382,37 +382,15 @@ def _handle_db_evidence(arguments: dict) -> list[TextContent]:
     if m:
         return [TextContent(type="text", text=f"错误：只读守卫拒绝危险子句: {m.group(1)}")]
 
-    # 尝试使用引擎的 DB 客户端（T-315：修复 DBClient 不存在——
-    # 引擎 db_oracle 只有 ReadOnlyDb；经适配包 load_env（T-309 含 db 密码回退）
-    # → normalize_db_config → ReadOnlyDb 建立只读连接）
+    # 连接与执行统一走 sg_core.db_access（进程级连接缓存；守卫并集语义不变）
     try:
-        import importlib
-        import os
-        BACKEND_DIR = SG_ROOT / "workbench" / "backend"
-
-        from engine.db_oracle import ReadOnlyDb, normalize_db_config
-        from specstd.workspace import resolve_system
-        system = resolve_system()
-        env_name = os.environ.get("SG_ENV", "sit")
-        env_cfg = importlib.import_module(f"systems.{system}").load_env(env_name) or {}
-        conns, default_name = normalize_db_config(env_cfg.get("db"))
-        if not default_name:
-            return [TextContent(type="text", text=json.dumps({
-                "sql": sql, "scenario_id": scenario_id,
-                "error": f"环境配置未设置 db 段（systems/{system}/config/env.{env_name}.yaml 的 db 连接配置缺失）",
-                "hint": "请在环境配置页补充 DB 只读连接，或确认 SG_ENV/SPEC_GUARD_SYSTEM",
-            }, ensure_ascii=False, indent=2))]
-        cfg = conns[default_name]
-        db = ReadOnlyDb(
-            host=cfg["host"], port=cfg.get("port", 3306), user=cfg["user"],
-            password=cfg.get("password", ""), database=cfg.get("name", "hr_center"),
-            charset=cfg.get("charset", "utf8mb4"))
-        rows = db.query(sql)
+        from sg_core import db_access
+        out = db_access.execute_readonly(sql)
         return [TextContent(type="text", text=json.dumps({
             "sql": sql,
             "scenario_id": scenario_id,
-            "row_count": len(rows),
-            "rows": rows[:100],
+            "row_count": out["row_count"],
+            "rows": out["rows"][:100],
         }, ensure_ascii=False, indent=2, default=str))]
     except Exception as e:
         return [TextContent(type="text", text=json.dumps({

@@ -25,5 +25,8 @@ export const agentApi = {
   // T-402: 取消会话当前运行（真打断）
   cancelSession: (sessionId: string) =>
     request<{ ok: boolean; session_id: string; message: string }>(`/agent/cancel/${sessionId}`, { method: 'POST' }),
+  // 辅助会话派生（设计 2026-08-25 §B3，幂等：同父同 purpose 复用未归档 aux）
+  spawnSession: (body: { parent_session_id: string; purpose: string; workspace?: string }) =>
+    request<{ ok: boolean; session_id: string; created: boolean }>('/agent/sessions/spawn', { method: 'POST', body: JSON.stringify(body) }),
 };
 

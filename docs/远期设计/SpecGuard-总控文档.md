@@ -294,6 +294,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-test-taxonomy | M-C 测试类型学施工（wt/test-taxonomy 树） | T-981（✅ 8df59e1+ef1547c 待主库复验） | 2026-08-21 | 当日完工+当日返修：sg_core/test_dimensions 八维词表+证据提取+映射检查（DIM_VOCAB/DIM_MISSING/DIM_MAP）；format_spec 2.14.0 三同步（§1.2 doc 选填字段+§五 T10，baseline 重建比对零漂移）；validator 双路+spec_validator T10；compute_coverage 维度聚合+CoveragePanel 维度分布区块；generate-scenario 1.1.0 测试设计方法；24 入库场景补标注零告警；返修：存量回归测试口径磁盘 rglob→git ls-files（主库本地 gitignored 草稿约 80 个被误卷根因），合并形态 108 文件复演零误炸；离线全绿（39+1948）+release_check PASS+前端 build 成功 |
 | sess-lark-scope-fix | M-D 飞书授权误报修复（wt/material-pool 树） | T-1012（✅ 08-24 主库验收合并 45a661e） | 2026-08-24 | 总控人实测上报授权误报；诊断在主库实跑 do_status+真实 token 调 contact 搜索钉案，施工在树内；文件读写一律树路径 |
 | sess-tool-consolidation | M-C 工具收敛 → M-F 收尾施工（wt/tool-consolidation 树） | T-982（✅ 08-21 主库验收合并 33931c6）→ T-998（✅ 待验收）→ T-999（✅ a/b/c/d 四分次，待验收）→ T-997（✅ 待验收） | 2026-08-21 | tool_meta 元数据单一事实源+consolidate 合并器（17 组 77→24）；side_effect/RBAC/doc 足迹全派生（_KNOWN_WRITERS 与 _RBAC_READONLY_TOOLS 手工清单废除）；purpose domains 领域子集两用途 15 工具；顺手修 specflow_refs 缺 handle 与 audit 未登记两存量缺口；eval 前后 3/3 持平 |
+| sess-db-aux | DB证据面板与辅助会话施工（wt/db-aux 树，superpowers 计划体系） | SP-DB-AUX Task1-16（✅ 施工完成待主库验收） | 2026-08-25 | 唯一执行依据：docs/superpowers/plans/2026-08-25-DB证据面板与辅助会话.md；设计：docs/superpowers/specs/2026-08-25-DB证据面板与辅助会话-design.md；16 Task 全交付（82a35f9~0fef8ab，13 commit），离线全绿+release_check PASS+前端 build 过；手动端到端（SIT/WS 真链路）待主库验收会话执行 |
 | | | | | |
 
 ---

@@ -5,6 +5,9 @@
  */
 import React, { useState } from 'react';
 import VariablePopover, { type LocalVar } from './VariablePopover';
+import { SqlResultTable } from './SqlResultTable';
+import { dbApi } from '../api/db';
+import type { DbQueryResult } from '../api/db';
 import type { EmpRole, UpstreamVar, EnvVar } from '../api';
 
 export interface StepData {
@@ -45,6 +48,20 @@ export default function StepFormCard({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const b = step.body;
+  // 编辑态试跑（设计 2026-08-25 §A4 入口①）——不含运行时 save 变量，env.* 由后端插值
+  const [tryout, setTryout] = useState<{ loading: boolean; result?: DbQueryResult; error?: string } | null>(null);
+
+  const runTryout = async () => {
+    const sqlText = String(b.sql || '');
+    setTryout({ loading: true });
+    try {
+      const r = await dbApi.query({ sql: sqlText, schema: String(b.schema || '') || undefined, vars: {} });
+      setTryout({ loading: false, result: r });
+    } catch (e: any) {
+      // 插值失败（引用运行时变量）→ 诚实提示变量名；守卫拒绝 → 显示文案
+      setTryout({ loading: false, error: e.message || '试跑失败' });
+    }
+  };
   const set = (key: string, value: unknown) =>
     onChange(index, { ...step, body: { ...b, [key]: value } });
 
@@ -318,11 +335,29 @@ export default function StepFormCard({
 
           {/* ── db_query ── */}
           {step.type === 'db_query' && (
+            <>
             <Row label="SQL" required>
               <textarea value={(b.sql as string) || ''} onChange={(e) => set('sql', e.target.value)}
                 rows={2} placeholder="SELECT …"
                 className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono" />
             </Row>
+            <div className="flex items-center gap-2 mt-1">
+              <button type="button" onClick={runTryout} disabled={tryout?.loading}
+                className="text-[10px] px-2 py-0.5 rounded border border-info/40 text-info hover:bg-info/10 disabled:opacity-50"
+                title="编辑态试跑（不含运行时 save 变量；env.* 由后端插值）">
+                ▶ 试跑
+              </button>
+              <span className="text-[10px] text-gray-600">编辑态试跑不含运行时变量</span>
+            </div>
+            {tryout && (
+              <div className="mt-1 border border-border rounded p-2 bg-surface-2">
+                {tryout.loading && <div className="text-xs text-gray-500">查询中…</div>}
+                {tryout.error && <div className="text-xs text-red-400">❌ {tryout.error}</div>}
+                {tryout.result && <SqlResultTable rows={tryout.result.rows} row_count={tryout.result.row_count} truncated={tryout.result.truncated} />}
+                <button type="button" onClick={() => setTryout(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1">关闭</button>
+              </div>
+            )}
+            </>
           )}
 
           {/* ── python ── */}

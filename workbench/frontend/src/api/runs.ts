@@ -99,6 +99,9 @@ export const runsApi = {
   failures: (scenarioId = '', limit = 10) =>
     request<FailureEntry[]>(`/runs/failures?scenario_id=${encodeURIComponent(scenarioId)}&limit=${limit}`),
   get: (runId: string) => request<Record<string, unknown>>(`/runs/${runId}`),
+  // 单场景 case 详情（设计 2026-08-25 §A4 入口②；case_file 相对 run 目录，如 cases/PP-RC-001.json）
+  getCase: (runId: string, caseFile: string) =>
+    request<Record<string, any>>(`/runs/${runId}/cases/${caseFile}`),
 };
 
 export interface FailureEntry {

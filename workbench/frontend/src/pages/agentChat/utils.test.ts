@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isToolError } from './utils';
+import { isToolError, filterTreeSessions } from './utils';
 
 describe('isToolError 工具结果语义判错', () => {
   // 回归用例：会话 20260824_172320_84d21cfa，spec sync 返回 ok:true 但
@@ -35,5 +35,17 @@ describe('isToolError 工具结果语义判错', () => {
     expect(isToolError('执行失败 ❌')).toBe(true);
     expect(isToolError('清单如下，共 3 项')).toBe(false);
     expect(isToolError('warn 8 info 0')).toBe(false);
+  });
+});
+
+describe('filterTreeSessions', () => {
+  it('过滤 aux 会话（§B5——辅助会话只活在面板页签）', () => {
+    const list = [
+      { id: 'a', kind: '' },
+      { id: 'b', kind: 'aux' },
+      { id: 'c' },
+    ] as any[];
+    const out = filterTreeSessions(list);
+    expect(out.map(s => s.id)).toEqual(['a', 'c']);
   });
 });

@@ -20,6 +20,7 @@ import { DraftArtifactsPanel } from './DraftArtifactsPanel';
 import { DepGraphPanel } from './DepGraphPanel';
 import { MaterialsRefPanel } from './MaterialsRefPanel';
 import { HistoryPanel } from './HistoryPanel';
+import { SqlAuxPanel } from './SqlAuxPanel';
 
 // ── 右侧面板组件（引用 + 信息包 + 上下文 + 待办） ──
 // ── K-032：右侧页签面板（待办首页 + 信息包页签 + 文件各自页签） ──
@@ -41,9 +42,10 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[]
   { id: 'materials', label: '📎 材料',     scope: 'purpose' },
   { id: 'deps',    label: '🕸 依赖图',     scope: 'purpose' },
   { id: 'history', label: '📜 提交历史',   scope: 'purpose' },
+  { id: 'sql_aux', label: '🧮 SQL 助手', scope: 'purpose' },  // 设计 2026-08-25 §C2
 ];
 
-export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, onAskAgentGuide, purposePanels }: {
+export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, workspace, onCiteToMain, onAskAgentGuide, purposePanels }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -75,6 +77,8 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
   onAskAgentBatch?: (items: DocWriteItem[]) => void;
   onRefreshWritingFeed?: () => void;
   sessionId: string;  // GateDock：操作台按会话反查面试上下文（sf_interviews 绑定）
+  workspace: string;              // §C2：SQL 助手 spawn/WS 用
+  onCiteToMain: (draftFilename: string) => void;  // §B6：辅助会话产出「引用到主会话」回流
   onAskAgentGuide?: (card: GateCard) => void;  // GateDock：「🤖 帮我」L1 引导
   purposePanels?: string[];  // T-932：当前 purpose 声明的专用页签 id（未声明 → 仅通用集）
 }) {
@@ -189,6 +193,9 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
         )}
         {activeTab === 'history' && (
           <HistoryPanel onError={onError} />
+        )}
+        {activeTab === 'sql_aux' && (
+          <SqlAuxPanel mainSessionId={sessionId} workspace={workspace} onCiteToMain={onCiteToMain} />
         )}
         {activeFile && (
           <div className="h-full min-h-0 flex flex-col">

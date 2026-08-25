@@ -85,7 +85,8 @@ class TestPurposeLoader:
         from agent.purpose_loader import list_purposes, clear_cache
         clear_cache()
         ids = {p.id for p in list_purposes()}
-        assert ids == {"requirement_interview", "test_workbench"}
+        # 设计 2026-08-25 §C1：sql_assistant 全角色可用（行为变更非回归，期望值 +1）
+        assert ids == {"requirement_interview", "test_workbench", "sql_assistant"}
 
     def test_hot_reload_new_file(self, tmp_path, monkeypatch):
         """新增用途文件 30s 内可见（TTL 过期后重新扫描）。"""
@@ -110,14 +111,15 @@ class TestPurposeLoader:
         """角色集合并集：tester+product 双角色用户可见两卡。"""
         from agent.purpose_loader import visible_purposes, clear_cache
         clear_cache()
-        # product 角色：仅需求面试
+        # product 角色：需求面试 + SQL 助手（§C1 全角色可用）
         p_product = {p.id for p in visible_purposes(["product"])}
-        assert p_product == {"requirement_interview"}
-        # tester+product（一人多用途）：两卡
+        assert p_product == {"requirement_interview", "sql_assistant"}
+        # tester+product（一人多用途）：三卡
         p_both = {p.id for p in visible_purposes(["tester", "product"])}
-        assert p_both == {"requirement_interview", "test_workbench"}
-        # viewer：2026-08-14 首页免权——测试工作台登录即用（产品工作台仍限 product+）
-        assert {p.id for p in visible_purposes(["viewer"])} == {"test_workbench"}
+        assert p_both == {"requirement_interview", "test_workbench", "sql_assistant"}
+        # viewer：2026-08-14 首页免权——测试工作台登录即用（产品工作台仍限 product+）；
+        # SQL 助手 §C1 全角色（viewer 由 resolve_tools 空集自然拦截工具面）
+        assert {p.id for p in visible_purposes(["viewer"])} == {"test_workbench", "sql_assistant"}
 
     def test_panels_values_align_tab_registry(self):
         """T-931：panels 值对齐前端 TAB_REGISTRY 页签 id（通用页签不声明、
@@ -127,7 +129,8 @@ class TestPurposeLoader:
         req = load_purpose("requirement_interview")
         assert req is not None and req.panels == ["pack", "focus", "materials"]
         tw = load_purpose("test_workbench")
-        assert tw is not None and tw.panels == ["deps", "history"]
+        # 设计 2026-08-25 §C2：sql_aux（SQL 助手页签）随 Task 14 前端注册落地
+        assert tw is not None and tw.panels == ["deps", "history", "sql_aux"]
 
 
 # ══════════════════════════════════════════════════════════
@@ -354,7 +357,8 @@ class TestPurposeEndpoints:
         r = client.get("/api/agent/purposes", headers=h)
         assert r.status_code == 200
         ids = {p["id"] for p in r.json()["purposes"]}
-        assert ids == {"requirement_interview"}
+        # 设计 §C1：sql_assistant 全角色可见（行为变更非回归）
+        assert ids == {"requirement_interview", "sql_assistant"}
 
     def test_purposes_multi_role_two_cards(self, client, monkeypatch):
         monkeypatch.setenv("SG_AUTH_MODE", "mock")
@@ -364,7 +368,7 @@ class TestPurposeEndpoints:
         h = self._login(client, "90024172")
         r = client.get("/api/agent/purposes", headers=h)
         ids = {p["id"] for p in r.json()["purposes"]}
-        assert ids == {"requirement_interview", "test_workbench"}
+        assert ids == {"requirement_interview", "test_workbench", "sql_assistant"}
 
     def test_list_sessions_purpose_filter(self, client, monkeypatch):
         monkeypatch.setenv("SG_AUTH_MODE", "mock")
