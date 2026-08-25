@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ToolItem } from './types';
 import { isToolError, tryParseJson } from './utils';
+import { SqlResultTable, parseDbEvidenceResult } from '../../components/SqlResultTable';
 
 /** 长文本截断 + 展开/收起 */
 function TruncText({ text, limit = 120, className = 'text-gray-400' }: { text: string; limit?: number; className?: string }) {
@@ -133,7 +134,13 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
             <div>
               <div className="text-gray-600 text-[10px] mb-0.5">结果</div>
               <div className={`text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-red-400' : ''}`}>
-                <ResultView result={tool.result!} />
+                {(() => {
+                  // G3：attribution(db_evidence) 结果含 rows → 表格化（设计 2026-08-25 §A5）
+                  const dbData = tool.name === 'attribution' ? parseDbEvidenceResult(tool.result!) : null;
+                  return dbData
+                    ? <SqlResultTable rows={dbData.rows} row_count={dbData.row_count} />
+                    : <ResultView result={tool.result!} />;
+                })()}
               </div>
             </div>
           )}
