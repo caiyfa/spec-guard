@@ -4,7 +4,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import Editor from '@monaco-editor/react';
-import { dbApi, DbQueryResult, DbSchema } from '../api/db';
+import { dbApi } from '../api/db';
+import type { DbQueryResult, DbSchema } from '../api/db';
 import { SqlResultTable } from '../components/SqlResultTable';
 
 const LS_SCHEMA = 'sg_db_schema';

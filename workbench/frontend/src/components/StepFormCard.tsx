@@ -6,7 +6,8 @@
 import React, { useState } from 'react';
 import VariablePopover, { type LocalVar } from './VariablePopover';
 import { SqlResultTable } from './SqlResultTable';
-import { dbApi, DbQueryResult } from '../api/db';
+import { dbApi } from '../api/db';
+import type { DbQueryResult } from '../api/db';
 import type { EmpRole, UpstreamVar, EnvVar } from '../api';
 
 export interface StepData {
