@@ -43,11 +43,13 @@ class SessionManager:
         self.workspace = workspace
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
-    def create(self, emp_no: str = "", workspace: str = "", purpose: str = "") -> str:
+    def create(self, emp_no: str = "", workspace: str = "", purpose: str = "",
+               extra_meta: dict | None = None) -> str:
         """创建新会话，返回 session_id。首行写入元数据。
 
         T-010：purpose 创建期一次性写入（不可变）；tool_whitelist/panels
         从用途定义快照（load_purpose），后续用途热更新不回流已建会话。
+        设计 2026-08-25 §B2：extra_meta 透传（辅助会话 kind/parent_session_id）。
         """
         sid = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
         # 写元数据首行
@@ -73,6 +75,8 @@ class SessionManager:
                     meta["panels"] = list(pdef.panels)
             except Exception:
                 pass
+        if extra_meta:
+            meta.update(extra_meta)
         path = self.sessions_dir / f"{sid}.jsonl"
         with open(path, "w", encoding="utf-8") as f:
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
@@ -125,6 +129,35 @@ class SessionManager:
             pass
         return False
 
+    def set_meta_fields(self, session_id: str, **fields) -> bool:
+        """批量更新首行 meta 字段（辅助会话快照指纹等运行时元数据，设计 §B4）。
+
+        返回是否有效（文件不存在/首行非 meta 返回 False；值未变化返回 True 不写）。
+        """
+        _validate_session_id(session_id)
+        path = self.sessions_dir / f"{session_id}.jsonl"
+        if not path.is_file():
+            return False
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if not lines:
+            return False
+        try:
+            meta = json.loads(lines[0])
+            if meta.get("_type") != "session_meta":
+                return False
+            changed = False
+            for k, v in fields.items():
+                if meta.get(k) != v:
+                    meta[k] = v
+                    changed = True
+            if not changed:
+                return True
+            lines[0] = json.dumps(meta, ensure_ascii=False)
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return True
+        except (json.JSONDecodeError, IndexError):
+            return False
+
     def save(self, session_id: str, messages: list[dict], metrics: dict = None,
              todos: list[dict] = None, emp_no: str = "", workspace: str = ""):
         """保存会话到 JSONL（覆盖写，每次全量保存）。
@@ -151,7 +184,8 @@ class SessionManager:
                 meta["purpose_locked"] = True
             elif "purpose" in old_meta:
                 meta["purpose"] = old_meta["purpose"]
-            for k in ("tool_whitelist", "panels", "title", "archived"):
+            for k in ("tool_whitelist", "panels", "title", "archived",
+                       "kind", "parent_session_id", "last_parent_fp"):
                 if k in old_meta:
                     meta[k] = old_meta[k]
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
@@ -269,6 +303,8 @@ class SessionManager:
                 "archived": meta.get("archived", False),   # 归档标记
                 "tool_whitelist": meta.get("tool_whitelist", []),
                 "panels": meta.get("panels", []),
+                "kind": meta.get("kind", ""),                      # 辅助会话标记（§B2）
+                "parent_session_id": meta.get("parent_session_id", ""),
             })
         return sessions
 
