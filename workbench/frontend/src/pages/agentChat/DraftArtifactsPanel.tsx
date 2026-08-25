@@ -7,6 +7,7 @@ import type { DraftItem, TrialRunResult, ValidateReport } from '../../api';
 interface DraftCardState {
   validate?: ValidateReport;
   validating?: boolean;
+  reviewing?: boolean;   // 第①闸人工评审进行中
   trial?: TrialRunResult;
   running?: boolean;
   promotedTo?: string;   // 已入库目标路径（入库后草稿已移入场景库，drafts 下不再存在）
@@ -36,13 +37,16 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   const [dlgConflict, setDlgConflict] = useState<{ existing: { id: string; path: string; module: string } | null; count: number } | null>(null);
   const [promoting, setPromoting] = useState(false);
   const [dlgError, setDlgError] = useState('');
+  // 列表加载失败（如 menu-drafts 未授权 403）——诚实呈现错误态，不误判"草稿已删除"
+  const [loadError, setLoadError] = useState('');
 
   const refresh = useCallback(() => {
     draftsApi.list().then(r => {
       const m: Record<string, DraftItem> = {};
       for (const d of r.drafts || []) m[d.filename] = d;
       setMetaMap(m);
-    }).catch(() => {});
+      setLoadError('');
+    }).catch((e: any) => setLoadError(e?.message || '草稿列表加载失败'));
     draftsApi.modules().then(r => setModules(r.modules || [])).catch(() => {});
     // K-xxx：依赖建议计数（按 consumer 场景 ID 聚合）
     draftsApi.suggestDeps().then(r => {
@@ -57,6 +61,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   // K-xxx：草稿去向判定——drafts 列表无此文件且本地无已入库状态时，查冲突预检区分「已入库/已删除」
   const draftsKey = draftFiles.join('|');
   useEffect(() => {
+    if (loadError) return;  // 列表加载失败时不做去向判定（403 会被误判为"已删除"）
     let alive = true;
     (async () => {
       const next: Record<string, { existing: { id: string; path: string; module: string } | null } | null> = {};
@@ -71,7 +76,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftsKey, metaMap]);
+  }, [draftsKey, metaMap, loadError]);
 
   const setOne = (file: string, patch: Partial<DraftCardState>) =>
     setState(prev => ({ ...prev, [file]: { ...prev[file], ...patch } }));
@@ -148,12 +153,31 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
     }
   };
 
+  /** T-061：第①闸人工评审（对话内闭环——人拍板 approved；gate2 未 pass 时后端打回） */
+  const handleReview = async (file: string) => {
+    setOne(file, { reviewing: true });
+    try {
+      await draftsApi.review(file, 'approved');
+      refresh();
+    } catch (e: any) {
+      onError(`评审失败：${e.message || ''}`);
+    } finally {
+      setOne(file, { reviewing: false });
+    }
+  };
+
   const busyAll = promoting;
 
   return (
     <div className="px-2 py-2 space-y-2">
       <div className="px-1 text-xs font-medium text-gray-300">📝 草稿产物（Agent 会话内评审）</div>
-      {draftFiles.length === 0 && (
+      {loadError && (
+        <div className="flex items-center gap-2 rounded border border-red-800/50 bg-red-900/20 px-2 py-1.5 text-[11px] text-red-400">
+          <span className="flex-1">草稿列表加载失败：{loadError}</span>
+          <button onClick={refresh} className="px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-900/60">重试</button>
+        </div>
+      )}
+      {draftFiles.length === 0 && !loadError && (
         <div className="text-[11px] text-gray-600 text-center py-8 leading-relaxed">
           Agent 尚未写入草稿。<br />写入后自动出现在这里，<br />可直接查看 / 校验 / 试跑 / 入库
         </div>
@@ -170,6 +194,8 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
               : null);
         const gone = !st.promotedTo && !meta && resolved[file] !== undefined && !resolved[file]?.existing;
         const checking = !st.promotedTo && !meta && resolved[file] === undefined;
+        const g1 = meta?.gates?.g1 || '';
+        const g2 = meta?.gates?.g2 || '';
         return (
           <div key={file} className="rounded-lg border border-border bg-surface-2/70 p-2">
             <div className="flex items-center gap-1.5">
@@ -188,12 +214,26 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                 <span className="text-green-400/90">✅ 已在场景库 · {libHit.scenarioId} · {libHit.path}</span>
               ) : gone ? (
                 <span className="text-gray-600">草稿已不存在（已废弃或删除）</span>
+              ) : loadError ? (
+                <span className="text-gray-600">状态未知（草稿列表加载失败）</span>
               ) : checking ? (
                 <span className="text-gray-600">检测草稿去向…</span>
               ) : meta
                 ? `${meta.scenario_id || ''}${meta.title ? ` · ${meta.title}` : ''}`
                 : '（草稿文件不存在或已删除）'}
             </div>
+
+            {/* 三闸状态（T-061）：① 人工评审 / ② 格式校验（③ 发布门禁在入库时自动跑） */}
+            {meta?.gates && !libHit && !gone && !loadError && (
+              <div className="flex items-center gap-1.5 mt-1 text-[9px]">
+                <span className={`px-1 py-0.5 rounded ${g1 === 'approved' ? 'bg-green-900/40 text-green-400' : g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                  ① {g1 === 'approved' ? '已评审' : g1 === 'rejected' ? '已驳回' : '待评审'}
+                </span>
+                <span className={`px-1 py-0.5 rounded ${g2 === 'pass' ? 'bg-green-900/40 text-green-400' : g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                  ② {g2 === 'pass' ? '校验通过' : g2 === 'fail' ? '校验未过' : '待校验'}
+                </span>
+              </div>
+            )}
 
             {/* 校验结果 */}
             {st.validate && (
@@ -239,19 +279,33 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
               <div className="mt-2 text-[9px] text-gray-600">
                 如需重新生成，请让 Agent 用 next_scenario_id 取新 ID
               </div>
+            ) : loadError ? (
+              <div className="flex flex-wrap gap-1 mt-2">
+                <button onClick={() => onViewFile(file, 'draft')} disabled={busyAll}
+                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1 disabled:opacity-40">查看</button>
+              </div>
             ) : (
               <div className="flex flex-wrap gap-1 mt-2">
                 <button onClick={() => onViewFile(file, 'draft')} disabled={busyAll}
                   className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1 disabled:opacity-40">查看</button>
+                {meta?.gates && g1 !== 'approved' && (
+                  <button onClick={() => handleReview(file)} disabled={busyAll || !!st.reviewing}
+                    title="第①闸人工评审通过（gate2 未 pass 时后端会打回）"
+                    className="px-2 py-1 rounded bg-yellow-600/80 text-white text-[11px] hover:bg-yellow-600 disabled:opacity-40">
+                    {st.reviewing ? '评审中…' : '✓ 评审通过'}
+                  </button>
+                )}
                 <button onClick={() => handleValidate(file)} disabled={busyAll}
                   className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1 disabled:opacity-40">
-                  {st.validating ? '校验中…' : '① 校验'}
+                  {st.validating ? '校验中…' : '校验'}
                 </button>
                 <button onClick={() => handleTrial(file)} disabled={busyAll}
                   className="px-2 py-1 rounded bg-warn/20 text-warn text-[11px] hover:bg-warn/30 disabled:opacity-40">
                   {st.running ? '试跑中…' : '▶ 试跑'}
                 </button>
-                <button onClick={() => openPromote(file)} disabled={busyAll || !!st.promotedTo}
+                <button onClick={() => openPromote(file)}
+                  disabled={busyAll || !!st.promotedTo || (meta?.gates ? g1 !== 'approved' : false)}
+                  title={meta?.gates && g1 !== 'approved' ? '第①闸人工评审未通过——先点「✓ 评审通过」' : ''}
                   className="px-2 py-1 rounded bg-info text-white text-[11px] hover:bg-info/90 disabled:opacity-40">⬆ 入库</button>
                 <button onClick={() => handleDiscard(file)} disabled={busyAll || !!st.promotedTo}
                   className="ml-auto px-2 py-1 rounded text-gray-500 text-[11px] hover:text-red-400 disabled:opacity-40">废弃</button>
