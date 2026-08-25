@@ -362,6 +362,32 @@ class TestRuntime:
         loaded = sm.load(sid)
         assert any(m.get("role") == "user" and m.get("content") == "本轮新消息" for m in loaded)
 
+    def test_session_resume_replaces_system_prompt(self, tmp_path):
+        """续会话：新 system_prompt 替换历史首条 system（每轮重建的上下文真正生效）。
+
+        生产佐证（会话 20260824_172320_84d21cfa）：WS 层每条消息重建 system prompt
+        （含最新场景/信息包清单），但 run() 续会话分支直接采用 history，
+        新 prompt 被丢弃——LLM 永远看到首条消息时的版本，新上传的信息包
+        在 system 层提示了也等于没提示。
+        """
+        sm = SessionManager(tmp_path / "sessions")
+        sid = sm.create()
+        sm.save(sid, [
+            {"role": "system", "content": "旧提示词（场景 SG-META-0001）"},
+            {"role": "user", "content": "previous"},
+            {"role": "assistant", "content": "prev reply"},
+        ])
+        llm = LLMClient(base_url="")
+        runtime = AgentRuntime(llm, max_turns=1)
+        messages = runtime.run(
+            "新提示词（当前场景 SG-META-0008）", "continue", session=sm, session_id=sid)
+        assert messages[0]["role"] == "system"
+        assert "SG-META-0008" in messages[0]["content"]
+        assert "SG-META-0001" not in messages[0]["content"]
+        # 落盘同步替换（save 全量写）
+        loaded = sm.load(sid)
+        assert "SG-META-0008" in loaded[0]["content"]
+
     def test_event_emission(self):
         """事件发射：assistant 和 state 事件。"""
         events = []

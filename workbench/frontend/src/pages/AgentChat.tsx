@@ -657,10 +657,14 @@ export default function AgentChat() {
     }
     setLoading(true); setError(''); setTurnInfo(''); setPlanItems([]);
     const msgRefs = refs.length ? [...refs] : undefined;
-    // K-015：发送时才落实 info_pack 关联（右侧信息包面板随发送出现）
+    // K-015：发送时才落实 info_pack 关联（右侧信息包面板随发送出现）。
+    // 注意：setScenarioId 是异步 setState，本轮 ws.send 必须用同步计算值
+    // （此前用闭包旧值 scenarioId，后端收到旧场景 ID → 新上传的信息包被忽略）
     const packRef = msgRefs?.find(r => r.type === 'info_pack');
+    let sidToSend = scenarioId;
     if (packRef && packRef.path !== scenarioId) {
       autoSentRef.current = true;  // 不触发向导自动发送
+      sidToSend = packRef.path;
       setScenarioId(packRef.path);
       scenarioApi.getMeta(packRef.path).then(setScenarioMeta).catch(() => {});
       expandSideTo('pack');  // K-037：面板收起时随发送自动展开到信息包页签
@@ -668,11 +672,11 @@ export default function AgentChat() {
     setMessages(prev => [...prev, { role: 'user', content: userMsg, references: msgRefs }]);
     ws.send(JSON.stringify({
       message: userMsg, session_id: sessionId, max_turns: 50,
-      workspace: currentWorkspace, scenario_id: scenarioId,
+      workspace: currentWorkspace, scenario_id: sidToSend,
       model_id: currentModelId,
       purpose: pickedPurpose,
       references: (msgRefs || []).map(r => ({ type: r.type, id: r.path, path: r.path })),
-      context: { current_page: currentPage, editing_scenario_id: scenarioId },
+      context: { current_page: currentPage, editing_scenario_id: sidToSend },
     }));
     return true;
   }, [loading, sessionId, pickedPurpose, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo, fetchAndShowPurposes]);

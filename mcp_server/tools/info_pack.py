@@ -26,7 +26,8 @@ _TOOL_DECLS = [
             "properties": {
                 "scenario_id": {
                     "type": "string",
-                    "description": "场景元数据 ID（如 SG-META-0001）"
+                    "description": "场景元数据 ID（格式 SG-META-XXXX，如 SG-META-0007；"
+                                   "不要自行猜测 ID——用户上传附件的 ID 会在消息 references 中给出）"
                 }
             },
             "required": ["scenario_id"]
@@ -62,7 +63,7 @@ _TOOL_DECLS = [
             "properties": {
                 "scenario_id": {
                     "type": "string",
-                    "description": "场景元数据 ID（如 SG-META-0001）"
+                    "description": "场景元数据 ID（格式 SG-META-XXXX）"
                 }
             },
             "required": ["scenario_id"]

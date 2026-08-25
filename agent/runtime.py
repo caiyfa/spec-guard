@@ -432,6 +432,15 @@ class AgentRuntime:
             history = session.load(session_id)
             if history:
                 messages = history
+                # 关键修复：用本轮重建的 system_prompt 替换历史首条 system——
+                # WS 层每条消息按最新 scenario_id 重建（场景/信息包清单实时感知，
+                # K-013 设计意图），此前直接采用 history 导致新 prompt 被丢弃，
+                # LLM 永远看到首条消息时的版本（生产会话 20260824_172320_84d21cfa
+                # 佐证：新上传信息包在 system 层提示了也等于没提示）
+                if messages and messages[0].get("role") == "system":
+                    messages[0] = {"role": "system", "content": system_prompt}
+                else:
+                    messages.insert(0, {"role": "system", "content": system_prompt})
                 # 关键修复（K-013）：恢复历史后必须追加本轮 user 消息——
                 # 此前直接丢弃，导致续会话时 LLM 看不到用户新消息（生产会话导出文件佐证）
                 if skill_hint:

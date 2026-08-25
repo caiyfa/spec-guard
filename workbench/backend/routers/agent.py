@@ -255,7 +255,12 @@ _REF_MAX_COUNT = 10          # 单条消息最多引用数
 def _process_references(references: list, scenario_id: str) -> tuple[str, str, list]:
     """处理 @引用，返回 (scenario_id, 引用内容块, 结构化引用清单)。
 
-    - info_pack：关联为当前场景（不注入内容，走 _build_scenario_context 标准流程）
+    - info_pack：上传即关联——无条件接管为最新信息包，且文件内容直接注入
+      <references> 块（对齐业界附件模式：OpenAI input_file / Anthropic document
+      block / Cursor @ 展开均是附件内容随上传那一轮 user message 直接可见，
+      不依赖 system prompt 提示 + 模型自己调工具的绕圈链路）。
+      生产佐证（会话 20260824_172320_84d21cfa）：旧「只关联不注入」链路 4 环全断，
+      两批上传模型均看不到。
     - file / draft：读取内容（截断保护）拼 <references> 块前缀到 user message，
       同时返回含引用时 sha 的结构化清单（挂 user 消息持久化，供右侧引用面板比对新鲜度）
     """
@@ -269,6 +274,25 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
     blocks: list[str] = []
     total = 0
 
+    def _read_pack_file(fp: str) -> tuple[str, str]:
+        """读信息包单个文件 → (content, sha)；与 file/draft 引用同款截断与转文本规则。"""
+        try:
+            resolved = safe_resolve(fp)
+            if not (resolved and resolved.is_file()):
+                return "", ""
+            raw = resolved.read_bytes()
+            sha = hashlib.sha256(raw).hexdigest()[:12]
+            # K-030 同款守卫：办公文档（xlsx/docx/pdf）转文本，避免乱码注入
+            from services import file_preview
+            if file_preview.is_office_doc(resolved):
+                _fmt, content = file_preview.preview_text(resolved)
+                content = f"[办公文档已转换为文本预览]\n{content}"
+            else:
+                content = raw.decode("utf-8", errors="replace")
+            return content, sha
+        except Exception:
+            return "", ""
+
     for ref in references[:_REF_MAX_COUNT]:
         if not isinstance(ref, dict):
             continue
@@ -278,10 +302,38 @@ def _process_references(references: list, scenario_id: str) -> tuple[str, str, l
             continue
 
         if rtype == "info_pack":
-            # 关联语义：当前对话未关联场景时接管 scenario_id
-            if not scenario_id:
-                scenario_id = rid
+            # 上传即关联：无条件接管为最新信息包（此前仅在空时接管，
+            # 已绑定场景的会话新上传被静默忽略——见上 docstring 生产佐证）
+            scenario_id = rid
             structured.append({"type": "info_pack", "path": rid, "sha": ""})
+            try:
+                from sg_core import scenario_meta as _sm
+                meta = _sm.get_meta(rid)
+            except Exception:
+                meta = None
+            if not meta:
+                blocks.append(f"--- {rid} ---\n[信息包不存在或不可读，可让用户重新上传]")
+                continue
+            pack_files = [e.get("path", "") if isinstance(e, dict) else str(e)
+                          for e in (meta.get("info_pack") or [])]
+            if not pack_files:
+                blocks.append(f"--- {rid}（{meta.get('name', '')}） ---\n[信息包为空]")
+                continue
+            for fp in pack_files:
+                content, sha = _read_pack_file(fp)
+                if not content:
+                    blocks.append(f"--- {fp} ---\n[文件不存在或不可读]")
+                    continue
+                truncated = False
+                if len(content) > _REF_MAX_FILE:
+                    content = content[:_REF_MAX_FILE]
+                    truncated = True
+                if total + len(content) > _REF_MAX_TOTAL:
+                    content = content[:max(0, _REF_MAX_TOTAL - total)]
+                    truncated = True
+                total += len(content)
+                blocks.append(f"--- {fp} (sha:{sha}) ---\n{content}"
+                              + ("\n[截断]" if truncated else ""))
             continue
 
         if rtype == "material":

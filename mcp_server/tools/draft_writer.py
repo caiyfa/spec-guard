@@ -120,7 +120,7 @@ _TOOL_DECLS = [
                           "description": "模式：create（新建，禁止覆盖）/ patch（追加到已有文件）",
                           "default": "create"},
                 "scenario_id": {"type": "string",
-                                 "description": "可选：来源场景元数据 ID（如 SG-META-0001）。"
+                                 "description": "可选：来源场景元数据 ID（格式 SG-META-XXXX）。"
                                  "记录后草稿与其信息包关联，信息包内容变更时可被核对标记"}
             },
             "required": ["filename", "content"]

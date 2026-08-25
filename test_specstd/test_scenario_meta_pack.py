@@ -144,15 +144,23 @@ class TestProcessReferences:
         assert refs[0]["type"] == "file" and len(refs[0]["sha"]) == 12
 
     def test_info_pack_reference_takes_over_scenario(self, ws):
+        """上传即关联 + 内容直接注入（对齐业界附件模式，20260824_172320_84d21cfa 佐证）。
+
+        旧语义（仅空时接管/不注入）已废弃：绕圈链路 4 环全断时模型永远看不到附件。
+        """
         from routers.agent import _process_references
+        meta = _create()
         sid, block, refs = _process_references(
-            [{"type": "info_pack", "id": "SG-META-0001"}], "")
-        assert sid == "SG-META-0001"  # 关联语义
-        assert block == ""  # 信息包不注入内容（走 read_info_pack 标准流程）
-        # 已有场景关联时不覆盖
-        sid2, _, _ = _process_references(
-            [{"type": "info_pack", "id": "SG-META-0002"}], "SG-META-0001")
-        assert sid2 == "SG-META-0001"
+            [{"type": "info_pack", "id": meta["id"]}], "")
+        assert sid == meta["id"]  # 上传即关联
+        assert "<references>" in block
+        assert "信息包为空" in block  # 空包注入可见提示（不再静默）
+        # 已有场景关联时无条件接管为最新上传
+        meta2 = _create("第二批发件")
+        sid2, block2, _ = _process_references(
+            [{"type": "info_pack", "id": meta2["id"]}], meta["id"])
+        assert sid2 == meta2["id"]
+        assert "信息包为空" in block2
 
     def test_draft_reference(self, ws):
         from specstd.workspace import drafts_dir
