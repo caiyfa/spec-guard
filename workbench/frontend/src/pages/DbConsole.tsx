@@ -2,7 +2,7 @@
  * 状态持久化（基线①）：schema 选择与编辑器草稿 localStorage 恢复；
  * 三态分离（基线③）：加载中 / 空态 / 错误分别呈现。 */
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router';
 import Editor from '@monaco-editor/react';
 import { dbApi, DbQueryResult, DbSchema } from '../api/db';
 import { SqlResultTable } from '../components/SqlResultTable';
@@ -15,6 +15,7 @@ interface HistoryItem { sql: string; schema: string; ts: number }
 
 export function DbConsole() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [schemas, setSchemas] = useState<DbSchema[]>([]);
   const [schemasLoaded, setSchemasLoaded] = useState(false);
   const [schema, setSchema] = useState(() => localStorage.getItem(LS_SCHEMA) || '');
@@ -110,6 +111,15 @@ export function DbConsole() {
           title="执行 (Ctrl+Enter)"
           className="px-3 py-1 text-xs rounded bg-info/20 text-info border border-info/40 hover:bg-info/30 disabled:opacity-50">
           {loading ? '查询中…' : '▶ 执行'}
+        </button>
+        <button onClick={() => {
+          // 交给 SQL 助手：SQL 草稿经 sessionStorage 中转 → /agent 激活页签自动发送（§C3）
+          sessionStorage.setItem('sg_sql_aux_send', sql);
+          navigate('/agent');
+        }} disabled={!sql.trim()}
+          className="px-3 py-1 text-xs rounded border border-border text-gray-400 hover:text-info disabled:opacity-50"
+          title="把当前 SQL 发给 SQL 助手迭代（解释表关系/设计理由/多轮优化）">
+          🤖 交给 SQL 助手
         </button>
         <span className="text-[10px] text-gray-600">Ctrl+Enter 执行</span>
       </div>

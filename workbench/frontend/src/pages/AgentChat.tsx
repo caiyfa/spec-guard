@@ -65,6 +65,14 @@ export default function AgentChat() {
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeSideTab, setActiveSideTab] = useState('todos');
   const [citeDraft, setCiteDraft] = useState('');  // §B6：辅助会话产出引用预填（ChatInput pendingRef）
+
+  // DB 面板转来：激活 SQL 助手页签（§C3；首条消息由 SqlAuxPanel 检测 sg_sql_aux_send 自行发送）
+  useEffect(() => {
+    if (sessionStorage.getItem('sg_sql_aux_send')) {
+      setActiveSideTab('sql_aux');
+      setSideCollapsed(false);
+    }
+  }, []);
   // K-037：会话列表 / 右侧面板 独立收起展开（localStorage 持久化）
   const [sessCollapsed, setSessCollapsed] = useState(() => localStorage.getItem('sg_sess_collapsed') === '1');
   const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('sg_side_collapsed') === '1');

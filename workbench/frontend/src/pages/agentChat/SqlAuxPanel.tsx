@@ -157,6 +157,13 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
                 title="把 @draft 引用预填进主会话输入框（发送后主会话 Agent 可读该 SQL）">
                 📎 引用到主会话
               </button>
+              <button
+                onClick={() => {
+                  const sqlText = artifacts.find(([f]) => f === fn)?.[1] || '';
+                  window.open(`/db-console?sql=${encodeURIComponent(sqlText)}`, '_self');
+                }}
+                className="text-[10px] px-1.5 py-0.5 rounded border border-border text-gray-400 hover:text-info flex-shrink-0"
+                title="带 SQL 跳 DB 证据面板回填执行">▶ DB 面板</button>
             </div>
           ))}
         </div>
