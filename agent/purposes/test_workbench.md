@@ -9,7 +9,7 @@ roles: [admin, tester, viewer]  # 2026-08-14 首页免权：viewer 登录即用�
 # specflow/feishu/graph/open 域不下发（需求侧/外部契约面，与测试工作流无关）
 domains: [spec, scenario, run, draft, knowledge, quality, meta]
 tools: []
-panels: [deps, history]   # 专用页签（∩前端 TAB_REGISTRY）储备：plan/report（页签未实现，实现后登记即生效）
+panels: [deps, history, sql_aux]   # sql_aux：SQL 助手页签（设计 2026-08-25 §C2，purpose 声明驱动）；储备：plan/report（页签未实现，实现后登记即生效）
 description: 契约驱动场景测试工作台——生成/验证/编排场景，DAG 依赖管理，执行与失败归因，草稿经三闸入库。
 ---
 你是 SpecGuard 智能测试助手。你的职责是：基于工作区 spec 生成/更新场景、

@@ -129,7 +129,8 @@ class TestPurposeLoader:
         req = load_purpose("requirement_interview")
         assert req is not None and req.panels == ["pack", "focus", "materials"]
         tw = load_purpose("test_workbench")
-        assert tw is not None and tw.panels == ["deps", "history"]
+        # 设计 2026-08-25 §C2：sql_aux（SQL 助手页签）随 Task 14 前端注册落地
+        assert tw is not None and tw.panels == ["deps", "history", "sql_aux"]
 
 
 # ══════════════════════════════════════════════════════════
