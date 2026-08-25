@@ -64,6 +64,7 @@ export default function AgentChat() {
   // K-032：文件页签（取代 modal 弹窗）+ 活动页签（'todos' | 'pack' | `file:{path}`）
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeSideTab, setActiveSideTab] = useState('todos');
+  const [citeDraft, setCiteDraft] = useState('');  // §B6：辅助会话产出引用预填（ChatInput pendingRef）
   // K-037：会话列表 / 右侧面板 独立收起展开（localStorage 持久化）
   const [sessCollapsed, setSessCollapsed] = useState(() => localStorage.getItem('sg_sess_collapsed') === '1');
   const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('sg_side_collapsed') === '1');
@@ -1326,6 +1327,8 @@ export default function AgentChat() {
             onQuickTextHandled={() => setQuickText('')}
             sessionId={sessionId}
             onMaterialUploaded={() => expandSideTo('materials')}
+            pendingRef={citeDraft ? { type: 'draft', path: citeDraft } : null}
+            onPendingRefConsumed={() => setCiteDraft('')}
           />
         </div>
 
@@ -1385,7 +1388,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} workspace={currentWorkspace} onCiteToMain={(fn: string) => setCiteDraft(fn)} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} />
           </>
         )}
       </div>

@@ -41,12 +41,15 @@ interface ChatInputProps {
   onQuickTextHandled?: () => void;
   sessionId: string;              // T-933：材料上传按会话反查绑定面试（sf_interviews）
   onMaterialUploaded?: () => void;  // T-933：上传成功后展开材料页签刷新
+  pendingRef?: { type: 'draft'; path: string } | null;   // 面板「引用到主会话」预填（§B6）
+  onPendingRefConsumed?: () => void;
 }
 
 export function ChatInput({
   wsState, loading, models, currentModelId,
   onSend, onStop, onNewSession, onClearMessages, onExportSession, onModelChange,
   quickText, onQuickTextHandled, sessionId, onMaterialUploaded,
+  pendingRef, onPendingRefConsumed,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
@@ -74,6 +77,16 @@ export function ChatInput({
   const matInputRef = useRef<HTMLInputElement>(null);
   const [matNotice, setMatNotice] = useState<{ text: string; error: boolean } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 面板回流：pendingRef 变化时并入 references（去重）并消费——用户显式点引用的唯一通道（§B6）
+  useEffect(() => {
+    if (!pendingRef) return;
+    setReferences(prev => prev.some(r => r.type === 'draft' && r.path === pendingRef.path)
+      ? prev : [...prev, { type: 'draft', path: pendingRef.path, sha: '' }]);
+    onPendingRefConsumed?.();
+    inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRef]);
 
   // 斜杠命令过滤
   const filteredCommands = useMemo(() => {
