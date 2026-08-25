@@ -26,3 +26,4 @@ export * from './knowledge';
 export * from './feishuPool';
 export * from './systems';
 export * from './products';
+export * from './db';
