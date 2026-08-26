@@ -1,0 +1,38 @@
+id: HI-PERM-001
+title: 3-URL 探针：摸清真实 base_url 和前缀
+version: "0.7"
+priority: P0
+tags: [permission]
+
+doc:
+  given: 探针 — 同时测 3 个候选 URL
+  when: 每个 URL 跑一次 GET，看哪个不报 404
+  then: 打印 status_code 找出正确路径
+
+flow:
+  - python:
+      script: |
+        c = http('default')
+        print(f"BASE_URL: {c.base_url}")
+        # 候选 1：附件里看到的完整路径（含 /femsp）
+        try:
+            r1 = c.request('GET', '/femsp/hr-center/api/permission/role/role-list-by-resource',
+                           json_body={"resourceCode": "VIEW_HISTORY", "domainSource": "hr"})
+            print(f"URL1 /femsp/hr-center/...: status={r1.status_code}")
+        except Exception as e:
+            print(f"URL1 failed: {type(e).__name__}: {str(e)[:200]}")
+        # 候选 2：去前缀
+        try:
+            r2 = c.request('GET', '/hr-center/api/permission/role/role-list-by-resource',
+                           json_body={"resourceCode": "VIEW_HISTORY", "domainSource": "hr"})
+            print(f"URL2 /hr-center/...: status={r2.status_code}")
+        except Exception as e:
+            print(f"URL2 failed: {type(e).__name__}: {str(e)[:200]}")
+        # 候选 3：再前缀
+        try:
+            r3 = c.request('GET', '/femsp/hr-center/permission/role/role-list-by-resource',
+                           json_body={"resourceCode": "VIEW_HISTORY", "domainSource": "hr"})
+            print(f"URL3 /femsp/hr-center/permission/...: status={r3.status_code}")
+        except Exception as e:
+            print(f"URL3 failed: {type(e).__name__}: {str(e)[:200]}")
+      save: probe
