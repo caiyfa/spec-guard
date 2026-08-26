@@ -791,9 +791,9 @@ class AgentRuntime:
         if is_pure_read(name, action):
             pre_fp = self._take_snapshot_fingerprint()
 
-        # T-901（GateDock 二期）：注入会话上下文特权参数——下划线前缀，
-        # LLM 入参同名键被覆盖（防伪造）；不需要的工具直接忽略该键。
-        arguments = {**arguments, "_session_id": self._session_id or ""}
+        # T-1020：会话上下文已由 _execute_tool 的 set_session_id 注入 contextvar，
+        # 工具经 current_session_id() 自取（零传参）；原 T-901 _session_id 特权参数
+        # 注入退役（gate_dock 迁移后无消费方，仅存量测试兼容读参）。
 
         try:
             result = asyncio.run(mod.handle(name, arguments))

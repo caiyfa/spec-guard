@@ -127,6 +127,12 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
         {item.writes > 1 && (
           <span className="text-[9px] text-gray-500 flex-shrink-0" title="同文件累计更新次数">×{item.writes}</span>
         )}
+        {item.versions && item.versions > 1 && (
+          <span className="text-[9px] text-gray-500 flex-shrink-0"
+            title={`活动流水版本链：第 ${item.version_no} 版 / 共 ${item.versions} 次（含历史会话）`}>
+            v{item.version_no}/{item.versions}
+          </span>
+        )}
         {verdictBadge(item.verdict)}
       </div>
       <div className="text-[10px] text-gray-600 truncate mt-0.5" title={item.ref}>{item.ref}</div>

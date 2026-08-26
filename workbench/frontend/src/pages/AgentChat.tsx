@@ -767,7 +767,7 @@ export default function AgentChat() {
     setActiveSideTab(prev => {
       if (prev === `file:${path}`) {
         if (readingFeed.length > 0) return 'reading';
-        if (writingFeed.length > 0) return 'drafts';
+        if (writingFeed.length > 0) return 'writing';  // 足迹/草稿分签后更新足迹独立成页
         return 'todos';
       }
       return prev;
@@ -1381,11 +1381,18 @@ export default function AgentChat() {
                 <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{readingFeed.length}</span>
               )}
             </button>
-            <button onClick={() => expandSideTo('drafts')} title={`更新与产物（${writingFeed.length + sessionDrafts.length}）`}
+            <button onClick={() => expandSideTo('drafts')} title={`草稿产物（${sessionDrafts.length}）`}
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
               📝
-              {writingFeed.length + sessionDrafts.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{writingFeed.length + sessionDrafts.length}</span>
+              {sessionDrafts.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{sessionDrafts.length}</span>
+              )}
+            </button>
+            <button onClick={() => expandSideTo('writing')} title={`更新足迹（${writingFeed.length}）`}
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+              ✏️
+              {writingFeed.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{writingFeed.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('history')} title="提交历史 / 推送远端"

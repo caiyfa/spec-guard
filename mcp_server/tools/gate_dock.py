@@ -52,8 +52,13 @@ async def handle(name: str, arguments: dict) -> list[TextContent]:
     if not ws:
         return _emit({"ok": False, "error": "工作区上下文缺失"})
 
-    # _session_id 由 runtime 注入（特权参数，LLM 入参同名键会被覆盖）
-    session_id = arguments.get("_session_id") or arguments.get("session_id") or ""
+    # T-1020：会话上下文优先走 contextvar（runtime 已注入，工具零传参，
+    # 如同 Java ThreadLocal）；_session_id 特权参数仅作存量兼容兑底
+    try:
+        from sg_core.session_context import current_session_id
+        session_id = current_session_id() or arguments.get("_session_id") or arguments.get("session_id") or ""
+    except Exception:
+        session_id = arguments.get("_session_id") or arguments.get("session_id") or ""
     interview_id = arguments.get("interview_id") or ""
 
     from workbench.backend.services.specflow import sf_store

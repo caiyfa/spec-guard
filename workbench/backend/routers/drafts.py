@@ -213,6 +213,61 @@ def suggest_draft_deps():
     return dep_suggest.suggest_deps(_scenarios_root(), _drafts_root(), drafts_only=True)
 
 
+@router.get("/activity", dependencies=[Depends(require_role("admin", "tester", "product"))])
+def list_draft_activity():
+    """T-1020：草稿活动摘要（product_activity 流水 → 面板 DB 化数据源）。
+
+    返回当前 emp+workspace 每份草稿的最新活动：来源会话/版本号/累计版本数/
+    最新动作/时间——草稿产物页跨会话接管展示依据。
+    """
+    from sg_core import product_activity as pa
+    from specstd.workspace import get_context_workspace
+
+    ws = get_context_workspace() or ""
+    emp = get_context_emp_no() or ""
+    if not ws:
+        raise HTTPException(status_code=400, detail="工作区上下文缺失")
+    try:
+        rows = pa.latest_by_workspace(ws)
+    except Exception:
+        rows = []  # 旧库无表/DB 不可用 → 空活动（面板退化为纯文件列表）
+    items = []
+    for r in rows:
+        if emp and r.get("emp_no") and r["emp_no"] != emp:
+            continue  # 草稿物理隔离在各自 emp 私有区，活动跟人走
+        path = r["product_path"]
+        items.append({
+            "filename": path.split("/", 1)[1] if path.startswith("drafts/") else path,
+            "action": r["action"], "session_id": r["session_id"],
+            "version_no": r["version_no"], "versions": r["versions"],
+            "size": r.get("size", 0), "updated_at": r["created_at"],
+        })
+    return {"activity": items}
+
+
+@router.get("/{filename}/versions", dependencies=[Depends(require_role("admin", "tester", "product"))])
+def draft_versions(filename: str):
+    """T-1020：单份草稿版本链（活动流水正序，含内容摘录）。"""
+    from sg_core import product_activity as pa
+    from specstd.workspace import get_context_workspace
+
+    _guard_filename(filename)  # 路径守卫复用（含私有区校验语义）
+    ws = get_context_workspace() or ""
+    if not ws:
+        raise HTTPException(status_code=400, detail="工作区上下文缺失")
+    try:
+        chain = pa.version_chain(ws, f"drafts/{filename}")
+    except Exception:
+        chain = []
+    return {"versions": [{
+        "version_no": v["version_no"], "action": v["action"],
+        "session_id": v["session_id"], "emp_no": v["emp_no"],
+        "size": v.get("size", 0), "sha": v.get("sha", ""),
+        "excerpt": (v.get("content") or "")[:200],
+        "created_at": v["created_at"],
+    } for v in chain]}
+
+
 @router.get("/{filename}", dependencies=[Depends(require_role("admin", "tester", "product"))])
 def read_draft(filename: str):
     """读取单个草稿内容（含解析出的场景 ID 与依赖关系）。

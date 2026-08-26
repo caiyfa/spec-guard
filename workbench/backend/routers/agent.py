@@ -113,11 +113,13 @@ def rebuild_items(items: list, key_idx: dict, key: str, card: dict, evt: dict):
             key_idx[item["key"]] = pos
 
 
-def _rebuild_writing_feed(messages: list) -> list[dict]:
-    """从消息链重建更新足迹（doc_write 事件，用于会话恢复）。
+def _rebuild_writing_feed(messages: list, session_id: str = "",
+                          workspace: str = "") -> list[dict]:
+    """重建更新足迹（doc_write 事件，用于会话恢复）。
 
-    遍历 assistant 消息的 tool_calls，对写型工具调用 build_doc_write
-    生成更新卡片，同文件去重合并 hunks + 累计更新次数（模拟前端汇聚逻辑）。
+    T-1020 双源：消息链重放为主体（verdict/findings/hunks 富字段完整）
+    + product_activity DB 增强/兑底（版本号附加；消息被压缩/截断的长会话
+    用 DB 活动生成简化卡片，保证足迹不丢）。DB 不可用时静默回退纯重放。
     """
     items: list[dict] = []
     key_idx: dict[str, int] = {}
@@ -176,6 +178,46 @@ def _rebuild_writing_feed(messages: list) -> list[dict]:
             key_idx.clear()
             for pos, item in enumerate(items):
                 key_idx[item["key"]] = pos
+
+    # ── T-1020：DB 活动增强/兑底（product_activity 为事实源）──
+    if session_id:
+        try:
+            from sg_core import product_activity as pa
+            acts = pa.by_session(session_id)
+            if workspace:
+                acts = [a for a in acts if a.get("workspace") == workspace]
+            if acts:
+                # 最新版本号映射：drafts/A.yaml → {version_no, versions, action}
+                by_path: dict[str, dict] = {}
+                for a in acts:
+                    by_path[a["product_path"]] = a
+                counts: dict[str, int] = {}
+                for a in acts:
+                    counts[a["product_path"]] = counts.get(a["product_path"], 0) + 1
+                # ① 重放卡片附加版本信息（write_draft 卡片的 ref=filename 直接对应）
+                for card in items:
+                    ref = card.get("ref") or ""
+                    act = by_path.get(f"drafts/{ref}")
+                    if act:
+                        card["version_no"] = act["version_no"]
+                        card["versions"] = counts[f"drafts/{ref}"]
+                # ② 兑底：DB 有活动但重放无卡片（长会话消息被压缩）→ 简化卡片
+                replay_refs = {c.get("ref", "") for c in items}
+                for path, act in by_path.items():
+                    ref = path.split("/", 1)[1] if path.startswith("drafts/") else ""
+                    if not ref or ref in replay_refs:
+                        continue
+                    items.insert(0, {
+                        "key": path, "tool": "draft", "ref": ref, "path": None,
+                        "turn": 0, "size": act.get("size", 0),
+                        "excerpt": (act.get("content") or "")[:300],
+                        "label": f"{act['action']} {ref}（活动流水留档）",
+                        "thinking": "", "verdict": None, "findings": [],
+                        "hunks": [], "writes": counts[path],
+                        "version_no": act["version_no"], "versions": counts[path],
+                    })
+        except Exception:
+            pass  # DB 不可用 → 纯重放（旧会话/旧库无表）
 
     return items
 
@@ -747,7 +789,7 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
         messages = sm.load(session_id)
         if messages is not None:
             reading_feed = _rebuild_reading_feed(messages)
-            writing_feed = _rebuild_writing_feed(messages)
+            writing_feed = _rebuild_writing_feed(messages, session_id, workspace)
             return {"session_id": session_id, "messages": messages,
                     "reading_feed": reading_feed, "writing_feed": writing_feed,
                     "owner": d.name, "workspace": workspace}
@@ -758,7 +800,7 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
             if messages is not None:
                 return {"session_id": session_id, "messages": messages,
                         "reading_feed": _rebuild_reading_feed(messages),
-                        "writing_feed": _rebuild_writing_feed(messages),
+                        "writing_feed": _rebuild_writing_feed(messages, session_id, ""),
                         "owner": d.name, "workspace": ""}
     raise HTTPException(status_code=404, detail="会话不存在")
 

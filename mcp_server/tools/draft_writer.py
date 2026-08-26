@@ -9,6 +9,7 @@
     reset         重置草稿区状态（清空草稿/回收站/元数据/DB 记录）［原 reset_draft_area］
 """
 
+import contextlib
 import contextvars
 import json
 from datetime import datetime
@@ -108,16 +109,17 @@ def _record_author(filename: str):
 _TOOL_DECLS = [
     Tool(
         name="write_draft",
-        description="写入草稿到 drafts/ 目录。路径限定（仅 drafts/ 可写），禁止覆盖已有文件"
-                    "（mode=create 时已存在返回 OVERWRITE_DENIED），支持 patch 模式（追加到已有文件）。"
+        description="写入草稿到 drafts/ 目录。路径限定（仅 drafts/ 可写），mode=create 禁止覆盖已有文件"
+                    "（已存在返回 OVERWRITE_DENIED），mode=patch 追加到已有文件，mode=overwrite 覆盖重写"
+                    "（旧版自动备份 .bak 且进活动流水版本链，可 undo/溯源恢复）。"
                     "写入前自动备份到 .bak 文件（支持 undo_draft 回滚）。",
         inputSchema={
             "type": "object",
             "properties": {
                 "filename": {"type": "string", "description": "草稿文件名（如 PP-RC-008.yaml），不允许包含路径分隔符"},
                 "content": {"type": "string", "description": "草稿内容（YAML 文本）"},
-                "mode": {"type": "string", "enum": ["create", "patch"],
-                          "description": "模式：create（新建，禁止覆盖）/ patch（追加到已有文件）",
+                "mode": {"type": "string", "enum": ["create", "patch", "overwrite"],
+                          "description": "模式：create（新建，禁止覆盖）/ patch（追加到已有文件）/ overwrite（覆盖重写，旧版自动留档）",
                           "default": "create"},
                 "scenario_id": {"type": "string",
                                  "description": "可选：来源场景元数据 ID（格式 SG-META-XXXX）。"
@@ -178,7 +180,8 @@ _TOOL_DECLS = [
     ),
     Tool(
         name="reset_draft_area",
-        description="重置草稿区状态：清空当前工作区所有草稿文件、回收站、元数据、三闸与台账记录。"
+        description="重置草稿区状态：仅清除【当前会话】写入的草稿文件（其他会话/用户手工放置的草稿不受影响），"
+                    "删前内容自动进活动流水留档（可溯源恢复）。需要会话上下文（Agent 会话自动携带）。"
                     "操作不可逆（已入库场景不受影响），调用前请用户确认。",
         inputSchema={
             "type": "object",
@@ -222,6 +225,10 @@ def _handle_promote_drafts(arguments: dict) -> list[TextContent]:
             emp_no = ""
         result = draft_promote.promote_batch(filenames, module,
                                              skip_gate=skip_gate, emp_no=emp_no)
+        if isinstance(result, dict) and result.get("ok"):
+            for m in (result.get("promoted") or []):  # T-1020 活动流水（逐份）
+                if isinstance(m, dict) and m.get("file"):
+                    _record_activity(m["file"], "promote")
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
     except Exception as e:
         code = getattr(e, "code", "error")
@@ -252,6 +259,8 @@ def _handle_promote_draft(arguments: dict) -> list[TextContent]:
             emp_no = ""
         result = draft_promote.promote(filename, module, skip_gate=skip_gate,
                                        emp_no=emp_no, replace=replace)
+        if isinstance(result, dict) and result.get("ok"):
+            _record_activity(filename, "promote")  # T-1020 活动流水（草稿生命终点）
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
     except Exception as e:
         code = getattr(e, "code", "error")
@@ -291,7 +300,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
 
     if mode == "create":
         if draft_path.exists():
-            return [TextContent(type="text", text=f"OVERWRITE_DENIED: 文件已存在: {filename}（使用 mode=patch 追加）")]
+            return [TextContent(type="text", text=f"OVERWRITE_DENIED: 文件已存在: {filename}（使用 mode=patch 追加或 mode=overwrite 覆盖重写）")]
         # 获取并消费 pending source files（A+B：注入头部注释 + 记录到 _meta.json）
         source_files = pop_pending_source_files()
         if source_files:
@@ -301,6 +310,7 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         _record_meta(filename, scenario_id, source_files=source_files)
         _register_gates(filename, content)
         _record_product_index(draft_path)
+        _record_activity(filename, "create", content=content)  # T-1020 活动流水
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "create",
             "path": _rel_path(draft_path), "size": len(content),
@@ -317,10 +327,27 @@ def _handle_write_draft(arguments: dict) -> list[TextContent]:
         _record_meta(filename, scenario_id)
         _register_gates(filename, merged)
         _record_product_index(draft_path)
+        _record_activity(filename, "patch", content=merged)  # T-1020 活动流水
         return [TextContent(type="text", text=json.dumps({
             "ok": True, "action": "patch",
             "path": _rel_path(draft_path), "size": len(merged),
             "backup": f"{filename}.bak",
+        }, ensure_ascii=False, indent=2))]
+
+    elif mode == "overwrite":
+        # T-1020：覆盖重写——旧版自动备份 .bak 且进活动流水版本链（reset 事故后
+        # Agent 重写正道：不再被 OVERWRITE_DENIED 逼向 reset 绕路）
+        if draft_path.exists():
+            _backup_draft(filename)
+        draft_path.write_text(content, encoding="utf-8")
+        _record_meta(filename, scenario_id)
+        _register_gates(filename, content)
+        _record_product_index(draft_path)
+        _record_activity(filename, "overwrite", content=content)
+        return [TextContent(type="text", text=json.dumps({
+            "ok": True, "action": "overwrite",
+            "path": _rel_path(draft_path), "size": len(content),
+            "backup": f"{filename}.bak" if (drafts_root / f"{filename}.bak").exists() else None,
         }, ensure_ascii=False, indent=2))]
 
     return [TextContent(type="text", text=f"错误：未知模式: {mode}")]
@@ -341,6 +368,18 @@ def _record_product_index(draft_path):
                        session_id=current_session_id(),
                        emp_no=current_emp_no(),
                        workspace=get_context_workspace() or "")
+    except Exception:
+        pass
+
+
+def _record_activity(filename: str, action: str, content: str = ""):
+    """T-1020：产物活动流水登记（版本链+全文快照，会话/工号/工作区自动取上下文）。
+
+    失败静默——流水是派生层，绝不阻断草稿主路径。
+    """
+    try:
+        from sg_core.product_activity import record_activity
+        record_activity(f"drafts/{filename}", action, content=content)
     except Exception:
         pass
 
@@ -390,7 +429,9 @@ def _handle_undo_draft(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"错误：无 .bak 备份文件: {filename}.bak")]
 
     # 恢复
-    draft_path.write_text(bak_path.read_text(encoding="utf-8"), encoding="utf-8")
+    restored = bak_path.read_text(encoding="utf-8")
+    draft_path.write_text(restored, encoding="utf-8")
+    _record_activity(filename, "undo", content=restored)  # T-1020 活动流水
     return [TextContent(type="text", text=json.dumps({
         "ok": True, "action": "undo",
         "path": _rel_path(draft_path),
@@ -399,7 +440,25 @@ def _handle_undo_draft(arguments: dict) -> list[TextContent]:
 
 
 def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
-    """重置草稿区状态：清空当前工作区所有草稿文件、回收站、元数据、三闸与台账。"""
+    """T-1020 reset 会话收窄：仅清当前会话写入的草稿，其余物理文件不动。
+
+    事故背景（20260825_151821_3178914e）：原全清语义下 Agent 五次自调 reset
+    清空了整个草稿区（含用户手写的 v0.3 修复版）——reset 只该对本会话产物生效。
+    删前内容进活动流水留档（product_activity.reset_delete），可溯源恢复。
+    """
+    # 1. 会话上下文硬前置：无会话（stdio POC/误用）拒绝——不给「无会话=全清」留后门
+    try:
+        from sg_core.session_context import current_session_id
+    except Exception:
+        current_session_id = lambda: ""  # noqa: E731
+    session_id = current_session_id()
+    if not session_id:
+        return [TextContent(type="text", text=json.dumps({
+            "ok": False,
+            "error": "reset 需要会话上下文（当前会话 ID 为空）。"
+                     "Agent 会话内自动携带；如需全量清理请在工作台 Drafts 页手动重置。",
+        }, ensure_ascii=False, indent=2))]
+
     try:
         drafts_root = _drafts_root()
     except RuntimeError as e:
@@ -420,48 +479,67 @@ def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
             ws = info.name if info else ""
         except Exception:
             ws = ""
-    stats = {"yaml_deleted": 0, "bak_deleted": 0, "trash_deleted": 0}
 
-    # 1. 删除 .yaml / .yml / .bak
+    # 2. 本会话写过的草稿文件集（活动流水事实源）
+    try:
+        from sg_core.product_activity import session_draft_files
+        session_files = session_draft_files(session_id, ws)
+    except Exception:
+        session_files = set()
+    # 流水里的 path 形如 drafts/A.yaml → 还原 filename
+    session_names = {p.split("/", 1)[1] for p in session_files if p.startswith("drafts/")}
+
+    stats = {"yaml_deleted": 0, "bak_deleted": 0, "skipped": []}
+
     if drafts_root.is_dir():
-        for f in list(drafts_root.glob("*.yaml")) + list(drafts_root.glob("*.yml")):
-            f.unlink(missing_ok=True)
-            stats["yaml_deleted"] += 1
-        for f in list(drafts_root.glob("*.bak")):
-            f.unlink(missing_ok=True)
-            stats["bak_deleted"] += 1
+        # 3. 只删本会话产物（存在才删；删前内容留档活动流水）
+        for name in sorted(session_names):
+            f = drafts_root / name
+            if f.is_file():
+                with contextlib.suppress(Exception):
+                    _record_activity(name, "reset_delete",
+                                     content=f.read_text(encoding="utf-8"))
+                f.unlink(missing_ok=True)
+                stats["yaml_deleted"] += 1
+            bak = drafts_root / f"{name}.bak"
+            if bak.is_file():
+                bak.unlink(missing_ok=True)
+                stats["bak_deleted"] += 1
+            # 三闸/台账只清本会话文件
+            try:
+                from sg_core import draft_gates
+                draft_gates.delete_draft_gate(name)
+            except Exception:
+                pass
+            try:
+                from sg_core import ledger_store
+                ledger_store.delete_draft(name, ws)
+            except Exception:
+                pass
 
-        # 2. 重置 _meta.json
+        # 4. _meta.json 只删本会话文件的条目
         meta_path = drafts_root / "_meta.json"
-        if meta_path.is_file():
-            meta_path.write_text("{}\n", encoding="utf-8")
+        if meta_path.is_file() and session_names:
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8")) or {}
+                for name in session_names:
+                    meta.pop(name, None)
+                meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
+                                     encoding="utf-8")
+            except Exception:
+                pass
 
-        # 3. 清空 _trash/
-        trash = drafts_root / "_trash"
-        if trash.is_dir():
-            for f in list(trash.glob("*")):
-                if f.is_file():
-                    f.unlink(missing_ok=True)
-                    stats["trash_deleted"] += 1
+        # 5. 非本会话产物不动，但如实报告（用户知情）
+        leftover = [f.name for f in drafts_root.glob("*.yaml")
+                    if f.name not in session_names]
+        stats["skipped"] = leftover
 
-    # 4. 删除 DB 三闸记录
-    try:
-        from sg_core import draft_gates
-        if ws:
-            draft_gates.delete_workspace_gates(ws)
-    except Exception:
-        pass
-
-    # 5. 删除 DB 草稿台账
-    try:
-        from sg_core import ledger_store
-        if ws:
-            ledger_store.clear_drafts(ws)
-    except Exception:
-        pass
+    # _trash/ 不动：discard 回收站无会话归属记录，保守跳过（工作台手动重置可清）
 
     return [TextContent(type="text", text=json.dumps({
-        "ok": True, "workspace": ws, **stats,
+        "ok": True, "workspace": ws, "session_id": session_id,
+        "note": "仅清除本会话写入的草稿；其他会话/手工草稿未动（见 skipped）",
+        **stats,
     }, ensure_ascii=False, indent=2))]
 
 
@@ -471,8 +549,9 @@ def _handle_reset_draft_area(arguments: dict) -> list[TextContent]:
 TOOLS, handle = consolidate(
     "draft",
     "草稿生命周期管理：写入/撤销/入库（单份/批量）/重置草稿区。"
-    "写草稿用 write；入库（移入场景库+发布门禁）用 promote/promote_batch"
-    "（仅用户明确确认后）；reset 不可逆，调用前请用户确认。",
+    "写草稿用 write（create 新建/patch 追加/overwrite 覆盖重写——旧版自动留档）；"
+    "入库（移入场景库+发布门禁）用 promote/promote_batch（仅用户明确确认后）；"
+    "reset 仅清除当前会话写入的草稿（其他会话/手工草稿不动），不可逆，调用前请用户确认。",
     actions={
         "write": ActionMeta(legacy="write_draft", rbac="product", doc_track="write"),
         "undo": ActionMeta(legacy="undo_draft", doc_track="write"),
