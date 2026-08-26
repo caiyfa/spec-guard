@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { draftsApi } from '../../api';
 import type { DraftItem, TrialRunResult, ValidateReport } from '../../api';
+import { CopyButton } from './MessageWithToolbar';
+import { buildTrialErrorText } from '../../utils/trialError';
 
 // ── 草稿产物区（K-xxx：草稿评审融合进 Agent 对话——写入草稿后直接在右侧校验/试跑/入库） ──
 interface DraftCardState {
@@ -256,9 +258,21 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
               <div className={`mt-1.5 text-[10px] rounded px-1.5 py-1 ${
                 st.trial.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'
               }`}>
-                {st.trial.ok
-                  ? `✅ 试跑通过（${st.trial.verdict || ''}${st.trial.env ? ` @${st.trial.env}` : ''}）`
-                  : `❌ 试跑失败：${st.trial.error || st.trial.reason || '未知错误'}`}
+                <div className="flex items-start gap-1">
+                  <span className="flex-1 break-all">
+                    {st.trial.ok
+                      ? `✅ 试跑通过（${st.trial.verdict || ''}${st.trial.env ? ` @${st.trial.env}` : ''}）`
+                      : `❌ 试跑失败：${st.trial.error || st.trial.reason || '未知错误'}`}
+                  </span>
+                  {!st.trial.ok && (
+                    <CopyButton text={buildTrialErrorText(file, st.trial)} />
+                  )}
+                </div>
+                {st.trial.run_id && (
+                  <div className="mt-0.5 text-[9px] opacity-75 font-mono select-all">
+                    任务号 {st.trial.run_id}（发给 Agent 可排查：日志/断言差异/DB 证据）
+                  </div>
+                )}
               </div>
             )}
 

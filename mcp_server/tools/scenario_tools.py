@@ -392,6 +392,30 @@ def _handle_check_dag(arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
 
 
+class _Tee:
+    """stdout 双写（console + 文件）：试跑 in-process 直跑无子进程 stdout 落盘，
+    用 Tee 把 [SpecGuard] 调用链日志同步写进 {run_id}/output.log，
+    与正式执行（runner.py pytest 子进程）的报告面齐平。"""
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, s):
+        for st in self._streams:
+            try:
+                st.write(s)
+            except Exception:
+                pass
+        return len(s)
+
+    def flush(self):
+        for st in self._streams:
+            try:
+                st.flush()
+            except Exception:
+                pass
+
+
 def _handle_run_scenario(arguments: dict) -> list[TextContent]:
     """试执行场景（K-021④：执行验证闭环）。
 
@@ -476,19 +500,54 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
                       run_dir=str(run_dir), db=db, dbs=dbs, strict_deps=strict_deps)
 
     scenario = graph.by_id[target_id]
+    started_at = datetime.now().isoformat(timespec="seconds")
+    record = None
+    run_error = None
     try:
-        record = run_single(scenario, rctx)
-        run_teardowns(rctx)
+        # 执行日志 Tee 双写 output.log（2026-08-26：试跑是 in-process 直跑，无 pytest
+        # 子进程 stdout 落盘——此前 attribution(action=log) 对试跑完全失明；
+        # Tee 双写不吞 console 输出，并发下可能混入同窗日志，属可接受副作用）
+        with open(run_dir / "output.log", "w", encoding="utf-8") as logf:
+            import contextlib
+            import sys
+            with contextlib.redirect_stdout(_Tee(sys.stdout, logf)):
+                record = run_single(scenario, rctx)
+                run_teardowns(rctx)
     except Exception as e:
-        return [TextContent(type="text", text=json.dumps(
-            {"ok": False, "error": f"执行异常: {e}", "report_dir": str(run_dir)},
-            ensure_ascii=False, indent=2))]
+        run_error = e
     finally:
         if db:
             try:
                 db.close()
             except Exception:
                 pass
+
+    # 报告落盘 + 索引收录（2026-08-26：与 plan_executor 同一落盘面——试跑结果从此
+    # 落 run.json/cases/report.md 并进 failures/executions 台账，attribution 工具链可排查；
+    # 异常分支也 best-effort 落盘已有记录。落盘失败不吞试跑结论）
+    try:
+        from engine import report_writer
+        meta = {
+            "run_id": run_id,
+            "env": env_config.get("env_name", env_name),
+            "system": system,
+            "started_at": started_at,
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "leases": rctx.leases.snapshot(),
+        }
+        report_writer.dump_json(rctx.records, str(run_dir), meta)
+        report_writer.render_md(rctx.records, str(run_dir), meta)
+        from sg_core import execution_index, failure_index
+        failure_index.append_failures(run_dir.parent, run_id)
+        execution_index.append_executions(run_dir.parent, run_id)
+    except Exception:
+        pass
+
+    if run_error is not None:
+        return [TextContent(type="text", text=json.dumps(
+            {"ok": False, "run_id": run_id, "error": f"执行异常: {run_error}",
+             "report_dir": str(run_dir)},
+            ensure_ascii=False, indent=2))]
 
     # 闭包内全部记录（上游 + 目标），verdict 分布一目了然
     records = []
@@ -503,12 +562,13 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
 
     out = {
         "ok": record.verdict == "PASS",
+        "run_id": run_id,
         "target": target_id,
         "verdict": record.verdict,
         "env": env_name,
         "records": records,
         "report_dir": str(run_dir),
-        "note": "validate 查格式，run 验证真实行为；FAIL 时用 read_run_report 归因",
+        "note": "validate 查格式，run 验证真实行为；FAIL 时用 attribution(action=log/report) 按 run_id 归因",
     }
     if record.verdict == "FAIL" and getattr(record, "failure", None):
         out["error"] = str(record.failure.get("message", ""))[:1000]

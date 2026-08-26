@@ -10,6 +10,8 @@ import type {
   EmpRole, OracleRef, UpstreamVar, EnvVar,
 } from '../api';
 import ScenarioFormEditor from '../components/ScenarioFormEditor';
+import { CopyButton } from './agentChat/MessageWithToolbar';
+import { buildTrialErrorText } from '../utils/trialError';
 
 /** verdict 配色（PASS/FAIL/SKIP/BLOCKED） */
 const VERDICT_STYLE: Record<string, string> = {
@@ -515,9 +517,14 @@ export default function Drafts() {
               <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${
                 trialResult.ok ? 'border-green-700/50 bg-green-900/20' : 'border-red-700/50 bg-red-900/20'
               }`}>
-                <div className={trialResult.ok ? 'text-green-400' : 'text-red-400'}>
-                  {trialResult.ok ? `✓ 试跑通过（${trialResult.env || 'sit'}）`
-                    : `✗ 试跑 ${trialResult.verdict || '失败'}${trialResult.error ? `：${trialResult.error}` : ''}`}
+                <div className={`flex items-start gap-1 ${trialResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className="flex-1 break-all">
+                    {trialResult.ok ? `✓ 试跑通过（${trialResult.env || 'sit'}）`
+                      : `✗ 试跑 ${trialResult.verdict || '失败'}${trialResult.error ? `：${trialResult.error}` : ''}`}
+                  </span>
+                  {!trialResult.ok && (
+                    <CopyButton text={buildTrialErrorText(selectedScenarioId || selected, trialResult)} />
+                  )}
                 </div>
                 {trialResult.records && trialResult.records.length > 0 && (
                   <ul className="mt-1.5 space-y-0.5">
@@ -532,6 +539,11 @@ export default function Drafts() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {trialResult.run_id && (
+                  <div className="mt-1 text-[10px] text-gray-500 font-mono select-all">
+                    任务号：{trialResult.run_id}（试跑失败时把任务号发给 Agent 可排查：日志/断言差异/DB 证据）
+                  </div>
                 )}
                 {trialResult.report_dir && (
                   <div className="mt-1 text-[10px] text-gray-600">报告：{trialResult.report_dir}</div>

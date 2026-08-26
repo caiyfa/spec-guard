@@ -379,18 +379,25 @@ async def trial_run_draft(filename: str):
         raise HTTPException(status_code=404, detail=f"草稿不存在: {filename}")
 
     from mcp_server.tools.scenario_tools import _handle_run_scenario
-    # MCP handler 返回 TextContent 列表；复用确保两套入口同一语义（asyncio.to_thread 透传工作区 contextvar）
-    contents = await asyncio.to_thread(
-        lambda: asyncio.run(_handle_run_scenario({"draft": filename})))
-    import json as _json
+    # MCP handler 返回 TextContent 列表；复用确保两套入口同一语义（asyncio.to_thread 透传工作区 contextvar）。
+    # 2026-08-26 修复：handler 是同步函数，此前误包 asyncio.run() 必抛 TypeError——
+    # 试跑结果永远到不了前端（恒 500 Internal Server Error）；同步 handler 直接 to_thread 调用。
+    # 任何未预期异常返回结构化错误 JSON（不再裸 500，前端可见具体异常信息）。
     try:
-        result = _json.loads(contents[0].text)
-    except Exception:
-        result = {"ok": False, "error": contents[0].text if contents else "未知错误"}
+        contents = await asyncio.to_thread(_handle_run_scenario, {"draft": filename})
+        try:
+            result = _json.loads(contents[0].text)
+        except Exception:
+            result = {"ok": False, "error": contents[0].text if contents else "未知错误"}
+    except Exception as e:
+        result = {"ok": False, "error": f"试跑执行异常: {type(e).__name__}: {e}"}
     if result.get("error", "").startswith("错误："):
         raise HTTPException(status_code=400, detail=result["error"])
-    user_store.audit(current_emp_no(), "trial_run_draft",
-                     f"试跑草稿 {filename} → {result.get('verdict', '?')}")
+    try:
+        user_store.audit(current_emp_no(), "trial_run_draft",
+                         f"试跑草稿 {filename} → {result.get('verdict', '?')}")
+    except Exception:
+        pass  # 审计失败不吞试跑结果
     return result
 
 
