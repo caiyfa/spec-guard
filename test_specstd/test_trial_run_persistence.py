@@ -10,9 +10,13 @@ A. routers/drafts.trial_run_draft 端点：
    - 同步 handler 正常返回 → 端点返回结果 dict（不再抛 TypeError/500）
    - handler 抛异常 → 结构化 {ok: False, error}（不再裸 500）
 B. scenario_tools._handle_run_scenario 试跑落盘：
-   - 响应带 run_id（agent_ 前缀）
+   - 响应带 run_id（EX- 任务号，同 runner/plan_executor）
    - run.json / cases/*.json / report.md / output.log 落盘
    - failures/index.jsonl + executions/index.jsonl 收录本次试跑
+C. 早期失败任务号（2026-08-26 HI-PERM-001 事故后续）：
+   - 草稿解析失败 / 装配失败 / 执行异常等任何失败都带 EX- 任务号
+   - 失败统一落 output.log 现场 + 最小 run.json（单 ERROR case）+ 双索引
+   - Agent attribution(log) 对早期失败可读（排障不瞎）
 """
 
 import asyncio
@@ -144,7 +148,8 @@ class TestTrialRunPersistence:
         """响应必须带 run_id（前端展示 + 用户甩给 Agent 排查的唯一线索）。"""
         result = self._run(workspace, monkeypatch)
         assert result["ok"] is False  # FAIL  verdict
-        assert result["run_id"].startswith("agent_")
+        assert result["run_id"].startswith("EX-"), (
+            f"试跑任务号应与 runner/plan_executor 同格式（EX- 前缀），实际: {result['run_id']}")
 
     def test_report_files_persisted(self, workspace, monkeypatch):
         """run.json / cases / report.md / output.log 全部落盘（原行为：空目录）。"""
@@ -195,3 +200,95 @@ class TestTrialRunPersistence:
         from mcp_server.tools.attribution import _handle_read_report
         out = _handle_read_report({"run_id": result["run_id"]})
         assert "运行报告不存在" not in out[0].text
+
+
+# ══════════════════════════════════════════════════════════
+# C. 早期失败任务号（目标确定后一切失败都有任务号 + 报告现场）
+# ══════════════════════════════════════════════════════════
+
+class TestEarlyFailurePersistence:
+    """早期失败（原 run_id 生成点之前的异常）也必须有任务号 + 落盘 + 索引。
+
+    背景：草稿解析失败（如 version 非法）、运行时装配失败、执行异常等分支
+    原先只返回错误文本——无任务号、无报告，Agent attribution 工具链完全
+    失明（会话 20260825_151821_3178914e LINE 166：'0.4-debug' 解析失败无任务号）。
+    """
+
+    def _write_bad_draft(self, name="TT-BAD-001.yaml", sid="TT-BAD-001") -> None:
+        """version 非法的坏草稿（解析必败，复现 LINE 166 事故形态）。"""
+        d = drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / name).write_text(
+            f'id: {sid}\ntitle: 坏草稿\nversion: "0.4-debug"\n'
+            "flow:\n  - set_var: {k1: v1}\n", encoding="utf-8")
+
+    def _mock_runtime_ok(self, monkeypatch) -> None:
+        import workbench.backend.services.plan_executor as plan_executor
+        from engine.dependency_graph import DependencyGraph
+        monkeypatch.setattr(
+            plan_executor, "_setup_runtime",
+            lambda *a, **k: ({"env_name": "sit"}, None, object(), None,
+                             DependencyGraph([]), {}))
+
+    def _assert_failure_report(self, result: dict, needle: str,
+                               scenario_ref: str) -> Path:
+        """失败五件套断言：EX- 任务号 + 落盘 + ERROR case + 双索引 + agent 可读。"""
+        assert result["ok"] is False
+        assert result["run_id"].startswith("EX-"), (
+            f"失败任务号应为 EX- 前缀，实际: {result.get('run_id')}")
+        assert needle in result["error"]
+        run_dir = Path(result["report_dir"])
+        log = (run_dir / "output.log").read_text(encoding="utf-8")
+        assert needle in log, "output.log 未含错误现场"
+        run_data = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        error_cases = [c for c in run_data["cases"] if c["verdict"] == "ERROR"]
+        assert error_cases, "run.json 应含 ERROR case（否则 list_failures 查不到）"
+        assert error_cases[0]["id"] == scenario_ref
+        reports_root = run_dir.parent
+        failures = (reports_root / "failures" / "index.jsonl").read_text(encoding="utf-8")
+        assert result["run_id"] in failures, "失败未进 failures 索引"
+        assert scenario_ref in failures
+        executions = (reports_root / "executions" / "index.jsonl").read_text(encoding="utf-8")
+        assert result["run_id"] in executions, "失败未进 executions 索引"
+        # Agent 排障视角实证：read_run_log 可读
+        from mcp_server.tools.attribution import _handle_read_run_log
+        out = _handle_read_run_log({"run_id": result["run_id"]})
+        assert "执行日志不存在" not in out[0].text
+        return run_dir
+
+    def test_draft_parse_failure_carries_ex_run_id(self, workspace, monkeypatch):
+        """草稿解析失败（version 非法）→ EX- 任务号 + 落盘 + 索引。"""
+        from mcp_server.tools import scenario_tools
+        self._mock_runtime_ok(monkeypatch)
+        _write_draft()
+        self._write_bad_draft()
+        out = scenario_tools._handle_run_scenario({"draft": "TT-BAD-001.yaml"})
+        self._assert_failure_report(json.loads(out[0].text), "0.4-debug", "TT-BAD-001")
+
+    def test_runtime_setup_failure_carries_ex_run_id(self, workspace, monkeypatch):
+        """运行时装配失败（环境不可达/配置错）→ EX- 任务号 + 落盘 + 索引。"""
+        import workbench.backend.services.plan_executor as plan_executor
+        from mcp_server.tools import scenario_tools
+
+        def boom(*a, **k):
+            raise RuntimeError("SIT 网关不可达")
+
+        monkeypatch.setattr(plan_executor, "_setup_runtime", boom)
+        _write_draft()
+        out = scenario_tools._handle_run_scenario({"draft": "TT-TRIAL-001.yaml"})
+        self._assert_failure_report(json.loads(out[0].text), "SIT 网关不可达", "TT-TRIAL-001")
+
+    def test_execution_exception_enters_failure_index(self, workspace, monkeypatch):
+        """执行异常（rctx.records 空）→ 最小 ERROR case 进失败索引。"""
+        from engine import scenario_runner
+        from mcp_server.tools import scenario_tools
+        self._mock_runtime_ok(monkeypatch)
+
+        def boom(scenario, rctx):
+            raise RuntimeError("引擎爆炸")
+
+        monkeypatch.setattr(scenario_runner, "run_single", boom)
+        monkeypatch.setattr(scenario_runner, "run_teardowns", lambda rctx: None)
+        _write_draft()
+        out = scenario_tools._handle_run_scenario({"draft": "TT-TRIAL-001.yaml"})
+        self._assert_failure_report(json.loads(out[0].text), "引擎爆炸", "TT-TRIAL-001")

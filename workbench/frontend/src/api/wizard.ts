@@ -31,7 +31,7 @@ export interface TrialRunRecord {
 
 export interface TrialRunResult {
   ok: boolean;
-  run_id?: string;   // 试跑任务号（agent_ 前缀；失败时发给 Agent 可排查：日志/断言差异/DB 证据）
+  run_id?: string;   // 试跑任务号（EX- 前缀，同 runner/plan_executor；失败时发给 Agent 可排查：日志/断言差异/DB 证据）
   target?: string;
   verdict?: string;
   env?: string;

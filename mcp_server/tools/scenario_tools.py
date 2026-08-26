@@ -416,6 +416,74 @@ class _Tee:
                 pass
 
 
+def _dump_failure_report(run_dir, run_id, target_ref, category, error,
+                         env_name, system, started_at, tb="") -> list[TextContent]:
+    """试跑失败的最小报告五件套（2026-08-26 HI-PERM-001 事故后续）。
+
+    与执行期报告同构（output.log / run.json / cases / report.md + 双索引），
+    但 cases 只有单条 ERROR 记录——早期失败（装配/解析/执行异常）也留下
+    任务号可追的现场，Agent attribution(log/report/failures) 不再失明。
+    落盘 best-effort：失败降级为纯 JSON 错误返回（不吞任务号）。
+    """
+    import re
+    import traceback
+    from datetime import datetime
+
+    finished_at = datetime.now().isoformat(timespec="seconds")
+    safe_ref = re.sub(r"[^\w.-]", "_", target_ref) or "unknown"
+    case = {
+        "scenario_id": target_ref, "title": "", "verdict": "ERROR",
+        "failure": {"category": category, "message": str(error)[:2000], "evidence": None},
+        "steps": [], "assertions": [], "duration_ms": 0, "covers": [],
+        "doc": {}, "given": {}, "warning_count": 0,
+    }
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        with open(run_dir / "output.log", "a", encoding="utf-8") as f:
+            f.write(f"> {run_id} | trial-run | target={target_ref} | "
+                    f"env={env_name} | status={category}\n")
+            f.write(f"[SpecGuard] 试跑失败（{category}）: {error}\n")
+            tb_text = tb or traceback.format_exc()
+            if tb_text and "NoneType: None" not in tb_text:
+                f.write(tb_text)
+        (run_dir / "cases").mkdir(exist_ok=True)
+        with open(run_dir / "cases" / f"{safe_ref}.json", "w", encoding="utf-8") as f:
+            json.dump(case, f, ensure_ascii=False, indent=2, default=str)
+        run_doc = {
+            "schema_version": "1.0",
+            "run_id": run_id, "env": env_name, "system": system,
+            "started_at": started_at, "finished_at": finished_at,
+            "stats": {"pass": 0, "fail": 0, "skip": 0, "blocked": 0,
+                      "total": 1, "warnings": 0},
+            "leases": {},
+            "cases": [{"id": target_ref, "title": "", "verdict": "ERROR",
+                       "duration_ms": 0, "covers": [], "upstream_of": "",
+                       "instance_no": 1, "dep_mode": "",
+                       "file": f"cases/{safe_ref}.json",
+                       "skip_category": "", "warning_count": 0}],
+        }
+        with open(run_dir / "run.json", "w", encoding="utf-8") as f:
+            json.dump(run_doc, f, ensure_ascii=False, indent=2, default=str)
+        with open(run_dir / "report.md", "w", encoding="utf-8") as f:
+            f.write(f"# SpecGuard 测试报告\n\n"
+                    f"> run_id: `{run_id}` | 环境: {env_name} | 系统: {system} "
+                    f"| 开始时间: {started_at}\n\n"
+                    f"## 结果总览\n\n"
+                    f"试跑未进入执行阶段（失败归类 `{category}`）：{error}\n\n"
+                    f"---\n\n## {target_ref} [ERROR]\n\n"
+                    f"### 情况分析\n\n"
+                    f"- 失败归类：`{category}`\n- 原因：{error}\n")
+        from sg_core import execution_index, failure_index
+        failure_index.append_failures(run_dir.parent, run_id)
+        execution_index.append_executions(run_dir.parent, run_id)
+    except Exception:
+        pass
+    return [TextContent(type="text", text=json.dumps(
+        {"ok": False, "run_id": run_id, "error": str(error),
+         "report_dir": str(run_dir)},
+        ensure_ascii=False, indent=2))]
+
+
 def _handle_run_scenario(arguments: dict) -> list[TextContent]:
     """试执行场景（K-021④：执行验证闭环）。
 
@@ -423,7 +491,6 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
     草稿经 _parse_scenario 归一化后重建图（与入库后同一依赖语义）。
     真实环境联网调用——同步执行（工具本身已在独立线程中运行）。
     """
-    import os
     from datetime import datetime
 
     sid = str(arguments.get("scenario_id", "") or "")
@@ -435,27 +502,54 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="错误：scenario_id 与 draft 必须二选一")]
 
     from workbench.backend.services.plan_executor import _setup_runtime
+    from workbench.backend.services.runner import _new_run_id
     from sg_core.draft_promote import _scenarios_root
     from engine.dependency_graph import DependencyGraph, CycleError
     from engine.scenario_loader import _parse_scenario
     from engine.scenario_runner import RunContext, run_single, run_teardowns
     from specstd.workspace import get_active_workspace, reports_dir
 
-    scenarios_root = _scenarios_root()
-    if not scenarios_root.is_dir():
-        return [TextContent(type="text", text=f"错误：场景库目录不存在: {scenarios_root}")]
+    # ── 任务号前置（2026-08-26 HI-PERM-001 事故后续）──
+    # 目标确定（sid/draft 二选一合法）后立即分配 EX- 任务号（同 runner/
+    # plan_executor，T-116 同款理由：时间戳目录同秒互覆 + 无 EX- 前缀无法按
+    # 任务号排错）；此后一切失败（装配/解析/执行异常）都落报告现场并回传
+    # 任务号，Agent attribution 工具链对试跑失败不再失明。
+    run_id = _new_run_id()
+    started_at = datetime.now().isoformat(timespec="seconds")
+    target_ref = sid or Path(draft).stem  # 解析成功前的 case 标识（草稿名 stem）
 
     ws = get_active_workspace()
     from specstd.workspace import resolve_system
     system = resolve_system(ws.system if ws else "")
 
+    # 运行上下文（报告落盘到工作区共享区 .specguard/reports/——T-1016：与
+    # attribution 工具链同一 reports_dir() 落盘面；此前用 specguard_dir() 未
+    # force_shared，emp 上下文（Web 登录态/Agent 会话恒有）下落到私有区
+    # {emp}/reports/，attribution(action=report/log/case) 读共享区完全失明，
+    # failures/executions 索引也写进私有区——2026-08-26 HI-PERM-001 三连败
+    # 事故中 Agent 排障失明的根因）
+    try:
+        run_dir = reports_dir() / run_id if ws else None
+    except Exception:
+        run_dir = None
+    if run_dir is None:
+        run_dir = SG_ROOT / "reports" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    def _fail(category: str, error: str) -> list[TextContent]:
+        """早期失败统一出口：五件套落盘 + 结构化回传（任务号永远在场）。"""
+        return _dump_failure_report(run_dir, run_id, target_ref, category, error,
+                                    env_name, system, started_at)
+
+    scenarios_root = _scenarios_root()
+    if not scenarios_root.is_dir():
+        return _fail("scenario_root_missing", f"场景库目录不存在: {scenarios_root}")
+
     try:
         env_config, db, registry, token_provider, graph, dbs = _setup_runtime(
             system, env_name, scenarios_root, strict_deps)
     except Exception as e:
-        return [TextContent(type="text", text=json.dumps(
-            {"ok": False, "error": f"运行时装配失败（环境 {env_name} 可达性/配置）: {e}"},
-            ensure_ascii=False, indent=2))]
+        return _fail("runtime_setup", f"运行时装配失败（环境 {env_name} 可达性/配置）: {e}")
 
     # 草稿并入图（重建 DependencyGraph——dep_status/edges 在建图时计算）
     target_id = sid
@@ -466,48 +560,30 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
             from specstd.workspace import drafts_dir
             f = drafts_dir() / draft
         except Exception:
-            return [TextContent(type="text", text="错误：无激活工作区，无法定位 drafts/")]
+            return _fail("no_workspace", "无激活工作区，无法定位 drafts/")
         if not f.is_file():
-            return [TextContent(type="text", text=f"错误：草稿不存在: {draft}")]
+            return _fail("draft_not_found", f"草稿不存在: {draft}")
         try:
             sc = _parse_scenario(str(f), {})
             graph = DependencyGraph(list(graph.by_id.values()) + [sc])
             target_id = sc.id
+            target_ref = sc.id
         except CycleError as e:
-            return [TextContent(type="text", text=json.dumps(
-                {"ok": False, "error": f"并入草稿后检测到循环依赖: {e}"},
-                ensure_ascii=False, indent=2))]
+            return _fail("cycle", f"并入草稿后检测到循环依赖: {e}")
         except Exception as e:
-            return [TextContent(type="text", text=json.dumps(
-                {"ok": False, "error": f"草稿解析失败: {e}"}, ensure_ascii=False, indent=2))]
+            return _fail("draft_parse", f"草稿解析失败: {e}")
 
     if target_id not in graph.by_id:
-        return [TextContent(type="text", text=json.dumps(
-            {"ok": False, "error": f"场景不存在: {target_id}"}, ensure_ascii=False, indent=2))]
-
-    # 运行上下文（报告落盘到工作区共享区 .specguard/reports/——T-1016：与
-    # attribution 工具链同一 reports_dir() 落盘面；此前用 specguard_dir() 未
-    # force_shared，emp 上下文（Web 登录态/Agent 会话恒有）下落到私有区
-    # {emp}/reports/，attribution(action=report/log/case) 读共享区完全失明，
-    # failures/executions 索引也写进私有区——2026-08-26 HI-PERM-001 三连败
-    # 事故中 Agent 排障失明的根因）
-    run_id = "agent_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-    try:
-        run_dir = reports_dir() / run_id if ws else None
-    except Exception:
-        run_dir = None
-    if run_dir is None:
-        run_dir = SG_ROOT / "reports" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+        return _fail("scenario_not_found", f"场景不存在: {target_id}")
 
     rctx = RunContext(registry=registry, env_config=env_config,
                       token_provider=token_provider, graph=graph,
                       run_dir=str(run_dir), db=db, dbs=dbs, strict_deps=strict_deps)
 
     scenario = graph.by_id[target_id]
-    started_at = datetime.now().isoformat(timespec="seconds")
     record = None
     run_error = None
+    run_error_tb = ""
     try:
         # 执行日志 Tee 双写 output.log（2026-08-26：试跑是 in-process 直跑，无 pytest
         # 子进程 stdout 落盘——此前 attribution(action=log) 对试跑完全失明；
@@ -520,6 +596,8 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
                 run_teardowns(rctx)
     except Exception as e:
         run_error = e
+        import traceback
+        run_error_tb = traceback.format_exc()
     finally:
         if db:
             try:
@@ -540,11 +618,18 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
             "finished_at": datetime.now().isoformat(timespec="seconds"),
             "leases": rctx.leases.snapshot(),
         }
-        report_writer.dump_json(rctx.records, str(run_dir), meta)
-        report_writer.render_md(rctx.records, str(run_dir), meta)
-        from sg_core import execution_index, failure_index
-        failure_index.append_failures(run_dir.parent, run_id)
-        execution_index.append_executions(run_dir.parent, run_id)
+        if run_error is not None and not rctx.records:
+            # 执行异常且零记录 → 最小 ERROR case（否则 run.json cases 为空，
+            # failures/executions 索引均收录不到，Agent 对执行异常失明）
+            _dump_failure_report(run_dir, run_id, target_ref, "execution_error",
+                                 f"执行异常: {run_error}", env_name, system,
+                                 started_at, tb=run_error_tb)
+        else:
+            report_writer.dump_json(rctx.records, str(run_dir), meta)
+            report_writer.render_md(rctx.records, str(run_dir), meta)
+            from sg_core import execution_index, failure_index
+            failure_index.append_failures(run_dir.parent, run_id)
+            execution_index.append_executions(run_dir.parent, run_id)
     except Exception:
         pass
 
