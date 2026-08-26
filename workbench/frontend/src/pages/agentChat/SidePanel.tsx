@@ -32,7 +32,10 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[]
   { id: 'todos',   label: '📋 待办',       scope: 'universal' },
   { id: 'gates',   label: '🎛 操作台',     scope: 'universal' },
   { id: 'reading', label: '📖 阅读',       scope: 'universal' },
-  { id: 'drafts',  label: '📝 更新与产物', scope: 'universal' },
+  // 更新足迹与草稿产物分列两页签（2026-08-26）：足迹条目多时会把草稿产物卡顶出首屏，
+  // 草稿产物是评审主入口，前置独立成签
+  { id: 'drafts',  label: '📝 草稿产物',   scope: 'universal' },
+  { id: 'writing', label: '✏️ 更新足迹',   scope: 'universal' },
   // T-996 菜单收缩收编：技能（只读）/合规校验/知识 收进对话页通用页签
   { id: 'skills',  label: '🛠 技能',       scope: 'universal' },
   { id: 'spec',    label: '📏 合规',       scope: 'universal' },
@@ -92,7 +95,8 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
     .filter(t => t.id !== 'pack' || !!scenarioMeta);
   const labelOf = (id: string) => {
     if (id === 'reading' && readingFeed.length > 0) return `📖 阅读(${readingFeed.length})`;
-    if (id === 'drafts') return `📝 更新与产物(${writingFeed.length + draftFiles.length})`;
+    if (id === 'drafts' && draftFiles.length > 0) return `📝 草稿产物(${draftFiles.length})`;
+    if (id === 'writing' && writingFeed.length > 0) return `✏️ 更新足迹(${writingFeed.length})`;
     if (id === 'pack' && scenarioMeta) return `📦 信息包(${scenarioMeta.info_pack.length})`;
     return SIDE_TABS.find(t => t.id === id)?.label || id;
   };
@@ -178,15 +182,10 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
             onViewFile={(p) => onViewFile(p)} defaultOpen />
         )}
         {activeTab === 'drafts' && (
-          <>
-            {/* S0.6 分区①：更新足迹（写型工具 doc_write 汇聚，只读） */}
-            <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onAskAgentBatch={onAskAgentBatch} onRefresh={onRefreshWritingFeed} />
-            {/* 分区②：草稿产物操作卡（评审闭环：查看/校验/试跑/入库/废弃） */}
-            <div className="px-1 pt-2 pb-1 text-xs font-medium text-gray-300 border-t border-border">
-              📝 草稿产物（Agent 会话内评审）
-            </div>
-            <DraftArtifactsPanel draftFiles={draftFiles} onViewFile={onViewFile} onError={onError} />
-          </>
+          <DraftArtifactsPanel draftFiles={draftFiles} onViewFile={onViewFile} onError={onError} />
+        )}
+        {activeTab === 'writing' && (
+          <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onAskAgentBatch={onAskAgentBatch} onRefresh={onRefreshWritingFeed} />
         )}
         {activeTab === 'deps' && (
           <DepGraphPanel draftFiles={draftFiles} onError={onError} />
