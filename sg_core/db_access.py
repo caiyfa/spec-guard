@@ -37,11 +37,19 @@ class DbAccessError(Exception):
         self.hint = hint
 
 
+# 前导注释剥离（验收复验 2026-08-25 发现：LLM 生成的 SQL 常带 --/--*/ 注释头，
+# 原样进守卫会被误判为非查询语句。只剥「前导」注释用于动词判定；
+# 危险子句/多语句检查仍对剥后全文执行，行内注释里的关键词保守照查不误放）。
+_LEADING_COMMENT_RE = re.compile(
+    r"^\s*(?:(?:--[^\n]*(?:\n|$))|(?:#[^\n]*(?:\n|$))|(?:/\*.*?\*/))+",
+    re.DOTALL)
+
+
 def _guard_sql(sql: str) -> None:
     """只读守卫（连接建立前触发；文案与 ReadOnlyDb._guard 同风格）。"""
-    s = sql or ""
+    s = _LEADING_COMMENT_RE.sub("", sql or "")
     if not _ALLOWED_RE.match(s):
-        raise DbAccessError(f"只读守卫拒绝非查询语句: {s[:80]}")
+        raise DbAccessError(f"只读守卫拒绝非查询语句: {(sql or '')[:80]}")
     m = _DENY_RE.search(s)
     if m:
         raise DbAccessError(f"只读守卫拒绝危险子句: {m.group(1)}")

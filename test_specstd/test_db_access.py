@@ -36,6 +36,30 @@ def test_guard_passes_normal_select():
     assert _guard_sql("SELECT 1") is None
 
 
+def test_guard_strips_leading_comments():
+    """验收复验（2026-08-25）：LLM 生成的 SQL 常带注释头——前导注释剥离后按动词判定。"""
+    from sg_core.db_access import _guard_sql
+    assert _guard_sql("-- HI-PERM-001 等效计数\nSELECT COUNT(*) FROM t") is None
+    assert _guard_sql("/* 说明 */\n\nSELECT 1") is None
+    assert _guard_sql("# 注释\nSHOW TABLES") is None
+
+
+def test_guard_strips_comments_still_rejects_write():
+    """剥注释不误放：注释头后的写语句仍拒。"""
+    import pytest
+    from sg_core.db_access import DbAccessError, _guard_sql
+    with pytest.raises(DbAccessError, match="非查询语句"):
+        _guard_sql("-- 说明\nDELETE FROM t")
+
+
+def test_guard_inline_comment_keyword_conservative():
+    """行内注释中的危险关键词保守照查（不误放）。"""
+    import pytest
+    from sg_core.db_access import DbAccessError, _guard_sql
+    with pytest.raises(DbAccessError, match="危险子句"):
+        _guard_sql("SELECT 1 -- FOR UPDATE")
+
+
 def test_interpolate_missing_var_names_variable():
     from sg_core.db_access import DbAccessError, _interpolate
     with pytest.raises(DbAccessError, match="变量未定义.*emp\\.no"):
