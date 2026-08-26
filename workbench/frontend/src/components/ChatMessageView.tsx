@@ -50,7 +50,35 @@ export function isPseudoMessageId(id: string): boolean {
   return id.startsWith('md-line-');
 }
 
-// T-952 富渲染素材：窗口内全部图片 (message_id, key) 配对懒拉字节 + imgmap
+// T-1016：merge_forward（合并转发）内层解析——与 chat_store.parse_forwarded_messages
+// 同构（"[ISOts+08:00] 发送人:" 头行 + 缩进内容行；<p> 剥离；两种图片占位按序提取）。
+export interface ForwardedSub {
+  ts: string;
+  sender: string;
+  text: string;      // 含图片占位（渲染层剔除后展示）
+  keys: string[];    // 内嵌图 key（出现顺序）
+}
+const FWD_IMG_RE = /!\[Image\]\((.+?)\)|\[Image:\s*(.+?)\]/g;
+const FWD_HEAD_RE = /^\[([^\]]+)\]\s+([^:：]+)[:：]\s*$/;
+export function parseForwardedMessages(content: string): ForwardedSub[] {
+  if (!content || !content.includes('<forwarded_messages>')) return [];
+  const body = content.replace('<forwarded_messages>', '')
+    .replace('</forwarded_messages>', '');
+  const subs: { ts: string; sender: string; lines: string[] }[] = [];
+  body.split('\n').forEach(line => {
+    const head = /^\S/.test(line) ? line.match(FWD_HEAD_RE) : null;
+    if (head) subs.push({ ts: head[1].trim(), sender: head[2].trim(), lines: [] });
+    else if (subs.length) subs[subs.length - 1].lines.push(line.trim());
+  });
+  return subs.map(s => {
+    const text = s.lines.filter(Boolean).join(' ').replace(/<\/?p>/g, '').trim();
+    const keys: string[] = [];
+    for (const m of text.matchAll(FWD_IMG_RE)) keys.push((m[1] || m[2]).trim());
+    return { ts: s.ts, sender: s.sender, text, keys };
+  });
+}
+
+// T-952 富渲染素材：窗口内全部图片 (message_id, key) 配对懒拉 + imgmap
 // captions；T-955 图片三态之失败态显式标记（不再永远「加载中」）。
 export function useChatMedia(messages: FeishuChatMessage[] | null,
                              sha8: string, days: string[]) {
@@ -64,6 +92,12 @@ export function useChatMedia(messages: FeishuChatMessage[] | null,
     messages.forEach(m => {
       (m.image_keys || []).forEach(k => k && pairs.add(`${m.message_id}|${k}`));
       if (m.image_key && m.message_id) pairs.add(`${m.message_id}|${m.image_key}`);
+      // T-1016：merge_forward 内嵌图兜底——存量 JSONL 行无 image_keys 时
+      // 从 content 解析（外层 message_id 配对下载）
+      if (m.msg_type === 'merge_forward' && m.message_id) {
+        parseForwardedMessages(m.content || '').forEach(s =>
+          s.keys.forEach(k => pairs.add(`${m.message_id}|${k}`)));
+      }
     });
     let cancelled = false;
     pairs.forEach(pk => {
@@ -190,6 +224,38 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
         <span className="text-gray-300">{msg.file_name || '文件'}</span>
         <span className="text-[10px] text-gray-600">点击下载</span>
       </button>
+    );
+  }
+  if (msg.msg_type === 'merge_forward') {
+    // T-1016：合并转发按子消息列表渲染（与正常聊天同构：发送人配色+时间+内容），
+    // 内嵌图占位替换为真实缩略图；解析失败兜底原文。
+    const subs = parseForwardedMessages(msg.content || '');
+    if (!subs.length) {
+      return <span className="whitespace-pre-wrap break-all">{msg.content}</span>;
+    }
+    return (
+      <div className="mt-1 rounded border border-border/60 bg-black/20 px-2 py-1.5">
+        <div className="text-[10px] text-gray-500 mb-1">合并转发 {subs.length} 条</div>
+        <div className="space-y-1.5">
+          {subs.map((s) => {
+            const text = s.text.replace(FWD_IMG_RE, '').trim();
+            return (
+              <div key={`${s.ts}|${s.sender}|${s.text.slice(0, 12)}`}>
+                <span className="font-medium" style={{ color: senderColor(s.sender) }}>
+                  {s.sender}
+                </span>
+                <span className="ml-1 text-[10px] text-gray-600">
+                  {s.ts.slice(11, 16)}
+                </span>
+                {text && (
+                  <span className="ml-1 whitespace-pre-wrap break-all">{text}</span>
+                )}
+                {s.keys.length > 0 && <div>{renderImgs(s.keys)}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   }
   return <span className="whitespace-pre-wrap break-all">{msg.content}</span>;

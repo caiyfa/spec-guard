@@ -191,3 +191,55 @@ def test_render_md_post_and_file(tmp_path):
     # file：真实文件名渲染（不再是 [file消息] 占位）
     assert any("report_gap_analysis_v9.xlsx" in l for l in lines)
     assert len(line_ids) == 2
+
+
+# ══════════════════════════════════════════════════════════
+# T-1016：merge_forward（合并转发）消息解析与渲染
+# ══════════════════════════════════════════════════════════
+
+def test_normalize_merge_forward_extracts_image_keys():
+    """merge_forward：内嵌图两种占位（![Image](key) 与 [Image: key]）全部提取到
+    image_keys（外层 message_id 配对下载依据）；content 原样保留。"""
+    from test_specstd.feishu_cli_contract import (MERGE_FORWARD_IMAGE_KEYS,
+                                                  MERGE_FORWARD_MESSAGE)
+    row = cs.normalize_pull_message(MERGE_FORWARD_MESSAGE)
+    assert row["msg_type"] == "merge_forward"
+    assert row["image_keys"] == MERGE_FORWARD_IMAGE_KEYS
+    assert row["content"].startswith("<forwarded_messages>")   # 原样保留
+    assert row["image_key"] == ""     # 非单图消息，单 key 字段置空
+
+
+def test_parse_forwarded_messages():
+    """内层消息解析：'[ISOts+08:00] 发送人:' 头行 + 缩进内容行 → 结构化列表。"""
+    from test_specstd.feishu_cli_contract import MERGE_FORWARD_MESSAGE
+    subs = cs.parse_forwarded_messages(MERGE_FORWARD_MESSAGE["content"])
+    assert len(subs) == 8
+    assert subs[0]["sender"] == "曹怡华"
+    assert subs[0]["ts"] == "2026-08-21T15:29:08+08:00"
+    assert "蔡老师" in subs[0]["text"]
+    # 图片占位保留在 text（渲染层替换为图）
+    assert "![Image](img_v3_0214p_a8cd9662" in subs[0]["text"]
+    # <p> 段落标签剥离（第 2 条 <p>@曹怡华 文件名的问题</p>）
+    assert subs[1]["text"] == "@曹怡华 文件名的问题"
+    # 多内容行 join（第 7 条：图行 + " & 去掉试试看" 行）
+    assert "去掉试试看" in subs[6]["text"]
+    # 非 merge_forward 内容 → 空列表（调用方兜底原文）
+    assert cs.parse_forwarded_messages("普通文本") == []
+
+
+def test_render_md_merge_forward_inline(tmp_path):
+    """md 派生：merge_forward 单行内联展开（line_ids 一对一不破）——内层
+    「发送人: 内容」拍平串联、图片占位入 imgmap（与 image/post 共享序号池）。"""
+    from test_specstd.feishu_cli_contract import (MERGE_FORWARD_IMAGE_KEYS,
+                                                  MERGE_FORWARD_MESSAGE)
+    f = tmp_path / "20260821.jsonl"
+    cs.merge_chat_jsonl(f, [cs.normalize_pull_message(MERGE_FORWARD_MESSAGE)])
+    md, imgmap, line_ids = cs.render_md_from_jsonl(f)
+    lines = [l for l in md.splitlines() if l.strip()]
+    assert len(lines) == 1
+    assert lines[0].startswith("[15:43] 蔡云飞: [合并转发]")
+    assert "曹怡华: @蔡云飞 蔡老师" in lines[0]
+    # 4 张内嵌图按出现顺序入 imgmap
+    assert imgmap["[图片#1]"]["media_key"] == MERGE_FORWARD_IMAGE_KEYS[0]
+    assert imgmap["[图片#4]"]["media_key"] == MERGE_FORWARD_IMAGE_KEYS[3]
+    assert line_ids == ["om_x100b67b4563770b4b4aadb072d42884"]
