@@ -11,8 +11,9 @@ import type { DocHunk } from '../components/FileViewer';
 import type { DocReadItem } from '../components/ReadingPanel';
 import type { ChatReference, ChatMessage, AgentStats, CtxUsage, GroupedItem, DocWriteItem, FileTab } from './agentChat/types';
 import { DEFAULT_CTX_LIMIT, PURPOSE_TITLE_FALLBACK } from './agentChat/types';
-import { ArtifactCtx, GateDockCtx } from './agentChat/contexts';
-import type { ArtifactCtxValue } from './agentChat/contexts';
+import { ArtifactCtx, GateDockCtx, SqlAuxBridgeCtx } from './agentChat/contexts';
+import type { ArtifactCtxValue, SqlAuxBridgeValue } from './agentChat/contexts';
+import { DbPanel } from './agentChat/DbPanel';
 import { stripRefBlock, extractPlan, filterTreeSessions } from './agentChat/utils';
 import { groupMessages, draftWriteUndo } from './agentChat/groupMessages';
 import { MarkdownText } from './agentChat/MarkdownText';
@@ -71,6 +72,22 @@ export default function AgentChat() {
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeSideTab, setActiveSideTab] = useState('todos');
   const [citeDraft, setCiteDraft] = useState('');  // §B6：辅助会话产出引用预填（ChatInput pendingRef）
+
+  // SQL 探索模式（设计 2026-08-26）：DB 面板会话内嵌打开——主会话最小化为细条，
+  // SQL 助手（SidePanel）居左撑宽、内嵌 DbPanel 居右；双向联动不走页面跳转。
+  // 桥沿用 GateDockCtx 注入模式（SqlAuxPanel 埋在 SidePanel 深处，props 不穿链）
+  const [dbExplore, setDbExplore] = useState(false);
+  const [dbPendingSql, setDbPendingSql] = useState('');  // 左栏「▶ DB 面板」带来的回填 SQL
+  const auxSendRef = useRef<(t: string) => void>(() => {});  // SqlAuxPanel 上报的 send
+  const sqlAuxBridge = useMemo<SqlAuxBridgeValue>(() => ({
+    register: (fn) => { auxSendRef.current = fn; },
+    openDbPanel: (sql) => { setSideMax(false); setDbPendingSql(sql); setDbExplore(true); },
+  }), []);
+  // DB 面板「交给 SQL 助手」：直发左栏辅助会话（同时确保左栏页签切回 sql_aux）
+  const handToAux = useCallback((sql: string) => {
+    setActiveSideTab('sql_aux');
+    auxSendRef.current(sql);
+  }, []);
 
   // DB 面板转来：激活 SQL 助手页签（§C3；pending 由 SqlAuxPanel 在 WS 就绪后消费）
   useEffect(() => {
@@ -1233,10 +1250,11 @@ export default function AgentChat() {
         />
       )}
 
-      {/* 中间+右侧 */}
+      {/* 中间+右侧（SqlAuxBridgeCtx：SQL 助手↔内嵌 DB 面板会话内联动桥） */}
+      <SqlAuxBridgeCtx.Provider value={sqlAuxBridge}>
       <div className="flex-1 flex min-w-0">
-        {/* 对话区（K-039：面板最大化时 display:none 隐藏——不卸载，WS/滚动/输入状态全保留） */}
-        <div className={`flex-1 flex flex-col min-w-0 ${sideMax ? 'hidden' : ''}`}>
+        {/* 对话区（K-039：面板最大化 / SQL 探索模式时 display:none 隐藏——不卸载，WS/滚动/输入状态全保留） */}
+        <div className={`flex-1 flex flex-col min-w-0 ${sideMax || dbExplore ? 'hidden' : ''}`}>
           {/* 顶部信息栏 */}
           <div className="flex-shrink-0 px-4 py-1.5 border-b border-border flex items-center gap-3 text-[10px] text-gray-500">
             {/* K-037：会话列表切换（细条收起时的另一入口） */}
@@ -1375,8 +1393,17 @@ export default function AgentChat() {
           />
         </div>
 
-        {/* K-037：右侧面板（可收起为细条；收起时拖拽柄隐藏） */}
-        {sideCollapsed ? (
+        {/* SQL 探索模式：主会话最小化为细条（K-037 细条同款视觉语言；点击恢复主对话区） */}
+        {dbExplore && (
+          <div className="w-9 flex-shrink-0 border-r border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
+            <button onClick={() => setDbExplore(false)} title="返回主会话（主对话区已最小化，WS/滚动状态保留）"
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">💬</button>
+            <span className="text-[9px] text-gray-600" style={{ writingMode: 'vertical-rl' }}>主会话</span>
+          </div>
+        )}
+
+        {/* K-037：右侧面板（可收起为细条；收起时拖拽柄隐藏；SQL 探索模式强制完整展开居左） */}
+        {sideCollapsed && !dbExplore ? (
           <div className="w-9 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
             <button onClick={toggleSideCollapsed} title="展开面板"
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
@@ -1428,8 +1455,8 @@ export default function AgentChat() {
           </div>
         ) : (
           <>
-            {/* K-033：右侧拖拽柄（左缘拖动调宽面板；K-039：最大化时隐藏） */}
-            {!sideMax && (
+            {/* K-033：右侧拖拽柄（左缘拖动调宽面板；K-039 最大化 / SQL 探索模式时隐藏） */}
+            {!sideMax && !dbExplore && (
               <div
                 onMouseDown={startSideDrag}
                 className="w-1 flex-shrink-0 cursor-col-resize hover:bg-info/40 active:bg-info/60 transition-colors"
@@ -1437,11 +1464,17 @@ export default function AgentChat() {
               />
             )}
 
-            {/* 右侧：K-032 页签面板（待办/信息包/文件页签） */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={sideMax ? '100%' : sideWidth} onCollapse={() => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} workspace={currentWorkspace} onCiteToMain={(fn: string) => setCiteDraft(fn)} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} />
+            {/* 右侧：K-032 页签面板（待办/信息包/文件页签）；SQL 探索模式撑宽 45% 为左栏主体 */}
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={dbExplore ? '45%' : sideMax ? '100%' : sideWidth} onCollapse={dbExplore ? () => setDbExplore(false) : () => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={dbExplore ? undefined : toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} workspace={currentWorkspace} onCiteToMain={(fn: string) => setCiteDraft(fn)} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} />
           </>
         )}
+
+        {/* SQL 探索模式右栏：内嵌 DB 证据面板（initialSql 回填自动执行；草稿/历史与独立页互通） */}
+        {dbExplore && (
+          <DbPanel initialSql={dbPendingSql} onClose={() => setDbExplore(false)} onHandToAux={handToAux} />
+        )}
       </div>
+      </SqlAuxBridgeCtx.Provider>
 
       {/* S0.6：更新对比弹窗（.bak 旧版 vs 当前） */}
       {diffItem && <DiffOverlay item={diffItem} onClose={() => setDiffItem(null)} />}

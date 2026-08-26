@@ -1,40 +1,17 @@
-/** DB 证据面板（设计 2026-08-25 §A3）——只读 SQL 执行 / schema 切换 / 结果表格 / 查询历史。
+/** DB 证据面板独立页（设计 2026-08-25 §A3）——只读 SQL 执行 / schema 切换 / 结果表格 / 查询历史。
+ * 状态逻辑与内嵌 DbPanel（agentChat/DbPanel.tsx）共享 useDbConsole（localStorage 互通）。
  * 状态持久化（基线①）：schema 选择与编辑器草稿 localStorage 恢复；
  * 三态分离（基线③）：加载中 / 空态 / 错误分别呈现。 */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import Editor from '@monaco-editor/react';
-import { dbApi } from '../api/db';
-import type { DbQueryResult, DbSchema } from '../api/db';
+import { useDbConsole } from './agentChat/DbPanel';
 import { SqlResultTable } from '../components/SqlResultTable';
-
-const LS_SCHEMA = 'sg_db_schema';
-const LS_SQL = 'sg_db_sql_draft';
-const LS_HISTORY = 'sg_db_history';
-
-interface HistoryItem { sql: string; schema: string; ts: number }
 
 export function DbConsole() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [schemas, setSchemas] = useState<DbSchema[]>([]);
-  const [schemasLoaded, setSchemasLoaded] = useState(false);
-  const [schema, setSchema] = useState(() => localStorage.getItem(LS_SCHEMA) || '');
-  const [sql, setSql] = useState(() => localStorage.getItem(LS_SQL) || 'SELECT 1');
-  const [result, setResult] = useState<DbQueryResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch { return []; }
-  });
-
-  useEffect(() => {
-    dbApi.schemas().then(r => {
-      setSchemas(r.schemas || []);
-      if (!schema && r.default) setSchema(r.default);
-    }).catch(() => setSchemas([])).finally(() => setSchemasLoaded(true));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { schemas, schemasLoaded, schema, setSchema, sql, setSql, result, loading, error, history, runQuery } = useDbConsole();
 
   // 联动入口：?sql=... 回填并自动执行（A4 入口②跳转目标）
   useEffect(() => {
@@ -46,28 +23,7 @@ export function DbConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  useEffect(() => { localStorage.setItem(LS_SQL, sql); }, [sql]);
-  useEffect(() => { localStorage.setItem(LS_SCHEMA, schema); }, [schema]);
-
-  const runQuery = async (sqlText = sql, schemaName = schema) => {
-    if (!sqlText.trim() || loading) return;
-    setLoading(true); setError(''); setResult(null);
-    try {
-      const r = await dbApi.query({ sql: sqlText, schema: schemaName || undefined });
-      setResult(r);
-      setHistory(prev => {
-        const next = [{ sql: sqlText, schema: schemaName, ts: Date.now() },
-          ...prev.filter(h => h.sql !== sqlText)].slice(0, 50);
-        localStorage.setItem(LS_HISTORY, JSON.stringify(next));
-        return next;
-      });
-    } catch (e: any) {
-      setError(e.message || '查询失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-  // onMount 闭包捕获的是初始态——经 ref 取最新 runQuery（Ctrl+Enter 快捷键）
+  // onMount 闭包捕获的是初始态——经 ref 取最新 runQuery
   const runQueryRef = useRef(runQuery);
   runQueryRef.current = runQuery;
 

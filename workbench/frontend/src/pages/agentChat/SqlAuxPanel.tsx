@@ -2,12 +2,13 @@
  *
  * 独立 WS 连接（复用 /api/agent/ws，session_id=辅助会话；K-015 按 session_id
  * 隔离，与主连接不冲突）+ 产出物区（write_draft 落盘的 .sql + content 缓存）
- * + 📎 引用到主会话（§B6 回流通道）/ ▶ DB 面板（§C3 互跳，Task 15 实装）。
+ * + 📎 引用到主会话（§B6 回流通道）/ ▶ DB 面板（SQL 探索模式：会话内嵌打开）。
  * 主→辅上下文同步由后端 WS 快照注入完成（§B4），本组件零感知。 */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { agentApi } from '../../api';
 import { session } from '../../api/core';
 import { SqlResultTable, parseDbEvidenceResult } from '../../components/SqlResultTable';
+import { SqlAuxBridgeCtx } from './contexts';
 import { MarkdownText } from './MarkdownText';
 
 interface AuxMessage { role: string; content: string; tool_calls?: any[] }
@@ -33,6 +34,10 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
   const sidRef = useRef('');
   const sendRef = useRef<(t: string) => void>(() => {});
   const scrollRef = useRef<HTMLDivElement>(null);  // 滚动跟随锚点
+
+  // SQL 探索模式桥（AgentChat 提供）：上报 send 供内嵌 DB 面板「交给 SQL 助手」直接调用；
+  // 无桥时（独立挂载场景）「▶ DB 面板」回退旧行为跳独立页
+  const bridge = useContext(SqlAuxBridgeCtx);
 
   // 消息/加载态变化时滚动到底部（与主会话 AgentChat 同语义——跟随最新内容位置）
   useEffect(() => {
@@ -65,6 +70,13 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
     setInput('');
   }, [loading, workspace]);
   sendRef.current = send;
+
+  // send 变化（loading/workspace 闭包刷新）时同步注册到桥——内嵌 DB 面板「交给 SQL 助手」经此直达；
+  // 卸载/重注册前置空，避免调到已卸载组件的闭包
+  useEffect(() => {
+    bridge?.register(send);
+    return () => bridge?.register(() => {});
+  }, [bridge, send]);
 
   // 激活即 spawn（幂等）+ 恢复历史 + DB 面板 pending 转发（Task 15）
   const ensureSession = useCallback(async () => {
@@ -189,10 +201,15 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
               <button
                 onClick={() => {
                   const sqlText = artifacts.find(([f]) => f === fn)?.[1] || '';
-                  window.open(`/db-console?sql=${encodeURIComponent(sqlText)}`, '_self');
+                  if (bridge) {
+                    // SQL 探索模式：会话内嵌打开（左 SQL 助手 / 右 DB 面板），回填自动执行
+                    bridge.openDbPanel(sqlText);
+                  } else {
+                    window.open(`/db-console?sql=${encodeURIComponent(sqlText)}`, '_self');
+                  }
                 }}
                 className="text-[10px] px-1.5 py-0.5 rounded border border-border text-gray-400 hover:text-info flex-shrink-0"
-                title="带 SQL 跳 DB 证据面板回填执行">▶ DB 面板</button>
+                title="在会话内打开 DB 证据面板回填执行（主会话自动最小化）">▶ DB 面板</button>
             </div>
           ))}
         </div>
