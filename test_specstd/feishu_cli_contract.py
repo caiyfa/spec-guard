@@ -143,3 +143,52 @@ FILE_MESSAGE = {
                "sender_type": "user"},
     "updated": False,
 }
+
+# T-1016 实测（2026-08-26）：merge_forward（合并转发）消息 content 形状——
+# <forwarded_messages> 包裹，内层每条消息为 "[ISO时间戳+08:00] 发送人:" 头行
+# + 4 空格缩进内容行（可多行）；内嵌图片两种占位混排：![Image](key)（post 风
+# 格）与 [Image: key]（image 消息风格）。来源：群 4d7f814d 落盘 JSONL 行
+# om_x100b67b4563770b4b4aadb072d42884（pull 通道原样 content，结构原样保留）。
+MERGE_FORWARD_MESSAGE = {
+    "chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+    "content": (
+        "<forwarded_messages>\n"
+        "[2026-08-21T15:29:08+08:00] 曹怡华:\n"
+        "    @蔡云飞 蔡老师，这个应该怎么处理呀\n"
+        "    ![Image](img_v3_0214p_a8cd9662-24ff-4113-a552-61e3fed37b1g)\n"
+        "[2026-08-21T15:30:48+08:00] 蔡云飞:\n"
+        "    <p>@曹怡华 文件名的问题</p>\n"
+        "[2026-08-21T15:31:26+08:00] 蔡云飞:\n"
+        "    把空格去掉\n"
+        "[2026-08-21T15:31:40+08:00] 蔡云飞:\n"
+        "    [Image: img_v3_0214p_b5659d96-eb78-4eb9-b7c6-e6c035afa3ag]\n"
+        "[2026-08-21T15:31:47+08:00] 蔡云飞:\n"
+        "    这中间有个空格\n"
+        "[2026-08-21T15:35:05+08:00] 曹怡华:\n"
+        "    还是不行@蔡云飞 \n"
+        "    ![Image](img_v3_0214p_f4761b1b-0dd5-4f05-a18d-ed5407786b6g)\n"
+        "[2026-08-21T15:35:30+08:00] 蔡云飞:\n"
+        "    ![Image](img_v3_0214p_a1b047a5-177b-4de4-ad8f-8c98febddcbg)\n"
+        "     & 去掉试试看\n"
+        "[2026-08-21T15:35:48+08:00] 蔡云飞:\n"
+        "    这个算是特殊字符\n"
+        "</forwarded_messages>"
+    ),
+    "create_time": "2026-08-21 15:43",
+    "deleted": False,
+    "message_id": "om_x100b67b4563770b4b4aadb072d42884",
+    "message_position": "3030",
+    "msg_type": "merge_forward",
+    "sender": {"id": "ou_62fe8d6439bc89e441af35bcf75ea98b",
+               "id_type": "open_id", "name": "蔡云飞",
+               "sender_type": "user"},
+    "updated": False,
+}
+
+# merge_forward 内嵌图 key（按 content 出现顺序，两种占位混合）
+MERGE_FORWARD_IMAGE_KEYS = [
+    "img_v3_0214p_a8cd9662-24ff-4113-a552-61e3fed37b1g",
+    "img_v3_0214p_b5659d96-eb78-4eb9-b7c6-e6c035afa3ag",
+    "img_v3_0214p_f4761b1b-0dd5-4f05-a18d-ed5407786b6g",
+    "img_v3_0214p_a1b047a5-177b-4de4-ad8f-8c98febddcbg",
+]

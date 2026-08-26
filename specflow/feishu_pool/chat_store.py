@@ -28,6 +28,14 @@ _DT_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M")
 _POST_IMG_RE = re.compile(r"!\[Image\]\((.+?)\)")
 _FILE_TAG_RE = re.compile(r'<file\s+key="([^"]*)"\s+name="([^"]*)"\s*/>')
 
+# T-1016 实测契约（2026-08-26，feishu_cli_contract.MERGE_FORWARD_MESSAGE）：
+# merge_forward content 为 <forwarded_messages> 包裹文本，内层每条消息
+# "[ISOts+08:00] 发送人:" 头行 + 缩进内容行；内嵌图两种占位混排
+# （![Image](key) 与 [Image: key]）。
+_FWD_ANY_IMG_RE = re.compile(r"!\[Image\]\((.+?)\)|\[Image:\s*(.+?)\]")
+_FWD_MSG_HEAD_RE = re.compile(r"^\[([^\]]+)\]\s+([^:：]+)[:：]\s*$")
+_P_TAG_RE = re.compile(r"</?p>")
+
 
 def extract_image_keys_from_post(content: str) -> list[str]:
     """post 消息 content 内嵌图引用提取（markdown 化 ![Image](key)，可多张）。"""
@@ -38,6 +46,37 @@ def parse_file_tag(content: str) -> tuple[str, str]:
     """file 消息 content 自描述标签解析 → (file_key, file_name)。"""
     m = _FILE_TAG_RE.search(content or "")
     return (m.group(1).strip(), m.group(2).strip()) if m else ("", "")
+
+
+def extract_image_keys_from_forward(content: str) -> list[str]:
+    """merge_forward content 内嵌图 key 提取（两种占位混排，按文本出现顺序）。"""
+    return [(m.group(1) or m.group(2)).strip()
+            for m in _FWD_ANY_IMG_RE.finditer(content or "")]
+
+
+def parse_forwarded_messages(content: str) -> list[dict]:
+    """merge_forward content → 内层消息列表 [{ts, sender, text}]（图片占位保留在
+    text，由渲染层替换为图/占位符；<p> 段落标签剥离）。
+
+    非 <forwarded_messages> 包裹内容返回 []（调用方兜底原文展示）。
+    """
+    body = str(content or "")
+    if "<forwarded_messages>" not in body:
+        return []
+    body = body.replace("<forwarded_messages>", "").replace(
+        "</forwarded_messages>", "")
+    subs: list[dict] = []
+    for line in body.splitlines():
+        head = _FWD_MSG_HEAD_RE.match(line) if not line.startswith((" ", "\t"))             else None
+        if head:
+            subs.append({"ts": head.group(1).strip(),
+                         "sender": head.group(2).strip(), "lines": []})
+        elif subs:
+            subs[-1]["lines"].append(line.strip())
+    return [{"ts": s["ts"], "sender": s["sender"],
+             "text": _P_TAG_RE.sub(
+                 "", " ".join(l for l in s["lines"] if l)).strip()}
+            for s in subs]
 
 
 def extract_image_key(msg: dict) -> str:
@@ -86,6 +125,9 @@ def normalize_pull_message(raw: dict) -> dict:
     if not deleted:
         if msg_type == "post":
             image_keys = extract_image_keys_from_post(content)
+        elif msg_type == "merge_forward":
+            # T-1016：内嵌图提取（外层 message_id 配对下载依据），content 原样保留
+            image_keys = extract_image_keys_from_forward(content)
         elif msg_type == "file":
             file_key, file_name = parse_file_tag(content)
     row = {
@@ -247,6 +289,20 @@ def render_md_from_jsonl(day_file: Path) -> tuple[str, dict, list[str]]:
         elif mtype == "file":
             fname = str(r.get("file_name") or "")
             body = f"[文件] {fname}" if fname else "[文件]"
+        elif mtype == "merge_forward":
+            # T-1016：单行内联展开（line_ids 一对一约束不破）——内层
+            # 「发送人: 内容」拍平串联；内嵌图占位按出现顺序入 imgmap
+            subs = parse_forwarded_messages(str(r.get("content") or ""))
+            if not subs:
+                body = "[合并转发]"
+            else:
+                parts = []
+                for s in subs:
+                    t = _FWD_ANY_IMG_RE.sub(
+                        lambda m: _img((m.group(1) or m.group(2)).strip()),
+                        str(s.get("text") or ""))
+                    parts.append(f"{s.get('sender') or '?'}: {t}".rstrip())
+                body = "[合并转发] " + "；".join(parts)
         elif mtype == "text":
             body = str(r.get("content") or "")
         else:
