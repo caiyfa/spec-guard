@@ -686,6 +686,31 @@ def spawn_session(body: dict, user: CurrentUser = Depends(get_current_user)):
     return {"ok": True, "session_id": sid, "created": True}
 
 
+@router.post("/sessions/{session_id}/clear")
+def clear_session_messages(session_id: str, workspace: str = "",
+                           user: CurrentUser = Depends(get_current_user)):
+    """清空会话消息（辅助会话长对话瘦身，2026-08-26）。
+
+    保留首行 meta（purpose/kind/parent 链接/白名单/标题）；辅助会话同步重置
+    last_parent_fp——父会话快照是每轮注入（§B4），指纹清空后下一轮重新注入
+    完整 <parent_context>，清空不丢主会话关键信息。owner 权限（本人会话）；
+    执行中的会话拒绝清空（与后台 run 落盘竞争，K-015 同语义）。
+    """
+    try:
+        _validate_session_id(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="非法 session_id") from e
+    sm = SessionManager(_sessions_dir(user.emp_no), workspace=workspace)
+    # 存在性用 is None 判断（空会话 load 返回 []，falsy 会误判不存在）
+    if sm.load(session_id) is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    if _run_in_progress(session_id):
+        raise HTTPException(status_code=409, detail="会话仍在后台执行上一条消息，请等待完成或先停止再清空")
+    sm.save(session_id, [])  # 清空消息（meta 继承：purpose/kind/parent 链接）
+    sm.set_meta_fields(session_id, last_parent_fp="")  # 重置快照指纹 → 下轮注入完整父快照
+    return {"ok": True, "session_id": session_id}
+
+
 @router.patch("/sessions/{session_id}")
 def patch_session(session_id: str, body: dict,
                   workspace: str = "",

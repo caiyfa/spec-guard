@@ -104,8 +104,8 @@ def aux_client(monkeypatch):
     import specstd.workspace as wsm
     monkeypatch.setattr(wsm, "REGISTRY_PATH", base / "registry.yaml")
     monkeypatch.setattr(wsm, "CLONES_DIR", base / "_clones")
-    from main import app
     from fastapi.testclient import TestClient
+    from main import app
     with TestClient(app) as c:
         r = c.post("/api/auth/mock-login", json={"emp_no": "90000001", "name": "测试"})
         assert r.status_code == 200, r.text
@@ -149,6 +149,42 @@ class TestSpawnApi:
         r = c.post("/api/agent/sessions/spawn",
                    json={"parent_session_id": parent, "purpose": "no_such_purpose"})
         assert r.status_code == 403
+
+
+@pytest.mark.skipif(not _SPY_TMP, reason="需隔离环境（SG_AUX_TEST_TMP）")
+class TestClearApi:
+    """清空消息端点（2026-08-26）：meta 保留 + last_parent_fp 重置（下轮重注完整父快照）。"""
+
+    def test_clear_keeps_meta_and_resets_parent_fp(self, aux_client):
+        c = aux_client
+        parent = c.post("/api/agent/sessions",
+                        json={"purpose": "test_workbench"}).json()["session_id"]
+        aux = c.post("/api/agent/sessions/spawn",
+                     json={"parent_session_id": parent, "purpose": "sql_assistant"}).json()["session_id"]
+        # 模拟已注入过父快照（指纹非空）+ 已有多轮消息
+        from routers import agent as agent_router
+
+        from agent.session import SessionManager
+        sm = SessionManager(agent_router.SESSIONS_ROOT / "90000001")
+        sm.set_meta_fields(aux, last_parent_fp="fp123")
+        sm.save(aux, [{"role": "user", "content": "hi"},
+                      {"role": "assistant", "content": "SELECT 1"}], emp_no="90000001")
+        r = c.post(f"/api/agent/sessions/{aux}/clear")
+        assert r.status_code == 200, r.text
+        # 消息清空
+        msgs = c.get(f"/api/agent/sessions/{aux}").json()["messages"]
+        assert msgs == []
+        # meta 保留（辅助会话身份/父链接/用途不丢）+ 指纹重置 → 下轮重注完整父快照
+        meta = sm._read_meta(sm.sessions_dir / f"{aux}.jsonl")
+        assert meta["kind"] == "aux"
+        assert meta["parent_session_id"] == parent
+        assert meta["purpose"] == "sql_assistant"
+        assert meta.get("last_parent_fp", "") == ""
+
+    def test_clear_missing_session_404(self, aux_client):
+        c = aux_client
+        r = c.post("/api/agent/sessions/NOT_EXIST_1/clear")
+        assert r.status_code == 404
 
 
 class TestParentSnapshot:

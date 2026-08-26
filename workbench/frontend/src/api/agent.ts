@@ -28,5 +28,8 @@ export const agentApi = {
   // 辅助会话派生（设计 2026-08-25 §B3，幂等：同父同 purpose 复用未归档 aux）
   spawnSession: (body: { parent_session_id: string; purpose: string; workspace?: string }) =>
     request<{ ok: boolean; session_id: string; created: boolean }>('/agent/sessions/spawn', { method: 'POST', body: JSON.stringify(body) }),
+  // 清空会话消息（辅助会话长对话瘦身；meta 保留 + last_parent_fp 重置，下轮重注父快照）
+  clearSessionMessages: (id: string, workspace = '') =>
+    request<{ ok: boolean; session_id: string }>(`/agent/sessions/${id}/clear${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'POST' }),
 };
 

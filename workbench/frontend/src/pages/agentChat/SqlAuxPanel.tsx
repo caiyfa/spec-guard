@@ -5,13 +5,17 @@
  * + 📎 引用到主会话（§B6 回流通道）/ ▶ DB 面板（SQL 探索模式：会话内嵌打开）。
  * 主→辅上下文同步由后端 WS 快照注入完成（§B4），本组件零感知。 */
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { agentApi } from '../../api';
+import { agentApi, modelApi } from '../../api';
+import type { ModelConfig } from '../../api';
 import { session } from '../../api/core';
 import { SqlResultTable, parseDbEvidenceResult } from '../../components/SqlResultTable';
 import { SqlAuxBridgeCtx } from './contexts';
 import { MarkdownText } from './MarkdownText';
 
 interface AuxMessage { role: string; content: string; tool_calls?: any[] }
+
+/** 模型选择持久化键（前端体验基线①：记住上次选择，恢复值失效时诚实回退默认）。 */
+const LS_MODEL = 'sg_sql_aux_model';
 
 /** 快照注入块（<parent_context>… 与 [parent_context]… 行）是 LLM 上下文，UI 不显示（§B4）。 */
 export function stripParentContext(text: string): string {
@@ -29,11 +33,30 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
   const [messages, setMessages] = useState<AuxMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [wsState, setWsState] = useState<'connecting' | 'open' | 'closed'>('closed');
+  const [models, setModels] = useState<ModelConfig[]>([]);
+  const [currentModelId, setCurrentModelId] = useState(() => localStorage.getItem(LS_MODEL) || '');
   const wsRef = useRef<WebSocket | null>(null);
   const sidRef = useRef('');
   const sendRef = useRef<(t: string) => void>(() => {});
   const scrollRef = useRef<HTMLDivElement>(null);  // 滚动跟随锚点
+
+  // 模型列表：恢复上次选择，失效时回退默认（基线①：不报错不空白）
+  useEffect(() => {
+    modelApi.list().then(r => {
+      const list = r.models || [];
+      setModels(list);
+      const saved = localStorage.getItem(LS_MODEL) || '';
+      if (saved && list.some(m => m.id === saved)) return;
+      const def = list.find(m => m.is_default);
+      setCurrentModelId(def ? def.id : (list[0]?.id || ''));
+    }).catch(() => { /* 模型列表拉不到时省略下拉，走后端默认模型 */ });
+  }, []);
+  const onModelChange = useCallback((id: string) => {
+    setCurrentModelId(id);
+    localStorage.setItem(LS_MODEL, id);
+  }, []);
 
   // SQL 探索模式桥（AgentChat 提供）：上报 send 供内嵌 DB 面板「交给 SQL 助手」直接调用；
   // 无桥时（独立挂载场景）「▶ DB 面板」回退旧行为跳独立页
@@ -66,10 +89,29 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
     if (!ws || ws.readyState !== WebSocket.OPEN || !text.trim() || loading) return;
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);
-    ws.send(JSON.stringify({ message: text, session_id: sidRef.current, workspace }));
+    // model_id/max_turns 对齐主会话（主会话 max_turns:50；辅助会话原来缺省 12 轮次过低）
+    ws.send(JSON.stringify({
+      message: text, session_id: sidRef.current, workspace,
+      model_id: currentModelId, max_turns: 50,
+    }));
     setInput('');
-  }, [loading, workspace]);
+  }, [loading, workspace, currentModelId]);
   sendRef.current = send;
+
+  // 清空上下文：后端清空消息（meta 保留）+ 重置父快照指纹——下一轮重新注入完整
+  // <parent_context>，主会话关键信息不丢（§B4 每轮注入语义）
+  const clearContext = useCallback(async () => {
+    if (!auxSid || loading || clearing) return;
+    setClearing(true);
+    try {
+      await agentApi.clearSessionMessages(auxSid, workspace);
+      setMessages([]);
+    } catch (e: any) {
+      setMessages(prev => [...prev, { role: 'system', content: `❌ 清空失败：${e.message || '请稍后重试'}` }]);
+    } finally {
+      setClearing(false);
+    }
+  }, [auxSid, loading, clearing, workspace]);
 
   // send 变化（loading/workspace 闭包刷新）时同步注册到桥——内嵌 DB 面板「交给 SQL 助手」经此直达；
   // 卸载/重注册前置空，避免调到已卸载组件的闭包
@@ -152,14 +194,32 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
     <div className="flex flex-col h-full text-xs">
       <div className="flex items-center gap-2 py-1 text-[10px] text-gray-500 border-b border-border flex-shrink-0">
         <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>{wsState === 'open' ? '●' : '○'}</span>
-        <span>SQL 助手（辅助会话·不进主对话）</span>
-        {auxSid && <span className="font-mono text-gray-600 truncate">{auxSid}</span>}
+        <span className="whitespace-nowrap">SQL 助手（辅助会话）</span>
+        {auxSid && <span className="font-mono text-gray-600 truncate flex-1" title={auxSid}>{auxSid}</span>}
+        {models.length > 0 && (
+          <select
+            value={currentModelId}
+            onChange={e => onModelChange(e.target.value)}
+            className="bg-surface-2 border border-border rounded px-1 py-0.5 text-[10px] text-gray-400 font-mono max-w-[120px] flex-shrink-0"
+            title="切换辅助会话模型（下一轮生效）">
+            {models.map(m => (
+              <option key={m.id} value={m.id}>{m.is_default ? '★ ' : ''}{m.name || m.model}</option>
+            ))}
+          </select>
+        )}
+        <button onClick={clearContext}
+          disabled={!auxSid || loading || clearing || messages.length === 0}
+          className="px-1.5 py-0.5 rounded border border-border text-gray-400 hover:text-info disabled:opacity-40 flex-shrink-0 whitespace-nowrap"
+          title="清空辅助会话消息（主会话不受影响；主会话最新快照会在下一条消息自动重新注入）">
+          {clearing ? '清空中…' : '🧹 清空上下文'}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2 space-y-2 min-h-0">
         {messages.length === 0 && (
           <div className="text-gray-600">
             输入需求生成 SQL（如「为主会话当前场景写等效计数 SQL」）——表关系解释与设计理由随 SQL 一并给出。
+            <div className="mt-1 text-gray-700">主会话最新快照（草稿足迹 + 最近回复）会随每条消息自动注入——清空上下文后也不丢。</div>
           </div>
         )}
         {messages.map((m, i) => (
