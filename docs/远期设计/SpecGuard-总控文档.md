@@ -283,7 +283,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-1017 | M-F | format_spec §1.13 python/http 文档补全（2.15.0 三同步） | wt/engine-hardening | — | ✅ 08-26 主库验收（合并 1a0346d） | sess-engine-hardening | 同上派工：明示 script 不渲染 {{}}/save 变量非脚本全局须 ns['名'] 访问 + 三类 save 产出结构（call={status,json,headers}/db_query=裸list/tool=工具自定）+ http(account) 完整签名（json_body=）与最小示例；不采纳事故报告 §5.1/5.2 的错误写法（平铺 key/foo.text/json= 均与实现相反） |
 | T-1018 | M-F | python 步骤错误消息增强（脚本 NameError/KeyError 附 ns 可用键清单） | wt/engine-hardening | — | ✅ 08-26 主库验收（合并 1a0346d） | sess-engine-hardening | 同上派工：让 Agent 下次自愈而非猜结构 |
 | T-1019 | M-F | HttpClient.request 兼容 json= 别名（对齐 requests 肌肉记忆） | wt/engine-hardening | — | ✅ 08-26 主库验收（合并 1a0346d） | sess-engine-hardening | 同上派工：json= 与 json_body= 同义，双给报错；post() 同步支持 |
-| T-1020 | M-F | 产物活动流水（product_activity 表：会话↔产物↔版本链落 DB）+ reset 按会话收窄 + write_draft overwrite 模式 + 更新足迹/草稿产物分签 + 面板 DB 化跨会话接管 | wt/draft-activity | — | 进行中 | sess-draft-activity | 08-26 总控人派工（20260825_151821_3178914e 会话 draft reset 事故复盘）：Agent 五次自调 reset 清空全工作区草稿（含用户 v0.3 修复版）——根因双层：①reset 无确认环节且不分会话归属；②write_draft 禁覆盖无出口，Agent 被 OVERWRITE_DENIED 逼向 reset 绕路。方案拍板：F1 sg_core/product_activity 流水表（session_id/emp/workspace/action/version_no/sha/content 全文快照，contextvar 上下文零传参）F2 draft_writer 六 handler 挂钩+reset 会话收窄（无会话拒绝）+write mode=overwrite（旧版自动留档）F3 gate_dock 迁 contextvar（退役 _session_id 特权参数）F4 writing_feed DB 优先消息重放兜底 F5 前端草稿产物面板 DB 化（全量草稿+来源会话+版本链，跨会话可见）+更新足迹/草稿产物分两页签（草稿产物前置）；product_index 并存过渡一个迭代后废弃 |
+| T-1020 | M-F | 产物活动流水（product_activity 表：会话↔产物↔版本链落 DB）+ reset 按会话收窄 + write_draft overwrite 模式 + 更新足迹/草稿产物分签 + 面板 DB 化跨会话接管 | wt/draft-activity | — | ✅ 08-26 已完成待主库验收（提交 0a2632a） | sess-draft-activity | 08-26 总控人派工（20260825_151821_3178914e 会话 draft reset 事故复盘）：Agent 五次自调 reset 清空全工作区草稿（含用户 v0.3 修复版）——根因双层：①reset 无确认环节且不分会话归属；②write_draft 禁覆盖无出口，Agent 被 OVERWRITE_DENIED 逼向 reset 绕路。方案拍板：F1 sg_core/product_activity 流水表（session_id/emp/workspace/action/version_no/sha/content 全文快照，contextvar 上下文零传参）F2 draft_writer 六 handler 挂钩+reset 会话收窄（无会话拒绝）+write mode=overwrite（旧版自动留档）F3 gate_dock 迁 contextvar（退役 _session_id 特权参数）F4 writing_feed DB 优先消息重放兜底 F5 前端草稿产物面板 DB 化（全量草稿+来源会话+版本链，跨会话可见）+更新足迹/草稿产物分两页签（草稿产物前置）；product_index 并存过渡一个迭代后废弃 |
 
 ---
 
@@ -317,6 +317,22 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
 | mcp_server/tools/lark_auth.py | sess-lark-scope-fix | 2026-08-24 | 8bdb475d568b | c2b08099fb3c | 已完成 | T-1012：_REQUIRED_SCOPES 首项改官方名 contact:user:search |
+| sg_core/product_activity.py | sess-draft-activity | 2026-08-26 | NEW | fb8903b83d16 | 已完成 | T-1020 F1：活动流水表（contextvar 取值/版本链/全文快照） |
+| sg_core/draft_gates.py | sess-draft-activity | 2026-08-26 | da892bf304a9 | c91557695e1d | 已完成 | T-1020：delete_draft_gate 单文件三闸删除 |
+| sg_core/ledger_store.py | sess-draft-activity | 2026-08-26 | 92ce01936a07 | d6bdad24eb03 | 已完成 | T-1020：delete_draft 单文件台账删除 |
+| mcp_server/tools/draft_writer.py | sess-draft-activity | 2026-08-26 | 4e9f79cce1aa | 727be90bd32f | 已完成 | T-1020 F2：overwrite 模式+六 handler 挂流水+reset 会话收窄 |
+| mcp_server/tools/gate_dock.py | sess-draft-activity | 2026-08-26 | 814609df5994 | 640788516b7d | 已完成 | T-1020 F3：迁 current_session_id contextvar |
+| agent/runtime.py | sess-draft-activity | 2026-08-26 | 74499571ba44 | 09a7d5815b5b | 已完成 | T-1020 F3：退役 _session_id 特权参数注入 |
+| workbench/backend/routers/agent.py | sess-draft-activity | 2026-08-26 | 2064df3b602f | c12e8930e97d | 已完成 | T-1020 F4：writing_feed 双源（重放+DB 增强/兜底） |
+| workbench/backend/routers/drafts.py | sess-draft-activity | 2026-08-26 | b46d5f7b85e3 | d52a9e461014 | 已完成 | T-1020 F5：GET /activity + /{filename}/versions 端点 |
+| test_specstd/test_product_activity.py | sess-draft-activity | 2026-08-26 | NEW | a34844ba3cf3 | 已完成 | T-1020 F1 测试（11） |
+| test_specstd/test_draft_activity.py | sess-draft-activity | 2026-08-26 | NEW | ea9404c77f5c | 已完成 | T-1020 F2 测试（8：overwrite/undo/reset 收窄钉案） |
+| test_specstd/test_mcp_server.py | sess-draft-activity | 2026-08-26 | 3ac0deb9cac1 | 1c4235d2b5f3 | 已完成 | T-1020：reset 测试适配会话收窄 |
+| workbench/frontend/src/api/drafts.ts | sess-draft-activity | 2026-08-26 | 4b1eaa9f1a3b | 2fd220f192e5 | 已完成 | T-1020 F5：activity/versions API |
+| workbench/frontend/src/pages/agentChat/DraftArtifactsPanel.tsx | sess-draft-activity | 2026-08-26 | 06b0a8848c5a | 1ba36e64d720 | 已完成 | T-1020 F5：全量草稿+本会话/外会话/版本徽标 |
+| workbench/frontend/src/pages/agentChat/SidePanel.tsx | sess-draft-activity | 2026-08-26 | 183062b3be4f | b8123721144b | 已完成 | T-1020：分签（认领提交）+sessionId 透传 |
+| workbench/frontend/src/pages/agentChat/WritingPanel.tsx | sess-draft-activity | 2026-08-26 | fc4e99e6dbef | d2d1e9bca04e | 已完成 | T-1020：卡片版本徽标 v{N}/{M} |
+| workbench/frontend/src/pages/agentChat/types.ts | sess-draft-activity | 2026-08-26 | 782f10a3f94a | 9ee70953bca2 | 已完成 | T-1020：DocWriteItem 版本字段 |
 | test_specstd/test_lark_auth.py | sess-lark-scope-fix | 2026-08-24 | 2477266780d3 | aceadf1ae025 | 已完成 | T-1012：断言同步改名+canonical 命名回归测试 |
 | AGENTS.md | sess-tool-consolidation | 2026-08-21 | a9a84429c233 | | 0890c0155353 | 已完成 | T-982：mcp_server 结构行工具计数 |
 | agent/compactor.py | sess-tool-consolidation | 2026-08-21 | 98128bba2653 | | ee2ed56dc04f | 已完成 | T-982 F3：压缩分类按逻辑 id 归一 |
