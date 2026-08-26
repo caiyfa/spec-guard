@@ -276,6 +276,15 @@ export default function AgentChat() {
   // 使用 ref 存储最新的事件处理函数，避免闭包过期
   const wsHandlerRef = useRef<(event: any) => void>(() => {});
   wsHandlerRef.current = (event: any) => {
+    // T-1021: 事件会话过滤——事件带 session_id 且与当前会话不符 → 丢弃
+    // （防 attach 残留流/旧会话 run 污染切换后的会话 UI，顺带修不同会话
+    // 并发 run 事件混流；state/started 例外：新建会话首事件必须放行，
+    // 否则 sessionId 无法建立）
+    if (event.session_id && sessionIdRef.current
+      && event.session_id !== sessionIdRef.current
+      && !(event.type === 'state' && event.status === 'started')) {
+      return;
+    }
     switch (event.type) {
       case 'state':
         if (event.status === 'started' && event.session_id) {
@@ -399,6 +408,31 @@ export default function AgentChat() {
         });
         break;
       }
+      case 'attached': {
+        // T-1021: attach 确认。run 已结束（attach 前刚完成的竞态）→ 解除 loading
+        // 并全量拉取对齐（done 可能已落盘但从未送达本页）
+        if (!event.run_in_progress) {
+          setLoading(false);
+          setStreamingText('');
+          setTurnInfo('');
+          if (event.session_id && event.session_id === sessionIdRef.current) {
+            agentApi.getSession(event.session_id, currentWorkspace)
+              .then(r => {
+                const msgs = r.messages || [];
+                setMessages(prev => (msgs.length >= prev.length ? msgs : prev));
+                setSessionsVersion(v => v + 1);
+              })
+              .catch(() => { });
+          }
+        }
+        break;
+      }
+      case 'replay_batch': {
+        // T-1021: 回放批次——逐条走既有事件管线（重建 run 进行中的 UI 现场）
+        if (event.session_id && event.session_id !== sessionIdRef.current) break;
+        for (const ev of (event.events || [])) wsHandlerRef.current(ev);
+        break;
+      }
       case 'done':
         setStats(event.stats || null);
         if (event.session_id) {
@@ -406,6 +440,11 @@ export default function AgentChat() {
           localStorage.setItem('sg_agent_session', event.session_id);
         }
         if (event.title) setSessionTitle(event.title);
+        // T-1021: done 携带全量 messages——attach/回放路径的对齐兑底
+        // （发送方路径 messages 由事件流维护，两者等长，替换无害）
+        if (Array.isArray(event.messages) && event.messages.length) {
+          setMessages(prev => (event.messages.length >= prev.length ? event.messages : prev));
+        }
         setTurnInfo('');
         setStreamingText('');
         setLoading(false);
@@ -477,8 +516,23 @@ export default function AgentChat() {
               const msgs = r.messages || [];
               setMessages(prev => (msgs.length > prev.length ? msgs : prev));
               setSessionsVersion(v => v + 1);
+              // T-1021: 断连期间 run 仍在执行 → attach 续上实时流
+              // （attach 时已完成的竞态由后端 attached(run_in_progress=false) 兜底对齐）
+              if (r.run_in_progress) {
+                setLoading(true);
+                const wsNow = wsRef.current;
+                if (wsNow && wsNow.readyState === WebSocket.OPEN) {
+                  wsNow.send(JSON.stringify({ type: 'attach', session_id: sid }));
+                }
+              }
             } catch { /* 静默 */ }
           }, 2500);
+        }
+        // T-1021: WS 就绪前挂起的 attach（刷新页面后 restoreSession 先于 WS open）
+        if (pendingAttachRef.current) {
+          const sid = pendingAttachRef.current;
+          pendingAttachRef.current = '';
+          ws.send(JSON.stringify({ type: 'attach', session_id: sid }));
         }
         _store.everConnected = true;
       };
@@ -895,8 +949,31 @@ export default function AgentChat() {
     matchDraft: (contentTrim: string) => draftContents.get(contentTrim),
   }), [openFileViewer, openContentViewer, draftContents]);
 
+  // T-1021: attach 运行中会话（断连/刷新后续上实时流）。WS 未就绪时挂起，
+  // onopen 后补发；detach 用于切会话时退出旧会话的 attach 订阅（后端对
+  // 游离 detach 静默忽略，可盲发）。
+  const pendingAttachRef = useRef('');
+  const sendAttach = useCallback((sid: string) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'attach', session_id: sid }));
+      return true;
+    }
+    pendingAttachRef.current = sid;
+    return false;
+  }, []);
+  const sendDetach = useCallback(() => {
+    pendingAttachRef.current = '';
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'detach' }));
+    }
+  }, []);
+
   // K-012: 恢复会话（会话项点击 / 页面刷新自动恢复共用）
   const restoreSession = useCallback(async (id: string, ws: string) => {
+    // T-1021: 切会话前退出旧会话的 attach 订阅（若有）
+    sendDetach();
     // 验收缺陷修复（2026-08-25）：恢复路径补 purposes 拉取——purpose 页签依赖
     // purposes.panels 装配，此前仅新建会话/发送拦截路径拉取，刷新/跨页跳回恢复后
     // purpose 页签（deps/history/sql_aux）整体消失。幂等低成本（listPurposes 轻量 GET）。
@@ -906,7 +983,17 @@ export default function AgentChat() {
     } catch { /* 页签降级为通用集 */ }
     const r = await agentApi.getSession(id, ws);
     const msgs = r.messages || [];
-    setMessages(msgs);
+    // T-1021: run 进行中——截断到基线（丢弃 run 期间已落盘的部分消息，attach
+    // 回放事件流将重建它们，天然去重），进入 loading 并 attach 续上实时流；
+    // 不在执行中则解除可能残留的 loading（上一会话 run 中切来）
+    const running = !!r.run_in_progress;
+    if (running) {
+      const bl = typeof r.run_baseline_len === 'number' ? r.run_baseline_len : 0;
+      setMessages(msgs.length > bl ? msgs.slice(0, bl) : msgs);
+    } else {
+      setMessages(msgs);
+      setLoading(false);
+    }
     setSessionId(id);
     setReadingFeed(r.reading_feed || []);  // T-511: 阅读足迹从后端重建（跨刷新保持）
     setWritingFeed(r.writing_feed || []);  // S0.6: 更新足迹从后端重建（跨刷新保持）
@@ -943,7 +1030,13 @@ export default function AgentChat() {
         break;
       }
     }
-  }, []);
+    // T-1021: run 进行中——进入 loading 并 attach 续上实时流（回放重建执行现场）
+    if (running) {
+      setLoading(true);
+      setTurnInfo('↻ 恢复执行现场…');
+      sendAttach(id);
+    }
+  }, [sendAttach, sendDetach]);
 
   const handleSelectSession = async (id: string, ws: string) => {
     try {
@@ -981,6 +1074,10 @@ export default function AgentChat() {
   }, []);
 
   const handleNewSession = async () => {
+    // T-1021: 新会话退出旧会话 attach 订阅并解除残留 loading（旧 run 后台继续落盘）
+    sendDetach();
+    setLoading(false);
+    setTurnInfo('');
     setSessionId(''); setSessionTitle(''); setMessages([]); setStats(null); setError(''); setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setReadingFeed([]);  // T-511：足迹=本轮运行依据，新会话清空

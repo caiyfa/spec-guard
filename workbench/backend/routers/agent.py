@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from services.auth import CurrentUser, get_current_user, get_current_user_ws
+from services.session_event_bus import REPLAY_BATCH, SessionEventBus
 
 # Agent 能力对全部登录用户开放（首页免权决策 2026-08-14：菜单层 PUBLIC_MENUS + 业务层登录即可）。
 # 注意：本路由含 WebSocket 端点，Request 型依赖在 WS 上无法注入，
@@ -33,6 +34,10 @@ SESSIONS_ROOT = SG_ROOT / "agent" / "sessions"
 # （session.save 是全量覆盖写，两个并发 run 会互相冲掉对方内容，last-writer-wins；
 #  用户真实会话导出文件取证：同 sid 的标签生成与草稿问答两段对话互相覆盖）
 _ACTIVE_RUNS: dict[str, "asyncio.Task"] = {}
+
+# T-1021: 会话级事件总线——run 事件发布到会话频道（fan-out 多订阅者 + 当前 run
+# 事件回放缓冲），刷新/断连/第二标签页可 attach 续上实时流。
+_BUS = SessionEventBus()
 
 # T-402: 会话运行时追踪（供 cancel 端点查找并设置取消标志）
 _ACTIVE_RUNTIMES: dict[str, "AgentRuntime"] = {}
@@ -783,6 +788,8 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
     except ValueError:
         raise HTTPException(status_code=400, detail="非法 session_id")
     dirs = _iter_all_session_dirs() if user.is_admin else [_sessions_dir(user.emp_no)]
+    # T-1021: run 进行中标志 + 基线消息数（前端据此 attach 续传并截断去重）
+    snap = _BUS.snapshot(session_id)
     for d in dirs:
         # 尝试工作区子目录 + 根目录
         sm = SessionManager(d, workspace=workspace)
@@ -792,7 +799,9 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
             writing_feed = _rebuild_writing_feed(messages, session_id, workspace)
             return {"session_id": session_id, "messages": messages,
                     "reading_feed": reading_feed, "writing_feed": writing_feed,
-                    "owner": d.name, "workspace": workspace}
+                    "owner": d.name, "workspace": workspace,
+                    "run_in_progress": _run_in_progress(session_id),
+                    "run_baseline_len": snap["baseline_len"] if snap["exists"] else 0}
         # 如果指定工作区未找到，也尝试无工作区（兼容旧会话）
         if workspace:
             sm2 = SessionManager(d)
@@ -801,7 +810,9 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
                 return {"session_id": session_id, "messages": messages,
                         "reading_feed": _rebuild_reading_feed(messages),
                         "writing_feed": _rebuild_writing_feed(messages, session_id, ""),
-                        "owner": d.name, "workspace": ""}
+                        "owner": d.name, "workspace": "",
+                        "run_in_progress": _run_in_progress(session_id),
+                        "run_baseline_len": snap["baseline_len"] if snap["exists"] else 0}
     raise HTTPException(status_code=404, detail="会话不存在")
 
 
@@ -883,6 +894,101 @@ async def cancel_agent(session_id: str,
 # WebSocket 端点
 # ══════════════════════════════════════════════════════════
 
+async def _handle_attach(websocket: WebSocket, data: dict, user, emp_no: str):
+    """T-1021: attach——订阅运行中会话的事件频道（断连/刷新/第二标签页续传）。
+
+    回放当前 run 已缓冲事件 + 实时续推直到 done/error（或前端 detach / 连接断开），
+    之后返回主循环——连接恢复正常收发（下一条消息走既有路径）。
+    前端配合：attach 前按 getSession 的 run_baseline_len 截断消息到基线，
+    回放事件流经既有渲染管线重建「运行中」现场，done 后全量对齐。
+    """
+    sid = str(data.get("session_id", "") or "")
+    try:
+        _validate_session_id(sid)
+    except ValueError:
+        await websocket.send_json({"type": "error", "message": "非法 session_id"})
+        return
+    # 归属校验：非 admin 只能 attach 本人会话（与 cancel 端点同口径）
+    if not user.is_admin and _find_session_owner(sid) != emp_no:
+        await websocket.send_json({"type": "error", "message": "无权访问该会话"})
+        return
+    if not _run_in_progress(sid):
+        # 竞态：attach 前刚好完成——告知前端全量拉取对齐即可（done 可能已落盘）
+        await websocket.send_json({"type": "attached", "session_id": sid,
+                                   "run_in_progress": False})
+        return
+    attached = _BUS.attach(sid)
+    if attached is None:  # 防御：run 登记与频道建立之间的极端竞态
+        await websocket.send_json({"type": "attached", "session_id": sid,
+                                   "run_in_progress": False})
+        return
+    sub, replay, meta = attached
+    try:
+        try:
+            await websocket.send_json({"type": "attached", "session_id": sid,
+                                       "run_in_progress": True,
+                                       "baseline_len": meta["baseline_len"]})
+            # 回放分批推送（长 run 全量回放拆帧，前端逐条喂既有事件管线）
+            for i in range(0, len(replay), REPLAY_BATCH):
+                await websocket.send_json({"type": "replay_batch", "session_id": sid,
+                                           "events": replay[i:i + REPLAY_BATCH]})
+        except Exception:
+            return  # 回放阶段连接已断：退订返回（run 不受影响）
+        # 实时续推：reader 并发监听 detach/ping；主侧推事件直到结束信号
+        detach_event = asyncio.Event()
+
+        async def _reader():
+            try:
+                while True:
+                    msg = await websocket.receive_json()
+                    t = msg.get("type", "")
+                    if t == "detach":
+                        detach_event.set()
+                        return
+                    if t == "ping":
+                        await websocket.send_json({"type": "pong"})
+            except Exception:
+                detach_event.set()  # 连接断开视为 detach
+                return
+
+        reader = asyncio.create_task(_reader())
+        try:
+            heartbeat_tick = 0
+            while True:
+                if detach_event.is_set():
+                    break
+                try:
+                    event = await asyncio.wait_for(sub.queue.get(), timeout=0.2)
+                    await websocket.send_json(event)
+                    heartbeat_tick = 0
+                    if event.get("type") in ("done", "error"):
+                        break
+                except TimeoutError:
+                    heartbeat_tick += 1
+                    if heartbeat_tick >= 50:  # 10s 无事件：保活心跳（同主循环节奏）
+                        try:
+                            await websocket.send_json({"type": "heartbeat"})
+                        except Exception:
+                            break
+                        heartbeat_tick = 0
+                    # 兜底：run 已结束但终态事件丢失（异常路径/极端竞态）→ 合成
+                    # attached(run_in_progress=false) 让前端解除 loading 并全量拉取对齐
+                    if not _run_in_progress(sid) and sub.queue.empty():
+                        try:
+                            await websocket.send_json({"type": "attached", "session_id": sid,
+                                                       "run_in_progress": False})
+                        except Exception:
+                            pass
+                        break
+                    continue
+                except Exception:
+                    break  # 连接断开
+        finally:
+            reader.cancel()
+    finally:
+        _BUS.detach(sid, sub)
+
+
 @router.websocket("/ws")
 async def agent_ws(websocket: WebSocket,
                    _user: CurrentUser = Depends(get_current_user_ws)):
@@ -938,6 +1044,13 @@ async def agent_ws(websocket: WebSocket,
             msg_type = data.get("type", "")
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+                continue
+            # T-1021: attach——订阅运行中会话的事件频道（回放+实时续推）；
+            # detach——退订（前端切会话时发送；非 attach 状态收到则静默忽略）
+            if msg_type == "attach":
+                await _handle_attach(websocket, data, _user, _ws_emp_no)
+                continue
+            if msg_type == "detach":
                 continue
 
             # 重置空闲心跳计数（收到有效消息说明连接正常）
@@ -1081,11 +1194,15 @@ async def agent_ws(websocket: WebSocket,
                     pass
             ws_message = f"{parent_block}{ref_block}{message}" if (parent_block or ref_block) else message
 
-            # V7 修复：事件经 asyncio 队列桥接实时推送（原实现跑完后批量推，无实时性）
+            # T-1021: 事件发布到会话级总线（fan-out 多订阅者 + 当前 run 回放缓冲）——
+            # 刷新/断连/第二标签页可 attach 续上实时流；本连接经 attach_live 订阅。
+            # 顺序铁律：run_started → attach_live → events.subscribe（否则注册到订阅
+            # 之间的事件会丢——发布进缓冲但不进本订阅者队列）。
+            _BUS.run_started(sid, baseline_len=len(sm.load(sid) or []))
             loop = asyncio.get_running_loop()
-            queue: asyncio.Queue = asyncio.Queue()
+            sub = _BUS.attach_live(sid)
             runtime.events.subscribe(
-                lambda e: loop.call_soon_threadsafe(queue.put_nowait, e)
+                lambda e: loop.call_soon_threadsafe(_BUS.publish, sid, e)
             )
 
             # T-402: 登记运行时供 cancel 端点查找
@@ -1099,10 +1216,10 @@ async def agent_ws(websocket: WebSocket,
                 heartbeat_tick = 0
                 ws_broken = False  # K-xxx: WS 断连后不再取消 run——继续执行并落盘
                 while True:
-                    if run_task.done() and queue.empty():
+                    if run_task.done() and sub.queue.empty():
                         break
                     try:
-                        event = await asyncio.wait_for(queue.get(), timeout=0.2)
+                        event = await asyncio.wait_for(sub.queue.get(), timeout=0.2)
                         if not ws_broken:
                             try:
                                 await websocket.send_json(event)
@@ -1128,21 +1245,31 @@ async def agent_ws(websocket: WebSocket,
                         # 事件丢弃（接收方已不存在），仅排空 queue 等 run 结束。
                         ws_broken = True
                         continue
-                messages = await run_task  # 运行异常在此抛出，进外层 except
+                messages = None
+                try:
+                    messages = await run_task  # 运行异常在此抛出，进外层 except
+                except Exception as e:
+                    # T-1021: 异常也广播到总线——attach 中的连接收到 error 后退出订阅循环
+                    _BUS.publish(sid, {"type": "error", "message": str(e), "session_id": sid})
+                    raise
             finally:
                 _ACTIVE_RUNS.pop(sid, None)
                 _ACTIVE_RUNTIMES.pop(sid, None)
 
             # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送。
+            # T-1021: done 广播到总线（attach 中的连接经订阅队列收到，含 messages/stats
+            # 供前端全量对齐）；本连接直发一份（事件循环已退出，不经订阅队列）。
             # K-xxx: WS 已断（detach 完成）时发送失败是预期——静默跳过，消息已落盘，恢复会话可见
+            done_event = {
+                "type": "done",
+                "session_id": sid,
+                "messages": messages,
+                "stats": llm.get_stats(),
+                "title": "",
+            }
+            _BUS.publish(sid, done_event)
             try:
-                await websocket.send_json({
-                    "type": "done",
-                    "session_id": sid,
-                    "messages": messages,
-                    "stats": llm.get_stats(),
-                    "title": "",
-                })
+                await websocket.send_json(done_event)
             except Exception:
                 pass
 
