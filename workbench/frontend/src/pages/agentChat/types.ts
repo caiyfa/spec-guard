@@ -80,8 +80,6 @@ export interface DocWriteItem {
   findings: { level: string; rule: string; message: string }[];  // 校验失败原因（与 verdict 同源，Agent 据此修复）
   hunks: DocHunk[];
   writes: number;           // 同文件累计更新次数
-  version_no?: number;      // T-1020：活动流水最新版号（DB 增强，旧会话无）
-  versions?: number;        // T-1020：活动流累计版本数
 }
 
 export interface FileTab {

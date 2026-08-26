@@ -40,29 +40,6 @@ export interface DraftConflictResult {
   file_missing?: boolean;
 }
 
-/** T-1020：草稿活动摘要（product_activity 流水，面板跨会话接管数据源） */
-export interface DraftActivityItem {
-  filename: string;
-  action: string;        // create / patch / overwrite / undo / promote / reset_delete
-  session_id: string;    // 最近一次写入的来源会话（空 = 非 agent 路径）
-  version_no: number;    // 最新版号
-  versions: number;      // 累计版本数
-  size: number;
-  updated_at: string;
-}
-
-/** T-1020：版本链单行（正文只带摘录） */
-export interface DraftVersionItem {
-  version_no: number;
-  action: string;
-  session_id: string;
-  emp_no: string;
-  size: number;
-  sha: string;
-  excerpt: string;
-  created_at: string;
-}
-
 export const draftsApi = {
   list: () => request<{ drafts: DraftItem[] }>('/drafts'),
   modules: () => request<{ modules: string[] }>('/drafts/modules'),
@@ -74,10 +51,6 @@ export const draftsApi = {
       body: JSON.stringify({ content }),
     }),
   suggestDeps: () => request<DepSuggestResult>('/drafts/suggest-deps'),
-  // T-1020：草稿活动摘要（来源会话/版本链——跨会话接管展示）
-  activity: () => request<{ activity: DraftActivityItem[] }>('/drafts/activity'),
-  versions: (filename: string) =>
-    request<{ versions: DraftVersionItem[] }>(`/drafts/${encodeURIComponent(filename)}/versions`),
   addDep: (filename: string, depId: string, mode = 'shared') =>
     request<{ ok: boolean; consumer: string; dep_id: string }>(`/drafts/${encodeURIComponent(filename)}/deps`, {
       method: 'POST',

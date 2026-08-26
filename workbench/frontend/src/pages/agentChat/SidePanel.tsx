@@ -182,7 +182,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
             onViewFile={(p) => onViewFile(p)} defaultOpen />
         )}
         {activeTab === 'drafts' && (
-          <DraftArtifactsPanel draftFiles={draftFiles} onViewFile={onViewFile} onError={onError} sessionId={sessionId} />
+          <DraftArtifactsPanel draftFiles={draftFiles} onViewFile={onViewFile} onError={onError} />
         )}
         {activeTab === 'writing' && (
           <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onAskAgentBatch={onAskAgentBatch} onRefresh={onRefreshWritingFeed} />

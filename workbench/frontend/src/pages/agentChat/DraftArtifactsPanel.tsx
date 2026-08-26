@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { draftsApi } from '../../api';
-import type { DraftActivityItem, DraftItem, TrialRunResult, ValidateReport } from '../../api';
+import type { DraftItem, TrialRunResult, ValidateReport } from '../../api';
 import { CopyButton } from './MessageWithToolbar';
 import { buildTrialErrorText } from '../../utils/trialError';
 
 // ── 草稿产物区（K-xxx：草稿评审融合进 Agent 对话——写入草稿后直接在右侧校验/试跑/入库） ──
-// T-1020：DB 化跨会话接管——渲染全量草稿（draftsApi.list）而非仅本会话写入，
-// 本会话产物前置高亮，其他会话/手工草稿标注来源会话与版本链
 interface DraftCardState {
   validate?: ValidateReport;
   validating?: boolean;
@@ -19,11 +17,10 @@ interface DraftCardState {
   discarded?: boolean;
 }
 
-export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId }: {
+export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   draftFiles: string[];                          // 本次会话 Agent 写入的草稿文件名（write_draft 检测）
   onViewFile: (path: string, kind?: 'file' | 'draft') => void;
   onError: (msg: string) => void;
-  sessionId: string;                             // T-1020：当前会话（标注「本会话」）
 }) {
   const navigate = useNavigate();
   const [metaMap, setMetaMap] = useState<Record<string, DraftItem>>({});
@@ -44,8 +41,6 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId
   const [dlgError, setDlgError] = useState('');
   // 列表加载失败（如 menu-drafts 未授权 403）——诚实呈现错误态，不误判"草稿已删除"
   const [loadError, setLoadError] = useState('');
-  // T-1020：活动摘要（来源会话/版本链——DB 化跨会话接管数据源）
-  const [actMap, setActMap] = useState<Record<string, DraftActivityItem>>({});
 
   const refresh = useCallback(() => {
     draftsApi.list().then(r => {
@@ -55,12 +50,6 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId
       setLoadError('');
     }).catch((e: any) => setLoadError(e?.message || '草稿列表加载失败'));
     draftsApi.modules().then(r => setModules(r.modules || [])).catch(() => {});
-    // T-1020：活动摘要（旧库无表/未授权时静默退化——无版本信息不影响主列表）
-    draftsApi.activity().then(r => {
-      const m: Record<string, DraftActivityItem> = {};
-      for (const a of r.activity || []) m[a.filename] = a;
-      setActMap(m);
-    }).catch(() => {});
     // K-xxx：依赖建议计数（按 consumer 场景 ID 聚合）
     draftsApi.suggestDeps().then(r => {
       const c: Record<string, number> = {};
@@ -181,11 +170,6 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId
 
   const busyAll = promoting;
 
-  // T-1020：渲染全量草稿——本会话写入的在前（写入顺序），其余（跨会话/手工）
-  // 按列表序在后；来源会话与版本链从活动流水标注（跨会话接管）
-  const sessionSet = new Set(draftFiles);
-  const allFiles = [...draftFiles, ...Object.keys(metaMap).filter(f => !sessionSet.has(f))];
-
   return (
     <div className="px-2 py-2 space-y-2">
       <div className="px-1 text-xs font-medium text-gray-300">📝 草稿产物（Agent 会话内评审）</div>
@@ -195,17 +179,14 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId
           <button onClick={refresh} className="px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-900/60">重试</button>
         </div>
       )}
-      {allFiles.length === 0 && !loadError && (
+      {draftFiles.length === 0 && !loadError && (
         <div className="text-[11px] text-gray-600 text-center py-8 leading-relaxed">
-          草稿区为空。<br />Agent 写入后自动出现在这里，<br />可直接查看 / 校验 / 试跑 / 入库
+          Agent 尚未写入草稿。<br />写入后自动出现在这里，<br />可直接查看 / 校验 / 试跑 / 入库
         </div>
       )}
-      {allFiles.map(file => {
+      {draftFiles.map(file => {
         const meta = metaMap[file];
         const st = state[file] || {};
-        const act = actMap[file];
-        const mine = sessionSet.has(file);   // 本会话写入
-        const fromOther = !!act && !!act.session_id && act.session_id !== sessionId;
         if (st.discarded) return null;
         // 去向判定：① 本会话已入库 → ② 刷新后无本地状态，conflict 预检命中库内 = 已入库 → ③ 未命中 = 已删除
         const libHit = st.promotedTo
@@ -221,21 +202,6 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId
           <div key={file} className="rounded-lg border border-border bg-surface-2/70 p-2">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-mono text-gray-200 truncate flex-1" title={file}>{file}</span>
-              {mine && (
-                <span className="text-[9px] px-1 py-0.5 rounded bg-info/20 text-info flex-shrink-0"
-                  title="本会话写入的草稿">本会话</span>
-              )}
-              {fromOther && !mine && (
-                <span className="text-[9px] px-1 py-0.5 rounded bg-surface-3 text-gray-400 flex-shrink-0"
-                  title={`其他会话写入（${act!.session_id}）——可跨会话接管评审，查看走卡片「查看」按钮`}>
-                  外会话</span>
-              )}
-              {act && act.versions > 1 && (
-                <span className="text-[9px] text-gray-500 flex-shrink-0"
-                  title={`版本链：第 ${act.version_no} 版 / 共 ${act.versions} 次写入（最近动作 ${act.action}）`}>
-                  v{act.version_no}/{act.versions}
-                </span>
-              )}
               {meta?.stale && (
                 <span className="text-[9px] text-yellow-400 flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
               )}
@@ -245,11 +211,6 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError, sessionId
                 </span>
               )}
             </div>
-            {fromOther && !mine && act?.updated_at && (
-              <div className="text-[9px] text-gray-600" title={`来源会话 ${act.session_id}`}>
-                外会话产物 · {act.updated_at.slice(0, 16).replace('T', ' ')} · 可直接接管校验/试跑/入库
-              </div>
-            )}
             <div className="text-[10px] truncate" title={meta?.title || libHit?.path || ''}>
               {libHit ? (
                 <span className="text-green-400/90">✅ 已在场景库 · {libHit.scenarioId} · {libHit.path}</span>
