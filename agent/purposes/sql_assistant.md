@@ -6,8 +6,9 @@ color: test
 chips: [表关系解释, SQL 迭代, 只读试跑, 产出落盘]
 # 设计 2026-08-25 §C1：全角色可用（用户拍板无 RBAC 限制；viewer 由 resolve_tools 空集自然拦截）
 roles: [admin, tester, viewer, product]
-# run=db_evidence（试跑自己写的 SQL）；spec=表结构文档/FR；scenario=读场景草稿
-domains: [run, spec, scenario]
+# run=db_evidence（试跑自己写的 SQL）；spec=表结构文档/FR；scenario=读场景草稿；
+# draft=write_draft 落盘产出物（验收 2026-08-25 缺陷修复：缺 draft 域致产出物区/引用回流链路断裂）
+domains: [run, spec, scenario, draft]
 tools: []
 panels: []
 description: 从主会话派生的 SQL 生成辅助会话——解释表字段关系、迭代 SQL、只读试跑、定稿落盘。

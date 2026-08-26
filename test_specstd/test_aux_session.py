@@ -63,6 +63,15 @@ def test_set_meta_fields_roundtrip(sm):
 def test_set_meta_fields_missing_session(sm):
     assert sm.set_meta_fields("nonexistent_sid", kind="aux") is False
 
+
+def test_sql_assistant_purpose_has_draft_domain():
+    """验收缺陷修复（2026-08-25 主库验收发现）：sql_assistant 白名单必须含 draft 域，
+    否则 write_draft 落盘不可用（产出物区/引用回流链路断裂）。"""
+    from agent.purpose_loader import load_purpose
+    p = load_purpose("sql_assistant")
+    assert p is not None
+    assert "draft" in p.domains
+
 # ══════════════════════════════════════════════════════════
 # spawn 派生 API（设计 2026-08-25 §B3）——TestClient 端到端，SG_AUX_TEST_TMP 隔离。
 # 适配说明：DB_PATH/SESSIONS_ROOT 均为模块常量（不读环境变量），隔离经
