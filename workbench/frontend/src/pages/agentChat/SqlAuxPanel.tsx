@@ -8,8 +8,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentApi } from '../../api';
 import { session } from '../../api/core';
 import { SqlResultTable, parseDbEvidenceResult } from '../../components/SqlResultTable';
+import { MarkdownText } from './MarkdownText';
 
 interface AuxMessage { role: string; content: string; tool_calls?: any[] }
+
+/** 快照注入块（<parent_context>… 与 [parent_context]… 行）是 LLM 上下文，UI 不显示（§B4）。 */
+export function stripParentContext(text: string): string {
+  return (text || '')
+    .replace(/<parent_context>[\s\S]*?<\/parent_context>\s*/g, '')
+    .replace(/\[parent_context\][^\n]*\n?/g, '');
+}
 
 export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
   mainSessionId: string;
@@ -24,6 +32,12 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
   const wsRef = useRef<WebSocket | null>(null);
   const sidRef = useRef('');
   const sendRef = useRef<(t: string) => void>(() => {});
+  const scrollRef = useRef<HTMLDivElement>(null);  // 滚动跟随锚点
+
+  // 消息/加载态变化时滚动到底部（与主会话 AgentChat 同语义——跟随最新内容位置）
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, loading]);
 
   // 产出物：write_draft 足迹收集（与主会话 sessionDrafts 同语义）+ content 缓存（Task 15 跳 DB 用）
   const artifacts = (() => {
@@ -138,8 +152,17 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
         )}
         {messages.map((m, i) => (
           <div key={i}>
-            {m.role === 'user' && <div className="bg-info/10 rounded p-1.5 text-gray-200 whitespace-pre-wrap">{m.content}</div>}
-            {m.role === 'assistant' && <div className="text-gray-300 whitespace-pre-wrap pl-1">{m.content}</div>}
+            {m.role === 'user' && (
+              <div className="bg-info/10 rounded p-1.5 text-gray-200 whitespace-pre-wrap">
+                {stripParentContext(m.content)}
+              </div>
+            )}
+            {m.role === 'assistant' && m.content && (
+              // 与主会话同渲染通道（react-markdown+remark-gfm 全功能：表格/标题/代码块）
+              <div className="pl-1 [&_p]:my-1 [&_p]:leading-6 [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
+                <MarkdownText content={m.content} />
+              </div>
+            )}
             {m.role === 'tool' && (() => {
               const dbData = parseDbEvidenceResult(m.content);
               return dbData
@@ -149,6 +172,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
           </div>
         ))}
         {loading && <div className="text-gray-500 animate-pulse">SQL 助手思考中…</div>}
+        <div ref={scrollRef} />
       </div>
 
       {artifacts.length > 0 && (
