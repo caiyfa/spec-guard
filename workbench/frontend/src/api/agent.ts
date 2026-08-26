@@ -18,8 +18,9 @@ export const agentApi = {
   // T-010 扩展：批量归档/恢复（只处理本人会话）
   batchArchive: (ids: string[], archived: boolean, workspace = '') =>
     request<{ ok: boolean; processed: number; skipped: string[]; archived: boolean }>(`/agent/sessions/batch-archive${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { method: 'POST', body: JSON.stringify({ session_ids: ids, archived }) }),
+  // T-1021: run_in_progress/run_baseline_len 供前端 attach 续传（截断基线去重 + 续上实时流）
   getSession: (id: string, workspace = '') =>
-    request<{ session_id: string; messages: any[]; reading_feed?: any[]; writing_feed?: any[] }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+    request<{ session_id: string; messages: any[]; reading_feed?: any[]; writing_feed?: any[]; run_in_progress?: boolean; run_baseline_len?: number }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>
     request<any>(`/agent/sessions/${id}/export${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   // T-402: 取消会话当前运行（真打断）
