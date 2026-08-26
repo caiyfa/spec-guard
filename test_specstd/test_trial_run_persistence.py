@@ -171,3 +171,27 @@ class TestTrialRunPersistence:
 
         executions = (reports_root / "executions" / "index.jsonl").read_text(encoding="utf-8")
         assert result["run_id"] in executions
+
+    def test_report_shared_readable_under_emp_context(self, workspace, monkeypatch):
+        """T-1016 回归：emp 上下文下试跑报告必须落共享区 .specguard/reports/。
+
+        原 bug（2026-08-26 HI-PERM-001 三连败事故的隐形推手）：run_dir 用
+        specguard_dir(workspace_root=ws.root)（无 force_shared），emp 上下文下落到
+        私有区 {emp}/reports/；而 attribution(action=report/log/case) 与
+        failures/executions 索引统一经 reports_dir() 读共享区 → 读写错位，
+        Agent 排障工具链对自己的试跑完全失明（"运行报告不存在"）。
+        """
+        from specstd.workspace import reports_dir
+        tok = wsm.set_context_emp_no("E10001")
+        try:
+            result = self._run(workspace, monkeypatch)
+        finally:
+            wsm.reset_context_emp_no(tok)
+        shared = reports_dir()
+        run_dir = Path(result["report_dir"])
+        assert run_dir.parent == shared, (
+            f"试跑报告应落共享区 {shared}，实际落在 {run_dir.parent}")
+        # 不停留在路径相等——以 attribution 读者视角实证可读
+        from mcp_server.tools.attribution import _handle_read_report
+        out = _handle_read_report({"run_id": result["run_id"]})
+        assert "运行报告不存在" not in out[0].text

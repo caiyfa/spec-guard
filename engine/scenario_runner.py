@@ -649,6 +649,23 @@ def _fn_namespace():
     return SimpleNamespace(**{k.split(".", 1)[1]: v for k, v in _FNS.items()})
 
 
+def _ns_hint(exc, ns):
+    """python 脚本异常的 ns 导航提示（T-1018）：仅对 NameError/KeyError 附加。
+
+    NameError = 把上游 save 变量当脚本全局名（或在脚本里写了 {{...}} 模板——
+    script 不渲染插值）；KeyError = ns 键名写错。两者都附「ns 当前可用键 +
+    正确访问范式」，让编写者一轮自愈而非连猜（2026-08-26 HI-PERM-001 三连败实证）。
+    """
+    if not isinstance(exc, (NameError, KeyError)):
+        return ""
+    keys = sorted(str(k) for k in ns)
+    if len(keys) > 50:
+        keys = keys[:50] + ["..."]
+    return (f"；ns 当前可用键: {keys}。提示：script 不渲染 {{{{}}}} 插值，"
+            f"上游 save 变量须经 ns['名'] 访问（call 产出为 dict："
+            f"ns['名']['status']/['json']/['headers']），不是脚本全局变量")
+
+
 def step_python(body, rctx, ns, record):
     """Python 脚本原语（格式 2.1）：在引擎上下文执行脚本，处理复杂逻辑。
 
@@ -715,7 +732,8 @@ def step_python(body, rctx, ns, record):
     except Exception as e:
         # ENG-T01：脚本异常属场景编写错误，归 CAT_SCENARIO（而非 CAT_ENV）
         raise ScenarioScriptError(
-            f"python 步骤脚本异常（场景编写错误）: {type(e).__name__}: {e}") from e
+            f"python 步骤脚本异常（场景编写错误）: {type(e).__name__}: {e}"
+            + _ns_hint(e, ns)) from e
     elapsed = int((time.time() - started) * 1000)
 
     printed = buf.getvalue().strip()
@@ -924,7 +942,8 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
             except Exception as e:
                 # ENG-T01：python 断言脚本非断言类异常属场景编写错误，原地落 trace，不中断
                 trace.passed = False
-                trace.message = f"python 断言脚本异常（场景编写错误）: {type(e).__name__}: {e}"
+                trace.message = (f"python 断言脚本异常（场景编写错误）: {type(e).__name__}: {e}"
+                                 + _ns_hint(e, ns))
                 if not first_fail_category:
                     first_fail_category = CAT_SCENARIO
             record.assertions.append(trace)

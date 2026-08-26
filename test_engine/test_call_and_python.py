@@ -169,3 +169,39 @@ def test_python_step_missing_script_rejected():
     record = ExecutionRecord(scenario_id="T")
     with pytest.raises(ValueError, match="缺少 script"):
         step_python({}, _rctx(None), {}, record)
+
+
+# ══════════════════════════════════════════════════════════
+# T-1018：脚本异常消息增强（NameError/KeyError 附 ns 可用键与访问范式）
+# ══════════════════════════════════════════════════════════
+
+def test_python_step_name_error_lists_ns_keys():
+    """把 save 变量当脚本全局名（NameError）→ 错误消息附 ns 可用键清单。
+
+    2026-08-26 HI-PERM-001 三连败实证：Agent 在脚本里写裸 roles_resp（或 {{}} 模板）
+    报 NameError 后只能靠猜；消息直接给出可用键与正确范式可一轮自愈。
+    """
+    record = ExecutionRecord(scenario_id="T")
+    ns = {"roles_resp": {"status": 200, "json": {}, "headers": {}}}
+    with pytest.raises(ScenarioScriptError) as ei:
+        step_python({"script": "data = roles_resp['json']"}, _rctx(None), ns, record)
+    msg = str(ei.value)
+    assert "ns 当前可用键" in msg and "roles_resp" in msg
+    assert "ns['名']" in msg
+
+
+def test_python_step_key_error_lists_ns_keys():
+    """ns 键名写错（KeyError）→ 同样附可用键清单。"""
+    record = ExecutionRecord(scenario_id="T")
+    with pytest.raises(ScenarioScriptError) as ei:
+        step_python({"script": "x = ns['roels_resp']"}, _rctx(None),
+                    {"roles_resp": 1}, record)
+    assert "ns 当前可用键" in str(ei.value) and "roles_resp" in str(ei.value)
+
+
+def test_python_step_other_error_no_ns_hint():
+    """非 NameError/KeyError 不附 ns 清单（保持原消息形态，防噪音）。"""
+    record = ExecutionRecord(scenario_id="T")
+    with pytest.raises(ScenarioScriptError) as ei:
+        step_python({"script": "x = 1 / 0"}, _rctx(None), {"k": 1}, record)
+    assert "ns 当前可用键" not in str(ei.value)

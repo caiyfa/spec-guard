@@ -10,7 +10,7 @@ ENG-T03：request(retry=...) 支持幂等重试（5xx/网络异常，固定退�
 retry/idempotent），poll 步骤固定不重试（轮询本身就是重试语义）。
 """
 
-import json
+import json as _json
 import re
 import time
 
@@ -45,7 +45,7 @@ def _trace_id_of(resp):
 def _excerpt(obj) -> str:
     """T-316：日志摘要（与报告 body_excerpt 同源 truncate）——数组方括号转圆括号。"""
     try:
-        return json.dumps(truncate(obj), ensure_ascii=False).replace("[", "(").replace("]", ")")
+        return _json.dumps(truncate(obj), ensure_ascii=False).replace("[", "(").replace("]", ")")
     except Exception:
         return str(obj)[:200]
 
@@ -68,8 +68,12 @@ class HttpClient:
     # ── 请求 ─────────────────────────────────────────────
     def request(self, method, path, params=None, json_body=None, files=None,
                 data=None, headers=None, cookies=None, raise_on_error=True, timeout=30,
-                retry=None):
+                retry=None, json=None):
         """发起请求。返回 requests.Response（调用方自行取 status_code/json）
+
+        json：json_body 的 requests 风格别名（T-1019）——python 步骤里手写
+        http(account).request(..., json=payload) 与 requests 肌肉记忆对齐；
+        与 json_body 二选一，同传报 ValueError（防双写歧义）。
 
         headers/cookies：Apifox 风格自定义头与 Cookie（KV dict，已在步骤层完成插值）。
         合并顺序：Authorization 先置，自定义 headers 后合并——允许负向测试显式覆盖认证头。
@@ -81,6 +85,10 @@ class HttpClient:
         - 401 刷新优先于 retry（不消耗 times）；每次重试打 WARN 日志（诚实语义：
           抖动必须留痕，排障时需要知道发生过重试）。
         """
+        if json is not None:
+            if json_body is not None:
+                raise ValueError("json 与 json_body 二选一（同义别名，勿同传）")
+            json_body = json
         _t0 = time.time()
         # T-316：调用前信息打印——账号/method/path/params/请求体/自定义头（不含 Authorization）。
         # 此前请求参数只在报告，执行日志看不到「发了什么」（EX-a4360d1f）。
@@ -141,7 +149,7 @@ class HttpClient:
         try:
             body = self._safe_json(resp)
             if body is not None:
-                excerpt = json.dumps(truncate(body), ensure_ascii=False)
+                excerpt = _json.dumps(truncate(body), ensure_ascii=False)
                 excerpt = excerpt.replace("[", "(").replace("]", ")")
         except Exception:
             pass
@@ -155,8 +163,8 @@ class HttpClient:
     def get(self, path, params=None, **kw):
         return self.request("GET", path, params=params, **kw)
 
-    def post(self, path, json_body=None, **kw):
-        return self.request("POST", path, json_body=json_body, **kw)
+    def post(self, path, json_body=None, json=None, **kw):
+        return self.request("POST", path, json_body=json_body, json=json, **kw)
 
     # ── 内部 ─────────────────────────────────────────────
     @staticmethod

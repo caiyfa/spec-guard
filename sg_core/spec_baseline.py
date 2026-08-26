@@ -32,7 +32,11 @@ _BASELINE_NAME = "signature_baseline.json"
 
 
 def _baseline_path(workspace_root: Path) -> Path:
-    return specguard_dir(workspace_root) / _BASELINE_NAME
+    # T-1016 波及面：签名基线是工作区级共享资产，必须 force_shared——否则
+    # emp 上下文（Web 登录态恒有）解析到 {emp}/ 私有区，每用户各自建基线，
+    # detect 首次自动初始化即报「无变更」，spec 变更检测对 Web 用户静默失明
+    # （与 T-014 reports_dir / T-1011 specflow_dir 同根因）
+    return specguard_dir(workspace_root, force_shared=True) / _BASELINE_NAME
 
 
 def _resolve_root(workspace_root: Optional[Path]) -> Optional[Path]:

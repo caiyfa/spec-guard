@@ -248,3 +248,39 @@ def test_retry_times_zero_suppresses_get_default():
     rec = run_scenario(_call_scenario("T-R7", {"retry": {"times": 0}}), rctx)
     assert rec.verdict == "FAIL"
     assert len(client.session.calls) == 1
+
+
+# ══════════════════════════════════════════════════════════
+# T-1019：HttpClient 兼容 requests 风格 json= 别名（与 json_body 同义）
+# ══════════════════════════════════════════════════════════
+
+import pytest  # noqa: E402
+
+
+def test_request_accepts_json_alias():
+    """request(json=payload) 与 requests 肌肉记忆对齐（= json_body 别名）。
+
+    2026-08-26 HI-PERM-001 第三次失败实证：Agent 在 python 步骤写 json= 报
+    TypeError——引擎内部本就用 requests 的 json= 透传，开放别名零语义风险。
+    """
+    client = _real_client([200])
+    resp = client.request("POST", "/api/x", json={"a": 1})
+    assert resp.status_code == 200
+    kw = client.session.calls[0][2]
+    assert kw["json"] == {"a": 1}, "json= 别名须透传给 requests.Session 的 json 参数"
+    assert kw["headers"]["Content-Type"] == "application/json"
+
+
+def test_post_accepts_json_alias():
+    """post(path, json=payload) 同样可用。"""
+    client = _real_client([200])
+    client.post("/api/x", json={"b": 2})
+    assert client.session.calls[0][2]["json"] == {"b": 2}
+
+
+def test_json_and_json_body_both_rejected():
+    """json 与 json_body 同传 → ValueError（防双写歧义），请求不发出。"""
+    client = _real_client([200])
+    with pytest.raises(ValueError, match="二选一"):
+        client.request("POST", "/api/x", json_body={"a": 1}, json={"a": 1})
+    assert len(client.session.calls) == 0

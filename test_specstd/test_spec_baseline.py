@@ -136,3 +136,20 @@ def test_settings_toggle(db):
     assert settings_store.audit_auto_update_baseline() is True
     settings_store.set_bool(settings_store.KEY_AUDIT_AUTO_UPDATE_BASELINE, False)
     assert settings_store.audit_auto_update_baseline() is False
+
+
+def test_baseline_path_shared_under_emp_context(ws):
+    """T-1016 波及面回归：emp 上下文下签名基线必须落共享区（工作区级资产）。
+
+    原 bug：_baseline_path 用 specguard_dir(workspace_root)（无 force_shared），
+    Web 登录态（auth 每请求 set_context_emp_no）下解析到 {emp}/ 私有区——
+    每用户各自建基线，detect 首次自动初始化即返回「无变更」，
+    spec 变更检测对 Web 用户静默失明（与 T-014 reports_dir/T-1011 specflow_dir 同根因）。
+    """
+    import specstd.workspace as wsm
+    tok = wsm.set_context_emp_no("E10001")
+    try:
+        bp = spec_baseline._baseline_path(ws)
+    finally:
+        wsm.reset_context_emp_no(tok)
+    assert bp == ws / ".specguard" / "signature_baseline.json"

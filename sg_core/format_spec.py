@@ -28,9 +28,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.14.0"
-SPEC_UPDATED = "2026-08-21"
+SPEC_VERSION = "2.15.0"
+SPEC_UPDATED = "2026-08-26"
 SPEC_CHANGELOG = [
+    ("2.15.0", "2026-08-26", "python/http 文档补全与 json= 别名（T-1017/T-1018/T-1019，HI-PERM-001 三连败复盘）：§1.13 明示 script 不渲染 {{}} 插值、save 变量非脚本全局须 ns['名'] 访问、五类 save 产出在 ns 中的结构表（call/poll={status,json,headers} 无 text 键 / db_query=裸 list / tool=工具自定 / python=output 值）、新增 §1.13.1 http(account) 完整签名与常见错误对照表；引擎侧：python 步骤/断言脚本 NameError/KeyError 消息附 ns 可用键清单（T-1018），HttpClient.request/post 兼容 json= 别名（T-1019，与 json_body 同义二选一）；顺带修正断言语义归类 CAT_SCENARIO（ENG-T01 起即如此，原文档 CAT_ENV 滞后）。YAML 语法层零变更，存量场景无需修改"),
     ("2.14.0", "2026-08-21", "测试类型学（T-981）：doc 层新增选填字段 `dimensions` 测试维度受控词表（happy-path/negative/boundary/permission/security/state/isolation/regression 八维，标注 1~3 个）+ 维度↔断言模式映射（T10 测试设计自检 WARN，词表外值 ERROR）+ 覆盖面板按维度聚合。doc 层字段不进契约指纹，存量 YAML 语法零变更（补标注后享受维度聚合与自检）"),
     ("2.13.0", "2026-08-21", "tool 限定名与动态系统包（T-973）：tool 信封 use 支持多系统同名消歧的限定写法 `system:name`（裸名唯一命中时行为不变）；tool 目录按系统命名空间组织（本表「归属系统」列，动态系统包注册的工具自动可见）；系统包 manifest 契约（config/template/code 三级——模板断言 assertions.yaml 经 SELECT-only 确定性校验注册为 oracle，代码型 extensions.py 评审闸后热加载）。语法层兼容扩展，存量 YAML 无需修改"),
     ("2.12.0", "2026-08-21", "引擎去领域化（T-972）：call/poll 的 service 缺省值由「内置 tdm」改为「env 配置 default_service 声明的默认服务名」（未声明且场景未写 service 时 SKIP——环境配置缺口）；{{env.resource_code}} 不再内置 TDM 兜底资源码（env 必配 default_resource_code，缺失时预检预警）；random 词库由系统适配包注入（YAML 语法与 tdm 可用池名不变）。语法层零变更，YAML 无需修改"),
@@ -565,6 +566,21 @@ verify:
       assert rows[0]['total_score'] is None, "首行分数应为 NULL"
 ```
 
+**插值边界（2.15.0 明示）**：`script`/`file` 的脚本内容**不做 `{{...}}` 模板插值**（脚本即代码，花括号是 Python 语法，渲染会破坏脚本）。上游变量一律经 `ns['名']` 读取——脚本里写 `{{xxx}}` 或裸名 `xxx` 都会报 `NameError`（save 变量不是脚本全局变量）。仅 `file:` 的路径本身支持插值。
+
+**save 变量在 ns 中的结构**（与 §1.6 步骤语法表的「产出变量」列同源）：
+
+| 上游步骤 | `ns['名']` 的结构 | python 脚本访问示例 |
+|----------|------------------|---------------------|
+| `call`（save: resp） | dict：`{"status": int, "json": 已反序列化响应体, "headers": dict}` | `ns['resp']['json']['data']` |
+| `poll`（save: result） | 同 call（末轮响应） | `ns['result']['json']` |
+| `db_query`（save: rows） | 裸 `list[dict]` | `ns['rows'][0]['id']` |
+| `tool`（save: x） | 由工具自身产出决定（见第八章 tool 目录） | 视工具而定 |
+| `python`（save: y） | 上游脚本 `output` 变量的值 | 任意类型 |
+
+- ns 键是**平铺**的：不存在 `ns['resp.json']` 这种点号键（点号路径只在 `{{...}}` 模板与 json 断言里有效）；call 产出**没有 `text` 键**。
+- `json` 键的类型随响应体而定（dict/list/str/None 皆可能）——错误响应的 `data` 字段常是 str（如 404 包装体 `{"status":"404","data":"NOT_FOUND"}`），**钻取前先判 `ns['resp']['status']`**。
+
 **浅拷贝注意事项（2.10.0）**：场景命名空间对共享变量是**浅拷贝**——`ns` 中来自上游/其他场景的 dict/list 是共享引用，脚本内**原地修改**（`append`/`pop`/改键）会泄漏污染其他场景。需要修改时先拷贝：`rows = list(ns['rows'])` / `d = dict(ns['d'])`。（引擎不做深拷贝是有意设计：`export_ns` 的传递引用绑定依赖共享引用实现"与实例一致的世界观"。）
 
 **脚本可用上下文**：
@@ -575,14 +591,50 @@ verify:
 | `save(k, v)` | 等价 `ns[k] = v` |
 | `output` | 约定产出变量（step 声明 `save` 时被取走） |
 | `rctx` / `record` | 运行上下文 / 执行记录 |
-| `http(account)` | 取 HTTP 客户端（含 token，可发任意请求） |
+| `http(account)` | 取 HTTP 客户端（含 token，自动 Bearer；401 自动刷新重试一次）——完整签名见 §1.13.1 |
 | `db` | 只读 DB 连接（不可用时为 None） |
 | `fn` | 内置函数：`fn.timestamp()` / `fn.date()` / `fn.uuid_short()` |
 | `json` / `re` / `time` / `datetime` / `uuid` | 预导入模块 |
 | `SkipScenario` | 主动跳过场景（`raise SkipScenario('原因', category='pool_empty')`） |
 | `print` | 输出捕获进 StepTrace |
 
-**断言语义**：脚本抛 `AssertionError` → 断言失败（CAT_ASSERT）；其他异常 → CAT_ENV。
+**断言语义**：脚本抛 `AssertionError` → 断言失败（CAT_ASSERT）；其他异常 → 场景编写错误（CAT_SCENARIO，ENG-T01；2.15.0 起 NameError/KeyError 消息附 ns 可用键清单）。
+
+#### 1.13.1 http(account) 客户端用法（2.15.0 补全）
+
+`http(account)` 返回带身份的 HTTP 客户端（`account` 为账号别名，同 call 步骤 `as:`；别名未配置 → SkipScenario）。`path` 写服务内相对路径（如 `/api/xxx`，自动拼 env 的默认服务 base），也接受 `http(s)://` 绝对 URL。
+
+```python
+r = http('default').request(
+    'POST', '/api/xxx',
+    params={'k': 'v'},          # URL 查询参数（dict）
+    json_body={'a': 1},         # JSON 请求体（自动加 Content-Type: application/json）
+                                # 2.15.0 起兼容 requests 风格别名 json={'a': 1}（二选一，同传报错）
+    data=None,                  # 原始 body（str/bytes，与 json_body 不并用）
+    headers={'X-Trace': 't'},   # 自定义头（可显式覆盖 Authorization 做负向测试）
+    timeout=30,                 # 秒
+    raise_on_error=False,       # 默认 True：HTTP≥400 抛 ApiError；负向测试传 False 后自判 status_code
+)
+r.status_code   # int
+r.json()        # 反序列化响应体（非 JSON 响应会抛异常——先判 status_code）
+r.text          # 原始响应文本
+r.headers       # dict
+
+# 快捷方法
+http('default').get('/api/xxx', params={...})
+http('default').post('/api/xxx', json_body={...})   # 或 json={...}
+```
+
+5xx/网络异常默认**不**重试（重试语义归 call 步骤的 retry 声明）；脚本内需要重试时自行循环或改用 poll 步骤。
+
+**常见错误对照**（实证自 2026-08-26 三次试跑失败链）：
+
+| 报错 | 根因 | 正确写法 |
+|------|------|----------|
+| `NameError: name 'xxx' is not defined` | 把 save 变量当脚本全局名，或在脚本里写了 `{{xxx}}` | `ns['xxx']`（2.15.0 起错误消息附 ns 可用键清单） |
+| `KeyError: 'xxx'` | ns 键名写错 | 对照错误消息里的可用键清单修正 |
+| `AttributeError: 'str' object has no attribute 'get'` | 对 `json` 体内的 str 值（典型：错误响应的 `data`）调 `.get()` | 先判 `status == 200` 再钻取 |
+| `TypeError: ... unexpected keyword argument 'json'` | 2.15.0 之前客户端只认 `json_body=` | 2.15.0 起 `json=` / `json_body=` 皆可 |
 
 ---
 

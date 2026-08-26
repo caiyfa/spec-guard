@@ -439,7 +439,7 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
     from engine.dependency_graph import DependencyGraph, CycleError
     from engine.scenario_loader import _parse_scenario
     from engine.scenario_runner import RunContext, run_single, run_teardowns
-    from specstd.workspace import get_active_workspace, specguard_dir
+    from specstd.workspace import get_active_workspace, reports_dir
 
     scenarios_root = _scenarios_root()
     if not scenarios_root.is_dir():
@@ -485,10 +485,15 @@ def _handle_run_scenario(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps(
             {"ok": False, "error": f"场景不存在: {target_id}"}, ensure_ascii=False, indent=2))]
 
-    # 运行上下文（报告落盘到工作区 .specguard/reports/）
+    # 运行上下文（报告落盘到工作区共享区 .specguard/reports/——T-1016：与
+    # attribution 工具链同一 reports_dir() 落盘面；此前用 specguard_dir() 未
+    # force_shared，emp 上下文（Web 登录态/Agent 会话恒有）下落到私有区
+    # {emp}/reports/，attribution(action=report/log/case) 读共享区完全失明，
+    # failures/executions 索引也写进私有区——2026-08-26 HI-PERM-001 三连败
+    # 事故中 Agent 排障失明的根因）
     run_id = "agent_" + datetime.now().strftime("%Y%m%d_%H%M%S")
     try:
-        run_dir = specguard_dir(workspace_root=ws.root) / "reports" / run_id if ws else None
+        run_dir = reports_dir() / run_id if ws else None
     except Exception:
         run_dir = None
     if run_dir is None:
