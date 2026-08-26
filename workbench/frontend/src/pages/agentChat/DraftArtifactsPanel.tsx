@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { draftsApi } from '../../api';
 import type { DraftItem, TrialRunResult, ValidateReport } from '../../api';
+import { TrialRunDetailModal } from '../../components/TrialRunDetailModal';
 import { CopyButton } from './MessageWithToolbar';
 import { buildTrialErrorText } from '../../utils/trialError';
 
@@ -41,6 +42,8 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   const [dlgError, setDlgError] = useState('');
   // 列表加载失败（如 menu-drafts 未授权 403）——诚实呈现错误态，不误判"草稿已删除"
   const [loadError, setLoadError] = useState('');
+  // K-xxx：试跑详情弹窗（打开时渲染 TrialRunDetailModal，读 run 报告展示完整执行过程）
+  const [detailFile, setDetailFile] = useState('');
 
   const refresh = useCallback(() => {
     draftsApi.list().then(r => {
@@ -268,6 +271,17 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                     <CopyButton text={buildTrialErrorText(file, st.trial)} />
                   )}
                 </div>
+                {/* K-xxx：查看结果——成功绿/失败红，点开读 run 报告展示完整执行过程（步骤/断言/DB 证据/日志） */}
+                {st.trial.run_id && (
+                  <button onClick={() => setDetailFile(file)}
+                    className={`mt-1 px-2 py-0.5 rounded text-[10px] border ${
+                      st.trial.ok
+                        ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
+                        : 'bg-red-900/40 text-red-400 border-red-700/50 hover:bg-red-900/60'
+                    }`}>
+                    🔍 查看结果
+                  </button>
+                )}
                 {st.trial.run_id && (
                   <div className="mt-0.5 text-[9px] opacity-75 font-mono select-all">
                     任务号 {st.trial.run_id}（发给 Agent 可排查：日志/断言差异/DB 证据）
@@ -328,6 +342,14 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
           </div>
         );
       })}
+
+      {/* 试跑执行详情弹窗（K-xxx：查看结果→ run 报告完整执行过程） */}
+      {detailFile && state[detailFile]?.trial?.run_id && (
+        <TrialRunDetailModal
+          trial={state[detailFile].trial!}
+          onClose={() => setDetailFile('')}
+        />
+      )}
 
       {/* 入库弹窗（模块选择 + 覆盖勾选 + 冲突预检提示） */}
       {dialog.open && (

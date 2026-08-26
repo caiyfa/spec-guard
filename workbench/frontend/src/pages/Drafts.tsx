@@ -10,6 +10,7 @@ import type {
   EmpRole, OracleRef, UpstreamVar, EnvVar,
 } from '../api';
 import ScenarioFormEditor from '../components/ScenarioFormEditor';
+import { TrialRunDetailModal } from '../components/TrialRunDetailModal';
 import { CopyButton } from './agentChat/MessageWithToolbar';
 import { buildTrialErrorText } from '../utils/trialError';
 
@@ -39,6 +40,8 @@ export default function Drafts() {
   const [allSuggestions, setAllSuggestions] = useState<DepSuggestion[]>([]);
   const [unresolved, setUnresolved] = useState<Record<string, string[]>>({});
   const [trialResult, setTrialResult] = useState<TrialRunResult | null>(null);
+  // K-xxx：试跑详情弹窗（查看结果 → 读 run 报告展示完整执行过程）
+  const [showTrialDetail, setShowTrialDetail] = useState(false);
   // K-046：编辑器参考数据（与 DagEditor 同一来源）
   const [empRoles, setEmpRoles] = useState<EmpRole[]>([]);
   const [oracles, setOracles] = useState<OracleRef[]>([]);
@@ -522,6 +525,17 @@ export default function Drafts() {
                     {trialResult.ok ? `✓ 试跑通过（${trialResult.env || 'sit'}）`
                       : `✗ 试跑 ${trialResult.verdict || '失败'}${trialResult.error ? `：${trialResult.error}` : ''}`}
                   </span>
+                  {/* K-xxx：查看结果——成功绿/失败红，点开读 run 报告展示完整执行过程（步骤/断言/DB 证据/日志） */}
+                  {trialResult.run_id && (
+                    <button onClick={() => setShowTrialDetail(true)}
+                      className={`px-2 py-0.5 rounded text-xs border flex-shrink-0 ${
+                        trialResult.ok
+                          ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
+                          : 'bg-red-900/40 text-red-400 border-red-700/50 hover:bg-red-900/60'
+                      }`}>
+                      🔍 查看结果
+                    </button>
+                  )}
                   {!trialResult.ok && (
                     <CopyButton text={buildTrialErrorText(selectedScenarioId || selected, trialResult)} />
                   )}
@@ -592,6 +606,11 @@ export default function Drafts() {
           </>
         )}
       </div>
+
+      {/* 试跑执行详情弹窗（K-xxx：查看结果 → run 报告完整执行过程） */}
+      {showTrialDetail && trialResult?.run_id && (
+        <TrialRunDetailModal trial={trialResult} onClose={() => setShowTrialDetail(false)} />
+      )}
     </div>
   );
 }
