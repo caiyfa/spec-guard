@@ -8,6 +8,7 @@ doc:
   given: 探针 — 同时测 3 个候选 URL
   when: 每个 URL 跑一次 GET，看哪个不报 404
   then: 打印 status_code 找出正确路径
+  dimensions: [regression]  # 探针场景无 verify 断言——源自 HI-PERM-001 三连败复盘的缺陷复现防护
 
 flow:
   - python:
