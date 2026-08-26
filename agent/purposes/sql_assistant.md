@@ -9,6 +9,9 @@ roles: [admin, tester, viewer, product]
 # run=db_evidence（试跑自己写的 SQL）；spec=表结构文档/FR；scenario=读场景草稿；
 # draft=write_draft 落盘产出物（验收 2026-08-25 缺陷修复：缺 draft 域致产出物区/引用回流链路断裂）
 domains: [run, spec, scenario, draft]
+# 2026-08-26 验收修复：spawn_only——辅助会话不进新会话选择卡片、不允许直接建会话，
+# 只能从主会话面板 spawn 派生（此前与用户工作台并列出现在用途选择卡片，语义错位）
+spawn_only: true
 tools: []
 panels: []
 description: 从主会话派生的 SQL 生成辅助会话——解释表字段关系、迭代 SQL、只读试跑、定稿落盘。

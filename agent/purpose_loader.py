@@ -42,6 +42,9 @@ class PurposeDef:
     panels: list[str] = field(default_factory=list)  # 右侧面板集
     description: str = ""              # 用途简述
     content: str = ""                  # Markdown 正文（system prompt 注入）
+    # 2026-08-26 验收修复：spawn_only=True 的用途不进新会话选择卡片、不允许直接建会话
+    # ——只能从主会话 spawn 派生（辅助会话语义，如 sql_assistant）
+    spawn_only: bool = False
 
 
 def load_purpose(purpose_id: str) -> Optional[PurposeDef]:
@@ -83,9 +86,10 @@ def list_purposes() -> list[PurposeDef]:
 
 
 def visible_purposes(roles: list) -> list[PurposeDef]:
-    """按角色集合并集过滤（v1.8）：用户角色 ∩ 用途 roles 非空即可见。"""
+    """按角色集合并集过滤（v1.8）：用户角色 ∩ 用途 roles 非空即可见。
+    spawn_only 用途恒不可见（辅助会话只从主会话 spawn 派生，不进选择卡片）。"""
     user_roles = set(r for r in (roles or []) if r)
-    return [p for p in list_purposes() if user_roles & set(p.roles)]
+    return [p for p in list_purposes() if not p.spawn_only and user_roles & set(p.roles)]
 
 
 def clear_cache():
@@ -146,4 +150,5 @@ def _parse_purpose_file(purpose_id: str, text: str) -> PurposeDef:
         panels=_str_list("panels"),
         description=str(frontmatter.get("description", "")),
         content=body,
+        spawn_only=bool(frontmatter.get("spawn_only", False)),
     )

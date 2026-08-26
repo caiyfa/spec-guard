@@ -108,18 +108,28 @@ class TestPurposeLoader:
         assert {p.id for p in list_purposes()} == {"temp_purpose"}
 
     def test_visible_purposes_union(self):
-        """角色集合并集：tester+product 双角色用户可见两卡。"""
+        """角色集合并集。2026-08-26 验收修复：spawn_only 用途（sql_assistant）不进选择
+        卡片——辅助会话只能从主会话面板 spawn 派生，不作为新会话用途出现。"""
         from agent.purpose_loader import visible_purposes, clear_cache
         clear_cache()
-        # product 角色：需求面试 + SQL 助手（§C1 全角色可用）
+        # product 角色：仅需求面试（sql_assistant spawn_only 不可见）
         p_product = {p.id for p in visible_purposes(["product"])}
-        assert p_product == {"requirement_interview", "sql_assistant"}
-        # tester+product（一人多用途）：三卡
+        assert p_product == {"requirement_interview"}
+        # tester+product（一人多用途）：两卡
         p_both = {p.id for p in visible_purposes(["tester", "product"])}
-        assert p_both == {"requirement_interview", "test_workbench", "sql_assistant"}
-        # viewer：2026-08-14 首页免权——测试工作台登录即用（产品工作台仍限 product+）；
-        # SQL 助手 §C1 全角色（viewer 由 resolve_tools 空集自然拦截工具面）
-        assert {p.id for p in visible_purposes(["viewer"])} == {"test_workbench", "sql_assistant"}
+        assert p_both == {"requirement_interview", "test_workbench"}
+        # viewer：2026-08-14 首页免权——测试工作台登录即用；sql_assistant spawn_only 不出现
+        assert {p.id for p in visible_purposes(["viewer"])} == {"test_workbench"}
+
+    def test_spawn_only_purpose_not_in_cards_but_loadable(self):
+        """spawn_only 语义：load_purpose/list_purposes 仍可见（spawn 依赖），
+        仅 visible_purposes（选择卡片面）过滤。"""
+        from agent.purpose_loader import load_purpose, list_purposes, visible_purposes, clear_cache
+        clear_cache()
+        p = load_purpose("sql_assistant")
+        assert p is not None and p.spawn_only is True
+        assert "sql_assistant" in {x.id for x in list_purposes()}
+        assert "sql_assistant" not in {x.id for x in visible_purposes(["admin", "tester", "product", "viewer"])}
 
     def test_panels_values_align_tab_registry(self):
         """T-931：panels 值对齐前端 TAB_REGISTRY 页签 id（通用页签不声明、
@@ -357,8 +367,9 @@ class TestPurposeEndpoints:
         r = client.get("/api/agent/purposes", headers=h)
         assert r.status_code == 200
         ids = {p["id"] for p in r.json()["purposes"]}
-        # 设计 §C1：sql_assistant 全角色可见（行为变更非回归）
-        assert ids == {"requirement_interview", "sql_assistant"}
+        # 设计 §C1 修正（2026-08-26 验收修复）：sql_assistant 是 spawn_only 辅助用途，
+        # 不出现在选择卡片（只能从主会话面板 spawn 派生）
+        assert ids == {"requirement_interview"}
 
     def test_purposes_multi_role_two_cards(self, client, monkeypatch):
         monkeypatch.setenv("SG_AUTH_MODE", "mock")
@@ -368,7 +379,17 @@ class TestPurposeEndpoints:
         h = self._login(client, "90024172")
         r = client.get("/api/agent/purposes", headers=h)
         ids = {p["id"] for p in r.json()["purposes"]}
-        assert ids == {"requirement_interview", "test_workbench", "sql_assistant"}
+        assert ids == {"requirement_interview", "test_workbench"}
+
+    def test_create_session_spawn_only_purpose_403(self, client, monkeypatch):
+        """spawn_only 用途不可直接建会话（只能从主会话 spawn 派生）。"""
+        monkeypatch.setenv("SG_AUTH_MODE", "mock")
+        h = self._login(client, "90024166")
+        r = client.post("/api/agent/sessions",
+                        json={"purpose": "sql_assistant", "workspace": "tdm"},
+                        headers=h)
+        assert r.status_code == 403
+        assert "spawn" in r.json()["detail"] or "派生" in r.json()["detail"]
 
     def test_list_sessions_purpose_filter(self, client, monkeypatch):
         monkeypatch.setenv("SG_AUTH_MODE", "mock")

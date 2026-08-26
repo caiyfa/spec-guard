@@ -573,6 +573,11 @@ def create_session(body: dict, user: CurrentUser = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail=f"用途不存在或不可见: {purpose}")
     if not (set(user.roles) & set(pdef.roles)):
         raise HTTPException(status_code=403, detail=f"当前角色无权限使用用途: {purpose}")
+    # 2026-08-26 验收修复：spawn_only 用途（辅助会话）不可直接建会话，只能从主会话 spawn 派生
+    if getattr(pdef, "spawn_only", False):
+        raise HTTPException(
+            status_code=403,
+            detail=f"用途 {purpose} 是辅助会话（spawn_only），请从主会话面板派生，不可直接创建")
     # L2 修复：workspace 非法（ValueError → 500）与未授权（绕过 resolve_workspace）
     # 统一前置为 4xx
     if workspace and not user.is_admin:
@@ -942,6 +947,13 @@ async def agent_ws(websocket: WebSocket,
                     await websocket.send_json({
                         "type": "error",
                         "message": f"用途不存在或无权限: {session_purpose}",
+                    })
+                    continue
+                # 2026-08-26 验收修复：spawn_only 用途拦截（与 REST create_session 同语义）
+                if getattr(pdef, "spawn_only", False):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"用途 {session_purpose} 是辅助会话（spawn_only），请从主会话面板派生",
                     })
                     continue
             else:
