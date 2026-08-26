@@ -67,11 +67,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
         role: m.role, content: m.content || '', tool_calls: m.tool_calls,
       }));
       setMessages(history);
-      const pending = sessionStorage.getItem('sg_sql_aux_send');
-      if (pending && history.length === 0) {
-        sessionStorage.removeItem('sg_sql_aux_send');
-        setTimeout(() => sendRef.current(pending), 300);
-      }
+      // pending 消费挪到 WS onopen（验收缺陷 2 修复：ws 未 open 时 send 被拒会丢消息）
     } catch { /* spawn 失败下次激活重试 */ }
   }, [mainSessionId, workspace]);
 
@@ -85,7 +81,16 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain }: {
       `${protocol}//${window.location.host}/api/agent/ws?token=${encodeURIComponent(session.getToken())}&workspace=${encodeURIComponent(workspace)}`);
     wsRef.current = ws;
     setWsState('connecting');
-    ws.onopen = () => setWsState('open');
+    ws.onopen = () => {
+      setWsState('open');
+      // DB 面板「交给 SQL 助手」中转消息：ws 就绪后消费（验收缺陷 2 修复——
+      // 原在 ensureSession 里以 history.length===0 为条件，已有历史时不发且 ws 未就绪）
+      const pending = sessionStorage.getItem('sg_sql_aux_send');
+      if (pending) {
+        sessionStorage.removeItem('sg_sql_aux_send');
+        setTimeout(() => sendRef.current(pending), 100);
+      }
+    };
     ws.onclose = () => { setWsState('closed'); wsRef.current = null; };
     ws.onmessage = (ev) => {
       const e = JSON.parse(ev.data);

@@ -54,7 +54,13 @@ export default function AgentChat() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsVersion, setSessionsVersion] = useState(0);
   // T-010: 用途选择（使命卡片）
-  const [purposes, setPurposes] = useState<{ id: string; title: string; icon: string; color: string; chips: string[]; description: string; panels: string[] }[]>([]);
+  // 验收缺陷 2 复验修复：初始值从 _store 恢复（SPA 跳回时 purpose 页签立即可装配）；
+  // setPurposes 包装同步 _store，跨导航不丢。
+  const [purposes, setPurposesState] = useState<{ id: string; title: string; icon: string; color: string; chips: string[]; description: string; panels: string[] }[]>(_store.purposes || []);
+  const setPurposes = useCallback((list: { id: string; title: string; icon: string; color: string; chips: string[]; description: string; panels: string[] }[]) => {
+    _store.purposes = list;
+    setPurposesState(list);
+  }, []);
   const [showPurposePicker, setShowPurposePicker] = useState(false);
   const [pickedPurpose, setPickedPurpose] = useState(() => localStorage.getItem('sg_picked_purpose') || '');
   const [models, setModels] = useState<ModelConfig[]>([]);
@@ -66,12 +72,22 @@ export default function AgentChat() {
   const [activeSideTab, setActiveSideTab] = useState('todos');
   const [citeDraft, setCiteDraft] = useState('');  // §B6：辅助会话产出引用预填（ChatInput pendingRef）
 
-  // DB 面板转来：激活 SQL 助手页签（§C3；首条消息由 SqlAuxPanel 检测 sg_sql_aux_send 自行发送）
+  // DB 面板转来：激活 SQL 助手页签（§C3；pending 由 SqlAuxPanel 在 WS 就绪后消费）
   useEffect(() => {
-    if (sessionStorage.getItem('sg_sql_aux_send')) {
+    if (!sessionStorage.getItem('sg_sql_aux_send')) return;
+    (async () => {
+      // 竞态防护（验收缺陷 2 复验修复）：purposes 未就绪时先拉取再激活——否则
+      // SidePanel 回落 guard 会在 purpose 页签未装配时把 activeTab 重置为 todos
+      if (!_store.purposes?.length) {
+        try {
+          const pr = await agentApi.listPurposes();
+          setPurposes(pr.purposes || []);
+        } catch { /* 页签缺省为通用集，激活仍尝试 */ }
+      }
       setActiveSideTab('sql_aux');
       setSideCollapsed(false);
-    }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // K-037：会话列表 / 右侧面板 独立收起展开（localStorage 持久化）
   const [sessCollapsed, setSessCollapsed] = useState(() => localStorage.getItem('sg_sess_collapsed') === '1');
@@ -881,6 +897,13 @@ export default function AgentChat() {
 
   // K-012: 恢复会话（会话项点击 / 页面刷新自动恢复共用）
   const restoreSession = useCallback(async (id: string, ws: string) => {
+    // 验收缺陷修复（2026-08-25）：恢复路径补 purposes 拉取——purpose 页签依赖
+    // purposes.panels 装配，此前仅新建会话/发送拦截路径拉取，刷新/跨页跳回恢复后
+    // purpose 页签（deps/history/sql_aux）整体消失。幂等低成本（listPurposes 轻量 GET）。
+    try {
+      const pr = await agentApi.listPurposes();
+      setPurposes(pr.purposes || []);
+    } catch { /* 页签降级为通用集 */ }
     const r = await agentApi.getSession(id, ws);
     const msgs = r.messages || [];
     setMessages(msgs);

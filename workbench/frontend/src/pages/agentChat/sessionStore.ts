@@ -20,4 +20,7 @@ export const _store = {
   wsState: 'connecting' as 'connecting' | 'open' | 'closed',
   readingFeed: [] as DocReadItem[],  // T-511：阅读足迹（跨导航保持，与 messages 同生命周期）
   writingFeed: [] as DocWriteItem[],  // S0.6：更新足迹（写型工具 doc_write 汇聚）
+  // 验收缺陷 2 复验修复（2026-08-25）：用途清单跨导航缓存——SPA 跳回（如 DB 面板
+  // 「交给 SQL 助手」）不走 restoreSession，purposes 为空会致 purpose 页签不装配。
+  purposes: [] as { id: string; title: string; icon: string; color: string; chips: string[]; description: string; panels: string[] }[],
 };
