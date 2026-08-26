@@ -20,6 +20,18 @@ export function CopyButton({ text, className }: { text: string; className?: stri
   );
 }
 
+// ── 短收尾句判定：LLM 在工具调用后习惯补发一句「等你的拍板 ⏳」类收尾短消息，
+//    套预览/文本重框视觉噪音大（生产会话取证：同一会话两次同模式短句，被误读为
+//    组件把多余内容识别进去）——单行短句降级为轻量气泡，由 AgentChat 渲染分支调用 ──
+const SHORT_REPLY_MAX_LEN = 40;
+
+/** 短回复判定：非空、单行、≤40 字符、且非块级 Markdown 语法开头（标题/列表/表格/引用/围栏） */
+export function isShortReply(content: string): boolean {
+  const t = content.trim();
+  if (!t || t.length > SHORT_REPLY_MAX_LEN || t.includes('\n')) return false;
+  return !/^(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||```)/.test(t);
+}
+
 // ── assistant 消息内容框：内部顶部工具栏（预览/文本双按钮 + 复制），内容区独立背景 ──
 export function MessageWithToolbar({ content }: { content: string }) {
   const [view, setView] = useState<'preview' | 'text'>('preview');
@@ -42,7 +54,7 @@ export function MessageWithToolbar({ content }: { content: string }) {
       {/* 内容区（预览 = Markdown 渲染 / 文本 = 原始源码，独立深色背景） */}
       {view === 'preview' ? (
         <div className="px-3 py-2 bg-gray-900/30">
-          <MarkdownText content={_unwrapTextBlock(content)} />
+          <MarkdownText content={unwrapTextBlock(content)} />
         </div>
       ) : (
         <pre className="text-xs font-mono text-gray-300 bg-gray-900/50 rounded-b-lg p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
@@ -55,6 +67,6 @@ export function MessageWithToolbar({ content }: { content: string }) {
 
 /** 解包「摘要 + 代码块 + 后续」模式：去掉外层 ```text/```markdown fences，
  *  使代码块内的 Markdown 内容得以正常渲染（而非以 <pre><code> 显示）。 */
-function _unwrapTextBlock(content: string): string {
+function unwrapTextBlock(content: string): string {
   return content.replace(/^```(?:text|markdown)\n([\s\S]*?)\n```\s*/gm, '$1');
 }

@@ -19,7 +19,7 @@ import { MarkdownText } from './agentChat/MarkdownText';
 import { ArtifactCard } from './agentChat/ArtifactCard';
 import { PurposeCards } from './agentChat/PurposeCards';
 import { ToolGroupBlock } from './agentChat/ToolBlocks';
-import { CopyButton, MessageWithToolbar } from './agentChat/MessageWithToolbar';
+import { CopyButton, isShortReply, MessageWithToolbar } from './agentChat/MessageWithToolbar';
 import { ConversationRail } from './agentChat/ConversationRail';
 import { ChatInput } from './agentChat/ChatInput';
 import { SidePanel } from './agentChat/SidePanel';
@@ -1169,6 +1169,18 @@ export default function AgentChat() {
         return (
           <div key={idx} className="mb-2 px-2 py-1 border-l-2 border-info/30 text-xs text-gray-400 italic">
             <MarkdownText content={item.content || ''} />
+          </div>
+        );
+      }
+      // 工具调用后的收尾短句（如「等你的拍板 ⏳」）：不套预览/文本重框，轻量气泡直渲，
+      // 避免短句紧贴工具行下方被误读为「组件把多余内容识别进去」
+      if (isShortReply(item.content || '')) {
+        return (
+          <div key={idx} className="mb-2 ml-1 border-l-2 border-border/50 pl-3 py-0.5 flex items-center gap-1.5">
+            <div className="flex-1 min-w-0">
+              <MarkdownText content={item.content || ''} />
+            </div>
+            <CopyButton text={item.content || ''} className="text-[10px] text-gray-500 hover:text-info flex-shrink-0" />
           </div>
         );
       }
