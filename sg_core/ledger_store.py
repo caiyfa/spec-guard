@@ -616,6 +616,14 @@ def clear_drafts(workspace: str = "", db_path: Path | None = None):
         conn.execute("DELETE FROM drafts WHERE workspace = ?", (ws,))
 
 
+def delete_draft(filename: str, workspace: str = "", db_path: Path | None = None):
+    """删除单份草稿的台账记录（T-1020 reset 会话收窄：只清本会话产物）。"""
+    ws = workspace or _active_workspace()
+    with _LOCK, _connect(db_path) as conn:
+        conn.execute("DELETE FROM drafts WHERE filename=? AND workspace=?",
+                     (filename, ws))
+
+
 # ══════════════════════════════════════════════════════════
 # Agent 会话台账（agent_sessions）——session.save 投影
 # ══════════════════════════════════════════════════════════

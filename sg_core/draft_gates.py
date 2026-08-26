@@ -321,6 +321,12 @@ def delete_workspace_gates(workspace: str, db_path: Path | None = None):
             "DELETE FROM sg_draft_gates WHERE workspace = ?", (workspace,))
 
 
+def delete_draft_gate(draft_id: str, db_path: Path | None = None):
+    """删除单份草稿的三闸记录（T-1020 reset 会话收窄：只清本会话产物）。"""
+    with _LOCK, _connect(db_path) as conn:
+        conn.execute("DELETE FROM sg_draft_gates WHERE draft_id = ?", (draft_id,))
+
+
 def set_draft_status_keep_gates(filename: str, status: str, module: str = "",
                                 db_path: Path | None = None):
     """草稿台账状态更新（对齐 ledger_store.set_draft_status 语义，兼容调用）。"""

@@ -529,23 +529,33 @@ class TestDraftWriter:
         # 清理
         (drafts_dir() / "test-patch.yaml").unlink(missing_ok=True)
 
-    def test_reset_draft_area(self, workspace):
-        """reset_draft_area 在激活工作区下可用。
+    def test_reset_draft_area(self, workspace, tmp_path, monkeypatch):
+        """reset_draft_area 会话收窄（T-1020）：仅清本会话写入的草稿。
 
         regression: get_active_workspace() 返回 WorkspaceInfo 对象非 dict，
         原 `.get("name")` 写法必抛 AttributeError（会话内三次工具异常的根因）。
         """
-        _call(draft_writer, "write_draft", {
-            "filename": "test-reset.yaml",
-            "content": "id: RESET-ME\n",
-        })
-        assert (drafts_dir() / "test-reset.yaml").exists()
-        result = _call(draft_writer, "reset_draft_area", {})
-        data = json.loads(result[0].text)
-        assert data["ok"] is True
-        assert data["workspace"] == "test-mcp"
-        assert data["yaml_deleted"] >= 1
-        assert not (drafts_dir() / "test-reset.yaml").exists()
+        import sg_core.user_store as core_us
+        p = tmp_path / "t1020-mcp.db"
+        core_us.init_db(p)
+        monkeypatch.setattr(core_us, "DB_PATH", p)
+        from sg_core import session_context as sc
+        tok = sc.set_session_id("SESS-MCP-RESET")
+        try:
+            _call(draft_writer, "write_draft", {
+                "filename": "test-reset.yaml",
+                "content": "id: RESET-ME\n",
+            })
+            assert (drafts_dir() / "test-reset.yaml").exists()
+            result = _call(draft_writer, "reset_draft_area", {})
+            data = json.loads(result[0].text)
+            assert data["ok"] is True
+            assert data["workspace"] == "test-mcp"
+            assert data["yaml_deleted"] >= 1
+            assert data["session_id"] == "SESS-MCP-RESET"
+            assert not (drafts_dir() / "test-reset.yaml").exists()
+        finally:
+            sc.reset_session_id(tok)
 
 
 # ══════════════════════════════════════════════════════════
