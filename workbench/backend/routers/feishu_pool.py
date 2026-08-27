@@ -548,6 +548,21 @@ def regen_topic_card(body: RegenRequest,
         raise HTTPException(status_code=404, detail=str(e)) from None
 
 
+@router.post("/topics/material-fetch")
+def fetch_topic_materials(body: TopicIdRequest,
+                          user: CurrentUser = Depends(get_current_user),
+                          workspace: str = Depends(resolve_workspace)):
+    """T-1029 D4：共享材料缺失快照逐条补拉（拍板①：即时补拉+失败诚实降级）。
+
+    每链接独立成败（fetched/skipped/errors 三段），单个权限不足/超时不断链；
+    补拉落池后下一次 GET /topics 联接自动可见。GET 链路保持纯读。"""
+    try:
+        return sync_svc.fetch_topic_materials(
+            _material_base(), body.id, workspace_root=_ws_root())
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+
+
 @router.post("/topics/confirm")
 def confirm_topic(body: TopicIdRequest,
                   user: CurrentUser = Depends(get_current_user),

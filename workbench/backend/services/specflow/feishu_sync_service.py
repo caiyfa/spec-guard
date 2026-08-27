@@ -769,9 +769,8 @@ def material_visible(item: dict, viewer_open_id: str,
         return True
     if viewer_open_id and viewer_open_id in (perm.get("member_users") or []):
         return True
-    if viewer_chats and (set(perm.get("member_chats") or []) & set(viewer_chats)):
-        return True
-    return False
+    return bool(viewer_chats
+                and (set(perm.get("member_chats") or []) & set(viewer_chats)))
 
 
 def list_pool_materials(specflow_emp_base: Path,
@@ -919,9 +918,93 @@ def list_pool_topics(specflow_emp_base: Path, workspace_root: Path) -> dict:
                  for link in links_all if link.get("edge") == "references"}
     material_sugs = tm.suggest_topic_materials(pool_cards, pool_materials,
                                                done_refs)
+    # T-1029：shared_materials 快照联接（纯读派生，不落库；补拉走
+    # /topics/material-fetch 显式动作）
+    from specflow.feishu_pool import shared_materials as sm_mod
+    for t in candidates:
+        t["shared_materials"] = sm_mod.resolve(t.get("shared_materials"),
+                                               specflow_emp_base)
+    for t in confirmed:
+        t["shared_materials"] = sm_mod.resolve(t.get("shared_materials"),
+                                               specflow_emp_base)
     return {"candidates": candidates, "confirmed": confirmed,
             "cross_suggestions": suggestions,
             "material_suggestions": material_sugs}
+
+
+def _run_with_timeout(fn, timeout_s: float):
+    """单链接补拉的看门狗（lark CLI 子进程可能挂起；超时抛 TimeoutError，
+    线程脱离由解释器 daemon 化回收——进程不陪葬）。"""
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(fn).result(timeout=timeout_s)
+
+
+def fetch_topic_materials(specflow_emp_base: Path, topic_id: str,
+                          workspace_root: Path | None = None,
+                          timeout_s: float = 30.0) -> dict:
+    """T-1029 D4：话题共享材料缺失快照逐条补拉（显式动作，GET 保持纯读）。
+
+    拍板口径：即时单条补拉 + 失败诚实降级——每链接独立 try/except，单个
+    权限不足/超时/失败只记 errors 不中断；sheets/base/wiki 无离线快照通道
+    skipped 如实标注。补拉成功后 fd-*/fm-* 落池，下一次 list_pool_topics
+    的 resolve 自动接上（联接读时派生，无回填时序问题）。
+    """
+    import concurrent.futures
+
+    from specflow.feishu_pool import shared_materials as sm_mod
+    from specflow.feishu_pool import topic_cluster as tc
+    topic = next((t for t in tc._load_candidates(specflow_emp_base)
+                  if str(t.get("id")) == topic_id), None)
+    if topic is None and workspace_root is not None:
+        from specflow.feishu_pool import facts
+        topic = next((t for t in facts.load_topics(workspace_root)
+                      if str(t.get("id")) == topic_id), None)
+    if topic is None:
+        raise KeyError(f"话题不存在: {topic_id}")
+    out = {"fetched": [], "skipped": [], "errors": []}
+    for fact in (sm_mod.resolve(topic.get("shared_materials"),
+                                specflow_emp_base)):
+        kind = str(fact.get("kind") or "")
+        token = str(fact.get("token") or "")
+        url = str(fact.get("url") or "")
+        if fact.get("in_pool"):
+            continue                       # 已在池内（无需动作）
+        if not token:
+            out["skipped"].append({"kind": kind, "token": "",
+                                   "reason": "链接缺 token（非标准形状）"})
+            continue
+        is_docs_kind = kind in ("docx", "doc", "file")
+        if not is_docs_kind and kind != "minutes":
+            out["skipped"].append({"kind": kind, "token": token,
+                                   "reason": "无离线快照通道"})
+            continue
+        try:
+            if kind == "minutes" and token:
+                detail = _run_with_timeout(
+                    lambda tk=token: _run_lark(
+                        ["minutes", "+detail", "--minute-tokens", tk,
+                         "--summary", "--keyword"]), timeout_s)
+                meta_url = url
+                saved = pool_store.save_minutes_snapshot(
+                    specflow_emp_base, token, detail.get("data") or {},
+                    source_url=meta_url,
+                    meta={"source_url": meta_url,
+                          "perm": _pull_perm_meta(token, "minutes")})
+            else:
+                saved = _run_with_timeout(
+                    lambda tk=token, u=url: sync_doc(specflow_emp_base, tk,
+                                                     url=u), timeout_s)
+            out["fetched"].append({"kind": kind,
+                                   "stem": str(saved.get("stem")
+                                                or saved.get("id") or "")})
+        except concurrent.futures.TimeoutError:
+            out["errors"].append({"kind": kind, "token": token,
+                                  "error": f"补拉超时(>{timeout_s}s)"})
+        except Exception as e:              # 逐链接诚实降级：单个失败不断链
+            out["errors"].append({"kind": kind, "token": token,
+                                  "error": str(e)[:200]})
+    return out
 
 
 def update_image_caption(specflow_emp_base: Path, material_stem: str,

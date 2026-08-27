@@ -29,6 +29,7 @@ from pathlib import Path
 
 import yaml
 
+from specflow.feishu_pool import shared_materials as sm
 from specflow.feishu_pool import tag_registry as tr
 from specflow.feishu_pool.paths import pool_dirs
 
@@ -445,6 +446,10 @@ def cluster_chat_snapshots(specflow_emp_base: Path, llm,
                 }
                 if ids:
                     candidate["message_ids"] = ids
+                # T-1029：共享材料事实随关联消息推导（确定性，快照联接读取时做）
+                sm.attach_to_card(candidate,
+                                  sm.index_message_rows(specflow_emp_base,
+                                                        chat_sha8, [day]))
                 # T-926：演进链——continues 必须存在于已有话题清单（防幻觉校验）
                 cont = str(rt.get("continues") or "")
                 if cont and any(t.get("id") == cont for t in existing):
@@ -707,6 +712,9 @@ def draft_chat_segments(emp_base: Path, llm, chat_sha8: str,
             seg["days"] = used_days           # 跨日卡标识（单日卡不携带）
         if ids:
             seg["message_ids"] = ids
+        # T-1029：草案段同样挂共享材料事实（窗口内全日索引）
+        sm.attach_to_card(seg, sm.index_message_rows(mroot, chat_sha8,
+                                                     used_days))
         cont = str(rt.get("continues") or "")
         if cont and any(t.get("id") == cont for t in existing):
             seg["continues"] = cont
@@ -821,6 +829,8 @@ def compose_topic_from_messages(emp_base: Path, llm, chat_sha8: str,
     if len(used_days) > 1:
         seg["days"] = used_days
     seg["message_ids"] = [str(r.get("message_id")) for r in rows]
+    # T-1029：勾选归纳同源推导（rows 已在内存，直接建索引零额外 IO）
+    sm.attach_to_card(seg, {str(r.get("message_id")): r for r in rows})
     drafts = _load_drafts(emp_base)
     key = f"{chat_sha8}/{'~'.join(used_days)}"
     drafts.setdefault(key, []).append(seg)
@@ -970,6 +980,16 @@ def edit_candidate(emp_base: Path, topic_id: str,
         changes["days"] = {"from": list(topic.get("days") or []),
                            "to": list(days)}
         topic["days"] = list(days)
+    if "message_ids" in changes:
+        # T-1029：重关联后重算共享材料事实（days 已更新作用域随之；
+        # 行索引里一个都找不到（md-only 存量卡）→ 不改写旧值）
+        _prev_shared = list(topic.get("shared_materials") or [])
+        sm.attach_to_card(topic, sm.index_message_rows(
+            mroot, str(topic.get("chat_sha8") or ""),
+            [str(d) for d in (topic.get("days") or [])] or None))
+        if list(topic.get("shared_materials") or []) != _prev_shared:
+            changes["shared_materials"] = {"from": _prev_shared,
+                                           "to": topic.get("shared_materials")}
     if not changes:
         return topic                              # 无实际变化：不推 rev 不落历史
     topic["rev"] = int(topic.get("rev") or 1) + 1
@@ -1072,11 +1092,16 @@ def regen_candidate(emp_base: Path, llm, topic_id: str,
         topic["category"], regen_count, regen_participants,
         llm_hint=str(rt.get("priority_hint") or ""))
     topic["agent_origin"] = new_origin
+    _old_shared = list(topic.get("shared_materials") or [])
     if regen_ids and line_ts:
         idxs = [i for i in range(len(line_ids)) if line_ids[i] in set(regen_ids)]
         if idxs:
             topic["window"] = [line_ts[min(idxs)], line_ts[max(idxs)]]
             topic["message_ids"] = regen_ids
+            # T-1029：regen 重算守卫——行可见才重推导（md-only 存量不动旧值）
+            sm.attach_to_card(topic,
+                              sm.index_message_rows(mroot, chat_sha8,
+                                                    regen_days or [day]))
         else:
             topic["window"] = _window_of(day, msg_range)
     else:
@@ -1092,5 +1117,10 @@ def regen_candidate(emp_base: Path, llm, topic_id: str,
     _save_candidates(mroot, existing)
     _append_history(mroot, topic_id, editor, "regen",
                     base_rev=int(topic.get("rev")) - 1,
-                    changes={"agent_origin": {"from": old_origin, "to": new_origin}})
+                    changes={"agent_origin": {"from": old_origin, "to": new_origin},
+                             **({"shared_materials":
+                                 {"from": _old_shared,
+                                  "to": topic.get("shared_materials")}}
+                                if list(topic.get("shared_materials") or [])
+                                != _old_shared else {})})
     return topic

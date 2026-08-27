@@ -159,7 +159,7 @@ def parse_forwarded_messages(content: str) -> list[dict]:
             subs[-1]["lines"].append(line.strip())
     return [{"ts": s["ts"], "sender": s["sender"],
              "text": _P_TAG_RE.sub(
-                 "", " ".join(l for l in s["lines"] if l)).strip()}
+                 "", " ".join(ln for ln in s["lines"] if ln)).strip()}
             for s in subs]
 
 
