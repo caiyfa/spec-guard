@@ -729,6 +729,13 @@ def step_python(body, rctx, ns, record):
             exec(compile(script, "<python_step>", "exec"), ctx)
     except SkipScenario:
         raise   # 脚本内主动跳过：原样保留 SKIP 语义
+    except SystemExit as e:
+        # SystemExit 继承 BaseException，下方 except Exception 捕不到——裸放行会击穿
+        # runner 崩掉整个运行进程（EX-dc874ada/EX-b9c359ba 实证：run.json 空文件、
+        # 工作台 Internal Server Error、UI 回退老报告）。跳过语义归 SkipScenario。
+        raise ScenarioScriptError(
+            f"python 步骤脚本调用了 SystemExit({e})（场景编写错误："
+            f"主动跳过请用 raise SkipScenario(...)）") from e
     except Exception as e:
         # ENG-T01：脚本异常属场景编写错误，归 CAT_SCENARIO（而非 CAT_ENV）
         raise ScenarioScriptError(
@@ -939,6 +946,14 @@ def _run_verifies(scenario, rctx, ns, record, last_call_ref):
                     trace.message = buf.getvalue().strip()[:200]
             except AssertionError as e:
                 trace.passed, trace.message = False, str(e)
+            except SystemExit as e:
+                # SystemExit 继承 BaseException，下方 except Exception 捕不到——裸放行
+                # 会击穿 runner 且丢 trace（同 flow python 步骤，EX-dc874ada 实证）。
+                trace.passed = False
+                trace.message = (f"python 断言脚本调用了 SystemExit({e})（场景编写错误："
+                                 f"主动跳过请用 raise SkipScenario(...)）")
+                if not first_fail_category:
+                    first_fail_category = CAT_SCENARIO
             except Exception as e:
                 # ENG-T01：python 断言脚本非断言类异常属场景编写错误，原地落 trace，不中断
                 trace.passed = False

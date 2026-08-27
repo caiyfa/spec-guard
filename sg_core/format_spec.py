@@ -28,9 +28,10 @@ except Exception:
     pass
 
 # 格式规范版本与变更记录
-SPEC_VERSION = "2.15.0"
-SPEC_UPDATED = "2026-08-26"
+SPEC_VERSION = "2.15.1"
+SPEC_UPDATED = "2026-08-27"
 SPEC_CHANGELOG = [
+    ("2.15.1", "2026-08-27", "python 脚本 SystemExit 防护（T-1022，HI-PERM-004 排障复盘）：flow 的 python 步骤与 verify 的 python 断言脚本里 `raise SystemExit(...)` 不再裸穿击穿运行进程（实证 EX-dc874ada/EX-b9c359ba：run.json 空文件、工作台 Internal Server Error、UI 回退显示老报告）——统一包装为场景编写错误（CAT_SCENARIO）并在消息中指路 SkipScenario；主动跳过语义不变（`raise SkipScenario(...)`）。§1.13 断言语义同步补充。语法层零变更，存量场景无需修改"),
     ("2.15.0", "2026-08-26", "python/http 文档补全与 json= 别名（T-1017/T-1018/T-1019，HI-PERM-001 三连败复盘）：§1.13 明示 script 不渲染 {{}} 插值、save 变量非脚本全局须 ns['名'] 访问、五类 save 产出在 ns 中的结构表（call/poll={status,json,headers} 无 text 键 / db_query=裸 list / tool=工具自定 / python=output 值）、新增 §1.13.1 http(account) 完整签名与常见错误对照表；引擎侧：python 步骤/断言脚本 NameError/KeyError 消息附 ns 可用键清单（T-1018），HttpClient.request/post 兼容 json= 别名（T-1019，与 json_body 同义二选一）；顺带修正断言语义归类 CAT_SCENARIO（ENG-T01 起即如此，原文档 CAT_ENV 滞后）。YAML 语法层零变更，存量场景无需修改"),
     ("2.14.0", "2026-08-21", "测试类型学（T-981）：doc 层新增选填字段 `dimensions` 测试维度受控词表（happy-path/negative/boundary/permission/security/state/isolation/regression 八维，标注 1~3 个）+ 维度↔断言模式映射（T10 测试设计自检 WARN，词表外值 ERROR）+ 覆盖面板按维度聚合。doc 层字段不进契约指纹，存量 YAML 语法零变更（补标注后享受维度聚合与自检）"),
     ("2.13.0", "2026-08-21", "tool 限定名与动态系统包（T-973）：tool 信封 use 支持多系统同名消歧的限定写法 `system:name`（裸名唯一命中时行为不变）；tool 目录按系统命名空间组织（本表「归属系统」列，动态系统包注册的工具自动可见）；系统包 manifest 契约（config/template/code 三级——模板断言 assertions.yaml 经 SELECT-only 确定性校验注册为 oracle，代码型 extensions.py 评审闸后热加载）。语法层兼容扩展，存量 YAML 无需修改"),
@@ -598,7 +599,7 @@ verify:
 | `SkipScenario` | 主动跳过场景（`raise SkipScenario('原因', category='pool_empty')`） |
 | `print` | 输出捕获进 StepTrace |
 
-**断言语义**：脚本抛 `AssertionError` → 断言失败（CAT_ASSERT）；其他异常 → 场景编写错误（CAT_SCENARIO，ENG-T01；2.15.0 起 NameError/KeyError 消息附 ns 可用键清单）。
+**断言语义**：脚本抛 `AssertionError` → 断言失败（CAT_ASSERT）；其他异常 → 场景编写错误（CAT_SCENARIO，ENG-T01；2.15.0 起 NameError/KeyError 消息附 ns 可用键清单）。`raise SystemExit(...)` 同样按场景编写错误包装（2.15.1）——它继承 BaseException，裸抛会击穿引擎异常处理崩掉运行进程，主动跳过一律用 `SkipScenario`。
 
 #### 1.13.1 http(account) 客户端用法（2.15.0 补全）
 

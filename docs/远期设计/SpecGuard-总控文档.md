@@ -283,6 +283,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | T-1017 | M-F | format_spec §1.13 python/http 文档补全（2.15.0 三同步） | wt/engine-hardening | — | ✅ 已完成（待主库验收） | sess-engine-hardening | 同上派工：明示 script 不渲染 {{}}/save 变量非脚本全局须 ns['名'] 访问 + 三类 save 产出结构（call={status,json,headers}/db_query=裸list/tool=工具自定）+ http(account) 完整签名（json_body=）与最小示例；不采纳事故报告 §5.1/5.2 的错误写法（平铺 key/foo.text/json= 均与实现相反） |
 | T-1018 | M-F | python 步骤错误消息增强（脚本 NameError/KeyError 附 ns 可用键清单） | wt/engine-hardening | — | ✅ 已完成（待主库验收） | sess-engine-hardening | 同上派工：让 Agent 下次自愈而非猜结构 |
 | T-1019 | M-F | HttpClient.request 兼容 json= 别名（对齐 requests 肌肉记忆） | wt/engine-hardening | — | ✅ 已完成（待主库验收） | sess-engine-hardening | 同上派工：json= 与 json_body= 同义，双给报错；post() 同步支持 |
+| T-1022 | M-F | python 脚本 SystemExit 击穿进程防护（flow python 步骤 + verify python 断言脚本统一包装为场景编写错误并指路 SkipScenario；format_spec 2.15.1 三同步） | wt/engine-hardening | — | ✅ 已完成（待主库验收） | sess-engine-hardening | 08-27 派工（HI-PERM-004 排障复盘）：EX-dc874ada/EX-b9c359ba 脚本 raise SystemExit 裸穿 except Exception（BaseException）致运行进程崩溃——run.json 空文件、工作台 Internal Server Error、UI 回退显示老 404 报告制造「修复无效」假象；TDD 双测试（步骤级 ScenarioScriptError 包装 + 断言脚本级 trace 原地落盘） |
 
 ---
 
@@ -299,7 +300,7 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | sess-lark-scope-fix | M-D 飞书授权误报修复（wt/material-pool 树） | T-1012（✅ 08-24 主库验收合并 45a661e） | 2026-08-24 | 总控人实测上报授权误报；诊断在主库实跑 do_status+真实 token 调 contact 搜索钉案，施工在树内；文件读写一律树路径 |
 | sess-tool-consolidation | M-C 工具收敛 → M-F 收尾施工（wt/tool-consolidation 树） | T-982（✅ 08-21 主库验收合并 33931c6）→ T-998（✅ 待验收）→ T-999（✅ a/b/c/d 四分次，待验收）→ T-997（✅ 待验收） | 2026-08-21 | tool_meta 元数据单一事实源+consolidate 合并器（17 组 77→24）；side_effect/RBAC/doc 足迹全派生（_KNOWN_WRITERS 与 _RBAC_READONLY_TOOLS 手工清单废除）；purpose domains 领域子集两用途 15 工具；顺手修 specflow_refs 缺 handle 与 audit 未登记两存量缺口；eval 前后 3/3 持平 |
 | sess-db-aux | DB证据面板与辅助会话施工（wt/db-aux 树，superpowers 计划体系） | SP-DB-AUX Task1-16（✅ 08-25 主库验收合并 8a1728d + 修复 2f7fd13/0303bff/9860e05，已推远端） | 2026-08-25 | 施工 16 Task 全交付（82a35f9~0fef8ab，19 commit）；主库验收：离线全绿（engine 39+230/specstd 1873/acceptance_fixes 红线48零修改/aux隔离14/vitest 119/tsc 0/build 43s/release_check PASS）+端到端 8 步全过；验收发现3缺陷当日修复：①sql_assistant缺draft域致write_draft不可用（设计遗漏补域）②purpose页签刷新/SPA跳回消失+激活竞态（既有缺陷暴露，_store缓存purposes+恢复路径补拉+pending改WS就绪消费）③守卫误判注释头SQL（剥前导注释） |
-| sess-engine-hardening | 引擎加固施工（wt/engine-hardening 树） | T-1016 → T-1017 → T-1018 → T-1019 | 2026-08-26 | HI-PERM-001 三连败事故复盘派工；文件读写一律树路径，只跑离线测试，提交即推 |
+| sess-engine-hardening | 引擎加固施工（wt/engine-hardening 树） | T-1016 → T-1017 → T-1018 → T-1019 → T-1022 | 2026-08-26 | HI-PERM-001 三连败事故复盘派工；文件读写一律树路径，只跑离线测试，提交即推。T-1022（08-27）：SystemExit 击穿进程防护，HI-PERM-004 排障复盘派工 |
 | | | | | |
 
 ---
