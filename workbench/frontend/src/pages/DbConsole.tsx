@@ -70,13 +70,13 @@ export function DbConsole() {
           {loading ? '查询中…' : '▶ 执行'}
         </button>
         <button onClick={() => {
-          // 交给 SQL 助手：SQL 草稿经 sessionStorage 中转 → /agent 激活页签自动发送（§C3）
+          // 交给辅助助手：SQL 草稿经 sessionStorage 中转 → /agent 激活页签自动发送（§C3；T-1031 改称）
           sessionStorage.setItem('sg_sql_aux_send', sql);
           navigate('/agent');
         }} disabled={!sql.trim()}
           className="px-3 py-1 text-xs rounded border border-border text-gray-400 hover:text-info disabled:opacity-50"
-          title="把当前 SQL 发给 SQL 助手迭代（解释表关系/设计理由/多轮优化）">
-          🤖 交给 SQL 助手
+          title="把当前 SQL 发给辅助助手迭代（解释表关系/设计理由/多轮优化）">
+          🤖 交给辅助助手
         </button>
         <span className="text-[10px] text-gray-600">Ctrl+Enter 执行</span>
       </div>

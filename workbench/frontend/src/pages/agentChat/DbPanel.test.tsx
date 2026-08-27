@@ -1,4 +1,4 @@
-/** DbPanel（内嵌 DB 证据面板）单测：initialSql 回填自动执行 / 交给 SQL 助手直发回调 / 关闭回调。 */
+/** DbPanel（内嵌 DB 证据面板）单测：initialSql 回填自动执行 / 交给辅助助手直发回调 / 关闭回调。 */
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
@@ -51,12 +51,12 @@ describe('DbPanel', () => {
     await waitFor(() => expect(screen.getByText('1 行')).toBeTruthy());
   });
 
-  test('「交给 SQL 助手」直发 onHandToAux 回调（不走 sessionStorage 跳页中转）', async () => {
+  test('「交给辅助助手」直发 onHandToAux 回调（不走 sessionStorage 跳页中转）', async () => {
     const onHandToAux = vi.fn();
     renderPanel({ onHandToAux });
     await waitFor(() => screen.getByText('default'));
     fireEvent.change(screen.getByTestId('sql-editor'), { target: { value: 'SELECT 2' } });
-    fireEvent.click(screen.getByTitle(/把当前 SQL 发给左栏 SQL 助手/));
+    fireEvent.click(screen.getByTitle(/把当前 SQL 发给左栏辅助助手/));
     expect(onHandToAux).toHaveBeenCalledWith('SELECT 2');
     // 旧通道断言：不经 sessionStorage 中转
     expect(sessionStorage.getItem('sg_sql_aux_send')).toBeNull();

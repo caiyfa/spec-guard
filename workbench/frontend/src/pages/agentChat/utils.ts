@@ -1,8 +1,17 @@
 import type { ChatMessage } from './types';
 
-/** K-013：消息展示时剥离 <references> 注入块（内容已在引用面板呈现） */
+/** K-013/T-1031：消息展示前剥离后端注入块——<references>（@引用注入）、
+ * <parent_context> 与 [parent_context] 单行降级形态（辅助会话父快照）、
+ * <viewing_context>（查看指针）、<knowledge_refs>（知识 nudge，落盘进 user 消息尾部）。
+ * 五者均为「LLM 可见、UI 不显示」的通道载荷；全局替换不限定位置。 */
 export function stripRefBlock(content: string): string {
-  return content.replace(/^<references>[\s\S]*?<\/references>\s*/, '');
+  return (content || '')
+    .replace(/<references>[\s\S]*?<\/references>\s*/g, '')
+    .replace(/<parent_context>[\s\S]*?<\/parent_context>\s*/g, '')
+    .replace(/\[parent_context\][^\n]*\n?/g, '')
+    .replace(/<viewing_context>[\s\S]*?<\/viewing_context>\s*/g, '')
+    .replace(/<knowledge_refs>[\s\S]*?<\/knowledge_refs>\s*/g, '')
+    .trimEnd();
 }
 
 // ── 按角色估算 token 分布（参考 opencode 的 chars/4 方法） ──
