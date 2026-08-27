@@ -243,3 +243,135 @@ def test_render_md_merge_forward_inline(tmp_path):
     assert imgmap["[图片#1]"]["media_key"] == MERGE_FORWARD_IMAGE_KEYS[0]
     assert imgmap["[图片#4]"]["media_key"] == MERGE_FORWARD_IMAGE_KEYS[3]
     assert line_ids == ["om_x100b67b4563770b4b4aadb072d42884"]
+
+
+# ══════════════════════════════════════════════════════════
+# T-1028：飞书链接确定性提取 + 三处渲染口径收敛（render_row_body）
+# ══════════════════════════════════════════════════════════
+
+def test_contract_new_pinned_types_normalize():
+    """新钉案类型（system/video_chat，实测 2026-08-27）：content 原样入库。"""
+    from test_specstd.feishu_cli_contract import (SYSTEM_MESSAGE,
+                                                  VIDEO_CHAT_MESSAGE)
+    row = cs.normalize_pull_message(SYSTEM_MESSAGE)
+    assert row["msg_type"] == "system"
+    assert "Meeting has started" in row["content"]
+    row = cs.normalize_pull_message(VIDEO_CHAT_MESSAGE)
+    assert row["msg_type"] == "video_chat"
+
+
+def test_extract_feishu_links_measured_shapes():
+    """实测链接形状提取：text 消息里的裸 sheets / docx+query+fragment / docx。
+
+    形状来源 2026-08-27 真实池扫描（fehorizon.feishu.cn）；token 值按契约模块
+    同纪律轻度改写（形状=语法保留，值不敏感）。
+    """
+    from test_specstd.feishu_cli_contract import (TEXT_WITH_DOCX_URL,
+                                                  TEXT_WITH_DOCX_URL_QF,
+                                                  TEXT_WITH_SHEETS_URL)
+    links = cs.extract_feishu_links(TEXT_WITH_DOCX_URL["content"])
+    assert links == [{"kind": "docx",
+                      "token": "CtM6dlgsroTTcBxB73wc6RSRnhd",
+                      "url": "https://fehorizon.feishu.cn/docx/CtM6dlgsroTTcBxB73wc6RSRnhd"}]
+    # query+fragment 属于 URL 的一部分（F2 匹配只看 token）
+    links = cs.extract_feishu_links(TEXT_WITH_DOCX_URL_QF["content"])
+    assert links[0]["kind"] == "docx"
+    assert links[0]["token"] == "PBrqdIjOtouAUtxatd1csAUin2A"
+    assert "?from=vc_group_doc_link#doxcn1cHWDK4Fp9vkR0XD6kPd3e" in links[0]["url"]
+    links = cs.extract_feishu_links(TEXT_WITH_SHEETS_URL["content"])
+    assert links == [{"kind": "sheets", "token": "MchesjK2nhtfKsthZyvcHa7Xne1",
+                      "url": "https://fehorizon.feishu.cn/sheets/MchesjK2nhtfKsthZyvcHa7Xne1"}]
+
+
+def test_extract_feishu_links_family_paths_and_dedup():
+    """同族产品路径（wiki/minutes/base/file，公开 URL 语法合成样）可提取；
+    多链接按出现顺序、同 URL 去重；中文标点跟随不吞入 URL。"""
+    content = (
+        "先看知识库 https://fehorizon.feishu.cn/wiki/XAbc123XYZdef456Ghi，"
+        "纪要在 https://fehorizon.feishu.cn/minutes/obcnxyz987654321abcd。"
+        "表格 https://fehorizon.feishu.cn/sheets/MchTOKEN000000000001 "
+        "以及重复 https://fehorizon.feishu.cn/sheets/MchTOKEN000000000001")
+    links = cs.extract_feishu_links(content)
+    kinds = [l["kind"] for l in links]
+    assert kinds == ["wiki", "minutes", "sheets"]
+    assert links[0]["token"] == "XAbc123XYZdef456Ghi"
+    assert links[1]["url"].endswith("minutes/obcnxyz987654321abcd")   # 中文句号不入 URL
+
+
+def test_extract_feishu_links_ignores_non_product_domains():
+    """非飞书产品域一律不收（防误吸外部链接）；无链接返回空表。"""
+    content = ("对比 github.com/zai-org 与 https://example.com/docx/xxxxx "
+               "还有飞书首页 https://www.feishu.cn/ 都不算")
+    assert cs.extract_feishu_links(content) == []
+    assert cs.extract_feishu_links("") == []
+    assert cs.extract_feishu_links(None) == []
+
+
+def _mixed_rows():
+    """混排行集（已按存储排序键排好）：两钉案类型 + 未知合成类型 + text 链接。"""
+    from test_specstd.feishu_cli_contract import (SYSTEM_MESSAGE,
+                                                  TEXT_WITH_DOCX_URL,
+                                                  VIDEO_CHAT_MESSAGE)
+    rows = [
+        cs.normalize_pull_message(SYSTEM_MESSAGE),
+        cs.normalize_pull_message(VIDEO_CHAT_MESSAGE),
+        dict(cs.normalize_pull_message(TEXT_WITH_DOCX_URL),
+             msg_type="magic_card",                      # 未来未知类型合成样本
+             message_id="om_magic_001"),                 # 独立幂等键防合并吞噬
+        cs.normalize_pull_message(TEXT_WITH_DOCX_URL),
+    ]
+    return sorted(rows, key=cs._sort_key)
+
+
+def test_render_row_body_shared_by_md_view(tmp_path):
+    """三处口径收敛①：日级 md 视图逐行 = [HH:MM] 发送人: render_row_body(row)。"""
+    rows = _mixed_rows()
+    f = tmp_path / "20260827.jsonl"
+    cs.merge_chat_jsonl(f, rows)
+    md, imgmap, line_ids = cs.render_md_from_jsonl(f)
+    lines = [l for l in md.splitlines() if l.strip()]
+    assert len(lines) == len(rows)                  # 一行一消息铁律
+    assert line_ids == [r["message_id"] for r in rows]
+    for line, row in zip(lines, rows):
+        hhmm = str(row.get("ts") or "")[11:16]
+        sender = str(row.get("sender_name") or row.get("sender_id") or "?")
+        assert line == f"[{hhmm}] {sender}: {cs.render_row_body(row)}"
+
+
+def test_render_row_body_readable_fallbacks():
+    """三处口径收敛②：system/video_chat 可读行；未知类型保真降级
+    （类型名前缀 + 空白折叠截断摘要），不再是纯占位。"""
+    body = cs.render_row_body({"msg_type": "system",
+                               "content": "Meeting has started."})
+    assert body == "[系统] Meeting has started."
+    assert cs.render_row_body({"msg_type": "video_chat",
+                               "content": "[Video call]"}) \
+        == "[视频通话] [Video call]"
+    unknown = {"msg_type": "share_doc_card",
+               "content": "<interact>  盘点方案\n  多行卡片内容……"}
+    body = cs.render_row_body(unknown)
+    assert body.startswith("[share_doc_card消息] ")
+    assert "盘点方案 多行卡片内容" in body           # 折叠后仍含关键信息
+    assert "\n" not in body
+
+
+def test_window_source_uses_shared_renderer(tmp_path):
+    """三处口径收敛③：多日窗口拼接同样走 render_row_body——merge_forward/
+    system/链接文本在窗口视图与日级视图渲染一致（此前窗口只保纯 text）。"""
+    from specflow.feishu_pool import topic_cluster as tc
+    sha = "deadbeef"
+    day = "20260827"
+    chats = tmp_path / "feishu_pool" / "chats" / sha
+    chats.mkdir(parents=True)
+    rows = _mixed_rows()
+    cs.merge_chat_jsonl(chats / f"{day}.jsonl", rows)
+    text, line_ids, line_ts, used_days = tc._load_window_source(
+        tmp_path, sha, [day])
+    assert used_days == [day]
+    assert line_ids == [r["message_id"] for r in rows]
+    # 窗口行 = 日前缀 + 共享渲染正文（与日级视图同源仅差日期段）
+    expected = [
+        f"[{str(r.get('ts') or '')[5:10]} {str(r.get('ts') or '')[11:16]}] "
+        f"{str(r.get('sender_name') or r.get('sender_id') or '?')}: "
+        f"{cs.render_row_body(r)}" for r in rows]
+    assert [l for l in text.splitlines() if l.strip()] == expected

@@ -543,9 +543,9 @@ def _load_window_source(emp_base: Path, chat_sha8: str,
             mmdd = str(r.get("ts") or "")[5:10] or "??-??"
             hhmm = str(r.get("ts") or "")[11:16] or "??:??"
             sender = str(r.get("sender_name") or r.get("sender_id") or "?")
-            mtype = str(r.get("msg_type") or "text")
-            body = (str(r.get("content") or "") if mtype == "text"
-                    else f"[{mtype}消息]")
+            # T-1028：正文与日级 md 视图同源（render_row_body），消灭
+            # 「窗口只保纯 text」的口径漂移——system/视频/未知类型同样可读
+            body = chat_store.render_row_body(r)
             lines.append(f"[{mmdd} {hhmm}] {sender}: {body}")
             line_ids.append(str(r.get("message_id") or ""))
             line_ts.append(str(r.get("ts") or ""))
@@ -778,10 +778,11 @@ def compose_topic_from_messages(emp_base: Path, llm, chat_sha8: str,
     for r in rows:
         ts = str(r.get("ts") or "")
         sender = str(r.get("sender_name") or r.get("sender_id") or "?")
-        mtype = str(r.get("msg_type") or "text")
-        body = (str(r.get("content") or "") if mtype == "text"
-                else f"[{mtype}消息]")
-        lines.append(f"[{ts[5:10] or '??-??'} {ts[11:16] or '??:??'}] {sender}: {body}")
+        # T-1028：同走共享渲染（勾选归纳可见文档链接/文件名，不再只认纯 text）
+        body = chat_store.render_row_body(
+            {k: v for k, v in r.items() if k != "_day"})
+        lines.append(f"[{ts[5:10] or '??-??'} {ts[11:16] or '??:??'}] "
+                     f"{sender}: {body}")
     extra_block = (f"\n用户补充说明（作为归纳的重要参考）：\n{extra_context.strip()}\n"
                    if extra_context.strip() else "")
     tag_digest = tr.known_tags_digest(tr.load_registry(mroot)) or _NO_TAGS

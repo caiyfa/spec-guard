@@ -36,6 +36,90 @@ _FWD_ANY_IMG_RE = re.compile(r"!\[Image\]\((.+?)\)|\[Image:\s*(.+?)\]")
 _FWD_MSG_HEAD_RE = re.compile(r"^\[([^\]]+)\]\s+([^:：]+)[:：]\s*$")
 _P_TAG_RE = re.compile(r"</?p>")
 
+# T-1028 实测（2026-08-27）：文档分享的现场事实形态 = text 消息内纯 URL
+# （fehorizon.feishu.cn 的 docx/sheets，带 query+fragment 变体）；产品域族
+# 收编 feishu.cn/larksuite.com 两家官方域。kind 取路径段原词（docx/sheets/
+# base/wiki/minutes/file），消费方（T-1029）按 token 匹配快照。
+_FEISHU_LINK_RE = re.compile(
+    r"https?://(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+"
+    r"(?:feishu\.cn|larksuite\.com)"
+    r"/(docx|doc|sheets|base|wiki|minutes|file)/([A-Za-z0-9]+)"
+    # 尾段零宽可空（*）：裸链接后紧跟空白时，+ 会把 token 末位回借给尾段
+    r"[^\s<>\"'）)】」，。；：！？]*")
+_TRAILING_PUNCT = ".,;:!?)》、，。；：！？」』）】"
+
+
+def extract_feishu_links(content) -> list[dict]:
+    """消息 content 内飞书产品链接确定性提取 → [{kind, token, url}]。
+
+    零幻觉、可离线测试；与 msg_type 解耦——text/post/merge_forward 及将来
+    钉案的卡片类 content 通吃。同 URL 去重（保序）；尾部中英文标点不吞。
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in _FEISHU_LINK_RE.finditer(str(content or "")):
+        url = m.group(0).rstrip(_TRAILING_PUNCT)
+        if url in seen:
+            continue
+        seen.add(url)
+        out.append({"kind": m.group(1), "token": m.group(2), "url": url})
+    return out
+
+
+def render_row_body(row: dict, img_slot=None) -> str:
+    """单条消息行 → 可读正文（T-1028 D1「渲染保真降级制」三处口径共享实现）。
+
+    此前的口径漂移（日级 md 保真 vs _load_window_source/compose 只留纯 text）
+    即本函数要消灭的问题：任何类型至少一行人类可读——已知类型专属渲染；
+    system/video_chat 按实测形状打标；未知类型（未来卡片类）降级为
+    「[{type}消息] + 空白折叠截断摘要」，不再是纯占位。
+
+    Args:
+        row: JSONL 消息行
+        img_slot: 图片占位回调 str(image_key)->str（日级视图传注入 imgmap 的
+            闭包以分配序号）；None 时图片渲染为不可转述的静态 "[图片]"
+    Returns:
+        正文文本（不含时间戳/发言人前缀）
+    """
+
+    def _slot(key: str) -> str:
+        return img_slot(key) if img_slot else "[图片]"
+
+    mtype = str(row.get("msg_type") or "")
+    content = str(row.get("content") or "")
+    if mtype == "image":
+        return _slot(str(row.get("image_key") or ""))
+    if mtype == "post":
+        # 文本主体 + 内嵌图逐一占位（内嵌图引用从文本中替换为占位符）
+        text = content
+        for key in (row.get("image_keys") or []):
+            text = text.replace(f"![Image]({key})", _slot(key))
+        return text or "[空 post]"
+    if mtype == "file":
+        fname = str(row.get("file_name") or "")
+        return f"[文件] {fname}" if fname else "[文件]"
+    if mtype == "merge_forward":
+        # 单行内联展开（line_ids 一对一约束不破）——内层「发送人: 内容」
+        # 拍平串联；内嵌图占位按出现顺序入 imgmap
+        subs = parse_forwarded_messages(content)
+        if not subs:
+            return "[合并转发]"
+        parts = []
+        for s in subs:
+            t = _FWD_ANY_IMG_RE.sub(
+                lambda m: _slot((m.group(1) or m.group(2)).strip()),
+                str(s.get("text") or ""))
+            parts.append(f"{s.get('sender') or '?'}: {t}".rstrip())
+        return "[合并转发] " + "；".join(parts)
+    if mtype == "text":
+        return content
+    if mtype == "system":                    # 实测：会议开始/邀请入群等通知
+        return f"[系统] {content.strip()}" if content.strip() else "[系统消息]"
+    if mtype == "video_chat":                # 实测：视频通话开始（[Video call]）
+        return "[视频通话]" + (f" {content.strip()}" if content.strip() else "")
+    snippet = re.sub(r"\s+", " ", content).strip()
+    return f"[{mtype}消息]" + (f" {snippet[:80]}" if snippet else "")
+
 
 def extract_image_keys_from_post(content: str) -> list[str]:
     """post 消息 content 内嵌图引用提取（markdown 化 ![Image](key)，可多张）。"""
@@ -258,9 +342,7 @@ def render_md_from_jsonl(day_file: Path) -> tuple[str, dict, list[str]]:
     """JSONL → (md 文本, imgmap, 行号→message_id 对齐表)。
 
     md 行格式 "[HH:MM] 发送人: 内容"（与聚类 _PROMPT 约定一致）；
-    图片行 "[图片#N]" 占位 + imgmap 初始条目（pending，转述链路接手）；
-    T-952：post 内嵌图逐一占位（与 image 消息共享序号池，均入 imgmap）；
-    file 行渲染真实文件名（不再是 [file消息] 占位）；
+    逐行正文统一走 render_row_body（T-1028 三处口径共享渲染）；
     line_ids 与 md 消息行一一对应（聚类 msg_lines → message_id 换算依据）。
     """
     rows = sorted(load_chat_jsonl(day_file), key=_sort_key)
@@ -277,36 +359,7 @@ def render_md_from_jsonl(day_file: Path) -> tuple[str, dict, list[str]]:
     for r in rows:
         hhmm = str(r.get("ts") or "")[11:16] or "??:??"
         sender = str(r.get("sender_name") or r.get("sender_id") or "?")
-        mtype = str(r.get("msg_type") or "text")
-        if mtype == "image":
-            body = _img(str(r.get("image_key") or ""))
-        elif mtype == "post":
-            # 文本主体 + 内嵌图逐一占位（内嵌图引用从文本中替换为占位符）
-            text = str(r.get("content") or "")
-            for key in (r.get("image_keys") or []):
-                text = text.replace(f"![Image]({key})", _img(key))
-            body = text or "[空 post]"
-        elif mtype == "file":
-            fname = str(r.get("file_name") or "")
-            body = f"[文件] {fname}" if fname else "[文件]"
-        elif mtype == "merge_forward":
-            # T-1016：单行内联展开（line_ids 一对一约束不破）——内层
-            # 「发送人: 内容」拍平串联；内嵌图占位按出现顺序入 imgmap
-            subs = parse_forwarded_messages(str(r.get("content") or ""))
-            if not subs:
-                body = "[合并转发]"
-            else:
-                parts = []
-                for s in subs:
-                    t = _FWD_ANY_IMG_RE.sub(
-                        lambda m: _img((m.group(1) or m.group(2)).strip()),
-                        str(s.get("text") or ""))
-                    parts.append(f"{s.get('sender') or '?'}: {t}".rstrip())
-                body = "[合并转发] " + "；".join(parts)
-        elif mtype == "text":
-            body = str(r.get("content") or "")
-        else:
-            body = f"[{mtype}消息]"
+        body = render_row_body(r, img_slot=_img)
         lines.append(f"[{hhmm}] {sender}: {body}")
         line_ids.append(str(r.get("message_id") or ""))
     md = "\n".join(lines) + ("\n" if lines else "")

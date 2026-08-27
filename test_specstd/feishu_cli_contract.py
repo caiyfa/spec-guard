@@ -192,3 +192,77 @@ MERGE_FORWARD_IMAGE_KEYS = [
     "img_v3_0214p_f4761b1b-0dd5-4f05-a18d-ed5407786b6g",
     "img_v3_0214p_a1b047a5-177b-4de4-ad8f-8c98febddcbg",
 ]
+
+# T-1028 实测（2026-08-27，feishu_pool 真实池全量扫描）：system/video_chat
+# 消息形状——pull 通道原样（群 4d7f814d 落盘 JSONL 行，token/人名轻度改写）。
+SYSTEM_MESSAGE = {
+    "chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+    "content": ("Meeting has started. New messages will be synced in the "
+                "group chat and in-meeting chat."),
+    "create_time": "2026-08-24 10:02",
+    "deleted": False,
+    "message_id": "om_system_001",
+    "message_position": "3102",
+    "msg_type": "system",
+    "sender": {"id": "", "id_type": "", "name": "",
+               "sender_type": "system"},
+    "updated": False,
+}
+
+VIDEO_CHAT_MESSAGE = {
+    "chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+    "content": "[Video call]",
+    "create_time": "2026-08-24 14:30",
+    "deleted": False,
+    "message_id": "om_vchat_001",
+    "message_position": "3110",
+    "msg_type": "video_chat",
+    "sender": {"id": "ou_zhangtao", "id_type": "open_id", "name": "张韬",
+               "sender_type": "user"},
+    "updated": False,
+}
+
+# T-1028 链接形状实测（同轮扫描）：当前所有工作区未捕获过云文档「分享卡片」
+# （interactive/share_*）实体——现场文档分享的事实形态 = text 消息内纯 URL。
+# 三种真实形状钉案如下（token 值轻度改写，语法原样）；URL 的 query/fragment
+# 属消息原文一部分，提取层保留、消费方按 token 匹配。
+TEXT_WITH_DOCX_URL = {
+    "chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+    "content": "全景档案的说明文档 https://fehorizon.feishu.cn/docx/CtM6dlgsroTTcBxB73wc6RSRnhd 大家先看一遍",
+    "create_time": "2026-08-20 16:12",
+    "deleted": False,
+    "message_id": "om_docurl_001",
+    "message_position": "3050",
+    "msg_type": "text",
+    "sender": {"id": "ou_caiyf", "id_type": "open_id", "name": "蔡云飞",
+               "sender_type": "user"},
+    "updated": False,
+}
+
+TEXT_WITH_DOCX_URL_QF = {
+    "chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+    "content": ("会议纪要 https://fehorizon.feishu.cn/docx/"
+                "PBrqdIjOtouAUtxatd1csAUin2A?from=vc_group_doc_link"
+                "#doxcn1cHWDK4Fp9vkR0XD6kPd3e 已同步"),
+    "create_time": "2026-08-22 09:41",
+    "deleted": False,
+    "message_id": "om_docurl_002",
+    "message_position": "3061",
+    "msg_type": "text",
+    "sender": {"id": "ou_hewj", "id_type": "open_id", "name": "贺文君",
+               "sender_type": "user"},
+    "updated": False,
+}
+
+TEXT_WITH_SHEETS_URL = {
+    "chat_id": "oc_8786450d43fc1c453beb1c147d947c03",
+    "content": "打分表在这 https://fehorizon.feishu.cn/sheets/MchesjK2nhtfKsthZyvcHa7Xne1",
+    "create_time": "2026-08-23 11:05",
+    "deleted": False,
+    "message_id": "om_docurl_003",
+    "message_position": "3077",
+    "msg_type": "text",
+    "sender": {"id": "ou_caoyh", "id_type": "open_id", "name": "曹怡华",
+               "sender_type": "user"},
+    "updated": False,
+}
