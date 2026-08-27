@@ -11,6 +11,7 @@
   POST   /api/workspace/pull            拉取更新
   GET    /api/workspace/spec-files      Spec 文件列表
   GET    /api/workspace/read-file       读取文件
+  GET    /api/workspace/anchor-refs     FR/AC 锚点 → spec 原文片段
   GET    /api/workspace/active          获取当前激活工作区
 """
 
@@ -448,6 +449,20 @@ def api_read_file(path: str, raw: bool = False, ws_name: str = Depends(resolve_w
 
     content = resolved.read_text(encoding="utf-8", errors="replace")
     return {"path": path, "content": content, "format": "raw"}
+
+
+@router.get("/anchor-refs")
+def api_anchor_refs(ids: str = "", hint: str = "", ws_name: str = Depends(resolve_workspace)):
+    """T-1023：FR/AC 锚点 → spec 原文片段（结构化阅读视图的 covers/related_ac 数据源）。
+
+    ids 为逗号分隔锚点清单（上限 MAX_IDS 个）；编号跨模块同号时返回全部候选
+    matches，按 hint（场景文件路径）相关性降序；未命中诚实 found=False。
+    """
+    ws = get_workspace(ws_name)
+    if not ws:
+        raise HTTPException(status_code=404, detail=f"工作区未注册: {ws_name}")
+    from services import anchor_refs
+    return {"refs": anchor_refs.resolve_anchor_refs(ws.root, ids.split(","), hint=hint)}
 
 
 @router.get("/file-hash")
