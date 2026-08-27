@@ -797,3 +797,15 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | workbench/frontend/src/pages/agentChat/DraftArtifactsPanel.tsx | sess-draft-activity | 2026-08-27 | 7730af71fee9 | 139e6f5843b6 | 已完成 | 草稿去向判定竞态修复：conflict 预检等列表就绪后才开始 + libHit 渲染加 !meta 守卫——「库内同 ID 旧版+草稿新版」不再误判为已入库（卡片只剩 DAG 编排按钮的根因，20260827_094125_f955645e 会话复盘） |
 | workbench/frontend/src/pages/agentChat/DraftArtifactsPanel.test.tsx | sess-draft-activity | 2026-08-27 | NEW | d4355251217d | 已完成 | 去向判定三态守卫 3 例（挂载竞态不复现已入库误判/昨日入库真命中→DAG 卡/库内未命中→已删除卡） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-draft-activity | 2026-08-27 | 4d7738e1c031 | 76b4bc2963d6 | 已完成 | §6 登记：草稿面板去向判定修复两文件 |
+| sg_core/spec_sections.py | sess-scenario-reader | 2026-08-27 | NEW | 04ab25c4f114 | 已完成 | T-1023：sections 纯函数下沉（mcp_server 与 workbench 共同消费） |
+| mcp_server/tools/sections.py | sess-scenario-reader | 2026-08-27 | 9e316168e0cf | a38692b60b62 | 已完成 | T-1023：改 sys.modules 转发 shim（存量 15 测试零改动绿） |
+| workbench/backend/services/anchor_refs.py | sess-scenario-reader | 2026-08-27 | NEW | 5810f4c58122 | 已完成 | T-1023：FR/AC → spec 原文解析（同号全候选 + hint 排序 + AC 反查） |
+| workbench/backend/routers/workspace.py | sess-scenario-reader | 2026-08-27 | 104751e34ddf | 0922c972b660 | 已完成 | T-1023：+GET /api/workspace/anchor-refs |
+| test_specstd/test_anchor_refs.py | sess-scenario-reader | 2026-08-27 | NEW | 589c9f94635c | 已完成 | T-1023：anchor_refs 7 例（标题式/列表式/AC/未命中/同号排序/空目录/上限） |
+| workbench/frontend/src/utils/scenarioReader.ts | sess-scenario-reader | 2026-08-27 | NEW | 52110e342509 | 已完成 | T-1023：阅读视图纯函数层（步骤归一/注释提取/描述/hint） |
+| workbench/frontend/src/utils/scenarioReader.test.ts | sess-scenario-reader | 2026-08-27 | NEW | 803e3d95a04b | 已完成 | T-1023：纯函数 vitest 11 例（钉脚本内注释不串行守卫） |
+| workbench/frontend/src/components/ScenarioReader.tsx | sess-scenario-reader | 2026-08-27 | NEW | a1aa4263dff8 | 已完成 | T-1023：结构化阅读视图主组件 + 锚点芯片/原文展开面板 |
+| workbench/frontend/src/components/FileViewer.tsx | sess-scenario-reader | 2026-08-27 | 9c2d3931fd77 | 38f0a0c2b4c6 | 已完成 | T-1023：场景 YAML 双视图切换（localStorage 记忆；顺手清 react-in-jsx-scope 存量告警） |
+| workbench/frontend/src/components/ScenarioFormEditor.tsx | sess-scenario-reader | 2026-08-27 | bc8e5f2186b6 | b5b801584913 | 已完成 | T-1023：阅读/表单/YAML 三模式 |
+| workbench/frontend/src/api/workspace.ts | sess-scenario-reader | 2026-08-27 | db10b138f99c | e0e7f4faa424 | 已完成 | T-1023：+anchorRefs API 与类型 |
+| docs/远期设计/SpecGuard-总控文档.md | sess-scenario-reader | 2026-08-27 | 509d661fc339 | 1d93b82b863c | 已完成 | T-1023：§4 任务登记 + §5 会话注册 + §6 文件登记（自登记 hash 为回填前一刻，固有滞后一次编辑） |
