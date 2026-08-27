@@ -4,7 +4,9 @@
 1. 共享通用配置 systems/_shared/config/env.{env}.yaml（跨系统复用，不存在则跳过）
 2. 本系统配置 systems/tdm/config/env.{env}.yaml —— 系统键覆盖共享同键（顶层合并）
 3. ${VAR:default} 占位符 → 环境变量替换（无环境变量时用 default）
-4. DB 密码为空时回退读取 devops 技能凭据 ~/.qoder/skills/devops/scripts/.env.devops
+4. 凭据回退走 SpecGuard 自有链（T-960b）：resolve_secret 统一解析——
+   环境变量 → 自有文件 ~/.specguard/secrets.env（SG_SECRETS_FILE 可重定向）
+   → 旧 devops .env.devops 过渡兜底（命中发 DeprecationWarning，计划下线）
 """
 
 import os
@@ -12,8 +14,9 @@ import re
 
 import yaml
 
+from systems._shared.secrets import resolve_secret
+
 _CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
-_DEVOPS_ENV = os.path.expanduser(r"~\.qoder\skills\devops\scripts\.env.devops")
 
 _PLACEHOLDER = re.compile(r"\$\{([A-Z0-9_]+)(?::([^}]*))?\}")
 
@@ -39,21 +42,6 @@ def _substitute(value):
     return value
 
 
-def _read_devops_env():
-    """读取 devops 技能凭据文件（key=value 行），不存在返回空 dict"""
-    result = {}
-    if not os.path.isfile(_DEVOPS_ENV):
-        return result
-    with open(_DEVOPS_ENV, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            result[k.strip()] = v.strip()
-    return result
-
-
 def load_env(env_name="sit"):
     """加载环境配置（共享通用层 + 本系统层合并，系统覆盖共享），完成占位符替换与凭据回退"""
     from systems._shared import load_shared_env, merge_env
@@ -66,22 +54,17 @@ def load_env(env_name="sit"):
     # T-309：共享通用配置打底（不存在返回 {}），系统键覆盖共享同键
     cfg = merge_env(load_shared_env(env_name), system_cfg)
 
-    # T-960 凭据出库：internal_token.client_secret 回退——
-    # env yaml ${SG_TDM_CLIENT_SECRET:} 为空 → devops .env.devops（与 DB 密码同模式）
+    # T-960/T-960b 凭据出库：internal_token.client_secret 回退——
+    # env yaml ${SG_TDM_CLIENT_SECRET:} 为空 → resolve_secret 自有链
     it_cfg = cfg.get("internal_token")
     if isinstance(it_cfg, dict) and not it_cfg.get("client_secret"):
-        devops_it = _read_devops_env()
-        it_cfg["client_secret"] = (
-            os.environ.get("SG_TDM_CLIENT_SECRET", "")
-            or devops_it.get("SG_TDM_CLIENT_SECRET", "")
-        )
+        it_cfg["client_secret"] = resolve_secret("SG_TDM_CLIENT_SECRET")
 
     # DB 密码回退（K-055 多 schema 感知）：逐连接回退——
-    # env yaml 为空 → SG_DB_PASSWORD_{SCHEMA} → SG_DB_PASSWORD → devops .env.devops
+    # env yaml 为空 → SG_DB_PASSWORD_{SCHEMA} → SG_DB_PASSWORD → resolve_secret 自有链
     from engine.db_oracle import normalize_db_config
     db_cfg = cfg.setdefault("db", {})
     conns, _ = normalize_db_config(db_cfg)
-    devops = None
     suffix = "_UAT" if env_name.lower() == "uat" else ""
     for name, conn in conns.items():
         if conn.get("password"):
@@ -91,15 +74,13 @@ def load_env(env_name="sit"):
             or os.environ.get("SG_DB_PASSWORD", "")
         )
         if not conn["password"]:
-            if devops is None:
-                devops = _read_devops_env()
-            conn["password"] = devops.get(f"DB_PASSWORD{suffix}", "")
-            # host/user/port 也允许从 devops 凭据补全
+            conn["password"] = resolve_secret(f"DB_PASSWORD{suffix}")
+            # host/user/port 也允许从凭据链补全（resolve_secret 内部环境变量优先）
             if not conn.get("host"):
-                conn["host"] = devops.get(f"DB_HOST{suffix}", "")
+                conn["host"] = resolve_secret(f"DB_HOST{suffix}")
             if not conn.get("user"):
-                conn["user"] = devops.get(f"DB_USER{suffix}", "")
+                conn["user"] = resolve_secret(f"DB_USER{suffix}")
             if not conn.get("port"):
-                conn["port"] = int(devops.get(f"DB_PORT{suffix}", "3306") or "3306")
+                conn["port"] = int(resolve_secret(f"DB_PORT{suffix}") or "3306")
     cfg["env_name"] = env_name
     return cfg
