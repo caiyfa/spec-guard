@@ -8,9 +8,8 @@ from pathlib import Path
 
 _TEST_DIR = Path(__file__).resolve().parent
 
-from test_specstd.feishu_cli_contract import pull_messages  # noqa: E402
-
 from specflow.feishu_pool import chat_store as cs  # noqa: E402
+from test_specstd.feishu_cli_contract import pull_messages  # noqa: E402
 
 
 def _pull_msgs():
@@ -120,7 +119,7 @@ def test_render_md_and_imgmap(tmp_path):
     cs.merge_chat_jsonl(
         f, [cs.normalize_pull_message(m) for m in _pull_msgs()])
     md, imgmap, line_ids = cs.render_md_from_jsonl(f)
-    lines = [l for l in md.splitlines() if l.strip()]
+    lines = [ln for ln in md.splitlines() if ln.strip()]
     assert lines[0] == "[09:15] 蔡云飞: [图片#1]"
     assert lines[1].startswith("[14:07] 蔡云飞: @贺文君")
     assert imgmap["[图片#1]"]["media_key"] == \
@@ -179,9 +178,9 @@ def test_render_md_post_and_file(tmp_path):
     cs.merge_chat_jsonl(f, [cs.normalize_pull_message(POST_MESSAGE),
                             cs.normalize_pull_message(FILE_MESSAGE)])
     md, imgmap, line_ids = cs.render_md_from_jsonl(f)
-    lines = [l for l in md.splitlines() if l.strip()]
+    lines = [ln for ln in md.splitlines() if ln.strip()]
     # post：文本 + 两张内嵌图占位（post 自身计数与 image 消息共享序号池）
-    assert any("跨平台工作经历" in l for l in lines)
+    assert any("跨平台工作经历" in ln for ln in lines)
     assert "[图片#1]" in md and "[图片#2]" in md
     # 内嵌图进 imgmap（转述链路覆盖 post 附图）
     assert imgmap["[图片#1]"]["media_key"] == \
@@ -189,7 +188,7 @@ def test_render_md_post_and_file(tmp_path):
     assert imgmap["[图片#2]"]["media_key"] == \
         "img_v3_0214l_95d7879b-8a6a-4624-807e-ac6cd9ddbc0g"
     # file：真实文件名渲染（不再是 [file消息] 占位）
-    assert any("report_gap_analysis_v9.xlsx" in l for l in lines)
+    assert any("report_gap_analysis_v9.xlsx" in ln for ln in lines)
     assert len(line_ids) == 2
 
 
@@ -200,8 +199,7 @@ def test_render_md_post_and_file(tmp_path):
 def test_normalize_merge_forward_extracts_image_keys():
     """merge_forward：内嵌图两种占位（![Image](key) 与 [Image: key]）全部提取到
     image_keys（外层 message_id 配对下载依据）；content 原样保留。"""
-    from test_specstd.feishu_cli_contract import (MERGE_FORWARD_IMAGE_KEYS,
-                                                  MERGE_FORWARD_MESSAGE)
+    from test_specstd.feishu_cli_contract import MERGE_FORWARD_IMAGE_KEYS, MERGE_FORWARD_MESSAGE
     row = cs.normalize_pull_message(MERGE_FORWARD_MESSAGE)
     assert row["msg_type"] == "merge_forward"
     assert row["image_keys"] == MERGE_FORWARD_IMAGE_KEYS
@@ -230,12 +228,11 @@ def test_parse_forwarded_messages():
 def test_render_md_merge_forward_inline(tmp_path):
     """md 派生：merge_forward 单行内联展开（line_ids 一对一不破）——内层
     「发送人: 内容」拍平串联、图片占位入 imgmap（与 image/post 共享序号池）。"""
-    from test_specstd.feishu_cli_contract import (MERGE_FORWARD_IMAGE_KEYS,
-                                                  MERGE_FORWARD_MESSAGE)
+    from test_specstd.feishu_cli_contract import MERGE_FORWARD_IMAGE_KEYS, MERGE_FORWARD_MESSAGE
     f = tmp_path / "20260821.jsonl"
     cs.merge_chat_jsonl(f, [cs.normalize_pull_message(MERGE_FORWARD_MESSAGE)])
     md, imgmap, line_ids = cs.render_md_from_jsonl(f)
-    lines = [l for l in md.splitlines() if l.strip()]
+    lines = [ln for ln in md.splitlines() if ln.strip()]
     assert len(lines) == 1
     assert lines[0].startswith("[15:43] 蔡云飞: [合并转发]")
     assert "曹怡华: @蔡云飞 蔡老师" in lines[0]
@@ -251,8 +248,7 @@ def test_render_md_merge_forward_inline(tmp_path):
 
 def test_contract_new_pinned_types_normalize():
     """新钉案类型（system/video_chat，实测 2026-08-27）：content 原样入库。"""
-    from test_specstd.feishu_cli_contract import (SYSTEM_MESSAGE,
-                                                  VIDEO_CHAT_MESSAGE)
+    from test_specstd.feishu_cli_contract import SYSTEM_MESSAGE, VIDEO_CHAT_MESSAGE
     row = cs.normalize_pull_message(SYSTEM_MESSAGE)
     assert row["msg_type"] == "system"
     assert "Meeting has started" in row["content"]
@@ -266,9 +262,7 @@ def test_extract_feishu_links_measured_shapes():
     形状来源 2026-08-27 真实池扫描（fehorizon.feishu.cn）；token 值按契约模块
     同纪律轻度改写（形状=语法保留，值不敏感）。
     """
-    from test_specstd.feishu_cli_contract import (TEXT_WITH_DOCX_URL,
-                                                  TEXT_WITH_DOCX_URL_QF,
-                                                  TEXT_WITH_SHEETS_URL)
+    from test_specstd.feishu_cli_contract import TEXT_WITH_DOCX_URL, TEXT_WITH_DOCX_URL_QF, TEXT_WITH_SHEETS_URL
     links = cs.extract_feishu_links(TEXT_WITH_DOCX_URL["content"])
     assert links == [{"kind": "docx",
                       "token": "CtM6dlgsroTTcBxB73wc6RSRnhd",
@@ -292,7 +286,7 @@ def test_extract_feishu_links_family_paths_and_dedup():
         "表格 https://fehorizon.feishu.cn/sheets/MchTOKEN000000000001 "
         "以及重复 https://fehorizon.feishu.cn/sheets/MchTOKEN000000000001")
     links = cs.extract_feishu_links(content)
-    kinds = [l["kind"] for l in links]
+    kinds = [ln["kind"] for ln in links]
     assert kinds == ["wiki", "minutes", "sheets"]
     assert links[0]["token"] == "XAbc123XYZdef456Ghi"
     assert links[1]["url"].endswith("minutes/obcnxyz987654321abcd")   # 中文句号不入 URL
@@ -309,9 +303,7 @@ def test_extract_feishu_links_ignores_non_product_domains():
 
 def _mixed_rows():
     """混排行集（已按存储排序键排好）：两钉案类型 + 未知合成类型 + text 链接。"""
-    from test_specstd.feishu_cli_contract import (SYSTEM_MESSAGE,
-                                                  TEXT_WITH_DOCX_URL,
-                                                  VIDEO_CHAT_MESSAGE)
+    from test_specstd.feishu_cli_contract import SYSTEM_MESSAGE, TEXT_WITH_DOCX_URL, VIDEO_CHAT_MESSAGE
     rows = [
         cs.normalize_pull_message(SYSTEM_MESSAGE),
         cs.normalize_pull_message(VIDEO_CHAT_MESSAGE),
@@ -329,10 +321,10 @@ def test_render_row_body_shared_by_md_view(tmp_path):
     f = tmp_path / "20260827.jsonl"
     cs.merge_chat_jsonl(f, rows)
     md, imgmap, line_ids = cs.render_md_from_jsonl(f)
-    lines = [l for l in md.splitlines() if l.strip()]
+    lines = [ln for ln in md.splitlines() if ln.strip()]
     assert len(lines) == len(rows)                  # 一行一消息铁律
     assert line_ids == [r["message_id"] for r in rows]
-    for line, row in zip(lines, rows):
+    for line, row in zip(lines, rows, strict=True):
         hhmm = str(row.get("ts") or "")[11:16]
         sender = str(row.get("sender_name") or row.get("sender_id") or "?")
         assert line == f"[{hhmm}] {sender}: {cs.render_row_body(row)}"
@@ -374,4 +366,4 @@ def test_window_source_uses_shared_renderer(tmp_path):
         f"[{str(r.get('ts') or '')[5:10]} {str(r.get('ts') or '')[11:16]}] "
         f"{str(r.get('sender_name') or r.get('sender_id') or '?')}: "
         f"{cs.render_row_body(r)}" for r in rows]
-    assert [l for l in text.splitlines() if l.strip()] == expected
+    assert [ln for ln in text.splitlines() if ln.strip()] == expected
