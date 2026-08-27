@@ -203,6 +203,18 @@ def _ws_url(token, workspace="tdm"):
     return f"/api/agent/ws?token={token}&workspace={workspace}"
 
 
+def _ws_connect(client, token, workspace="tdm"):
+    """每次连接强制独立 portal（client.portal=None 使 _portal_factory 新建）。
+
+    starlette 1.0 TestClient 在 __enter__ 后会复用 lifespan portal（所有 WS
+    连接挤同一 loop），而本套测试的总线跨 loop 投递防护与 attach 时序按
+    「每连接独立 portal loop」设计；复用单 loop 时嵌套连接的 handler 协程
+    调度与真实双标签页拓扑不一致，且实测会间歇性挂死（ws_b 收不到 attached）。
+    """
+    client.portal = None
+    return client.websocket_connect(_ws_url(token, workspace))
+
+
 class TestWsAttach:
 
     def test_attach_resumes_stream_after_disconnect(self, client):
@@ -214,7 +226,7 @@ class TestWsAttach:
         # 注意：不能用 with 退出模拟断连——TestClient 退出会取消后端 handler 协程
         # （与真实断连不同），改用 close() 只关连接：后端 send 失败转入 ws_broken，
         # run 继续后台执行（断连不打断），与生产语义一致。
-        with client.websocket_connect(_ws_url(token)) as ws_a:
+        with _ws_connect(client, token) as ws_a:
             ws_a.send_json({"message": "你好", "purpose": "test_workbench",
                             "session_id": "", "max_turns": 2})
             msg = ws_a.receive_json()
@@ -236,7 +248,7 @@ class TestWsAttach:
             assert body["run_baseline_len"] == 0  # 新会话基线
 
             # 连接 B：attach 续上——回放已发生事件 + 实时收到尾部与 done
-            with client.websocket_connect(_ws_url(token)) as ws_b:
+            with _ws_connect(client, token) as ws_b:
                 ws_b.send_json({"type": "attach", "session_id": sid})
                 got = [ws_b.receive_json()]
                 assert got[0]["type"] == "attached"
@@ -272,7 +284,7 @@ class TestWsAttach:
         r = client.post("/api/agent/sessions", headers=h,
                         json={"purpose": "test_workbench", "workspace": "tdm"})
         sid = r.json()["session_id"]
-        with client.websocket_connect(_ws_url(token)) as ws:
+        with _ws_connect(client, token) as ws:
             ws.send_json({"type": "attach", "session_id": sid})
             msg = ws.receive_json()
             assert msg["type"] == "attached" and msg["run_in_progress"] is False
@@ -291,7 +303,7 @@ class TestWsAttach:
         user_store.grant_workspace("tdm", "90000002", "90000001")
         h_b = _login(client, "90000002")
         token_b = h_b["Authorization"].split(" ", 1)[1]
-        with client.websocket_connect(_ws_url(token_b)) as ws:
+        with _ws_connect(client, token_b) as ws:
             ws.send_json({"type": "attach", "session_id": sid})
             msg = ws.receive_json()
             assert msg["type"] == "error" and "无权" in msg["message"]
@@ -299,7 +311,7 @@ class TestWsAttach:
     def test_attach_invalid_sid(self, client):
         h = _login(client, "90000001")
         token = h["Authorization"].split(" ", 1)[1]
-        with client.websocket_connect(_ws_url(token)) as ws:
+        with _ws_connect(client, token) as ws:
             ws.send_json({"type": "attach", "session_id": "../evil"})
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -308,13 +320,20 @@ class TestWsAttach:
         """第二标签页：发起连接在线时另一连接 attach 同样续上（fan-out）。"""
         h = _login(client, "90000001")
         token = h["Authorization"].split(" ", 1)[1]
-        with client.websocket_connect(_ws_url(token)) as ws_a:
+        with _ws_connect(client, token) as ws_a:
             ws_a.send_json({"message": "你好", "purpose": "test_workbench",
                             "session_id": "", "max_turns": 2})
             started = ws_a.receive_json()
             sid = started["session_id"]
-            time.sleep(0.4)
-            with client.websocket_connect(_ws_url(token)) as ws_b:
+            # 确定性等待：收到 runtime 首个 delta 才证明 run 已登记并启动
+            # （started 消息早于 _ACTIVE_RUNS 登记，盲等 sleep 会在慢机器上
+            # 赌进登记窗口——attach 返回 run_in_progress=False 属正确语义）
+            while True:
+                ev = ws_a.receive_json()
+                if ev["type"] == "assistant_delta":
+                    break
+                assert ev["type"] != "error", ev
+            with _ws_connect(client, token) as ws_b:
                 ws_b.send_json({"type": "attach", "session_id": sid})
                 attached = ws_b.receive_json()
                 assert attached["run_in_progress"] is True
@@ -343,7 +362,7 @@ class TestWsAttach:
         class ExplodingRuntime(StubRuntime):
             def run(self, system_prompt, user_message, sm, sid, refs=None):
                 self.events.emit("state", turn=0, max_turns=2)
-                time.sleep(0.5)
+                time.sleep(1.2)  # attach 窗口放宽：确定性等待后仍需足够窗口完成 attach 握手
                 raise RuntimeError("boom")
 
         from routers import agent as agent_router
@@ -352,11 +371,18 @@ class TestWsAttach:
         try:
             h = _login(client, "90000001")
             token = h["Authorization"].split(" ", 1)[1]
-            with client.websocket_connect(_ws_url(token)) as ws_a:
+            with _ws_connect(client, token) as ws_a:
                 ws_a.send_json({"message": "x", "purpose": "test_workbench"})
                 sid = ws_a.receive_json()["session_id"]
-                time.sleep(0.3)
-                with client.websocket_connect(_ws_url(token)) as ws_b:
+                # 确定性等待：runtime state（带 turn）到达 = run 已登记启动，
+                # 再 attach 必然 run_in_progress=True（原盲等 0.3s 在慢机器上
+                # 会落进 started→登记窗口，attach 返回 False 属正确语义但断言假失败）
+                while True:
+                    ev = ws_a.receive_json()
+                    if ev.get("type") == "state" and "turn" in ev:
+                        break
+                    assert ev["type"] != "error", ev
+                with _ws_connect(client, token) as ws_b:
                     ws_b.send_json({"type": "attach", "session_id": sid})
                     attached = ws_b.receive_json()
                     assert attached["run_in_progress"] is True

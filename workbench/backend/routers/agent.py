@@ -4,6 +4,7 @@
 """  # reload-trigger
 
 import asyncio
+import contextlib
 import json
 import re
 from pathlib import Path
@@ -996,14 +997,17 @@ async def _handle_attach(websocket: WebSocket, data: dict, user, emp_no: str):
                         except Exception:
                             break
                         heartbeat_tick = 0
-                    # 兜底：run 已结束但终态事件丢失（异常路径/极端竞态）→ 合成
-                    # attached(run_in_progress=false) 让前端解除 loading 并全量拉取对齐
-                    if not _run_in_progress(sid) and sub.queue.empty():
-                        try:
+                    # 兜底：run 已结束且终态事件丢失（异常路径/极端竞态）→ 合成
+                    # attached(run_in_progress=false) 让前端解除 loading 并全量拉取对齐。
+                    # 三重条件防误触发：_run_in_progress 与 queue.empty() 非原子检查，
+                    # 两次检查之间 done 可能恰好尚未发布（worker 已返回、主循环还没走
+                    # 到 publish）——此时提前退订会错过紧接着的 done。必须再加总线
+                    # 频道的 done 标记（publish 内同步置位，证明终态确已发布）。
+                    if not _run_in_progress(sid) and sub.queue.empty() \
+                            and _BUS.snapshot(sid)["done"]:
+                        with contextlib.suppress(Exception):
                             await websocket.send_json({"type": "attached", "session_id": sid,
                                                        "run_in_progress": False})
-                        except Exception:
-                            pass
                         break
                     continue
                 except Exception:
@@ -1242,7 +1246,13 @@ async def agent_ws(websocket: WebSocket,
                 ws_broken = False  # K-xxx: WS 断连后不再取消 run——继续执行并落盘
                 while True:
                     if run_task.done() and sub.queue.empty():
-                        break
+                        # 在飞投递防护：worker 线程的末事件经 call_soon_threadsafe
+                        # 投递，future.set_result（run_task done）与回调入 ready 队存在
+                        # 调度间隙——让出一轮再重查，防提前退出丢末事件（attach 中
+                        # 的订阅者将收不到后续 done 广播）
+                        await asyncio.sleep(0)
+                        if run_task.done() and sub.queue.empty():
+                            break
                     try:
                         event = await asyncio.wait_for(sub.queue.get(), timeout=0.2)
                         if not ws_broken:
@@ -1274,29 +1284,40 @@ async def agent_ws(websocket: WebSocket,
                 try:
                     messages = await run_task  # 运行异常在此抛出，进外层 except
                 except Exception as e:
-                    # T-1021: 异常也广播到总线——attach 中的连接收到 error 后退出订阅循环
+                    # T-1021: 异常也广播到总线——attach 中的连接收到 error 后退出订阅循环。
+                    # 顺序：先 publish 再注销活跃标记——注销会让 attach 循环的终态兜底
+                    # 条件（_run_in_progress=False）成立，若 error 还在飞会被误判为「事件已丢」
+                    # 提前退订，订阅者永远收不到 error。
                     _BUS.publish(sid, {"type": "error", "message": str(e), "session_id": sid})
+                    _ACTIVE_RUNS.pop(sid, None)
+                    _ACTIVE_RUNTIMES.pop(sid, None)
                     raise
-            finally:
+
+                # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送。
+                # T-1021: done 广播到总线（attach 中的连接经订阅队列收到，含 messages/stats
+                # 供前端全量对齐）；本连接直发一份（事件循环已退出，不经订阅队列）。
+                # 顺序：先 publish 再注销活跃标记（同 error 路径）——否则 done 跨 loop 投递
+                # 还在飞时兜底条件成立，attach 订阅者提前退订错过 done。
+                # K-xxx: WS 已断（detach 完成）时发送失败是预期——静默跳过，消息已落盘，恢复会话可见
+                done_event = {
+                    "type": "done",
+                    "session_id": sid,
+                    "messages": messages,
+                    "stats": llm.get_stats(),
+                    "title": "",
+                }
+                _BUS.publish(sid, done_event)
                 _ACTIVE_RUNS.pop(sid, None)
                 _ACTIVE_RUNTIMES.pop(sid, None)
-
-            # 首字响应优化：先推送 done（前端立即解除 loading），标题异步生成后单独推送。
-            # T-1021: done 广播到总线（attach 中的连接经订阅队列收到，含 messages/stats
-            # 供前端全量对齐）；本连接直发一份（事件循环已退出，不经订阅队列）。
-            # K-xxx: WS 已断（detach 完成）时发送失败是预期——静默跳过，消息已落盘，恢复会话可见
-            done_event = {
-                "type": "done",
-                "session_id": sid,
-                "messages": messages,
-                "stats": llm.get_stats(),
-                "title": "",
-            }
-            _BUS.publish(sid, done_event)
-            try:
-                await websocket.send_json(done_event)
-            except Exception:
-                pass
+                try:
+                    await websocket.send_json(done_event)
+                except Exception:
+                    pass
+            finally:
+                # 兜底注销（正常路径已在 done/error 处先 publish 后 pop——
+                # 顺序见上；此处幂等，防主循环异常退出时标记泄漏致 K-015 永拒）
+                _ACTIVE_RUNS.pop(sid, None)
+                _ACTIVE_RUNTIMES.pop(sid, None)
 
             # G4: 新会话标题异步生成（不阻塞 done 事件）
             if is_new_session and messages:
