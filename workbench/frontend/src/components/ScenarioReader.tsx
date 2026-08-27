@@ -221,6 +221,18 @@ function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch
 
 // ── 主组件 ──
 
+// T-1027 F3：区块分页签（此前五个区块自上而下堆叠，评审时不知看哪里）。
+// 头部信息常驻；分签选择 localStorage 持久化，恢复值失效回退首个可用签（体验基线①）。
+type ReaderTabId = 'semantic' | 'anchors' | 'flow' | 'verify' | 'tail';
+const READER_TAB_KEY = 'sg_scenario_reader_tab';
+const READER_TABS: { id: ReaderTabId; icon: string; label: string }[] = [
+  { id: 'semantic', icon: '📖', label: '业务语义' },
+  { id: 'anchors',  icon: '🔗', label: '关联需求' },
+  { id: 'flow',     icon: '⚙',  label: '执行步骤' },
+  { id: 'verify',   icon: '✅', label: '验证断言' },
+  { id: 'tail',     icon: '🧩', label: '依赖与产出' },
+];
+
 export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: Props) {
   const doc = (data.doc || {}) as Record<string, unknown>;
   const covers = Array.isArray(doc.covers) ? doc.covers.map(String) : [];
@@ -269,175 +281,232 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
   const tags = Array.isArray(data.tags) ? data.tags.map(String) : [];
   const dimensions = Array.isArray(doc.dimensions) ? doc.dimensions.map(String) : [];
 
+  // ── 分签装配（空区块不出签；持久化值失效回退首签） ──
+  const hasSemantic = !!((doc.given || doc.when || doc.then || doc.note));
+  const hasAnchors = anchorIds.length > 0;
+  const hasTail = Object.keys(requires).length > 0 || dependsOn.length > 0
+    || produces.length > 0 || teardown.length > 0;
+  const availableTabs = useMemo(() => READER_TABS.filter((t) => ({
+    semantic: hasSemantic,
+    anchors: hasAnchors,
+    flow: flow.length > 0,
+    verify: verify.length > 0,
+    tail: hasTail,
+  } as Record<ReaderTabId, boolean>)[t.id]), [hasSemantic, hasAnchors, flow.length, verify.length, hasTail]);
+
+  const [activeTab, setActiveTab] = useState<ReaderTabId>(() => {
+    try {
+      const stored = localStorage.getItem(READER_TAB_KEY) as ReaderTabId | null;
+      if (stored && READER_TABS.some(t => t.id === stored)) return stored;
+    } catch { /* 隐私模式 */ }
+    return 'semantic';
+  });
+  // 活动签失效（该文档无此区块/存储值越界）→ 回退首个可用签，不空白不报错
+  useEffect(() => {
+    if (!availableTabs.some(t => t.id === activeTab)) {
+      setActiveTab(availableTabs[0]?.id ?? 'semantic');
+    }
+  }, [availableTabs, activeTab]);
+  const selectTab = (id: ReaderTabId) => {
+    setActiveTab(id);
+    try { localStorage.setItem(READER_TAB_KEY, id); } catch { /* 隐私模式写失败无害 */ }
+  };
+
+  const tabCountOf = (id: ReaderTabId): number | undefined =>
+    id === 'flow' && flow.length > 0 ? flow.length
+      : id === 'verify' && verify.length > 0 ? verify.length
+        : id === 'anchors' && hasAnchors ? anchorIds.length
+          : undefined;
+
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <div className="max-w-3xl space-y-5">
-
-        {/* ── 头部 ── */}
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-sm text-info">{String(data.id || '')}</span>
-            {!!data.version && <Chip text={`v${String(data.version)}`} />}
-            {!!data.priority && <Chip text={String(data.priority)} tone={data.priority === 'P0' ? 'warn' : 'gray'} />}
-            {tags.map((t) => <Chip key={t} text={t} />)}
-            {dimensions.map((t) => <Chip key={t} text={`◆${t}`} />)}
-          </div>
-          {!!data.title && <div className="mt-1 text-[13px] text-gray-200">{String(data.title)}</div>}
+    <div className="h-full flex flex-col min-h-0">
+      {/* ── 头部（常驻）：id/版本/优先级/tags/dimensions + 标题 ── */}
+      <div className="px-4 pt-3 pb-1 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-sm text-info">{String(data.id || '')}</span>
+          {!!data.version && <Chip text={`v${String(data.version)}`} />}
+          {!!data.priority && <Chip text={String(data.priority)} tone={data.priority === 'P0' ? 'warn' : 'gray'} />}
+          {tags.map((t) => <Chip key={t} text={t} />)}
+          {dimensions.map((t) => <Chip key={t} text={`◆${t}`} />)}
         </div>
+        {!!data.title && <div className="mt-1 text-[13px] text-gray-200">{String(data.title)}</div>}
+      </div>
 
-        {/* ── 📖 业务语义 ── */}
-        {(!!doc.given || !!doc.when || !!doc.then) && (
-          <Section icon="📖" title="业务语义">
-            <div className="rounded-lg border border-border bg-surface-2/70 px-3 py-2.5 space-y-1.5 text-[12px]">
-              {!!doc.given && (
-                <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">Given</span>
-                  <span className="text-gray-300 whitespace-pre-wrap">{String(doc.given)}</span></div>
-              )}
-              {!!doc.when && (
-                <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">When</span>
-                  <span className="text-gray-300 whitespace-pre-wrap">{String(doc.when)}</span></div>
-              )}
-              {!!doc.then && (
-                <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">Then</span>
-                  <span className="text-gray-300 whitespace-pre-wrap">{String(doc.then)}</span></div>
-              )}
-            </div>
-          </Section>
-        )}
+      {/* ── 区块页签条 ── */}
+      {availableTabs.length > 1 && (
+        <div className="flex items-center gap-1 px-3 pb-1.5 pt-0.5 border-b border-border flex-shrink-0 overflow-x-auto">
+          {availableTabs.map((t) => {
+            const n = tabCountOf(t.id);
+            return (
+              <button key={t.id} onClick={() => selectTab(t.id)}
+                title={`${t.label}${n != null ? `（${n} 条）` : ''}`}
+                className={`px-2 py-1 rounded text-[10px] whitespace-nowrap transition-colors ${
+                  activeTab === t.id ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
+                }`}>
+                {t.icon} {t.label}
+                {n != null && <span className="ml-0.5 opacity-70">{n}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-        {/* ── 🔗 关联需求 ── */}
-        {anchorIds.length > 0 && (
-          <Section icon="🔗" title="关联需求（点击展开 spec 原文）">
-            <div className="space-y-1.5">
-              {covers.length > 0 && (
-                <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-[10px] text-gray-600 py-0.5 flex-shrink-0">covers</span>
-                  {covers.map((aid) => (
-                    <AnchorChip key={aid} aid={aid} anchor={refs[aid]}
-                      open={openAnchor === aid}
-                      onToggle={() => setOpenAnchor(openAnchor === aid ? null : aid)} />
-                  ))}
-                </div>
-              )}
-              {relatedAc.length > 0 && (
-                <div className="flex items-start gap-2 flex-wrap">
-                  <span className="text-[10px] text-gray-600 py-0.5 flex-shrink-0">验收标准</span>
-                  {relatedAc.map((aid) => (
-                    <AnchorChip key={aid} aid={aid} anchor={refs[aid]}
-                      open={openAnchor === aid}
-                      onToggle={() => setOpenAnchor(openAnchor === aid ? null : aid)} />
-                  ))}
-                </div>
-              )}
-              {refsError && <div className="text-[10px] text-fail">锚点原文加载失败：{refsError}</div>}
-              {openAnchor && refs[openAnchor]?.found && (
-                <AnchorSourcePanel anchor={refs[openAnchor]}
-                  onOpenDoc={(match) => setDocView({ aid: openAnchor, match })}
-                  onOpenFile={onOpenFile} />
-              )}
-            </div>
-          </Section>
-        )}
+      {/* ── 活动区块内容 ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 pt-3">
+        <div className="max-w-3xl space-y-5">
 
-        {docView && <SpecDocModal aid={docView.aid} match={docView.match} onClose={() => setDocView(null)} />}
+          {activeTab === 'semantic' && (
+            <>
+              {(!!doc.given || !!doc.when || !!doc.then) && (
+                <Section icon="📖" title="业务语义">
+                  <div className="rounded-lg border border-border bg-surface-2/70 px-3 py-2.5 space-y-1.5 text-[12px]">
+                    {!!doc.given && (
+                      <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">Given</span>
+                        <span className="text-gray-300 whitespace-pre-wrap">{String(doc.given)}</span></div>
+                    )}
+                    {!!doc.when && (
+                      <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">When</span>
+                        <span className="text-gray-300 whitespace-pre-wrap">{String(doc.when)}</span></div>
+                    )}
+                    {!!doc.then && (
+                      <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">Then</span>
+                        <span className="text-gray-300 whitespace-pre-wrap">{String(doc.then)}</span></div>
+                    )}
+                  </div>
+                </Section>
+              )}
+              {!!doc.note && (
+                <details className="rounded border border-border/60 bg-surface-2/50 px-3 py-1.5">
+                  <summary className="text-[11px] text-gray-500 cursor-pointer">📝 编写备注（关键决策）</summary>
+                  <div className="mt-1.5 text-[11px] text-gray-400 whitespace-pre-wrap">{String(doc.note)}</div>
+                </details>
+              )}
+            </>
+          )}
 
-        {!!doc.note && (
-          <details className="rounded border border-border/60 bg-surface-2/50 px-3 py-1.5">
-            <summary className="text-[11px] text-gray-500 cursor-pointer">📝 编写备注（关键决策）</summary>
-            <div className="mt-1.5 text-[11px] text-gray-400 whitespace-pre-wrap">{String(doc.note)}</div>
-          </details>
-        )}
+          {activeTab === 'anchors' && hasAnchors && (
+            <Section icon="🔗" title="关联需求（点击展开 spec 原文）">
+              <div className="space-y-1.5">
+                {covers.length > 0 && (
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <span className="text-[10px] text-gray-600 py-0.5 flex-shrink-0">covers</span>
+                    {covers.map((aid) => (
+                      <AnchorChip key={aid} aid={aid} anchor={refs[aid]}
+                        open={openAnchor === aid}
+                        onToggle={() => setOpenAnchor(openAnchor === aid ? null : aid)} />
+                    ))}
+                  </div>
+                )}
+                {relatedAc.length > 0 && (
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <span className="text-[10px] text-gray-600 py-0.5 flex-shrink-0">验收标准</span>
+                    {relatedAc.map((aid) => (
+                      <AnchorChip key={aid} aid={aid} anchor={refs[aid]}
+                        open={openAnchor === aid}
+                        onToggle={() => setOpenAnchor(openAnchor === aid ? null : aid)} />
+                    ))}
+                  </div>
+                )}
+                {refsError && <div className="text-[10px] text-fail">锚点原文加载失败：{refsError}</div>}
+                {openAnchor && refs[openAnchor]?.found && (
+                  <AnchorSourcePanel anchor={refs[openAnchor]}
+                    onOpenDoc={(match) => setDocView({ aid: openAnchor, match })}
+                    onOpenFile={onOpenFile} />
+                )}
+              </div>
+            </Section>
+          )}
 
-        {/* ── ⚙ 执行步骤 ── */}
-        {flow.length > 0 && (
-          <Section icon="⚙" title="执行步骤" count={flow.length}>
-            <div className="space-y-1.5">
-              {flow.map((s, i) => {
-                const d = describeStep(s);
-                const comment = flowComments[i] || '';
-                return (
-                  <div key={i} className="rounded-lg border border-border bg-surface-2/70 px-3 py-2">
-                    <div className="flex items-center gap-2 text-[12px]">
-                      <span className="text-gray-600 text-[10px] w-4 flex-shrink-0">{i + 1}</span>
-                      <span>{d.icon}</span>
-                      <span className="text-gray-500 flex-shrink-0">{d.typeLabel}</span>
-                      <span className="text-gray-200 font-mono text-[11px] break-all">{d.title}</span>
-                      {d.save && (
-                        <span className="ml-auto text-[9px] text-gray-600 flex-shrink-0"
-                          title={`结果存为变量，后续步骤以 {{${d.save}.…}} 引用`}>→ {d.save}</span>
+          {activeTab === 'flow' && flow.length > 0 && (
+            <Section icon="⚙" title="执行步骤" count={flow.length}>
+              <div className="space-y-1.5">
+                {flow.map((s, i) => {
+                  const d = describeStep(s);
+                  const comment = flowComments[i] || '';
+                  return (
+                    <div key={i} className="rounded-lg border border-border bg-surface-2/70 px-3 py-2">
+                      <div className="flex items-center gap-2 text-[12px]">
+                        <span className="text-gray-600 text-[10px] w-4 flex-shrink-0">{i + 1}</span>
+                        <span>{d.icon}</span>
+                        <span className="text-gray-500 flex-shrink-0">{d.typeLabel}</span>
+                        <span className="text-gray-200 font-mono text-[11px] break-all">{d.title}</span>
+                        {d.save && (
+                          <span className="ml-auto text-[9px] text-gray-600 flex-shrink-0"
+                            title={`结果存为变量，后续步骤以 {{${d.save}.…}} 引用`}>→ {d.save}</span>
+                        )}
+                      </div>
+                      {comment && (
+                        <div className="mt-1 ml-6 text-[11px] text-gray-500 whitespace-pre-wrap border-l-2 border-info/20 pl-2">
+                          {comment}
+                        </div>
+                      )}
+                      {d.lines.length > 0 && (
+                        <div className="mt-0.5 ml-6 text-[10px] text-gray-600 space-y-0">
+                          {d.lines.map((l, j) => <div key={j} className="break-all">{l}</div>)}
+                        </div>
+                      )}
+                      {d.code && (
+                        <details className="mt-1 ml-6">
+                          <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-info">
+                            查看{d.code.lang === 'sql' ? ' SQL' : d.code.lang === 'python' ? '脚本' : '报文'}
+                          </summary>
+                          <div className="mt-1"><CodeBlock lang={d.code.lang} text={d.code.text} /></div>
+                        </details>
                       )}
                     </div>
-                    {comment && (
-                      <div className="mt-1 ml-6 text-[11px] text-gray-500 whitespace-pre-wrap border-l-2 border-info/20 pl-2">
-                        {comment}
-                      </div>
-                    )}
-                    {d.lines.length > 0 && (
-                      <div className="mt-0.5 ml-6 text-[10px] text-gray-600 space-y-0">
-                        {d.lines.map((l, j) => <div key={j} className="break-all">{l}</div>)}
-                      </div>
-                    )}
-                    {d.code && (
-                      <details className="mt-1 ml-6">
-                        <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-info">
-                          查看{d.code.lang === 'sql' ? ' SQL' : d.code.lang === 'python' ? '脚本' : '报文'}
-                        </summary>
-                        <div className="mt-1"><CodeBlock lang={d.code.lang} text={d.code.text} /></div>
-                      </details>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Section>
-        )}
+                  );
+                })}
+              </div>
+            </Section>
+          )}
 
-        {/* ── ✅ 验证 ── */}
-        {verify.length > 0 && (
-          <Section icon="✅" title="验证断言" count={verify.length}>
-            <div className="rounded-lg border border-border bg-surface-2/70 px-3 py-2 space-y-1.5">
-              {verify.map((v, i) => {
-                const d = describeVerify(v);
-                const comment = verifyComments[i] || '';
-                return (
-                  <div key={i} className="text-[11px]">
-                    <div className="flex items-start gap-1.5">
-                      <span className="flex-shrink-0">{d.icon}</span>
-                      <span className="text-gray-300 break-all flex-1">{d.text}</span>
+          {activeTab === 'verify' && verify.length > 0 && (
+            <Section icon="✅" title="验证断言" count={verify.length}>
+              <div className="rounded-lg border border-border bg-surface-2/70 px-3 py-2 space-y-1.5">
+                {verify.map((v, i) => {
+                  const d = describeVerify(v);
+                  const comment = verifyComments[i] || '';
+                  return (
+                    <div key={i} className="text-[11px]">
+                      <div className="flex items-start gap-1.5">
+                        <span className="flex-shrink-0">{d.icon}</span>
+                        <span className="text-gray-300 break-all flex-1">{d.text}</span>
+                      </div>
+                      {comment && <div className="ml-5 text-[10px] text-gray-600 whitespace-pre-wrap">{comment}</div>}
+                      {d.code && (
+                        <details className="ml-5 mt-0.5">
+                          <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-info">查看明细</summary>
+                          <div className="mt-1"><CodeBlock lang={d.code.lang} text={d.code.text} /></div>
+                        </details>
+                      )}
                     </div>
-                    {comment && <div className="ml-5 text-[10px] text-gray-600 whitespace-pre-wrap">{comment}</div>}
-                    {d.code && (
-                      <details className="ml-5 mt-0.5">
-                        <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-info">查看明细</summary>
-                        <div className="mt-1"><CodeBlock lang={d.code.lang} text={d.code.text} /></div>
-                      </details>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Section>
-        )}
+                  );
+                })}
+              </div>
+            </Section>
+          )}
 
-        {/* ── 尾部摘要 ── */}
-        {(Object.keys(requires).length > 0 || dependsOn.length > 0 || produces.length > 0 || teardown.length > 0) && (
-          <div className="rounded-lg border border-border/60 bg-surface-2/50 px-3 py-2 text-[10px] text-gray-600 space-y-1">
-            {!!(Array.isArray(requires.accounts) && requires.accounts.length) && (
-              <div>所需账号：{(requires.accounts as unknown[]).map(String).join('、')}</div>
-            )}
-            {!!(Array.isArray(requires.env) && requires.env.length) && (
-              <div>环境配置：{(requires.env as unknown[]).map(String).join('、')}</div>
-            )}
-            {dependsOn.length > 0 && (
-              <div>上游依赖：{dependsOn.map((d) => (typeof d === 'string' ? d : String((d as Record<string, unknown>).id || ''))).join('、')}</div>
-            )}
-            {produces.length > 0 && (
-              <div>对外产出：{produces.map((p) => Object.keys(p as Record<string, unknown>)[0] || '').filter(Boolean).join('、')}</div>
-            )}
-            {teardown.length > 0 && <div>清理步骤：{teardown.length} 步</div>}
-          </div>
-        )}
+          {activeTab === 'tail' && hasTail && (
+            <div className="rounded-lg border border-border/60 bg-surface-2/50 px-3 py-2 text-[10px] text-gray-600 space-y-1">
+              {!!(Array.isArray(requires.accounts) && requires.accounts.length) && (
+                <div>所需账号：{(requires.accounts as unknown[]).map(String).join('、')}</div>
+              )}
+              {!!(Array.isArray(requires.env) && requires.env.length) && (
+                <div>环境配置：{(requires.env as unknown[]).map(String).join('、')}</div>
+              )}
+              {dependsOn.length > 0 && (
+                <div>上游依赖：{dependsOn.map((d) => (typeof d === 'string' ? d : String((d as Record<string, unknown>).id || ''))).join('、')}</div>
+              )}
+              {produces.length > 0 && (
+                <div>对外产出：{produces.map((p) => Object.keys(p as Record<string, unknown>)[0] || '').filter(Boolean).join('、')}</div>
+              )}
+              {teardown.length > 0 && <div>清理步骤：{teardown.length} 步</div>}
+            </div>
+          )}
+        </div>
       </div>
+
+      {docView && <SpecDocModal aid={docView.aid} match={docView.match} onClose={() => setDocView(null)} />}
     </div>
   );
 }

@@ -11,7 +11,7 @@
  * - 其他: 纯文本
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { load as yamlLoad } from 'js-yaml';
@@ -21,6 +21,7 @@ import { getFileExt } from './FileTree';
 import OfficeViewer from './OfficeViewer';
 import MermaidBlock from './MermaidBlock';
 import ScenarioReader from './ScenarioReader';
+import DraftFormEditor from './DraftFormEditor';
 import { isScenarioDoc } from '../utils/scenarioReader';
 import { useJsTokens } from '../theme';
 
@@ -183,40 +184,115 @@ function YamlViewer({ content }: { content: string }) {  const [showOutline, set
 
 const SCENARIO_MODE_KEY = 'sg_fileview_scenario_yaml_mode';
 
-/** 场景类 YAML（含 flow+doc）默认进结构化阅读视图；非场景 YAML 与解析失败回退原文高亮 */
-function ScenarioYamlView({ path, content, onOpenFile }: {
+/** T-1027 F1：面板保存结果（AgentChat 把 PUT 响应映射为此处，编辑区内联呈现）。
+ * 类型事实源在 DraftFormEditor（编辑面板宿主），此处转发导出保持旧 import 路径兼容。 */
+export type { EditSaveOutcome } from './DraftFormEditor';
+import type { EditSaveOutcome } from './DraftFormEditor';
+
+/** 编辑区工具条高度外的保存横幅（verdict 配色 + findings 摘录） */
+function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
+  const pass = outcome.verdict === 'PASS';
+  return (
+    <div className={`flex-shrink-0 mx-2 my-1 text-[10px] rounded px-2 py-1 ${
+      !outcome.ok ? 'bg-red-900/20 text-red-400'
+        : pass ? 'bg-green-900/20 text-green-400' : 'bg-yellow-900/20 text-yellow-500'
+    }`}>
+      <div className="font-medium">
+        {outcome.ok ? `✓ 已保存${outcome.verdict ? ` · 校验 ${outcome.verdict}` : ''}${outcome.summaryError != null ? ` · error ${outcome.summaryError} / warn ${outcome.summaryWarn ?? 0}` : ''}` : '✗ 保存失败'}
+        {outcome.message && <span className="font-normal opacity-80"> — {outcome.message}</span>}
+      </div>
+      {(outcome.findings || []).slice(0, 4).map((f) => (
+        <div key={`${f.rule}:${f.message}`} className={f.level === 'ERROR' ? 'text-red-400' : 'opacity-70'}>
+          [{f.rule}] {f.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 场景类 YAML（含 flow+doc）默认进结构化阅读视图；非场景 YAML 与解析失败回退原文高亮。
+ * T-1027 F1：canEdit+onSaveContent（draft 页签）时第三模式「✏️ 编辑」——
+ * 验收反馈返修：编辑落在结构化表单（DraftFormEditor 复用场景编辑器三模式，
+ * 默认进表单；YAML 降为其内部次选），保存走回调（PUT /api/drafts，后端自动
+ * 校验+版本链+对话感知），结果横幅内联回显。 */
+function ScenarioYamlView({ path, content, onOpenFile, canEdit, onSaveContent }: {
   path: string; content: string; onOpenFile?: (relPath: string) => void;
+  canEdit?: boolean; onSaveContent?: (content: string) => Promise<EditSaveOutcome>;
 }) {
+  // 结构化解析基于「已落盘」内容：编辑缓冲在 DraftFormEditor/ScenarioFormEditor 内部
   const data = useMemo(() => {
     try { return yamlLoad(content) as unknown; } catch { return null; }
   }, [content]);
-  const [mode, setMode] = useState<'read' | 'raw'>(() =>
+  const [mode, setMode] = useState<'read' | 'raw' | 'edit'>(() =>
     (typeof localStorage !== 'undefined' && localStorage.getItem(SCENARIO_MODE_KEY)) === 'raw' ? 'raw' : 'read');
+  const [savedText, setSavedText] = useState(content);
+  const [outcome, setOutcome] = useState<EditSaveOutcome | null>(null);
 
-  if (!isScenarioDoc(data)) return <YamlViewer content={content} />;
+  useEffect(() => { setSavedText(content); }, [content]);
 
-  const switchMode = (m: 'read' | 'raw') => {
+  const editable = !!(canEdit && onSaveContent);
+  const isScenario = !!isScenarioDoc(data);
+  // 模式归一化：内容不是场景结构时「结构化」不可用（持久化残留 read → 落回原文）
+  const effectiveMode = !isScenario && mode === 'read' ? 'raw' : mode;
+
+  if (!editable && !isScenario) return <YamlViewer content={content} />;
+
+  const switchMode = (m: 'read' | 'raw' | 'edit') => {
+    if (m === 'edit' && !editable) return;
+    if (m === 'edit') setOutcome(null);
     setMode(m);
-    try { localStorage.setItem(SCENARIO_MODE_KEY, m); } catch { /* 隐私模式等写失败无害 */ }
+    if (m === 'read' || m === 'raw') {
+      try { localStorage.setItem(SCENARIO_MODE_KEY, m); } catch { /* 隐私模式等写失败无害 */ }
+    }
   };
+  /** 结构化编辑器保存桥：结果回填横幅与页签文本；ok=false 由子组件自行渲染错误条 */
+  const handleEditSave = async (nextYaml: string): Promise<EditSaveOutcome> => {
+    if (!onSaveContent) return { ok: false, message: '保存回调不可用' };
+    setOutcome(null);
+    const r = await onSaveContent(nextYaml);
+    setOutcome(r);
+    if (r.ok) setSavedText(nextYaml);   // AgentChat 会同步刷新页签 content，此处先行收敛
+    return r;
+  };
+
+  const modeList = [
+    ...(isScenario ? ['read'] as const : []),
+    ...(['raw'] as const),
+    ...(editable ? ['edit'] as const : []),
+  ];
 
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border flex-shrink-0">
         <div className="flex bg-surface-3 rounded overflow-hidden">
-          {(['read', 'raw'] as const).map((m) => (
+          {modeList.map((m) => (
             <button key={m} onClick={() => switchMode(m)}
-              className={`px-2.5 py-1 text-[10px] transition-colors ${mode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
-              {m === 'read' ? '📖 结构化' : '📄 原文'}
+              className={`px-2.5 py-1 text-[10px] transition-colors ${effectiveMode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
+              {m === 'read' ? '📖 结构化' : m === 'raw' ? '📄 原文' : '✏️ 编辑'}
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-gray-600">场景 YAML · 结构化视图为只读摘要</span>
+        {effectiveMode === 'edit' ? (
+          <div className="ml-auto flex items-center gap-1.5">
+            <button onClick={() => switchMode('raw')}
+              title="退出编辑（未保存的修改即丢弃）"
+              className="px-2 py-0.5 rounded text-[10px] bg-surface-3 text-gray-400 hover:text-gray-200">✕ 退出编辑</button>
+          </div>
+        ) : (
+          <span className="text-[10px] text-gray-600">{isScenario ? '场景 YAML · 结构化视图为只读摘要' : '草稿 YAML'}{editable ? ' · 点「✏️ 编辑」进结构化表单修改草稿' : ''}</span>
+        )}
       </div>
-      <div className="flex-1 min-h-0">
-        {mode === 'read'
-          ? <ScenarioReader data={data} rawYaml={content} filePath={path} onOpenFile={onOpenFile} />
-          : <YamlViewer content={content} />}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {effectiveMode === 'edit' && onSaveContent ? (
+          <>
+            {outcome && <SaveOutcomeBanner outcome={outcome} />}
+            <div className="flex-1 min-h-0">
+              <DraftFormEditor filename={path} yaml={savedText} onSave={handleEditSave} />
+            </div>
+          </>
+        ) : effectiveMode === 'read' && isScenario
+          ? <ScenarioReader data={data} rawYaml={savedText} filePath={path} onOpenFile={onOpenFile} />
+          : <YamlViewer content={savedText} />}
       </div>
     </div>
   );
@@ -229,9 +305,11 @@ interface FileViewerProps {
   format?: 'raw' | 'markdown' | 'text';  // K-030: 后端转换提示（xlsx→markdown 等）
   hunks?: DocHunk[];  // T-511: doc_read 使用位置——带 hunks 时统一走行号定位渲染
   onOpenFile?: (relPath: string) => void;  // T-1024: 结构化视图内「打开关联文档」回调
+  canEdit?: boolean;  // T-1027 F1: draft 页签可编辑（新增「✏️ 编辑」模式）
+  onSaveContent?: (content: string) => Promise<EditSaveOutcome>;  // T-1027 F1: 保存回调（AgentChat 落 draftsApi.update）
 }
 
-export default function FileViewer({ path, content, loading, format, hunks, onOpenFile }: FileViewerProps) {
+export default function FileViewer({ path, content, loading, format, hunks, onOpenFile, canEdit, onSaveContent }: FileViewerProps) {
   const ext = useMemo(() => getFileExt(path), [path]);
   const tokens = useJsTokens();  // K-043
 
@@ -283,9 +361,10 @@ export default function FileViewer({ path, content, loading, format, hunks, onOp
     );
   }
 
-  // YAML（K-041：结构大纲；T-1023：场景类 YAML 双视图）
+  // YAML（K-041：结构大纲；T-1023：场景类 YAML 双视图；T-1027：draft 可编辑）
   if (ext === '.yaml' || ext === '.yml') {
-    return <ScenarioYamlView path={path} content={content} onOpenFile={onOpenFile} />;
+    return <ScenarioYamlView path={path} content={content} onOpenFile={onOpenFile}
+      canEdit={canEdit} onSaveContent={onSaveContent} />;
   }
   if (ext === '.json' || ext === '.py' || ext === '.ts' || ext === '.js' || ext === '.tsx') {
     const lang = ext.slice(1);

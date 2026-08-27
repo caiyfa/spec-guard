@@ -1377,7 +1377,16 @@ async def agent_ws(websocket: WebSocket,
                     pass
                 if focus_path:
                     parent_block += _viewing_context_block(focus_path, focus_kind)
-            ws_message = f"{parent_block}{ref_block}{message}" if (parent_block or ref_block) else message
+            # T-1027 F2：排空面板人工编辑 pending（run 进行中面板保存 → 暂存文件），
+            # 以 <panel_edits> 前缀块并入本轮 user 消息（parent_block 同款先例）
+            edit_block = ""
+            try:
+                from services.panel_edit_feedback import drain_panel_edits
+                edit_block = drain_panel_edits(sessions_dir, workspace, sid)
+            except Exception:
+                edit_block = ""
+            run_prefix = f"{parent_block}{edit_block}"
+            ws_message = f"{run_prefix}{ref_block}{message}" if (run_prefix or ref_block) else message
 
             # T-1021: 事件发布到会话级总线（fan-out 多订阅者 + 当前 run 回放缓冲）——
             # 刷新/断连/第二标签页可 attach 续上实时流；本连接经 attach_live 订阅。

@@ -7,7 +7,7 @@ import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, drafts
 import type { ScenarioMeta, ModelConfig, GateCard } from '../api';
 import SessionTree from '../components/SessionTree';
 import type { StructuredTodo } from '../components/TodoPanel';
-import type { DocHunk } from '../components/FileViewer';
+import type { DocHunk, EditSaveOutcome } from '../components/FileViewer';
 import type { DocReadItem } from '../components/ReadingPanel';
 import type { ChatReference, ChatMessage, AgentStats, CtxUsage, GroupedItem, DocWriteItem, FileTab } from './agentChat/types';
 import { DEFAULT_CTX_LIMIT, PURPOSE_TITLE_FALLBACK } from './agentChat/types';
@@ -853,6 +853,30 @@ export default function AgentChat() {
     });
   }, [readingFeed, writingFeed]);
 
+  // T-1027 F1/F2：草稿面板编辑保存——PUT /api/drafts（带 session_id），后端自动格式校验
+  // + user_edit 版本链 + 对话感知注入；结果映射为 EditSaveOutcome 由编辑区内联回显
+  const handleSaveDraftFile = useCallback(async (filename: string, content: string): Promise<EditSaveOutcome> => {
+    try {
+      const r = await draftsApi.update(filename, content, sessionId || undefined);
+      if (!r.ok) return { ok: false, message: '保存失败（后端返回未确认）' };
+      // 页签内容对齐落盘版本：结构化/原文视图立即反映新内容
+      setFileTabs(prev => prev.map(t => t.path === filename && t.kind === 'draft' ? { ...t, content } : t));
+      const v = r.validate;
+      let message = '对话已感知本次编辑与校验结论';
+      if (r.percept?.mode === 'pending') message = '会话执行中——本次编辑将在下一条消息发送前自动告知对话';
+      else if (r.percept?.mode === 'off') message = r.percept.reason === 'session_not_found' ? '会话不存在，编辑未同步到对话' : '已保存';
+      return {
+        ok: true, message,
+        verdict: v?.verdict,
+        summaryError: v?.summary?.error ?? 0,
+        summaryWarn: v?.summary?.warn ?? 0,
+        findings: (v?.findings || []).map(f => ({ level: f.level, rule: f.rule, message: f.message })),
+      };
+    } catch (e: any) {
+      return { ok: false, message: e?.message || '保存失败', findings: [] };
+    }
+  }, [sessionId]);
+
   // 未落盘内容预览（对话内大段 md 代码块 → 虚拟 memo: 页签，FileViewer 按 .md 渲染）
   // T-511：opts.hunks 阅读足迹定位（memo 内容为摘录时 hunk 行区间按内容行数收敛）
   const openContentViewer = useCallback((title: string, content: string, opts?: { hunks?: DocHunk[] }) => {
@@ -1570,7 +1594,7 @@ export default function AgentChat() {
             )}
 
             {/* 右侧：K-032 页签面板（待办/信息包/文件页签）；SQL 探索模式撑宽 45% 为左栏主体 */}
-            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={dbExplore ? '45%' : sideMax ? '100%' : sideWidth} onCollapse={dbExplore ? () => setDbExplore(false) : () => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={dbExplore ? undefined : toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} workspace={currentWorkspace} onCiteToMain={(fn: string) => setCiteDraft(fn)} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} />
+            <SidePanel ctxUsage={ctxUsage} planItems={planItems} structuredTodos={structuredTodos} loading={loading} messages={messages} ctxLimit={ctxLimit} stats={stats} scenarioMeta={scenarioMeta} onUpdateMeta={setScenarioMeta} onError={setError} references={allRefs} onViewFile={openFileViewer} fileTabs={fileTabs} activeTab={activeSideTab} onSelectTab={setActiveSideTab} onCloseTab={closeFileTab} width={dbExplore ? '45%' : sideMax ? '100%' : sideWidth} onCollapse={dbExplore ? () => setDbExplore(false) : () => { setSideMax(false); toggleSideCollapsed(); }} maximized={sideMax} onToggleMaximize={dbExplore ? undefined : toggleSideMax} draftFiles={sessionDrafts} readingFeed={readingFeed} onOpenDocRead={openDocRead} onRefreshReadingFeed={handleRefreshReading} writingFeed={writingFeed} onOpenDocWrite={openDocWrite} onOpenDiff={openDiff} onAskAgentFix={askAgentFix} onAskAgentBatch={askAgentBatch} onRefreshWritingFeed={handleRefreshWriting} sessionId={sessionId} workspace={currentWorkspace} onCiteToMain={(fn: string) => setCiteDraft(fn)} onAskAgentGuide={askAgentGuide} purposePanels={purposes.find(p => p.id === pickedPurpose)?.panels || []} onSaveDraft={handleSaveDraftFile} />
           </>
         )}
 
