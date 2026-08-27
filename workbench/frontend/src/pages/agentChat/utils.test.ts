@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isToolError, filterTreeSessions } from './utils';
+import { isToolError, filterTreeSessions, stripRefBlock } from './utils';
 
 describe('isToolError 工具结果语义判错', () => {
   // 回归用例：会话 20260824_172320_84d21cfa，spec sync 返回 ok:true 但
@@ -47,5 +47,35 @@ describe('filterTreeSessions', () => {
     ] as any[];
     const out = filterTreeSessions(list);
     expect(out.map(s => s.id)).toEqual(['a', 'c']);
+  });
+});
+
+describe('stripRefBlock 注入块剥离（K-013/T-1031）', () => {
+  it('剥离 <references> 块，保留正文（原有语义不变）', () => {
+    expect(stripRefBlock('<references>\n--- a.yaml ---\n内容\n</references>\n\n问题')).toBe('问题');
+  });
+
+  it('剥离 <parent_context> 块与 [parent_context] 单行降级形态', () => {
+    expect(stripRefBlock('<parent_context>\n父会话快照\n</parent_context>\n帮我看看'))
+      .toBe('帮我看看');
+    expect(stripRefBlock('[parent_context] 主会话自上轮起无变更\n继续')).toBe('继续');
+  });
+
+  it('剥离 <knowledge_refs> 知识 nudge 块（T-508 落盘进 user 消息尾部，UI 不显示）', () => {
+    const input = '用人和我讲一下 HI-PERM-002 测试的是什么内容'
+      + '\n\n<knowledge_refs>\n知识模组提示：<环境叙事 (sit)>（env）：# TDM 系统——SIT 环境叙事\n</knowledge_refs>';
+    expect(stripRefBlock(input)).toBe('用人和我讲一下 HI-PERM-002 测试的是什么内容');
+  });
+
+  it('多块叠加全剥且不受位置约束', () => {
+    const input = '<parent_context>\nA\n</parent_context>'
+      + '<viewing_context>用户当前正在查看…HI-PERM-002.yaml…</viewing_context>'
+      + '<knowledge_refs>x</knowledge_refs>'
+      + '\n讲一下这个文件';
+    expect(stripRefBlock(input)).toBe('讲一下这个文件');
+  });
+
+  it('无注入块时原样返回', () => {
+    expect(stripRefBlock('普通消息')).toBe('普通消息');
   });
 });

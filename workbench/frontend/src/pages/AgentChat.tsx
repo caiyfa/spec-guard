@@ -74,7 +74,7 @@ export default function AgentChat() {
   const [citeDraft, setCiteDraft] = useState('');  // §B6：辅助会话产出引用预填（ChatInput pendingRef）
 
   // SQL 探索模式（设计 2026-08-26）：DB 面板会话内嵌打开——主会话最小化为细条，
-  // SQL 助手（SidePanel）居左撑宽、内嵌 DbPanel 居右；双向联动不走页面跳转。
+  // 辅助助手（SidePanel）居左撑宽、内嵌 DbPanel 居右；双向联动不走页面跳转。
   // 桥沿用 GateDockCtx 注入模式（SqlAuxPanel 埋在 SidePanel 深处，props 不穿链）
   const [dbExplore, setDbExplore] = useState(false);
   const [dbPendingSql, setDbPendingSql] = useState('');  // 左栏「▶ DB 面板」带来的回填 SQL
@@ -82,7 +82,13 @@ export default function AgentChat() {
   const sqlAuxBridge = useMemo<SqlAuxBridgeValue>(() => ({
     register: (fn) => { auxSendRef.current = fn; },
     openDbPanel: (sql) => { setSideMax(false); setDbPendingSql(sql); setDbExplore(true); },
-  }), []);
+    // T-1031：焦点提供者——辅助助手发送时取当前活动文件页签（后端注入 <viewing_context>）
+    getViewing: () => {
+      if (!activeSideTab.startsWith('file:')) return null;
+      const tab = fileTabs.find(t => `file:${t.path}` === activeSideTab);
+      return tab ? { path: tab.path, kind: tab.kind } : null;
+    },
+  }), [activeSideTab, fileTabs]);
   // DB 面板「交给 SQL 助手」：直发左栏辅助会话（同时确保左栏页签切回 sql_aux）
   const handToAux = useCallback((sql: string) => {
     setActiveSideTab('sql_aux');

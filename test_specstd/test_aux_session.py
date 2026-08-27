@@ -72,6 +72,16 @@ def test_sql_assistant_purpose_has_draft_domain():
     assert p is not None
     assert "draft" in p.domains
 
+
+def test_aux_purpose_visible_title_is_aux_assistant():
+    """T-1031 定位升级：id 保留 sql_assistant（存量辅助会话兼容），
+    用户可见面 title 必须是「辅助助手」（页签/面板标头/选择卡全部跟随）。"""
+    from agent.purpose_loader import load_purpose
+    p = load_purpose("sql_assistant")
+    assert p is not None
+    assert p.title == "辅助助手"
+    assert p.spawn_only is True
+
 # ══════════════════════════════════════════════════════════
 # spawn 派生 API（设计 2026-08-25 §B3）——TestClient 端到端，SG_AUX_TEST_TMP 隔离。
 # 适配说明：DB_PATH/SESSIONS_ROOT 均为模块常量（不读环境变量），隔离经
@@ -219,3 +229,71 @@ class TestParentSnapshot:
         sm.save(p, [{"role": "assistant", "content": "y" * 20000}], emp_no="e", workspace="w1")
         block, _ = _parent_snapshot(sm, p, last_fp="")
         assert len(block) <= 8 * 1024 + 200  # 8KB 上限 + 包裹标签余量
+
+    def test_snapshot_draft_pointer_and_focus(self, sm):
+        """T-1031：草稿行明示 drafts/ 区定位（治先搜场景库扑空绕路）+
+        聚焦场景行（试跑/校验工具声明的 target/scenario_id）。"""
+        from test_specstd.routers_shim import _parent_snapshot
+        tool_call = {"id": "t1", "function": {
+            "name": "write_draft",
+            "arguments": json.dumps({"filename": "HI-PERM-002.yaml", "content": "x"})}}
+        run_call = {"id": "t2", "function": {
+            "name": "run_scenario",
+            "arguments": json.dumps({"target": "HI-PERM-001"})}}
+        p = sm.create(emp_no="e", workspace="w1")
+        sm.save(p, [
+            {"role": "assistant", "content": "", "tool_calls": [tool_call]},
+            {"role": "tool", "tool_call_id": "t1", "content": '{"ok": true}'},
+            {"role": "assistant", "content": "", "tool_calls": [run_call]},
+            {"role": "tool", "tool_call_id": "t2", "content": '{"verdict": "PASS"}'},
+        ], emp_no="e", workspace="w1")
+        block, _ = _parent_snapshot(sm, p, last_fp="")
+        assert "HI-PERM-002.yaml" in block
+        assert "drafts/ 区" in block          # 指路：明确草稿不在场景库
+        assert "聚焦场景: HI-PERM-001" in block
+
+    def test_snapshot_reading_feed_line(self, sm):
+        """T-1031：最近读过的文件行（复用 doc_read 足迹重建，与阅读面板同源）。"""
+        from test_specstd.routers_shim import _parent_snapshot
+        read_call = {"id": "t3", "function": {
+            "name": "read_spec",
+            "arguments": json.dumps({"path": "specs/demo/spec.md"})}}
+        p = sm.create(emp_no="e", workspace="w1")
+        sm.save(p, [
+            {"role": "assistant", "content": "", "tool_calls": [read_call]},
+            {"role": "tool", "tool_call_id": "t3", "content": "# Demo Spec 正文"},
+        ], emp_no="e", workspace="w1")
+        block, _ = _parent_snapshot(sm, p, last_fp="")
+        assert "最近读过的工作区文件: specs/demo/spec.md" in block
+
+
+class TestViewingContext:
+    """T-1031：<viewing_context> 查看指针块（用户当前主界面打开的文件页签）。"""
+
+    def test_draft_exists_pointer_with_excerpt(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("specstd.workspace.get_workspace_root",
+                            lambda name=None: tmp_path)
+        d = tmp_path / ".specguard" / "drafts"
+        d.mkdir(parents=True)
+        (d / "HI-PERM-002.yaml").write_text("# HI-PERM-002\nscenario_id: HI-PERM-002\ncovers: [FR-005]\n",
+                                            encoding="utf-8")
+        from test_specstd.routers_shim import _viewing_context_block
+        block = _viewing_context_block("HI-PERM-002.yaml", "draft")
+        assert block.startswith("<viewing_context>")
+        assert "查看主会话草稿（drafts/ 区）：HI-PERM-002.yaml" in block
+        assert "已存在（" in block and "字节）" in block
+        assert "covers: [FR-005]" in block     # 开头摘录携带内容锚点
+        assert "</viewing_context>" in block
+
+    def test_missing_file_degrades(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("specstd.workspace.get_workspace_root",
+                            lambda name=None: tmp_path)
+        from test_specstd.routers_shim import _viewing_context_block
+        block = _viewing_context_block("GONE-PERM-999.yaml", "draft")
+        assert "<viewing_context>" in block
+        assert "不存在或不可读" in block
+
+    def test_empty_focus_returns_empty(self):
+        from test_specstd.routers_shim import _viewing_context_block
+        assert _viewing_context_block("", "") == ""
+        assert _viewing_context_block("   ", "") == ""

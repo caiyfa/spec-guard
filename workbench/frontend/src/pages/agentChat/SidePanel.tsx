@@ -49,7 +49,7 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose'; lo
   { id: 'materials', label: '📎 材料',     scope: 'purpose' },
   { id: 'deps',    label: '🕸 依赖图',     scope: 'purpose', lowFreq: true },
   { id: 'history', label: '📜 提交历史',   scope: 'purpose', lowFreq: true },
-  { id: 'sql_aux', label: '🧮 SQL 助手', scope: 'purpose' },  // 设计 2026-08-25 §C2
+  { id: 'sql_aux', label: '🤝 辅助助手', scope: 'purpose' },  // 设计 2026-08-25 §C2；T-1031 定位升级改称
 ];
 
 export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, workspace, onCiteToMain, onAskAgentGuide, purposePanels }: {
@@ -232,7 +232,8 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
           <HistoryPanel onError={onError} />
         )}
         {activeTab === 'sql_aux' && (
-          <SqlAuxPanel mainSessionId={sessionId} workspace={workspace} onCiteToMain={onCiteToMain} />
+          <SqlAuxPanel mainSessionId={sessionId} workspace={workspace} onCiteToMain={onCiteToMain}
+            onPreview={onViewFile} />
         )}
         {activeFile && (
           <div className="h-full min-h-0 flex flex-col">

@@ -2,7 +2,7 @@
  *
  * 与独立页 /db-console（DbConsole.tsx）共享 useDbConsole 状态逻辑与 localStorage
  * （schema/草稿/查询历史互通），仅布局不同：本组件为紧凑纵向排布（嵌入对话页）。
- * 「交给 SQL 助手」不再经 sessionStorage+navigate 跳页，直接走 onHandToAux 回调
+ * 「交给辅助助手」（T-1031 前称 SQL 助手）不再经 sessionStorage+navigate 跳页，直接走 onHandToAux 回调
  * 发给左栏辅助会话。 */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
@@ -69,7 +69,7 @@ export function useDbConsole() {
 export function DbPanel({ initialSql, onClose, onHandToAux }: {
   initialSql?: string;         // 左栏 SQL 助手产出物跳来时的回填 SQL（变化即重填+执行）
   onClose: () => void;         // 退出 SQL 探索模式
-  onHandToAux?: (sql: string) => void;  // 「交给 SQL 助手」：直发左栏对话（不走跳页中转）
+  onHandToAux?: (sql: string) => void;  // 「交给辅助助手」：直发左栏对话（不走跳页中转）
 }) {
   const db = useDbConsole();
   const { schemas, schemasLoaded, schema, setSchema, sql, setSql, result, loading, error, history, runQuery } = db;
@@ -136,8 +136,8 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
           {onHandToAux && (
             <button onClick={() => onHandToAux(sql)} disabled={!sql.trim()}
               className="px-3 py-1 text-xs rounded border border-border text-gray-400 hover:text-info disabled:opacity-50"
-              title="把当前 SQL 发给左栏 SQL 助手迭代（解释表关系/设计理由/多轮优化）">
-              🤖 交给 SQL 助手
+              title="把当前 SQL 发给左栏辅助助手迭代（解释表关系/设计理由/多轮优化）">
+              🤖 交给辅助助手
             </button>
           )}
           <span className="text-[10px] text-gray-600">Ctrl+Enter 执行</span>
