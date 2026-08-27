@@ -187,3 +187,22 @@ def test_db_query_without_connection_stays_skip():
     rec = run_scenario(sc, rctx)
     assert rec.verdict == VERDICT_SKIP
     assert rec.skip_category == "db_unavailable"
+
+
+# ══════════════════════════════════════════════════════════
+# 8. verify python 断言脚本 raise SystemExit → 原地落 trace（不击穿 run_scenario）
+# ══════════════════════════════════════════════════════════
+
+def test_verify_python_system_exit_lands_as_scenario_error():
+    """SystemExit 继承 BaseException，同款 except Exception 捕不到——
+    裸穿既丢断言 trace 又崩掉运行进程（2026-08-27 HI-PERM-004 复盘，
+    flow python 步骤同型洞由 test_call_and_python 覆盖）。"""
+    rctx = _make_rctx()
+    sc = Scenario(id="T-SE", title="断言脚本 SystemExit",
+                  flow=[{"set_var": {"vars": {"v": 1}}}],
+                  verify=[{"python": "raise SystemExit('boom')"}])
+    rec = run_scenario(sc, rctx)
+    assert rec.verdict == VERDICT_FAIL
+    assert rec.failure["category"] == CAT_SCENARIO
+    assert rec.assertions, "断言 trace 必须原地落盘（不能因 SystemExit 丢失）"
+    assert "SystemExit" in rec.assertions[-1].message

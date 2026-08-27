@@ -205,3 +205,21 @@ def test_python_step_other_error_no_ns_hint():
     with pytest.raises(ScenarioScriptError) as ei:
         step_python({"script": "x = 1 / 0"}, _rctx(None), {"k": 1}, record)
     assert "ns 当前可用键" not in str(ei.value)
+
+
+def test_python_step_system_exit_wrapped():
+    """脚本 raise SystemExit(...) → 包装为 ScenarioScriptError，不得裸穿击穿 runner。
+
+    2026-08-27 HI-PERM-004 实证（EX-dc874ada/EX-b9c359ba）：SystemExit 继承
+    BaseException，except Exception 捕不到，裸放行直接崩掉运行进程——run.json
+    空文件、工作台 Internal Server Error、UI 回退显示老报告。主动跳过的正道是
+    SkipScenario（独立分支原样放行），SystemExit 一律按场景编写错误包装并指路。
+    """
+    record = ExecutionRecord(scenario_id="T")
+    with pytest.raises(ScenarioScriptError) as ei:
+        step_python({"script": "raise SystemExit('SIT 未配 corp 维度 PART 空 codes 成员')"},
+                    _rctx(None), {}, record)
+    msg = str(ei.value)
+    assert "SystemExit" in msg
+    assert "SkipScenario" in msg
+
