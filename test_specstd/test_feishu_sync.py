@@ -155,6 +155,22 @@ def test_sync_doc_to_pool(tmp_path):
     assert (base / "feishu_pool" / "docs" / "fd-FBxod.md").is_file()
     assert (base / "feishu_pool" / "docs" / "fd-FBxod.imgmap.json").is_file()
 
+def test_sync_doc_real_nested_document_shape(tmp_path):
+    """T-1029 实测契约：正文嵌套 data.document.content（旧扁平键是造字段，
+    生产 docs 内容路径因此从未跑通）→ 双键兼容下快照必须非空落盘。"""
+    from test_specstd.feishu_cli_contract import docs_fetch_nested
+    base = tmp_path / ".specflow" / "u1"
+    with patch.object(svc, "_run_lark", return_value=docs_fetch_nested()):
+        svc.sync_doc(base, doc_token="tokReal", url="https://x")
+    body = (base / "feishu_pool" / "docs" / "fd-tokReal.md").read_text(
+        encoding="utf-8")
+    assert len(body) > 10 and "正文" in body
+    import json as _json
+    meta = _json.loads((base / "feishu_pool" / "docs"
+                        / "fd-tokReal.meta.json").read_text(encoding="utf-8"))
+    assert meta["title"] == "人才发展系统_测试用例"   # <title> 行提取落 meta
+
+
 def test_sync_chat_renders_timeline(tmp_path):
     """T-948：真实 CLI 契约（data.messages/字符串时间/嵌套 sender）→
     JSONL 事实源 + md 派生视图。"""

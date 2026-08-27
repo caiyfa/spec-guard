@@ -195,13 +195,22 @@ def _pull_perm_meta(token: str, doc_type: str) -> dict:
 def sync_doc(specflow_emp_base: Path, doc_token: str, url: str = "",
              meta: dict | None = None) -> dict:
     """文档快照落池（docs +fetch 只读；meta T-940：owner/直链 sidecar；
-    T-949：附飞书权限元数据 perm——缺失不阻断，可见性过滤保守处理）。"""
+    T-949：附飞书权限元数据 perm——缺失不阻断，可见性过滤保守处理）。
+
+    T-1029 自验收实测修正（08-27）：当前 lark-cli 正文在
+    data.document.content（嵌套 document 层）；旧扁平 data.content/markdown
+    键保留兜底兼容（测试夹具与潜在 CLI 版本差异）。"""
     payload = _run_lark(["docs", "+fetch", "--as", "user",
                          "--doc", doc_token, "--doc-format", "markdown"])
     data = payload.get("data") or {}
-    content = str(data.get("content") or data.get("markdown") or "")
+    content = str(data.get("content")
+                  or (data.get("document") or {}).get("content")
+                  or data.get("markdown") or "")
     imgmap = _imgmap_from_content(content, data.get("images"))
     meta = dict(meta or {})
+    m_title = re.match(r"\s*<title>(.*?)</title>", content)
+    if m_title:
+        meta.setdefault("title", m_title.group(1).strip())
     meta.setdefault("perm", _pull_perm_meta(doc_token, "docx"))
     return pool_store.save_doc_snapshot(
         specflow_emp_base, doc_token, content,

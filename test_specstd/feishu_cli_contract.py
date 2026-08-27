@@ -266,3 +266,26 @@ TEXT_WITH_SHEETS_URL = {
                "sender_type": "user"},
     "updated": False,
 }
+
+
+# T-1029 自验收实测（2026-08-27）：docs +fetch 当前真实输出——正文嵌套于
+# data.document.content。此前夹具沿用旧扁平 data.content 键属造字段，而
+# 生产 docs 通道自开通起未真正跑通过快照内容，本期才暴露（sync_doc 已改
+# 双键兼容：document.content 优先、扁平键兜底）。结构原样、正文脱敏截断。
+DOCS_FETCH_NESTED = {
+    "ok": True,
+    "identity": "user",
+    "data": {
+        "document": {
+            "content": "<title>人才发展系统_测试用例</title>\n\n"
+                       "# 一、示例章节\n\n正文段落……\n",
+        },
+    },
+}
+
+
+def docs_fetch_nested() -> dict:
+    """真实嵌套形状的深拷贝。"""
+    import copy as _copy
+
+    return _copy.deepcopy(DOCS_FETCH_NESTED)
