@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { GateCard, ScenarioMeta } from '../../api';
 import TodoPanel from '../../components/TodoPanel';
 import type { StructuredTodo } from '../../components/TodoPanel';
@@ -21,6 +21,7 @@ import { DepGraphPanel } from './DepGraphPanel';
 import { MaterialsRefPanel } from './MaterialsRefPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { SqlAuxPanel } from './SqlAuxPanel';
+import { MorePanelsMenu } from './MorePanelsMenu';
 
 // ── 右侧面板组件（引用 + 信息包 + 上下文 + 待办） ──
 // ── K-032：右侧页签面板（待办首页 + 信息包页签 + 文件各自页签） ──
@@ -28,23 +29,26 @@ import { SqlAuxPanel } from './SqlAuxPanel';
 // T-932：页签注册表（页签 id 单一事实源）——通用页签所有 purpose 恒显，
 // 专用页签由 purpose 的 panels 声明驱动（∩ 本注册表，未知 id 静默忽略）。
 // materials 页签 T-933 落地（requirement_interview panels 已声明）。
-const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose' }[] = [
+// T-1026：lowFreq 页签不常驻页签条，收进「更多」面板选择器（操作台/阅读/更新足迹/
+// 合规/知识/依赖图/提交历史 七签聚合，对标 VS Code「打开标签页」卡片网格）——
+// 活动中的低频签暂显条内、切走即隐；外部 expandSideTo 按 id 跳转不受影响。
+const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose'; lowFreq?: boolean }[] = [
   { id: 'todos',   label: '📋 待办',       scope: 'universal' },
-  { id: 'gates',   label: '🎛 操作台',     scope: 'universal' },
-  { id: 'reading', label: '📖 阅读',       scope: 'universal' },
+  { id: 'gates',   label: '🎛 操作台',     scope: 'universal', lowFreq: true },
+  { id: 'reading', label: '📖 阅读',       scope: 'universal', lowFreq: true },
   // 更新足迹与草稿产物分列两页签（2026-08-26）：足迹条目多时会把草稿产物卡顶出首屏，
   // 草稿产物是评审主入口，前置独立成签
   { id: 'drafts',  label: '📝 草稿产物',   scope: 'universal' },
-  { id: 'writing', label: '✏️ 更新足迹',   scope: 'universal' },
+  { id: 'writing', label: '✏️ 更新足迹',   scope: 'universal', lowFreq: true },
   // T-996 菜单收缩收编：技能（只读）/合规校验/知识 收进对话页通用页签
   { id: 'skills',  label: '🛠 技能',       scope: 'universal' },
-  { id: 'spec',    label: '📏 合规',       scope: 'universal' },
-  { id: 'knowledge', label: '🧠 知识',     scope: 'universal' },
+  { id: 'spec',    label: '📏 合规',       scope: 'universal', lowFreq: true },
+  { id: 'knowledge', label: '🧠 知识',     scope: 'universal', lowFreq: true },
   { id: 'pack',    label: '📦 信息包',     scope: 'purpose' },
   { id: 'focus',   label: '◎ 图谱',        scope: 'purpose' },
   { id: 'materials', label: '📎 材料',     scope: 'purpose' },
-  { id: 'deps',    label: '🕸 依赖图',     scope: 'purpose' },
-  { id: 'history', label: '📜 提交历史',   scope: 'purpose' },
+  { id: 'deps',    label: '🕸 依赖图',     scope: 'purpose', lowFreq: true },
+  { id: 'history', label: '📜 提交历史',   scope: 'purpose', lowFreq: true },
   { id: 'sql_aux', label: '🧮 SQL 助手', scope: 'purpose' },  // 设计 2026-08-25 §C2
 ];
 
@@ -93,6 +97,11 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
   const visibleTabs = SIDE_TABS
     .filter(t => t.scope === 'universal' || purposePanelSet.has(t.id))
     .filter(t => t.id !== 'pack' || !!scenarioMeta);
+  // T-1026：高频签常驻页签条；lowFreq 签收进「更多」选择器，仅活动签暂显条内
+  const primaryTabs = visibleTabs.filter(t => !t.lowFreq);
+  const overflowTabs = visibleTabs.filter(t => t.lowFreq);
+  const activeOverflow = overflowTabs.find(t => t.id === activeTab);
+  const [moreOpen, setMoreOpen] = useState(false);
   const labelOf = (id: string) => {
     if (id === 'reading' && readingFeed.length > 0) return `📖 阅读(${readingFeed.length})`;
     if (id === 'drafts' && draftFiles.length > 0) return `📝 草稿产物(${draftFiles.length})`;
@@ -100,6 +109,15 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
     if (id === 'pack' && scenarioMeta) return `📦 信息包(${scenarioMeta.info_pack.length})`;
     return SIDE_TABS.find(t => t.id === id)?.label || id;
   };
+  // T-1026：「更多」卡片用——label 拆 emoji/名称 + 足迹计数徽标（与 labelOf 同源口径）
+  const emojiNameOf = (label: string) => {
+    const i = label.indexOf(' ');
+    return i > 0 ? { emoji: label.slice(0, i), name: label.slice(i + 1) } : { emoji: '▢', name: label };
+  };
+  const countOf = (id: string) =>
+    id === 'reading' ? readingFeed.length
+      : id === 'writing' ? writingFeed.length
+        : 0;
   // 活动页签被装配隐藏（如切方向后专用页签不再可见）→ 回落到待办
   useEffect(() => {
     const hidden = SIDE_TABS.find(t =>
@@ -132,21 +150,41 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
     <div
       className="flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col min-h-0"
       style={{ width }}
-    >      {/* 页签条（K-032：参考编辑器页签样式；T-932 注册表装配） */}
-      <div className="flex items-center border-b border-border overflow-x-auto flex-shrink-0">
-        {visibleTabs.map(t => tabBtn(t.id, labelOf(t.id)))}
-        {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
-        {onToggleMaximize && (
-          <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
-            className="ml-auto px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0">
-            {maximized ? '⤡' : '⤢'}
-          </button>
-        )}
-        {onCollapse && (
-          <button onClick={onCollapse} title="收起面板"
-            className={`${onToggleMaximize ? '' : 'ml-auto '}px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0`}>
-            »
-          </button>
+    >      {/* 页签条（K-032：参考编辑器页签样式；T-932 注册表装配；T-1026 低频签聚合「更多」） */}
+      <div className="relative flex-shrink-0">
+        <div className="flex items-center border-b border-border overflow-x-auto flex-shrink-0">
+          {primaryTabs.map(t => tabBtn(t.id, labelOf(t.id)))}
+          {activeOverflow && tabBtn(activeOverflow.id, labelOf(activeOverflow.id))}
+          {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
+          <div className="ml-auto flex items-center flex-shrink-0">
+            {overflowTabs.length > 0 && (
+              <button onClick={() => setMoreOpen(v => !v)} title="更多面板（低频页签聚合）"
+                className={`px-2 py-1.5 text-[11px] whitespace-nowrap transition-colors ${
+                  moreOpen || activeOverflow ? 'text-info' : 'text-gray-600 hover:text-info'
+                }`}>
+                ⊞ 更多
+              </button>
+            )}
+            {onToggleMaximize && (
+              <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
+                className="px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0">
+                {maximized ? '⤡' : '⤢'}
+              </button>
+            )}
+            {onCollapse && (
+              <button onClick={onCollapse} title="收起面板"
+                className="px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0">
+                »
+              </button>
+            )}
+          </div>
+        </div>
+        {moreOpen && overflowTabs.length > 0 && (
+          <MorePanelsMenu
+            items={overflowTabs.map(t => ({ id: t.id, ...emojiNameOf(t.label), count: countOf(t.id) }))}
+            activeId={activeOverflow?.id}
+            onSelect={onSelectTab}
+            onClose={() => setMoreOpen(false)} />
         )}
       </div>
 
