@@ -3,7 +3,7 @@ import type { GateCard, ScenarioMeta } from '../../api';
 import TodoPanel from '../../components/TodoPanel';
 import type { StructuredTodo } from '../../components/TodoPanel';
 import FileViewer from '../../components/FileViewer';
-import type { DocHunk } from '../../components/FileViewer';
+import type { DocHunk, EditSaveOutcome } from '../../components/FileViewer';
 import ReadingPanel from '../../components/ReadingPanel';
 import type { DocReadItem } from '../../components/ReadingPanel';
 import GateDockPanel from '../GateDockPanel';
@@ -52,7 +52,7 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose'; lo
   { id: 'sql_aux', label: '🧮 SQL 助手', scope: 'purpose' },  // 设计 2026-08-25 §C2
 ];
 
-export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, workspace, onCiteToMain, onAskAgentGuide, purposePanels }: {
+export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messages, ctxLimit, stats, scenarioMeta, onUpdateMeta, onError, references, onViewFile, fileTabs, activeTab, onSelectTab, onCloseTab, width, onCollapse, maximized, onToggleMaximize, draftFiles, readingFeed, onOpenDocRead, onRefreshReadingFeed, writingFeed, onOpenDocWrite, onOpenDiff, onAskAgentFix, onAskAgentBatch, onRefreshWritingFeed, sessionId, workspace, onCiteToMain, onAskAgentGuide, purposePanels, onSaveDraft }: {
   ctxUsage: CtxUsage | null;
   planItems: string[];
   structuredTodos: StructuredTodo[];
@@ -88,6 +88,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
   onCiteToMain: (draftFilename: string) => void;  // §B6：辅助会话产出「引用到主会话」回流
   onAskAgentGuide?: (card: GateCard) => void;  // GateDock：「🤖 帮我」L1 引导
   purposePanels?: string[];  // T-932：当前 purpose 声明的专用页签 id（未声明 → 仅通用集）
+  onSaveDraft?: (filename: string, content: string) => Promise<EditSaveOutcome>;  // T-1027 F1：draft 页签编辑保存（PUT + 会话感知）
 }) {
   const isFileTab = activeTab.startsWith('file:');
   const activeFile = isFileTab ? fileTabs.find(t => `file:${t.path}` === activeTab) : null;
@@ -243,7 +244,10 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
             <div className="flex-1 min-h-0">
               <FileViewer path={activeFile.path} content={activeFile.content}
                 loading={activeFile.loading} format={activeFile.format} hunks={activeFile.hunks}
-                onOpenFile={(p) => onViewFile(p)} />
+                onOpenFile={(p) => onViewFile(p)}
+                canEdit={onSaveDraft ? activeFile.kind === 'draft' : false}
+                onSaveContent={onSaveDraft && activeFile.kind === 'draft'
+                  ? (content) => onSaveDraft(activeFile.path, content) : undefined} />
             </div>
           </div>
         )}

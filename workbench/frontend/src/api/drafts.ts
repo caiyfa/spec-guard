@@ -40,15 +40,32 @@ export interface DraftConflictResult {
   file_missing?: boolean;
 }
 
+/** T-1027 F2：面板保存后的编辑感知去向（appended=已注入会话 / pending=run 进行中暂存 / off=无关联会话） */
+export interface DraftPercept {
+  mode: 'appended' | 'pending' | 'off';
+  reason?: string;
+}
+
+/** T-1027：PUT 保存扩展响应——自动校验报告 + ②闸状态 + 版本号 + 感知去向 */
+export interface DraftSaveResult {
+  ok: boolean;
+  filename: string;
+  validate?: ValidateReport;
+  gate2_status?: string | null;
+  version_no?: number | null;
+  percept?: DraftPercept;
+}
+
 export const draftsApi = {
   list: () => request<{ drafts: DraftItem[] }>('/drafts'),
   modules: () => request<{ modules: string[] }>('/drafts/modules'),
   read: (filename: string) =>
     request<{ filename: string; content: string; depends_on: string[] }>(`/drafts/${encodeURIComponent(filename)}`),
-  update: (filename: string, content: string) =>
-    request<{ ok: boolean }>(`/drafts/${encodeURIComponent(filename)}`, {
+  // T-1027：sessionId 提供时后端保存后向该会话注入「面板编辑感知」（校验结论随之带上）
+  update: (filename: string, content: string, sessionId?: string) =>
+    request<DraftSaveResult>(`/drafts/${encodeURIComponent(filename)}`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, session_id: sessionId || undefined }),
     }),
   suggestDeps: () => request<DepSuggestResult>('/drafts/suggest-deps'),
   addDep: (filename: string, depId: string, mode = 'shared') =>

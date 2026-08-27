@@ -5,7 +5,8 @@
   GET    /api/drafts/modules                可入库的模块目录（scenarios/ 下）
   GET    /api/drafts/suggest-deps           全部草稿的依赖建议（K-046，dep_suggest 确定性引擎）
   GET    /api/drafts/{filename}             草稿内容
-  PUT    /api/drafts/{filename}             保存草稿内容（K-046，写前 .bak 备份 + 审计）
+  PUT    /api/drafts/{filename}             保存草稿内容（K-046，写前 .bak 备份 + 审计；
+                                            T-1027：+自动校验/②闸刷新/user_edit 版本链/会话编辑感知）
   POST   /api/drafts/{filename}/validate    格式校验（与 MCP validate 同一实现）
   POST   /api/drafts/{filename}/deps        草稿连线：文本外科手术加 depends_on（K-046）
   POST   /api/drafts/{filename}/trial-run   草稿试跑（K-046，与 MCP run_scenario 同一语义）
@@ -28,7 +29,6 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-
 from services.auth import require_role
 
 router = APIRouter(prefix="/api/drafts", tags=["drafts"])
@@ -296,6 +296,7 @@ def read_draft(filename: str):
 
 class DraftSaveBody(BaseModel):
     content: str
+    session_id: str = ""   # T-1027 F2：关联对话会话——提供时保存后向该会话注入编辑感知
 
 
 def _update_meta(filename: str) -> None:
@@ -320,9 +321,12 @@ def save_draft(filename: str, body: DraftSaveBody):
 
     写前自动 .bak 备份（对齐 draft_writer patch 惯例，undo 可恢复）；
     仅写 drafts/ 沙箱——入库仍必须走 promote 三道闸。
+    T-1027 F2：保存成功后确定性自动格式校验 + ②闸刷新 + user_edit 进活动
+    流水版本链；body.session_id 提供时向该会话注入「面板编辑感知」（system 行，
+    LLM 可见前端不渲染；run 进行中暂存 pending 由 WS 开跑前排空）。
     """
-    from services.auth import current_emp_no
     from services import user_store
+    from services.auth import current_emp_no
 
     path = _guard_filename(filename)
     if not path.is_file():
@@ -332,6 +336,7 @@ def save_draft(filename: str, body: DraftSaveBody):
         yaml.safe_load(body.content)
     except yaml.YAMLError as e:
         raise HTTPException(status_code=422, detail=f"YAML 解析失败，未写入: {e}")
+    old_text = path.read_text(encoding="utf-8")
     shutil.copy2(str(path), str(path) + ".bak")
     path.write_text(body.content, encoding="utf-8")
     _update_meta(filename)
@@ -356,7 +361,57 @@ def save_draft(filename: str, body: DraftSaveBody):
         )
     except Exception:
         pass
-    return {"ok": True, "filename": filename}
+
+    # ── T-1027 F2：保存后自动校验 + ②闸刷新 + 活动流水 + 对话感知 ──
+    # 与 MCP 写路径（draft_writer 六 handler）对齐：REST 人工编辑同样进版本链，
+    # 否则「用户改了 v3 → Agent overwrite 记成 v2」的版本叙事失真。
+    from mcp_server.tools.validator import validate_scenario_content
+    from specstd.workspace import get_context_workspace
+    try:
+        report = validate_scenario_content(body.content)
+    except Exception as e:  # 校验器自身异常不阻断保存，诚实降级 ERROR 报告
+        report = {"verdict": "ERROR",
+                  "findings": [{"level": "ERROR", "rule": "INTERNAL",
+                                "message": f"校验器异常: {e}"}]}
+    gate2_status = ""
+    try:
+        from services import draft_gates
+        gate2_status = draft_gates.run_gate2(filename)["gate2_status"]
+    except Exception:
+        pass  # 无三闸记录/闸执行失败不阻塞保存——卡面展示旧状态
+    version_no = None
+    try:
+        from sg_core import product_activity as pa
+        row = pa.record_activity(f"drafts/{filename}", "user_edit",
+                                 session_id=body.session_id or "",
+                                 emp_no=current_emp_no(),
+                                 workspace=get_context_workspace() or "",
+                                 content=body.content)
+        version_no = (row or {}).get("version_no")
+    except Exception:
+        pass  # 版本链缺库不影响主流程（文件本身已落盘）
+
+    percept = {"mode": "off"}   # off=无关联会话 / appended=已注入 / pending=运行中暂存
+    if body.session_id.strip():
+        sid = body.session_id.strip()
+        try:
+            from services.panel_edit_feedback import build_edit_note, inject_edit_note
+
+            from routers.agent import _run_in_progress, _sessions_dir
+            emp = current_emp_no()
+            ws_name = get_context_workspace() or ""
+            note = build_edit_note(filename, old_text, body.content, report)
+            percept = inject_edit_note(
+                _sessions_dir(emp), ws_name, sid, note,
+                busy=bool(_run_in_progress(sid)))
+        except ValueError:
+            percept = {"mode": "off", "reason": "invalid_session_id"}
+        except Exception:
+            percept = {"mode": "off", "reason": "error"}   # 感知失败不回滚保存
+
+    return {"ok": True, "filename": filename,
+            "validate": report, "gate2_status": gate2_status or None,
+            "version_no": version_no, "percept": percept}
 
 
 class DraftDepBody(BaseModel):
@@ -370,9 +425,8 @@ def add_draft_dep(filename: str, body: DraftDepBody):
 
     守卫：自依赖拒绝、dep 目标必须存在（库内场景或另一草稿）、环预检（草稿并入图）。
     """
-    from services import deps_editor, dep_suggest
+    from services import dep_suggest, deps_editor, user_store
     from services.auth import current_emp_no
-    from services import user_store
 
     path = _guard_filename(filename)
     if not path.is_file():
@@ -426,8 +480,9 @@ async def trial_run_draft(filename: str):
     未入库先验证，豁免 covers 闸（草稿可能尚未锚定 FR）；报告落 .specguard/reports/。
     """
     import asyncio
-    from services.auth import current_emp_no
+
     from services import user_store
+    from services.auth import current_emp_no
 
     path = _guard_filename(filename)
     if not path.is_file():
@@ -488,9 +543,8 @@ def review_draft(filename: str, body: ReviewBody):
 
     gate2 未 pass 时 approved 被拒（②失败打回，①不生效）。
     """
-    from services import draft_gates
+    from services import draft_gates, user_store
     from services.auth import current_emp_no
-    from services import user_store
 
     try:
         gate = draft_gates.review_draft(
@@ -515,9 +569,8 @@ def review_draft(filename: str, body: ReviewBody):
 @router.post("/{filename}/revalidate", dependencies=[Depends(require_role("admin", "tester"))])
 def revalidate_draft(filename: str):
     """重跑第②闸（T-061）：草稿修改后重新格式校验，报告逐项更新。"""
-    from services import draft_gates
+    from services import draft_gates, user_store
     from services.auth import current_emp_no
-    from services import user_store
 
     path = _guard_filename(filename)
     if not path.is_file():
@@ -600,10 +653,10 @@ def reset_draft_area():
     - 删除 sg_draft_gates 中当前工作区的记录
     - 删除 ledger_store drafts 表中当前工作区的记录
     """
-    from specstd.workspace import get_active_workspace
-    from services import draft_gates, ledger_store
+    from services import draft_gates, ledger_store, user_store
     from services.auth import current_emp_no
-    from services import user_store
+
+    from specstd.workspace import get_active_workspace
 
     drafts_root = _drafts_root()
     ws = (get_active_workspace() or {}).get("name", "") if get_active_workspace else ""
