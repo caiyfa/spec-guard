@@ -18,7 +18,7 @@ python -m pytest -v
 
 - Python 依赖：`pytest`、`requests`、`pymysql`、`pyyaml`
 - 网络可达 SIT 网关 `sit-ha.fehorizon.com` + SIT MySQL
-- DB 密码：自动回退读取 devops 技能凭据 `~/.qoder/skills/devops/scripts/.env.devops`（无需手动配置）
+- DB 密码/SSO 凭据：缺省时走 SpecGuard 自有回退链——环境变量 → 自有凭据文件 `~/.specguard/secrets.env`（`KEY=VALUE` 行式，路径可用 `SG_SECRETS_FILE` 重定向）→ 旧 devops `.env.devops` 过渡兜底（命中即提示迁移，T-960b）
 
 每次运行自动生成报告：`{工作区}/.specguard/reports/{EX-任务号}/`（K-050 起按任务号归档）
 

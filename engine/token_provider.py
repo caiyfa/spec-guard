@@ -76,10 +76,13 @@ class TokenProvider:
                 return token
         cfg = self._internal_cfg
         if not cfg.get("client_secret"):
-            # T-960 凭据出库：client_secret 走环境变量/devops 凭据回退，缺省时诚实报错（不发空 secret 请求）
+            # T-960/T-960b 凭据出库：client_secret 走自有回退链（环境变量 → ~/.specguard/secrets.env
+            # → 旧 devops 过渡兜底），缺省时诚实报错（不发空 secret 请求）
             raise TokenError(
                 "internal_token.client_secret 未配置（T-960 已出库）——"
-                "请设环境变量 SG_TDM_CLIENT_SECRET，或在 devops 凭据 ~/.qoder/skills/devops/scripts/.env.devops 补 SG_TDM_CLIENT_SECRET")
+                "请设环境变量 SG_TDM_CLIENT_SECRET，或在 SpecGuard 自有凭据文件 "
+                "~/.specguard/secrets.env 补一行 SG_TDM_CLIENT_SECRET=值"
+                "（路径可用环境变量 SG_SECRETS_FILE 重定向）")
         url = (f"{cfg['url']}?clientId={cfg['client_id']}"
                f"&clientSecret={cfg['client_secret']}&scope={cfg.get('scope', 'internal')}")
         resp = requests.post(url, timeout=15)

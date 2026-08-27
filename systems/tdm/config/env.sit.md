@@ -60,7 +60,7 @@
 
 1. **TDM_INV_ACTIVITY 未授权（EX-8200eada，2026-08-02）**：SIT 权限体系该资源码无绑定账号，default 账号实际无活动创建权限。HTTP 200 但业务失败（`status: 500000`，`data` 为错误消息字符串）→ 插值 `{{activity.json.data.id}}` 报「变量未定义」。**对策**：写型场景首步必须带 `precheck_permission`（无权限首步诚实 SKIP）；排障先看 case 详情的 `body_excerpt` 而非 HTTP 状态；环境侧需为测试账号绑定写型资源码全集（TDM_INV_ACTIVITY / TDM_SNAPSHOT_ARCHIVE / TDM_GRID_RESULT / TDM_INV_OPERATION）。
 2. **版本头剥离**：`X-Api-Version` 仅 sit-tdm 直连网关返回，sit-ha 代理剥掉——走 sit-ha 必须 `check_version_header: false`。
-3. **DB 只读纪律**：SIT MySQL 只有只读账号（mcp_read），DB 校对断言仅 SELECT；密码缺省时自动回退读 devops `.env.devops`（`SG_DB_PASSWORD` / `SG_SSO_PASSWORD` 可覆盖）。
+3. **DB 只读纪律**：SIT MySQL 只有只读账号（mcp_read），DB 校对断言仅 SELECT；密码缺省时走自有凭据链 `~/.specguard/secrets.env`（环境变量 `SG_DB_PASSWORD` / `SG_SSO_PASSWORD` 优先；旧 devops `.env.devops` 仅过渡兜底并提示迁移）。
 4. **账号池缺口**：restricted 受限账号未补充——单平台权限过滤类场景（PP-PERM 系列）依赖该账号，未配置时无法真实模拟「部分可见」。
 
 ---
