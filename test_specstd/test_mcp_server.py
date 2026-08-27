@@ -45,8 +45,9 @@ def workspace(tmp_path):
 class TestToolRegistration:
     def test_11_tools_registered(self):
         # T-982 工具收敛：stdio 92 → 40（对内 25 合并工具——T-1011 新增 meta 域
-        # topic 通用召回 + S8 open/ 15 契约面不变）
-        assert len(ALL_TOOLS) == 40
+        # topic 通用召回 + S8 open/ 15 契约面不变）；T-1032 增 parent（辅助会话
+        # 读父脉络，纯读 aux 域）→ 41
+        assert len(ALL_TOOLS) == 41
 
     def test_tool_names(self):
         names = {t.name for t in ALL_TOOLS}
@@ -60,6 +61,7 @@ class TestToolRegistration:
             "feishu_read", "lark_auth", "lark_execute",
             "graph", "lineage",
             "knowledge",
+            "parent",           # T-1032：父会话脉络读取（仅 aux 域，主会话不可见）
             "audit", "scan_compliance", "query_coverage_gaps",
             "todo_write", "gate_dock_status", "topic",
             # S8 open/ 对外开放面（15 新名，对外契约不变；read_run_report 复用内部映射）

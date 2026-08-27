@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from services.auth import CurrentUser, get_current_user, get_current_user_ws
 from services.session_event_bus import REPLAY_BATCH, SessionEventBus
@@ -494,6 +494,31 @@ _FOCUS_TOOL_NAMES = {"scenario.run", "run_scenario", "validate", "scenario.edit"
 _FOCUS_ARG_KEYS = ("target", "scenario_id", "scenario")
 
 
+def _refresh_parent_digest_bg(sm: SessionManager, sid: str, llm=None) -> dict | None:
+    """T-1032 方案②：父会话脉络摘要后台刷新。调用方负责放后台线程；失败静默不炸。
+
+    LLM 通道传用户当轮所选模型实例（与其主会话同款口味）；mock/未配置时
+    refresh_digest 内部诚实降级骨架摘要。
+    """
+    try:
+        from sg_core import session_digest as _sdd
+        msgs = sm.load(sid)
+        if msgs is None:
+            return None
+
+        def _llm(system: str, user: str) -> str:
+            prompt = [{"role": "system", "content": system},
+                      {"role": "user", "content": user}]
+            msg, _usage = llm.chat(prompt, tools=None)
+            return str((msg or {}).get("content") or "")
+
+        use_llm = llm if (llm is not None and not getattr(llm, "is_mock", False)) else None
+        return _sdd.refresh_digest(sm.sessions_dir, sid, msgs,
+                                   llm_call=use_llm)
+    except Exception as e:
+        return {"action": "failed", "error": str(e)}
+
+
 def _dedupe_tail(items: list[str], keep: int) -> list[str]:
     """保序去重取尾部最近 N 条（快照注入面防膨胀）。"""
     seen: set[str] = set()
@@ -505,7 +530,8 @@ def _dedupe_tail(items: list[str], keep: int) -> list[str]:
     return list(reversed(out))[-keep:]
 
 
-def _parent_snapshot(sm: SessionManager, parent_sid: str, last_fp: str) -> tuple[str, str]:
+def _parent_snapshot(sm: SessionManager, parent_sid: str, last_fp: str,
+                     include_digest_hint: bool = True) -> tuple[str, str]:
     """构造父会话最新快照。返回 (注入文本, 新指纹)。
 
     - 父不可读 → 降级行（辅助会话继续不炸）
@@ -513,6 +539,8 @@ def _parent_snapshot(sm: SessionManager, parent_sid: str, last_fp: str) -> tuple
     - 内容：父会话 meta 概要 + 草稿足迹 + 聚焦场景 + 阅读足迹 + 最近 assistant 摘要。
       T-1031 增强：草稿行明示 drafts/ 区定位（治辅助会话先搜场景库扑空绕路），
       新增聚焦场景与最近读过文件两行（治「一开头不知道在处理什么」盲区）。
+      T-1032：摘要文件就绪时追加 parent 工具用法提示行（include_digest_hint
+      由调用方按创建期工具白名单判定——存量辅助会话无 aux 域时不提示，防误导）。
     """
     import hashlib
     msgs = None
@@ -573,6 +601,21 @@ def _parent_snapshot(sm: SessionManager, parent_sid: str, last_fp: str) -> tuple
     if read_tail:
         parts.append(f"- 主会话最近读过的工作区文件: {', '.join(read_tail)}")
     parts.append(f"- 最近回复摘要: {last_assistant or '（无）'}")
+    # T-1032：脉络摘要就绪提示（方案③工具入口的发现性——摘要由方案②每轮 run 后自动维护）
+    if include_digest_hint:
+        try:
+            from sg_core import session_digest as _sdd
+            _md, _mj = _sdd.paths_for(str(sm.sessions_dir), parent_sid)
+            if _md.is_file():
+                cov = _sdd.parse_coverage(
+                    _mj.read_text(encoding="utf-8") if _mj.is_file() else None)
+                parts.append(
+                    f"- 父会话脉络摘要已就绪（{(cov or {}).get('mode', '')} 模式，"
+                    f"覆盖截至第 {(cov or {}).get('covered_len', '?')} 条）："
+                    "主会话的整体进展/产物清单可用 parent 工具读取"
+                    "（action=summary 全文摘要，action=recent 最近轮窗）")
+        except Exception:
+            pass
     body = "\n".join(parts)
     fp = hashlib.sha256(body.encode("utf-8")).hexdigest()[:12]
     if last_fp and fp == last_fp:
@@ -732,11 +775,15 @@ def create_session(body: dict, user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/sessions/spawn")
-def spawn_session(body: dict, user: CurrentUser = Depends(get_current_user)):
+def spawn_session(body: dict, background_tasks: BackgroundTasks,
+                  user: CurrentUser = Depends(get_current_user)):
     """辅助会话派生（设计 2026-08-25 §B3）：从主会话派生专职 purpose 的辅助会话。
 
     幂等：同父会话 + 同 purpose 存在未归档 aux 会话 → 直接返回（created=False）；
     父会话的 aux 已归档时再派生新的。父会话必须存在且属当前用户。
+    T-1032 方案②兜底：父会话尚无脉络摘要时，响应后后台生成骨架摘要
+    （llm=None→确定性提取，诚实标注 skeleton；其首轮 run 完成后自动升级 LLM 版），
+    保证派生后 parent 工具立即有东西可读。
     """
     parent_sid = str(body.get("parent_session_id", "") or "").strip()
     purpose = str(body.get("purpose", "") or "").strip()
@@ -762,6 +809,7 @@ def spawn_session(body: dict, user: CurrentUser = Depends(get_current_user)):
                 and s.get("parent_session_id") == parent_sid
                 and s.get("purpose") == purpose
                 and not s.get("archived")):
+            _spawn_digest_backfill(background_tasks, sm, parent_sid)
             return {"ok": True, "session_id": s["id"], "created": False}
     sid = sm.create(
         emp_no=user.emp_no, workspace=workspace, purpose=purpose,
@@ -771,7 +819,20 @@ def spawn_session(body: dict, user: CurrentUser = Depends(get_current_user)):
         agent_session_store.upsert_session(sid, user.emp_no, workspace, purpose, "")
     except Exception:
         pass
+    _spawn_digest_backfill(background_tasks, sm, parent_sid)
     return {"ok": True, "session_id": sid, "created": True}
+
+
+def _spawn_digest_backfill(background_tasks: BackgroundTasks,
+                           sm: SessionManager, parent_sid: str):
+    """T-1032：派生时父摘要缺失 → 后台补骨架版（有则跳过，避免重复写）。"""
+    try:
+        from sg_core import session_digest as _sdd
+        md_path, _mj = _sdd.paths_for(str(sm.sessions_dir), parent_sid)
+        if not md_path.is_file():
+            background_tasks.add_task(_refresh_parent_digest_bg, sm, parent_sid, None)
+    except Exception:
+        pass
 
 
 @router.post("/sessions/{session_id}/clear")
@@ -1300,9 +1361,14 @@ async def agent_ws(websocket: WebSocket,
                                    user_roles=list(_ws_roles or []))
             # 辅助会话：父会话每轮快照前缀注入（主→辅单向；设计 §B4）
             # T-1031: 追加查看指针 <viewing_context>——用户当前打开的文件页签随消息携带
+            # T-1032: 摘要提示行仅对工具白名单含 aux 域的会话（存量辅助会话的
+            # 创建期快照可能缺该域——M5 语义定义不回流，提示了也调不到，防误导）
             parent_block = ""
+            _aux_tool_ok = (not session_tools_snapshot) \
+                or ("domain:aux" in tuple(session_tools_snapshot or ()))
             if session_kind == "aux" and parent_sid:
-                parent_block, new_fp = _parent_snapshot(sm, parent_sid, last_parent_fp)
+                parent_block, new_fp = _parent_snapshot(
+                    sm, parent_sid, last_parent_fp, include_digest_hint=_aux_tool_ok)
                 try:
                     sm.set_meta_fields(sid, last_parent_fp=new_fp)
                 except Exception:
@@ -1399,6 +1465,14 @@ async def agent_ws(websocket: WebSocket,
                 _ACTIVE_RUNTIMES.pop(sid, None)
                 try:
                     await websocket.send_json(done_event)
+                except Exception:
+                    pass
+
+                # T-1032 方案②：run 完成 → 后台刷新本会话脉络摘要（供其辅助会话
+                # 经 parent 工具读取）。fire-and-forget——失败静默，不阻塞连接循环。
+                try:
+                    asyncio.create_task(
+                        asyncio.to_thread(_refresh_parent_digest_bg, sm, sid, llm))
                 except Exception:
                     pass
             finally:

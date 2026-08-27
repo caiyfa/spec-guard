@@ -22,3 +22,28 @@ def set_session_id(session_id: str):
 
 def reset_session_id(token):
     _CTX_SESSION_ID.reset(token)
+
+
+# ── 运行时作用域（T-1032 父会话脉络感知）──
+# runtime.run() 开头解析一次完整会话身份，_execute_tool 与 set_session_id 同点
+# 注入；parent 等工具据此做门卫（仅辅助会话可用/只读本链接父会话）与路径定位。
+# MCP stdio / 纯 API 无会话语境为 None → 工具诚实拒绝。
+_CTX_RUNTIME_SCOPE: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "sg_runtime_scope", default=None)
+
+
+def set_runtime_scope(scope: dict | None):
+    return _CTX_RUNTIME_SCOPE.set(scope or None)
+
+
+def reset_runtime_scope(token):
+    _CTX_RUNTIME_SCOPE.reset(token)
+
+
+def get_runtime_scope() -> dict | None:
+    """当前运行时作用域快照。
+
+    约定键：sid / kind / purpose / parent_sid / title /
+    sessions_dir(str, SessionManager.sessions_dir)。
+    """
+    return _CTX_RUNTIME_SCOPE.get()

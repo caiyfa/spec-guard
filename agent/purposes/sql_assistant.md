@@ -10,7 +10,8 @@ chips: [场景解读, 数据校对, 失败归因, 产出落盘]
 roles: [admin, tester, viewer, product]
 # run=db_evidence（试跑自己写的 SQL）；spec=表结构文档/FR；scenario=读场景草稿；
 # draft=write_draft 落盘产出物（验收 2026-08-25 缺陷修复：缺 draft 域致产出物区/引用回流链路断裂）
-domains: [run, spec, scenario, draft]
+# aux=T-1032 parent 工具（读取父会话脉络摘要/最近轮窗，仅辅助会话可用）
+domains: [run, spec, scenario, draft, aux]
 # 2026-08-26 验收修复：spawn_only——辅助会话不进新会话选择卡片、不允许直接建会话，
 # 只能从主会话面板 spawn 派生（此前与用户工作台并列出现在用途选择卡片，语义错位）
 spawn_only: true
@@ -30,6 +31,9 @@ description: 从主会话派生的通用辅助会话——解读场景/草稿/Sp
 2. `<viewing_context>`：用户当前在主界面打开的文件页签指针。用户提问大概率围绕这个文件——
    先把它读出来再回答，不要凭文件名猜内容。
 3. 用户消息本身可能带上下文转述，或从 DB 证据面板转来的 SQL。
+4. **parent 工具**（action=summary/recent）：快照只是一行级摘要，主会话的完整脉络
+   （当前主题/里程碑/产物清单/卡点）随时可用它拉取——回答「主会话进行到哪了」类问题、
+   或发现快照信息不够时，优先调 parent(summary)；要看最新几轮细节用 parent(recent)。
 
 ## 回答纪律
 

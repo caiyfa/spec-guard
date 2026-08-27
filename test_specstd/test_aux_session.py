@@ -160,6 +160,32 @@ class TestSpawnApi:
                    json={"parent_session_id": parent, "purpose": "no_such_purpose"})
         assert r.status_code == 403
 
+    def test_spawn_backfills_parent_digest(self, aux_client):
+        """T-1032 方案②兜底：派生时父会话无脉络摘要 → 响应后后台落盘骨架版。"""
+        from pathlib import Path as _P
+
+        from sg_core import session_digest as _sdd
+        c = aux_client
+        parent = c.post("/api/agent/sessions",
+                        json={"purpose": "test_workbench"}).json()["session_id"]
+        # 先给父会话两条有效消息（空会话会被 refresh 的清理语义移除）
+        from routers import agent as agent_router
+
+        from agent.session import SessionManager
+        sm = SessionManager(agent_router.SESSIONS_ROOT / "90000001")
+        sm.save(parent, [
+            {"role": "user", "content": "为历史盘点权限模块生成 HI-PERM-001 场景"},
+            {"role": "assistant", "content": "草稿已写入 drafts/HI-PERM-001.yaml，等待评审。"},
+        ], emp_no="90000001")
+        resp = c.post("/api/agent/sessions/spawn",
+                      json={"parent_session_id": parent, "purpose": "sql_assistant"})
+        assert resp.status_code == 200
+        md_path, _mj = _sdd.paths_for(str(sm.sessions_dir), parent)
+        assert _P(md_path).is_file(), "spawn 后父摘要应已由后台任务补齐"
+        body = _P(md_path).read_text(encoding="utf-8")
+        assert "mode=skeleton" in body            # 无 LLM 通道时诚实标注
+        assert "HI-PERM-001" in body              # 骨架含用户请求要点
+
 
 @pytest.mark.skipif(not _SPY_TMP, reason="需隔离环境（SG_AUX_TEST_TMP）")
 class TestClearApi:

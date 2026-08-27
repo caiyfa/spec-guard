@@ -6,4 +6,6 @@ _BACKEND = Path(__file__).resolve().parent.parent / "workbench" / "backend"
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from routers.agent import _parent_snapshot, _viewing_context_block  # noqa: F401,E402
+from routers.agent import (  # noqa: F401,E402
+    _parent_snapshot, _refresh_parent_digest_bg, _viewing_context_block,
+)

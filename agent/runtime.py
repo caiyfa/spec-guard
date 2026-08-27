@@ -427,6 +427,25 @@ class AgentRuntime:
         self._session = session
         self._session_id = session_id
 
+        # T-1032：解析一次会话运行时作用域（_execute_tool 注入给 parent 等
+        # 会话感知工具）。meta 读取失败静默降级——工具侧门卫仍会拦截越权读取。
+        try:
+            _meta = (session._read_meta(session.sessions_dir / f"{session_id}.jsonl") or {}
+                     if (session and session_id) else {})
+            self._runtime_scope = {
+                "sid": session_id or "",
+                "kind": str(_meta.get("kind", "") or ""),
+                "purpose": self._purpose_name or "",
+                "parent_sid": str(_meta.get("parent_session_id", "") or ""),
+                "title": str(_meta.get("title", "") or ""),
+                "sessions_dir": str(getattr(session, "sessions_dir", "") or ""),
+            }
+        except Exception:
+            self._runtime_scope = {"sid": session_id or "", "kind": "",
+                                   "purpose": self._purpose_name or "",
+                                   "parent_sid": "", "title": "",
+                                   "sessions_dir": ""}
+
         # 恢复历史会话
         if session and session_id:
             history = session.load(session_id)
@@ -702,9 +721,13 @@ class AgentRuntime:
         self._refresh_whitelist()
         from sg_core import session_context as _sc
         _sc_tok = _sc.set_session_id(self._session_id or "")
+        # T-1032：同步注入运行时作用域（kind/parent_sid/sessions_dir 等，
+        # parent 工具门卫与限界读取依赖；与 set_session_id 同点同生命周期）
+        scope_tok = _sc.set_runtime_scope(getattr(self, "_runtime_scope", None))
         try:
             return self._execute_tool_inner(tool_call)
         finally:
+            _sc.reset_runtime_scope(scope_tok)
             _sc.reset_session_id(_sc_tok)
 
     def _execute_tool_inner(self, tool_call: dict) -> str:
