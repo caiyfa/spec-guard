@@ -24,9 +24,20 @@ from pathlib import Path
 # pending 文件名后缀（与会话 {sid}.jsonl 同目录共存）
 PENDING_SUFFIX = "_panel_edits.jsonl"
 
-_NOTE_MAX = 1200    # 注入文本上限（防大 diff 刷爆上下文）
-_FINDING_MAX = 3    # 校验 findings ERROR 摘录条数
-_MSG_SAMPLE = 240   # 单条 finding message 截断长度
+_NOTE_MAX = 1800          # 注入文本上限（防大 diff 刷爆上下文；超限只裁摘录行，护栏必保）
+_FINDING_MAX = 3          # 校验 findings ERROR 摘录条数
+_MSG_SAMPLE = 240         # 单条 finding message 截断长度
+_EXCERPT_MAX = 8          # 变更内容摘录条数上限（± 合计）
+_EXCERPT_LINE_MAX = 120   # 摘录单行截断长度
+
+# ── 注记固定措辞（T-1027 首轮验收打回的返修钉案）──
+# 真实性纪律：注记里的工具调用必须真实存在于注册表——首轮验收曾指向不存在的
+# draft read action，Agent 被错误指引后即兴 overwrite 摧毁用户草稿（58bb6b8 打回根因）。
+# spec 的 read action 与 path 参数经 spec_reader.py + tool_meta 注册表实证；
+# 测试侧用 get_meta(tool).actions 对照断言防回潮（test_draft_panel_edit.py）。
+READ_HINT_FMT = 'spec(action="read", path="{path}")'
+GUARD_TEXT = ('护栏：用户的修改就是最新事实源——禁止用 draft write/overwrite 重写该文件'
+              '来"恢复"或"修正"，除非用户明确要求。')
 
 _TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):")
 
@@ -44,11 +55,14 @@ def _top_level_owners(lines: list[str]) -> list[str]:
 
 
 def build_edit_note(filename: str, old_text: str, new_text: str,
-                    validate_report: dict | None) -> str:
-    """构造注入文本：变更摘要（±行数 + 涉及区块）+ 自动校验结论。
+                    validate_report: dict | None,
+                    read_path: str = "", version_no: int | None = None) -> str:
+    """构造注入文本：变更摘要 + 校验结论 + 变更行摘录 + 反覆盖护栏。
 
-    给 LLM 的定位：「用户亲手改过这个文件」——Agent 后续评审/修复必须以磁盘
-    最新内容为事实源，不能拿自己上一版记忆覆盖用户改动。
+    给 LLM 的定位：「用户亲手改过这个文件」——回答变更问题优先直接引用摘录行
+    （零工具依赖，首轮验收证明"让 Agent 自己去读"会诱发即兴操作）；read_path
+    提供时附带真实可执行的全文读取调用作为兜底。超长时只裁摘录行，
+    校验结论与护栏必须保留在注入文本里。
     """
     old_lines = old_text.splitlines()
     new_lines = new_text.splitlines()
@@ -56,36 +70,69 @@ def build_edit_note(filename: str, old_text: str, new_text: str,
     owners_new = _top_level_owners(new_lines)
     added = deleted = 0
     touched: set[str] = set()
+    excerpts: list[str] = []
     matcher = difflib.SequenceMatcher(a=old_lines, b=new_lines, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
         if tag in ("replace", "delete"):
             deleted += i2 - i1
             touched.update(owners_old[i1:i2])
         if tag in ("replace", "insert"):
             added += j2 - j1
             touched.update(owners_new[j1:j2])
+        if len(excerpts) < _EXCERPT_MAX:
+            if tag in ("replace", "delete"):
+                excerpts.extend("- " + ln.rstrip()[:_EXCERPT_LINE_MAX]
+                                for ln in old_lines[i1:min(i2, i1 + _EXCERPT_MAX - len(excerpts))])
+            if len(excerpts) < _EXCERPT_MAX and tag in ("replace", "insert"):
+                excerpts.extend("+ " + ln.rstrip()[:_EXCERPT_LINE_MAX]
+                                for ln in new_lines[j1:min(j2, j1 + _EXCERPT_MAX - len(excerpts))])
     sections = "、".join(sorted(t for t in touched if t != "(head)")) or "(head)"
 
-    lines = [
-        f"[面板编辑] 用户在草稿产物面板直接修改了 {filename}。",
-        f"变更摘要：+{added}/-{deleted} 行，涉及区块：{sections}。"
-        "后续处理请以该文件最新内容为准；需要细节可用 draft 工具 read 查看。",
+    head = [
+        f"[面板编辑] 用户在草稿产物面板直接修改了 {filename}（人工手改，磁盘上已是最新版）。",
+        f"变更摘要：+{added}/-{deleted} 行，涉及区块：{sections}。",
     ]
     report = validate_report or {}
     verdict = str(report.get("verdict", ""))
     if verdict:
         summary = report.get("summary") or {}
-        head = f"保存时自动格式校验：{verdict}"
+        vhead = f"保存时自动格式校验：{verdict}"
         if summary:
-            head += f" · error {summary.get('error', 0)} / warn {summary.get('warn', 0)}"
-        lines.append(head)
+            vhead += f" · error {summary.get('error', 0)} / warn {summary.get('warn', 0)}"
+        head.append(vhead)
         errs = [f for f in report.get("findings", [])
                 if str(f.get("level", "")).upper() == "ERROR"][:_FINDING_MAX]
         for f in errs:
-            lines.append(f"- [{f.get('rule', '')}] {str(f.get('message', ''))[:_MSG_SAMPLE]}")
+            head.append(f"- [{f.get('rule', '')}] {str(f.get('message', ''))[:_MSG_SAMPLE]}")
         if errs:
-            lines.append("校验存在 ERROR——用户编辑可能引入问题，请主动关注是否需要协助修复。")
-    return "\n".join(lines)[:_NOTE_MAX]
+            head.append("校验存在 ERROR——用户编辑可能引入问题，请主动关注是否需要协助修复。")
+
+    tail = [GUARD_TEXT]
+    if version_no is not None:
+        tail.append(f"本次编辑前的全文已留档版本链 v{version_no}；回滚只能由用户明确要求后进行。")
+    if read_path:
+        tail.append(f'需要全文可用 {READ_HINT_FMT.format(path=read_path)} 读取。')
+
+    # 超限裁剪：从摘录尾部逐条丢弃，头部与 tail 完整保留；摘录清空仍超限才硬截头部
+    def _join(exc: list[str]) -> str:
+        mid = ["变更内容摘录（行首 +/- 为增/删行）："]
+        mid += [f"  {e}" for e in exc] if exc else ["  （变更过大，仅见上方摘要）"]
+        return "\n".join(head + mid + tail)
+
+    kept = list(excerpts)
+    while len(_join(kept)) > _NOTE_MAX and kept:
+        kept = kept[:-1]
+    note = _join(kept)
+    return note if len(note) <= _NOTE_MAX else body_hard_cut(head, tail)
+
+
+def body_hard_cut(head: list[str], tail: list[str]) -> str:
+    """头部自身超预算的最后防线：截头部、完整保尾部（预算先扣尾部实长）。"""
+    tail_text = "\n".join(tail)
+    budget = max(120, _NOTE_MAX - len(tail_text) - 2)
+    return "\n".join(head)[:budget].rstrip() + "\n\n" + tail_text
 
 
 def _pending_file(sessions_dir: str | Path, workspace: str, session_id: str) -> Path:

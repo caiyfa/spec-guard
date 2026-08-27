@@ -400,7 +400,17 @@ def save_draft(filename: str, body: DraftSaveBody):
             from routers.agent import _run_in_progress, _sessions_dir
             emp = current_emp_no()
             ws_name = get_context_workspace() or ""
-            note = build_edit_note(filename, old_text, body.content, report)
+            # 全文读取指引的工作区相对路径（spec(action="read") 第一解析根为工作区根；
+            # 解析不出时诚实省略该行，不给 Agent 不可执行的路径）
+            ws_root = get_workspace_root()
+            read_path = ""
+            if ws_root:
+                try:
+                    read_path = str(path.resolve().relative_to(ws_root.resolve())).replace("\\", "/")
+                except (ValueError, OSError):
+                    read_path = ""
+            note = build_edit_note(filename, old_text, body.content, report,
+                                   read_path=read_path, version_no=version_no)
             percept = inject_edit_note(
                 _sessions_dir(emp), ws_name, sid, note,
                 busy=bool(_run_in_progress(sid)))

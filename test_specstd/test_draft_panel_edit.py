@@ -63,10 +63,89 @@ class TestBuildEditNote:
         assert "[R3]" not in note         # 只摘录前 3 条
         assert "ERROR" in note            # 有 ERROR 时提示关注修复
 
-    def test_truncated_to_cap(self):
-        big_new = NEW_YAML + "\n# " + "x" * 5000
-        note = build_edit_note("X.yaml", OLD_YAML, big_new, None)
-        assert len(note) <= 1200
+    # ── T-1027 首轮验收打回返修（58bb6b8：注记指向不存在的 draft read，Agent 即兴
+    # overwrite 摧毁用户草稿）——以下四条钉死返修语义 ──
+
+    def test_changed_lines_embedded_zero_tool_dependency(self):
+        """变更行摘录直接进注记——Agent 引用即可作答，不需要任何工具调用。"""
+        note = build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None)
+        exc = [ln for ln in note.splitlines()
+               if ln.strip().startswith(("+ ", "- ")) and ("db_eq: count" in ln or "title: 旧标题" in ln)]
+        assert len(exc) >= 2              # 增行与删行都以 ± 前缀原文呈现（保留缩进）
+
+    def test_guard_anti_overwrite_pinned(self):
+        """反覆盖护栏必须逐字在注记中（首轮事故正是 Agent 连续 overwrite）。"""
+        note = build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None)
+        assert "禁止用 draft write/overwrite 重写该文件" in note
+
+    def test_read_pointer_real_and_honest(self):
+        """有工作区相对路径 → 给出 spec(action="read") 真实调用；无路径 → 整行诚实省略。"""
+        note = build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None,
+                               read_path=".specguard/90024166/drafts/X.yaml")
+        assert 'spec(action="read", path=".specguard/90024166/drafts/X.yaml")' in note
+        bare = build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None)
+        assert 'spec(action=' not in bare       # 解析不出路径时不给不可执行的指引
+
+    def test_no_phantom_draft_read_reference(self):
+        """禁止回潮：注记不得再出现 draft 工具的 read 指引（draft 无此 action）。"""
+        note = build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None,
+                               read_path=".specguard/e/drafts/X.yaml")
+        assert 'draft(action="read"' not in note
+        assert "draft 工具 read" not in note
+
+    def test_tool_refs_exist_in_registry(self):
+        """真实性对照：注记里所有 tool(action=…) 引用必须在 MCP 注册表中真实存在。"""
+        import re
+
+        import mcp_server.tools.spec_reader  # noqa: F401 — consolidate 注册发生在 import 时
+        from mcp_server.tools.tool_meta import get_meta
+
+        note = build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None,
+                               read_path="d/X.yaml", version_no=3)
+        refs = re.findall(r'\b(\w+)\(action="(\w+)"', note)
+        assert refs, "护栏指针缺失（应至少引用一个真实工具）"
+        for tool, action in refs:
+            actions = get_meta(tool).actions
+            assert actions, f"{tool} 不是已注册的合并工具（legacy 工具不得写 action= 形式）"
+            assert action in actions, f"{tool} 不存在 action={action!r}（合法值: {list(actions)}）"
+
+    def test_overflow_keeps_guard_and_pointer_trims_excerpt(self, monkeypatch):
+        """超长 diff：摘录被逐条裁剪，护栏与全文指针必须存活；总量受上限约束。
+
+        用 monkeypatch 调低 _NOTE_MAX 确定性触发裁剪路径（正常常量下
+        摘录本身有 _EXCERPT_MAX×截断 双重封顶，自然溢出不可控）。
+        """
+        import services.panel_edit_feedback as mod
+        monkeypatch.setattr(mod, "_NOTE_MAX", 300)
+        note = mod.build_edit_note("X.yaml", OLD_YAML, NEW_YAML, None, read_path="d/X.yaml")
+        assert len(note) <= 300
+        assert "禁止用 draft write/overwrite 重写该文件" in note
+        assert 'spec(action="read"' in note
+
+
+class TestReadPointerExecutable:
+    def test_read_pointer_path_actually_resolvable(self, workspace):
+        """注记里的 read path 必须真实可读（端到端钉案）。
+
+        首轮验收事故根源：指引不可执行 → Agent 即兴操作。本测试用 PUT 同款
+        相对路径组装，direct-call read_spec 守住「指哪读哪」。
+        """
+        from mcp_server.tools.spec_reader import _handle_read_spec
+        from specstd import ws_dirs
+
+        d = ws_dirs.drafts_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / "READ-1.yaml"
+        f.write_text("id: READ-1\nflow:\n  - step: call\n", encoding="utf-8")
+        try:
+            ws_root = ws_dirs.get_workspace_root()
+            rel = str(f.resolve().relative_to(ws_root.resolve())).replace("\\", "/")
+            contents = _handle_read_spec({"path": rel})
+            text = "".join(c.text for c in contents)
+            assert "OUT_OF_SCOPE" not in text and "错误" not in text.split("\n")[0]
+            assert "id: READ-1" in text
+        finally:
+            f.unlink(missing_ok=True)
 
 
 class TestInjectEditNote:
