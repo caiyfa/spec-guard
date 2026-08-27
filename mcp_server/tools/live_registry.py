@@ -97,3 +97,61 @@ def list_step_types() -> list[dict]:
 def oracle_names() -> set[str]:
     """oracle 名称集合（validator 幻觉拦截用）。"""
     return {o["name"] for o in list_oracles()}
+
+
+# ══════════════════════════════════════════════════════════
+# env 配置只读窗口（query_registry type=env 数据源）
+# 背景：agent 工具被沙箱在工作区（spec 仓库），够不到引擎仓库的
+# systems/{system}/config/env.{env}.yaml——曾致模型拿旧试跑报告当
+# 现状、误断言「缺 hr_tdm_base」（20260827_094125_f955645e 会话）。
+# ══════════════════════════════════════════════════════════
+
+# 值打码的键名模式（大小写不敏感的子串匹配）——凭据不进会话日志
+_SENSITIVE_KEY_PAT = ("password", "secret", "token", "credential")
+
+
+def mask_env_config(cfg: dict) -> dict:
+    """递归脱敏 env 配置：password/secret/token 类键与 accounts.*.ad 值打码。
+
+    agent 只需要「键是否存在 + 非敏感值」（URL/开关/别名），凭据
+    （DB 密码、SSO secret、AD 域账号名）不得经工具结果落进会话 JSONL。
+    """
+    def _mask(node):
+        if isinstance(node, dict):
+            masked = {}
+            for key, val in node.items():
+                if isinstance(val, (dict, list)):
+                    masked[key] = _mask(val)
+                elif key.lower() == "ad" or any(p in key.lower() for p in _SENSITIVE_KEY_PAT):
+                    masked[key] = "***"
+                else:
+                    masked[key] = val
+            return masked
+        if isinstance(node, list):
+            return [_mask(x) for x in node]
+        return node
+
+    return _mask(cfg)
+
+
+def load_env_view(system: str = "", env_name: str = "") -> dict | None:
+    """加载当前系统 env 配置并脱敏，返回 {system, env, source, config}。
+
+    走 engine.bootstrap.load_system_env——与运行时同源，工具看到的即引擎用的。
+    加载失败/配置为空返回 None（调用方诚实报错，不伪造空清单）。
+    """
+    system = _resolve_system(system)
+    env_name = env_name or os.environ.get("SG_ENV", "sit")
+    try:
+        from engine.bootstrap import load_system_env
+        cfg = load_system_env(system, env_name)
+    except Exception:
+        return None
+    if not isinstance(cfg, dict) or not cfg:
+        return None
+    return {
+        "system": system,
+        "env": env_name,
+        "source": f"systems/{system}/config/env.{env_name}.yaml",
+        "config": mask_env_config(cfg),
+    }

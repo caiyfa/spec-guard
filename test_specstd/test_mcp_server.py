@@ -472,6 +472,46 @@ class TestRegistryQuery:
         assert "call" in types
         assert "tool" in types
 
+    def test_query_env(self):
+        result = _call(registry_query, "query_registry", {"type": "env"})
+        data = json.loads(result[0].text)
+        assert data["system"] == "tdm"
+        assert data["env"]
+        assert data["source"] == f"systems/tdm/config/env.{data['env']}.yaml"
+        cfg = data["config"]
+        assert isinstance(cfg, dict) and cfg
+        assert "tdm_base" in cfg  # 仓内适配包稳定键：键存在性可实时查证
+
+    def test_query_env_masks_credentials(self):
+        result = _call(registry_query, "query_registry", {"type": "env"})
+        cfg = json.loads(result[0].text)["config"]
+        assert cfg["db"]["password"] == "***"
+        for acct in cfg.get("accounts", {}).values():
+            if isinstance(acct, dict) and "ad" in acct:
+                assert acct["ad"] == "***"
+
+    def test_query_env_explicit_params(self):
+        result = _call(registry_query, "query_registry", {"type": "env", "system": "tdm", "env": "sit"})
+        data = json.loads(result[0].text)
+        assert data["system"] == "tdm"
+        assert data["env"] == "sit"
+
+    def test_mask_env_config(self):
+        from mcp_server.tools.live_registry import mask_env_config
+        masked = mask_env_config({
+            "hr_tdm_base": "http://x/femsp/hr-tdm",
+            "check_version_header": False,
+            "db": {"host": "mysql-sit", "user": "mcp_read", "password": "${SG_DB_PASSWORD:}"},
+            "accounts": {"default": {"ad": "someone", "emp_no": "90024166"}},
+            "sso": [{"client_id": "svc", "client_secret": "real-secret"}],
+        })
+        assert masked["hr_tdm_base"] == "http://x/femsp/hr-tdm"  # 非敏感值原样
+        assert masked["check_version_header"] is False
+        assert masked["db"]["password"] == "***"
+        assert masked["accounts"]["default"]["ad"] == "***"  # AD 域账号名打码
+        assert masked["accounts"]["default"]["emp_no"] == "90024166"
+        assert masked["sso"][0]["client_secret"] == "***"    # 列表内嵌套同样打码
+
 
 # ══════════════════════════════════════════════════════════
 # draft_writer

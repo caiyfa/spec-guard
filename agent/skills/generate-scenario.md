@@ -13,7 +13,10 @@ keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个
 
 1. **读取需求**：使用 `info_pack(action=read)`（如有 scenario_id）或 `spec(action=read)` 读取需求文档（spec(action=read) 支持 `anchor=FR-xxx`/`section=章节` 参数只取关键章节，省 token）
 2. **获取 ID**：使用 `scenario(action=next_id)` 获取下一个可用场景 ID
-3. **查询注册表**：使用 `query_registry` 确认可用的 tool 和 oracle
+3. **查询注册表**：使用 `query_registry` 确认可用的 tool 和 oracle；场景会用到 `service:` /
+   `requires.env` 声明的环境键（如 `*_base`、资源码）时，用 `query_registry(type=env)` 实时查
+   当前环境配置（凭据已打码）确认键已存在——**历史试跑报告只反映报告时刻的状态，禁止拿它
+   断言当前 env 缺配置**；查不到键再向用户报告，不凭推测下 BLOCKER 结论
 4. **参考已有场景（分类定位）**：使用 `scenario(action=list)`（返回含 `summary` 分类摘要：按模块/
    标签聚合计数）——**先看 summary 定位同模块同类参照**（如生成 TL- 系列先看
    by_module 里标签库维护模块的存量），再用 `scenario(action=read)` 读 1-2 个同类场景的结构
