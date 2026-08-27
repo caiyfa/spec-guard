@@ -357,13 +357,65 @@ class TestPureReadEnforcement:
         assert rec.call_args.args[1] == "ok"
         assert rec.call_args.args[4] == "draft"  # side_effect=draft
 
-    def test_snapshot_fingerprint_covers_workspace(self):
-        """T-081：指纹目录含工作区产物与台账 DB（纯读工具写工作区草稿可检出）。"""
+    def test_snapshot_fingerprint_covers_workspace_only(self):
+        """T-1033 收窄钉：指纹只覆盖工作区产物（私有/共享区）；运行态文件
+        （workbench.db 等）与 SpecGuard 自身仓库目录不纳入——运行态异步落盘
+        （SQLite WAL checkpoint）曾落进纯读比对窗口造成误判（总控 T-1029 注记）。
+        断言剥离 docstring 后只看代码体：文档里解释「为什么不覆盖」不受限。"""
+        import ast
         import inspect
+        import textwrap
         from agent.runtime import AgentRuntime
-        src = inspect.getsource(AgentRuntime._take_snapshot_fingerprint)
-        assert "specguard_dir" in src
-        assert "workbench.db" in src
+        src = textwrap.dedent(inspect.getsource(AgentRuntime._take_snapshot_fingerprint))
+        fn = ast.parse(src).body[0]
+        code_parts = [ast.get_source_segment(src, stmt) or ""
+                      for stmt in fn.body
+                      if not (isinstance(stmt, ast.Expr)
+                              and isinstance(stmt.value, ast.Constant)
+                              and isinstance(stmt.value.value, str))]
+        code = "\n".join(code_parts)
+        assert "specguard_dir" in code                     # 工作区面仍在
+        for gone in ("workbench.db", "feedback/ledger.json",
+                     '("specs"', '"agent/skills"', '"mcp_server/tools"'):
+            assert gone not in code, f"运行态/仓库面应移出指纹代码: {gone}"
+
+    def test_fingerprint_ignores_runtime_state_and_repo(self, tmp_path, monkeypatch):
+        """行为钉（T-1033）：仓库/运行态文件变化不改变指纹；工作区文档写入必被捕获。"""
+        from agent import runtime as rt
+
+        ws_private = tmp_path / "ws_priv"
+        ws_shared = tmp_path / "ws_shared"
+        ws_private.mkdir()
+        (ws_private / "draft.md").write_text("v1", encoding="utf-8")
+
+        def fake_specguard_dir(emp=None):
+            return ws_private if emp is None else ws_shared
+
+        monkeypatch.setattr(rt, "SG_ROOT", tmp_path)
+        monkeypatch.setattr("specstd.workspace.specguard_dir", fake_specguard_dir)
+
+        # 旧口径会入指纹的运行态 DB + 仓库目录，即便变化也不得影响指纹
+        db = tmp_path / "workbench" / "backend" / "data" / "workbench.db"
+        db.parent.mkdir(parents=True)
+        db.write_bytes(b"x")
+        (tmp_path / "specs").mkdir()
+        (tmp_path / "specs" / "dirty.md").write_text("repo-side", encoding="utf-8")
+
+        instance = self._make_runtime()
+        fp1 = instance._take_snapshot_fingerprint()
+
+        db.write_bytes(b"y" * 16)
+        (tmp_path / "specs" / "dirty.md").write_text("repo-side-2", encoding="utf-8")
+        fp2 = instance._take_snapshot_fingerprint()
+        assert fp1 == fp2, "运行态/仓库面变化不得改变指纹"
+
+        (ws_private / "draft.md").write_text("v2-written-by-tool!", encoding="utf-8")
+        fp3 = instance._take_snapshot_fingerprint()
+        assert fp3 != fp2, "工作区文档改写必须被指纹捕获"
+
+        (ws_private / "new.md").write_text("added file", encoding="utf-8")
+        fp4 = instance._take_snapshot_fingerprint()
+        assert fp4 != fp3, "工作区新增文件必须被指纹捕获"
 
     def test_fingerprint_stable_without_change(self):
         """无变更时指纹稳定（旧断言保留）。"""

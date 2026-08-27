@@ -839,33 +839,24 @@ class AgentRuntime:
             return err_msg
 
     def _take_snapshot_fingerprint(self) -> str:
-        """T-081：取关键目录快照指纹（mtime+size 聚合），校验纯读工具无副作用。
+        """T-081：工作区产物快照指纹（mtime+size 聚合），校验纯读工具无副作用。
 
-        覆盖 SpecGuard 仓库关键目录 + 工作区产物（T-014 emp 私有区/共享区）+
-        台账 DB——纯读工具写工作区草稿/落库均会被检出。
+        T-1033 收窄：只覆盖工作区产物（T-014 emp 私有区/共享区）——守卫语义是
+        「纯读工具不得写用户工作区文档」，不再覆盖 SpecGuard 自身仓库目录与
+        workbench.db/ledger 等运行态文件：运行态文件的异步落盘（如 SQLite WAL
+        checkpoint）曾落进纯读比对窗口造成误判（总控 T-1029 注记 → T-1033）。
+        运行态完整性由各自写通道与发布闸门负责，不靠本守卫。
         """
         import hashlib as _hl
-        parts = []
-        roots: list[tuple[str, Path]] = []
-        for sub in ("specs", "scenarios", "agent/skills",
-                    "mcp_server/tools", "drafts", "feedback"):
-            d = SG_ROOT / sub
-            if d.is_dir():
-                roots.append((f"root:{sub}", d))
-        # 工作区产物（私有区 + 共享区）——纯读工具不得写草稿/计划
         try:
             from specstd.workspace import specguard_dir
-            roots.append(("ws:private", specguard_dir()))
-            roots.append(("ws:shared", specguard_dir(emp="")))
+            roots: list[tuple[str, Path]] = [
+                ("ws:private", specguard_dir()),
+                ("ws:shared", specguard_dir(emp="")),
+            ]
         except Exception:
-            pass
-        # 台账/审计 DB（纯读工具不得落库）
-        for db_rel in ("workbench/backend/data/workbench.db",
-                       "feedback/ledger.json", "feedback/registry.json"):
-            f = SG_ROOT / db_rel
-            if f.is_file():
-                st = f.stat()
-                parts.append(f"db:{db_rel}:{st.st_size}:{int(st.st_mtime)}")
+            return ""   # 无工作区上下文（如 stdio 裸调用）→ 无面可守，恒等指纹
+        parts: list[str] = []
         for label, d in roots:
             if not d.is_dir():
                 continue
