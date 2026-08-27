@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isToolError, filterTreeSessions, stripRefBlock } from './utils';
+import { isToolError, filterTreeSessions, stripRefBlock, resolveViewingFocus } from './utils';
 
 describe('isToolError 工具结果语义判错', () => {
   // 回归用例：会话 20260824_172320_84d21cfa，spec sync 返回 ok:true 但
@@ -77,5 +77,25 @@ describe('stripRefBlock 注入块剥离（K-013/T-1031）', () => {
 
   it('无注入块时原样返回', () => {
     expect(stripRefBlock('普通消息')).toBe('普通消息');
+  });
+});
+
+describe('resolveViewingFocus（验收缺陷 A：最近文件签记忆）', () => {
+  const tabs: ReadonlyArray<{ path: string; kind?: 'file' | 'draft' }> =
+    [{ path: 'a.yaml' }, { path: 'b/b.md', kind: 'draft' }];
+
+  it('活动签是 file: 时优先取当前', () => {
+    expect(resolveViewingFocus('file:a.yaml', '', tabs)).toEqual({ path: 'a.yaml', kind: 'file' });
+  });
+
+  it('切到辅助面板提问时回退最近活动的文件签（原实现此处恒 null）', () => {
+    expect(resolveViewingFocus('sql_aux', 'file:b/b.md', tabs))
+      .toEqual({ path: 'b/b.md', kind: 'draft' });
+  });
+
+  it('记忆页签已关闭 / 从未打开过文件签 → 无焦点', () => {
+    expect(resolveViewingFocus('sql_aux', 'file:gone.yaml', tabs)).toBeNull();
+    expect(resolveViewingFocus('sql_aux', '', tabs)).toBeNull();
+    expect(resolveViewingFocus('todos', '', tabs)).toBeNull();
   });
 });

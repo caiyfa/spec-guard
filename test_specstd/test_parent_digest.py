@@ -232,3 +232,61 @@ def test_snapshot_digest_hint_line_gated_by_whitelist_flag(tmp_path):
 
     block_off, _fp2 = _parent_snapshot(sm, pid, "", include_digest_hint=False)
     assert "parent 工具读取" not in block_off
+
+
+def test_refresh_bg_passes_callable_llm_wrapper(monkeypatch, tmp_path):
+    """验收缺陷 C 钉子：_refresh_parent_digest_bg 必须把 _llm 包装闭包（可调用）
+    交给 refresh_digest——曾误传 LLMClient 实例本身，refresh_digest 以
+    llm_call(system,user) 调用即抛 'LLMClient' object is not callable，
+    每轮摘要全量静默降骨架。"""
+    from types import SimpleNamespace
+    from workbench.backend.routers import agent as rag
+
+    captured = {}
+
+    class FakeLLM:
+        is_mock = False
+
+        def chat(self, prompt, tools=None):
+            assert prompt[0]["role"] == "system" and prompt[1]["role"] == "user"
+            return {"content": "# LLM 脉络摘要"}, {"total_tokens": 1}
+
+    def fake_refresh(sessions_dir, sid, msgs, llm_call=None, force=False):
+        captured["llm_call"] = llm_call
+        assert callable(llm_call), "llm_call 必须是可调用包装，而非客户端实例"
+        assert llm_call("s", "u") == "# LLM 脉络摘要"
+        return {"action": "written", "mode": "llm"}
+
+    monkeypatch.setattr("sg_core.session_digest.refresh_digest", fake_refresh)
+    sm = SimpleNamespace(sessions_dir=str(tmp_path),
+                         load=lambda _sid: [{"role": "user", "content": "hi"},
+                                            {"role": "assistant", "content": "yo"}])
+
+    report = rag._refresh_parent_digest_bg(sm, "sidX", FakeLLM())
+    assert report == {"action": "written", "mode": "llm"}
+    assert callable(captured["llm_call"])
+
+
+def test_refresh_bg_mock_llm_falls_back_to_skeleton_path(monkeypatch, tmp_path):
+    """mock/未配置模型时 llm_call 为 None——骨架兜底通道不受缺陷 C 修复影响。"""
+    from types import SimpleNamespace
+    from workbench.backend.routers import agent as rag
+
+    captured = {}
+
+    class MockLLM:
+        is_mock = True
+
+        def chat(self, prompt, tools=None):  # pragma: no cover - 不应被走到
+            raise AssertionError("mock 模型不应参与摘要生成")
+
+    def fake_refresh(sessions_dir, sid, msgs, llm_call=None, force=False):
+        captured["llm_call"] = llm_call
+        return {"action": "written", "mode": "skeleton"}
+
+    monkeypatch.setattr("sg_core.session_digest.refresh_digest", fake_refresh)
+    sm = SimpleNamespace(sessions_dir=str(tmp_path),
+                         load=lambda _sid: [{"role": "user", "content": "hi"}])
+    report = rag._refresh_parent_digest_bg(sm, "sidX", MockLLM())
+    assert report["mode"] == "skeleton"
+    assert captured["llm_call"] is None

@@ -14,6 +14,24 @@ export function stripRefBlock(content: string): string {
     .trimEnd();
 }
 
+/** T-1031 查看指针解析（验收缺陷 A 修复）：辅助面板发送时用户必然已切走活动侧签，
+ * 只认「当前活动」会让 focus 恒空。口径改为——优先当前活动的 file: 页签，
+ * 其次记忆中最近活动过的 file: 页签（lastFileTab），页签已关闭则视为无焦点。
+ * kind 字面量与 SqlAuxPanel.ViewingFocus 对齐（'file' | 'draft'）。 */
+export function resolveViewingFocus(
+  activeTab: string,
+  lastFileTab: string,
+  fileTabs: ReadonlyArray<{ path: string; kind?: 'file' | 'draft' }>,
+): { path: string; kind: 'file' | 'draft' } | null {
+  const wanted = activeTab.startsWith('file:') ? activeTab : lastFileTab;
+  if (!wanted || !wanted.startsWith('file:')) return null;
+  const path = wanted.slice('file:'.length);
+  const hit = fileTabs.find(t => t.path === path);
+  if (!hit) return null;
+  const kind: 'file' | 'draft' = hit.kind === 'draft' ? 'draft' : 'file';
+  return { path: hit.path, kind };
+}
+
 // ── 按角色估算 token 分布（参考 opencode 的 chars/4 方法） ──
 export function calcCtxBreakdown(messages: ChatMessage[], actualPromptTokens: number): Record<string, number> {
   const est: Record<string, number> = { system: 0, user: 0, assistant: 0, tool: 0 };

@@ -512,7 +512,9 @@ def _refresh_parent_digest_bg(sm: SessionManager, sid: str, llm=None) -> dict | 
             msg, _usage = llm.chat(prompt, tools=None)
             return str((msg or {}).get("content") or "")
 
-        use_llm = llm if (llm is not None and not getattr(llm, "is_mock", False)) else None
+        # 验收缺陷 C 修复：refresh_digest 以函数形态调用 llm_call(system,user)，
+        # 必须传 _llm 包装闭包而非 LLMClient 实例（直传实例曾致全量静默降骨架）。
+        use_llm = _llm if (llm is not None and not getattr(llm, "is_mock", False)) else None
         return _sdd.refresh_digest(sm.sessions_dir, sid, msgs,
                                    llm_call=use_llm)
     except Exception as e:

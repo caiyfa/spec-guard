@@ -157,17 +157,21 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
     return () => bridge?.register(() => {});
   }, [bridge, send]);
 
-  // 激活即 spawn（幂等）+ 恢复历史 + DB 面板 pending 转发（Task 15）
+  // 会话绑定跟随主会话（验收缺陷 B 修复）：mainSessionId 变化即重新解析——后端
+  // spawn 幂等（同父+purpose 直接复用既有 aux），无需本地缓存绑定；旧实现以
+  // sidRef 守卫粘死首个解析结果，切换主会话后永远停留在旧辅助会话上。
   const ensureSession = useCallback(async () => {
-    if (!mainSessionId || sidRef.current) return;
+    if (!mainSessionId) return;
     try {
       const r = await agentApi.spawnSession({
         parent_session_id: mainSessionId, purpose: 'sql_assistant', workspace,
       });
+      if (sidRef.current === r.session_id) return;   // 同一配对会话不重复拉历史
       sidRef.current = r.session_id;
       setAuxSid(r.session_id);
-      localStorage.setItem(`sg_sql_aux_${mainSessionId}`, r.session_id);
+      setMessages([]); setCtxUsage(null); setStats(null);   // 换绑先清旧态再对齐历史
       const s = await agentApi.getSession(r.session_id, workspace);
+      if (sidRef.current !== r.session_id) return;   // await 期间主会话又切换，弃用本次结果
       const history = (s.messages || []).map((m: any) => ({
         role: m.role, content: m.content || '', tool_calls: m.tool_calls,
       }));
