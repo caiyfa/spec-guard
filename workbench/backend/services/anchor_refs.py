@@ -77,6 +77,9 @@ def resolve_anchor_refs(ws_root: Path, ids: list[str], hint: str = "") -> list[d
                 rel = str(Path(info.file_path).relative_to(ws_root)).replace("\\", "/")
             except ValueError:
                 rel = info.file_path  # 不在工作区根内（理论不至）——原样给绝对路径
+            # T-1025：相关性分数（hint 与候选路径的分词交集数）——前端据此把
+            # 零相关候选折叠，测试用例视角默认只看对应模块的 spec
+            score = len(hint_tokens & _tokens(info.file_path))
             matches.append({
                 "title": sec["title"],
                 "file": info.file_path,
@@ -86,7 +89,8 @@ def resolve_anchor_refs(ws_root: Path, ids: list[str], hint: str = "") -> list[d
                 "start": sec["start"],
                 "end": sec["end"],
                 "chunk": sec["chunk"],
+                "score": score,
             })
-        matches.sort(key=lambda m: (-len(hint_tokens & _tokens(m["file"])), m["file"]))
+        matches.sort(key=lambda m: (-m["score"], m["file"]))
         refs.append({"id": aid, "found": bool(matches), "matches": matches})
     return refs

@@ -40,6 +40,7 @@ export interface AnchorMatch {
   start: number;
   end: number;
   chunk: string;
+  score?: number;    // T-1025：与场景 hint 的相关性分数（0=零相关，默认折叠）
 }
 
 export interface AnchorRef {

@@ -93,6 +93,9 @@ def test_duplicate_fr_returns_all_candidates_sorted_by_hint(tmp_path):
         ws, ["FR-005"], hint="inventory/inventory-session/HI-PERM-002.yaml")
     assert "历史盘点查询" in ref2["matches"][0]["title"]
     assert "pollExport" in ref2["matches"][1]["title"]
+    # T-1025：相关性分数随候选返回（inventory 命中 1 词，data-export 零相关）
+    assert ref2["matches"][0]["score"] >= 1
+    assert ref2["matches"][1]["score"] == 0
 
 
 def test_empty_specs_dir(tmp_path):

@@ -6,6 +6,8 @@
  * 挂载：FileViewer 场景双视图 + ScenarioFormEditor 阅读模式。
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { workspaceApi, type AnchorMatch, type AnchorRef } from '../api/workspace';
@@ -13,7 +15,6 @@ import {
   buildAnchorHint, describeStep, describeVerify, extractSectionComments,
 } from '../utils/scenarioReader';
 import Modal from './Modal';
-import { LocatedTextView } from './LocatedTextView';
 import { useJsTokens } from '../theme';
 
 interface Props {
@@ -95,20 +96,34 @@ function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
   onOpenDoc: (m: AnchorMatch) => void;
   onOpenFile?: (relPath: string) => void;
 }) {
-  const [idx, setIdx] = useState(0);
-  const m: AnchorMatch | undefined = anchor.matches[Math.min(idx, anchor.matches.length - 1)];
+  // T-1025：按相关性分组——score>0 的相关模块默认展示，零相关的全库同号折叠
+  const relevant = anchor.matches.filter((c) => (c.score ?? 0) > 0);
+  const rest = anchor.matches.filter((c) => (c.score ?? 0) === 0);
+  const [showRest, setShowRest] = useState(false);
+  const [sel, setSel] = useState(anchor.matches[0]);
+  const visible = relevant.length > 0 && !showRest ? relevant : anchor.matches;
+  const m = sel;
   if (!m) return null;
   return (
     <div className="mt-1 rounded border border-info/20 bg-surface-2/60 overflow-hidden">
       {anchor.matches.length > 1 && (
-        <div className="flex flex-wrap gap-1 px-2 py-1 border-b border-border/50 text-[9px]">
-          <span className="text-gray-600 py-0.5">同号候选：</span>
-          {anchor.matches.map((c, i) => (
-            <button key={i} onClick={() => setIdx(i)}
-              className={`px-1.5 py-0.5 rounded ${i === idx ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500 hover:text-gray-300'}`}>
+        <div className="flex flex-wrap items-center gap-1 px-2 py-1 border-b border-border/50 text-[9px]">
+          <span className="text-gray-600 py-0.5">
+            {relevant.length > 0 ? `相关候选 ${relevant.length} 处：` : `同号候选 ${anchor.matches.length} 处：`}
+          </span>
+          {visible.map((c) => (
+            <button key={c.rel} onClick={() => setSel(c)}
+              className={`px-1.5 py-0.5 rounded ${c.rel === m.rel ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500 hover:text-gray-300'}`}>
               {c.module}/{c.feature}
             </button>
           ))}
+          {relevant.length > 0 && rest.length > 0 && (
+            <button onClick={() => setShowRest(!showRest)}
+              className="px-1.5 py-0.5 rounded text-gray-600 hover:text-gray-400"
+              title="与当前场景零相关的全库同号编号">
+              {showRest ? '收起其余 ◂' : `其余 ${rest.length} 处同号 ▸`}
+            </button>
+          )}
         </div>
       )}
       <div className="flex items-center gap-2 px-2 py-1 text-[9px] text-gray-600 border-b border-border/30">
@@ -117,7 +132,7 @@ function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
         </span>
         <button onClick={() => onOpenDoc(m)}
           className="px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20 flex-shrink-0"
-          title="弹层打开完整 spec 文档（定位到本段）">
+          title="弹层打开完整 spec 文档（渲染格式，定位到本段）">
           📄 完整文档
         </button>
         {onOpenFile && (
@@ -136,11 +151,24 @@ function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
   );
 }
 
-/** T-1024：spec 完整文档弹层（拉取全文 + 定位高亮锚点段，三态分离） */
+/** T-1025：markdown 高亮组件工厂——hast node.position 行号落入锚点区间则高亮标记 */
+function mkHl(Tag: string, start: number, end: number) {
+  return function Hl({ node, children, ...props }: any) {  // eslint-disable-line @typescript-eslint/no-explicit-any
+    const line: number | undefined = node?.position?.start?.line;
+    const hit = line != null && line >= start && line <= end;
+    const cls = hit
+      ? `${props.className || ''} bg-info/15 border-l-2 border-info pl-1.5 -ml-1.5 rounded-sm`.trim()
+      : props.className;
+    return <Tag {...props} className={cls} {...(hit ? { 'data-fr-hit': '1' } : {})}>{children}</Tag>;
+  };
+}
+
+/** T-1024/T-1025：spec 完整文档弹层（markdown 渲染 + 定位高亮锚点段，三态分离） */
 function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch; onClose: () => void }) {
   const [content, setContent] = useState('');
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errMsg, setErrMsg] = useState('');
+  const containerRef = React.useRef<HTMLDivElement>(null);
   useEffect(() => {
     let alive = true;
     setState('loading'); setContent(''); setErrMsg('');
@@ -149,15 +177,42 @@ function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch
       .catch((e) => { if (alive) { setErrMsg(e instanceof Error ? e.message : '读取失败'); setState('error'); } });
     return () => { alive = false; };
   }, [match.rel]);
+
+  // 渲染完成后滚动到第一个高亮段
+  useEffect(() => {
+    if (state !== 'ready') return;
+    const t = setTimeout(() => {
+      containerRef.current?.querySelector('[data-fr-hit]')
+        ?.scrollIntoView({ block: 'start' });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  const mdComponents = useMemo(() => ({
+    p: mkHl('p', match.start, match.end),
+    li: mkHl('li', match.start, match.end),
+    h1: mkHl('h1', match.start, match.end),
+    h2: mkHl('h2', match.start, match.end),
+    h3: mkHl('h3', match.start, match.end),
+    h4: mkHl('h4', match.start, match.end),
+    tr: mkHl('tr', match.start, match.end),
+    pre: mkHl('pre', match.start, match.end),
+    blockquote: mkHl('blockquote', match.start, match.end),
+  }), [match.start, match.end]);
+
   return (
     <Modal open onClose={onClose} width={860}
       title={`${aid} · ${match.module}/${match.feature} · ${match.rel}`}>
-      <div style={{ height: '68vh' }}>
+      <div className="px-2 py-1 text-[9px] text-gray-600 border-b border-border/30 sticky top-0 bg-surface-2 z-10">
+        {match.title} · 行 {match.start}-{match.end}（高亮段）
+      </div>
+      <div ref={containerRef} style={{ height: '66vh' }} className="overflow-y-auto">
         {state === 'loading' && <div className="p-4 text-[11px] text-gray-600">文档加载中…</div>}
         {state === 'error' && <div className="p-4 text-[11px] text-fail">文档读取失败：{errMsg}</div>}
         {state === 'ready' && (
-          <LocatedTextView content={content}
-            hunks={[{ title: match.title, start: match.start, end: match.end }]} />
+          <div className="spec-md p-4 text-sm">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content}</ReactMarkdown>
+          </div>
         )}
       </div>
     </Modal>
