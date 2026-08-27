@@ -1,15 +1,16 @@
-/** ScenarioFormEditor — 场景编辑器（Tab 分区 + 表单/YAML 双模式）
+/** ScenarioFormEditor — 场景编辑器（Tab 分区 + 阅读/表单/YAML 三模式）
  *
  * 参考 Apifox 场景编排：
  * - Tab 分区聚焦：基本信息 / 依赖与产出 / 执行步骤 / 断言 / 清理
  * - 步骤卡片紧凑折叠，展开后才显示完整表单
  * - 变量通过 {x} 角标弹出，不平铺
- * - 表单/YAML 双模式可互切
+ * - 阅读（T-1023 ScenarioReader 只读）/表单/YAML 三模式可互切
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
 import Editor from '@monaco-editor/react';
 import StepFormCard, { type StepData } from './StepFormCard';
+import ScenarioReader from './ScenarioReader';
 import type { LocalVar } from './VariablePopover';
 import type { EmpRole, OracleRef, UpstreamVar, EnvVar, ScenarioDetail } from '../api';
 import { referenceApi } from '../api';
@@ -84,7 +85,7 @@ export default function ScenarioFormEditor({
   const [data, setData] = useState<Record<string, unknown>>({});
   const [yamlText, setYamlText] = useState('');
   const [tab, setTab] = useState<TabKey>('flow');
-  const [mode, setMode] = useState<'form' | 'yaml'>('form');
+  const [mode, setMode] = useState<'read' | 'form' | 'yaml'>('form');
   const tokens = useJsTokens();  // K-043：Monaco 主题跟随
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -100,12 +101,15 @@ export default function ScenarioFormEditor({
   const update = (key: string, value: unknown) => setData((prev) => ({ ...prev, [key]: value }));
 
   // ── 模式切换 ──
-  const switchMode = (m: 'form' | 'yaml') => {
+  const switchMode = (m: 'read' | 'form' | 'yaml') => {
     if (m === 'yaml') {
-      // form → yaml：序列化当前 data 到编辑器
+      // form/read → yaml：序列化当前 data 到编辑器
+      try { setYamlText(yamlDump(data, { indent: 2, lineWidth: 120, noRefs: true })); } catch { /* */ }
+    } else if (m === 'read' && mode === 'form') {
+      // form → read：表单编辑只改了 data，刷新 yamlText 保持阅读视图与表单一致
       try { setYamlText(yamlDump(data, { indent: 2, lineWidth: 120, noRefs: true })); } catch { /* */ }
     } else {
-      // yaml → form：解析编辑器内容回 data
+      // yaml → form/read：解析编辑器内容回 data
       try { setData((yamlLoad(yamlText) as Record<string, unknown>) || {}); } catch { /* */ }
     }
     setMode(m);
@@ -175,20 +179,29 @@ export default function ScenarioFormEditor({
         <span className="text-xs font-mono text-info">{scenarioId}</span>
         <div className="flex items-center gap-2">
           <div className="flex bg-surface-3 rounded overflow-hidden">
-            {(['form', 'yaml'] as const).map((m) => (
+            {(['read', 'form', 'yaml'] as const).map((m) => (
               <button key={m} onClick={() => switchMode(m)}
                 className={`px-2.5 py-1 text-[10px] transition-colors ${mode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
-                {m === 'form' ? '📋 表单' : '📄 YAML'}
+                {m === 'read' ? '📖 阅读' : m === 'form' ? '📋 表单' : '📄 YAML'}
               </button>
             ))}
           </div>
-          <button onClick={save} disabled={saving}
-            className="px-3 py-1 rounded text-[11px] bg-pass/20 text-pass hover:bg-pass/30 disabled:opacity-40">
-            {saving ? '…' : '💾 保存'}
-          </button>
+          {mode !== 'read' && (
+            <button onClick={save} disabled={saving}
+              className="px-3 py-1 rounded text-[11px] bg-pass/20 text-pass hover:bg-pass/30 disabled:opacity-40">
+              {saving ? '…' : '💾 保存'}
+            </button>
+          )}
         </div>
       </div>
-      {saveMsg && <div className={`px-3 py-1 text-[11px] flex-shrink-0 ${saveMsg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{saveMsg}</div>}
+      {saveMsg && mode !== 'read' && <div className={`px-3 py-1 text-[11px] flex-shrink-0 ${saveMsg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{saveMsg}</div>}
+
+      {/* ── 阅读模式（T-1023 只读结构化视图） ── */}
+      {mode === 'read' && (
+        <div className="flex-1 min-h-0">
+          <ScenarioReader data={data} rawYaml={yamlText} filePath={scenarioId} />
+        </div>
+      )}
 
       {/* ── YAML 模式 ── */}
       {mode === 'yaml' && (

@@ -1,7 +1,8 @@
 /**
  * FileViewer — 文件内容渲染器
  * - .md/.markdown: react-markdown 渲染 + K-041 mermaid 图表 + 标题大纲导航
- * - .yaml/.yml: 语法高亮 + K-041 结构大纲（点击跳行）
+ * - .yaml/.yml: 语法高亮 + K-041 结构大纲（点击跳行）；
+ *   T-1023：场景类 YAML（含 flow+doc）默认进 ScenarioReader 结构化阅读视图，可切回原文
  * - .html/.htm: iframe srcdoc 渲染
  * - .json/.py/.ts 等: 语法高亮
  * - .csv: 表格渲染
@@ -10,14 +11,17 @@
  * - 其他: 纯文本
  */
 
-import { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { load as yamlLoad } from 'js-yaml';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getFileExt } from './FileTree';
 import OfficeViewer from './OfficeViewer';
 import MermaidBlock from './MermaidBlock';
+import ScenarioReader from './ScenarioReader';
+import { isScenarioDoc } from '../utils/scenarioReader';
 import { useJsTokens } from '../theme';
 
 // K-036：办公文档走保真预览（SheetJS/pdf 原生/mammoth），不再用转换文本渲染
@@ -213,8 +217,7 @@ function MarkdownViewer({ content }: { content: string }) {
 }
 
 /** K-041：yaml 渲染（语法高亮 + 行锚点 + 结构大纲） */
-function YamlViewer({ content }: { content: string }) {
-  const [showOutline, setShowOutline] = useState(true);
+function YamlViewer({ content }: { content: string }) {  const [showOutline, setShowOutline] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const outline = useMemo(() => extractYamlOutline(content), [content]);
   const tokens = useJsTokens();  // K-043：高亮主题与代码底色跟随主题
@@ -241,6 +244,47 @@ function YamlViewer({ content }: { content: string }) {
         className="absolute top-2 right-2 z-10 text-[10px] px-1.5 py-0.5 rounded bg-surface-2/80 border border-border text-gray-500 hover:text-info">
         {showOutline ? '»' : '≡'}
       </button>
+    </div>
+  );
+}
+
+// ── T-1023：场景 YAML 双视图（结构化阅读 ⇄ 原文） ──
+
+const SCENARIO_MODE_KEY = 'sg_fileview_scenario_yaml_mode';
+
+/** 场景类 YAML（含 flow+doc）默认进结构化阅读视图；非场景 YAML 与解析失败回退原文高亮 */
+function ScenarioYamlView({ path, content }: { path: string; content: string }) {
+  const data = useMemo(() => {
+    try { return yamlLoad(content) as unknown; } catch { return null; }
+  }, [content]);
+  const [mode, setMode] = useState<'read' | 'raw'>(() =>
+    (typeof localStorage !== 'undefined' && localStorage.getItem(SCENARIO_MODE_KEY)) === 'raw' ? 'raw' : 'read');
+
+  if (!isScenarioDoc(data)) return <YamlViewer content={content} />;
+
+  const switchMode = (m: 'read' | 'raw') => {
+    setMode(m);
+    try { localStorage.setItem(SCENARIO_MODE_KEY, m); } catch { /* 隐私模式等写失败无害 */ }
+  };
+
+  return (
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border flex-shrink-0">
+        <div className="flex bg-surface-3 rounded overflow-hidden">
+          {(['read', 'raw'] as const).map((m) => (
+            <button key={m} onClick={() => switchMode(m)}
+              className={`px-2.5 py-1 text-[10px] transition-colors ${mode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
+              {m === 'read' ? '📖 结构化' : '📄 原文'}
+            </button>
+          ))}
+        </div>
+        <span className="text-[10px] text-gray-600">场景 YAML · 结构化视图为只读摘要</span>
+      </div>
+      <div className="flex-1 min-h-0">
+        {mode === 'read'
+          ? <ScenarioReader data={data} rawYaml={content} filePath={path} />
+          : <YamlViewer content={content} />}
+      </div>
     </div>
   );
 }
@@ -305,9 +349,9 @@ export default function FileViewer({ path, content, loading, format, hunks }: Fi
     );
   }
 
-  // YAML（K-041：结构大纲）/ JSON / 代码 语法高亮
+  // YAML（K-041：结构大纲；T-1023：场景类 YAML 双视图）
   if (ext === '.yaml' || ext === '.yml') {
-    return <YamlViewer content={content} />;
+    return <ScenarioYamlView path={path} content={content} />;
   }
   if (ext === '.json' || ext === '.py' || ext === '.ts' || ext === '.js' || ext === '.tsx') {
     const lang = ext.slice(1);

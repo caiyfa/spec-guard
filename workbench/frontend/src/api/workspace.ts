@@ -30,6 +30,23 @@ export interface WorkspaceTreeGroup {
   workspaces: WorkspaceInfo[];
 }
 
+// T-1023：锚点原文（同号歧义时 matches 含全部候选，按 hint 相关性降序）
+export interface AnchorMatch {
+  title: string;
+  file: string;
+  module: string;
+  feature: string;
+  start: number;
+  end: number;
+  chunk: string;
+}
+
+export interface AnchorRef {
+  id: string;
+  found: boolean;
+  matches: AnchorMatch[];
+}
+
 export const workspaceApi = {
   list: () => request<{ workspaces: WorkspaceInfo[]; active: string; my_default?: string }>('/workspace/list'),
   tree: () => request<{ tree: WorkspaceTreeGroup[] }>('/workspace/tree'),
@@ -59,6 +76,11 @@ export const workspaceApi = {
     request<{ path: string; raw_base64: string; format: string }>(`/workspace/read-file?path=${encodeURIComponent(path)}&raw=true`),
   fileHash: (path: string) =>
     request<{ path: string; sha: string }>(`/workspace/file-hash?path=${encodeURIComponent(path)}`),
+  // T-1023：FR/AC 锚点 → spec 原文片段（结构化阅读视图 covers/related_ac 数据源）；
+  // 同号歧义返回全部候选 matches（已按 hint 相关性降序），未命中 found=false
+  anchorRefs: (ids: string[], hint?: string) =>
+    request<{ refs: AnchorRef[] }>(
+      `/workspace/anchor-refs?ids=${encodeURIComponent(ids.join(','))}${hint ? `&hint=${encodeURIComponent(hint)}` : ''}`),
   search: (q: string) =>
     request<{ results: { path: string; match_type: string; line?: number; preview: string; size: number }[]; query: string }>(`/workspace/search?q=${encodeURIComponent(q)}`),
   gitLog: (limit = 100) =>
