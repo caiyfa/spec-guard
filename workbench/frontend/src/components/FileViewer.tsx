@@ -15,13 +15,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { load as yamlLoad } from 'js-yaml';
-import Editor from '@monaco-editor/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getFileExt } from './FileTree';
 import OfficeViewer from './OfficeViewer';
 import MermaidBlock from './MermaidBlock';
 import ScenarioReader from './ScenarioReader';
+import DraftFormEditor from './DraftFormEditor';
 import { isScenarioDoc } from '../utils/scenarioReader';
 import { useJsTokens } from '../theme';
 
@@ -184,15 +184,10 @@ function YamlViewer({ content }: { content: string }) {  const [showOutline, set
 
 const SCENARIO_MODE_KEY = 'sg_fileview_scenario_yaml_mode';
 
-/** T-1027 F1：面板保存结果（AgentChat 把 PUT 响应映射为此处，编辑区内联呈现） */
-export interface EditSaveOutcome {
-  ok: boolean;
-  message?: string;     // 人话结论（含对话感知去向：已注入/执行中暂存/无关联会话）
-  verdict?: string;     // 自动格式校验结论（PASS/FAIL/ERROR…）
-  summaryError?: number;
-  summaryWarn?: number;
-  findings?: { level: string; rule: string; message: string }[];
-}
+/** T-1027 F1：面板保存结果（AgentChat 把 PUT 响应映射为此处，编辑区内联呈现）。
+ * 类型事实源在 DraftFormEditor（编辑面板宿主），此处转发导出保持旧 import 路径兼容。 */
+export type { EditSaveOutcome } from './DraftFormEditor';
+import type { EditSaveOutcome } from './DraftFormEditor';
 
 /** 编辑区工具条高度外的保存横幅（verdict 配色 + findings 摘录） */
 function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
@@ -216,30 +211,24 @@ function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
 }
 
 /** 场景类 YAML（含 flow+doc）默认进结构化阅读视图；非场景 YAML 与解析失败回退原文高亮。
- * T-1027 F1：canEdit+onSaveContent（draft 页签）时第三模式「✏️ 编辑」——Monaco 改 YAML，
- * 保存走回调（PUT /api/drafts，后端自动校验+版本链+对话感知），结果内联回显。 */
+ * T-1027 F1：canEdit+onSaveContent（draft 页签）时第三模式「✏️ 编辑」——
+ * 验收反馈返修：编辑落在结构化表单（DraftFormEditor 复用场景编辑器三模式，
+ * 默认进表单；YAML 降为其内部次选），保存走回调（PUT /api/drafts，后端自动
+ * 校验+版本链+对话感知），结果横幅内联回显。 */
 function ScenarioYamlView({ path, content, onOpenFile, canEdit, onSaveContent }: {
   path: string; content: string; onOpenFile?: (relPath: string) => void;
   canEdit?: boolean; onSaveContent?: (content: string) => Promise<EditSaveOutcome>;
 }) {
-  // 结构化解析基于「已落盘」内容（savedText）：编辑中不随击键反复重解析，保存后自动跟随
+  // 结构化解析基于「已落盘」内容：编辑缓冲在 DraftFormEditor/ScenarioFormEditor 内部
   const data = useMemo(() => {
     try { return yamlLoad(content) as unknown; } catch { return null; }
   }, [content]);
   const [mode, setMode] = useState<'read' | 'raw' | 'edit'>(() =>
     (typeof localStorage !== 'undefined' && localStorage.getItem(SCENARIO_MODE_KEY)) === 'raw' ? 'raw' : 'read');
-  // 编辑缓冲：savedText 跟随最近一次落盘内容；dirty 由两者差异派生（外层内容刷新自动收敛）
   const [savedText, setSavedText] = useState(content);
-  const [draftText, setDraftText] = useState(content);
-  const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<EditSaveOutcome | null>(null);
-  const tokens = useJsTokens();
 
-  useEffect(() => {
-    setSavedText(content);
-    if (draftText === savedText) setDraftText(content);  // 未动笔才跟随外部刷新，防覆盖输入
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content]);
+  useEffect(() => { setSavedText(content); }, [content]);
 
   const editable = !!(canEdit && onSaveContent);
   const isScenario = !!isScenarioDoc(data);
@@ -248,25 +237,22 @@ function ScenarioYamlView({ path, content, onOpenFile, canEdit, onSaveContent }:
 
   if (!editable && !isScenario) return <YamlViewer content={content} />;
 
-  const dirty = draftText !== savedText;
   const switchMode = (m: 'read' | 'raw' | 'edit') => {
     if (m === 'edit' && !editable) return;
-    if (m === 'edit') { setDraftText(savedText); setOutcome(null); }
+    if (m === 'edit') setOutcome(null);
     setMode(m);
     if (m === 'read' || m === 'raw') {
       try { localStorage.setItem(SCENARIO_MODE_KEY, m); } catch { /* 隐私模式等写失败无害 */ }
     }
   };
-  const handleSave = async () => {
-    if (!onSaveContent || saving) return;
-    setSaving(true); setOutcome(null);
-    try {
-      const r = await onSaveContent(draftText);
-      setOutcome(r);
-      if (r.ok) setSavedText(draftText);
-    } finally {
-      setSaving(false);
-    }
+  /** 结构化编辑器保存桥：结果回填横幅与页签文本；ok=false 由子组件自行渲染错误条 */
+  const handleEditSave = async (nextYaml: string): Promise<EditSaveOutcome> => {
+    if (!onSaveContent) return { ok: false, message: '保存回调不可用' };
+    setOutcome(null);
+    const r = await onSaveContent(nextYaml);
+    setOutcome(r);
+    if (r.ok) setSavedText(nextYaml);   // AgentChat 会同步刷新页签 content，此处先行收敛
+    return r;
   };
 
   const modeList = [
@@ -288,27 +274,21 @@ function ScenarioYamlView({ path, content, onOpenFile, canEdit, onSaveContent }:
         </div>
         {effectiveMode === 'edit' ? (
           <div className="ml-auto flex items-center gap-1.5">
-            {dirty && <span className="text-[10px] text-warn">未保存修改</span>}
-            <button onClick={() => switchMode('raw')} disabled={saving}
-              className="px-2 py-0.5 rounded text-[10px] bg-surface-3 text-gray-400 hover:text-gray-200 disabled:opacity-40">↩ 取消</button>
-            <button onClick={handleSave} disabled={!dirty || saving} title="保存到草稿沙箱（自动格式校验 + 对话感知）"
-              className="px-2.5 py-0.5 rounded text-[10px] bg-pass/25 text-pass hover:bg-pass/35 disabled:opacity-40">
-              {saving ? '保存中…' : '💾 保存并校验'}
-            </button>
+            <button onClick={() => switchMode('raw')}
+              title="退出编辑（未保存的修改即丢弃）"
+              className="px-2 py-0.5 rounded text-[10px] bg-surface-3 text-gray-400 hover:text-gray-200">✕ 退出编辑</button>
           </div>
         ) : (
-          <span className="text-[10px] text-gray-600">{isScenario ? '场景 YAML · 结构化视图为只读摘要' : '草稿 YAML'}{editable ? ' · 可在「✏️ 编辑」中修改草稿' : ''}</span>
+          <span className="text-[10px] text-gray-600">{isScenario ? '场景 YAML · 结构化视图为只读摘要' : '草稿 YAML'}{editable ? ' · 点「✏️ 编辑」进结构化表单修改草稿' : ''}</span>
         )}
       </div>
       <div className="flex-1 min-h-0 flex flex-col">
         {effectiveMode === 'edit' && onSaveContent ? (
           <>
-            <div className="flex-1 min-h-0">
-              <Editor language="yaml" theme={tokens.monaco} value={draftText}
-                onChange={(v) => { setDraftText(v || ''); setOutcome(null); }}
-                options={{ fontSize: 12, minimap: { enabled: false }, wordWrap: 'on', scrollBeyondLastLine: false }} />
-            </div>
             {outcome && <SaveOutcomeBanner outcome={outcome} />}
+            <div className="flex-1 min-h-0">
+              <DraftFormEditor filename={path} yaml={savedText} onSave={handleEditSave} />
+            </div>
           </>
         ) : effectiveMode === 'read' && isScenario
           ? <ScenarioReader data={data} rawYaml={savedText} filePath={path} onOpenFile={onOpenFile} />

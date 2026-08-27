@@ -1,12 +1,27 @@
-/** T-1027 F1：FileViewer 草稿编辑模式测试（入口仅 draft、保存回调、结果内联回显）。 */
+/** T-1027 F1 返修：草稿编辑落在结构化预览（DraftFormEditor 复用场景编辑器），非裸 YAML。
+ * ScenarioFormEditor 以桩件替身——捕获 props 驱动保存成功/失败两条路径。 */
 import { expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-// Monaco 打桩为 textarea（jsdom 无法跑真实 monaco；只验证受控行为：值/onChange）
-vi.mock('@monaco-editor/react', () => ({
-  default: ({ value, onChange }: { value: string; onChange?: (v: string) => void }) => (
-    <textarea aria-label="monaco-yaml" value={value} onChange={e => onChange?.(e.target.value)} />
-  ),
+const sfeProps: Record<string, unknown> = {};
+vi.mock('./ScenarioFormEditor', () => ({
+  default: (props: any) => {   // eslint-disable-line @typescript-eslint/no-explicit-any
+    Object.assign(sfeProps, props);
+    return (
+      <div data-testid="sfe">
+        <div data-testid="sfe-yaml">{props.yamlContent}</div>
+        <div data-testid="sfe-sid">{props.scenarioId}</div>
+        <button onClick={() => {
+          Promise.resolve(props.onSave(props.yamlContent + '\n# 表单改动'))
+            .catch((e: Error) => { sfeProps._err = e.message; });
+        }}>__save_ok</button>
+        <button onClick={() => {
+          Promise.resolve(props.onSave('broken: ['))
+            .catch((e: Error) => { sfeProps._err = e.message; });
+        }}>__save_reject</button>
+      </div>
+    );
+  },
 }));
 
 import FileViewer from './FileViewer';
@@ -39,40 +54,52 @@ const OK_OUTCOME = {
 
 beforeEach(() => {
   localStorage.clear();
+  for (const k of Object.keys(sfeProps)) delete sfeProps[k];
 });
 
-test('可编辑草稿：出「✏️ 编辑」入口，改文保存后回调与横幅回显', async () => {
+test('可编辑草稿：✏️ 编辑进结构化表单（非裸 YAML 编辑器）', async () => {
+  const onSave = vi.fn().mockResolvedValue(OK_OUTCOME);
+  render(<FileViewer path="HI-PERM-002.yaml" content={SCENARIO_YAML} canEdit onSaveContent={onSave} />);
+  fireEvent.click(screen.getByText('✏️ 编辑'));
+  // 场景编辑器桩在屏、携带当前落盘文本与场景 ID；参考 registries 为空数组降级形态
+  await waitFor(() => expect(screen.getByTestId('sfe')).toBeTruthy());
+  expect(screen.getByTestId('sfe-yaml').textContent).toBe(SCENARIO_YAML);
+  expect(screen.getByTestId('sfe-sid').textContent).toContain('HI-PERM-002');
+  expect(sfeProps.allScenarios).toEqual([]);
+});
+
+test('结构化编辑保存成功：回调收到表单产物 YAML + 横幅回显校验结论', async () => {
   const onSave = vi.fn().mockResolvedValue(OK_OUTCOME);
   const { container } = render(
     <FileViewer path="HI-PERM-002.yaml" content={SCENARIO_YAML} canEdit onSaveContent={onSave} />,
   );
   fireEvent.click(screen.getByText('✏️ 编辑'));
-  const editor = screen.getByLabelText('monaco-yaml') as HTMLTextAreaElement;
-  expect(editor.value).toBe(SCENARIO_YAML);
-  // 改动 → dirty 提示出现，保存可用
-  fireEvent.change(editor, { target: { value: SCENARIO_YAML + '\n# 用户手改' } });
-  expect(screen.getByText('未保存修改')).toBeTruthy();
-  fireEvent.click(screen.getByText('💾 保存并校验'));
+  await waitFor(() => expect(sfeProps.onSave).toBeTruthy());
+  fireEvent.click(screen.getByText('__save_ok'));
   await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-  expect(onSave.mock.calls[0][0]).toContain('# 用户手改');
+  expect(String(onSave.mock.calls[0][0])).toContain('# 表单改动');
   // 横幅：verdict + 摘要 + 感知去向 + findings 摘录
   await waitFor(() => expect(screen.getByText(/校验 PASS/)).toBeTruthy());
   expect(container.textContent).toContain('对话已感知本次编辑与校验结论');
   expect(container.textContent).toContain('[DIM_MAP] 提示一下');
 });
 
+test('保存失败（后端 422 等）：错误信息抛回场景编辑器错误条，横幅如实显示', async () => {
+  const onSave = vi.fn().mockResolvedValue({ ok: false, message: 'YAML 解析失败，未写入' });
+  const { container } = render(
+    <FileViewer path="a.yaml" content={SCENARIO_YAML} canEdit onSaveContent={onSave} />,
+  );
+  fireEvent.click(screen.getByText('✏️ 编辑'));
+  await waitFor(() => expect(sfeProps.onSave).toBeTruthy());
+  fireEvent.click(screen.getByText('__save_reject'));
+  await waitFor(() => {
+    expect(container.textContent).toContain('✗ 保存失败');
+    expect(container.textContent).toContain('YAML 解析失败，未写入');
+  });
+  expect(sfeProps._err).toBe('YAML 解析失败，未写入');   // 抛回子组件供其错误条呈现
+});
+
 test('不可编辑（场景库文件）：无编辑入口', () => {
   render(<FileViewer path="scenarios/x.yaml" content={SCENARIO_YAML} />);
   expect(screen.queryByText('✏️ 编辑')).toBeNull();
-});
-
-test('保存失败结果如实回显不静默', async () => {
-  const onSave = vi.fn().mockResolvedValue({ ok: false, message: 'YAML 解析失败，未写入' });
-  render(<FileViewer path="a.yaml" content={SCENARIO_YAML} canEdit onSaveContent={onSave} />);
-  fireEvent.click(screen.getByText('✏️ 编辑'));
-  fireEvent.change(screen.getByLabelText('monaco-yaml'),
-    { target: { value: SCENARIO_YAML + '\nbroken: [' } });
-  fireEvent.click(screen.getByText('💾 保存并校验'));
-  await waitFor(() => expect(screen.getByText('✗ 保存失败')).toBeTruthy());
-  expect(screen.getByText(/YAML 解析失败，未写入/)).toBeTruthy();
 });
