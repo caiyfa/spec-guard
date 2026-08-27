@@ -31,6 +31,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   const [state, setState] = useState<Record<string, DraftCardState>>({});
   // K-xxx：drafts 列表查不到的文件（入库/废弃/刷新后）——用 conflict 预检判定去向：
   // ID 命中场景库 = 已入库（本地 promotedTo 状态刷新后丢失），未命中 = 已废弃/删除
+  // 注意：预检只在「草稿确实不在列表」时可信——草稿在列表而库内有同 ID 旧版，是重生成待覆盖更新的正常形态
   const [resolved, setResolved] = useState<Record<string, { existing: { id: string; path: string; module: string } | null } | null>>({});
   // 入库弹窗
   const [dialog, setDialog] = useState<{ file: string; open: boolean }>({ file: '', open: false });
@@ -42,15 +43,20 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   const [dlgError, setDlgError] = useState('');
   // 列表加载失败（如 menu-drafts 未授权 403）——诚实呈现错误态，不误判"草稿已删除"
   const [loadError, setLoadError] = useState('');
+  // 草稿列表是否就绪——去向判定（conflict 预检）必须等列表返回后才开始：
+  // 挂载时两请求并发，预检抢跑命中库内同 ID 旧版会把「库内旧版+草稿新版」误判成「已入库」
+  const [listLoaded, setListLoaded] = useState(false);
   // K-xxx：试跑详情弹窗（打开时渲染 TrialRunDetailModal，读 run 报告展示完整执行过程）
   const [detailFile, setDetailFile] = useState('');
 
   const refresh = useCallback(() => {
+    setListLoaded(false);
     draftsApi.list().then(r => {
       const m: Record<string, DraftItem> = {};
       for (const d of r.drafts || []) m[d.filename] = d;
       setMetaMap(m);
       setLoadError('');
+      setListLoaded(true);
     }).catch((e: any) => setLoadError(e?.message || '草稿列表加载失败'));
     draftsApi.modules().then(r => setModules(r.modules || [])).catch(() => {});
     // K-xxx：依赖建议计数（按 consumer 场景 ID 聚合）
@@ -66,7 +72,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
   // K-xxx：草稿去向判定——drafts 列表无此文件且本地无已入库状态时，查冲突预检区分「已入库/已删除」
   const draftsKey = draftFiles.join('|');
   useEffect(() => {
-    if (loadError) return;  // 列表加载失败时不做去向判定（403 会被误判为"已删除"）
+    if (loadError || !listLoaded) return;  // 列表就绪前不判定去向——预检抢跑会把「草稿新版+库内旧版」误判为已入库
     let alive = true;
     (async () => {
       const next: Record<string, { existing: { id: string; path: string; module: string } | null } | null> = {};
@@ -81,7 +87,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftsKey, metaMap, loadError]);
+  }, [draftsKey, metaMap, loadError, listLoaded]);
 
   const setOne = (file: string, patch: Partial<DraftCardState>) =>
     setState(prev => ({ ...prev, [file]: { ...prev[file], ...patch } }));
@@ -191,10 +197,11 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
         const meta = metaMap[file];
         const st = state[file] || {};
         if (st.discarded) return null;
-        // 去向判定：① 本会话已入库 → ② 刷新后无本地状态，conflict 预检命中库内 = 已入库 → ③ 未命中 = 已删除
+        // 去向判定：① 本会话已入库 → ② 草稿不在列表且 conflict 预检命中库内 = 已入库 → ③ 未命中 = 已删除
+        // 视图层兜底：meta 存在（草稿在列表）一律草稿态——libHit 只对「列表中已消失」的草稿生效
         const libHit = st.promotedTo
           ? { path: st.promotedTo, scenarioId: st.scenarioId || '' }
-          : (resolved[file]?.existing
+          : (!meta && resolved[file]?.existing
               ? { path: resolved[file]!.existing!.path, scenarioId: resolved[file]!.existing!.id }
               : null);
         const gone = !st.promotedTo && !meta && resolved[file] !== undefined && !resolved[file]?.existing;
