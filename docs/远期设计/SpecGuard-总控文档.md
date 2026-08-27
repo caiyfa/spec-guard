@@ -792,3 +792,6 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | test_specstd/test_agent_resume.py | sess-agent-resume | 2026-08-26 | NEW | a70aa7cd605b | 已完成 | T-1021：总线单测+WS attach 端到端（TestClient 双连接） |
 | docs/远期设计/SpecGuard-总控文档.md | sess-agent-resume | 2026-08-26 | 29770fbc165e | f10bfba081fe | 已完成 | T-1021：§4/§5/§6 开工登记 |
 | docs/远期设计/SpecGuard-总控文档.md | 主库验收（T-1021） | 2026-08-27 | 730778e18c0f | 683128e1ef72 | 已完成 | T-1021 主库验收回写：§4 状态改已验收 + §5 补验收结论（离线五门禁+联网实证+验收期三处竞态修复） |
+| workbench/frontend/src/pages/agentChat/DraftArtifactsPanel.tsx | sess-draft-activity | 2026-08-27 | 7730af71fee9 | 139e6f5843b6 | 已完成 | 草稿去向判定竞态修复：conflict 预检等列表就绪后才开始 + libHit 渲染加 !meta 守卫——「库内同 ID 旧版+草稿新版」不再误判为已入库（卡片只剩 DAG 编排按钮的根因，20260827_094125_f955645e 会话复盘） |
+| workbench/frontend/src/pages/agentChat/DraftArtifactsPanel.test.tsx | sess-draft-activity | 2026-08-27 | NEW | d4355251217d | 已完成 | 去向判定三态守卫 3 例（挂载竞态不复现已入库误判/昨日入库真命中→DAG 卡/库内未命中→已删除卡） |
+| docs/远期设计/SpecGuard-总控文档.md | sess-draft-activity | 2026-08-27 | 4d7738e1c031 | 76b4bc2963d6 | 已完成 | §6 登记：草稿面板去向判定修复两文件 |
