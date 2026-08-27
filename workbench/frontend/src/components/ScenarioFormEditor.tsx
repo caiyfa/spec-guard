@@ -89,27 +89,42 @@ export default function ScenarioFormEditor({
   const tokens = useJsTokens();  // K-043：Monaco 主题跟随
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  // 表单脏标记：data 被表单改过才需要在进阅读模式时重 dump——
+  // 未编辑时保留原 yamlText（含 # 注释，阅读视图的步骤说明依赖它）
+  const formDirty = React.useRef(false);
 
   // 初始化：解析 YAML
   useEffect(() => {
     setYamlText(yamlContent);
+    formDirty.current = false;
     try {
       setData((yamlLoad(yamlContent) as Record<string, unknown>) || {});
     } catch { setData({}); }
   }, [yamlContent]);
 
-  const update = (key: string, value: unknown) => setData((prev) => ({ ...prev, [key]: value }));
+  const update = (key: string, value: unknown) => {
+    formDirty.current = true;
+    setData((prev) => ({ ...prev, [key]: value }));
+  };
 
   // ── 模式切换 ──
   const switchMode = (m: 'read' | 'form' | 'yaml') => {
     if (m === 'yaml') {
       // form/read → yaml：序列化当前 data 到编辑器
       try { setYamlText(yamlDump(data, { indent: 2, lineWidth: 120, noRefs: true })); } catch { /* */ }
+      formDirty.current = false;
     } else if (m === 'read' && mode === 'form') {
-      // form → read：表单编辑只改了 data，刷新 yamlText 保持阅读视图与表单一致
-      try { setYamlText(yamlDump(data, { indent: 2, lineWidth: 120, noRefs: true })); } catch { /* */ }
+      // form → read：仅当表单真改过时刷新 yamlText（dump 丢注释，未编辑时原文注释必须保留）
+      if (formDirty.current) {
+        try { setYamlText(yamlDump(data, { indent: 2, lineWidth: 120, noRefs: true })); } catch { /* */ }
+        formDirty.current = false;
+      }
+    } else if (m !== 'read') {
+      // yaml → form：解析编辑器内容回 data（yamlText 即原文，注释保留）
+      try { setData((yamlLoad(yamlText) as Record<string, unknown>) || {}); } catch { /* */ }
+      formDirty.current = false;
     } else {
-      // yaml → form/read：解析编辑器内容回 data
+      // yaml → read：解析编辑器内容回 data
       try { setData((yamlLoad(yamlText) as Record<string, unknown>) || {}); } catch { /* */ }
     }
     setMode(m);
