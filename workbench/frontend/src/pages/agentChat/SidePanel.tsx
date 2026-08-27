@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { GateCard, ScenarioMeta } from '../../api';
 import TodoPanel from '../../components/TodoPanel';
 import type { StructuredTodo } from '../../components/TodoPanel';
@@ -89,7 +89,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
   const activeFile = isFileTab ? fileTabs.find(t => `file:${t.path}` === activeTab) : null;
 
   // T-932：装配——通用恒显 + purpose 声明的专用（∩ 注册表）；pack 保持信息包存在才显
-  const purposePanelSet = new Set(purposePanels || []);
+  const purposePanelSet = useMemo(() => new Set(purposePanels || []), [purposePanels]);
   const visibleTabs = SIDE_TABS
     .filter(t => t.scope === 'universal' || purposePanelSet.has(t.id))
     .filter(t => t.id !== 'pack' || !!scenarioMeta);
@@ -105,7 +105,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
     const hidden = SIDE_TABS.find(t =>
       t.id === activeTab && t.scope === 'purpose' && !purposePanelSet.has(t.id));
     if (hidden) onSelectTab('todos');
-  }, [activeTab, purposePanels, onSelectTab]);
+  }, [activeTab, purposePanelSet, onSelectTab]);
 
   const tabBtn = (id: string, label: string, closable = false, path = '') => (
     <button
@@ -204,7 +204,8 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
             </div>
             <div className="flex-1 min-h-0">
               <FileViewer path={activeFile.path} content={activeFile.content}
-                loading={activeFile.loading} format={activeFile.format} hunks={activeFile.hunks} />
+                loading={activeFile.loading} format={activeFile.format} hunks={activeFile.hunks}
+                onOpenFile={(p) => onViewFile(p)} />
             </div>
           </div>
         )}

@@ -73,9 +73,14 @@ def resolve_anchor_refs(ws_root: Path, ids: list[str], hint: str = "") -> list[d
             if sec is None:
                 # 锚点在清单中但切片未命中（如同名定义歧义块）——跳过该候选
                 continue
+            try:
+                rel = str(Path(info.file_path).relative_to(ws_root)).replace("\\", "/")
+            except ValueError:
+                rel = info.file_path  # 不在工作区根内（理论不至）——原样给绝对路径
             matches.append({
                 "title": sec["title"],
                 "file": info.file_path,
+                "rel": rel,
                 "module": info.module,
                 "feature": info.feature,
                 "start": sec["start"],

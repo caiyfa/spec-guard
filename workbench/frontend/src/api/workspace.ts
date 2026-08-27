@@ -33,7 +33,8 @@ export interface WorkspaceTreeGroup {
 // T-1023：锚点原文（同号歧义时 matches 含全部候选，按 hint 相关性降序）
 export interface AnchorMatch {
   title: string;
-  file: string;
+  file: string;      // 服务器绝对路径（展示用）
+  rel: string;       // 工作区相对路径（打开文档页签用）
   module: string;
   feature: string;
   start: number;

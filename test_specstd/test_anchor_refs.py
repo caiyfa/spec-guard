@@ -52,6 +52,7 @@ def test_fr_heading_section(tmp_path):
     assert "导出" not in m["chunk"]
     assert m["start"] < m["end"]
     assert m["module"] == "inventory" and m["feature"] == "history"
+    assert m["rel"] == "specs/inventory/history/spec.md"
 
 
 def test_fr_list_section(tmp_path):

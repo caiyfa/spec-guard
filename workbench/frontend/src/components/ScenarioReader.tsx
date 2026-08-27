@@ -12,12 +12,15 @@ import { workspaceApi, type AnchorMatch, type AnchorRef } from '../api/workspace
 import {
   buildAnchorHint, describeStep, describeVerify, extractSectionComments,
 } from '../utils/scenarioReader';
+import Modal from './Modal';
+import { LocatedTextView } from './LocatedTextView';
 import { useJsTokens } from '../theme';
 
 interface Props {
   data: Record<string, unknown>;
   rawYaml?: string;   // 有原文时可提取步骤注释；缺省时注释区块不显示（诚实降级）
   filePath?: string;  // 锚点同号排序 hint 来源之一
+  onOpenFile?: (relPath: string) => void;  // T-1024：有文件页签体系（AgentChat）时「页签打开」入口
 }
 
 // ── 小部件 ──
@@ -87,7 +90,11 @@ function AnchorChip({ aid, anchor, open, onToggle }: {
   );
 }
 
-function AnchorSourcePanel({ anchor }: { anchor: AnchorRef }) {
+function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
+  anchor: AnchorRef;
+  onOpenDoc: (m: AnchorMatch) => void;
+  onOpenFile?: (relPath: string) => void;
+}) {
   const [idx, setIdx] = useState(0);
   const m: AnchorMatch | undefined = anchor.matches[Math.min(idx, anchor.matches.length - 1)];
   if (!m) return null;
@@ -104,8 +111,22 @@ function AnchorSourcePanel({ anchor }: { anchor: AnchorRef }) {
           ))}
         </div>
       )}
-      <div className="px-2 py-1 text-[9px] text-gray-600 border-b border-border/30">
-        {m.module}/{m.feature} · {m.file.split(/[/\\]/).slice(-3).join('/')}:{m.start}-{m.end}
+      <div className="flex items-center gap-2 px-2 py-1 text-[9px] text-gray-600 border-b border-border/30">
+        <span className="flex-1 min-w-0 truncate">
+          {m.module}/{m.feature} · {m.rel}:{m.start}-{m.end}
+        </span>
+        <button onClick={() => onOpenDoc(m)}
+          className="px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20 flex-shrink-0"
+          title="弹层打开完整 spec 文档（定位到本段）">
+          📄 完整文档
+        </button>
+        {onOpenFile && (
+          <button onClick={() => onOpenFile(m.rel)}
+            className="px-1.5 py-0.5 rounded bg-surface-3 text-gray-400 hover:text-info flex-shrink-0"
+            title="在文件页签中打开 spec 文档">
+            页签打开 ›
+          </button>
+        )}
       </div>
       <pre className="px-2.5 py-1.5 text-[11px] text-gray-300 whitespace-pre-wrap break-all max-h-56 overflow-y-auto"
         style={{ background: 'rgb(var(--code-bg))' }}>
@@ -115,9 +136,37 @@ function AnchorSourcePanel({ anchor }: { anchor: AnchorRef }) {
   );
 }
 
+/** T-1024：spec 完整文档弹层（拉取全文 + 定位高亮锚点段，三态分离） */
+function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch; onClose: () => void }) {
+  const [content, setContent] = useState('');
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [errMsg, setErrMsg] = useState('');
+  useEffect(() => {
+    let alive = true;
+    setState('loading'); setContent(''); setErrMsg('');
+    workspaceApi.readFile(match.rel)
+      .then((r) => { if (alive) { setContent(r.content); setState('ready'); } })
+      .catch((e) => { if (alive) { setErrMsg(e instanceof Error ? e.message : '读取失败'); setState('error'); } });
+    return () => { alive = false; };
+  }, [match.rel]);
+  return (
+    <Modal open onClose={onClose} width={860}
+      title={`${aid} · ${match.module}/${match.feature} · ${match.rel}`}>
+      <div style={{ height: '68vh' }}>
+        {state === 'loading' && <div className="p-4 text-[11px] text-gray-600">文档加载中…</div>}
+        {state === 'error' && <div className="p-4 text-[11px] text-fail">文档读取失败：{errMsg}</div>}
+        {state === 'ready' && (
+          <LocatedTextView content={content}
+            hunks={[{ title: match.title, start: match.start, end: match.end }]} />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ── 主组件 ──
 
-export default function ScenarioReader({ data, rawYaml, filePath }: Props) {
+export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: Props) {
   const doc = (data.doc || {}) as Record<string, unknown>;
   const covers = Array.isArray(doc.covers) ? doc.covers.map(String) : [];
   const relatedAc = Array.isArray(doc.related_ac) ? doc.related_ac.map(String) : [];
@@ -128,6 +177,7 @@ export default function ScenarioReader({ data, rawYaml, filePath }: Props) {
   const [refs, setRefs] = useState<Record<string, AnchorRef>>({});
   const [refsError, setRefsError] = useState('');
   const [openAnchor, setOpenAnchor] = useState<string | null>(null);
+  const [docView, setDocView] = useState<{ aid: string; match: AnchorMatch } | null>(null);  // T-1024 文档弹层
   useEffect(() => {
     setRefs({}); setRefsError(''); setOpenAnchor(null);
     if (!anchorIds.length) return;
@@ -225,10 +275,16 @@ export default function ScenarioReader({ data, rawYaml, filePath }: Props) {
                 </div>
               )}
               {refsError && <div className="text-[10px] text-fail">锚点原文加载失败：{refsError}</div>}
-              {openAnchor && refs[openAnchor]?.found && <AnchorSourcePanel anchor={refs[openAnchor]} />}
+              {openAnchor && refs[openAnchor]?.found && (
+                <AnchorSourcePanel anchor={refs[openAnchor]}
+                  onOpenDoc={(match) => setDocView({ aid: openAnchor, match })}
+                  onOpenFile={onOpenFile} />
+              )}
             </div>
           </Section>
         )}
+
+        {docView && <SpecDocModal aid={docView.aid} match={docView.match} onClose={() => setDocView(null)} />}
 
         {!!doc.note && (
           <details className="rounded border border-border/60 bg-surface-2/50 px-3 py-1.5">
