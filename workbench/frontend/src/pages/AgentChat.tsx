@@ -2,7 +2,7 @@
  *  T-995：面板/输入区/消息渲染等子组件按职责拆至 ./agentChat/，本文件只保留会话状态机与布局装配。 */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router';
 import { session, agentApi, authApi, scenarioApi, modelApi, workspaceApi, draftsApi } from '../api';
 import type { ScenarioMeta, ModelConfig, GateCard } from '../api';
 import SessionTree from '../components/SessionTree';
@@ -14,7 +14,7 @@ import { DEFAULT_CTX_LIMIT, PURPOSE_TITLE_FALLBACK } from './agentChat/types';
 import { ArtifactCtx, GateDockCtx, SqlAuxBridgeCtx } from './agentChat/contexts';
 import type { ArtifactCtxValue, SqlAuxBridgeValue } from './agentChat/contexts';
 import { DbPanel } from './agentChat/DbPanel';
-import { stripRefBlock, extractPlan, filterTreeSessions, resolveViewingFocus } from './agentChat/utils';
+import { stripRefBlock, extractPlan, filterTreeSessions, filterMenuSessions, resolveViewingFocus, chatRouteForPurpose, chatStorageKeys } from './agentChat/utils';
 import { groupMessages, draftWriteUndo } from './agentChat/groupMessages';
 import { MarkdownText } from './agentChat/MarkdownText';
 import { ArtifactCard } from './agentChat/ArtifactCard';
@@ -25,17 +25,26 @@ import { ConversationRail } from './agentChat/ConversationRail';
 import { ChatInput } from './agentChat/ChatInput';
 import { SidePanel } from './agentChat/SidePanel';
 import { DiffOverlay } from './agentChat/WritingPanel';
-import { _store } from './agentChat/sessionStore';
+import { _store, ensureSideStore } from './agentChat/sessionStore';
 
-export default function AgentChat() {
+export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string }) {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  // T-1039：双菜单（测试=/agent · 产品=/agent-product）——fixedPurpose 由路由注入并锁定，
+  // 存储键按菜单隔离，同浏览器两侧各自记住上次会话，互不串扰
+  const { sessionKey: LS_SESSION, purposeKey: LS_PURPOSE } = chatStorageKeys(fixedPurpose);
+  const chatSide = fixedPurpose === 'requirement_interview' ? 'product' : 'test';
   // K-013：scenarioId 状态化——@信息包 引用可在对话中关联场景（不再只能从场景管理页进入）
   const [scenarioId, setScenarioId] = useState(searchParams.get('scenario_id') || '');
   // H-5#3: 通知链接带 context 打开（debug_run_id 触发自动调试消息）
   const debugRunId = searchParams.get('debug_run_id') || '';
 
   // 从模块存储恢复状态（跨导航保持会话）
-  const [messages, setMessages] = useState<ChatMessage[]>(_store.messages);
+  // T-1039：首个初始化器完成分侧交换（幂等），后续初始化器读到的即本侧快照；
+  // sideSwappedRef 记录本挂载是否异侧切换（自愈补拉只在异侧切回时做，
+  // 同侧 SPA 往返走缓冲回放原链路，避免 attach 重放与缓冲重复追加）
+  const sideSwappedRef = useRef(false);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => { sideSwappedRef.current = ensureSideStore(chatSide); return _store.messages; });
   const [loading, setLoading] = useState(_store.loading);
   const [sessionId, setSessionId] = useState(_store.sessionId);
   const [sessionTitle, setSessionTitle] = useState(_store.sessionTitle);
@@ -63,7 +72,10 @@ export default function AgentChat() {
     setPurposesState(list);
   }, []);
   const [showPurposePicker, setShowPurposePicker] = useState(false);
-  const [pickedPurpose, setPickedPurpose] = useState(() => localStorage.getItem('sg_picked_purpose') || '');
+  // T-1039：固定用途菜单下当前角色不可见该用途 → 诚实无权态（🔒 空态 + 发送拦截），
+  // 区别于 loading/空数据（体验基线③）；拉取失败不进入此态（诚实降级为放行，WS 兜底）
+  const [purposeDenied, setPurposeDenied] = useState(false);
+  const [pickedPurpose, setPickedPurpose] = useState(() => fixedPurpose || localStorage.getItem(LS_PURPOSE) || '');
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [currentModelId, setCurrentModelId] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<ScenarioMeta | null>(null);
@@ -210,6 +222,7 @@ export default function AgentChat() {
   const debugSentRef = useRef(false);  // H-5#3: 调试链接自动发送
   const lastEventTimeRef = useRef(Date.now());  // TCP 半开连接防护：最后收到事件的时间
   const sessionIdRef = useRef('');  // K-xxx: WS onopen 重连补拉需要最新 sessionId（避开闭包过期）
+  const loadingRef = useRef(false);  // T-1039: 事件过滤器用——本挂载点是否刚发起 run
   const wsPingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);  // WS 健康检测定时器
   const currentWorkspace = session.getWorkspace();
 
@@ -237,10 +250,11 @@ export default function AgentChat() {
   const loadSessions = useCallback(async () => {
     try {
       // T-010 扩展：一次拉全（含归档），SessionTree 内部分组显示
+      // T-1039：双菜单按固定用途过滤会话树（对侧会话归对侧菜单；无用途历史会话归测试侧）
       const r = await agentApi.listSessions('', '', true);
-      setSessions(filterTreeSessions(r.sessions || []));  // 辅助会话不进会话树（§B5）
+      setSessions(filterMenuSessions(filterTreeSessions(r.sessions || []), fixedPurpose));  // 辅助会话不进会话树（§B5）
     } catch { setSessions([]); }
-  }, []);
+  }, [fixedPurpose]);
 
   // T-010 扩展：批量归档/恢复（后端只处理本人会话，非本人跳过）
   const [notice, setNotice] = useState('');  // 绿色成功提示（区别于红色错误）
@@ -286,6 +300,7 @@ export default function AgentChat() {
   useEffect(() => { _store.messages = messages; }, [messages]);
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { _store.loading = loading; }, [loading]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
   useEffect(() => { _store.sessionId = sessionId; }, [sessionId]);
   useEffect(() => { _store.sessionTitle = sessionTitle; }, [sessionTitle]);
   useEffect(() => { _store.stats = stats; }, [stats]);
@@ -305,16 +320,20 @@ export default function AgentChat() {
     // （防 attach 残留流/旧会话 run 污染切换后的会话 UI，顺带修不同会话
     // 并发 run 事件混流；state/started 例外：新建会话首事件必须放行，
     // 否则 sessionId 无法建立）
-    if (event.session_id && sessionIdRef.current
+    // T-1039 收紧：sessionIdRef 为空（本侧尚无会话）时同样过滤——双菜单下对侧
+    // 菜单进行中的 run 会流经本挂载点（共享 WS），唯有本挂载点刚发起 run
+    // （loading 中、会话 id 未建立）的新会话事件才放行
+    if (event.session_id
       && event.session_id !== sessionIdRef.current
-      && !(event.type === 'state' && event.status === 'started')) {
+      && !(event.type === 'state' && event.status === 'started')
+      && !(loadingRef.current && !sessionIdRef.current)) {
       return;
     }
     switch (event.type) {
       case 'state':
         if (event.status === 'started' && event.session_id) {
           setSessionId(event.session_id);
-          localStorage.setItem('sg_agent_session', event.session_id);  // K-012: 持久化供刷新/重启恢复
+          localStorage.setItem(LS_SESSION, event.session_id);  // K-012: 持久化供刷新/重启恢复
           setSessionsVersion(v => v + 1);
         } else if (event.status === 'preparing') {
           setTurnInfo('⚙ 正在初始化…');
@@ -462,7 +481,7 @@ export default function AgentChat() {
         setStats(event.stats || null);
         if (event.session_id) {
           setSessionId(event.session_id);
-          localStorage.setItem('sg_agent_session', event.session_id);
+          localStorage.setItem(LS_SESSION, event.session_id);
         }
         if (event.title) setSessionTitle(event.title);
         // T-1021: done 携带全量 messages——attach/回放路径的对齐兑底
@@ -624,12 +643,12 @@ export default function AgentChat() {
           message: msg, session_id: '', max_turns: 50,
           workspace: currentWorkspace, scenario_id: scenarioId,
           model_id: currentModelId,
-          purpose: 'test_workbench',
+          purpose: fixedPurpose || 'test_workbench',
           context: { current_page: currentPage, editing_scenario_id: scenarioId },
         }));
       }
     }
-  }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentModelId, currentPage]);
+  }, [scenarioId, wsState, scenarioMeta, currentWorkspace, currentModelId, currentPage, fixedPurpose]);
 
   // H-5#3: 通知链接自动打开调试（debug_run_id 触发）
   useEffect(() => {
@@ -644,7 +663,7 @@ export default function AgentChat() {
           message: msg, session_id: '', max_turns: 50,
           workspace: currentWorkspace, scenario_id: '',
           model_id: currentModelId,
-          purpose: 'test_workbench',
+          purpose: fixedPurpose || 'test_workbench',
           context: {
             current_page: 'execution',
             last_run_failed: true,
@@ -653,7 +672,7 @@ export default function AgentChat() {
         }));
       }
     }
-  }, [debugRunId, wsState, currentWorkspace, currentModelId]);
+  }, [debugRunId, wsState, currentWorkspace, currentModelId, fixedPurpose]);
 
   // TCP 半开连接防护：loading 期间定期检测，长时间无事件则判定连接断开并自动重连
   useEffect(() => {
@@ -721,17 +740,30 @@ export default function AgentChat() {
       const r = await agentApi.listPurposes();
       const list = r.purposes || [];
       setPurposes(list);
+      // T-1039: 固定用途菜单——不弹卡片直接锁定；角色不可见该用途时进入诚实无权态
+      if (fixedPurpose) {
+        if (list.length > 0 && !list.some(p => p.id === fixedPurpose)) {
+          setPurposeDenied(true);
+          setShowPurposePicker(false);
+          return false;
+        }
+        setPurposeDenied(false);
+        setPickedPurpose(fixedPurpose);
+        localStorage.setItem(LS_PURPOSE, fixedPurpose);
+        setShowPurposePicker(false);
+        return true;
+      }
       if (list.length === 1) {
         // 单用途：跳过选择直接锁定
         setPickedPurpose(list[0].id);
-        localStorage.setItem('sg_picked_purpose', list[0].id);
+        localStorage.setItem(LS_PURPOSE, list[0].id);
         setShowPurposePicker(false);
         return true;
       } else if (list.length > 1) {
         // 多用途：展示使命卡片，等用户拍板
         setShowPurposePicker(true);
         setPickedPurpose('');
-        localStorage.removeItem('sg_picked_purpose');
+        localStorage.removeItem(LS_PURPOSE);
         return false;
       }
       setShowPurposePicker(false);
@@ -740,12 +772,17 @@ export default function AgentChat() {
       setShowPurposePicker(false);
       return true;  // 拉取失败：不拦截，避免功能不可用
     }
-  }, []);
+  }, [fixedPurpose, LS_PURPOSE, setPurposes]);
 
   const handleSend = useCallback((text: string, refs: ChatReference[]): boolean => {
     const userMsg = text.trim();
     const ws = wsRef.current;
     if (!userMsg || loading) return false;
+    // T-1039: 无权态拦截——空态已展示 🔒，此处兜底防快捷键/自动消息绕过
+    if (purposeDenied) {
+      setError('当前角色无此工作台权限，请切换到有权限的菜单或联系管理员');
+      return false;
+    }
     // T-010: 新会话必须先选用途——未选使命直接发送会创建无用途会话（工具集不锁定、提示词不装配），此处拦截并弹卡片
     if (!sessionId && !pickedPurpose) {
       setError('请先选择会话用途（测试工作台 / 产品工作台）再开始对话');
@@ -783,12 +820,12 @@ export default function AgentChat() {
       context: { current_page: currentPage, editing_scenario_id: sidToSend },
     }));
     return true;
-  }, [loading, sessionId, pickedPurpose, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo, fetchAndShowPurposes]);
+  }, [loading, sessionId, pickedPurpose, purposeDenied, currentWorkspace, scenarioId, currentModelId, currentPage, expandSideTo, fetchAndShowPurposes]);
 
   // T-402: 打断会话（真打断——先调用 cancel API，再关 WS）
   const handleStop = useCallback(() => {
     // 先调用 cancel API 设置后端 cancellation 标志（不等待，静默失败）
-    const sid = sessionId || localStorage.getItem('sg_agent_session');
+    const sid = sessionId || localStorage.getItem(LS_SESSION);
     if (sid) {
       agentApi.cancelSession(sid).catch(() => {});
     }
@@ -801,7 +838,7 @@ export default function AgentChat() {
     setError('');
     setStreamingText('');
     setWsReconnect(v => v + 1);
-  }, [sessionId]);
+  }, [sessionId, LS_SESSION]);
 
   // K-032: 打开引用文件——新增/激活右侧文件页签（取代 modal 弹窗）
   // T-511：opts.hunks 携带阅读足迹使用位置（行区间定位+高亮）；opts.fallback
@@ -1019,6 +1056,26 @@ export default function AgentChat() {
     }
   }, []);
 
+  // T-1039: 异侧切回自愈——切走期间本侧 run 的事件已被对侧菜单过滤丢弃（共享 WS），
+  // 补拉对齐：run 仍在进行则截到基线 + attach 重放续流（restoreSession 同款），
+  // 已完成则替换为更长落盘版并解除残留 loading。仅异侧交换的挂载执行（同侧
+  // SPA 往返走缓冲回放原链路，不做以免 attach 重放与缓冲重复追加）
+  useEffect(() => {
+    if (!sideSwappedRef.current || !sessionId || !loading) return;
+    agentApi.getSession(sessionId, currentWorkspace).then(r => {
+      const msgs = r.messages || [];
+      if (r.run_in_progress) {
+        const bl = typeof r.run_baseline_len === 'number' ? r.run_baseline_len : 0;
+        setMessages(msgs.length > bl ? msgs.slice(0, bl) : msgs);
+        sendAttach(sessionId);
+      } else {
+        setMessages(prev => (msgs.length > prev.length ? msgs : prev));
+        setLoading(false);
+      }
+    }).catch(() => { /* 静默：下一条消息/刷新仍有常规恢复路径 */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // K-012: 恢复会话（会话项点击 / 页面刷新自动恢复共用）
   const restoreSession = useCallback(async (id: string, ws: string) => {
     // T-1021: 切会话前退出旧会话的 attach 订阅（若有）
@@ -1030,6 +1087,21 @@ export default function AgentChat() {
       const pr = await agentApi.listPurposes();
       setPurposes(pr.purposes || []);
     } catch { /* 页签降级为通用集 */ }
+    // T-1039: 双菜单路由守卫——拉消息前先查用途归属，属另一侧菜单则改道（不做任何
+    // 本侧状态变更；先清本侧恢复键防回环。仅两个主用途参与分流，辅助会话等未知
+    // 用途留当前页；查用途失败不阻塞，按本侧恢复，后端 WS 仍有用途角色校验兜底）
+    if (fixedPurpose) {
+      try {
+        const lst = await agentApi.listSessions(ws, '', true);
+        const meta = (lst.sessions || []).find((s: any) => s.id === id);
+        const p = meta?.purpose || '';
+        if (p && p !== fixedPurpose && (p === 'test_workbench' || p === 'requirement_interview')) {
+          localStorage.removeItem(LS_SESSION);
+          navigate(`${chatRouteForPurpose(p)}?session=${encodeURIComponent(id)}`);
+          return;
+        }
+      } catch { /* 查用途失败不阻塞会话加载 */ }
+    }
     const r = await agentApi.getSession(id, ws);
     const msgs = r.messages || [];
     // T-1021: run 进行中——截断到基线（丢弃 run 期间已落盘的部分消息，attach
@@ -1047,13 +1119,14 @@ export default function AgentChat() {
     setReadingFeed(r.reading_feed || []);  // T-511: 阅读足迹从后端重建（跨刷新保持）
     setWritingFeed(r.writing_feed || []);  // S0.6: 更新足迹从后端重建（跨刷新保持）
     // T-010: 恢复会话时带出锁定用途（会话列表含 purpose 字段；找不到时保持现状）
-    try {
+    // T-1039: 固定用途菜单跳过——pickedPurpose 已由路由锁定，归属守卫在上方完成
+    if (!fixedPurpose) try {
       const lst = await agentApi.listSessions(ws, '', true);
       const meta = (lst.sessions || []).find((s: any) => s.id === id);
       const p = meta?.purpose || '';
       if (p) {
         setPickedPurpose(p);
-        localStorage.setItem('sg_picked_purpose', p);
+        localStorage.setItem(LS_PURPOSE, p);
       }
     } catch { /* 恢复用途失败不阻塞会话加载 */ }
     setPlanItems([]);
@@ -1085,12 +1158,12 @@ export default function AgentChat() {
       setTurnInfo('↻ 恢复执行现场…');
       sendAttach(id);
     }
-  }, [sendAttach, sendDetach]);
+  }, [sendAttach, sendDetach, fixedPurpose, LS_SESSION, LS_PURPOSE, navigate, setPurposes]);
 
   const handleSelectSession = async (id: string, ws: string) => {
     try {
       await restoreSession(id, ws);
-      localStorage.setItem('sg_agent_session', id);
+      localStorage.setItem(LS_SESSION, id);
     } catch { setError('加载会话失败'); }
   };
 
@@ -1110,15 +1183,31 @@ export default function AgentChat() {
     } catch { /* 静默 */ }
   }, [sessionId, currentWorkspace]);
 
+  // T-1039: 双菜单固定用途——挂载即拉用途清单（purpose 页签装配 + 角色无权诚实态；
+  // 新建会话不再经过卡片选择路径，purposes 必须前置就绪）
+  useEffect(() => { if (fixedPurpose) { fetchAndShowPurposes(); } }, [fixedPurpose, fetchAndShowPurposes]);
+
+  // T-1039: 旧版融合菜单存储键一次性迁移——sg_agent_session 迁入先打开的菜单侧键；
+  // 归属不符由路由守卫改道并清键，之后两侧各自独立记忆（体验基线①）
+  useEffect(() => {
+    const legacy = localStorage.getItem('sg_agent_session');
+    if (legacy) {
+      if (!localStorage.getItem(LS_SESSION)) localStorage.setItem(LS_SESSION, legacy);
+      localStorage.removeItem('sg_agent_session');
+    }
+    localStorage.removeItem('sg_picked_purpose');  // 旧版用途键不再消费（固定菜单由路由锁定）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // K-012: 页面刷新/服务重启后自动恢复上次会话（_store 为空时才补拉，SPA 内导航不触发）
   // T-1000: ?session= 深链优先（「我的活动」产出溯源/会话列表跳入）
   useEffect(() => {
     if (messages.length > 0 || scenarioId || debugRunId) return;
     const urlSid = new URLSearchParams(window.location.search).get('session');
-    const savedId = urlSid || localStorage.getItem('sg_agent_session');
+    const savedId = urlSid || localStorage.getItem(LS_SESSION);
     if (!savedId) return;
     restoreSession(savedId, currentWorkspace)
-      .catch(() => { if (!urlSid) localStorage.removeItem('sg_agent_session'); });  // 会话已不存在则清键静默降级
+      .catch(() => { if (!urlSid) localStorage.removeItem(LS_SESSION); });  // 会话已不存在则清键静默降级
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1134,7 +1223,7 @@ export default function AgentChat() {
     // K-032：新会话同步清理信息包关联与文件页签
     setScenarioId(''); setScenarioMeta(null);
     setFileTabs([]); setActiveSideTab('todos');
-    localStorage.removeItem('sg_agent_session');
+    localStorage.removeItem(LS_SESSION);
     // T-010: 获取用途列表并决定是否显示选择卡片
     await fetchAndShowPurposes();
   };
@@ -1460,10 +1549,16 @@ export default function AgentChat() {
               <GateDockCtx.Provider value={{ onAskAgent: askAgentGuide, onError: setError }}>
               <ArtifactCtx.Provider value={artifactCtxValue}>
               {grouped.length === 0 && !loading && (
-                showPurposePicker && purposes.length > 0 ? (
+                purposeDenied ? (
+                  <div className="text-center text-gray-500 text-sm py-12">
+                    <div className="text-3xl mb-2">🔒</div>
+                    当前角色无此工作台权限（需产品/开发/管理员角色）<br />
+                    <span className="text-xs text-gray-600">测试场景制作请使用「测试对话」菜单，或联系管理员调整角色</span>
+                  </div>
+                ) : showPurposePicker && purposes.length > 0 ? (
                   <PurposeCards purposes={purposes} onPick={(id) => {
                     setPickedPurpose(id);
-                    localStorage.setItem('sg_picked_purpose', id);
+                    localStorage.setItem(LS_PURPOSE, id);
                     setShowPurposePicker(false);
                   }} />
                 ) : (

@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { agentApi, auditApi, productsApi, runsApi, type ProductRecord } from '../api';
+import { chatRouteForPurpose } from './agentChat/utils';
 
 const TYPE_LABELS: Record<string, string> = {
   draft: '📝 草稿',
@@ -68,8 +69,10 @@ export default function MyActivity() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openSession = (sid: string) => {
-    if (sid) window.location.href = `/agent?session=${encodeURIComponent(sid)}`;
+  // T-1039：跳会话按用途分流双菜单（产品用途→/agent-product）；无用途信息时
+  // 默认 /agent，AgentChat 路由守卫会按会话真实用途改道
+  const openSession = (sid: string, purpose?: string) => {
+    if (sid) window.location.href = `${chatRouteForPurpose(purpose || '')}?session=${encodeURIComponent(sid)}`;
   };
 
   return (
@@ -140,7 +143,7 @@ export default function MyActivity() {
                     {s.updated_at || s.created_at || ''}{s.workspace ? ` · ${s.workspace}` : ''}
                   </div>
                 </div>
-                <button onClick={() => openSession(s.session_id || s.id)}
+                <button onClick={() => openSession(s.session_id || s.id, s.purpose)}
                   className="px-2 py-1 text-xs bg-info/15 text-info rounded hover:bg-info/25 flex-shrink-0">
                   打开
                 </button>

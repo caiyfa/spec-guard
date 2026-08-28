@@ -37,9 +37,9 @@ const REDIRECT_TARGETS: Record<string, string> = {
   '/attribution': '/history?tab=attribution',  // 失败归因并入执行中心
   '/notify': '/feedback?tab=notify',       // 通知配置并入反哺闭环
   '/skills': '/agent',                     // 技能收对话页签
-  '/materials': '/agent',                  // 材料管理收操作台页签
-  '/scores': '/agent',                     // 评分冻结收操作台页签
-  '/zentao': '/agent',                     // 禅道收操作台页签
+  '/materials': '/agent-product',          // 材料管理收操作台页签（T-1039：产品侧）
+  '/scores': '/agent-product',             // 评分冻结收操作台页签（T-1039：产品侧）
+  '/zentao': '/agent-product',             // 禅道收操作台页签（T-1039：产品侧）
   '/spec': '/agent',                       // 合规校验收对话页签
   '/knowledge': '/agent',                  // 知识收对话页签
   '/workspace/git-log': '/system-config',  // GitLog 已删除，回系统配置（T-1010 三栏合一）
@@ -157,7 +157,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
     if (current) setExpandedGroups(prev => prev.has(current.label) ? prev : new Set([current.label]));
   }, [location.pathname, navTree]);
 
-  const noPadding = location.pathname === '/agent';
+  const noPadding = location.pathname.startsWith('/agent');  // T-1039：/agent 与 /agent-product 双对话页均无 padding
   const visibleGroups = navTree;
 
   // 路由守卫：当前 path 不在可见菜单（含隐藏 Redirect 目标）→ 无权限页
@@ -347,9 +347,11 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         ) : (
           <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>
             <Routes>
-              {/* 首页 = Home（登录即用，免菜单权限，守卫 PUBLIC_PATHS 放行）；Agent 对话回到 /agent */}
+              {/* 首页 = Home（登录即用，免菜单权限，守卫 PUBLIC_PATHS 放行）；
+                  T-1039：对话按用途拆双菜单——测试对话 /agent · 产品对话 /agent-product（固定用途锁定） */}
               <Route path="/" element={<Home user={user} navTree={navTree} navLoaded={navLoaded} navError={navError} onRetryNav={loadNav} />} />
-              <Route path="/agent" element={<AgentChat />} />
+              <Route path="/agent" element={<AgentChat fixedPurpose="test_workbench" />} />
+              <Route path="/agent-product" element={<AgentChat fixedPurpose="requirement_interview" />} />
               <Route path="/dashboard" element={<Dashboard />} />  {/* 仪表盘（原首页） */}
               <Route path="/graph" element={<GraphPanorama />} />  {/* T-071：全景图谱（三镜头+源头定位） */}
 

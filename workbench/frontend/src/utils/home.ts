@@ -1,8 +1,9 @@
 /** Home 页纯函数助手（从 pages/Home.tsx 拆出，保持页面文件只导出组件以兼容 react-refresh） */
 import type { NavGroup } from '../api';
 
-/** 免权菜单路径（与后端 rbac_store.PUBLIC_MENUS 对齐；零权限提示条判定用） */
-export const PUBLIC_MENU_PATHS = ['/agent'];
+/** 免权菜单路径（与后端 rbac_store.PUBLIC_MENUS 对齐；零权限提示条判定用）。
+ * T-1039：产品对话同为公开菜单（对话双入口），与 /agent 并列 */
+export const PUBLIC_MENU_PATHS = ['/agent', '/agent-product'];
 
 /** 时段问候（本地时间小时数 → 问候语） */
 export function greeting(hour: number = new Date().getHours()): string {
