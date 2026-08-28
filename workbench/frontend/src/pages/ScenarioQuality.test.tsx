@@ -29,6 +29,8 @@ vi.mock('../api/runs', () => ({
     preflight: vi.fn(),
   },
 }));
+// T-1036：配置源透出（runs accounts 响应 source 字段）
+const mockAccounts = vi.mocked(runsApi.accounts);
 vi.mock('../components/ScenarioFormEditor', () => ({
   default: ({ scenarioId }: any) => <div data-testid="form-editor">{scenarioId}</div>,
 }));
@@ -116,7 +118,8 @@ function renderPage(role = 'tester') {
 }
 
 async function openDetail(id: string) {
-  await waitFor(() => expect(screen.getByText('特性A')).toBeTruthy());
+  // 等待条件用任意页签都渲染的统计卡（页签/筛选经 localStorage 持久化，跨渲染可能不在套件视图）
+  await waitFor(() => expect(screen.getByText('用例总数')).toBeTruthy());
   fireEvent.click(screen.getByText('📄 用例明细'));
   fireEvent.click(screen.getByText(id));
   await waitFor(() => expect(screen.getByTestId('form-editor')).toBeTruthy());
@@ -227,5 +230,21 @@ describe('ScenarioQuality 测试用例管理页', () => {
     const btn = screen.getByText('▶ 开始试跑（联网执行）') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     expect(mockTrigger).not.toHaveBeenCalled();
+  });
+
+  it('执行环境区显示配置源（Nacos / 本地文件，T-1036）', async () => {
+    mockAccounts.mockResolvedValueOnce({ accounts: {}, env: 'sit', source: 'nacos:specguard-tdm-sit.yaml' } as any);
+    renderPage('tester');
+    await openDetail('DEEP-001');
+    fireEvent.click(screen.getByText('▶ 试跑'));
+    expect(await screen.findByText(/配置源：Nacos/)).toBeTruthy();
+    expect(screen.getByText(/配置源：Nacos（specguard-tdm-sit\.yaml）/)).toBeTruthy();
+
+    cleanup();  // 弹层不重挂载（accounts 仅 mount 拉取），file 来源用独立渲染验证
+    mockAccounts.mockResolvedValueOnce({ accounts: {}, env: 'sit', source: 'file' } as any);
+    renderPage('tester');
+    await openDetail('DEEP-001');
+    fireEvent.click(screen.getByText('▶ 试跑'));
+    expect(await screen.findByText('配置源：本地文件')).toBeTruthy();
   });
 });

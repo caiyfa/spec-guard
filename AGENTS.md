@@ -221,6 +221,7 @@ python -m mcp_server.server                          # MCP stdio server（供 Qo
 - Node 18+（前端构建）；前端测试/lint 需 Node 20+（vitest 4 要求，24 实测可用）
 - 联网场景需可达 SIT 网关 + SIT MySQL；DB 密码/SSO 凭据缺省时走 SpecGuard 自有回退链（`systems/_shared/secrets.py`）：环境变量 → 自有凭据文件 `~/.specguard/secrets.env`（`SG_SECRETS_FILE` 可重定向）→ 旧 devops `.env.devops` 过渡兜底（命中即 DeprecationWarning，计划下线）；可用环境变量 `SG_DB_PASSWORD` / `SG_SSO_PASSWORD` 覆盖。
 - T-960/T-960b 凭据出库：`internal_token.client_secret`（internal 账号 SSO client-credentials）不硬编码仓库、不读第三方工具目录——回退链 = 环境变量 `SG_TDM_CLIENT_SECRET` → 自有凭据文件同名键；缺省时 token 获取诚实报错提示配置（不发空 secret 请求）。
+- T-1036 Nacos 配置中心（默认关闭）：env.{env}.yaml 的 `nacos:` 块启用后，配置值从 Nacos 拉取深合并覆盖本地（`systems/_shared/nacos.py`，OpenAPI+httpx 零新增依赖，TTL 300s）；本地文件退为 bootstrap+兜底，不可达 WARN 降级；`config_source` 标注真实来源（试跑面板可见）。统一管理在 Nacos 侧完成，仓库内只留连接 bootstrap。
 
 ---
 

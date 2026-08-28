@@ -14,6 +14,7 @@ import re
 
 import yaml
 
+from systems._shared.nacos import deep_merge
 from systems._shared.secrets import resolve_secret
 
 _CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
@@ -49,10 +50,25 @@ def load_env(env_name="sit"):
     path = os.path.join(_CONFIG_DIR, f"env.{env_name}.yaml")
     if not os.path.isfile(path):
         raise ConfigError(f"环境配置不存在: {path}")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         system_cfg = _substitute(yaml.safe_load(f) or {})
     # T-309：共享通用配置打底（不存在返回 {}），系统键覆盖共享同键
     cfg = merge_env(load_shared_env(env_name), system_cfg)
+
+    # T-1036 Nacos 配置中心：启用时深合并覆盖本地（Nacos 逐键胜出），
+    # 本地文件退为 bootstrap + 兜底；不可达诚实降级（WARN），config_source 如实标注。
+    # 全部消费方（conftest/工作台/preflight/db/账号接口）收敛本函数，单点生效。
+    nacos_cfg = cfg.get("nacos")
+    if isinstance(nacos_cfg, dict) and nacos_cfg.get("enabled"):
+        from systems._shared.nacos import fetch_config
+        remote = fetch_config(nacos_cfg)
+        if remote is not None:
+            cfg = deep_merge(cfg, remote)
+            cfg["config_source"] = f"nacos:{nacos_cfg.get('data_id', '')}"
+        else:
+            cfg["config_source"] = "file (nacos 降级: 拉取失败，见 WARN)"
+    else:
+        cfg["config_source"] = "file"
 
     # T-960/T-960b 凭据出库：internal_token.client_secret 回退——
     # env yaml ${SG_TDM_CLIENT_SECRET:} 为空 → resolve_secret 自有链

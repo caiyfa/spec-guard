@@ -81,7 +81,7 @@ export const runsApi = {
         overrides,  // T-312：预检弹窗输入的变量覆盖（账号/env 键）
       }),
     }),
-  accounts: () => request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string }>('/runs/accounts'),
+  accounts: () => request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string; source?: string }>('/runs/accounts'),
   // T-311：执行前依赖预检（确认弹窗前静态比对账号/env 键/跨场景引用）
   preflight: (scenarios: string[], env?: string) =>
     request<PreflightResult>(`/runs/preflight?scenarios=${encodeURIComponent(scenarios.join(','))}${env ? `&env=${encodeURIComponent(env)}` : ''}`),

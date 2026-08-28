@@ -8,14 +8,16 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-
-from services.auth import (
-    CurrentUser, get_current_user, get_current_user_ws, optional_workspace, require_role,
-)
 from services import user_store
-from services.runner import run_manager
-from services.scenario_store import list_reports, get_report, get_case
+from services.auth import (
+    CurrentUser,
+    get_current_user,
+    optional_workspace,
+    require_role,
+)
 from services.covers_gate import check_covers_gate as _check_covers
+from services.runner import run_manager
+from services.scenario_store import get_case, get_report, list_reports
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -153,6 +155,7 @@ def api_preflight(scenarios: str = "", env: str = ""):
     纯读：不触发执行、不落盘。
     """
     from services import preflight
+
     from specstd.workspace import resolve_system
     ids = [s.strip() for s in (scenarios or "").split(",") if s.strip()]
     if not ids:
@@ -170,6 +173,7 @@ def api_run_accounts(workspace: str = Depends(optional_workspace)):
     不必每次改系统设置。
     """
     import importlib
+
     from specstd.workspace import get_active_workspace, resolve_system
     ws = get_active_workspace()
     system = resolve_system(ws.system if ws else "")
@@ -177,7 +181,7 @@ def api_run_accounts(workspace: str = Depends(optional_workspace)):
         mod = importlib.import_module(f"systems.{system}")
         env_config = mod.load_env(os.environ.get("SG_ENV", "sit"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"环境配置加载失败: {e}")
+        raise HTTPException(status_code=500, detail=f"环境配置加载失败: {e}") from e
     accounts = {}
     for alias, cfg in (env_config.get("accounts") or {}).items():
         if isinstance(cfg, str):
@@ -187,7 +191,8 @@ def api_run_accounts(workspace: str = Depends(optional_workspace)):
             "emp_no": cfg.get("emp_no", ""),
             "type": cfg.get("type", "user"),
         }
-    return {"accounts": accounts, "env": env_config.get("env_name", "sit")}
+    return {"accounts": accounts, "env": env_config.get("env_name", "sit"),
+            "source": env_config.get("config_source", "")}  # T-1036：配置源透出（nacos:{data_id} / file）
 
 
 @router.get("/{run_id}/log", dependencies=[Depends(get_current_user)])
@@ -205,7 +210,7 @@ def api_get_run_log(run_id: str, tail: int = 500):
     try:
         log_path.relative_to(reports_root.resolve())
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"路径越界: {run_id}")
+        raise HTTPException(status_code=400, detail=f"路径越界: {run_id}") from None
     if not log_path.is_file():
         raise HTTPException(status_code=404, detail=f"执行日志不存在（K-050 之前的运行无 output.log）: {run_id}")
     lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -240,7 +245,7 @@ def api_evidence(run_id: str, scenario_id: str):
         return attribution_service.assemble_evidence(run_id, scenario_id)
     except attribution_service.EvidenceError as e:
         status = 400 if e.code == "invalid_run_id" else 404
-        raise HTTPException(status_code=status, detail=str(e))
+        raise HTTPException(status_code=status, detail=str(e)) from e
 
 
 class AttributeBody(BaseModel):
@@ -255,7 +260,7 @@ def api_attribute(run_id: str, body: AttributeBody):
         evidence = attribution_service.assemble_evidence(run_id, body.scenario_id)
     except attribution_service.EvidenceError as e:
         status = 400 if e.code == "invalid_run_id" else 404
-        raise HTTPException(status_code=status, detail=str(e))
+        raise HTTPException(status_code=status, detail=str(e)) from e
     case_msg = (evidence.get("response_snapshot") or {}).get("assertion_failed", "")
     suggestion = attribution_service.suggest_kind(
         verdict="FAIL", category="assertion", message=case_msg)
@@ -310,8 +315,8 @@ async def ws_stream(ws: WebSocket):
         await ws.close(code=4401)
         return
     try:
-        from services.auth import _validate_token
         from services import user_store as auth_store
+        from services.auth import _validate_token
         emp_no, name = _validate_token(token)
         auth_store.upsert_user(emp_no, name)  # 登录留痕（与原 WS 依赖同语义）
     except Exception:

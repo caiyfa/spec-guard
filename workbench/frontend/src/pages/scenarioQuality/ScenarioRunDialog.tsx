@@ -51,6 +51,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
   const [withDownstream, setWithDownstream] = useState(false);
   const [account, setAccount] = useState('');
   const [accounts, setAccounts] = useState<Record<string, { ad: string; emp_no: string; type: string }>>({});
+  const [configSource, setConfigSource] = useState('');
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [overrideInputs, setOverrideInputs] = useState<Record<string, string>>({});
@@ -72,7 +73,10 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
 
   useEffect(() => {
     runsApi.accounts()
-      .then(r => setAccounts(r.accounts || {}))
+      .then(r => {
+        setAccounts(r.accounts || {});
+        setConfigSource(r.source || '');
+      })
       .catch(() => setAccounts({}));
   }, []);
 
@@ -179,6 +183,14 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
               ))}
             </select>
           </span>
+          {configSource && (
+            <span className="text-xs text-gray-400"
+              title="执行环境配置来源（T-1036）：nacos 表示统一管理配置中心，file 表示本地 env yaml；降级时已 WARN">
+              配置源：{configSource.startsWith('nacos') ? 'Nacos' : '本地文件'}
+              {configSource.startsWith('nacos') && `（${configSource.slice('nacos:'.length)}）`}
+              {configSource.includes('降级') && <span className="text-warn">（已降级）</span>}
+            </span>
+          )}
           {!preflightLoading && preflight && !preflight.has_gaps && (
             <span className="text-xs text-pass"
               title={`账号：${(preflight.accounts || []).join('、') || '—'}｜环境键：${(preflight.env_keys || []).join('、') || '—'}`}>
