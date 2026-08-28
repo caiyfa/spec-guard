@@ -21,3 +21,23 @@ def quality_overview(refresh: bool = False):
         return sq.collect_quality(refresh=refresh)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"场景库质量扫描失败: {e}") from e
+
+
+@router.get("/shape-contract", dependencies=[Depends(require_role("admin", "tester", "product"))])
+def shape_contract(refresh: bool = False):
+    """API 形状契约全景（T-1037：引用完整性/漂移分类/重要性；60s 缓存）。"""
+    from services import shape_contract as sc
+    try:
+        return sc.analyze_shape_contract(refresh=refresh)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"形状契约分析失败: {e}") from e
+
+
+@router.get("/parallel-safety", dependencies=[Depends(require_role("admin", "tester", "product"))])
+def parallel_safety(refresh: bool = False):
+    """并行安全静态判定（T-1038：读-读并行/沾写互斥/理论并行度；60s 缓存）。"""
+    from services import parallel_safety as ps
+    try:
+        return ps.analyze_parallel_safety(refresh=refresh)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"并行安全分析失败: {e}") from e

@@ -79,4 +79,47 @@ export interface QualityOverview {
 export const scenarioQualityApi = {
   overview: (refresh = false) =>
     request<QualityOverview>(`/scenario-quality/overview${refresh ? '?refresh=1' : ''}`),
+  // ── T-1037 形状契约 / T-1038 并行安全 ──
+  shapeContract: (refresh = false) =>
+    request<ShapeContract>(`/scenario-quality/shape-contract${refresh ? '?refresh=1' : ''}`),
+  parallelSafety: (refresh = false) =>
+    request<ParallelSafety>(`/scenario-quality/parallel-safety${refresh ? '?refresh=1' : ''}`),
 };
+
+export interface ShapeFinding {
+  type: 'unresolved-ref' | 'removed-path' | 'added-paths';
+  level: 'WARN' | 'INFO';
+  api: string;
+  path: string;
+  was_type?: string;
+  consumers: string[];
+  message: string;
+}
+
+export interface ShapeContract {
+  generated_at: string;
+  n_runs: number;
+  apis: {
+    api: string;
+    runs: number;
+    fields: number;
+    refs: number;
+    owner_scenarios: string[];
+    importance: number;
+    category: string;
+  }[];
+  findings: ShapeFinding[];
+}
+
+export interface ParallelSafety {
+  generated_at: string;
+  totals: {
+    scenarios: number;
+    readers: number;
+    writers: number;
+    max_parallelism: number;
+    model: string;
+  };
+  writers: { id: string; title: string; category: string; priority: string; dependents: number; accounts: string[] }[];
+  readers: { id: string; title: string; category: string; priority: string; dependents: number; accounts: string[] }[];
+}

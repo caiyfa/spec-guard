@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { scenarioQualityApi } from '../api';
-import type { QualityGrade, QualityOverview } from '../api';
+import type { QualityGrade, QualityOverview, ParallelSafety, ShapeContract } from '../api';
 import { GRADE_CLS, GRADE_LABEL, ISSUE_CLS, ISSUE_LABEL } from './scenarioQuality/labels';
 import ScenarioDetailModal from './scenarioQuality/ScenarioDetailModal';
 
@@ -16,8 +16,16 @@ const ISSUES = ['missing-covers', 'invalid-covers', 'shallow', 'no-verify', 'pro
 const SQ_TABS = [
   { id: 'suites', label: '🗂 套件视图' },
   { id: 'scenarios', label: '📄 用例明细' },
+  { id: 'shape', label: '🔗 形状契约' },
+  { id: 'parallel', label: '🚦 并行安全' },
 ] as const;
 type SqTab = typeof SQ_TABS[number]['id'];
+
+const FINDING_TYPE_LABEL: Record<string, string> = {
+  'unresolved-ref': '引用路径未出现过',
+  'removed-path': '路径消失（漂移）',
+  'added-paths': '新增字段',
+};
 
 interface Filters { suite: string; grade: string; issue: string; q: string }
 const EMPTY_FILTERS: Filters = { suite: '', grade: '', issue: '', q: '' };
@@ -56,6 +64,10 @@ export default function ScenarioQuality({ role }: Props) {
   });
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [shapeData, setShapeData] = useState<ShapeContract | null>(null);
+  const [shapeError, setShapeError] = useState('');
+  const [parallelData, setParallelData] = useState<ParallelSafety | null>(null);
+  const [parallelError, setParallelError] = useState('');
 
   useEffect(() => { localStorage.setItem('sg_sq_tab', tab); }, [tab]);
   useEffect(() => { localStorage.setItem('sg_sq_filters', JSON.stringify(filters)); }, [filters]);
@@ -72,6 +84,22 @@ export default function ScenarioQuality({ role }: Props) {
     }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
+
+  // 形状契约/并行安全：首次进入页签时懒加载（各自 60s 后端缓存，refresh 走按钮）
+  const loadShape = useCallback(async (force = false) => {
+    setShapeError('');
+    try { setShapeData(await scenarioQualityApi.shapeContract(force)); }
+    catch (e: any) { setShapeError(e.message || '加载失败'); }
+  }, []);
+  const loadParallel = useCallback(async (force = false) => {
+    setParallelError('');
+    try { setParallelData(await scenarioQualityApi.parallelSafety(force)); }
+    catch (e: any) { setParallelError(e.message || '加载失败'); }
+  }, []);
+  useEffect(() => { if (tab === 'shape' && !shapeData && !shapeError) loadShape(); },
+    [tab, shapeData, shapeError, loadShape]);
+  useEffect(() => { if (tab === 'parallel' && !parallelData && !parallelError) loadParallel(); },
+    [tab, parallelData, parallelError, loadParallel]);
 
   // 恢复值失效（套件在当前库不存在，如切换工作区后）→ 诚实回退「全部」
   useEffect(() => {
@@ -329,6 +357,172 @@ export default function ScenarioQuality({ role }: Props) {
                     </tbody>
                   </table>
                 </div>
+              )}
+            </>
+          )}
+          {/* 形状契约（T-1037） */}
+          {tab === 'shape' && (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-gray-500">
+                  {shapeData
+                    ? `形状基线来自最近 ${shapeData.n_runs} 个执行 run（response_body 落盘面派生）· 口径：新增字段放行（INFO）；被引用路径消失才报警；引用路径从未出现=疑似幻觉路径`
+                    : '按 API 聚合的响应形状事实与消费方引用完整性'}
+                </p>
+                <button className="btn-ghost text-xs" onClick={() => loadShape(true)}>🔄 重扫</button>
+              </div>
+              {shapeError && (
+                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+                  ❌ 形状契约分析失败：{shapeError}
+                  <button className="ml-3 underline" onClick={() => loadShape(true)}>重试</button>
+                </div>
+              )}
+              {!shapeData && !shapeError && (
+                <div className="py-10 text-center text-gray-500 text-sm">加载中…</div>
+              )}
+              {shapeData && shapeData.findings.length > 0 && (
+                <div className="mb-4 bg-surface-2 border border-border rounded-lg overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b border-border">
+                        <th className="px-3 py-2">级别</th>
+                        <th className="px-3 py-2">类型</th>
+                        <th className="px-3 py-2">API</th>
+                        <th className="px-3 py-2">说明</th>
+                        <th className="px-3 py-2">消费方</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shapeData.findings.map((f, i) => (
+                        <tr key={i} className="border-b border-border/50">
+                          <td className="px-3 py-2">
+                            <span className={`px-1.5 py-0.5 rounded text-xs ${f.level === 'WARN' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-400'}`}>
+                              {f.level}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-xs">{FINDING_TYPE_LABEL[f.type] || f.type}</td>
+                          <td className="px-3 py-2 text-xs font-mono">{f.api}</td>
+                          <td className="px-3 py-2 text-xs text-gray-300">{f.message}</td>
+                          <td className="px-3 py-2 text-xs text-gray-500">{f.consumers?.join('、') || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {shapeData && shapeData.findings.length === 0 && (
+                <div className="mb-4 text-sm text-pass">✅ 未发现形状契约问题（引用完整、无被引用路径漂移）</div>
+              )}
+              {shapeData && (
+                <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b border-border">
+                        <th className="px-3 py-2">API（METHOD path）</th>
+                        <th className="px-3 py-2 text-right">样本 run</th>
+                        <th className="px-3 py-2 text-right">字段数</th>
+                        <th className="px-3 py-2 text-right">被引用路径</th>
+                        <th className="px-3 py-2">重要性</th>
+                        <th className="px-3 py-2">所属场景</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shapeData.apis.map(a => (
+                        <tr key={a.api} className="border-b border-border/50">
+                          <td className="px-3 py-2 font-mono text-xs">{a.api}</td>
+                          <td className="px-3 py-2 text-right">{a.runs}</td>
+                          <td className="px-3 py-2 text-right">{a.fields}</td>
+                          <td className="px-3 py-2 text-right">{a.refs}</td>
+                          <td className="px-3 py-2">
+                            {a.importance >= 3 ? <span className="text-fail">●●●</span>
+                              : a.importance === 2 ? <span className="text-warn">●●</span>
+                              : a.importance === 1 ? <span className="text-info">●</span>
+                              : <span className="text-gray-600">○</span>}
+                            <span className="text-xs text-gray-500 ml-1">{a.category}</span>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">{a.owner_scenarios.join('、') || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 并行安全（T-1038） */}
+          {tab === 'parallel' && (
+            <>
+              <p className="text-xs text-gray-500 mb-2">
+                当前调度仍为串行——本页是 V3 并行执行（T-802）的静态前置判定：
+                读-读并行安全、沾写全局互斥（保守模型，produces/consumes 落地后按资源粒度细化）。
+              </p>
+              {parallelError && (
+                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+                  ❌ 并行安全分析失败：{parallelError}
+                  <button className="ml-3 underline" onClick={() => loadParallel(true)}>重试</button>
+                </div>
+              )}
+              {!parallelData && !parallelError && (
+                <div className="py-10 text-center text-gray-500 text-sm">加载中…</div>
+              )}
+              {parallelData && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div className="card-hover p-3">
+                      <div className="text-xs text-gray-500 mb-1">读场景（可全并行）</div>
+                      <div className="text-lg font-semibold text-pass">{parallelData.totals.readers}</div>
+                    </div>
+                    <div className="card-hover p-3">
+                      <div className="text-xs text-gray-500 mb-1">写场景（全局互斥）</div>
+                      <div className="text-lg font-semibold text-warn">{parallelData.totals.writers}</div>
+                    </div>
+                    <div className="card-hover p-3">
+                      <div className="text-xs text-gray-500 mb-1">最大理论并行度</div>
+                      <div className="text-lg font-semibold text-info">{parallelData.totals.max_parallelism}</div>
+                    </div>
+                    <div className="card-hover p-3">
+                      <div className="text-xs text-gray-500 mb-1">判定模型</div>
+                      <div className="text-xs text-gray-400">{parallelData.totals.model}</div>
+                    </div>
+                  </div>
+                  <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto mb-4">
+                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-border">串行瓶颈（写场景，按被依赖数排序）</div>
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {parallelData.writers.map(w => (
+                          <tr key={w.id} className="border-b border-border/50">
+                            <td className="px-3 py-2 font-medium">{w.id}<span className="text-xs text-gray-500 ml-2">{w.title}</span></td>
+                            <td className="px-3 py-2 text-xs text-gray-400">{w.category}</td>
+                            <td className="px-3 py-2 text-xs text-gray-400">被依赖 {w.dependents}</td>
+                            <td className="px-3 py-2 text-xs text-gray-400">{w.priority}</td>
+                            <td className="px-3 py-2 text-xs text-gray-500">账号：{w.accounts.join('、') || '—'}</td>
+                          </tr>
+                        ))}
+                        {parallelData.writers.length === 0 && (
+                          <tr><td className="px-3 py-3 text-sm text-pass">无写场景——全库读-读可并行</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
+                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-border">读层（两两可并行，{parallelData.readers.length} 个）</div>
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {parallelData.readers.slice(0, 30).map(r => (
+                          <tr key={r.id} className="border-b border-border/50">
+                            <td className="px-3 py-2 font-medium">{r.id}<span className="text-xs text-gray-500 ml-2">{r.title}</span></td>
+                            <td className="px-3 py-2 text-xs text-gray-400">{r.category}</td>
+                            <td className="px-3 py-2 text-xs text-gray-500">账号：{r.accounts.join('、') || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {parallelData.readers.length > 30 && (
+                      <div className="px-3 py-2 text-xs text-gray-600">…其余 {parallelData.readers.length - 30} 个略</div>
+                    )}
+                  </div>
+                </>
               )}
             </>
           )}

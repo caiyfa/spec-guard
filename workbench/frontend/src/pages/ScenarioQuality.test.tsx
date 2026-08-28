@@ -11,7 +11,11 @@ import { runsApi } from '../api/runs';
 import type { QualityOverview } from '../api/scenarioQuality';
 
 vi.mock('../api/scenarioQuality', () => ({
-  scenarioQualityApi: { overview: vi.fn() },
+  scenarioQualityApi: {
+    overview: vi.fn(),
+    shapeContract: vi.fn(),
+    parallelSafety: vi.fn(),
+  },
 }));
 vi.mock('../api/scenarios', () => ({
   scenariosApi: { get: vi.fn(), save: vi.fn() },
@@ -42,6 +46,8 @@ vi.mock('../hooks/useRunStream', () => ({
 }));
 
 const mockOverview = vi.mocked(scenarioQualityApi.overview);
+const mockShape = vi.mocked(scenarioQualityApi.shapeContract);
+const mockParallel = vi.mocked(scenarioQualityApi.parallelSafety);
 const mockGet = vi.mocked(scenariosApi.get);
 const mockTrigger = vi.mocked(runsApi.trigger);
 const mockPreflight = vi.mocked(runsApi.preflight);
@@ -246,5 +252,48 @@ describe('ScenarioQuality 测试用例管理页', () => {
     await openDetail('DEEP-001');
     fireEvent.click(screen.getByText('▶ 试跑'));
     expect(await screen.findByText('配置源：本地文件')).toBeTruthy();
+  });
+
+  it('形状契约页签：懒加载 API 表与发现明细，错误路径不白屏（T-1037）', async () => {
+    mockShape.mockResolvedValue({
+      generated_at: '2026-08-28T22:00:00', n_runs: 6,
+      apis: [{ api: 'GET /api/items', runs: 6, fields: 4, refs: 1, owner_scenarios: ['UP-001'], importance: 2, category: 'query' }],
+      findings: [{
+        type: 'unresolved-ref', level: 'WARN', api: 'GET /api/items',
+        path: '$.data.items[0].id', consumers: ['DOWN-001'],
+        message: '引用路径 $.data.items[0].id 在 6 个历史响应中从未出现（幻觉/写错路径？）',
+      }],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('用例总数')).toBeTruthy());
+    fireEvent.click(screen.getByText('🔗 形状契约'));
+    expect(await screen.findByText('引用路径未出现过')).toBeTruthy();
+    expect(screen.getAllByText('GET /api/items').length).toBe(2);   // 发现表 + API 契约表各一
+    expect(screen.getByText('DOWN-001')).toBeTruthy();
+
+    // 持久化 + 错误路径
+    expect(localStorage.getItem('sg_sq_tab')).toBe('shape');
+    cleanup();
+    mockShape.mockRejectedValueOnce(new Error('scan boom'));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('用例总数')).toBeTruthy());
+    fireEvent.click(screen.getByText('🔗 形状契约'));
+    expect(await screen.findByText(/形状契约分析失败：scan boom/)).toBeTruthy();
+  });
+
+  it('并行安全页签：统计卡与写瓶颈清单（T-1038）', async () => {
+    mockParallel.mockResolvedValue({
+      generated_at: '2026-08-28T22:00:00',
+      totals: { scenarios: 3, readers: 2, writers: 1, max_parallelism: 2, model: '读-读并行安全；沾写全局互斥' },
+      writers: [{ id: 'W-001', title: '写场景', category: 'producer', priority: 'P0', dependents: 2, accounts: ['default'] }],
+      readers: [{ id: 'R-001', title: '纯查询', category: 'query', priority: 'P1', dependents: 0, accounts: [] }],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('用例总数')).toBeTruthy());
+    fireEvent.click(screen.getByText('🚦 并行安全'));
+    expect(await screen.findByText('读场景（可全并行）')).toBeTruthy();
+    expect(screen.getByText('最大理论并行度')).toBeTruthy();
+    expect(screen.getByText('W-001')).toBeTruthy();
+    expect(screen.getByText('当前调度仍为串行——本页是 V3 并行执行（T-802）的静态前置判定：', { exact: false })).toBeTruthy();
   });
 });
