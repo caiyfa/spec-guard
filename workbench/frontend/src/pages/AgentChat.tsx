@@ -1552,8 +1552,14 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                 purposeDenied ? (
                   <div className="text-center text-gray-500 text-sm py-12">
                     <div className="text-3xl mb-2">🔒</div>
-                    当前角色无此工作台权限（需产品/开发/管理员角色）<br />
-                    <span className="text-xs text-gray-600">测试场景制作请使用「测试对话」菜单，或联系管理员调整角色</span>
+                    {fixedPurpose === 'requirement_interview'
+                      ? '当前角色无此工作台权限（需产品/开发/管理员角色）'
+                      : '当前角色无此工作台权限（需测试/只读/管理员角色）'}<br />
+                    <span className="text-xs text-gray-600">
+                      {fixedPurpose === 'requirement_interview'
+                        ? '测试场景制作请使用「测试对话」菜单，或联系管理员调整角色'
+                        : '需求访谈与规格维护请使用「产品对话」菜单，或联系管理员调整角色'}
+                    </span>
                   </div>
                 ) : showPurposePicker && purposes.length > 0 ? (
                   <PurposeCards purposes={purposes} onPick={(id) => {
