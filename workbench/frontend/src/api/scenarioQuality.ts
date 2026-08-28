@@ -31,8 +31,6 @@ export interface ScenarioQualityRow {
   grade: QualityGrade;
   issues: QualityIssue[];
   doc_summary: { given: string; when: string; then: string };
-  flow_summary: string[];    // flow 步骤一行式人话描述
-  verify_summary: string[];  // verify 断言一行式人话描述
   steps: Record<string, number>;
   tools: string[];
   oracles: string[];

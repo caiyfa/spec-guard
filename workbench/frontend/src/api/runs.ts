@@ -69,7 +69,7 @@ export interface PreflightResult {
 
 export const runsApi = {
   trigger: (scope: string, target = '', env = 'sit', breakpoints: string[] = [],
-            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean; accountOverride?: string },
+            light?: { prepOnly?: boolean; skipUpstreamVerify?: boolean; strictDeps?: boolean; accountOverride?: string },
             overrides: { kind: string; name: string; value: string }[] = []) =>
     request<{ ok: boolean; run_id?: string; queued?: boolean; queue_id?: number; position?: number }>('/runs/trigger', {
       method: 'POST',
@@ -77,6 +77,7 @@ export const runsApi = {
         scope, target, env, breakpoints,
         prep_only: !!light?.prepOnly,
         skip_upstream_verify: !!light?.skipUpstreamVerify,
+        strict_deps: !!light?.strictDeps,  // TriggerBody 本就支持，T-1035 试跑对话框补齐透传
         account_override: light?.accountOverride || '',
         overrides,  // T-312：预检弹窗输入的变量覆盖（账号/env 键）
       }),

@@ -1,41 +1,17 @@
-// T-1035：测试用例管理（只读）——用例库全景：需求关联 / 断言深度 / 待完善项一屏可见，不用翻 YAML。
+// T-1035：测试用例管理——用例库全景：需求关联 / 断言深度 / 待完善项一屏可见，不用翻 YAML。
 // 评级与问题标记口径唯一事实源在后端 services/scenario_quality.py，本页只渲染。
-// 三态分离（加载中/空库/错误）+ tab 与筛选条件 localStorage 记忆（体验基线①③）+ 单点刷新（④）。
+// 行点击开详情弹层（结构化查看/编辑 + 试跑，见 scenarioQuality/ScenarioDetailModal）。
+// 三态分离 + tab 与筛选条件 localStorage 记忆（体验基线①③）+ 单点刷新（④）。
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { scenarioQualityApi } from '../api';
-import type { QualityGrade, QualityOverview, ScenarioQualityRow } from '../api';
+import type { QualityGrade, QualityOverview } from '../api';
+import { GRADE_CLS, GRADE_LABEL, ISSUE_CLS, ISSUE_LABEL } from './scenarioQuality/labels';
+import ScenarioDetailModal from './scenarioQuality/ScenarioDetailModal';
 
 const GRADES: QualityGrade[] = ['deep', 'medium', 'shallow', 'no-verify'];
 const ISSUES = ['missing-covers', 'invalid-covers', 'shallow', 'no-verify', 'probe'];
-
-const GRADE_LABEL: Record<QualityGrade, string> = {
-  deep: '深断言', medium: '中等', shallow: '浅断言', 'no-verify': '无断言',
-};
-const GRADE_CLS: Record<QualityGrade, string> = {
-  deep: 'bg-green-900/40 text-green-400',
-  medium: 'bg-blue-900/40 text-blue-400',
-  shallow: 'bg-yellow-900/40 text-yellow-400',
-  'no-verify': 'bg-red-900/40 text-red-400',
-};
-const ISSUE_LABEL: Record<string, string> = {
-  'missing-covers': '缺关联需求', 'invalid-covers': '需求锚点失效',
-  shallow: '浅断言', 'no-verify': '无断言', probe: '探针',
-};
-const ISSUE_CLS: Record<string, string> = {
-  'missing-covers': 'bg-yellow-900/40 text-yellow-400',
-  'invalid-covers': 'bg-red-900/40 text-red-400',
-  shallow: 'bg-yellow-900/40 text-yellow-400',
-  'no-verify': 'bg-red-900/40 text-red-400',
-  probe: 'bg-red-900/40 text-red-400',
-};
-// 断言证据：后端从断言内容确定性提取的特征（评级的输入），此处翻译为人话
-const EVIDENCE_LABEL: Record<string, string> = {
-  http_ok: '成功状态', http_error: '显式拒绝', body_error_code: '错误码',
-  error_message: '错误消息', absent: '不泄露', json_field: '响应字段',
-  oracle: 'DB 校对断言器', db_proof: '持久层证据', python: 'Python 脚本',
-};
 
 const SQ_TABS = [
   { id: 'suites', label: '🗂 套件视图' },
@@ -62,7 +38,11 @@ function loadFilters(): Filters {
   return EMPTY_FILTERS;
 }
 
-export default function ScenarioQuality() {
+interface Props {
+  role?: string;   // App.tsx 注入（SystemConfig 同款）；编辑/试跑仅 admin/tester（与后端 RBAC 一致）
+}
+
+export default function ScenarioQuality({ role }: Props) {
   const [data, setData] = useState<QualityOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -75,7 +55,7 @@ export default function ScenarioQuality() {
     return 'suites';
   });
   const [filters, setFilters] = useState<Filters>(loadFilters);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   useEffect(() => { localStorage.setItem('sg_sq_tab', tab); }, [tab]);
   useEffect(() => { localStorage.setItem('sg_sq_filters', JSON.stringify(filters)); }, [filters]);
@@ -110,6 +90,10 @@ export default function ScenarioQuality() {
       (!q || s.id.toLowerCase().includes(q) || s.title.toLowerCase().includes(q)));
   }, [data, filters]);
 
+  const detailRow = useMemo(
+    () => (detailId && data ? data.scenarios.find(s => s.id === detailId) || null : null),
+    [detailId, data]);
+
   const gotoSuite = (key: string) => {
     setFilters(f => ({ ...f, suite: key }));
     setTab('scenarios');
@@ -118,14 +102,8 @@ export default function ScenarioQuality() {
     setFilters({ ...EMPTY_FILTERS, issue });
     setTab('scenarios');
   };
-  const toggleExpand = (id: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
 
+  const canRun = role === 'admin' || role === 'tester';
   const t = data?.totals;
 
   return (
@@ -306,12 +284,47 @@ export default function ScenarioQuality() {
                         <th className="px-3 py-2 text-right">断言数</th>
                         <th className="px-3 py-2">评级</th>
                         <th className="px-3 py-2">待完善</th>
-                        <th className="px-3 py-2 w-8"></th>
+                        <th className="px-3 py-2 w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.map(s => (
-                        <ScenarioRow key={s.id} s={s} expanded={expanded.has(s.id)} onToggle={() => toggleExpand(s.id)} />
+                        <tr key={s.id} onClick={() => setDetailId(s.id)}
+                          className="border-b border-border/50 hover:bg-surface-3 cursor-pointer"
+                          title="点击打开详情（结构化查看/编辑/试跑）">
+                          <td className="px-3 py-2">
+                            <div className="font-medium">{s.id}</div>
+                            <div className="text-xs text-gray-500">{s.title}</div>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-400">{s.suite}</td>
+                          <td className="px-3 py-2">
+                            {s.covers_detail.length === 0 ? <span className="text-gray-600">—</span> : (
+                              <div className="flex flex-wrap gap-1">
+                                {s.covers_detail.map(c => (
+                                  <span key={c.fr}
+                                    title={c.valid
+                                      ? `${c.fr}：${c.title || '（无标题）'}${c.module ? `（${c.module}）` : ''}`
+                                      : `${c.fr}：当前工作区锚点表查不到（spec 世代/编号体系可能不匹配）`}
+                                    className={`px-1.5 py-0.5 rounded text-xs ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
+                                    {c.fr}{!c.valid && ' ⚠'}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">{s.verify_count}</td>
+                          <td className="px-3 py-2">
+                            <span className={`px-2 py-0.5 rounded text-xs ${GRADE_CLS[s.grade]}`}>{GRADE_LABEL[s.grade]}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              {s.issues.map(i => (
+                                <span key={i} className={`px-1.5 py-0.5 rounded text-xs ${ISSUE_CLS[i]}`}>{ISSUE_LABEL[i]}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-gray-500 text-xs">详情 ›</td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>
@@ -321,89 +334,17 @@ export default function ScenarioQuality() {
           )}
         </>
       )}
-    </div>
-  );
-}
 
-function ScenarioRow({ s, expanded, onToggle }: { s: ScenarioQualityRow; expanded: boolean; onToggle: () => void }) {
-  const hasDoc = s.doc_summary.given || s.doc_summary.when || s.doc_summary.then;
-  return (
-    <>
-      <tr onClick={onToggle} className="border-b border-border/50 hover:bg-surface-3 cursor-pointer">
-        <td className="px-3 py-2">
-          <div className="font-medium">{s.id}</div>
-          <div className="text-xs text-gray-500">{s.title}</div>
-        </td>
-        <td className="px-3 py-2 text-xs text-gray-400">{s.suite}</td>
-        <td className="px-3 py-2">
-          {s.covers_detail.length === 0 ? <span className="text-gray-600">—</span> : (
-            <div className="flex flex-wrap gap-1">
-              {s.covers_detail.map(c => (
-                <span key={c.fr}
-                  title={c.valid
-                    ? `${c.fr}：${c.title || '（无标题）'}${c.module ? `（${c.module}）` : ''}`
-                    : `${c.fr}：当前工作区锚点表查不到（spec 世代/编号体系可能不匹配）`}
-                  className={`px-1.5 py-0.5 rounded text-xs ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
-                  {c.fr}{!c.valid && ' ⚠'}
-                </span>
-              ))}
-            </div>
-          )}
-        </td>
-        <td className="px-3 py-2 text-right">{s.verify_count}</td>
-        <td className="px-3 py-2">
-          <span className={`px-2 py-0.5 rounded text-xs ${GRADE_CLS[s.grade]}`}>{GRADE_LABEL[s.grade]}</span>
-        </td>
-        <td className="px-3 py-2">
-          <div className="flex flex-wrap gap-1">
-            {s.issues.map(i => (
-              <span key={i} className={`px-1.5 py-0.5 rounded text-xs ${ISSUE_CLS[i]}`}>{ISSUE_LABEL[i]}</span>
-            ))}
-          </div>
-        </td>
-        <td className="px-3 py-2 text-gray-500">{expanded ? '▾' : '▸'}</td>
-      </tr>
-      {expanded && (
-        <tr className="border-b border-border/50 bg-surface-1">
-          <td colSpan={7} className="px-4 py-3 text-xs text-gray-300">
-            <div className="space-y-2.5">
-              {hasDoc && (
-                <div>
-                  <div className="text-gray-500">业务语义</div>
-                  {s.doc_summary.given && <div className="mt-0.5">· 给定：{s.doc_summary.given}</div>}
-                  {s.doc_summary.when && <div className="mt-0.5">· 操作：{s.doc_summary.when}</div>}
-                  {s.doc_summary.then && <div className="mt-0.5">· 预期：{s.doc_summary.then}</div>}
-                </div>
-              )}
-              <div>
-                <div className="text-gray-500">执行步骤（{s.flow_summary.length}）</div>
-                {s.flow_summary.map((l, i) => <div key={i} className="mt-0.5">{i + 1}. {l}</div>)}
-              </div>
-              <div>
-                <div className="text-gray-500">验证断言（{s.verify_summary.length}）</div>
-                {s.verify_summary.length > 0
-                  ? s.verify_summary.map((l, i) => <div key={i} className="mt-0.5">· {l}</div>)
-                  : <div className="mt-0.5 text-fail">无断言——探针/半成品用例</div>}
-              </div>
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-gray-500">断言证据（评级的确定性输入）：</span>
-                {s.evidence.length === 0 ? <span className="text-gray-600">无</span> : s.evidence.map(e => (
-                  <span key={e} className="px-1.5 py-0.5 rounded bg-surface-3"
-                    title={`证据特征 ${e}`}>{EVIDENCE_LABEL[e] || e}</span>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-400">
-                <span><span className="text-gray-500">依赖：</span>{s.depends_on.length ? s.depends_on.map(d => `${d.id}(${d.mode})`).join('、') : '—'}</span>
-                <span><span className="text-gray-500">tool：</span>{s.tools.length ? s.tools.join('、') : '—'}</span>
-                <span><span className="text-gray-500">oracle：</span>{s.oracles.length ? s.oracles.join('、') : '—'}</span>
-                <span><span className="text-gray-500">测试维度：</span>{s.dimensions.length ? s.dimensions.join('、') : '—'}</span>
-                <span><span className="text-gray-500">优先级：</span>{s.priority}</span>
-                <span><span className="text-gray-500">文件：</span>{s.path}</span>
-              </div>
-            </div>
-          </td>
-        </tr>
+      {/* 用例详情弹层（结构化查看/编辑 + 试跑） */}
+      {detailRow && (
+        <ScenarioDetailModal
+          row={detailRow}
+          scenarios={data?.scenarios || []}
+          canRun={canRun}
+          onClose={() => setDetailId(null)}
+          onSaved={() => refresh(true)}
+        />
       )}
-    </>
+    </div>
   );
 }

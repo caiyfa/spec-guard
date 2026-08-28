@@ -148,11 +148,9 @@ def test_overview_aggregates_grades_issues_and_suites(client):
     assert rows["DEEP-001"]["suite"] == "suiteA"
     assert rows["DEEP-001"]["path"] == str(Path("suiteA") / "DEEP-001.yaml")
 
-    # 内容字段：明细展开即见用例内容（doc 语义 + 步骤/断言一行式 + covers 逐条解析）
+    # 内容字段：doc 语义快速预览 + covers 逐条解析（完整结构化内容前端走 ScenarioFormEditor）
     deep = rows["DEEP-001"]
     assert deep["doc_summary"] == {"given": "库里有一行数据", "when": "查询并断言", "then": "返回一行"}
-    assert deep["flow_summary"] == ["DB 查询 SELECT 1 → 存 rows"]
-    assert deep["verify_summary"] == ["HTTP 状态 = 200", "响应字段 $.rows len_eq 1（断言对象 rows）"]
     assert len(deep["covers_detail"]) == 1
     cd = deep["covers_detail"][0]
     assert cd["fr"] == "FR-001" and cd["valid"] is True
@@ -166,8 +164,6 @@ def test_overview_aggregates_grades_issues_and_suites(client):
     assert set(rows["PROBE-001"]["issues"]) == {"invalid-covers", "no-verify", "probe"}
     assert rows["PROBE-001"]["invalid_covers"] == ["FR-999"]
     assert rows["PROBE-001"]["covers_detail"][0] == {"fr": "FR-999", "valid": False, "title": "", "module": ""}
-    assert rows["PROBE-001"]["verify_summary"] == []
-    assert rows["PROBE-001"]["flow_summary"][0].startswith("Python 脚本")
 
     suites = {s["key"]: s for s in data["suites"]}
     assert suites["suiteA"]["scenarios"] == 2

@@ -359,7 +359,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/feishu-pool" element={<FeishuPool />} />  {/* T-929：飞书话题总览（T-1003 改名） */}
 
               <Route path="/plans" element={<Scenarios />} />
-              <Route path="/scenario-quality" element={<ScenarioQuality />} />  {/* T-1035：场景库质量看板 */}
+              <Route path="/scenario-quality" element={<ScenarioQuality role={user.role} />} />  {/* T-1035：测试用例管理（详情编辑/试跑按角色门控） */}
 
               <Route path="/run" element={<RunControl />} />
               <Route path="/dag" element={<DagEditor />} />
