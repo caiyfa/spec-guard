@@ -45,7 +45,7 @@ SEED_MENUS: list[tuple] = [
     ("menu-dag", "DAG 编排", "", "/dag", "group-scenario", 1, 1, 0),
     ("menu-feishu-pool", "飞书话题", "", "/feishu-pool", "group-scenario", 2, 1, 0),   # T-1003：原「飞书材料池」改名（种子 label 每次启动同步存量 menus 表，见 _migrate_menus_t996 UPDATE 分支）
     ("menu-lifecycle", "覆盖与生命周期", "", "/lifecycle", "group-scenario", 3, 1, 0),
-    ("menu-scenario-quality", "场景质量", "", "/scenario-quality", "group-scenario", 4, 1, 0),  # T-1035：场景库质量看板（授权随 menu-lifecycle 无损映射，见 _migrate_menus_t1035）
+    ("menu-scenario-quality", "测试用例管理", "", "/scenario-quality", "group-scenario", 4, 1, 0),  # T-1035：用例库管理看板（授权随 menu-lifecycle 无损映射，见 _migrate_menus_t1035）
     ("group-execution", "执行", "▶️", "", "", 3, 1, 0),
     ("menu-run", "测试执行", "", "/run", "group-execution", 0, 1, 0),
     ("menu-history", "执行中心", "", "/history", "group-execution", 1, 1, 0),

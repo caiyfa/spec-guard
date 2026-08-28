@@ -1,4 +1,4 @@
-/** 场景库质量看板 API（T-1035）——只读派生数据，评级/问题标记口径以后端
+/** 测试用例管理页 API（T-1035）——只读派生数据，评级/问题标记口径以后端
  *  workbench/backend/services/scenario_quality.py 为唯一事实源，前端只渲染。 */
 import { request } from './core';
 
@@ -7,6 +7,13 @@ export type QualityGrade = 'deep' | 'medium' | 'shallow' | 'no-verify';
 export type QualityIssue =
   | 'missing-covers' | 'invalid-covers' | 'shallow' | 'no-verify' | 'probe';
 
+export interface CoverDetail {
+  fr: string;
+  valid: boolean;    // false = 当前工作区锚点表查不到（如 spec 世代/编号体系不匹配）
+  title: string;     // 有效时的锚点标题（失效为 ''）
+  module: string;
+}
+
 export interface ScenarioQualityRow {
   id: string;
   title: string;
@@ -14,6 +21,7 @@ export interface ScenarioQualityRow {
   module: string;
   path: string;
   covers: string[];
+  covers_detail: CoverDetail[];
   invalid_covers: string[];
   dimensions: string[];
   priority: string;
@@ -22,6 +30,9 @@ export interface ScenarioQualityRow {
   evidence: string[];
   grade: QualityGrade;
   issues: QualityIssue[];
+  doc_summary: { given: string; when: string; then: string };
+  flow_summary: string[];    // flow 步骤一行式人话描述
+  verify_summary: string[];  // verify 断言一行式人话描述
   steps: Record<string, number>;
   tools: string[];
   oracles: string[];

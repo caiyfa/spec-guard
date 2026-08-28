@@ -1,9 +1,10 @@
-"""scenario_quality — 场景库质量看板数据装配（T-1035）。
+"""scenario_quality — 测试用例管理页数据装配（T-1035）。
 
 只读派生，三源确定性聚合（无落库，重扫重建同一结果）：
-  场景 YAML（engine.scenario_loader.load_scenarios，含 _suite.yaml 套件元信息）
-× spec FR 锚点（specstd.anchors.scan_anchors，covers 有效性判定；无工作区锚点时
-  诚实跳过 invalid 判定并置 anchors_available=False）
+  场景 YAML（engine.scenario_loader.load_scenarios，含 _suite.yaml 套件元信息；
+    行载荷附 doc 语义摘要 + flow/verify 一行式人话描述，明细展开即见用例内容）
+× spec FR 锚点（specstd.anchors.scan_anchors，covers 逐条解析有效性+标题；
+    无工作区锚点时诚实跳过 invalid 判定并置 anchors_available=False）
 × 断言证据（sg_core.test_dimensions.extract_evidence，深度评级输入）
 
 评级与问题标记在后端确定性计算，前端只渲染——规则口径唯一事实源在本文件。
@@ -95,6 +96,89 @@ def _oracles_used(verify: list) -> dict:
         if name:
             oracles[str(name)] = oracles.get(str(name), 0) + 1
     return oracles
+
+
+def _clip(text: str, limit: int = 60) -> str:
+    """单行截断（明细一行式展示用）。"""
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _step_line(step: dict) -> str:
+    """flow 步骤一行式人话描述（确定性，不做语义推断）。"""
+    kind = next(iter(step))
+    body = step.get(kind) or {}
+    if kind == "call":
+        method = str(body.get("method", "GET")).upper()
+        line = f"调用 {method} {body.get('path', '')}"
+        if body.get("as"):
+            line += f"（账号 {body['as']}）"
+    elif kind == "db_query":
+        line = f"DB 查询 {_clip(body.get('sql', ''), 48)}"
+    elif kind == "poll":
+        call = body.get("call") or {}
+        line = f"轮询 {call.get('method', 'GET')} {call.get('path', '')}（直至条件满足或超时）"
+    elif kind == "tool":
+        line = f"工具 {body.get('use', '')}"
+        if body.get("with"):
+            line += f"（参数 {_clip(body['with'], 40)}）"
+    elif kind == "python":
+        line = f"Python 脚本 {_clip(body.get('script') or body.get('file') or '', 48)}"
+    elif kind == "random":
+        line = f"随机数据 {_clip(body.get('type', ''), 24)}"
+    elif kind == "set_var":
+        line = f"注入变量 {', '.join(k for k in body if k != 'save')}" if isinstance(body, dict) else "注入变量"
+    else:
+        line = f"工具 {kind}（遗留直写形式）"
+    if isinstance(body, dict) and body.get("save"):
+        line += f" → 存 {body['save']}"
+    return line
+
+
+def _verify_line(item: dict) -> str:
+    """verify 断言一行式人话描述（确定性，不做语义推断）。"""
+    of = ""
+    if "status" in item:
+        s = item["status"] or {}
+        of = s.get("of", "")
+        line = f"HTTP 状态 = {s.get('eq', '?')}"
+    elif "json" in item:
+        j = item["json"] or {}
+        of = j.get("of", "")
+        ops = [f"{op} {_clip(j[op], 24)}" for op in j if op not in ("path", "of")]
+        line = f"响应字段 {j.get('path', '')} {'，'.join(ops)}"
+    elif "oracle" in item:
+        raw = item["oracle"]
+        name = raw if isinstance(raw, str) else (raw or {}).get("name", "")
+        line = f"DB 校对断言器 {name}"
+        if isinstance(raw, dict) and raw.get("params"):
+            line += f"（参数 {_clip(raw['params'], 40)}）"
+    elif "python" in item:
+        line = "Python 断言脚本"
+    else:
+        line = _clip(item, 48)
+    if of:
+        line += f"（断言对象 {of}）"
+    return line
+
+
+def _doc_summary(doc: dict) -> dict:
+    """doc 层业务语义（given/when/then 原文摘录）。"""
+    return {k: str(doc.get(k, "") or "") for k in ("given", "when", "then")}
+
+
+def _covers_detail(covers: list, anchors: dict) -> list:
+    """covers 逐条解析：有效 → 附锚点标题/模块；失效 → 标记（前端展示「锚点表查不到」）。"""
+    detail = []
+    for c in covers:
+        info = anchors.get(c)
+        detail.append({
+            "fr": c,
+            "valid": bool(info),
+            "title": str(getattr(info, "title", "") or "") if info else "",
+            "module": str(getattr(info, "module", "") or "") if info else "",
+        })
+    return detail
 
 
 def _grade(evidence: set, verify_count: int, has_db_query: bool) -> str:
@@ -206,6 +290,7 @@ def _build(root: Path) -> dict:
             "module": sc.module or "",
             "path": rel_path,
             "covers": covers,
+            "covers_detail": _covers_detail(covers, anchors),
             "invalid_covers": invalid,
             "dimensions": list(sc.dimensions or []),
             "priority": sc.priority,
@@ -214,6 +299,9 @@ def _build(root: Path) -> dict:
             "evidence": sorted(evidence),
             "grade": grade,
             "issues": issues,
+            "doc_summary": _doc_summary(sc.doc or {}),
+            "flow_summary": [_step_line(s) for s in (sc.flow or []) if isinstance(s, dict) and s],
+            "verify_summary": [_verify_line(v) for v in (sc.verify or []) if isinstance(v, dict)],
             "steps": steps,
             "tools": sorted(tools),
             "oracles": sorted(oracles),
