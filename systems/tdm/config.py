@@ -60,6 +60,13 @@ def load_env(env_name="sit"):
     if isinstance(it_cfg, dict) and not it_cfg.get("client_secret"):
         it_cfg["client_secret"] = resolve_secret("SG_TDM_CLIENT_SECRET")
 
+    # T-1034 凭据红线出库：sso.password 同款回退——
+    # env yaml ${SG_SSO_PASSWORD:} 为空 → resolve_secret 自有链
+    # （历史缺陷：真实口令写在占位符默认值位随仓库入库，链路恒被默认值遮蔽）
+    sso_cfg = cfg.get("sso")
+    if isinstance(sso_cfg, dict) and not sso_cfg.get("password"):
+        sso_cfg["password"] = resolve_secret("SG_SSO_PASSWORD")
+
     # DB 密码回退（K-055 多 schema 感知）：逐连接回退——
     # env yaml 为空 → SG_DB_PASSWORD_{SCHEMA} → SG_DB_PASSWORD → resolve_secret 自有链
     from engine.db_oracle import normalize_db_config

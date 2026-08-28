@@ -96,3 +96,42 @@ def test_config_load_env_uses_resolve_secret(isolated, monkeypatch, tmp_path):
     from systems.tdm.config import load_env
     cfg = load_env("sit")
     assert cfg["internal_token"]["client_secret"] == sentinel
+
+
+def test_config_load_env_sso_password_uses_resolve_secret(isolated, monkeypatch, tmp_path):
+    """T-1034 集成：sso.password 同款回退——env yaml 默认位清空后经 resolve_secret 取链。
+
+    曾经的缺陷形态：真实口令写在 env.sit.yaml 的 ${SG_SSO_PASSWORD:默认值} 位，
+    入库推远端 + 环境变量/secrets 链永不生效（yaml 默认值恒胜）。
+    """
+    _write_devops_stub(tmp_path, monkeypatch, content=None)
+    sentinel = "unittest-sso-file-marker"
+    isolated.parent.mkdir(parents=True, exist_ok=True)
+    isolated.write_text(f"SG_SSO_PASSWORD={sentinel}\n", encoding="utf-8")
+    monkeypatch.delenv("SG_SSO_PASSWORD", raising=False)
+
+    from systems.tdm.config import load_env
+    cfg = load_env("sit")
+    assert cfg["sso"]["password"] == sentinel
+
+
+def test_config_load_env_sso_password_missing_is_empty(isolated, monkeypatch, tmp_path):
+    """T-1034：三层全空 → sso.password 诚实为空（TokenProvider 登录时自然失败，
+    不回退任何硬编码值——与「缺凭据诚实为空，由上层报错」契约一致）。"""
+    _write_devops_stub(tmp_path, monkeypatch, content=None)
+    monkeypatch.delenv("SG_SSO_PASSWORD", raising=False)
+
+    from systems.tdm.config import load_env
+    cfg = load_env("sit")
+    assert cfg["sso"]["password"] == ""
+
+
+def test_shared_env_yaml_no_plaintext_sso_password():
+    """T-1034 凭据红线源码钉：共享 env yaml 不得再出现明文口令默认值
+    （回归形态：真实密码写进 ${VAR:默认值} 的 default 位随仓库入库）。"""
+    import io
+    import os
+    yaml_path = os.path.join(SG_ROOT, "systems", "_shared", "config", "env.sit.yaml")
+    text = io.open(yaml_path, encoding="utf-8").read()
+    assert "Fehorizon" not in text, "共享 env yaml 出现明文口令默认值（凭据红线）"
+    assert "${SG_SSO_PASSWORD:}" in text, "sso.password 应保留空默认位的链路引用"
