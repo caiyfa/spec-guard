@@ -45,6 +45,7 @@ SEED_MENUS: list[tuple] = [
     ("menu-dag", "DAG 编排", "", "/dag", "group-scenario", 1, 1, 0),
     ("menu-feishu-pool", "飞书话题", "", "/feishu-pool", "group-scenario", 2, 1, 0),   # T-1003：原「飞书材料池」改名（种子 label 每次启动同步存量 menus 表，见 _migrate_menus_t996 UPDATE 分支）
     ("menu-lifecycle", "覆盖与生命周期", "", "/lifecycle", "group-scenario", 3, 1, 0),
+    ("menu-scenario-quality", "场景质量", "", "/scenario-quality", "group-scenario", 4, 1, 0),  # T-1035：场景库质量看板（授权随 menu-lifecycle 无损映射，见 _migrate_menus_t1035）
     ("group-execution", "执行", "▶️", "", "", 3, 1, 0),
     ("menu-run", "测试执行", "", "/run", "group-execution", 0, 1, 0),
     ("menu-history", "执行中心", "", "/history", "group-execution", 1, 1, 0),
@@ -130,6 +131,7 @@ def init_db(db_path: Path | None = None):
             conn.executemany(
                 "INSERT INTO role_menus (role_key,menu_key) VALUES (?,?)", SEED_ROLE_MENUS)
         _migrate_menus_t996(conn)
+        _migrate_menus_t1035(conn)
 
 
 # T-996 信息架构收缩：已移除的菜单键 → 幸存菜单键（授权无损映射）
@@ -186,6 +188,17 @@ def _migrate_menus_t996(conn: sqlite3.Connection):
                          (r["role_key"], target))
     conn.execute(f"DELETE FROM role_menus WHERE menu_key IN ({ph})", old_keys)
     conn.execute(f"DELETE FROM menus WHERE menu_key IN ({ph})", old_keys)
+
+
+def _migrate_menus_t1035(conn: sqlite3.Connection):
+    """T-1035 场景库质量看板：新菜单授权无损映射（幂等）——
+    已授权「覆盖与生命周期」（menu-lifecycle，最邻近的同类只读看板）的角色
+    自动获得本菜单；未授权的角色不受影响（全新库零授权语义不变）。"""
+    rows = conn.execute(
+        "SELECT role_key FROM role_menus WHERE menu_key='menu-lifecycle'").fetchall()
+    for r in rows:
+        conn.execute("INSERT OR IGNORE INTO role_menus (role_key,menu_key) VALUES (?,?)",
+                     (r["role_key"], "menu-scenario-quality"))
 
 
 def _ensure_audit(conn: sqlite3.Connection):

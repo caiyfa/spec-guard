@@ -45,6 +45,7 @@ API_MENU_BINDINGS: dict[str, str | tuple[str, ...]] = {
     "systems": "menu-system-config",  # T-1010：系统包管理收编系统配置
     "feishu-pool": "menu-feishu-pool",
     "products": "menu-activity",
+    "scenario-quality": "menu-scenario-quality",  # T-1035：场景库质量看板
     # data-fab 无前端消费方，保持未绑定放行（存量行为）
 }
 

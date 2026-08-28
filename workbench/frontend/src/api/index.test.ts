@@ -19,7 +19,7 @@ const EXPECTED_EXPORTS: Record<string, string> = {
   specflowApi: 'object', graphApi: 'object', lineageApi: 'object',
   auditApi: 'object', skillsApi: 'object', larkApi: 'object',
   knowledgeApi: 'object', feishuPoolApi: 'object', systemsApi: 'object',
-  productsApi: 'object',
+  productsApi: 'object', scenarioQualityApi: 'object',
 };
 
 describe('api/index 门面（T-997 拆分完整性）', () => {

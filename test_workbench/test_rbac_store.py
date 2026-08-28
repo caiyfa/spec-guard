@@ -14,7 +14,7 @@ def test_seed_idempotent(db):
     rbac_store.init_db(db)  # 重复 init 不重复写
     menus = rbac_store.list_menus(db)
     roles = rbac_store.list_roles(db)
-    assert len(menus) == 23  # T-996 22 + T-1000 新增 menu-activity（menu-workspace 复活 T-996 删除项，净增一叶）
+    assert len(menus) == 24  # T-996 22 + T-1000 menu-activity + T-1035 menu-scenario-quality（场景库质量看板）
     assert {r["role_key"] for r in roles} == {"admin", "tester", "viewer", "product"}
     assert all(r["is_builtin"] for r in roles)
     # admin 保底两条授权

@@ -27,3 +27,4 @@ export * from './feishuPool';
 export * from './systems';
 export * from './products';
 export * from './db';
+export * from './scenarioQuality';

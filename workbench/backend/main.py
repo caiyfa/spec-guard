@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge, feishu_pool, rbac, quality, systems, products, db_console
+from routers import scenarios, runs, reference, plans, spec_validation, agent, workspace, feedback, drafts, auth, users, settings, notify, schedules, lifecycle, executions, specflow_interview, specflow_decisions, specflow_materials, specflow_freeze, specflow_gate_dock, zentao, coverage, data_fab, graph, lineage, agent_skills, audit, knowledge, feishu_pool, rbac, quality, systems, products, db_console, scenario_quality
 from services.auth import get_current_user
 from services import user_store, rbac_store
 from services.menu_guard import MenuGuardMiddleware
@@ -178,6 +178,7 @@ app.include_router(quality.router, dependencies=[Depends(get_current_user)])  # 
 app.include_router(systems.router)  # 系统包管理面（T-973 分级动态注册；写操作 admin，读登录）
 app.include_router(products.router, dependencies=[Depends(get_current_user)])  # 产出反查（T-1000）
 app.include_router(db_console.router, dependencies=[Depends(get_current_user)])  # DB 证据面板（设计 2026-08-25 §A2，登录即可用）
+app.include_router(scenario_quality.router, dependencies=[Depends(get_current_user)])  # 场景库质量看板（T-1035，只读）
 
 
 @app.get("/api/health")

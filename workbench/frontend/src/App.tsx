@@ -20,6 +20,7 @@ import MenuRoles from './pages/MenuRoles';
 import SystemConfig from './pages/SystemConfig';
 import MyActivity from './pages/MyActivity';
 import GraphPanorama from './pages/GraphPanorama';
+import ScenarioQuality from './pages/ScenarioQuality';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import { authApi, session, menusApi } from './api';
@@ -358,6 +359,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <Route path="/feishu-pool" element={<FeishuPool />} />  {/* T-929：飞书话题总览（T-1003 改名） */}
 
               <Route path="/plans" element={<Scenarios />} />
+              <Route path="/scenario-quality" element={<ScenarioQuality />} />  {/* T-1035：场景库质量看板 */}
 
               <Route path="/run" element={<RunControl />} />
               <Route path="/dag" element={<DagEditor />} />
