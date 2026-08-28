@@ -14,12 +14,14 @@ import ScenarioRunDialog from './ScenarioRunDialog';
 interface Props {
   row: ScenarioQualityRow;                       // 列表行（徽标/关联需求/语义直接复用）
   scenarios: ScenarioQualityRow[];               // 全库（试跑对话框算上下游闭包）
+  anchorsAvailable: boolean;                     // 当前工作区锚点表可用性（试跑 covers 预警）
+  invalidCoversCount: number;                    // 全库锚点失效数（>0 时试跑被 covers 闸拦截）
   canRun: boolean;                               // role ∈ admin/tester（与后端 RBAC 一致）
   onClose: () => void;
   onSaved: () => void;                           // 保存成功 → 父页 refresh(true)
 }
 
-export default function ScenarioDetailModal({ row, scenarios, canRun, onClose, onSaved }: Props) {
+export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, invalidCoversCount, canRun, onClose, onSaved }: Props) {
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
@@ -127,6 +129,8 @@ export default function ScenarioDetailModal({ row, scenarios, canRun, onClose, o
         <ScenarioRunDialog
           scenarioId={row.id}
           scenarios={scenarios}
+          anchorsAvailable={anchorsAvailable}
+          invalidCoversCount={invalidCoversCount}
           onClose={() => setShowRun(false)}
         />
       )}

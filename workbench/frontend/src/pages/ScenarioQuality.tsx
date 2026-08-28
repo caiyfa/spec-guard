@@ -340,6 +340,8 @@ export default function ScenarioQuality({ role }: Props) {
         <ScenarioDetailModal
           row={detailRow}
           scenarios={data?.scenarios || []}
+          anchorsAvailable={data.anchors_available}
+          invalidCoversCount={t.issues['invalid-covers'] || 0}
           canRun={canRun}
           onClose={() => setDetailId(null)}
           onSaved={() => refresh(true)}

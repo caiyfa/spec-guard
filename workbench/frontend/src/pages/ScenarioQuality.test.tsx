@@ -207,9 +207,25 @@ describe('ScenarioQuality 测试用例管理页', () => {
     renderPage('tester');
     await openDetail('DEEP-001');
     fireEvent.click(screen.getByText('▶ 试跑'));
-    await screen.findByText(/依赖扫描/);
+    await screen.findByText(/执行环境/);
     fireEvent.click(screen.getByText('▶ 开始试跑（联网执行）'));
     await waitFor(() => expect(mockTrigger).toHaveBeenCalled());
     expect((mockTrigger.mock.calls[0] as any[])[1]).toBe('DEEP-001');
+  });
+
+  it('全库锚点失效时试跑面板预警并禁用开始按钮（covers 前置闸事前可见）', async () => {
+    mockOverview.mockResolvedValue({
+      ...OVERVIEW,
+      totals: { ...OVERVIEW.totals, issues: { ...OVERVIEW.totals.issues, 'invalid-covers': 25 } },
+    });
+    renderPage('tester');
+    await openDetail('DEEP-001');
+    fireEvent.click(screen.getByText('▶ 试跑'));
+
+    expect(screen.getByText(/covers 前置闸将拦截本次触发/)).toBeTruthy();
+    expect(screen.getByText(/切换到与用例库同世代的工作区/)).toBeTruthy();
+    const btn = screen.getByText('▶ 开始试跑（联网执行）') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(mockTrigger).not.toHaveBeenCalled();
   });
 });

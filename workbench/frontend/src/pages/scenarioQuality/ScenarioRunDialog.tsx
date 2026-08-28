@@ -1,7 +1,9 @@
-// T-1035 v2：用例试跑对话框——链路范围/轻量选项/执行账号/预检参数输入 → trigger → 进度 → 报告。
-// 全面复用 RunControl 既有件：runsApi.trigger/accounts/preflight（T-311/T-312 同款）
+// T-1035 v2.1：用例试跑 = 执行准备面板——环境就绪度一屏可见 + 参数微调，然后联网执行。
+// 复用 RunControl 既有件：runsApi.trigger/accounts/preflight（T-311/T-312 同款）
 // + useRunStream 实时进度 + TrialRunDetailModal 完整报告（与正式执行同一落盘面）。
-// 联网执行：真实调用目标环境（默认恒 sit，与 RunControl 一致）。
+// covers 前置闸（全库级，服务端判定不可绕过）：锚点失效时进面板即预警并指路，
+// 不让用户点了才开始失败。引擎语义开关（仅准备/上游不断言/严格依赖）不在此暴露，
+// 需要时走「测试执行」页（RunControl）。
 
 import { useEffect, useMemo, useState } from 'react';
 import Modal from '../../components/Modal';
@@ -14,10 +16,12 @@ import type { ScenarioQualityRow } from '../../api/scenarioQuality';
 interface Props {
   scenarioId: string;
   scenarios: ScenarioQualityRow[];   // 全库（depends_on 反算上下游闭包）
+  anchorsAvailable: boolean;         // 当前工作区锚点表是否可用
+  invalidCoversCount: number;        // 全库「需求锚点失效」用例数（>0 时 covers 闸拦截一切触发）
   onClose: () => void;
 }
 
-export default function ScenarioRunDialog({ scenarioId, scenarios, onClose }: Props) {
+export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvailable, invalidCoversCount, onClose }: Props) {
   // ── 链路闭包（客户端确定性计算，与引擎 depends_on 图同源）──
   const { upstream, downstream } = useMemo(() => {
     const ups = new Map<string, string[]>();
@@ -42,10 +46,9 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, onClose }: Pr
     return { upstream: bfs(scenarioId, ups), downstream: bfs(scenarioId, downs) };
   }, [scenarios, scenarioId]);
 
+  const coversBlocked = anchorsAvailable && invalidCoversCount > 0;
+
   const [withDownstream, setWithDownstream] = useState(false);
-  const [prepOnly, setPrepOnly] = useState(false);
-  const [skipUpstreamVerify, setSkipUpstreamVerify] = useState(false);
-  const [strictDeps, setStrictDeps] = useState(false);
   const [account, setAccount] = useState('');
   const [accounts, setAccounts] = useState<Record<string, { ad: string; emp_no: string; type: string }>>({});
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
@@ -105,14 +108,15 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, onClose }: Pr
     setBusy(true);
     setTriggerError('');
     try {
-      const r = await runsApi.trigger('scenario', targetIds.join(' or '), 'sit', [], {
-        prepOnly, skipUpstreamVerify, strictDeps,
-        accountOverride: account || undefined,
-      }, collectOverrides());
+      const r = await runsApi.trigger('scenario', targetIds.join(' or '), 'sit', [],
+        { accountOverride: account || undefined }, collectOverrides());
       if (r.queued) setQueued(`已有执行在进行，本次已排队（第 ${r.position ?? '?'} 位）`);
       if (r.run_id) setRunId(r.run_id);
     } catch (e: any) {
-      setTriggerError(e.message || '触发失败');
+      const msg = typeof e.message === 'string' ? e.message : '';
+      setTriggerError(msg.includes('covers')
+        ? 'covers 校验未通过（全库存在需求锚点失效的用例）——切换到与用例库同世代的工作区后重试'
+        : (msg || '触发失败'));
     } finally {
       setBusy(false);
     }
@@ -121,7 +125,19 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, onClose }: Pr
   const trialResult: TrialRunResult = { ok: true, run_id: runId, target: targetIds.join(' or ') };
 
   return (
-    <Modal open onClose={onClose} width={620} title={`试跑 ${scenarioId}`}>
+    <Modal open onClose={onClose} width={620} title={`试跑 ${scenarioId} · 执行准备`}>
+      {/* covers 前置闸预警（全库级，服务端判定；不满足时不必点开始才知道失败） */}
+      {coversBlocked && (
+        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+          <div>⛔ covers 前置闸将拦截本次触发：当前用例库有 <b>{invalidCoversCount}</b> 个用例的需求锚点
+            在当前工作区查不到（全库级校验，任一失效即拦截所有触发）。</div>
+          <div className="mt-1 text-xs">
+            处置：① 顶栏切换到与用例库同世代的工作区（如「干部盘点 (TDM)」）后重试；
+            ② 或修复用例的 covers 标签（见用例详情「需求锚点失效」标记）。
+          </div>
+        </div>
+      )}
+
       {/* 链路范围 */}
       <div className="text-sm mb-3">
         <div className="text-xs text-gray-500 mb-1.5">链路范围</div>
@@ -150,37 +166,32 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, onClose }: Pr
         )}
       </div>
 
-      {/* 轻量选项 + 账号 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm mb-3">
-        <label className="flex items-center gap-1.5 cursor-pointer" title="只跑上游环境准备，不执行本用例">
-          <input type="checkbox" checked={prepOnly} onChange={e => setPrepOnly(e.target.checked)} />仅准备
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer" title="上游照跑 flow 准备数据，但跳过其 verify 断言">
-          <input type="checkbox" checked={skipUpstreamVerify} onChange={e => setSkipUpstreamVerify(e.target.checked)} />上游不断言
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer" title="上游契约版本漂移/孤儿依赖升格为 FAIL">
-          <input type="checkbox" checked={strictDeps} onChange={e => setStrictDeps(e.target.checked)} />严格依赖
-        </label>
-        <span className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500">执行账号</span>
-          <select value={account} onChange={e => setAccount(e.target.value)} className="input text-sm" title="覆盖默认账号别名">
-            <option value="">默认（配置账号）</option>
-            {Object.entries(accounts).map(([alias, cfg]) => (
-              <option key={alias} value={alias}>{alias}（{cfg.ad || cfg.emp_no || alias}）</option>
-            ))}
-          </select>
-        </span>
-      </div>
-
-      {/* 依赖预检 + 参数输入（T-311/T-312 同款） */}
+      {/* 执行环境：账号 + 就绪度 + 参数微调 */}
       <div className="text-sm mb-3">
-        <div className="text-xs text-gray-500 mb-1">依赖扫描（{preflightIds.length} 个场景）</div>
-        {preflightLoading && <div className="text-xs text-gray-500">扫描中…</div>}
-        {!preflightLoading && preflight && !preflight.has_gaps && (
-          <div className="text-xs text-pass">✅ 依赖就绪</div>
-        )}
-        {!preflightLoading && preflight && preflight.has_gaps && (
+        <div className="text-xs text-gray-500 mb-1.5">执行环境</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-2">
+          <span className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">执行账号</span>
+            <select value={account} onChange={e => setAccount(e.target.value)} className="input text-sm" title="覆盖场景默认账号别名">
+              <option value="">默认（配置账号）</option>
+              {Object.entries(accounts).map(([alias, cfg]) => (
+                <option key={alias} value={alias}>{alias}（{cfg.ad || cfg.emp_no || alias}）</option>
+              ))}
+            </select>
+          </span>
+          {!preflightLoading && preflight && !preflight.has_gaps && (
+            <span className="text-xs text-pass"
+              title={`账号：${(preflight.accounts || []).join('、') || '—'}｜环境键：${(preflight.env_keys || []).join('、') || '—'}`}>
+              ✅ 依赖就绪（账号 {preflight.accounts?.length ?? 0} · 环境键 {preflight.env_keys?.length ?? 0}）
+            </span>
+          )}
+          {preflightLoading && <span className="text-xs text-gray-500">扫描中…</span>}
+        </div>
+
+        {/* 参数微调：预检缺失项就地填写（T-312 同款，只本次执行生效） */}
+        {preflight && preflight.has_gaps && (
           <div className="px-2 py-1.5 bg-fail/5 border border-fail/30 rounded space-y-1.5 max-h-36 overflow-y-auto">
+            <div className="text-[11px] text-gray-500">以下缺失项就地填写，仅对本次执行生效（不改配置文件）：</div>
             {preflight.missing_accounts.map(g => (
               <div key={g.account} className="text-[11px]">
                 <div className="text-fail">
@@ -245,7 +256,9 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, onClose }: Pr
           </button>
         )}
         {!runId ? (
-          <button className="btn-primary text-sm" onClick={startRun} disabled={busy}>
+          <button className="btn-primary text-sm" onClick={startRun}
+            disabled={busy || coversBlocked}
+            title={coversBlocked ? 'covers 前置闸未通过——按上方提示处置后重试' : undefined}>
             {busy ? '触发中…' : '▶ 开始试跑（联网执行）'}
           </button>
         ) : (
