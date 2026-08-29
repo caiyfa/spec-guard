@@ -165,12 +165,47 @@ def api_preflight(scenarios: str = "", env: str = ""):
                                        system=resolve_system())
 
 
+@router.get("/envs", dependencies=[Depends(get_current_user)])
+def api_run_envs(workspace: str = Depends(optional_workspace)):
+    """T-1039：可执行环境清单（试跑面板环境下拉的数据源）。
+
+    枚举 systems/{system}/config/env.{name}.yaml，逐环境 load_env 取配置源
+    （T-1036：nacos 启用时 load_env 内部已 nacos 优先深合并，source 如实
+    标注 nacos:{data_id}；加载失败的环境诚实标 ok=False 不隐藏）。
+    """
+    import importlib
+    from pathlib import Path as _Path
+
+    from specstd.workspace import get_active_workspace, resolve_system
+    ws = get_active_workspace()
+    system = resolve_system(ws.system if ws else "")
+    try:
+        mod = importlib.import_module(f"systems.{system}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"适配包加载失败: {e}") from e
+    cfg_dir = _Path(mod.__file__).parent / "config"
+    envs = []
+    for p in sorted(cfg_dir.glob("env.*.yaml")):
+        name = p.stem[len("env."):]
+        try:
+            cfg = mod.load_env(name)
+            envs.append({"name": name, "ok": True,
+                         "source": cfg.get("config_source", ""), "error": ""})
+        except Exception as e:
+            envs.append({"name": name, "ok": False, "source": "", "error": str(e)})
+    if not envs:
+        raise HTTPException(status_code=404,
+                            detail=f"systems/{system}/config/ 下无 env.*.yaml")
+    return {"system": system, "default": os.environ.get("SG_ENV", "sit"), "envs": envs}
+
+
 @router.get("/accounts", dependencies=[Depends(get_current_user)])
-def api_run_accounts(workspace: str = Depends(optional_workspace)):
+def api_run_accounts(env: str = "", workspace: str = Depends(optional_workspace)):
     """K-056：执行时可选账号清单（确认执行上下文弹窗的数据源）。
 
     来源为当前工作区系统适配包的 env 配置 accounts 段——执行时选择，
-    不必每次改系统设置。
+    不必每次改系统设置。T-1039：env 参数指定环境（试跑面板环境下拉联动；
+    空 = 后端进程 SG_ENV 默认）。
     """
     import importlib
 
@@ -179,7 +214,7 @@ def api_run_accounts(workspace: str = Depends(optional_workspace)):
     system = resolve_system(ws.system if ws else "")
     try:
         mod = importlib.import_module(f"systems.{system}")
-        env_config = mod.load_env(os.environ.get("SG_ENV", "sit"))
+        env_config = mod.load_env(env or os.environ.get("SG_ENV", "sit"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"环境配置加载失败: {e}") from e
     accounts = {}
@@ -191,8 +226,30 @@ def api_run_accounts(workspace: str = Depends(optional_workspace)):
             "emp_no": cfg.get("emp_no", ""),
             "type": cfg.get("type", "user"),
         }
-    return {"accounts": accounts, "env": env_config.get("env_name", "sit"),
+    return {"accounts": accounts, "env": env_config.get("env_name", env or "sit"),
             "source": env_config.get("config_source", "")}  # T-1036：配置源透出（nacos:{data_id} / file）
+
+
+@router.get("/resolve-account", dependencies=[Depends(require_role("admin", "tester"))])
+def api_resolve_account(scenarios: str = "", env: str = "",
+                        workspace: str = Depends(optional_workspace)):
+    """T-1039：按权限解析执行账号（试跑面板「自动」档；探针纯读联网）。
+
+    优先级语义（用户拍板）：试跑手动输入 > 按权限解析 > 固定配置账号。
+    静态提取闭包内 default 别名的资源码需求 → 适配包探针（hr-center 实时
+    权限）→ 全码 has_any 的首个配置账号即匹配。require admin/tester：探针
+    会执行 SSO 登录（统一密码）。失败/无匹配不阻断试跑——回退固定配置。
+    """
+    from services import account_resolution
+
+    from specstd.workspace import resolve_system
+    ids = [s.strip() for s in (scenarios or "").split(",") if s.strip()]
+    if not ids:
+        return {"supported": False, "reason": "缺少 scenarios 参数（逗号分隔场景 ID）",
+                "requirements": {}, "candidates": [], "matched": None,
+                "override_value": "", "errors": [], "unresolved": [], "env": env}
+    return account_resolution.resolve(env or os.environ.get("SG_ENV", "sit"),
+                                      resolve_system(), ids)
 
 
 @router.get("/{run_id}/log", dependencies=[Depends(get_current_user)])

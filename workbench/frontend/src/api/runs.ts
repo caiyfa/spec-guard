@@ -81,7 +81,16 @@ export const runsApi = {
         overrides,  // T-312：预检弹窗输入的变量覆盖（账号/env 键）
       }),
     }),
-  accounts: () => request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string; source?: string }>('/runs/accounts'),
+  // T-1039：env 指定执行环境（试跑面板环境下拉联动；空 = 后端 SG_ENV 默认）
+  accounts: (env?: string) =>
+    request<{ accounts: Record<string, { ad: string; emp_no: string; type: string }>; env: string; source?: string }>(
+      `/runs/accounts${env ? `?env=${encodeURIComponent(env)}` : ''}`),
+  // T-1039：可执行环境清单（env.{name}.yaml 枚举 + 每环境配置源 nacos/file）
+  envs: () =>
+    request<{ system: string; default: string; envs: { name: string; ok: boolean; source: string; error: string }[] }>('/runs/envs'),
+  // T-1039：按权限解析执行账号（优先级：手动输入 > 按权限解析 > 固定配置；探针纯读联网）
+  resolveAccount: (scenarios: string[], env?: string) =>
+    request<AccountResolution>(`/runs/resolve-account?scenarios=${encodeURIComponent(scenarios.join(','))}${env ? `&env=${encodeURIComponent(env)}` : ''}`),
   // T-311：执行前依赖预检（确认弹窗前静态比对账号/env 键/跨场景引用）
   preflight: (scenarios: string[], env?: string) =>
     request<PreflightResult>(`/runs/preflight?scenarios=${encodeURIComponent(scenarios.join(','))}${env ? `&env=${encodeURIComponent(env)}` : ''}`),
@@ -113,5 +122,30 @@ export interface FailureEntry {
   env: string;
   finished_at: string;
   log: string;
+}
+
+// T-1039：按权限解析执行账号（runs/resolve-account）
+export interface AccountProbeCell {
+  has_any: boolean;
+  summary: string;   // corpCode=…, groupLevel=…, verticalManager=…
+  status: string;    // data-info 业务码 / exception 说明
+}
+export interface AccountCandidate {
+  alias: string;
+  ad: string;
+  emp_no: string;
+  probe: Record<string, AccountProbeCell>;
+  matched: boolean;
+}
+export interface AccountResolution {
+  supported: boolean;    // 系统未提供探针/环境加载失败时 false
+  env: string;
+  requirements: Record<string, string[]>;  // 别名 → 资源码需求
+  unresolved: string[];  // 静态不可解析的资源码引用（诚实透出）
+  candidates: AccountCandidate[];
+  matched: { alias: string; ad: string; emp_no: string } | null;
+  override_value: string;  // "ad:emp_no"——直接塞 SG_OVERRIDES account::default
+  reason: string;          // 无需求/无匹配/不支持的诚实说明
+  errors: string[];
 }
 

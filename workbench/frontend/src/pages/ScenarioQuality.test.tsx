@@ -30,11 +30,18 @@ vi.mock('../api/runs', () => ({
   runsApi: {
     trigger: vi.fn(),
     accounts: vi.fn().mockResolvedValue({ accounts: {}, env: 'sit' }),
+    envs: vi.fn().mockResolvedValue({
+      system: 'tdm', default: 'sit',
+      envs: [{ name: 'sit', ok: true, source: 'file', error: '' }],
+    }),
+    resolveAccount: vi.fn(),
     preflight: vi.fn(),
   },
 }));
 // T-1036：配置源透出（runs accounts 响应 source 字段）
 const mockAccounts = vi.mocked(runsApi.accounts);
+const mockEnvs = vi.mocked(runsApi.envs);
+const mockResolveAccount = vi.mocked(runsApi.resolveAccount);
 vi.mock('../components/ScenarioFormEditor', () => ({
   default: ({ scenarioId }: any) => <div data-testid="form-editor">{scenarioId}</div>,
 }));
@@ -252,6 +259,65 @@ describe('ScenarioQuality 测试用例管理页', () => {
     await openDetail('DEEP-001');
     fireEvent.click(screen.getByText('▶ 试跑'));
     expect(await screen.findByText('配置源：本地文件')).toBeTruthy();
+  });
+
+  it('T-1039：执行环境下拉渲染 + 切换环境联动重拉 accounts/preflight', async () => {
+    mockEnvs.mockResolvedValue({
+      system: 'tdm', default: 'sit',
+      envs: [
+        { name: 'sit', ok: true, source: 'file', error: '' },
+        { name: 'uat', ok: true, source: 'nacos:specguard-tdm-uat.yaml', error: '' },
+      ],
+    } as any);
+    renderPage('tester');
+    await openDetail('DEEP-001');
+    fireEvent.click(screen.getByText('▶ 试跑'));
+    const envSel = screen.getByTitle(/执行环境/) as HTMLSelectElement;
+    await waitFor(() => expect(envSel.value).toBe('sit'));   // 默认取后端 SG_ENV
+    fireEvent.change(envSel, { target: { value: 'uat' } });
+    await waitFor(() => expect(mockAccounts).toHaveBeenLastCalledWith('uat'));
+    expect(mockPreflight).toHaveBeenLastCalledWith(expect.anything(), 'uat');
+  });
+
+  it('T-1039：手动输入账号 → SG_OVERRIDES account::default 透传（最高优先档）', async () => {
+    mockPreflight.mockResolvedValue({ ...PREFLIGHT, has_gaps: false, missing_accounts: [] } as any);
+    renderPage('tester');
+    await openDetail('DEEP-001');
+    fireEvent.click(screen.getByText('▶ 试跑'));
+    fireEvent.change(screen.getByTitle(/优先级：手动输入/), { target: { value: '__manual__' } });
+    const input = await screen.findByPlaceholderText(/AD 账号 或 AD:工号/);
+    fireEvent.change(input, { target: { value: 'zhangsan:90011111' } });
+    fireEvent.click(screen.getByText('▶ 开始试跑（联网执行）'));
+    await waitFor(() => expect(mockTrigger).toHaveBeenCalled());
+    const args = mockTrigger.mock.calls[0] as any[];
+    expect(args[5]).toEqual([{ kind: 'account', name: 'default', value: 'zhangsan:90011111' }]);
+  });
+
+  it('T-1039：自动档探针匹配 → override_value 透传，探针矩阵可见', async () => {
+    mockPreflight.mockResolvedValue({ ...PREFLIGHT, has_gaps: false, missing_accounts: [] } as any);
+    mockResolveAccount.mockResolvedValue({
+      supported: true, env: 'sit',
+      requirements: { default: ['VIEW_HISTORY'] },
+      unresolved: [], errors: [],
+      candidates: [
+        { alias: 'default', ad: 'caiyunfei', emp_no: '90024166',
+          probe: { VIEW_HISTORY: { has_any: true, summary: 'corpCode=ALL', status: '0' } }, matched: true },
+        { alias: 'no_access', ad: 'caiyunfei', emp_no: '90024166',
+          probe: { VIEW_HISTORY: { has_any: false, summary: '', status: '400001' } }, matched: false },
+      ],
+      matched: { alias: 'default', ad: 'caiyunfei', emp_no: '90024166' },
+      override_value: 'caiyunfei:90024166', reason: '',
+    } as any);
+    renderPage('tester');
+    await openDetail('DEEP-001');
+    fireEvent.click(screen.getByText('▶ 试跑'));
+    fireEvent.change(screen.getByTitle(/优先级：手动输入/), { target: { value: '__auto__' } });
+    await screen.findByText(/本次试跑 default 别名以/);   // 匹配结果面板
+    expect(screen.getByText('default → VIEW_HISTORY')).toBeTruthy();
+    fireEvent.click(screen.getByText('▶ 开始试跑（联网执行）'));
+    await waitFor(() => expect(mockTrigger).toHaveBeenCalled());
+    expect((mockTrigger.mock.calls[0] as any[])[5])
+      .toEqual([{ kind: 'account', name: 'default', value: 'caiyunfei:90024166' }]);
   });
 
   it('形状契约页签：懒加载 API 表与发现明细，错误路径不白屏（T-1037）', async () => {

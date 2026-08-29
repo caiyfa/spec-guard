@@ -1,6 +1,8 @@
 // T-1035 v2.1：用例试跑 = 执行准备面板——环境就绪度一屏可见 + 参数微调，然后联网执行。
 // 复用 RunControl 既有件：runsApi.trigger/accounts/preflight（T-311/T-312 同款）
 // + useRunStream 实时进度 + TrialRunDetailModal 完整报告（与正式执行同一落盘面）。
+// T-1039：执行环境下拉（env.{name}.yaml 枚举，nacos 启用时 load_env 内部 nacos 优先）
+// + 账号三档语义：试跑手动输入 > 按权限自动解析（runsApi.resolveAccount 探针）> 固定配置。
 // covers 前置闸（全库级，服务端判定不可绕过）：锚点失效时进面板即预警并指路，
 // 不让用户点了才开始失败。引擎语义开关（仅准备/上游不断言/严格依赖）不在此暴露，
 // 需要时走「测试执行」页（RunControl）。
@@ -10,8 +12,13 @@ import Modal from '../../components/Modal';
 import { TrialRunDetailModal } from '../../components/TrialRunDetailModal';
 import { useRunStream } from '../../hooks/useRunStream';
 import { runsApi } from '../../api';
-import type { PreflightResult, TrialRunResult } from '../../api';
+import type { AccountResolution, PreflightResult, TrialRunResult } from '../../api';
 import type { ScenarioQualityRow } from '../../api/scenarioQuality';
+
+// 账号选择哨兵值：固定配置 / 按权限自动解析 / 手动输入（其余值 = 配置别名，K-056 语义）
+const ACCOUNT_CONFIG = '__config__';
+const ACCOUNT_AUTO = '__auto__';
+const ACCOUNT_MANUAL = '__manual__';
 
 interface Props {
   scenarioId: string;
@@ -49,7 +56,14 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
   const coversBlocked = anchorsAvailable && invalidCoversCount > 0;
 
   const [withDownstream, setWithDownstream] = useState(false);
-  const [account, setAccount] = useState('');
+  // T-1039：执行环境（下拉切换；'' = 尚未拉到清单，用后端默认）
+  const [envName, setEnvName] = useState('');
+  const [envs, setEnvs] = useState<{ name: string; ok: boolean; source: string; error: string }[]>([]);
+  // T-1039：账号三档（配置默认 / 按权限自动解析 / 手动输入 / 具体别名）
+  const [accountSel, setAccountSel] = useState(ACCOUNT_CONFIG);
+  const [manualAccount, setManualAccount] = useState('');
+  const [resolution, setResolution] = useState<AccountResolution | null>(null);
+  const [resolving, setResolving] = useState(false);
   const [accounts, setAccounts] = useState<Record<string, { ad: string; emp_no: string; type: string }>>({});
   const [configSource, setConfigSource] = useState('');
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
@@ -71,24 +85,52 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
     () => [...new Set([...targetIds, ...upstream])],
     [targetIds, upstream]);
 
+  // 环境清单（T-1039）：env.{name}.yaml 枚举；失败诚实回退 'sit'（不空白不卡加载）
   useEffect(() => {
-    runsApi.accounts()
+    runsApi.envs()
+      .then(r => {
+        setEnvs(r.envs || []);
+        const names = (r.envs || []).map(e => e.name);
+        if (r.default && names.includes(r.default)) setEnvName(r.default);
+        else if (names.length) setEnvName(names[0]);
+        else setEnvName(n => n || 'sit');
+      })
+      .catch(() => { setEnvs([]); setEnvName(n => n || 'sit'); });
+  }, []);
+
+  // 账号随环境联动（T-1039）：环境就位后再拉一次（避免 '' → 默认值 双拉闪变）
+  useEffect(() => {
+    if (!envName) return;
+    runsApi.accounts(envName)
       .then(r => {
         setAccounts(r.accounts || {});
         setConfigSource(r.source || '');
       })
       .catch(() => setAccounts({}));
-  }, []);
+  }, [envName]);
 
   useEffect(() => {
+    if (!envName) return;
     let alive = true;
     setPreflightLoading(true);
-    runsApi.preflight(preflightIds)
+    runsApi.preflight(preflightIds, envName)
       .then(r => { if (alive) setPreflight(r); })
       .catch(() => { if (alive) setPreflight(null); })
       .finally(() => { if (alive) setPreflightLoading(false); });
     return () => { alive = false; };
-  }, [preflightIds]);
+  }, [preflightIds, envName]);
+
+  // 自动档（T-1039）：按权限解析 default 账号——探针联网（SSO + hr-center），数秒级
+  useEffect(() => {
+    if (accountSel !== ACCOUNT_AUTO || !envName) { setResolution(null); setResolving(false); return; }
+    let alive = true;
+    setResolving(true);
+    runsApi.resolveAccount(preflightIds, envName)
+      .then(r => { if (alive) setResolution(r); })
+      .catch(() => { if (alive) setResolution(null); })
+      .finally(() => { if (alive) setResolving(false); });
+    return () => { alive = false; };
+  }, [accountSel, envName, preflightIds]);
 
   // ── 进度：全局 run 事件流过滤本 run ──
   const { events } = useRunStream();
@@ -111,9 +153,22 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
   const startRun = async () => {
     setBusy(true);
     setTriggerError('');
+    // T-1039 账号三档落地：
+    //   手动输入/自动解析 → SG_OVERRIDES account::default（试跑输入优先级最高，
+    //   conftest apply_overrides 替换 default 别名配置）；固定别名 → K-056 重映射；
+    //   配置默认 → 不传，conftest 原样生效。显式别名（no_access 等）永不被替换。
+    const overrides = collectOverrides();
+    let accountOverride: string | undefined;
+    if (accountSel === ACCOUNT_MANUAL && manualAccount.trim()) {
+      overrides.push({ kind: 'account', name: 'default', value: manualAccount.trim() });
+    } else if (accountSel === ACCOUNT_AUTO && resolution?.override_value) {
+      overrides.push({ kind: 'account', name: 'default', value: resolution.override_value });
+    } else if (accountSel !== ACCOUNT_CONFIG && accountSel !== ACCOUNT_AUTO && accountSel !== ACCOUNT_MANUAL) {
+      accountOverride = accountSel;
+    }
     try {
-      const r = await runsApi.trigger('scenario', targetIds.join(' or '), 'sit', [],
-        { accountOverride: account || undefined }, collectOverrides());
+      const r = await runsApi.trigger('scenario', targetIds.join(' or '), envName || 'sit', [],
+        { accountOverride }, overrides);
       if (r.queued) setQueued(`已有执行在进行，本次已排队（第 ${r.position ?? '?'} 位）`);
       if (r.run_id) setRunId(r.run_id);
     } catch (e: any) {
@@ -125,6 +180,9 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
       setBusy(false);
     }
   };
+
+  const startDisabled = busy || coversBlocked
+    || (accountSel === ACCOUNT_MANUAL && !manualAccount.trim());
 
   const trialResult: TrialRunResult = { ok: true, run_id: runId, target: targetIds.join(' or ') };
 
@@ -170,22 +228,41 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
         )}
       </div>
 
-      {/* 执行环境：账号 + 就绪度 + 参数微调 */}
+      {/* 执行环境：环境切换 + 账号三档 + 就绪度 + 参数微调 */}
       <div className="text-sm mb-3">
         <div className="text-xs text-gray-500 mb-1.5">执行环境</div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-2">
           <span className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">环境</span>
+            <select value={envName} disabled={!!runId}
+              onChange={e => setEnvName(e.target.value)}
+              className="input text-sm"
+              title="执行环境（env.{name}.yaml）；Nacos 启用时配置优先从配置中心取（T-1036 单收点）">
+              {(envs.length ? envs : [{ name: envName || 'sit', ok: true, source: '', error: '' }])
+                .map(e => (
+                  <option key={e.name} value={e.name} disabled={!e.ok}>
+                    {e.name}{e.ok ? '' : `（加载失败：${e.error.slice(0, 40)}）`}
+                  </option>
+                ))}
+            </select>
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500">执行账号</span>
-            <select value={account} onChange={e => setAccount(e.target.value)} className="input text-sm" title="覆盖场景默认账号别名">
-              <option value="">默认（配置账号）</option>
-              {Object.entries(accounts).map(([alias, cfg]) => (
+            <select value={accountSel} disabled={!!runId}
+              onChange={e => setAccountSel(e.target.value)}
+              className="input text-sm"
+              title="优先级：手动输入 / 按权限解析 > 固定配置；显式别名（如 no_access）保留配置语义">
+              <option value={ACCOUNT_CONFIG}>默认（配置账号）</option>
+              <option value={ACCOUNT_AUTO}>自动（按权限解析）</option>
+              <option value={ACCOUNT_MANUAL}>手动输入…</option>
+              {Object.entries(accounts).filter(([alias]) => alias !== 'default').map(([alias, cfg]) => (
                 <option key={alias} value={alias}>{alias}（{cfg.ad || cfg.emp_no || alias}）</option>
               ))}
             </select>
           </span>
           {configSource && (
             <span className="text-xs text-gray-400"
-              title="执行环境配置来源（T-1036）：nacos 表示统一管理配置中心，file 表示本地 env yaml；降级时已 WARN">
+              title="当前环境的配置来源（T-1036）：nacos 表示统一管理配置中心，file 表示本地 env yaml；降级时已 WARN">
               配置源：{configSource.startsWith('nacos') ? 'Nacos' : '本地文件'}
               {configSource.startsWith('nacos') && `（${configSource.slice('nacos:'.length)}）`}
               {configSource.includes('降级') && <span className="text-warn">（已降级）</span>}
@@ -199,6 +276,87 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
           )}
           {preflightLoading && <span className="text-xs text-gray-500">扫描中…</span>}
         </div>
+
+        {/* 手动输入档（T-1039）：自由账号替换 default 别名，仅本次执行生效 */}
+        {accountSel === ACCOUNT_MANUAL && (
+          <div className="mb-2">
+            <input
+              value={manualAccount}
+              onChange={e => setManualAccount(e.target.value)}
+              placeholder="AD 账号 或 AD:工号（替换 default 别名，仅本次执行生效）"
+              className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-xs font-mono text-gray-200 focus:border-info outline-none" />
+            <div className="text-[11px] text-gray-600 mt-0.5">
+              场景中 <code>as: default</code> 及未声明账号的步骤将以该账号执行；显式别名（如 no_access）保留配置语义。
+            </div>
+          </div>
+        )}
+
+        {/* 自动档（T-1039）：按权限解析——探针矩阵 + 匹配结果 + 诚实回退说明 */}
+        {accountSel === ACCOUNT_AUTO && (
+          <div className="mb-2 px-2 py-1.5 bg-surface-1 border border-border rounded space-y-1 text-[11px]">
+            {resolving && <div className="text-gray-500">🔍 探针中…（SSO 登录 + hr-center 权限查询，数秒）</div>}
+            {!resolving && !resolution && <div className="text-warn">解析失败（网络/服务异常）——将按固定配置账号执行</div>}
+            {!resolving && resolution && (
+              <>
+                {Object.keys(resolution.requirements).length > 0 && (
+                  <div className="text-gray-400">
+                    权限需求：
+                    <span className="font-mono">
+                      {Object.entries(resolution.requirements)
+                        .map(([a, codes]) => `${a} → ${codes.join('、')}`)
+                        .join('；')}
+                    </span>
+                  </div>
+                )}
+                {resolution.unresolved.map(u => (
+                  <div key={u} className="text-warn">🔗 {u}（运行期按实际插值处理）</div>
+                ))}
+                {resolution.errors.map(e => (
+                  <div key={e} className="text-fail">⚠ {e}</div>
+                ))}
+                {resolution.candidates.length > 0 && (
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-gray-500">
+                        <th className="text-left font-normal py-0.5">候选</th>
+                        {Object.keys(resolution.candidates[0]?.probe || {}).map(c => (
+                          <th key={c} className="text-left font-normal py-0.5 font-mono">{c}</th>
+                        ))}
+                        <th className="text-left font-normal py-0.5">结果</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resolution.candidates.map(c => (
+                        <tr key={c.alias}>
+                          <td className="py-0.5">{c.alias}（{c.ad}:{c.emp_no}）</td>
+                          {Object.keys(resolution.candidates[0]?.probe || {}).map(code => (
+                            <td key={code} className="py-0.5"
+                              title={c.probe[code]?.summary || c.probe[code]?.status || ''}>
+                              {c.probe[code]?.has_any ? '✅' : (c.probe[code] ? '❌' : '—')}
+                            </td>
+                          ))}
+                          <td className="py-0.5">
+                            {c.matched
+                              ? <span className="text-pass">✅ 匹配</span>
+                              : <span className="text-gray-500">不满足</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {resolution.matched && (
+                  <div className="text-pass">
+                    ✅ 本次试跑 default 别名以 <b>{resolution.matched.ad}</b>（{resolution.matched.emp_no}）执行
+                  </div>
+                )}
+                {resolution.reason && (
+                  <div className="text-warn">{resolution.reason}</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {/* 参数微调：预检缺失项就地填写（T-312 同款，只本次执行生效） */}
         {preflight && preflight.has_gaps && (
@@ -269,8 +427,12 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
         )}
         {!runId ? (
           <button className="btn-primary text-sm" onClick={startRun}
-            disabled={busy || coversBlocked}
-            title={coversBlocked ? 'covers 前置闸未通过——按上方提示处置后重试' : undefined}>
+            disabled={startDisabled}
+            title={coversBlocked
+              ? 'covers 前置闸未通过——按上方提示处置后重试'
+              : (accountSel === ACCOUNT_MANUAL && !manualAccount.trim()
+                ? '手动输入档需填写账号（AD 或 AD:工号）'
+                : undefined)}>
             {busy ? '触发中…' : '▶ 开始试跑（联网执行）'}
           </button>
         ) : (
