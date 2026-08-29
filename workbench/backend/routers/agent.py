@@ -984,6 +984,22 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
                         "owner": d.name, "workspace": "",
                         "run_in_progress": _run_in_progress(session_id),
                         "run_baseline_len": snap["baseline_len"] if snap["exists"] else 0}
+        # T-1040: 深链兜底——历史会话的存盘子目录名与 meta.workspace 可能错位
+        # （早期工作区切换残留，如 smoke/ 目录的会话 meta 记为「人才发展」），
+        # 前两级都 miss 时按子目录名逐一尝试，保证深链/树外打开可达
+        if d.is_dir():
+            for sub in d.iterdir():
+                if not sub.is_dir() or sub.name == workspace:
+                    continue
+                sm3 = SessionManager(d, workspace=sub.name)
+                messages = sm3.load(session_id)
+                if messages is not None:
+                    return {"session_id": session_id, "messages": messages,
+                            "reading_feed": _rebuild_reading_feed(messages),
+                            "writing_feed": _rebuild_writing_feed(messages, session_id, sub.name),
+                            "owner": d.name, "workspace": sub.name,
+                            "run_in_progress": _run_in_progress(session_id),
+                            "run_baseline_len": snap["baseline_len"] if snap["exists"] else 0}
     raise HTTPException(status_code=404, detail="会话不存在")
 
 

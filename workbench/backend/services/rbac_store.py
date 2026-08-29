@@ -21,8 +21,9 @@ _LOCK = threading.RLock()
 
 # 系统保护菜单：admin 授权不可移除（自举保底，防管理员锁死）
 SYSTEM_MENUS = ("menu-menu-manage", "menu-users")
-# 公开菜单：登录即用，无需任何角色/菜单授权（首页对话页免权）
-PUBLIC_MENUS = ("menu-agent", "menu-db-console")
+# 公开菜单：登录即用，无需任何角色/菜单授权（首页对话页免权；T-1039 产品对话同测——
+# 真实能力边界由用途角色闸兜底，菜单拆分是信息架构层）
+PUBLIC_MENUS = ("menu-agent", "menu-agent-product", "menu-db-console")
 # 内置角色：不可删、key 不可改
 BUILTIN_ROLES = ("admin", "tester", "viewer", "product")
 ROLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
@@ -38,8 +39,10 @@ SEED_MENUS: list[tuple] = [
     ("menu-graph", "全景图谱", "", "/graph", "group-overview", 1, 1, 0),
     ("menu-activity", "我的活动", "", "/my-activity", "group-overview", 2, 1, 0),
     ("group-agent", "Agent", "🤖", "", "", 1, 1, 0),
-    ("menu-agent", "Agent 对话", "", "/agent", "group-agent", 0, 1, 0),
-    ("menu-drafts", "草稿评审", "", "/drafts", "group-agent", 1, 1, 0),
+    # T-1039：对话按用途拆双菜单（测试/产品）；原「Agent 对话」更名「测试对话」（种子 upsert 自动对齐存量 label）
+    ("menu-agent", "测试对话", "", "/agent", "group-agent", 0, 1, 0),
+    ("menu-agent-product", "产品对话", "", "/agent-product", "group-agent", 1, 1, 0),
+    ("menu-drafts", "草稿评审", "", "/drafts", "group-agent", 2, 1, 0),
     ("group-scenario", "场景", "🧩", "", "", 2, 1, 0),
     ("menu-plans", "场景管理", "", "/plans", "group-scenario", 0, 1, 0),
     ("menu-dag", "DAG 编排", "", "/dag", "group-scenario", 1, 1, 0),
@@ -411,6 +414,9 @@ def menus_for_user(role_keys: list[str], db_path: Path | None = None) -> list[di
     all_menus = {m["menu_key"]: m for m in list_menus(db_path)}
     visible_keys = {k for k, m in all_menus.items() if m["visible"]}
     granted = {k for k in visible_keys if user_has_menu(role_keys, k, db_path)}
+    # T-1039：end（精确高亮）通用规则——存在另一授权菜单路径以本路径为前缀时，
+    # 本项必须 end 精确匹配（/agent vs /agent-product 前缀撞车会双高亮）
+    granted_paths = [m["path"] for m in all_menus.values() if m["menu_key"] in granted and m["path"]]
     # 分组节点：其下有被授权子项即显示（分组本身无需授权）
     parent_keys = {m["parent_key"] for m in all_menus.values() if m["menu_key"] in granted}
     group_keys = {k for k in parent_keys if k and k in all_menus and all_menus[k]["visible"]}
@@ -424,6 +430,8 @@ def menus_for_user(role_keys: list[str], db_path: Path | None = None) -> list[di
             "label": g["label"],
             "icon": g["icon"],
             "items": [{"to": m["path"] or "/", "label": m["label"],
-                       "end": m["path"] == "/"} for m in sorted(items, key=lambda m: m["sort"])],
+                       "end": m["path"] == "/" or not any(
+                           p != m["path"] and p.startswith(m["path"] + "/") for p in granted_paths)}
+                      for m in sorted(items, key=lambda m: m["sort"])],
         })
     return out

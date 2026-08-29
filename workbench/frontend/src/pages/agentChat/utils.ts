@@ -103,3 +103,27 @@ export function isToolError(result: string): boolean {
 export function filterTreeSessions<T extends { kind?: string }>(sessions: T[]): T[] {
   return sessions.filter(s => (s as any).kind !== 'aux');
 }
+
+/** T-1039：双菜单会话树归属过滤——只留本侧用途会话；无用途的历史会话（融合期
+ * 产物）归测试菜单（旧「Agent 对话」入口的继承侧），产品菜单不混入。 */
+export function filterMenuSessions<T extends { purpose?: string }>(sessions: T[], fixedPurpose: string): T[] {
+  if (!fixedPurpose) return sessions;
+  return sessions.filter(s =>
+    (s as any).purpose === fixedPurpose
+    || (!(s as any).purpose && fixedPurpose === 'test_workbench'));
+}
+
+// ── T-1039：对话双菜单（测试=/agent · 产品=/agent-product）路由与存储键派生 ──
+
+/** 会话用途 → 归属菜单路由。产品用途归 /agent-product；测试/未知/辅助用途回落 /agent
+ * （深链缺用途时先进测试菜单，AgentChat 路由守卫会按真实用途改道）。 */
+export function chatRouteForPurpose(purpose: string): string {
+  return purpose === 'requirement_interview' ? '/agent-product' : '/agent';
+}
+
+/** 双菜单隔离的 localStorage 键——同浏览器两侧菜单各自记住「上次会话/选中用途」，
+ * 互不串扰（体验基线①）。fixedPurpose 为空（兼容直开组件）按测试侧派生。 */
+export function chatStorageKeys(fixedPurpose: string): { sessionKey: string; purposeKey: string } {
+  const side = fixedPurpose === 'requirement_interview' ? 'product' : 'test';
+  return { sessionKey: `sg_agent_session:${side}`, purposeKey: `sg_picked_purpose:${side}` };
+}

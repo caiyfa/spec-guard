@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isToolError, filterTreeSessions, stripRefBlock, resolveViewingFocus } from './utils';
+import { isToolError, filterTreeSessions, filterMenuSessions, stripRefBlock, resolveViewingFocus, chatRouteForPurpose, chatStorageKeys } from './utils';
 
 describe('isToolError 工具结果语义判错', () => {
   // 回归用例：会话 20260824_172320_84d21cfa，spec sync 返回 ok:true 但
@@ -97,5 +97,49 @@ describe('resolveViewingFocus（验收缺陷 A：最近文件签记忆）', () =
     expect(resolveViewingFocus('sql_aux', 'file:gone.yaml', tabs)).toBeNull();
     expect(resolveViewingFocus('sql_aux', '', tabs)).toBeNull();
     expect(resolveViewingFocus('todos', '', tabs)).toBeNull();
+  });
+});
+
+describe('chatRouteForPurpose（T-1039 双菜单分流）', () => {
+  it('产品用途归 /agent-product，测试/未知/辅助用途归 /agent', () => {
+    expect(chatRouteForPurpose('requirement_interview')).toBe('/agent-product');
+    expect(chatRouteForPurpose('test_workbench')).toBe('/agent');
+    expect(chatRouteForPurpose('sql_assistant')).toBe('/agent');  // 辅助会话留测试侧默认
+    expect(chatRouteForPurpose('')).toBe('/agent');  // 无用途深链默认测试侧（守卫再改道）
+  });
+});
+
+describe('chatStorageKeys（T-1039 存储键按菜单隔离）', () => {
+  it('产品侧派生 product 键，测试侧/缺省派生 test 键，两侧互不串扰', () => {
+    expect(chatStorageKeys('requirement_interview')).toEqual({
+      sessionKey: 'sg_agent_session:product', purposeKey: 'sg_picked_purpose:product',
+    });
+    expect(chatStorageKeys('test_workbench')).toEqual({
+      sessionKey: 'sg_agent_session:test', purposeKey: 'sg_picked_purpose:test',
+    });
+    expect(chatStorageKeys('')).toEqual(chatStorageKeys('test_workbench'));
+    expect(chatStorageKeys('requirement_interview').sessionKey)
+      .not.toBe(chatStorageKeys('test_workbench').sessionKey);
+  });
+});
+
+describe('filterMenuSessions（T-1039 会话树归属过滤）', () => {
+  const sessions = [
+    { id: 'a', purpose: 'test_workbench' },
+    { id: 'b', purpose: 'requirement_interview' },
+    { id: 'c', purpose: '' },          // 融合期历史会话
+    { id: 'd' },                        // 更早期无字段会话
+  ] as any[];
+
+  it('测试菜单：本侧用途 + 无用途历史会话', () => {
+    expect(filterMenuSessions(sessions, 'test_workbench').map(s => s.id)).toEqual(['a', 'c', 'd']);
+  });
+
+  it('产品菜单：只留本侧用途，历史会话不混入', () => {
+    expect(filterMenuSessions(sessions, 'requirement_interview').map(s => s.id)).toEqual(['b']);
+  });
+
+  it('无固定用途（兼容模式）：不过滤', () => {
+    expect(filterMenuSessions(sessions, '')).toHaveLength(4);
   });
 });
