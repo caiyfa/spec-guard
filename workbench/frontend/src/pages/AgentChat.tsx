@@ -1087,22 +1087,31 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
       const pr = await agentApi.listPurposes();
       setPurposes(pr.purposes || []);
     } catch { /* 页签降级为通用集 */ }
-    // T-1039: 双菜单路由守卫——拉消息前先查用途归属，属另一侧菜单则改道（不做任何
-    // 本侧状态变更；先清本侧恢复键防回环。仅两个主用途参与分流，辅助会话等未知
-    // 用途留当前页；查用途失败不阻塞，按本侧恢复，后端 WS 仍有用途角色校验兜底）
-    if (fixedPurpose) {
-      try {
-        const lst = await agentApi.listSessions(ws, '', true);
-        const meta = (lst.sessions || []).find((s: any) => s.id === id);
-        const p = meta?.purpose || '';
-        if (p && p !== fixedPurpose && (p === 'test_workbench' || p === 'requirement_interview')) {
-          localStorage.removeItem(LS_SESSION);
-          navigate(`${chatRouteForPurpose(p)}?session=${encodeURIComponent(id)}`);
-          return;
-        }
-      } catch { /* 查用途失败不阻塞会话加载 */ }
-    }
-    const r = await agentApi.getSession(id, ws);
+    // T-1039: 双菜单路由守卫——挂载期先查会话归属，一次全量列表三用：
+    // ① purpose 归属另一侧菜单则改道（不做任何本侧状态变更，先清本侧恢复键防回环；
+    //    仅两个主用途参与分流，辅助会话等未知用途留当前页）
+    // ② T-1040: 深链会话可能属非当前工作区（如 smoke 会话挂 tdm 选择器打开）——
+    //    用列表携带的 workspace 精准打开，否则 getSession 404 空态
+    // ③ 兼容模式（无固定用途）带出锁定用途
+    // 查归属失败不阻塞，按本侧/当前工作区恢复，后端 WS 仍有用途角色校验兜底
+    let realWs = ws;
+    try {
+      const lst = await agentApi.listSessions('', '', true);
+      const meta = (lst.sessions || []).find((s: any) => s.session_id === id || s.id === id);
+      const p = meta?.purpose || '';
+      if (fixedPurpose && p && p !== fixedPurpose
+        && (p === 'test_workbench' || p === 'requirement_interview')) {
+        localStorage.removeItem(LS_SESSION);
+        navigate(`${chatRouteForPurpose(p)}?session=${encodeURIComponent(id)}`);
+        return;
+      }
+      if (meta?.workspace) realWs = meta.workspace;
+      if (!fixedPurpose && p) {
+        setPickedPurpose(p);
+        localStorage.setItem(LS_PURPOSE, p);
+      }
+    } catch { /* 查归属失败不阻塞会话加载 */ }
+    const r = await agentApi.getSession(id, realWs);
     const msgs = r.messages || [];
     // T-1021: run 进行中——截断到基线（丢弃 run 期间已落盘的部分消息，attach
     // 回放事件流将重建它们，天然去重），进入 loading 并 attach 续上实时流；
@@ -1118,17 +1127,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
     setSessionId(id);
     setReadingFeed(r.reading_feed || []);  // T-511: 阅读足迹从后端重建（跨刷新保持）
     setWritingFeed(r.writing_feed || []);  // S0.6: 更新足迹从后端重建（跨刷新保持）
-    // T-010: 恢复会话时带出锁定用途（会话列表含 purpose 字段；找不到时保持现状）
-    // T-1039: 固定用途菜单跳过——pickedPurpose 已由路由锁定，归属守卫在上方完成
-    if (!fixedPurpose) try {
-      const lst = await agentApi.listSessions(ws, '', true);
-      const meta = (lst.sessions || []).find((s: any) => s.id === id);
-      const p = meta?.purpose || '';
-      if (p) {
-        setPickedPurpose(p);
-        localStorage.setItem(LS_PURPOSE, p);
-      }
-    } catch { /* 恢复用途失败不阻塞会话加载 */ }
+    // T-010/T-1039: 锁定用途已在上方归属查询（③）统一带出
     setPlanItems([]);
     setStructuredTodos([]);  // H-FE: 清空结构化待办
     setReadingFeed([]);  // T-511：足迹=本轮运行依据，恢复历史会话时清空（不持久化）
