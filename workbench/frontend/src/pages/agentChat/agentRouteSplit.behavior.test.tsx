@@ -60,7 +60,7 @@ function DualChatRoutes() {
         <Route path="/agent" element={<AgentChat key="agent-test" fixedPurpose="test_workbench" />} />
         <Route path="/agent-product" element={<AgentChat key="agent-product" fixedPurpose="requirement_interview" />} />
       </Routes>
-      <button onClick={() => { _store.side === 'test' ? nav('/agent-product') : nav('/agent'); }}>switch-side</button>
+      <button onClick={() => { if (_store.side === 'test') { nav('/agent-product'); } else { nav('/agent'); } }}>switch-side</button>
     </>
   );
 }
