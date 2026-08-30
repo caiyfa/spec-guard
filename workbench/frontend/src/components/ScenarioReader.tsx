@@ -30,7 +30,7 @@ function Chip({ text, tone = 'gray' }: { text: string; tone?: 'gray' | 'info' | 
   const cls = tone === 'info' ? 'bg-info/15 text-info'
     : tone === 'warn' ? 'bg-yellow-900/30 text-yellow-500'
     : 'bg-surface-3 text-gray-400';
-  return <span className={`px-1.5 py-0.5 rounded text-[10px] ${cls}`}>{text}</span>;
+  return <span className={`px-1.5 py-0.5 rounded text-fs-aux ${cls}`}>{text}</span>;
 }
 
 function Section({ icon, title, count, children }: {
@@ -63,11 +63,11 @@ function AnchorChip({ aid, anchor, open, onToggle }: {
 }) {
   // anchor undefined = 仍在加载
   if (anchor === undefined) {
-    return <span className="px-1.5 py-0.5 rounded text-[10px] bg-surface-3 text-gray-600">{aid} …</span>;
+    return <span className="px-1.5 py-0.5 rounded text-fs-aux bg-surface-3 text-gray-600">{aid} …</span>;
   }
   if (!anchor.found) {
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] bg-surface-3 text-gray-600"
+      <span className="px-1.5 py-0.5 rounded text-fs-aux bg-surface-3 text-gray-600"
         title="当前工作区 spec 锚点清单中未找到该编号">
         {aid} <span className="text-gray-700">未找到</span>
       </span>
@@ -76,7 +76,7 @@ function AnchorChip({ aid, anchor, open, onToggle }: {
   const m = anchor.matches[0];
   return (
     <button onClick={onToggle}
-      className={`px-1.5 py-0.5 rounded text-[10px] text-left transition-colors ${
+      className={`px-1.5 py-0.5 rounded text-fs-aux text-left transition-colors ${
         open ? 'bg-info/25 text-info' : 'bg-info/10 text-info/80 hover:bg-info/20'}`}
       title={`${m.title}\n${m.module}/${m.feature} · 点击${open ? '收起' : '展开'} spec 原文`}>
       <span className="font-mono">{aid}</span>
@@ -340,7 +340,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
             return (
               <button key={t.id} onClick={() => selectTab(t.id)}
                 title={`${t.label}${n != null ? `（${n} 条）` : ''}`}
-                className={`px-2 py-1 rounded text-[10px] whitespace-nowrap transition-colors ${
+                className={`px-2 py-1 rounded text-fs-aux whitespace-nowrap transition-colors ${
                   activeTab === t.id ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
                 }`}>
                 {t.icon} {t.label}
@@ -389,7 +389,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
               <div className="space-y-1.5">
                 {covers.length > 0 && (
                   <div className="flex items-start gap-2 flex-wrap">
-                    <span className="text-[10px] text-gray-600 py-0.5 flex-shrink-0">covers</span>
+                    <span className="text-fs-aux text-gray-600 py-0.5 flex-shrink-0">covers</span>
                     {covers.map((aid) => (
                       <AnchorChip key={aid} aid={aid} anchor={refs[aid]}
                         open={openAnchor === aid}
@@ -399,7 +399,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                 )}
                 {relatedAc.length > 0 && (
                   <div className="flex items-start gap-2 flex-wrap">
-                    <span className="text-[10px] text-gray-600 py-0.5 flex-shrink-0">验收标准</span>
+                    <span className="text-fs-aux text-gray-600 py-0.5 flex-shrink-0">验收标准</span>
                     {relatedAc.map((aid) => (
                       <AnchorChip key={aid} aid={aid} anchor={refs[aid]}
                         open={openAnchor === aid}
@@ -407,7 +407,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                     ))}
                   </div>
                 )}
-                {refsError && <div className="text-[10px] text-fail">锚点原文加载失败：{refsError}</div>}
+                {refsError && <div className="text-fs-aux text-fail">锚点原文加载失败：{refsError}</div>}
                 {openAnchor && refs[openAnchor]?.found && (
                   <AnchorSourcePanel anchor={refs[openAnchor]}
                     onOpenDoc={(match) => setDocView({ aid: openAnchor, match })}
@@ -426,7 +426,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                   return (
                     <div key={i} className="rounded-lg border border-border bg-surface-2/70 px-3 py-2">
                       <div className="flex items-center gap-2 text-[12px]">
-                        <span className="text-gray-600 text-[10px] w-4 flex-shrink-0">{i + 1}</span>
+                        <span className="text-gray-600 text-fs-aux w-4 flex-shrink-0">{i + 1}</span>
                         <span>{d.icon}</span>
                         <span className="text-gray-500 flex-shrink-0">{d.typeLabel}</span>
                         <span className="text-gray-200 font-mono text-[11px] break-all">{d.title}</span>
@@ -441,13 +441,13 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                         </div>
                       )}
                       {d.lines.length > 0 && (
-                        <div className="mt-0.5 ml-6 text-[10px] text-gray-600 space-y-0">
+                        <div className="mt-0.5 ml-6 text-fs-aux text-gray-600 space-y-0">
                           {d.lines.map((l, j) => <div key={j} className="break-all">{l}</div>)}
                         </div>
                       )}
                       {d.code && (
                         <details className="mt-1 ml-6">
-                          <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-info">
+                          <summary className="text-fs-aux text-gray-600 cursor-pointer hover:text-info">
                             查看{d.code.lang === 'sql' ? ' SQL' : d.code.lang === 'python' ? '脚本' : '报文'}
                           </summary>
                           <div className="mt-1"><CodeBlock lang={d.code.lang} text={d.code.text} /></div>
@@ -472,10 +472,10 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                         <span className="flex-shrink-0">{d.icon}</span>
                         <span className="text-gray-300 break-all flex-1">{d.text}</span>
                       </div>
-                      {comment && <div className="ml-5 text-[10px] text-gray-600 whitespace-pre-wrap">{comment}</div>}
+                      {comment && <div className="ml-5 text-fs-aux text-gray-600 whitespace-pre-wrap">{comment}</div>}
                       {d.code && (
                         <details className="ml-5 mt-0.5">
-                          <summary className="text-[10px] text-gray-600 cursor-pointer hover:text-info">查看明细</summary>
+                          <summary className="text-fs-aux text-gray-600 cursor-pointer hover:text-info">查看明细</summary>
                           <div className="mt-1"><CodeBlock lang={d.code.lang} text={d.code.text} /></div>
                         </details>
                       )}
@@ -487,7 +487,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
           )}
 
           {activeTab === 'tail' && hasTail && (
-            <div className="rounded-lg border border-border/60 bg-surface-2/50 px-3 py-2 text-[10px] text-gray-600 space-y-1">
+            <div className="rounded-lg border border-border/60 bg-surface-2/50 px-3 py-2 text-fs-aux text-gray-600 space-y-1">
               {!!(Array.isArray(requires.accounts) && requires.accounts.length) && (
                 <div>所需账号：{(requires.accounts as unknown[]).map(String).join('、')}</div>
               )}

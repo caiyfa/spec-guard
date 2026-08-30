@@ -169,7 +169,7 @@ export default function Scenarios() {
           {searchQuery.length >= 2 ? (
             // 搜索结果模式
             <div className="flex-1 overflow-y-auto p-1">
-              <div className="text-[10px] text-gray-500 px-1 py-1">
+              <div className="text-fs-aux text-gray-500 px-1 py-1">
                 {searching ? '搜索中...' : `${searchResults.length} 个结果`}
               </div>
               {searchResults.map((r, i) => (
@@ -190,13 +190,13 @@ export default function Scenarios() {
                       onClick={e => e.stopPropagation()}
                       className="w-3 h-3 accent-info flex-shrink-0"
                     />
-                    <span className="truncate flex-1 font-mono text-[10px]">{r.path}</span>
+                    <span className="truncate flex-1 font-mono text-fs-aux">{r.path}</span>
                     {r.match_type === 'content' && r.line && (
                       <span className="text-fs-micro text-gray-600">L{r.line}</span>
                     )}
                   </div>
                   {r.preview && (
-                    <div className="text-[10px] text-gray-600 mt-0.5 truncate pl-5">
+                    <div className="text-fs-aux text-gray-600 mt-0.5 truncate pl-5">
                       {r.preview.replace(/\n/g, ' ')}
                     </div>
                   )}
@@ -240,7 +240,7 @@ export default function Scenarios() {
               </button>
             </div>
             {meta && (
-              <div className="mt-2 text-[10px] text-gray-500">
+              <div className="mt-2 text-fs-aux text-gray-500">
                 ID: <span className="font-mono text-info">{meta.id}</span>
                 {currentWorkspace && <span className="ml-2">工作区: {currentWorkspace}</span>}
               </div>
@@ -254,7 +254,7 @@ export default function Scenarios() {
               {selectedFiles.size > 0 && (
                 <button
                   onClick={() => setSelectedFiles(new Set())}
-                  className="text-[10px] text-gray-500 hover:text-fail"
+                  className="text-fs-aux text-gray-500 hover:text-fail"
                 >
                   清空
                 </button>
@@ -268,11 +268,11 @@ export default function Scenarios() {
               <div className="space-y-0.5">
                 {Array.from(selectedFiles).map(path => (
                   <div key={path} className="flex items-center gap-2 px-2 py-1 hover:bg-surface-3 rounded group">
-                    <span className="text-[10px]">📄</span>
+                    <span className="text-fs-aux">📄</span>
                     <span className="text-xs font-mono text-gray-400 truncate flex-1">{path}</span>
                     <button
                       onClick={() => toggleFile(path)}
-                      className="text-red-500 text-[10px] opacity-0 group-hover:opacity-100"
+                      className="text-red-500 text-fs-aux opacity-0 group-hover:opacity-100"
                     >✕</button>
                   </div>
                 ))}
@@ -303,7 +303,7 @@ export default function Scenarios() {
         <div className="w-72 flex-shrink-0 bg-surface-1 rounded-lg border border-border overflow-hidden flex flex-col">
           <div className="px-3 py-2 border-b border-border text-xs text-gray-500 bg-surface-2 flex items-center justify-between">
             <span>已有场景（{existingMetas.length}）</span>
-            <button onClick={loadMetas} className="text-[10px] text-gray-600 hover:text-info">刷新</button>
+            <button onClick={loadMetas} className="text-fs-aux text-gray-600 hover:text-info">刷新</button>
           </div>
           <div className="flex-1 overflow-y-auto p-1">
             {existingMetas.length === 0 ? (
@@ -317,9 +317,9 @@ export default function Scenarios() {
                     meta?.id === m.id ? 'bg-info/10 text-info' : 'hover:bg-surface-3 text-gray-400'
                   }`}
                 >
-                  <span className="font-mono text-[10px] text-info">{m.id}</span>
+                  <span className="font-mono text-fs-aux text-info">{m.id}</span>
                   <span className="truncate flex-1">{m.name}</span>
-                  <span className="text-[10px] text-gray-600">{m.info_pack?.length || 0} 文件</span>
+                  <span className="text-fs-aux text-gray-600">{m.info_pack?.length || 0} 文件</span>
                 </button>
               ))
             )}

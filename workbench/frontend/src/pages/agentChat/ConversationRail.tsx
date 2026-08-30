@@ -37,7 +37,7 @@ export function ConversationRail({ userMsgs, railPos, activeUserGroupIdx, inView
             </button>
             {hoverUserIdx === p.idx && um && (
               <div className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-72 bg-surface-2 border border-border rounded-lg shadow-xl p-2.5 pointer-events-none">
-                <div className="text-[10px] text-railDot mb-1 font-medium">第 {seq} 轮 · 用户消息</div>
+                <div className="text-fs-aux text-railDot mb-1 font-medium">第 {seq} 轮 · 用户消息</div>
                 <div className="text-xs text-gray-300 line-clamp-3 break-all">{um.content}</div>
               </div>
             )}

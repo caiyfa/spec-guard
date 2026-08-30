@@ -114,7 +114,7 @@ export default function SpecValidation() {
                   {specResult.verdict === 'PASS' ? '✅ PASS' : '❌ REJECT'}
                   <span className="text-gray-500 ml-2">delta: {specResult.delta} · mode: {specResult.mode}</span>
                 </span>
-                <span className="text-[10px] text-gray-500">
+                <span className="text-fs-aux text-gray-500">
                   ERROR={specResult.summary.error} WARN={specResult.summary.warn} INFO={specResult.summary.info || 0}
                 </span>
               </div>
@@ -142,7 +142,7 @@ export default function SpecValidation() {
                   {tcResult.verdict === 'PASS' ? '✅ PASS' : '❌ REJECT'}
                   <span className="text-gray-500 ml-2">共 {tcResult.total_scenarios} 个场景</span>
                 </span>
-                <span className="text-[10px] text-gray-500">
+                <span className="text-fs-aux text-gray-500">
                   ERROR={tcResult.summary.error} WARN={tcResult.summary.warn}
                 </span>
               </div>

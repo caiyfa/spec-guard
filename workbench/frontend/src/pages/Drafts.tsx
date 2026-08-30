@@ -294,7 +294,7 @@ export default function Drafts() {
                   )}
                 </div>
                 <div className="text-xs text-gray-500 truncate">{d.title || d.filename}</div>
-                <div className="text-[10px] text-gray-600 mt-0.5">
+                <div className="text-fs-aux text-gray-600 mt-0.5">
                   {d.modified}{d.author ? ` · ${d.author}` : ''}
                 </div>
                 {/* T-061：三闸状态徽章 */}
@@ -319,7 +319,7 @@ export default function Drafts() {
                 {/* A+B：文件依赖展示 */}
                 {d.source_files && d.source_files.length > 0 && (
                   <div className="mt-1">
-                    <details className="text-[10px]">
+                    <details className="text-fs-aux">
                       <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
                         📄 {d.source_files.length} 个文件依赖
                       </summary>
@@ -333,7 +333,7 @@ export default function Drafts() {
                 )}
                 {/* K-026：信息包关联可见化——此前仅 stale 时 tooltip 提及，用户看不到草稿来自哪个信息包 */}
                 {d.source_meta && (
-                  <div className="text-[10px] mt-0.5">
+                  <div className="text-fs-aux mt-0.5">
                     <span className="px-1 py-0.5 rounded bg-info/15 text-info/90"
                       title={`本草稿由信息包 ${d.source_meta} 派生（Agent 对话生成）`}>
                       📦 {d.source_meta}
@@ -369,7 +369,7 @@ export default function Drafts() {
             {/* 操作栏 */}
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               {/* T-061：三闸状态卡（write 自动跑② → 人评审① → promote 跑③） */}
-              <div className="flex items-center gap-1 px-2 py-1 rounded bg-surface-2 border border-border text-[10px]">
+              <div className="flex items-center gap-1 px-2 py-1 rounded bg-surface-2 border border-border text-fs-aux">
                 <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
                   ① {selectedDraft?.gates?.g1 === 'approved' ? '已评审' : selectedDraft?.gates?.g1 === 'rejected' ? '已驳回' : '待评审'}
                 </span>
@@ -469,7 +469,7 @@ export default function Drafts() {
                 <ul className="space-y-1">
                   {dependsOn.map((dep, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs">
-                      <span className="px-1.5 py-0.5 rounded bg-info/20 text-info font-mono text-[10px]">
+                      <span className="px-1.5 py-0.5 rounded bg-info/20 text-info font-mono text-fs-aux">
                         {dep}
                       </span>
                       <span className="text-gray-500">上游依赖</span>
@@ -555,12 +555,12 @@ export default function Drafts() {
                   </ul>
                 )}
                 {trialResult.run_id && (
-                  <div className="mt-1 text-[10px] text-gray-500 font-mono select-all">
+                  <div className="mt-1 text-fs-aux text-gray-500 font-mono select-all">
                     任务号：{trialResult.run_id}（试跑失败时把任务号发给 Agent 可排查：日志/断言差异/DB 证据）
                   </div>
                 )}
                 {trialResult.report_dir && (
-                  <div className="mt-1 text-[10px] text-gray-600">报告：{trialResult.report_dir}</div>
+                  <div className="mt-1 text-fs-aux text-gray-600">报告：{trialResult.report_dir}</div>
                 )}
               </div>
             )}

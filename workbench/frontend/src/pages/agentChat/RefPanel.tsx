@@ -52,7 +52,7 @@ export function RefPanel({ refs, onView }: {
           {refs.map((r, i) => (
             <div key={i}
               onClick={() => r.type !== 'info_pack' && onView(r.path, r.type === 'draft' ? 'draft' : 'file')}
-              className={`flex items-center gap-1.5 px-1 py-0.5 rounded text-[10px] ${r.type !== 'info_pack' ? 'cursor-pointer hover:bg-surface-3' : ''}`}>
+              className={`flex items-center gap-1.5 px-1 py-0.5 rounded text-fs-aux ${r.type !== 'info_pack' ? 'cursor-pointer hover:bg-surface-3' : ''}`}>
               <span>{r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'}</span>
               <span className="font-mono text-gray-400 truncate flex-1" title={r.path}>{r.label || r.path}</span>
               <FreshBadge status={status[`${r.type}:${r.path}`] || ''} />

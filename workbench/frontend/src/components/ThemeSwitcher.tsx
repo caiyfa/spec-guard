@@ -70,7 +70,7 @@ export default function ThemeSwitcher() {
       <Modal open={open} onClose={() => setOpen(false)} title="🎨 外观设置" width={300}>
         {/* 主题列表 */}
         <div className="p-2">
-          <div className="px-1.5 py-1 text-[10px] text-gray-600">界面主题</div>
+          <div className="px-1.5 py-1 text-fs-aux text-gray-600">界面主题</div>
           {THEMES.map(t => (
             <button key={t.id}
               onClick={() => applyTheme(t.id)}
@@ -91,7 +91,7 @@ export default function ThemeSwitcher() {
         {/* K-044：背景图片设置 */}
         <div className="mx-2 mb-2 pt-2 border-t border-border/60 px-1.5 pb-1">
           <div className="flex items-center justify-between py-1">
-            <span className="text-[10px] text-gray-600">背景图片</span>
+            <span className="text-fs-aux text-gray-600">背景图片</span>
             <span className="flex gap-2">
               <input ref={fileRef} type="file" accept="image/*" className="hidden"
                 onChange={e => handleBgFile(e.target.files?.[0])} />
@@ -125,15 +125,15 @@ export default function ThemeSwitcher() {
               </label>
             </>
           )}
-          {bgError && <div className="text-[10px] text-fail py-0.5">{bgError}</div>}
+          {bgError && <div className="text-fs-aux text-fail py-0.5">{bgError}</div>}
           {!bg.image && !bgError && (
-            <div className="text-[10px] text-gray-700 py-0.5">上传后建议搭配「🧊 磨砂」主题</div>
+            <div className="text-fs-aux text-gray-700 py-0.5">上传后建议搭配「🧊 磨砂」主题</div>
           )}
         </div>
 
         {/* 多轮对话导航 */}
         <div className="mx-2 mb-2 pt-2 border-t border-border/60 px-1.5 pb-1">
-          <div className="px-1.5 py-1 text-[10px] text-gray-600">对话导航</div>
+          <div className="px-1.5 py-1 text-fs-aux text-gray-600">对话导航</div>
           {/* 图标颜色 */}
           <div className="flex items-center justify-between py-1 px-1.5">
             <span className="text-[11px] text-gray-500">图标颜色</span>

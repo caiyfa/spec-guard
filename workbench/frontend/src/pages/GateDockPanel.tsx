@@ -80,7 +80,7 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
             : '当前会话未绑定需求面试'}
         </div>
         <button onClick={load} disabled={loading}
-          className="text-[10px] text-gray-600 hover:text-info flex-shrink-0">
+          className="text-fs-aux text-gray-600 hover:text-info flex-shrink-0">
           {loading ? '加载中…' : '刷新'}
         </button>
       </div>
@@ -94,7 +94,7 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
       {!loading && !interview && (
         <div className="text-xs text-gray-600 text-center py-6 space-y-1">
           <div>操作台跟随需求面试会话工作</div>
-          <div className="text-[10px] text-gray-700">在产品工作台开标后，此处聚合材料/评分/冻结/禅道待办</div>
+          <div className="text-fs-aux text-gray-700">在产品工作台开标后，此处聚合材料/评分/冻结/禅道待办</div>
         </div>
       )}
 

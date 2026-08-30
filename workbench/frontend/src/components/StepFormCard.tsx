@@ -82,14 +82,14 @@ export default function StepFormCard({
         className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-surface-3/50"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="text-[10px] text-gray-600 w-4">{index + 1}</span>
+        <span className="text-fs-aux text-gray-600 w-4">{index + 1}</span>
         <span>{meta.icon}</span>
         <span className="text-[11px] font-medium text-gray-300">{meta.label}</span>
-        <span className="text-[10px] text-gray-500 truncate flex-1">{summary}</span>
+        <span className="text-fs-aux text-gray-500 truncate flex-1">{summary}</span>
         {saveName && (
-          <code className="text-[10px] font-mono text-pass/70 bg-pass/10 px-1.5 rounded">→ {saveName}</code>
+          <code className="text-fs-aux font-mono text-pass/70 bg-pass/10 px-1.5 rounded">→ {saveName}</code>
         )}
-        <span className="text-gray-600 text-[10px]">{expanded ? '▾' : '▸'}</span>
+        <span className="text-gray-600 text-fs-aux">{expanded ? '▾' : '▸'}</span>
       </div>
 
       {/* ── 展开表单 ── */}
@@ -97,7 +97,7 @@ export default function StepFormCard({
         <div className="border-t border-border/30 p-3 space-y-2.5">
           {/* 类型选择 */}
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500">类型</span>
+            <span className="text-fs-aux text-gray-500">类型</span>
             <select
               value={step.type}
               onChange={(e) => onChange(index, { type: e.target.value, body: { save: b.save } })}
@@ -273,7 +273,7 @@ export default function StepFormCard({
           {/* ── poll ── */}
           {step.type === 'poll' && (
             <>
-              <div className="text-[10px] text-gray-500 bg-surface-3/50 rounded px-2 py-1.5">
+              <div className="text-fs-aux text-gray-500 bg-surface-3/50 rounded px-2 py-1.5">
                 轮询配置（call + until 条件需通过 YAML 模式编辑）
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -343,18 +343,18 @@ export default function StepFormCard({
             </Row>
             <div className="flex items-center gap-2 mt-1">
               <button type="button" onClick={runTryout} disabled={tryout?.loading}
-                className="text-[10px] px-2 py-0.5 rounded border border-info/40 text-info hover:bg-info/10 disabled:opacity-50"
+                className="text-fs-aux px-2 py-0.5 rounded border border-info/40 text-info hover:bg-info/10 disabled:opacity-50"
                 title="编辑态试跑（不含运行时 save 变量；env.* 由后端插值）">
                 ▶ 试跑
               </button>
-              <span className="text-[10px] text-gray-600">编辑态试跑不含运行时变量</span>
+              <span className="text-fs-aux text-gray-600">编辑态试跑不含运行时变量</span>
             </div>
             {tryout && (
               <div className="mt-1 border border-border rounded p-2 bg-surface-2">
                 {tryout.loading && <div className="text-xs text-gray-500">查询中…</div>}
                 {tryout.error && <div className="text-xs text-red-400">❌ {tryout.error}</div>}
                 {tryout.result && <SqlResultTable rows={tryout.result.rows} row_count={tryout.result.row_count} truncated={tryout.result.truncated} />}
-                <button type="button" onClick={() => setTryout(null)} className="text-[10px] text-gray-500 hover:text-gray-300 mt-1">关闭</button>
+                <button type="button" onClick={() => setTryout(null)} className="text-fs-aux text-gray-500 hover:text-gray-300 mt-1">关闭</button>
               </div>
             )}
             </>
@@ -368,7 +368,7 @@ export default function StepFormCard({
                   rows={7} placeholder={"rows = ns['rows']\noutput = [r for r in rows if r['score'] is None]\nprint(f'过滤出 {len(output)} 行')"}
                   className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono leading-snug" />
               </Row>
-              <div className="text-[10px] text-gray-600 bg-surface-3/40 rounded px-2 py-1.5 space-y-0.5">
+              <div className="text-fs-aux text-gray-600 bg-surface-3/40 rounded px-2 py-1.5 space-y-0.5">
                 <div>可用：<code className="text-info/70">ns</code>（读写变量）、<code className="text-info/70">save(k,v)</code>、<code className="text-info/70">output</code>（配合 save 输出）、<code className="text-info/70">http(account)</code>、<code className="text-info/70">db</code>、<code className="text-info/70">fn.date()</code>、<code className="text-info/70">json/re/time/datetime/uuid</code></div>
               </div>
             </>
@@ -420,7 +420,7 @@ function OutputHints({ type, name }: { type: string; name: string }) {
   const paths = hints[type];
   if (!paths) return null;
   return (
-    <span className="ml-2 text-[10px] text-gray-600">
+    <span className="ml-2 text-fs-aux text-gray-600">
       {paths.map((p) => <code key={p} className="mr-1 text-pass/50">{`{{${name}${p}}}`}</code>)}
     </span>
   );
@@ -450,9 +450,9 @@ function KVEditor({ label, value, onChange, vp }: {
   return (
     <div>
       <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[10px] text-gray-500">{label}</span>
+        <span className="text-fs-aux text-gray-500">{label}</span>
         <button onClick={() => onChange({ ...value, '': '' })}
-          className="text-[10px] text-gray-600 hover:text-info">+ 添加</button>
+          className="text-fs-aux text-gray-600 hover:text-info">+ 添加</button>
       </div>
       {entries.map(([k, v], i) => (
         <div key={i} className="flex items-center gap-1 mb-1">
@@ -461,8 +461,8 @@ function KVEditor({ label, value, onChange, vp }: {
               const ne = [...entries]; ne[i] = [e.target.value, v];
               onChange(Object.fromEntries(ne));
             }}
-            className="w-24 bg-surface-3 border border-border/50 rounded px-1.5 py-0.5 text-[10px] font-mono" />
-          <span className="text-gray-600 text-[10px]">=</span>
+            className="w-24 bg-surface-3 border border-border/50 rounded px-1.5 py-0.5 text-fs-aux font-mono" />
+          <span className="text-gray-600 text-fs-aux">=</span>
           <VarInput value={String(v ?? '')} onChange={(val) => {
             const ne = [...entries]; ne[i] = [k, val];
             onChange(Object.fromEntries(ne));
@@ -471,7 +471,7 @@ function KVEditor({ label, value, onChange, vp }: {
             onChange(Object.fromEntries(ne));
           })} />
           <button onClick={() => onChange(Object.fromEntries(entries.filter((_, j) => j !== i)))}
-            className="text-gray-600 hover:text-fail text-[10px]">✕</button>
+            className="text-gray-600 hover:text-fail text-fs-aux">✕</button>
         </div>
       ))}
     </div>
@@ -484,7 +484,7 @@ function Row({ label, required, className, children }: {
 }) {
   return (
     <div className={className}>
-      <label className="block text-[10px] text-gray-500 mb-0.5">
+      <label className="block text-fs-aux text-gray-500 mb-0.5">
         {label}{required && <span className="text-fail">*</span>}
       </label>
       <div className="flex items-center">{children}</div>
@@ -498,7 +498,7 @@ function MiniBtn({ onClick, title, danger, children }: {
 }) {
   return (
     <button onClick={(e) => { e.stopPropagation(); onClick(); }} title={title}
-      className={`text-[10px] px-1 py-0.5 rounded ${danger ? 'text-gray-600 hover:text-fail' : 'text-gray-600 hover:text-info'}`}>
+      className={`text-fs-aux px-1 py-0.5 rounded ${danger ? 'text-gray-600 hover:text-fail' : 'text-gray-600 hover:text-info'}`}>
       {children}
     </button>
   );

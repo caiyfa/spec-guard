@@ -119,35 +119,35 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
           {t.title}
         </span>
         {!draft && (
-          <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${badge.cls}`}>
+          <span className={`px-1.5 py-0.5 rounded text-fs-aux shrink-0 ${badge.cls}`}>
             {badge.label}
           </span>
         )}
         {draft && (
-          <span className="px-1.5 py-0.5 rounded text-[10px] shrink-0 bg-info/10 text-info">
+          <span className="px-1.5 py-0.5 rounded text-fs-aux shrink-0 bg-info/10 text-info">
             草案
           </span>
         )}
         {t.category && (
-          <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${(CATEGORY_BADGE[t.category] || CATEGORY_BADGE.routine).cls}`}>
+          <span className={`px-1.5 py-0.5 rounded text-fs-aux shrink-0 ${(CATEGORY_BADGE[t.category] || CATEGORY_BADGE.routine).cls}`}>
             {(CATEGORY_BADGE[t.category] || CATEGORY_BADGE.routine).label}
           </span>
         )}
         {t.priority && t.priority !== 'normal' && (
-          <span className={`text-[10px] shrink-0 ${(PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.normal).cls}`}
+          <span className={`text-fs-aux shrink-0 ${(PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.normal).cls}`}
             title={`优先级：${t.priority}（信号推导初值，可编辑）`}>
             {(PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.normal).label}
           </span>
         )}
         {!draft && (relatedCount || 0) > 0 && (
-          <button className="text-[10px] shrink-0 text-emerald-400 hover:underline"
+          <button className="text-fs-aux shrink-0 text-emerald-400 hover:underline"
             title="跨群关联（点击查看多群证据并排）"
             onClick={e => { e.stopPropagation(); onOpenRelations?.(); }}>
             🔗 {(relatedCount || 0) + 1} 群
           </button>
         )}
-        {t.continues && <span className="text-[10px] text-amber-400">⤺ 延续</span>}
-        <span className="ml-auto flex items-center gap-2 text-[10px] text-gray-500 shrink-0">
+        {t.continues && <span className="text-fs-aux text-amber-400">⤺ 延续</span>}
+        <span className="ml-auto flex items-center gap-2 text-fs-aux text-gray-500 shrink-0">
           {time && <span>{time}</span>}
           <span>{t.message_count} 条 · {t.participants_count} 人</span>
           {t.rev !== undefined && t.rev > 1 && <span title="乐观锁版本">v{t.rev}</span>}
@@ -164,18 +164,18 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
             const dom = tagIdx?.domainOf(k) || '';
             return (
               <span key={k}
-                className="px-1.5 py-0.5 rounded bg-surface-3 border border-border text-[10px] text-gray-400"
+                className="px-1.5 py-0.5 rounded bg-surface-3 border border-border text-fs-aux text-gray-400"
                 title={dom ? `标签 ${k} · 域：${dom}` : k}>
                 {k}
               </span>
             );
           })}
           {(t.keywords || []).length > 4 && (
-            <span className="text-[10px] text-gray-600">+{t.keywords!.length - 4}</span>
+            <span className="text-fs-aux text-gray-600">+{t.keywords!.length - 4}</span>
           )}
           {/* T-992：功能模块（FR 锚点派生，拍板②——非自由字段；留空不显示） */}
           {(t.modules || []).map(m => (
-            <span key={m} className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[10px] text-emerald-400"
+            <span key={m} className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-fs-aux text-emerald-400"
               title="功能模块：由已确认的话题→FR 关联边派生（FR 模块目录）">
               🏷 {m}
             </span>
@@ -188,7 +188,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
           {(t.materials || []).map(m => (
             <button key={m.id}
               onClick={e => { e.stopPropagation(); onOpenMaterial?.(m); }}
-              className="px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-[10px] text-sky-400 hover:bg-sky-500/20"
+              className="px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-fs-aux text-sky-400 hover:bg-sky-500/20"
               title={`关联材料（人工确认）——点击查看原文快照\n${m.file}`}>
               {m.type === 'feishu_doc' ? '📄' : '🎙'} {m.title || m.id}
             </button>
@@ -196,14 +196,14 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
         </div>
       )}
       {(t.last_edited_by?.name || t.author?.name) && (
-        <div className="text-[10px] text-gray-600 mt-1">
+        <div className="text-fs-aux text-gray-600 mt-1">
           {t.author?.name ? `创建：${t.author.name}` : ''}
           {t.last_edited_by?.name ? ` · 最后编辑：${t.last_edited_by.name}` : ''}
         </div>
       )}
-      {err && <div className="text-[10px] text-red-400 mt-1">{err}</div>}
+      {err && <div className="text-fs-aux text-red-400 mt-1">{err}</div>}
       {onLocate && (
-        <div className="flex items-center gap-2 mt-1 text-[10px]">
+        <div className="flex items-center gap-2 mt-1 text-fs-aux">
           <button className={`${selected ? 'text-info underline' : 'text-info hover:underline'}`}
             onClick={onLocate}
             title={selected ? '取消定位（时间轴高亮与滚动定位解除）'
@@ -213,7 +213,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
         </div>
       )}
       {!draft && (
-        <div className="flex items-center gap-2 mt-1 text-[10px]">
+        <div className="flex items-center gap-2 mt-1 text-fs-aux">
           {onEdit && (
             <button className="text-info hover:underline" onClick={onEdit}
               title="弹框编辑：左原文右话题并排，可修正 AI 关联错的原文">
@@ -244,9 +244,9 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
       {history !== null && (
         <div className="mt-1.5 border-t border-border pt-1.5 max-h-44 overflow-auto">
           {history.length === 0 ? (
-            <div className="text-[10px] text-gray-600">暂无历史记录</div>
+            <div className="text-fs-aux text-gray-600">暂无历史记录</div>
           ) : history.map((h, i) => (
-            <div key={i} className="text-[10px] text-gray-500 leading-relaxed">
+            <div key={i} className="text-fs-aux text-gray-500 leading-relaxed">
               <span className="text-gray-400">{h.at.slice(5, 16)}</span>
               {' · '}
               <span className={h.editor?.emp ? 'text-gray-400' : 'text-gray-600'}>

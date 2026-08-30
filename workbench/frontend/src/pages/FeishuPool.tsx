@@ -247,7 +247,7 @@ export default function FeishuPool() {
                 {label}（{matTypeCount(id)}）
               </button>
             ))}
-            <span className="ml-auto text-[10px] text-gray-600">
+            <span className="ml-auto text-fs-aux text-gray-600">
               群聊快照不再重复展示——「话题」页签左侧原文时间轴按群+窗口查看（同一消息只存一份，话题只存 message_id 指针）
             </span>
           </div>
@@ -293,12 +293,12 @@ export default function FeishuPool() {
                 {pageMaterials.map(m => (
                   <tr key={m.id} className="cursor-pointer hover:bg-surface-3/60" onClick={() => openDetail(m)}>
                     <td className={td}>
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${TYPE_BADGE[m.type]?.cls || ''}`}>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-fs-aux ${TYPE_BADGE[m.type]?.cls || ''}`}>
                         {TYPE_BADGE[m.type]?.label || m.type}
                       </span>
                       {/* T-949：perm 缺失（需补授权）诚实标注——重新扫码授权后同步即补齐 */}
                       {m.type !== 'chat' && m.perm && !m.perm.pulled_at && (
-                        <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-400"
+                        <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-fs-aux bg-amber-500/15 text-amber-400"
                           title={(m.perm.error || '').slice(0, 120) || '权限元数据缺失'}>
                           需补授权
                         </span>
@@ -307,7 +307,7 @@ export default function FeishuPool() {
                     <td className={td}>
                       <div className="text-gray-200">{m.title || m.id}</div>
                       {m.summary && <div className="text-[11px] text-gray-500 truncate max-w-[360px]">{m.summary}</div>}
-                      <div className="text-[10px] text-gray-600">{m.id} · {m.sha}</div>
+                      <div className="text-fs-aux text-gray-600">{m.id} · {m.sha}</div>
                     </td>
                     <td className={td}>{m.owner_name || <span className="text-gray-600">—</span>}</td>
                     <td className={td}>{(m.size / 1024).toFixed(1)} KB</td>
@@ -371,7 +371,7 @@ export default function FeishuPool() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
                 <span className="truncate">{detail.m.title || detail.m.id}</span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] shrink-0 ${TYPE_BADGE[detail.m.type]?.cls}`}>
+                <span className={`px-1.5 py-0.5 rounded text-fs-aux shrink-0 ${TYPE_BADGE[detail.m.type]?.cls}`}>
                   {TYPE_BADGE[detail.m.type]?.label}
                 </span>
                 {detail.m.source_url && (
@@ -398,7 +398,7 @@ export default function FeishuPool() {
                 {detail.data.type === 'feishu_minutes' && detail.data.raw && (
                   <details className="mt-3">
                     <summary className="text-[11px] text-gray-500 cursor-pointer">原始 JSON</summary>
-                    <pre className="mt-2 max-h-64 overflow-auto text-[10px] text-gray-500
+                    <pre className="mt-2 max-h-64 overflow-auto text-fs-aux text-gray-500
                       bg-surface-3 border border-border rounded p-2">{detail.data.raw}</pre>
                   </details>
                 )}

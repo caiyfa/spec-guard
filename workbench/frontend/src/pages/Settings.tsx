@@ -25,7 +25,7 @@ export default function Settings() {
       {/* 顶栏 */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold">⚙️ 基础设置</h2>
-        <span className="text-[10px] text-gray-600">SpecGuard 运行基础信息 · 被测系统配置见「🧩 系统配置」</span>
+        <span className="text-fs-aux text-gray-600">SpecGuard 运行基础信息 · 被测系统配置见「🧩 系统配置」</span>
       </div>
 
       {/* Tab 栏 */}
@@ -170,8 +170,8 @@ function ModelsTab() {
       {/* 左侧：模型列表 */}
       <div className="w-56 flex-shrink-0 bg-surface-2 border border-border rounded-lg p-2 overflow-y-auto">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-gray-500">模型列表</span>
-          <button onClick={handleAdd} className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">+ 添加</button>
+          <span className="text-fs-aux text-gray-500">模型列表</span>
+          <button onClick={handleAdd} className="text-fs-aux px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">+ 添加</button>
         </div>
         {models.map(m => (
           <button key={m.id} onClick={() => selectModel(m)}
@@ -179,13 +179,13 @@ function ModelsTab() {
               m.id === selectedId ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
             }`}>
             <div className="flex items-center gap-1">
-              {m.is_default && <span className="text-yellow-500 text-[10px]">★</span>}
+              {m.is_default && <span className="text-yellow-500 text-fs-aux">★</span>}
               <span className="text-xs font-medium truncate">{m.name || '(未命名)'}</span>
             </div>
             <div className="text-fs-micro text-gray-600 font-mono truncate">{m.model || '(未配置)'}</div>
           </button>
         ))}
-        {models.length === 0 && <p className="text-[10px] text-gray-600 text-center py-4">暂无模型配置</p>}
+        {models.length === 0 && <p className="text-fs-aux text-gray-600 text-center py-4">暂无模型配置</p>}
       </div>
 
       {/* 右侧：编辑表单 */}
@@ -196,25 +196,25 @@ function ModelsTab() {
               <span className="text-xs font-medium text-gray-300">编辑模型：{editForm.name || '(未命名)'}</span>
               <div className="flex items-center gap-2">
                 <button onClick={handleProbe} disabled={probing}
-                  className="text-[10px] px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40">
+                  className="text-fs-aux px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40">
                   {probing ? '探测中...' : '🔌 探测'}
                 </button>
                 <button onClick={handleSetDefault}
-                  className="text-[10px] px-2 py-1 rounded bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">
+                  className="text-fs-aux px-2 py-1 rounded bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">
                   ★ 设为默认
                 </button>
                 <button onClick={handleDelete}
-                  className="text-[10px] px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/30">
+                  className="text-fs-aux px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/30">
                   🗑 删除
                 </button>
                 <button onClick={handleSave}
-                  className="text-[10px] px-2 py-1 rounded bg-pass/10 text-pass hover:bg-pass/20">
+                  className="text-fs-aux px-2 py-1 rounded bg-pass/10 text-pass hover:bg-pass/20">
                   💾 保存
                 </button>
               </div>
             </div>
-            {msg && <p className="text-[10px] mb-2 text-gray-400">{msg}</p>}
-            {probeMsg && <p className="text-[10px] mb-2">{probeMsg}</p>}
+            {msg && <p className="text-fs-aux mb-2 text-gray-400">{msg}</p>}
+            {probeMsg && <p className="text-fs-aux mb-2">{probeMsg}</p>}
             <div className="grid grid-cols-3 gap-3">
               <Field label="名称" value={editForm.name} onChange={(v) => setEditForm(p => ({ ...p, name: v }))} placeholder="DeepSeek-V4" />
               <Field label="Base URL" value={editForm.base_url} onChange={(v) => setEditForm(p => ({ ...p, base_url: v }))} placeholder="https://api.deepseek.com" />
@@ -225,7 +225,7 @@ function ModelsTab() {
               <SelectField label="最大输出" value={editForm.max_output_tokens} onChange={(v) => setEditForm(p => ({ ...p, max_output_tokens: v }))} options={OUTPUT_OPTIONS} />
               {/* 思考开关 */}
               <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">启用思考</label>
+                <label className="block text-fs-aux text-gray-500 mb-0.5">启用思考</label>
                 <select value={editForm.thinking_enabled}
                   onChange={(e) => setEditForm(p => ({ ...p, thinking_enabled: e.target.value }))}
                   className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono">
@@ -235,7 +235,7 @@ function ModelsTab() {
               </div>
               {/* 推理等级 */}
               <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">推理等级</label>
+                <label className="block text-fs-aux text-gray-500 mb-0.5">推理等级</label>
                 <select value={editForm.reasoning_effort}
                   onChange={(e) => setEditForm(p => ({ ...p, reasoning_effort: e.target.value }))}
                   disabled={editForm.thinking_enabled !== 'true'}
@@ -250,8 +250,8 @@ function ModelsTab() {
             </div>
             {/* 请求体预览 */}
             <div className="mt-3 pt-2 border-t border-border/50">
-              <label className="block text-[10px] text-gray-500 mb-0.5">请求体预览</label>
-              <pre className="bg-surface-3 border border-border rounded px-2 py-1 text-[10px] font-mono text-gray-400 overflow-x-auto">
+              <label className="block text-fs-aux text-gray-500 mb-0.5">请求体预览</label>
+              <pre className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-aux font-mono text-gray-400 overflow-x-auto">
 {JSON.stringify({
   model: editForm.model || 'gpt-4o',
   ...(Number(editForm.max_output_tokens) > 0 ? { max_tokens: Number(editForm.max_output_tokens) } : {}),
@@ -384,7 +384,7 @@ function AuditTab() {
           />
           <span className="text-sm text-gray-200">审计完成后自动更新基线</span>
         </label>
-        <div className="text-[10px] text-gray-500 mt-2 space-y-1">
+        <div className="text-fs-aux text-gray-500 mt-2 space-y-1">
           <p>· 关闭（默认手动）：研发修正 spec 后需在 Agent 会话中或调用 POST /api/workspace/mark-audited 手动标记已审计，基线才复位。</p>
           <p>· 开启：Agent 写审计报告成功后自动更新基线，无需手动标记。</p>
         </div>
@@ -446,7 +446,7 @@ function GitTab() {
           <Field label="token (HTTPS PAT)" value={gitToken} onChange={setGitToken}
             placeholder={hasToken ? '已配置（不修改请留空）' : 'ghp_xxx...'} type="password" />
         </div>
-        <div className="text-[10px] text-gray-600 mt-1">
+        <div className="text-fs-aux text-gray-600 mt-1">
           {hasToken ? '✅ 已配置 token（重新输入可覆盖）' : '未配置 token——推送到远端需要 HTTPS PAT'}
         </div>
         <button onClick={handleSave} disabled={saving}
@@ -468,7 +468,7 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
 }) {
   return (
     <div>
-      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
     </div>
@@ -484,7 +484,7 @@ function SelectField({ label, value, onChange, options }: {
   const items = known ? options : [...options, [`自定义: ${value}`, value]];
   return (
     <div>
-      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)}
         className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono">
         {items.map(([l, v]) => <option key={v} value={v}>{l}</option>)}

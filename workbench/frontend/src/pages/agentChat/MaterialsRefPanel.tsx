@@ -77,17 +77,17 @@ export function MaterialsRefPanel({ sessionId, references, onError }: {
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-gray-200 truncate" title={m.filename}>{m.filename}</span>
             {refMids.has(m.mid) && (
-              <span className="text-[10px] text-info shrink-0" title="已在对话消息中引用">📌</span>
+              <span className="text-fs-aux text-info shrink-0" title="已在对话消息中引用">📌</span>
             )}
-            <span className={`ml-auto shrink-0 text-[10px] ${MAT_STATUS_COLOR[m.status] || 'text-gray-500'}`}>
+            <span className={`ml-auto shrink-0 text-fs-aux ${MAT_STATUS_COLOR[m.status] || 'text-gray-500'}`}>
               {m.status}{m.fmt ? ` · ${m.fmt}` : ''}
             </span>
           </div>
           {heads[m.mid] && (
-            <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{heads[m.mid]}</div>
+            <div className="text-fs-aux text-gray-500 mt-0.5 line-clamp-2">{heads[m.mid]}</div>
           )}
           {m.parse_error && (
-            <div className="text-[10px] text-red-400/80 mt-0.5 truncate" title={m.parse_error}>
+            <div className="text-fs-aux text-red-400/80 mt-0.5 truncate" title={m.parse_error}>
               {m.parse_error}
             </div>
           )}

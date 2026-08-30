@@ -243,7 +243,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
         )}
         {activeFile && (
           <div className="h-full min-h-0 flex flex-col">
-            <div className="px-3 py-1.5 border-b border-border text-[10px] font-mono text-gray-500 truncate flex-shrink-0"
+            <div className="px-3 py-1.5 border-b border-border text-fs-aux font-mono text-gray-500 truncate flex-shrink-0"
               title={activeFile.path}>
               {activeFile.path}
             </div>

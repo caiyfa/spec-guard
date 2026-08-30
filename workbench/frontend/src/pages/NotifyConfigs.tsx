@@ -217,7 +217,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
                 <label className="text-xs text-gray-500">Webhook URL</label>
                 <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                {editing && <p className="text-[10px] text-gray-600 mt-0.5">留空则不修改现有 URL</p>}
+                {editing && <p className="text-fs-aux text-gray-600 mt-0.5">留空则不修改现有 URL</p>}
               </div>
 
               <div>

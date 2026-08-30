@@ -195,7 +195,7 @@ export default function FileTree({
             className="w-full text-left flex items-center gap-1 px-1 py-0.5 hover:bg-surface-3 rounded text-xs text-gray-400"
             style={{ paddingLeft: `${node.level * 12 + 4}px` }}
           >
-            <span className="text-[10px]">{isExpanded ? '▼' : '▶'}</span>
+            <span className="text-fs-aux">{isExpanded ? '▼' : '▶'}</span>
             <span>{isExpanded ? '📂' : '📁'}</span>
             <span className="truncate">{node.name}</span>
           </button>
@@ -239,10 +239,10 @@ export default function FileTree({
           />
         )}
         <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
-        {node.is_delta && <span className="text-yellow-500 text-[10px] flex-shrink-0">Δ</span>}
+        {node.is_delta && <span className="text-yellow-500 text-fs-aux flex-shrink-0">Δ</span>}
         <span className="truncate flex-1">{node.name}</span>
         {node.size !== undefined && (
-          <span className="text-gray-600 text-[10px] flex-shrink-0">{formatSize(node.size)}</span>
+          <span className="text-gray-600 text-fs-aux flex-shrink-0">{formatSize(node.size)}</span>
         )}
       </div>
     );

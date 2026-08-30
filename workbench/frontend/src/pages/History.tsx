@@ -114,7 +114,7 @@ function RunDetail({ runId }: { runId: string }) {
                 {['FAIL', 'BLOCKED', 'ERROR'].includes(c.verdict) && (
                   <button type="button"
                     onClick={() => lookupDbSql(c.id)}
-                    className="text-[10px] text-gray-500 hover:text-info ml-2"
+                    className="text-fs-aux text-gray-500 hover:text-info ml-2"
                     title="从 case 详情取 db_query SQL，跳 DB 证据面板执行">
                     🗄 查 DB 证据
                   </button>
@@ -122,7 +122,7 @@ function RunDetail({ runId }: { runId: string }) {
                 {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
               </div>
               {caseReason(c) && (
-                <div className="pl-[4.5rem] text-[10px] text-gray-500 truncate" title={caseReason(c)}>
+                <div className="pl-[4.5rem] text-fs-aux text-gray-500 truncate" title={caseReason(c)}>
                   {caseReason(c)}
                 </div>
               )}
@@ -144,7 +144,7 @@ function RunDetail({ runId }: { runId: string }) {
                   {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
                 </div>
                 {caseReason(c) && (
-                  <div className="pl-[4.5rem] text-[10px] text-gray-500 truncate" title={caseReason(c)}>
+                  <div className="pl-[4.5rem] text-fs-aux text-gray-500 truncate" title={caseReason(c)}>
                     {caseReason(c)}
                   </div>
                 )}
@@ -225,8 +225,8 @@ function RunRecords() {
               className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]"
             />
             <button onClick={() => queryFailures('')}
-              className="text-[10px] text-gray-500 hover:text-info">清除</button>
-            <span className="ml-auto text-[10px] text-gray-500">{failures.length} 条（最近 30）</span>
+              className="text-fs-aux text-gray-500 hover:text-info">清除</button>
+            <span className="ml-auto text-fs-aux text-gray-500">{failures.length} 条（最近 30）</span>
           </div>
           <div className="max-h-48 overflow-y-auto space-y-1">
             {failures.length === 0 && <div className="text-xs text-gray-600">暂无失败记录</div>}
@@ -234,9 +234,9 @@ function RunRecords() {
               <div key={i} className="flex items-center gap-2 text-[11px] bg-surface-2/60 rounded px-2 py-1">
                 <span className="text-fail font-medium w-14">{f.verdict}</span>
                 <span className="font-mono text-gray-300">{f.scenario_id}</span>
-                <span className="text-gray-500 font-mono text-[10px]">{f.run_id}</span>
+                <span className="text-gray-500 font-mono text-fs-aux">{f.run_id}</span>
                 <span className="text-gray-600 truncate flex-1" title={f.message}>{f.category || '—'} · {f.message.slice(0, 60)}</span>
-                <span className="text-gray-600 text-[10px] font-mono">{f.finished_at}</span>
+                <span className="text-gray-600 text-fs-aux font-mono">{f.finished_at}</span>
                 <button
                   onClick={() => window.location.href = `/run?ids=${f.scenario_id}`}
                   className="text-info hover:underline flex-shrink-0"

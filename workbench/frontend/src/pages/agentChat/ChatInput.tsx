@@ -285,7 +285,7 @@ export function ChatInput({
               }`}>
               <span className="font-mono text-xs text-info/70">{c.cmd}</span>
               <span className="text-xs">{c.label}</span>
-              <span className="text-[10px] text-gray-600 ml-auto">{c.desc}</span>
+              <span className="text-fs-aux text-gray-600 ml-auto">{c.desc}</span>
             </button>
           ))}
         </div>
@@ -300,7 +300,7 @@ export function ChatInput({
                 i === atIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
               }`}>
               <span className="text-xs truncate">{c.label}</span>
-              <span className="text-[10px] text-gray-600 ml-auto flex-shrink-0">{c.hint}</span>
+              <span className="text-fs-aux text-gray-600 ml-auto flex-shrink-0">{c.hint}</span>
             </button>
           ))}
         </div>
@@ -321,7 +321,7 @@ export function ChatInput({
         <div className="flex flex-wrap gap-1 mb-2">
           {references.map((r, i) => (
             <span key={`${r.type}:${r.path}`}
-              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/30 font-mono">
+              className="flex items-center gap-1 text-fs-aux px-1.5 py-0.5 rounded bg-info/10 text-info border border-info/30 font-mono">
               {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : r.type === 'material' ? '🧾' : '📄'} {r.label || r.path}
               <button onClick={() => setReferences(prev => prev.filter((_, j) => j !== i))}
                 className="text-info/60 hover:text-fail">✕</button>
@@ -398,7 +398,7 @@ export function ChatInput({
           <select
             value={currentModelId}
             onChange={e => onModelChange(e.target.value)}
-            className="bg-surface-2 border border-border rounded px-2 py-0.5 text-[10px] text-gray-400 font-mono"
+            className="bg-surface-2 border border-border rounded px-2 py-0.5 text-fs-aux text-gray-400 font-mono"
           >
             {models.map(m => (
               <option key={m.id} value={m.id}>

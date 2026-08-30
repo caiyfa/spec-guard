@@ -9,7 +9,7 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
 }) {
   return (
     <div>
-      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
     </div>
@@ -105,9 +105,9 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
       <div className="px-1 text-xs font-medium text-gray-300">
         📜 提交历史（{data.branch}）
         {data.synced ? (
-          <span className="ml-1.5 text-[10px] text-green-400">✅ 已全部同步</span>
+          <span className="ml-1.5 text-fs-aux text-green-400">✅ 已全部同步</span>
         ) : (
-          <span className="ml-1.5 text-[10px] text-warn">
+          <span className="ml-1.5 text-fs-aux text-warn">
             {ahead > 0 ? `⬆ ${ahead} 待推送` : ''}
             {behind > 0 ? ` · ⬇ ${behind} 待拉取（推送前自动 rebase）` : ''}
           </span>
@@ -128,17 +128,17 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
             <div key={c.sha} className="rounded-lg border border-border bg-surface-2/70 p-2">
               <div className="flex items-center gap-1.5 cursor-pointer"
                 onClick={() => setExpanded(prev => ({ ...prev, [c.sha]: !prev[c.sha] }))}>
-                <span className="text-[10px] font-mono text-info">{c.short_sha}</span>
+                <span className="text-fs-aux font-mono text-info">{c.short_sha}</span>
                 <span className="text-[11px] text-gray-200 truncate flex-1" title={c.message}>{c.message}</span>
                 <span className="text-fs-micro text-gray-600 flex-shrink-0">{expanded[c.sha] ? '▲' : '▼'}</span>
               </div>
-              <div className="text-[10px] text-gray-600 mt-0.5">
+              <div className="text-fs-aux text-gray-600 mt-0.5">
                 {c.author} · {c.date.slice(0, 16).replace('T', ' ')}
               </div>
               {expanded[c.sha] && (
                 <div className="mt-1.5 space-y-0.5">
                   {c.files.map((f, i) => (
-                    <div key={i} className="text-[10px] font-mono text-gray-500 flex items-center gap-1">
+                    <div key={i} className="text-fs-aux font-mono text-gray-500 flex items-center gap-1">
                       <span className={
                         f.status === 'A' ? 'text-green-400' : f.status === 'D' ? 'text-red-400' : 'text-yellow-400'
                       }>{f.status}</span>
@@ -159,7 +159,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
       )}
 
       {pushResult && (
-        <div className={`text-[10px] rounded px-1.5 py-1 ${pushResult.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+        <div className={`text-fs-aux rounded px-1.5 py-1 ${pushResult.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
           {pushResult.ok ? '✅ ' : '❌ '}{pushResult.msg}
         </div>
       )}

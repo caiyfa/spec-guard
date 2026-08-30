@@ -139,7 +139,7 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
             </button>
           ))}
         </div>
-        <span className="text-[10px] text-gray-600 truncate">{SCOPE_LABELS[scope].hint(system)}</span>
+        <span className="text-fs-aux text-gray-600 truncate">{SCOPE_LABELS[scope].hint(system)}</span>
       </div>
 
       {!exists && effView !== 'db' && (
@@ -209,7 +209,7 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
                   <div className="text-gray-600">共享层可放置任何跨系统复用的键；系统层同键会整体覆盖。</div>
                 </>
               )}
-              <div className="border-t border-border pt-2 text-[10px] text-gray-600">
+              <div className="border-t border-border pt-2 text-fs-aux text-gray-600">
                 加载语义：共享打底 + 系统覆盖（顶层键合并）。
                 {scope === 'system' && '数据库连接见「🗄 数据库」显示模式（物理存于本系统 env 的 db 段）。'}
               </div>
@@ -303,14 +303,14 @@ function DbView({ system, env, isAdmin, onSaved }: {
           {isAdmin && (
             <div className="flex items-center gap-2">
               <button onClick={save} disabled={saving || !system}
-                className="text-[10px] px-2 py-1 rounded bg-pass/15 text-pass hover:bg-pass/25 disabled:opacity-50">💾 保存</button>
+                className="text-fs-aux px-2 py-1 rounded bg-pass/15 text-pass hover:bg-pass/25 disabled:opacity-50">💾 保存</button>
               <button onClick={testDb} disabled={!system}
-                className="text-[10px] px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-50">🔌 测试连接</button>
-              {dbTestMsg && <span className="text-[10px]">{dbTestMsg}</span>}
+                className="text-fs-aux px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-50">🔌 测试连接</button>
+              {dbTestMsg && <span className="text-fs-aux">{dbTestMsg}</span>}
             </div>
           )}
         </div>
-        <p className="text-[10px] text-gray-600 mb-2">
+        <p className="text-fs-aux text-gray-600 mb-2">
           SpecGuard 引擎只读校验连接（db_oracle 断言数据源），db 段物理存于 systems/{system || '{system}'}/config/env.{env}.yaml。
           {isAdmin && <span className="text-warn"> 与「📝 原文」编辑同一文件——请先保存原文再改库连接，避免互相覆盖。</span>}
         </p>
@@ -356,7 +356,7 @@ function Field({ label, value, onChange, type = 'text', placeholder = '', disabl
 }) {
   return (
     <div>
-      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
         className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600 disabled:opacity-50" />
     </div>

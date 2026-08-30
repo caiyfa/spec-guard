@@ -35,7 +35,7 @@ const DIM_LABEL: Record<string, string> = {
 const cardCls = 'bg-surface-1 border border-border rounded-lg p-3';
 const btn = 'px-2.5 py-1 rounded text-[11px] font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40 disabled:cursor-not-allowed';
 const btnOk = 'px-2.5 py-1 rounded text-[11px] font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
-const btnDanger = 'px-2 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
+const btnDanger = 'px-2 py-0.5 rounded text-fs-aux font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
 
 // ══════════════════════════════════════════════════════════
 // GateCardView：单张闸门卡片（人拍板按钮直调原有 REST + RBAC）
@@ -120,7 +120,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
                 const st = gates[k]?.status || '-';
                 return (
                   <span key={k}
-                    className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                    className={`text-fs-aux px-1.5 py-0.5 rounded border ${
                       st === 'pass'
                         ? 'text-green-400 border-green-500/40'
                         : 'text-gray-500 border-border'}`}>
@@ -184,7 +184,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
         {onAskAgent && (
           <button onClick={() => onAskAgent(c)}
             title="让 Agent 解释此闸门并指导操作（L1 引导，不代执行）"
-            className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">
+            className="text-fs-aux px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">
             🤖 帮我
           </button>
         )}
@@ -247,7 +247,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
         <div className="text-[11px] text-yellow-400">
           🚫 Agent 提议的代执行「{action || '(缺 action)'}」不在白名单内——已拦截。
         </div>
-        <div className="text-[10px] text-gray-500 mt-1">
+        <div className="text-fs-aux text-gray-500 mt-1">
           代执行仅限可逆低危操作（材料入包/移出、议题确认）；该操作请在操作台手动拍板。
         </div>
       </div>

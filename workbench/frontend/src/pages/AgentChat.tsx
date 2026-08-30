@@ -1384,10 +1384,10 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
             )}
             {stripRefBlock(item.content || '')}
             <div className="flex items-center gap-1.5 mt-1">
-              <CopyButton text={stripRefBlock(item.content || '')} className="text-[10px] text-info/40 hover:text-info" />
+              <CopyButton text={stripRefBlock(item.content || '')} className="text-fs-aux text-info/40 hover:text-info" />
               {item.msgIdx !== undefined && (
                 <button onClick={() => handleRetract(item.msgIdx!)}
-                  className="text-[10px] text-gray-500 hover:text-red-400"
+                  className="text-fs-aux text-gray-500 hover:text-red-400"
                   title="撤回该消息及后续内容">
                   撤回
                 </button>
@@ -1414,7 +1414,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
             <div className="flex-1 min-w-0">
               <MarkdownText content={item.content || ''} />
             </div>
-            <CopyButton text={item.content || ''} className="text-[10px] text-gray-500 hover:text-info flex-shrink-0" />
+            <CopyButton text={item.content || ''} className="text-fs-aux text-gray-500 hover:text-info flex-shrink-0" />
           </div>
         );
       }
@@ -1473,7 +1473,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
         {/* 对话区（K-039：面板最大化 / SQL 探索模式时 display:none 隐藏——不卸载，WS/滚动/输入状态全保留） */}
         <div className={`flex-1 flex flex-col min-w-0 ${sideMax || dbExplore ? 'hidden' : ''}`}>
           {/* 顶部信息栏 */}
-          <div className="flex-shrink-0 px-4 py-1.5 border-b border-border flex items-center gap-3 text-[10px] text-gray-500">
+          <div className="flex-shrink-0 px-4 py-1.5 border-b border-border flex items-center gap-3 text-fs-aux text-gray-500">
             {/* K-037：会话列表切换（细条收起时的另一入口） */}
             <button onClick={toggleSessCollapsed} title={sessCollapsed ? '展开会话列表' : '收起会话列表'}
               className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
@@ -1487,7 +1487,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               if (!pt) return null;
               const isReq = pickedPurpose === 'requirement_interview';
               return (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isReq ? 'bg-purple-900/30 text-purple-300' : 'bg-info/15 text-info'}`}>
+                <span className={`text-fs-aux px-1.5 py-0.5 rounded ${isReq ? 'bg-purple-900/30 text-purple-300' : 'bg-info/15 text-info'}`}>
                   {pt}
                 </span>
               );

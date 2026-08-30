@@ -107,7 +107,7 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         className="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-3 transition-colors text-left"
         title={hasResult ? (isError ? '执行失败，点击查看详情' : '执行成功，点击查看详情') : '执行中…'}
       >
-        <span className="text-gray-600 text-[10px]">{expanded ? '▼' : '▶'}</span>
+        <span className="text-gray-600 text-fs-aux">{expanded ? '▼' : '▶'}</span>
         <span className="text-yellow-500/80 font-mono">🔧</span>
         <span className="text-gray-400 font-mono">{tool.name}</span>
         {hasResult && (
@@ -118,21 +118,21 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         {!hasResult && <span className="text-yellow-500/50 animate-pulse">⏳</span>}
         {/* 结果摘要内联（代替原第二行预览） */}
         {hasResult && resultPreview && (
-          <span className={`flex-1 truncate text-[10px] ${isError ? 'text-red-400/80' : 'text-gray-500'}`}>{resultPreview}</span>
+          <span className={`flex-1 truncate text-fs-aux ${isError ? 'text-red-400/80' : 'text-gray-500'}`}>{resultPreview}</span>
         )}
       </button>
       {/* 展开内容（K-024：键值化友好渲染，不再直接甩原始 JSON） */}
       {expanded && (
         <div className="px-2 pb-2 space-y-1.5">
           <div>
-            <div className="text-gray-600 text-[10px] mb-0.5">参数</div>
+            <div className="text-gray-600 text-fs-aux mb-0.5">参数</div>
             <div className="text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-60">
               <KeyValueView text={tool.args} />
             </div>
           </div>
           {hasResult && (
             <div>
-              <div className="text-gray-600 text-[10px] mb-0.5">结果</div>
+              <div className="text-gray-600 text-fs-aux mb-0.5">结果</div>
               <div className={`text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-red-400' : ''}`}>
                 {(() => {
                   // G3：attribution(db_evidence) 结果含 rows → 表格化（设计 2026-08-25 §A5）
@@ -171,20 +171,20 @@ export function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLa
         onClick={() => setGroupExpanded(!groupExpanded)}
         className="w-full flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
       >
-        <span className="text-[10px]">{groupExpanded ? '▼' : '▶'}</span>
+        <span className="text-fs-aux">{groupExpanded ? '▼' : '▶'}</span>
         <span className="text-gray-400 font-mono">{toolLabel}</span>
         {stepLabel && stepLabel !== toolLabel && (
-          <span className="text-[10px] text-gray-600">· {stepLabel}</span>
+          <span className="text-fs-aux text-gray-600">· {stepLabel}</span>
         )}
-        <span className="text-[10px] text-gray-600">
+        <span className="text-fs-aux text-gray-600">
           {allDone ? `${successCount}/${tools.length} 工具` : `${tools.length} 工具 执行中…`}
         </span>
         {allDone && (
-          <span className={hasError ? 'text-red-400 text-[10px]' : 'text-green-500/70 text-[10px]'}>
+          <span className={hasError ? 'text-red-400 text-fs-aux' : 'text-green-500/70 text-fs-aux'}>
             {hasError ? '⚠️' : '✅'}
           </span>
         )}
-        {!allDone && <span className="text-yellow-500/50 text-[10px] animate-pulse">⏳</span>}
+        {!allDone && <span className="text-yellow-500/50 text-fs-aux animate-pulse">⏳</span>}
       </button>
       {/* 展开时显示各工具调用（思考文本已在组外独立展示，K-024） */}
       {groupExpanded && (

@@ -243,7 +243,7 @@ export default function GraphPanorama() {
         {snapshots.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {snapshots.map(s => (
-              <span key={s.snapshot_id} className="text-[10px] bg-surface-3 text-gray-400 px-2 py-1 rounded">
+              <span key={s.snapshot_id} className="text-fs-aux bg-surface-3 text-gray-400 px-2 py-1 rounded">
                 {s.label} · {s.created_at.slice(0, 16).replace('T', ' ')} · {s.nodes} 节点 · {s.source_fingerprint.slice(0, 8)}…
               </span>
             ))}
@@ -276,7 +276,7 @@ export default function GraphPanorama() {
         {diffResult && Object.keys(diffResult.per_module).length > 0 && (
           <div className="flex flex-wrap gap-2">
             {Object.entries(diffResult.per_module).map(([mod, c]) => (
-              <span key={mod} className="text-[10px] bg-surface-3 px-2 py-1 rounded text-gray-400">
+              <span key={mod} className="text-fs-aux bg-surface-3 px-2 py-1 rounded text-gray-400">
                 {mod}：+{c.added} / -{c.removed} / ~{c.modified}
               </span>
             ))}
@@ -317,7 +317,7 @@ export default function GraphPanorama() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-200">{m.name}</span>
-                  <span className="text-[10px] bg-info/10 text-info px-1.5 py-0.5 rounded">FR {m.fr_count}</span>
+                  <span className="text-fs-aux bg-info/10 text-info px-1.5 py-0.5 rounded">FR {m.fr_count}</span>
                 </div>
                 <div className="mt-2 h-1.5 bg-surface-3 rounded-full overflow-hidden">
                   <div className="h-full bg-info/60 rounded-full" style={{ width: `${Math.min(100, m.fr_count * 8)}%` }} />
@@ -358,7 +358,7 @@ export default function GraphPanorama() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-200 font-medium">{feat.split('/').pop()}</span>
                   {isDebt && <span title="测试债：健康分 <80">❄</span>}
-                  {isNew && <span className="text-[10px] text-gray-500">新功能点（无健康分）</span>}
+                  {isNew && <span className="text-fs-aux text-gray-500">新功能点（无健康分）</span>}
                   <span className="ml-auto flex items-center gap-2 text-[11px] text-gray-500">
                     <span className="text-green-400">覆盖 {item.nCov}</span>
                     <span className="text-red-400">缺口 {item.nGap}</span>
@@ -398,12 +398,12 @@ export default function GraphPanorama() {
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${fr.cov === 'ok' ? 'bg-green-400' : 'bg-red-400'}`} />
                   <span className="text-gray-200 font-medium">{fr.id}</span>
-                  <span className="text-[10px] text-gray-500">{fr.cov === 'ok' ? '已覆盖' : '缺口'}</span>
+                  <span className="text-fs-aux text-gray-500">{fr.cov === 'ok' ? '已覆盖' : '缺口'}</span>
                 </div>
                 <p className="text-gray-400 mt-1 line-clamp-2">{maxLen(fr.t)}</p>
                 {fr.source_ref && (
                   <button
-                    className="mt-1.5 text-[10px] text-info/80 hover:text-info"
+                    className="mt-1.5 text-fs-aux text-info/80 hover:text-info"
                     onClick={e => { e.stopPropagation(); openSource(fr.source_ref!.file, fr.source_ref!.line_range[0]); }}
                   >
                     📍 {maxLen(fr.source_ref.file, 80)}:{fr.source_ref.line_range[0]}
@@ -423,10 +423,10 @@ export default function GraphPanorama() {
                   <span className="text-gray-200 font-medium">{sc.id}</span>
                 </div>
                 <p className="text-gray-400 mt-1 line-clamp-1">{maxLen(sc.title)}</p>
-                <p className="text-[10px] text-gray-600 mt-0.5">covers: {sc.covers.join(', ')}</p>
+                <p className="text-fs-aux text-gray-600 mt-0.5">covers: {sc.covers.join(', ')}</p>
                 {sc.source_ref && (
                   <button
-                    className="mt-1 text-[10px] text-info/80 hover:text-info"
+                    className="mt-1 text-fs-aux text-info/80 hover:text-info"
                     onClick={() => openSource(sc.source_ref!.file, sc.source_ref!.line_range[0])}
                   >
                     📍 {maxLen(sc.source_ref.file, 80)}:{sc.source_ref.line_range[0]}

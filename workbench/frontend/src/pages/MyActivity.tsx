@@ -113,7 +113,7 @@ export default function MyActivity() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{TYPE_LABELS[p.product_type] || p.product_type}</span>
                   <span className="text-sm text-gray-200 font-mono truncate">{p.product_path}</span>
-                  <span className="text-[10px] text-gray-600 ml-auto">{p.created_at}</span>
+                  <span className="text-fs-aux text-gray-600 ml-auto">{p.created_at}</span>
                 </div>
                 <div className="text-[11px] text-gray-600 mt-1">
                   {p.workspace && <span>工作区: {p.workspace}</span>}

@@ -42,7 +42,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
         <div>暂无阅读足迹——agent 调用读型文档工具后自动汇聚到这里</div>
         {onRefresh && (
           <button onClick={onRefresh}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] bg-surface-3 rounded hover:bg-surface-3/70 transition-colors">
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-fs-aux bg-surface-3 rounded hover:bg-surface-3/70 transition-colors">
             ↻ 刷新
           </button>
         )}
@@ -55,7 +55,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
       {onRefresh && (
         <div className="flex justify-end -mb-1">
           <button onClick={onRefresh}
-            className="text-[10px] text-gray-500 hover:text-info transition-colors px-1"
+            className="text-fs-aux text-gray-500 hover:text-info transition-colors px-1"
             title="重新加载阅读足迹">↻</button>
         </div>
       )}
@@ -72,16 +72,16 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
             )}
           </div>
           {/* 文件路径 */}
-          <div className="text-[10px] font-mono text-gray-500 truncate mt-0.5" title={item.ref}>
+          <div className="text-fs-aux font-mono text-gray-500 truncate mt-0.5" title={item.ref}>
             {item.path || item.ref}
           </div>
           {/* 元信息：工具 · 轮次 · 大小 */}
-          <div className="text-[10px] text-gray-600 mt-0.5">
+          <div className="text-fs-aux text-gray-600 mt-0.5">
             {item.tool} · 第{item.turn + 1}轮 · {formatSize(item.size)}
           </div>
           {/* 意义标注②：K-024 思考文本 */}
           {item.thinking && (
-            <div className="text-[10px] text-gray-500 mt-1 truncate" title={item.thinking}>
+            <div className="text-fs-aux text-gray-500 mt-1 truncate" title={item.thinking}>
               💭 {item.thinking}
             </div>
           )}
@@ -89,7 +89,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
           <div className="mt-1.5 space-y-1">
             {item.hunks.map((h, i) => (
               <button key={i} onClick={() => onOpen(item, h)}
-                className="w-full text-left px-1.5 py-1 rounded bg-surface-3/60 hover:bg-surface-3 text-[10px] text-gray-400 hover:text-info transition-colors"
+                className="w-full text-left px-1.5 py-1 rounded bg-surface-3/60 hover:bg-surface-3 text-fs-aux text-gray-400 hover:text-info transition-colors"
                 title={`${h.note || ''}${h.thinking ? `\n💭 ${h.thinking}` : ''}`}>
                 <span className="truncate block">{h.title}</span>
                 <span className="text-gray-600">行{h.start}-{h.end}{h.note ? ` · ${h.note}` : ''}</span>
@@ -98,7 +98,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
           </div>
           {/* 头部摘录（前 3 行；T-512 章节分支跳过 --- 标头行，直接展示段落摘要） */}
           {item.excerpt && (
-            <pre className="mt-1.5 text-[10px] font-mono text-gray-600 bg-gray-900/40 rounded p-1.5 overflow-hidden whitespace-pre-wrap break-all max-h-16">
+            <pre className="mt-1.5 text-fs-aux font-mono text-gray-600 bg-gray-900/40 rounded p-1.5 overflow-hidden whitespace-pre-wrap break-all max-h-16">
               {item.excerpt.split('\n')
                 .filter((l, i) => !(i === 0 && /^--- .+ · .+ · 行\d+-\d+ ---$/.test(l)))
                 .slice(0, 3).join('\n')}

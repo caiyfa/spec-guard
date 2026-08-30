@@ -341,10 +341,10 @@ export default function RunControl() {
             </summary>
             {closureInfo.upstream.length > 0 && (
               <div className="mt-1 px-2 py-1.5 bg-surface-2 border border-border rounded max-w-md">
-                <div className="text-[10px] text-gray-600 mb-1">连带上游（先执行）：</div>
+                <div className="text-fs-aux text-gray-600 mb-1">连带上游（先执行）：</div>
                 <div className="flex flex-wrap gap-1">
                   {closureInfo.upstream.map((id) => (
-                    <span key={id} className="px-1 py-0.5 rounded bg-info/10 text-info/90 font-mono text-[10px]">{id}</span>
+                    <span key={id} className="px-1 py-0.5 rounded bg-info/10 text-info/90 font-mono text-fs-aux">{id}</span>
                   ))}
                 </div>
               </div>
@@ -373,7 +373,7 @@ export default function RunControl() {
               placeholder={scope === 'tag' ? 'P0 / permission / snapshot' : 'PP-RC-005'}
               className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-sm w-48" />
           )}
-          <span className="text-[10px] text-gray-600">勾选列表非空时优先按勾选项直跑；清空勾选后此处生效</span>
+          <span className="text-fs-aux text-gray-600">勾选列表非空时优先按勾选项直跑；清空勾选后此处生效</span>
         </div>
       )}
 
@@ -399,10 +399,10 @@ export default function RunControl() {
                     {q.emp_no}{q.emp_no === myEmpNo && '（我）'}
                   </span>
                   <span className="text-gray-600">{q.scope}{q.target ? ` · ${q.target.slice(0, 40)}` : ''}</span>
-                  <span className="text-gray-700 font-mono text-[10px]">{q.created_at}</span>
+                  <span className="text-gray-700 font-mono text-fs-aux">{q.created_at}</span>
                   {(q.emp_no === myEmpNo || runStatus?.current_emp_no === myEmpNo) && (
                     <button onClick={() => cancelQueued(q.id)}
-                      className="text-fail/80 hover:text-fail text-[10px]">取消</button>
+                      className="text-fail/80 hover:text-fail text-fs-aux">取消</button>
                   )}
                 </div>
               ))}
@@ -439,7 +439,7 @@ export default function RunControl() {
                 <div className="text-[11px] text-gray-400 font-medium mb-1.5">✅ 已完成（{breakpointHit.context.completed_count}）</div>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {(breakpointHit.context.completed || []).map((sid: string) => (
-                    <div key={sid} className="text-[10px] font-mono text-pass/70">✓ {sid}</div>
+                    <div key={sid} className="text-fs-aux font-mono text-pass/70">✓ {sid}</div>
                   ))}
                 </div>
               </div>
@@ -448,7 +448,7 @@ export default function RunControl() {
                 <div className="text-[11px] text-gray-400 font-medium mb-1.5">📊 最近结果</div>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {(breakpointHit.context.recent_verdicts || []).map((v: { scenario_id: string; verdict: string }, i: number) => (
-                    <div key={i} className={`text-[10px] font-mono ${
+                    <div key={i} className={`text-fs-aux font-mono ${
                       v.verdict === 'PASSED' ? 'text-pass' : v.verdict === 'FAILED' ? 'text-fail' : 'text-skip'
                     }`}>
                       {v.verdict === 'PASSED' ? '✓' : v.verdict === 'FAILED' ? '✗' : '⊘'} {v.scenario_id}
@@ -462,8 +462,8 @@ export default function RunControl() {
           {/* 输出尾部 */}
           {breakpointHit.context?.output_tail && (
             <details className="rounded-lg" style={{ background: 'rgb(var(--code-bg))' }}>
-              <summary className="px-3 py-1.5 text-[10px] text-gray-500 cursor-pointer">📄 最近输出（{breakpointHit.context.output_tail.length} 行）</summary>
-              <pre className="px-3 py-2 text-[10px] text-gray-400 font-mono max-h-32 overflow-y-auto">
+              <summary className="px-3 py-1.5 text-fs-aux text-gray-500 cursor-pointer">📄 最近输出（{breakpointHit.context.output_tail.length} 行）</summary>
+              <pre className="px-3 py-2 text-fs-aux text-gray-400 font-mono max-h-32 overflow-y-auto">
                 {breakpointHit.context.output_tail.join('\n')}
               </pre>
             </details>
@@ -490,7 +490,7 @@ export default function RunControl() {
             title="返回场景选择"
           >
             <span className="text-sm">«</span>
-            <span className="text-[10px] [writing-mode:vertical-rl]">{selectedIds.size} 已选</span>
+            <span className="text-fs-aux [writing-mode:vertical-rl]">{selectedIds.size} 已选</span>
           </button>
         )}
 
@@ -501,9 +501,9 @@ export default function RunControl() {
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium">场景选择（{selectedIds.size} 已选）</span>
               <button onClick={() => setSelectedIds(new Set(filteredScenarios.map(s => s.id)))}
-                className="text-[10px] text-info hover:underline ml-auto">全选当前</button>
+                className="text-fs-aux text-info hover:underline ml-auto">全选当前</button>
               <button onClick={() => setSelectedIds(new Set())}
-                className="text-[10px] text-gray-500 hover:text-fail">清空</button>
+                className="text-fs-aux text-gray-500 hover:text-fail">清空</button>
             </div>
             <div className="flex gap-1.5">
               <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)}
@@ -529,7 +529,7 @@ export default function RunControl() {
                   <span className="text-gray-500 truncate flex-1">{s.title}</span>
                   {/* T-320：场景最后更新时间（YAML mtime） */}
                   {s.updated_at && (
-                    <span className="text-gray-600 text-[10px] shrink-0" title={`最后更新 ${s.updated_at}`}>
+                    <span className="text-gray-600 text-fs-aux shrink-0" title={`最后更新 ${s.updated_at}`}>
                       {s.updated_at.slice(5)}
                     </span>
                   )}
@@ -619,7 +619,7 @@ export default function RunControl() {
                 ))}
               </select>
               {accountOverride && accountOptions[accountOverride] && (
-                <span className="ml-2 text-[10px] text-info">
+                <span className="ml-2 text-fs-aux text-info">
                   场景 as: default 将以 {accountOptions[accountOverride].ad || accountOverride} 执行
                 </span>
               )}
@@ -717,7 +717,7 @@ export default function RunControl() {
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期按实际值判定）</span>
                   </div>
                 ))}
-                <p className="text-[10px] text-gray-500 pt-0.5">
+                <p className="text-fs-aux text-gray-500 pt-0.5">
                   账号/环境键缺失执行时按诚实语义 SKIP 不报 FAIL，可直接在上方输入值覆盖执行（仅本次运行生效，不改配置文件）；📎 fixtures 缺失为仓库缺陷（文件应随 git 提交），不提供输入覆盖——请补齐文件后重试。
                 </p>
               </div>
@@ -739,14 +739,14 @@ export default function RunControl() {
                   <label key={sid} className="flex items-center gap-2 text-xs cursor-pointer hover:opacity-80">
                     <input type="checkbox" checked={breakpoints.has(sid)}
                       onChange={() => toggleBreakpoint(sid)} />
-                    <span className="text-gray-600 font-mono text-[10px]">#{idx + 1}</span>
+                    <span className="text-gray-600 font-mono text-fs-aux">#{idx + 1}</span>
                     <span className="font-mono">{sid}</span>
-                    {breakpoints.has(sid) && <span className="text-info text-[10px]">🔴 在此前暂停</span>}
+                    {breakpoints.has(sid) && <span className="text-info text-fs-aux">🔴 在此前暂停</span>}
                   </label>
                 ))}
                 {breakpoints.size > 0 && (
                   <button onClick={() => setBreakpoints(new Set())}
-                    className="text-[10px] text-gray-500 hover:text-fail">清除全部断点</button>
+                    className="text-fs-aux text-gray-500 hover:text-fail">清除全部断点</button>
                 )}
               </div>
             )}
@@ -761,10 +761,10 @@ export default function RunControl() {
           </div>
           {closureInfo.upstream.length > 0 && (
             <div className="px-2 py-1.5 bg-surface-2 border border-border rounded">
-              <div className="text-[10px] text-gray-600 mb-1">连带上游（先于选中场景执行）：</div>
+              <div className="text-fs-aux text-gray-600 mb-1">连带上游（先于选中场景执行）：</div>
               <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
                 {closureInfo.upstream.map((id) => (
-                  <span key={id} className="px-1 py-0.5 rounded bg-info/10 text-info/90 font-mono text-[10px]">{id}</span>
+                  <span key={id} className="px-1 py-0.5 rounded bg-info/10 text-info/90 font-mono text-fs-aux">{id}</span>
                 ))}
               </div>
             </div>

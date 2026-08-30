@@ -470,7 +470,7 @@ export default function DagEditor() {
           placeholder="🔍 搜索场景 ID / 标题"
           className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-xs"
         />
-        <span className="text-[10px] text-gray-600">
+        <span className="text-fs-aux text-gray-600">
           {filteredDag && dagData ? `${filteredDag.nodes.length}/${dagData.nodes.length} 节点` : ''}
         </span>
         {/* K-046：多选执行（Shift 框选 / Ctrl 点选后一键跳 RunControl 预选）；T-105：批量断点/批量采纳 */}
@@ -502,18 +502,18 @@ export default function DagEditor() {
         {/* 类型图例 */}
         <div className="flex gap-2 ml-auto">
           {Object.entries(CATEGORY_META).map(([key, meta]) => (
-            <span key={key} className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: meta.color, background: meta.color + '15' }}>
+            <span key={key} className="text-fs-aux px-1.5 py-0.5 rounded" style={{ color: meta.color, background: meta.color + '15' }}>
               {meta.icon} {meta.label}({catCounts[key] || 0})
             </span>
           ))}
         </div>
-        <button onClick={refreshDag} className="text-[10px] text-gray-500 hover:text-info px-2 py-1 rounded border border-border hover:border-info/40" title="重新布局">
+        <button onClick={refreshDag} className="text-fs-aux text-gray-500 hover:text-info px-2 py-1 rounded border border-border hover:border-info/40" title="重新布局">
           🔄 重排
         </button>
         {/* T-201：孤节点补全——无上游场景批量扫描建议并采纳 */}
         <button
           onClick={handleCompleteOrphans}
-          className="text-[10px] text-gray-500 hover:text-pass px-2 py-1 rounded border border-border hover:border-pass/40"
+          className="text-fs-aux text-gray-500 hover:text-pass px-2 py-1 rounded border border-border hover:border-pass/40"
           title="扫描无依赖上游的场景，批量采纳依赖建议（跨场景变量引用补全）"
         >
           🟢 补全孤节点
@@ -521,7 +521,7 @@ export default function DagEditor() {
         {/* K-xxx：对话编排主入口——Agent 会话承担编排，画布保留编辑作复核视图 */}
         <button
           onClick={() => navigate(`/agent?hint=dag-orchestration`)}
-          className="text-[10px] text-info hover:opacity-80 px-2 py-1 rounded border border-info/40 hover:border-info/60 bg-info/10"
+          className="text-fs-aux text-info hover:opacity-80 px-2 py-1 rounded border border-info/40 hover:border-info/60 bg-info/10"
           title="在对话中编排依赖（建议/加边/删边/复核）——Agent 会话是 DAG 编排主入口，本画布为可视化复核视图"
         >
           🤖 对话编排
@@ -671,7 +671,7 @@ export default function DagEditor() {
                   💡 {suggestions.length} 条依赖建议（扫描 {'{{...}}'} 插值匹配生产者）
                 </div>
                 {suggestError && (
-                  <div className="text-fail text-[10px] mb-1" title={suggestError}>
+                  <div className="text-fail text-fs-aux mb-1" title={suggestError}>
                     ⚠️ 建图失败，环预检已失效：{suggestError.slice(0, 80)}
                   </div>
                 )}

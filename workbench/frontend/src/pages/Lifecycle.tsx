@@ -26,14 +26,14 @@ function StatusBadge({ item }: { item: LifecycleItem }) {
   const mark = item.last_verdict && FAILURE_VERDICTS.includes(item.last_verdict) && item.status !== 'discarded'
     ? ' ❌' : '';
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${STATUS_STYLE[item.status] || STATUS_STYLE.unknown}`}>
+    <span className={`text-fs-aux px-1.5 py-0.5 rounded border whitespace-nowrap ${STATUS_STYLE[item.status] || STATUS_STYLE.unknown}`}>
       {item.status_label}{mark}
     </span>
   );
 }
 
 function VerdictDots({ verdicts }: { verdicts: string[] }) {
-  if (!verdicts || verdicts.length === 0) return <span className="text-[10px] text-gray-600">—</span>;
+  if (!verdicts || verdicts.length === 0) return <span className="text-fs-aux text-gray-600">—</span>;
   return (
     <span className="flex gap-0.5 items-center" title={`最近 ${verdicts.length} 次：${verdicts.join(' → ')}`}>
       {verdicts.map((v, i) => (
@@ -140,7 +140,7 @@ function LifecycleBoard() {
               filter === c.filter ? 'border-info bg-info/10' : 'border-border bg-surface-2 hover:bg-surface-3'
             }`}>
             <div className={`text-xl font-bold ${c.cls || 'text-gray-200'}`}>{c.value}</div>
-            <div className="text-[10px] text-gray-500">{c.label}</div>
+            <div className="text-fs-aux text-gray-500">{c.label}</div>
           </button>
         ))}
       </div>
@@ -191,7 +191,7 @@ function LifecycleBoard() {
                       <span className="text-fs-micro text-pass" title={`${it.closed_loops} 次失败修复闭环`}>🔄×{it.closed_loops}</span>
                     )}
                     <VerdictDots verdicts={it.recent_verdicts} />
-                    <span className="ml-auto text-[10px] text-gray-600 whitespace-nowrap">
+                    <span className="ml-auto text-fs-aux text-gray-600 whitespace-nowrap">
                       {it.last_run_id ? `${fmtAt(it.last_run_at)} · ${it.last_run_id}` : '未执行过'}
                     </span>
                   </div>
@@ -201,7 +201,7 @@ function LifecycleBoard() {
                     {it.draft_filename && <span className="text-yellow-600/80"> · 📝 {it.draft_filename}</span>}
                   </div>
                   {it.last_failure && (
-                    <div className="text-[10px] text-fail/80 truncate mt-0.5"
+                    <div className="text-fs-aux text-fail/80 truncate mt-0.5"
                       title={`${it.last_failure.run_id} · ${it.last_failure.message}`}>
                       ❌ {it.last_failure.category || 'failed'} · {it.last_failure.message}
                     </div>
@@ -224,12 +224,12 @@ function LifecycleBoard() {
             <div className="flex-1 min-h-0 overflow-y-auto p-3">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-gray-200">{detail.id}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${STATUS_STYLE[detail.status] || STATUS_STYLE.unknown}`}>
+                <span className={`text-fs-aux px-1.5 py-0.5 rounded border ${STATUS_STYLE[detail.status] || STATUS_STYLE.unknown}`}>
                   {detail.status_label}
                 </span>
               </div>
               <div className="text-xs text-gray-500 mt-0.5">{detail.title}</div>
-              <div className="text-[10px] text-gray-600 mt-0.5">
+              <div className="text-fs-aux text-gray-600 mt-0.5">
                 {detail.module && `模块 ${detail.module} · `}v{detail.version || '—'}
                 {detail.file_path && ` · ${detail.file_path}`}
               </div>
@@ -255,7 +255,7 @@ function LifecycleBoard() {
               {/* 时间线 */}
               <div className="mt-3 text-xs font-medium text-gray-300">生命周期时间线</div>
               <div className="mt-1.5 space-y-0">
-                {detail.timeline.length === 0 && <div className="text-[10px] text-gray-600">暂无事件</div>}
+                {detail.timeline.length === 0 && <div className="text-fs-aux text-gray-600">暂无事件</div>}
                 {detail.timeline.map((e, i) => (
                   <div key={i} className="flex gap-2">
                     <div className="flex flex-col items-center">
@@ -277,7 +277,7 @@ function LifecycleBoard() {
                           <span className={`font-medium ${VERDICT_STYLE[e.verdict] || 'text-gray-400'}`}>{e.verdict}</span>
                         )}
                       </div>
-                      {e.detail && <div className="text-[10px] text-gray-600 truncate" title={e.detail}>{e.detail}</div>}
+                      {e.detail && <div className="text-fs-aux text-gray-600 truncate" title={e.detail}>{e.detail}</div>}
                       <div className="text-fs-micro text-gray-700">{fmtAt(e.at || '')}</div>
                     </div>
                   </div>
@@ -287,15 +287,15 @@ function LifecycleBoard() {
               {/* 执行历史 */}
               <div className="mt-3 text-xs font-medium text-gray-300">执行历史（{detail.runs.length}）</div>
               <div className="mt-1.5 space-y-1">
-                {detail.runs.length === 0 && <div className="text-[10px] text-gray-600">暂无执行记录</div>}
+                {detail.runs.length === 0 && <div className="text-fs-aux text-gray-600">暂无执行记录</div>}
                 {detail.runs.map(r => (
                   <div key={r.run_id} className="rounded bg-surface-2 border border-border/60 px-2 py-1.5">
                     <div className="flex items-center gap-2 text-[11px]">
                       <span className={`font-medium ${VERDICT_STYLE[r.verdict] || 'text-gray-400'}`}>{r.verdict}</span>
                       <span className="font-mono text-gray-400">{r.run_id}</span>
-                      <span className="ml-auto text-[10px] text-gray-600">{r.duration_ms}ms · {fmtAt(r.finished_at)}</span>
+                      <span className="ml-auto text-fs-aux text-gray-600">{r.duration_ms}ms · {fmtAt(r.finished_at)}</span>
                     </div>
-                    {r.message && <div className="text-[10px] text-fail/80 truncate mt-0.5" title={r.message}>{r.message}</div>}
+                    {r.message && <div className="text-fs-aux text-fail/80 truncate mt-0.5" title={r.message}>{r.message}</div>}
                   </div>
                 ))}
               </div>

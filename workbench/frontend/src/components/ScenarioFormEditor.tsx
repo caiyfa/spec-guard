@@ -196,7 +196,7 @@ export default function ScenarioFormEditor({
           <div className="flex bg-surface-3 rounded overflow-hidden">
             {(['read', 'form', 'yaml'] as const).map((m) => (
               <button key={m} onClick={() => switchMode(m)}
-                className={`px-2.5 py-1 text-[10px] transition-colors ${mode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
+                className={`px-2.5 py-1 text-fs-aux transition-colors ${mode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
                 {m === 'read' ? '📖 阅读' : m === 'form' ? '📋 表单' : '📄 YAML'}
               </button>
             ))}
@@ -298,7 +298,7 @@ export default function ScenarioFormEditor({
                     />
                   ))}
                   <button onClick={() => update('depends_on', serializeDeps([...deps, { id: '', mode: 'shared', version: undefined, optional: false }]))}
-                    className="text-[10px] text-gray-500 hover:text-info">+ 添加依赖</button>
+                    className="text-fs-aux text-gray-500 hover:text-info">+ 添加依赖</button>
                 </div>
                 <div className="border-t border-border/30 pt-3">
                   <div className="text-[11px] text-gray-400 font-medium mb-2">产出声明（produces）</div>
@@ -315,8 +315,8 @@ export default function ScenarioFormEditor({
                     </div>
                   ))}
                   <button onClick={() => update('produces', [...produces, { resource: '', state: '' }])}
-                    className="text-[10px] text-gray-500 hover:text-info">+ 添加产出</button>
-                  <p className="text-[10px] text-gray-600 mt-1.5">声明后下游场景可感知此场景的产出资源与状态</p>
+                    className="text-fs-aux text-gray-500 hover:text-info">+ 添加产出</button>
+                  <p className="text-fs-aux text-gray-600 mt-1.5">声明后下游场景可感知此场景的产出资源与状态</p>
                 </div>
               </div>
             )}
@@ -414,7 +414,7 @@ function VerifyCard({ item, oracles, onChange, onRemove }: {
           <option value="json">json</option>
           <option value="oracle">oracle</option>
         </select>
-        <button onClick={onRemove} className="ml-auto text-gray-600 hover:text-fail text-[10px]">✕</button>
+        <button onClick={onRemove} className="ml-auto text-gray-600 hover:text-fail text-fs-aux">✕</button>
       </div>
       {type === 'status' && (
         <div className="flex gap-2 items-end">
@@ -495,7 +495,7 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
           ))}
         </select>
         <button onClick={() => onChange({ ...dep, mode: dep.mode === 'shared' ? 'exclusive' : 'shared' })}
-          className={`text-[10px] px-2 py-1 rounded border flex-shrink-0 ${dep.mode === 'exclusive' ? 'border-warn text-warn bg-warn/10' : 'border-border text-gray-500'}`}>
+          className={`text-fs-aux px-2 py-1 rounded border flex-shrink-0 ${dep.mode === 'exclusive' ? 'border-warn text-warn bg-warn/10' : 'border-border text-gray-500'}`}>
           {dep.mode}
         </button>
         <button onClick={onRemove} className="text-gray-600 hover:text-fail text-xs flex-shrink-0">✕</button>
@@ -506,17 +506,17 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
         <div className="border-t border-border/30 px-3 py-2 space-y-1.5">
           {/* 场景描述 */}
           {detail.given && (
-            <p className="text-[10px] text-gray-500 leading-4">📖 {detail.given}</p>
+            <p className="text-fs-aux text-gray-500 leading-4">📖 {detail.given}</p>
           )}
 
           {/* save 变量 */}
           {detail.saves.length > 0 && (
             <div>
-              <span className="text-[10px] text-gray-500">产出变量：</span>
+              <span className="text-fs-aux text-gray-500">产出变量：</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {detail.saves.map((s) => (
                   <span key={s.name}
-                    className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-info/10 text-info/80"
+                    className="text-fs-aux font-mono px-1.5 py-0.5 rounded bg-info/10 text-info/80"
                     title={`步骤类型: ${s.step_type}`}>
                     {`{{${detail.id}.${s.name}}}`}
                   </span>
@@ -528,10 +528,10 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
           {/* produces 声明 */}
           {detail.produces.length > 0 && (
             <div>
-              <span className="text-[10px] text-gray-500">资源产出：</span>
+              <span className="text-fs-aux text-gray-500">资源产出：</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {detail.produces.map((p, i) => (
-                  <span key={i} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-pass/10 text-pass/70">
+                  <span key={i} className="text-fs-aux font-mono px-1.5 py-0.5 rounded bg-pass/10 text-pass/70">
                     {p.resource}{p.state ? `(${p.state})` : ''}
                   </span>
                 ))}
@@ -540,7 +540,7 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
           )}
 
           {detail.saves.length === 0 && detail.produces.length === 0 && (
-            <p className="text-[10px] text-gray-600">该场景无 save 变量和 produces 声明</p>
+            <p className="text-fs-aux text-gray-600">该场景无 save 变量和 produces 声明</p>
           )}
         </div>
       )}
@@ -552,7 +552,7 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
 function F({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={className}>
-      <label className="block text-[10px] text-gray-500 mb-0.5">{label}</label>
+      <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       {children}
     </div>
   );

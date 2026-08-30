@@ -193,7 +193,7 @@ export default function FeishuReviewPanel() {
                       checked={selected.has(k)} onChange={() => toggleOne(k)} />
                   </td>
                   <td className={td}>
-                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] mr-1.5 ${badge.cls}`}>
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-fs-aux mr-1.5 ${badge.cls}`}>
                       {badge.label}
                     </span>
                     <code className="text-[11px]">{it.src}</code>
@@ -215,7 +215,7 @@ export default function FeishuReviewPanel() {
                       {it.evidence || '（无依据）'}
                     </span>
                     {!it.valid && (
-                      <span className="ml-1 text-[10px] text-red-400">invalid·不可确认</span>
+                      <span className="ml-1 text-fs-aux text-red-400">invalid·不可确认</span>
                     )}
                   </td>
                 </tr>
@@ -254,7 +254,7 @@ export default function FeishuReviewPanel() {
               }}>确认入包意向</button>
             <button className={btn} onClick={() => setIvPrompt([])}>跳过</button>
           </div>
-          <div className="mt-1.5 text-[10px] text-gray-500">
+          <div className="mt-1.5 text-fs-aux text-gray-500">
             入包走 M03 原有人拍板端点；飞书材料需先在材料管理登记为 MAT 后才可入包
           </div>
         </div>

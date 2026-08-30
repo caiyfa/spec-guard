@@ -86,7 +86,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-sm font-semibold">按勾选原文生成话题</span>
-          <span className="text-[10px] text-gray-600">
+          <span className="text-fs-aux text-gray-600">
             {days.join(' / ')} · {isMulti ? '跨日窗口' : '单日'}
           </span>
           <button className="ml-auto text-gray-500 hover:text-gray-300"
@@ -110,7 +110,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
                       style={{ color: senderColor(m.sender_id || m.sender_name || '') }}>
                       {m.sender_name || m.sender_id || '?'}
                     </span>
-                    <span className="text-[10px] text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
+                    <span className="text-fs-aux text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
                     <button className="ml-auto text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="从本话题移除该条"
                       onClick={() => removeMsg(m.message_id)}>✕</button>
@@ -142,7 +142,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
               {tagOptions.map(n => <option key={n} value={n} />)}
             </datalist>
             {tagHints.length > 0 && (
-              <div className="text-[10px] text-amber-400/90 -mt-1">
+              <div className="text-fs-aux text-amber-400/90 -mt-1">
                 将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
               </div>
             )}
@@ -153,7 +153,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
               onChange={e => setExtra(e.target.value)}
               placeholder="可选；将作为附加上下文参与 LLM 生成" />
             <div className="mt-auto flex items-center gap-2 pt-2 border-t border-border">
-              <span className="text-[10px] text-gray-600">
+              <span className="text-fs-aux text-gray-600">
                 生成后落右栏「候选段」——勾选「生成话题卡」提交入库
               </span>
               <span className="ml-auto flex gap-2">

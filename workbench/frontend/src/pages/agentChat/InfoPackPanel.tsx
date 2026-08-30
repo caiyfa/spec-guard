@@ -65,7 +65,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="ml-1 text-[10px] px-1.5 py-0.5 rounded border border-border text-gray-500 hover:text-info hover:border-info/40 disabled:opacity-40"
+          className="ml-1 text-fs-aux px-1.5 py-0.5 rounded border border-border text-gray-500 hover:text-info hover:border-info/40 disabled:opacity-40"
           title="上传材料到信息包（xlsx/docx/pdf/md/csv 等，≤20MB）"
         >
           {uploading ? '上传中…' : '⬆ 上传'}
@@ -83,9 +83,9 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
             {meta.info_pack.map(entry => (
               <div key={entry.path} className="flex items-center gap-1 group">
                 <FreshBadge status={statusOf(entry.path)} />
-                <span className="text-[10px]">📄</span>
+                <span className="text-fs-aux">📄</span>
                 <span onClick={() => onViewFile(entry.path)}
-                  className="text-[10px] font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info"
+                  className="text-fs-aux font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info"
                   title={`${entry.path}\nsha: ${entry.sha || '-'}\n添加: ${entry.added_at || '-'}`}>
                   {entry.path}
                 </span>
@@ -95,7 +95,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
                     const updated = await scenarioApi.updateInfoPack(meta.id, newFiles);
                     onUpdate(updated);
                   } catch { onError('移除文件失败'); }
-                }} className="text-red-500 text-[10px] opacity-0 group-hover:opacity-100">✕</button>
+                }} className="text-red-500 text-fs-aux opacity-0 group-hover:opacity-100">✕</button>
               </div>
             ))}
           </div>
@@ -109,7 +109,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
                 {outside.map(p => (
                   <div key={p} className="flex items-center gap-1">
                     <span onClick={() => onViewFile(p)}
-                      className="text-[10px] font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info">{p}</span>
+                      className="text-fs-aux font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info">{p}</span>
                     <button onClick={() => handleAddOutside(p)}
                       className="text-fs-micro text-info hover:underline flex-shrink-0">+ 补入</button>
                   </div>

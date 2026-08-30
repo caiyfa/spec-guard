@@ -221,7 +221,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                 </span>
               )}
             </div>
-            <div className="text-[10px] truncate" title={meta?.title || libHit?.path || ''}>
+            <div className="text-fs-aux truncate" title={meta?.title || libHit?.path || ''}>
               {libHit ? (
                 <span className="text-green-400/90">✅ 已在场景库 · {libHit.scenarioId} · {libHit.path}</span>
               ) : gone ? (
@@ -249,7 +249,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
 
             {/* 校验结果 */}
             {st.validate && (
-              <div className={`mt-1.5 text-[10px] rounded px-1.5 py-1 ${
+              <div className={`mt-1.5 text-fs-aux rounded px-1.5 py-1 ${
                 st.validate.verdict === 'PASS' ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'
               }`}>
                 <div className="font-medium">
@@ -265,7 +265,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             )}
             {/* 试跑结果 */}
             {st.trial && (
-              <div className={`mt-1.5 text-[10px] rounded px-1.5 py-1 ${
+              <div className={`mt-1.5 text-fs-aux rounded px-1.5 py-1 ${
                 st.trial.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'
               }`}>
                 <div className="flex items-start gap-1">
@@ -281,7 +281,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                 {/* K-xxx：查看结果——成功绿/失败红，点开读 run 报告展示完整执行过程（步骤/断言/DB 证据/日志） */}
                 {st.trial.run_id && (
                   <button onClick={() => setDetailFile(file)}
-                    className={`mt-1 px-2 py-0.5 rounded text-[10px] border ${
+                    className={`mt-1 px-2 py-0.5 rounded text-fs-aux border ${
                       st.trial.ok
                         ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
                         : 'bg-red-900/40 text-red-400 border-red-700/50 hover:bg-red-900/60'

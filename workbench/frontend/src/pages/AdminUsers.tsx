@@ -101,7 +101,7 @@ export default function AdminUsers() {
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-sm text-gray-200 font-medium">{u.name || u.emp_no}</span>
                 <span className="text-xs text-gray-500 font-mono">{u.emp_no}</span>
-                <span className="text-[10px] text-gray-600 ml-auto">
+                <span className="text-fs-aux text-gray-600 ml-auto">
                   默认工作区: {u.default_workspace || '—'} · 最近登录: {u.last_login_at || '—'}
                 </span>
               </div>
@@ -132,7 +132,7 @@ export default function AdminUsers() {
                     <option key={r.role_key} value={r.role_key}>{r.label} ({r.role_key})</option>
                   ))}
                 </select>
-                <a href="/menu-roles" className="text-[10px] text-gray-600 hover:text-gray-400 underline ml-auto">角色管理 →</a>
+                <a href="/menu-roles" className="text-fs-aux text-gray-600 hover:text-gray-400 underline ml-auto">角色管理 →</a>
               </div>
               {/* 工作区授权 */}
               <div className="flex flex-wrap items-center gap-1.5">

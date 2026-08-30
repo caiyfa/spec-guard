@@ -259,7 +259,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
           placeholder="搜索本表…"
           className="ml-auto bg-surface-2 border border-border rounded px-2 py-1 text-[11px] text-gray-300 placeholder-gray-600 focus:border-info outline-none w-40"
         />
-        <span className="text-[10px] text-gray-600 whitespace-nowrap">
+        <span className="text-fs-aux text-gray-600 whitespace-nowrap">
           {view.length === body.length ? `${body.length} 行` : `筛选后 ${view.length} / ${body.length} 行`}
           {sheet.truncated && `（仅解析前 ${MAX_PARSE_ROWS} 行）`}
         </span>
@@ -284,7 +284,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
           <thead className="sticky top-0 z-10">
             {headerBlock.map((row, r) => (
               <tr key={r}>
-                {r === 0 && <th rowSpan={sheet.headerRows} className="px-1 py-1.5 border border-border bg-surface-3 text-gray-600 text-[10px] font-normal w-11">#</th>}
+                {r === 0 && <th rowSpan={sheet.headerRows} className="px-1 py-1.5 border border-border bg-surface-3 text-gray-600 text-fs-aux font-normal w-11">#</th>}
                 {row.map((cell, c) => {
                   const span = spanOf(sheet.merges, r, c);
                   if (span.skip) return null;
@@ -301,14 +301,14 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
                           <span className="relative">
                             <button
                               onClick={() => { setFilterOpen(filterOpen === c ? null : c); setFilterSearch(''); }}
-                              className={`text-[10px] px-0.5 rounded ${(filters[c]?.size ?? 0) > 0 ? 'text-info' : 'text-gray-600 hover:text-gray-400'}`}
+                              className={`text-fs-aux px-0.5 rounded ${(filters[c]?.size ?? 0) > 0 ? 'text-info' : 'text-gray-600 hover:text-gray-400'}`}
                               title="筛选">🔽</button>
                             {filterOpen === c && (
                               <span className="absolute left-0 top-full mt-1 z-20 w-48 bg-surface-2 border border-border rounded-lg shadow-xl p-2 block font-normal">
                                 <input autoFocus value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
                                   placeholder="搜索值…"
                                   className="w-full bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-info mb-1" />
-                                <span className="flex gap-2 mb-1 text-[10px]">
+                                <span className="flex gap-2 mb-1 text-fs-aux">
                                   <button className="text-info hover:underline"
                                     onClick={() => setFilters(prev => ({ ...prev, [c]: new Set() }))}>清除</button>
                                   <button className="text-gray-500 hover:underline ml-auto" onClick={() => setFilterOpen(null)}>关闭</button>
@@ -321,7 +321,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
                                       <span className="truncate">{v || '(空)'}</span>
                                     </label>
                                   ))}
-                                  {uniqueValues.length === 0 && <span className="block text-[10px] text-gray-600 px-1">无匹配值</span>}
+                                  {uniqueValues.length === 0 && <span className="block text-fs-aux text-gray-600 px-1">无匹配值</span>}
                                 </span>
                               </span>
                             )}
@@ -343,7 +343,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
               const r = startIdx + wi;  // view 坐标（排序/筛选后）
               return (
                 <tr key={r} className="hover:bg-surface-3/40">
-                  <td className="px-1 py-1 border border-border/30 text-gray-600 text-[10px] text-right select-none bg-surface-2/50 sticky left-0">
+                  <td className="px-1 py-1 border border-border/30 text-gray-600 text-fs-aux text-right select-none bg-surface-2/50 sticky left-0">
                     {row.no}
                   </td>
                   {row.cells.map((cell, c) => (
@@ -374,7 +374,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
 
       {/* K-040：状态栏（选中统计 / 筛选提示） */}
       {(selStats || activeFilters > 0) && (
-        <div className="px-3 py-1 border-t border-border text-[10px] flex-shrink-0 flex items-center gap-3">
+        <div className="px-3 py-1 border-t border-border text-fs-aux flex-shrink-0 flex items-center gap-3">
           {selStats && (
             <span className="text-gray-400">
               选中 <b className="text-info">{selStats.count}</b> 格

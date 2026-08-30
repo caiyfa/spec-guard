@@ -92,7 +92,7 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
       {/* 标题条 */}
       <div className="flex-shrink-0 px-3 py-1.5 border-b border-border flex items-center gap-2 text-xs">
         <span className="text-gray-200">🗄 DB 证据</span>
-        <span className="text-[10px] text-gray-500 truncate">只读查询——仅 SELECT/SHOW/DESCRIBE/EXPLAIN</span>
+        <span className="text-fs-aux text-gray-500 truncate">只读查询——仅 SELECT/SHOW/DESCRIBE/EXPLAIN</span>
         <button onClick={onClose} title="关闭 DB 面板，返回主会话"
           className="ml-auto text-gray-500 hover:text-info px-1 rounded hover:bg-surface-3 flex-shrink-0">✕</button>
       </div>
@@ -140,14 +140,14 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
               🤖 交给辅助助手
             </button>
           )}
-          <span className="text-[10px] text-gray-600">Ctrl+Enter 执行</span>
+          <span className="text-fs-aux text-gray-600">Ctrl+Enter 执行</span>
         </div>
 
         {/* 三态分离：错误 / 结果 / 空态 */}
         {error && <div className="text-xs text-red-400 bg-red-900/10 border border-red-700/20 rounded p-2">❌ {error}</div>}
         {result && (
           <div className="space-y-1">
-            <div className="text-[10px] text-gray-500">{result.elapsed_ms}ms{result.truncated ? ' · 结果超上限已截断' : ''}</div>
+            <div className="text-fs-aux text-gray-500">{result.elapsed_ms}ms{result.truncated ? ' · 结果超上限已截断' : ''}</div>
             <SqlResultTable rows={result.rows} row_count={result.row_count} truncated={result.truncated} />
           </div>
         )}

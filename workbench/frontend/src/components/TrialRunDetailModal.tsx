@@ -121,14 +121,14 @@ function StepItem({ index, s }: { index: number; s: CaseStep }) {
             {Object.keys(req).length > 0 && (
               <div>
                 <div className="text-fs-micro text-gray-500">请求</div>
-                <pre className="px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
+                <pre className="px-2 py-1 rounded text-fs-aux font-mono text-gray-400 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
                   style={{ background: 'rgb(var(--code-bg))' }}>{pretty(req)}</pre>
               </div>
             )}
             {(s.body_excerpt != null || s.response_body != null) && (
               <div>
                 <div className="text-fs-micro text-gray-500">响应</div>
-                <pre className="px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
+                <pre className="px-2 py-1 rounded text-fs-aux font-mono text-gray-400 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
                   style={{ background: 'rgb(var(--code-bg))' }}>{pretty(s.body_excerpt ?? s.response_body)}</pre>
               </div>
             )}
@@ -151,7 +151,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
   return (
     <div className={`rounded-lg border ${open ? 'border-info/40' : 'border-border'} bg-surface-2/70 overflow-hidden`}>
       <button onClick={onToggle} className="w-full px-2.5 py-2 flex items-center gap-2 text-left hover:bg-surface-3/50">
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${VERDICT_BADGE[brief.verdict] || 'bg-surface-3 text-gray-400'}`}>
+        <span className={`px-1.5 py-0.5 rounded text-fs-aux font-medium flex-shrink-0 ${VERDICT_BADGE[brief.verdict] || 'bg-surface-3 text-gray-400'}`}>
           {brief.verdict}
         </span>
         <span className="font-mono text-xs text-gray-200 flex-shrink-0">{brief.id}</span>
@@ -169,7 +169,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
         {!!(brief.duration_ms || detail?.duration_ms) && (
           <span className="text-fs-micro text-gray-600 flex-shrink-0">{((brief.duration_ms || detail?.duration_ms || 0) / 1000).toFixed(1)}s</span>
         )}
-        <span className="text-gray-500 text-[10px] flex-shrink-0">{open ? '▾' : '▸'}</span>
+        <span className="text-gray-500 text-fs-aux flex-shrink-0">{open ? '▾' : '▸'}</span>
       </button>
       {open && (
         <div className="border-t border-border/60 px-2.5 py-2 space-y-2.5">
@@ -181,7 +181,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
                 {detail.failure.message}
               </div>
               {detail.failure.evidence != null && (
-                <pre className="mt-1 px-2 py-1 rounded text-[10px] font-mono text-red-300/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto"
+                <pre className="mt-1 px-2 py-1 rounded text-fs-aux font-mono text-red-300/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto"
                   style={{ background: 'rgb(var(--code-bg))' }}>{pretty(detail.failure.evidence)}</pre>
               )}
             </div>
@@ -199,7 +199,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
               {detail.doc?.given && <div className="text-gray-400"><span className="text-gray-600">Given </span>{detail.doc.given}</div>}
               {detail.doc?.when && <div className="text-gray-400"><span className="text-gray-600">When </span>{detail.doc.when}</div>}
               {detail.doc?.then && <div className="text-gray-400"><span className="text-gray-600">Then </span>{detail.doc.then}</div>}
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-600">
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-fs-aux text-gray-600">
                 {detail?.given?.account && <span>账号：{detail.given.account}</span>}
                 {!!(detail?.covers || []).length && <span>覆盖：{(detail.covers || []).join(', ')}</span>}
               </div>
@@ -224,7 +224,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
               <div className="text-gray-500 text-fs-micro mb-0.5">权限预言（{oracles.length}）</div>
               <div className="space-y-1">
                 {oracles.map((o, i) => (
-                  <div key={i} className="rounded border border-border/60 px-2 py-1 text-[10px] font-mono">
+                  <div key={i} className="rounded border border-border/60 px-2 py-1 text-fs-aux font-mono">
                     <div className="text-gray-300">{o.purpose || 'oracle'}</div>
                     {o.scope && <div className="text-gray-500 break-all">{o.scope}</div>}
                     {o.raw_message && <div className="text-yellow-500/80 break-all">{o.raw_message}</div>}
@@ -242,12 +242,12 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
                 {dbTraces.map((d, i) => (
                   <div key={i} className="rounded border border-border/60 px-2 py-1.5">
                     {d.sql && (
-                      <pre className="px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-32 overflow-y-auto mb-1"
+                      <pre className="px-2 py-1 rounded text-fs-aux font-mono text-gray-400 whitespace-pre-wrap break-all max-h-32 overflow-y-auto mb-1"
                         style={{ background: 'rgb(var(--code-bg))' }}>{d.sql}</pre>
                     )}
                     {(d.excerpt || []).length > 0
                       ? <SqlResultTable rows={d.excerpt || []} truncated={d.truncated} row_count={d.rows} />
-                      : <div className="text-[10px] text-gray-600">{d.rows ?? 0} 行（无摘录）</div>}
+                      : <div className="text-fs-aux text-gray-600">{d.rows ?? 0} 行（无摘录）</div>}
                   </div>
                 ))}
               </div>
@@ -265,7 +265,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
                     <span className="flex-1 min-w-0">
                       <span className="text-gray-300 break-all">{a.expr || 'assert'}</span>
                       {!a.passed && (a.expected != null || a.actual != null) && (
-                        <span className="text-gray-500 font-mono text-[10px]">
+                        <span className="text-gray-500 font-mono text-fs-aux">
                           {' '}期望 {pretty(a.expected)} · 实际 {pretty(a.actual)}
                         </span>
                       )}
@@ -282,7 +282,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {Object.keys(savedVars).length > 0 && (
             <details>
               <summary className="cursor-pointer text-fs-micro text-gray-500 hover:text-gray-300 select-none">💾 变量快照（{Object.keys(savedVars).length} 个）</summary>
-              <pre className="mt-1 px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-48 overflow-y-auto"
+              <pre className="mt-1 px-2 py-1 rounded text-fs-aux font-mono text-gray-400 whitespace-pre-wrap break-all max-h-48 overflow-y-auto"
                 style={{ background: 'rgb(var(--code-bg))' }}>{pretty(savedVars)}</pre>
             </details>
           )}
@@ -346,7 +346,7 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
           {runId && <span className="font-mono text-xs text-gray-400 select-all">{runId}</span>}
           {(trial.env || run?.env) && <span className="text-[11px] text-gray-500 font-mono">@{(trial.env || run?.env) || ''}</span>}
           {run?.system && <span className="text-[11px] text-gray-500 font-mono">{run.system}</span>}
-          {run?.started_at && <span className="text-[10px] text-gray-600 font-mono ml-auto">{run.started_at}{run.finished_at ? ` → ${run.finished_at}` : ''}</span>}
+          {run?.started_at && <span className="text-fs-aux text-gray-600 font-mono ml-auto">{run.started_at}{run.finished_at ? ` → ${run.finished_at}` : ''}</span>}
         </div>
         {stats && (
           <div className="flex gap-3 text-[11px]">
@@ -390,14 +390,14 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
               <span className="ml-auto">{showLog ? '▾ 收起' : '▸ 展开'}</span>
             </button>
             {showLog && (
-              <pre className="px-2.5 py-2 text-[10px] text-gray-400 font-mono max-h-72 overflow-y-auto border-t border-border whitespace-pre-wrap break-all"
+              <pre className="px-2.5 py-2 text-fs-aux text-gray-400 font-mono max-h-72 overflow-y-auto border-t border-border whitespace-pre-wrap break-all"
                 style={{ background: 'rgb(var(--code-bg))' }}>{log}</pre>
             )}
           </div>
         )}
 
         {trial.report_dir && (
-          <div className="text-[10px] text-gray-600 break-all">报告目录：{trial.report_dir}</div>
+          <div className="text-fs-aux text-gray-600 break-all">报告目录：{trial.report_dir}</div>
         )}
       </div>
     </Modal>

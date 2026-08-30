@@ -472,11 +472,11 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                             setChatSel(next);
                           }} />
                         <span className="text-gray-200 truncate">{c.name || c.chat_id}</span>
-                        <code className="text-[10px] text-gray-600">{c.chat_id}</code>
+                        <code className="text-fs-aux text-gray-600">{c.chat_id}</code>
                         {chatSel.has(c.chat_id) && (
-                          <span className="ml-auto flex items-center gap-1 shrink-0 text-[10px] text-gray-500">
+                          <span className="ml-auto flex items-center gap-1 shrink-0 text-fs-aux text-gray-500">
                             <select
-                              className="bg-surface-3 border border-border rounded px-1 py-0.5 text-[10px] text-gray-300 outline-none focus:border-info"
+                              className="bg-surface-3 border border-border rounded px-1 py-0.5 text-fs-aux text-gray-300 outline-none focus:border-info"
                               value={chatKind[c.chat_id] || ''}
                               onChange={e => setChatKind(prev => ({
                                 ...prev,
@@ -488,7 +488,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                             </select>
                             话题
                             <input type="number" min={0} max={365}
-                              className="w-12 bg-surface-3 border border-border rounded px-1 py-0.5 text-[10px] text-gray-300 outline-none focus:border-info"
+                              className="w-12 bg-surface-3 border border-border rounded px-1 py-0.5 text-fs-aux text-gray-300 outline-none focus:border-info"
                               value={chatTopicDays[c.chat_id] ?? 7}
                               onChange={e => setChatTopicDays(prev => ({
                                 ...prev,
@@ -531,7 +531,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                       {userResults.map(u => (
                         <div key={u.open_id} className="flex items-center gap-2 text-xs">
                           <span className="text-gray-200">{u.name || u.open_id}</span>
-                          <span className="text-[10px] text-gray-600">
+                          <span className="text-fs-aux text-gray-600">
                             {u.department}{u.email ? ` · ${u.email}` : ''}</span>
                           <button className={btn} onClick={() => addUser(u)}
                             disabled={watchUsers.some(w => w.open_id === u.open_id)}>添加</button>
@@ -600,7 +600,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                       {docUserResults.map(u => (
                         <div key={u.open_id} className="flex items-center gap-2 text-xs">
                           <span className="text-gray-200">{u.name || u.open_id}</span>
-                          <span className="text-[10px] text-gray-600">{u.department}</span>
+                          <span className="text-fs-aux text-gray-600">{u.department}</span>
                           <button className={btn}
                             onClick={() => { setDocOwner({ open_id: u.open_id, name: u.name }); setDocUserResults([]); }}>
                             选为检索目标</button>
@@ -648,8 +648,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                               setDocSel(next);
                             }} />
                           <span className="text-gray-200 truncate">{d.title || d.token}</span>
-                          {d.title && <code className="text-[10px] text-gray-600">{d.token.slice(0, 12)}…</code>}
-                          {d.owner_name && <span className="text-[10px] text-gray-600">{d.owner_name}</span>}
+                          {d.title && <code className="text-fs-aux text-gray-600">{d.token.slice(0, 12)}…</code>}
+                          {d.owner_name && <span className="text-fs-aux text-gray-600">{d.owner_name}</span>}
                         </label>
                       ))}
                     </div>

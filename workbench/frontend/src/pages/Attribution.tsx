@@ -241,7 +241,7 @@ export default function Attribution() {
                       <button
                         onClick={() => handleAttribute(fc.scenario_id)}
                         disabled={attributing !== ''}
-                        className="px-2 py-0.5 bg-surface-3 text-gray-300 rounded text-[10px] hover:bg-surface-2 disabled:opacity-40"
+                        className="px-2 py-0.5 bg-surface-3 text-gray-300 rounded text-fs-aux hover:bg-surface-2 disabled:opacity-40"
                         title="装配证据包 + 确定性定性建议（仅建议，人确认才建档）">
                         {attributing === fc.scenario_id ? '归因中…' : '🔍 归因'}
                       </button>
@@ -273,18 +273,18 @@ export default function Attribution() {
                       <div className="mt-2 space-y-2">
                         <div className="bg-surface-2 rounded p-2 border border-border">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${sug.cls}`}>
+                            <span className={`text-fs-aux px-1.5 py-0.5 rounded ${sug.cls}`}>
                               Agent 建议：{sug.label}
                             </span>
-                            <span className="text-[10px] text-gray-500">仅建议——人确认才建档</span>
+                            <span className="text-fs-aux text-gray-500">仅建议——人确认才建档</span>
                           </div>
                           <div className="text-[11px] text-gray-400">{attr.suggestion.rationale}</div>
                           {attr.honesty_review?.required && (
-                            <div className="mt-1 text-[10px] px-1.5 py-1 rounded bg-orange-900/30 text-orange-400">
+                            <div className="mt-1 text-fs-aux px-1.5 py-1 rounded bg-orange-900/30 text-orange-400">
                               ⚠️ 诚实性复核：{attr.honesty_review.conclusion}
                             </div>
                           )}
-                          <details className="mt-1.5 text-[10px]">
+                          <details className="mt-1.5 text-fs-aux">
                             <summary className="cursor-pointer text-gray-500 hover:text-gray-300">
                               证据包（flow_digest {attr.evidence.flow_digest} · 断言现场）
                             </summary>
@@ -300,7 +300,7 @@ export default function Attribution() {
                               <button key={k}
                                 onClick={() => handleConfirmSpq(fc.scenario_id, k)}
                                 disabled={attributing !== ''}
-                                className={`px-2 py-0.5 rounded text-[10px] ${v.cls} border border-border hover:opacity-80 disabled:opacity-40`}
+                                className={`px-2 py-0.5 rounded text-fs-aux ${v.cls} border border-border hover:opacity-80 disabled:opacity-40`}
                                 title="人拍板建档 SPQ（留痕 decided_by）">
                                 定性：{v.label}
                               </button>
@@ -348,23 +348,23 @@ export default function Attribution() {
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-mono text-info">{s.spq_id}</span>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
+                    <span className="text-fs-aux text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
                     {s.status === 'pending' && (
                       <button onClick={() => handleSpqTransition(s.spq_id, 'in_progress')}
-                        className="text-[10px] px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded hover:bg-yellow-900/60">
+                        className="text-fs-aux px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded hover:bg-yellow-900/60">
                         处理中
                       </button>
                     )}
                     {s.status !== 'closed' && (
                       <button onClick={() => handleSpqTransition(s.spq_id, 'closed')}
-                        className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60">
+                        className="text-fs-aux px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60">
                         闭环
                       </button>
                     )}
                   </div>
                 </div>
                 <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={s.title}>{s.title}</div>
-                <div className="text-[10px] text-gray-600 mt-0.5 flex gap-2 flex-wrap">
+                <div className="text-fs-aux text-gray-600 mt-0.5 flex gap-2 flex-wrap">
                   {s.run_id && <span>← {s.run_id}</span>}
                   {s.scenario_id && <span>{s.scenario_id}</span>}
                   {(s.fr_refs || []).length > 0 && <span>FR: {(s.fr_refs || []).join(',')}</span>}

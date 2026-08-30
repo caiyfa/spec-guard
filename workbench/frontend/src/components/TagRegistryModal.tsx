@@ -50,7 +50,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
   };
 
   const input = 'bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none focus:border-info';
-  const act = 'px-1.5 py-0.5 rounded border border-border text-[10px] text-gray-400 hover:border-gray-500 disabled:opacity-40 shrink-0';
+  const act = 'px-1.5 py-0.5 rounded border border-border text-fs-aux text-gray-400 hover:border-gray-500 disabled:opacity-40 shrink-0';
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
@@ -59,7 +59,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-semibold">标签词表管理</span>
-          <span className="text-[10px] text-gray-600">
+          <span className="text-fs-aux text-gray-600">
             待收录 {Object.values(tags).filter(t => t.status === 'pending').length} ·
             已收录 {activeNames.length} · 域 {domains.length}
           </span>
@@ -68,7 +68,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
             onChange={e => setFilter(e.target.value)} />
           <button className="text-gray-500 hover:text-gray-300" onClick={onClose}>✕</button>
         </div>
-        <div className="text-[10px] text-gray-600 mb-2">
+        <div className="text-fs-aux text-gray-600 mb-2">
           词表作用于后续 AI 分类（prompt 复用清单）与标签栏归并展示；话题卡上已落的原始关键词不改写。
         </div>
         {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{err}</div>}
@@ -127,7 +127,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
                 <div key={name} className="flex items-center gap-1.5 px-1 py-1">
                   <span className="text-[11px] text-gray-200 shrink-0">{name}</span>
                   {(e.aliases || []).length > 0 && (
-                    <span className="text-[10px] text-gray-600 truncate"
+                    <span className="text-fs-aux text-gray-600 truncate"
                       title={`别名：${(e.aliases || []).join('、')}`}>
                       ← {(e.aliases || []).join('、')}
                     </span>

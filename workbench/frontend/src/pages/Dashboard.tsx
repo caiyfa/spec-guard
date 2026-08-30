@@ -154,7 +154,7 @@ function SpecTab({ specMd, specLoading, exportMd }: {
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center justify-end mb-2">
           <button onClick={exportMd}
-            className="text-[10px] px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20">
+            className="text-fs-aux px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20">
             📥 导出 MD
           </button>
         </div>
@@ -249,9 +249,9 @@ function CollapsibleCodeBlock({ language, children }: { language: string; childr
   return (
     <div className="relative group">
       <div className="flex items-center justify-between px-3 py-1 bg-surface-3/80 rounded-t-lg border border-b-0 border-border">
-        <span className="text-[10px] text-gray-500 font-mono">{language}</span>
+        <span className="text-fs-aux text-gray-500 font-mono">{language}</span>
         <button onClick={() => setCollapsed(!collapsed)}
-          className="text-[10px] text-gray-500 hover:text-info">
+          className="text-fs-aux text-gray-500 hover:text-info">
           {collapsed ? `▸ 展开（${lines} 行）` : '▾ 收起'}
         </button>
       </div>

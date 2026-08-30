@@ -90,7 +90,7 @@ function flattenText(node: unknown): string {
 function OutlinePanel({ items, onJump }: { items: OutlineItem[]; onJump: (anchor: string) => void }) {
   return (
     <div className="w-40 flex-shrink-0 border-l border-border overflow-y-auto py-2 bg-surface-2/30">
-      <div className="px-2 pb-1 text-[10px] text-gray-600 border-b border-border/50">大纲</div>
+      <div className="px-2 pb-1 text-fs-aux text-gray-600 border-b border-border/50">大纲</div>
       {items.map((it, i) => (
         <button key={i} onClick={() => onJump(it.anchor)}
           className={`w-full text-left px-2 py-0.5 text-[11px] truncate text-gray-500 hover:text-info hover:bg-surface-3 transition-colors ${
@@ -101,7 +101,7 @@ function OutlinePanel({ items, onJump }: { items: OutlineItem[]; onJump: (anchor
           {it.text}
         </button>
       ))}
-      {items.length === 0 && <div className="px-2 py-2 text-[10px] text-gray-700">无标题结构</div>}
+      {items.length === 0 && <div className="px-2 py-2 text-fs-aux text-gray-700">无标题结构</div>}
     </div>
   );
 }
@@ -141,7 +141,7 @@ function MarkdownViewer({ content }: { content: string }) {
           onJump={a => containerRef.current?.querySelector(`#${CSS.escape(a)}`)?.scrollIntoView({ block: 'start' })} />
       )}
       <button onClick={() => setShowOutline(v => !v)} title={showOutline ? '隐藏大纲' : '显示大纲'}
-        className="absolute top-2 right-2 z-10 text-[10px] px-1.5 py-0.5 rounded bg-surface-2/80 border border-border text-gray-500 hover:text-info">
+        className="absolute top-2 right-2 z-10 text-fs-aux px-1.5 py-0.5 rounded bg-surface-2/80 border border-border text-gray-500 hover:text-info">
         {showOutline ? '»' : '≡'}
       </button>
     </div>
@@ -173,7 +173,7 @@ function YamlViewer({ content }: { content: string }) {  const [showOutline, set
           onJump={a => containerRef.current?.querySelector(`#${a}`)?.scrollIntoView({ block: 'start' })} />
       )}
       <button onClick={() => setShowOutline(v => !v)} title={showOutline ? '隐藏大纲' : '显示大纲'}
-        className="absolute top-2 right-2 z-10 text-[10px] px-1.5 py-0.5 rounded bg-surface-2/80 border border-border text-gray-500 hover:text-info">
+        className="absolute top-2 right-2 z-10 text-fs-aux px-1.5 py-0.5 rounded bg-surface-2/80 border border-border text-gray-500 hover:text-info">
         {showOutline ? '»' : '≡'}
       </button>
     </div>
@@ -193,7 +193,7 @@ import type { EditSaveOutcome } from './DraftFormEditor';
 function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
   const pass = outcome.verdict === 'PASS';
   return (
-    <div className={`flex-shrink-0 mx-2 my-1 text-[10px] rounded px-2 py-1 ${
+    <div className={`flex-shrink-0 mx-2 my-1 text-fs-aux rounded px-2 py-1 ${
       !outcome.ok ? 'bg-red-900/20 text-red-400'
         : pass ? 'bg-green-900/20 text-green-400' : 'bg-yellow-900/20 text-yellow-500'
     }`}>
@@ -267,7 +267,7 @@ function ScenarioYamlView({ path, content, onOpenFile, canEdit, onSaveContent }:
         <div className="flex bg-surface-3 rounded overflow-hidden">
           {modeList.map((m) => (
             <button key={m} onClick={() => switchMode(m)}
-              className={`px-2.5 py-1 text-[10px] transition-colors ${effectiveMode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
+              className={`px-2.5 py-1 text-fs-aux transition-colors ${effectiveMode === m ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
               {m === 'read' ? '📖 结构化' : m === 'raw' ? '📄 原文' : '✏️ 编辑'}
             </button>
           ))}
@@ -276,10 +276,10 @@ function ScenarioYamlView({ path, content, onOpenFile, canEdit, onSaveContent }:
           <div className="ml-auto flex items-center gap-1.5">
             <button onClick={() => switchMode('raw')}
               title="退出编辑（未保存的修改即丢弃）"
-              className="px-2 py-0.5 rounded text-[10px] bg-surface-3 text-gray-400 hover:text-gray-200">✕ 退出编辑</button>
+              className="px-2 py-0.5 rounded text-fs-aux bg-surface-3 text-gray-400 hover:text-gray-200">✕ 退出编辑</button>
           </div>
         ) : (
-          <span className="text-[10px] text-gray-600">{isScenario ? '场景 YAML · 结构化视图为只读摘要' : '草稿 YAML'}{editable ? ' · 点「✏️ 编辑」进结构化表单修改草稿' : ''}</span>
+          <span className="text-fs-aux text-gray-600">{isScenario ? '场景 YAML · 结构化视图为只读摘要' : '草稿 YAML'}{editable ? ' · 点「✏️ 编辑」进结构化表单修改草稿' : ''}</span>
         )}
       </div>
       <div className="flex-1 min-h-0 flex flex-col">

@@ -255,7 +255,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
           <div className="max-w-[85%] rounded-lg rounded-br-sm px-2.5 py-1.5 text-xs bg-info/10 text-info/90 border border-info/20 whitespace-pre-wrap break-words">
             {stripRefBlock(item.content || '')}
             <div className="flex items-center gap-1 mt-1">
-              <CopyButton text={stripRefBlock(item.content || '')} className="text-[10px] text-info/40 hover:text-info" />
+              <CopyButton text={stripRefBlock(item.content || '')} className="text-fs-aux text-info/40 hover:text-info" />
             </div>
           </div>
         </div>
@@ -275,7 +275,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
             <div className="flex-1 min-w-0 text-xs">
               <MarkdownText content={item.content || ''} />
             </div>
-            <CopyButton text={item.content || ''} className="text-[10px] text-gray-500 hover:text-info flex-shrink-0" />
+            <CopyButton text={item.content || ''} className="text-fs-aux text-gray-500 hover:text-info flex-shrink-0" />
           </div>
         );
       }
@@ -309,7 +309,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
 
   return (
     <div className="flex flex-col h-full text-xs">
-      <div className="flex items-center gap-2 py-1 text-[10px] text-gray-500 border-b border-border flex-shrink-0">
+      <div className="flex items-center gap-2 py-1 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
         <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>{wsState === 'open' ? '●' : '○'}</span>
         <span className="whitespace-nowrap">辅助助手（辅助会话）</span>
         {auxSid && <span className="font-mono text-gray-600 truncate flex-1" title={auxSid}>{auxSid}</span>}
@@ -317,7 +317,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
           <select
             value={currentModelId}
             onChange={e => onModelChange(e.target.value)}
-            className="bg-surface-2 border border-border rounded px-1 py-0.5 text-[10px] text-gray-400 font-mono max-w-[120px] flex-shrink-0"
+            className="bg-surface-2 border border-border rounded px-1 py-0.5 text-fs-aux text-gray-400 font-mono max-w-[120px] flex-shrink-0"
             title="切换辅助会话模型（下一轮生效）">
             {models.map(m => (
               <option key={m.id} value={m.id}>{m.is_default ? '★ ' : ''}{m.name || m.model}</option>
@@ -360,7 +360,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
 
       {artifacts.length > 0 && (
         <div className="border-t border-border pt-1 mt-1 space-y-1 flex-shrink-0">
-          <div className="text-[10px] text-gray-500">产物区（{artifacts.length}）· write_draft 落盘，点击「引用」回流主会话</div>
+          <div className="text-fs-aux text-gray-500">产物区（{artifacts.length}）· write_draft 落盘，点击「引用」回流主会话</div>
           {artifacts.map(([fn, content]) => (
             <ArtifactRow key={fn} artifact={{
               fileName: fn,
@@ -371,7 +371,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
               actions={
                 <>
                   <button onClick={() => onCiteToMain(fn)}
-                    className="text-[10px] px-1.5 py-0.5 rounded border border-info/40 text-info hover:bg-info/10 flex-shrink-0"
+                    className="text-fs-aux px-1.5 py-0.5 rounded border border-info/40 text-info hover:bg-info/10 flex-shrink-0"
                     title="把 @draft 引用预填进主会话输入框（发送后主会话 Agent 可读该文件）">
                     📎 引用
                   </button>
@@ -384,7 +384,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
                         window.open(`/db-console?sql=${encodeURIComponent(content || '')}`, '_self');
                       }
                     }}
-                    className="text-[10px] px-1.5 py-0.5 rounded border border-border text-gray-400 hover:text-info flex-shrink-0"
+                    className="text-fs-aux px-1.5 py-0.5 rounded border border-border text-gray-400 hover:text-info flex-shrink-0"
                     title="在会话内打开 DB 证据面板回填执行（主会话自动最小化）">▶ DB</button>
                 </>
               } />
@@ -430,7 +430,7 @@ function ArtifactRow({ artifact, onPreview, actions, compact }: {
       {metaParts.length > 0 && <span className="text-fs-micro text-gray-600 flex-shrink-0">{metaParts.join(' · ')}</span>}
       <button onClick={() => onPreview?.(artifact.fileName!, 'draft')}
         disabled={!onPreview || !artifact.fileName}
-        className="text-[10px] text-info/80 hover:text-info flex-shrink-0 disabled:opacity-40"
+        className="text-fs-aux text-info/80 hover:text-info flex-shrink-0 disabled:opacity-40"
         title="在右侧文件页签预览该草稿">预览 ›</button>
       {actions}
     </div>

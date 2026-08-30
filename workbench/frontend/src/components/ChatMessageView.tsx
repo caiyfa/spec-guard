@@ -144,7 +144,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
   onImageClick: (url: string, caption: string) => void;
 }) {
   const imgCls = 'max-h-28 rounded border border-border mt-1 mr-1 inline-block align-top cursor-pointer';
-  const capCls = `text-[10px] mt-0.5 ${highlight ? 'text-info/80' : 'text-gray-500'}`;
+  const capCls = `text-fs-aux mt-0.5 ${highlight ? 'text-info/80' : 'text-gray-500'}`;
   const renderImgs = (keys: (string | undefined)[]) => (
     keys.filter(Boolean).map(k => {
       const key = k as string;
@@ -161,11 +161,11 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
               }} />
           ) : imgFailed.has(key) ? (
             <span className="inline-block w-16 h-16 leading-[3.5rem] text-center rounded
-              border border-red-500/30 bg-red-500/5 text-[10px] text-red-400 align-top"
+              border border-red-500/30 bg-red-500/5 text-fs-aux text-red-400 align-top"
               title="图片加载失败（当前飞书账号无该图权限或下载失败，刷新页面重试）">加载失败</span>
           ) : (
             <span className="inline-block w-16 h-16 leading-[4rem] text-center rounded
-              border border-border bg-black/30 text-[10px] text-gray-600 align-top">加载中…</span>
+              border border-border bg-black/30 text-fs-aux text-gray-600 align-top">加载中…</span>
           )}
           {captions[key] && (
             <div className={capCls}>{captions[key]}</div>
@@ -197,7 +197,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
           title="旧快照无附件下载信息——点「↻ 更新本群」重新同步后可下载">
           <span className="text-[13px]">📎</span>
           <span className="text-gray-300">{msg.file_name || '文件'}</span>
-          <span className="text-[10px] text-amber-500/80">需更新后可下载</span>
+          <span className="text-fs-aux text-amber-500/80">需更新后可下载</span>
         </span>
       );
     }
@@ -222,7 +222,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
         }}>
         <span className="text-[13px]">📎</span>
         <span className="text-gray-300">{msg.file_name || '文件'}</span>
-        <span className="text-[10px] text-gray-600">点击下载</span>
+        <span className="text-fs-aux text-gray-600">点击下载</span>
       </button>
     );
   }
@@ -235,7 +235,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
     }
     return (
       <div className="mt-1 rounded border border-border/60 bg-black/20 px-2 py-1.5">
-        <div className="text-[10px] text-gray-500 mb-1">合并转发 {subs.length} 条</div>
+        <div className="text-fs-aux text-gray-500 mb-1">合并转发 {subs.length} 条</div>
         <div className="space-y-1.5">
           {subs.map((s) => {
             const text = s.text.replace(FWD_IMG_RE, '').trim();
@@ -244,7 +244,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
                 <span className="font-medium" style={{ color: senderColor(s.sender) }}>
                   {s.sender}
                 </span>
-                <span className="ml-1 text-[10px] text-gray-600">
+                <span className="ml-1 text-fs-aux text-gray-600">
                   {s.ts.slice(11, 16)}
                 </span>
                 {text && (

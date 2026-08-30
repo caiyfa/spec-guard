@@ -142,7 +142,7 @@ export function DepGraphPanel({ draftFiles, onError }: {
         </div>
       ) : (
         <>
-          <div className="px-1 text-[10px] text-gray-600">
+          <div className="px-1 text-fs-aux text-gray-600">
             {scope.nodes.length} 个场景 · {scope.edges.length} 条依赖边
             {cycleSets.length > 0 && <span className="text-fail"> · ⛔ {cycleSets.length} 条环</span>}
           </div>

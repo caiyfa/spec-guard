@@ -95,10 +95,10 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
               }`}>
               <div className="flex items-center gap-2">
                 <span className="font-medium">{s.display_name}</span>
-                <span className="font-mono text-[10px] text-gray-600">{s.name}</span>
-                {!s.enabled && <span className="text-[10px] text-gray-600">⏸ 停用</span>}
+                <span className="font-mono text-fs-aux text-gray-600">{s.name}</span>
+                {!s.enabled && <span className="text-fs-aux text-gray-600">⏸ 停用</span>}
               </div>
-              <div className="text-[10px] text-gray-600 mt-0.5">
+              <div className="text-fs-aux text-gray-600 mt-0.5">
                 <span className={`px-1 rounded ${TIER_BADGE[s.tier] || ''}`}>{s.tier}</span>
                 {s.envs.length > 0 && <span className="ml-1">env: {s.envs.join(',')}</span>}
               </div>
@@ -122,7 +122,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
                 </span>
               </div>
               {cur.description && <div className="text-xs text-gray-500">{cur.description}</div>}
-              {cur.package_dir && <div className="text-[10px] text-gray-700 font-mono mt-1" title="适配包目录（配置落点）">{cur.package_dir}</div>}
+              {cur.package_dir && <div className="text-fs-aux text-gray-700 font-mono mt-1" title="适配包目录（配置落点）">{cur.package_dir}</div>}
               <div className="text-xs text-gray-600 mt-1">环境: {cur.envs.join(', ') || '—'} · 账号别名: {cur.accounts.join(', ') || '—'}</div>
               {isAdmin && (
                 <div className="flex gap-2 mt-2">
@@ -148,7 +148,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
                   <div className={`text-xs ${gate.loadable ? 'text-green-400' : 'text-amber-400'}`}>
                     {gate.loadable ? `✅ 已评审加载（${gate.approved_by} @ ${gate.approved_at}）` : `⚠ ${gate.reason}`}
                   </div>
-                  <div className="text-[10px] text-gray-700 font-mono mt-1">sha256: {gate.sha256.slice(0, 16)}…</div>
+                  <div className="text-fs-aux text-gray-700 font-mono mt-1">sha256: {gate.sha256.slice(0, 16)}…</div>
                   {isAdmin && !gate.loadable && (
                     <button disabled={busy === 'review'}
                       onClick={() => run('review', () => systemsApi.review(cur.name), '评审通过，已绑定指纹并热加载')}

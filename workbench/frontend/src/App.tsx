@@ -263,7 +263,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
                 >
                   <span className="text-xs">{group.icon}</span>
                   <span className="flex-1 text-left">{group.label}</span>
-                  <span className="text-[10px] text-gray-600">{isExpanded ? '▼' : '▶'}</span>
+                  <span className="text-fs-aux text-gray-600">{isExpanded ? '▼' : '▶'}</span>
                 </button>
                 {isExpanded && (
                   <div className="ml-3 border-l border-border/50 pl-1 mt-0.5 space-y-0.5">
@@ -290,7 +290,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
           })}
         </nav>
 
-        <div className="p-3 border-t border-border text-[10px] text-gray-600 flex-shrink-0 whitespace-nowrap">
+        <div className="p-3 border-t border-border text-fs-aux text-gray-600 flex-shrink-0 whitespace-nowrap">
           engine 不可变 · 仅读写 YAML + reports
         </div>
       </aside>

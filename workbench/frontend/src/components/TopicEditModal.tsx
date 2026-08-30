@@ -158,7 +158,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
         <div className="flex items-center gap-2 mb-3">
           <span className="text-sm font-semibold">编辑话题</span>
           <span className="text-xs text-gray-400 truncate" title={topic.title}>{topic.title}</span>
-          <span className="text-[10px] text-gray-600">
+          <span className="text-fs-aux text-gray-600">
             {days.join(' / ')} · {isMulti ? '跨日话题' : '单日'}
           </span>
           <button className="ml-auto text-gray-500 hover:text-gray-300"
@@ -193,14 +193,14 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
               )}
             </div>
             {!canRelate && messages !== null && (
-              <div className="px-2 py-1.5 text-[10px] text-amber-400 border-b border-border/50">
+              <div className="px-2 py-1.5 text-fs-aux text-amber-400 border-b border-border/50">
                 {messages.length === 0
                   ? '该话题覆盖日无消息快照——重关联不可用（文本编辑不受影响）'
                   : '旧快照为 md 视图（无精确消息 id），重关联不可用——「↻ 更新本群」重建快照后可用'}
               </div>
             )}
             {missingIds.length > 0 && (
-              <div className="px-2 py-1.5 text-[10px] text-amber-400 border-b border-border/50"
+              <div className="px-2 py-1.5 text-fs-aux text-amber-400 border-b border-border/50"
                 title={missingIds.join(', ')}>
                 {missingIds.length} 条已关联消息未在快照中找到（保存将解除其关联）
               </div>
@@ -227,7 +227,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
                         style={{ color: on ? undefined : senderColor(m.sender_id || m.sender_name || '') }}>
                         {m.sender_name || m.sender_id || '?'}
                       </span>
-                      <span className="text-[10px] text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
+                      <span className="text-fs-aux text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
                     </div>
                     <div className={on ? 'text-info' : 'text-gray-300'}>
                       <MessageBody msg={m} imgUrls={imgUrls} imgFailed={imgFailed}
@@ -254,7 +254,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
               {tagOptions.map(n => <option key={n} value={n} />)}
             </datalist>
             {tagHints.length > 0 && (
-              <div className="text-[10px] text-amber-400/90 -mt-1">
+              <div className="text-fs-aux text-amber-400/90 -mt-1">
                 将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
               </div>
             )}
@@ -278,23 +278,23 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
             </div>
             {origin && (
               <div className="p-2 rounded bg-surface-3/60 border border-border/50">
-                <div className="text-[10px] text-gray-500 mb-0.5">
+                <div className="text-fs-aux text-gray-500 mb-0.5">
                   AI 原稿对照（人工修改处标黄，生成优化依据）：
                 </div>
-                <div className={`text-[10px] ${diff(title, origin.title) ? 'text-amber-300' : 'text-gray-500'}`}>
+                <div className={`text-fs-aux ${diff(title, origin.title) ? 'text-amber-300' : 'text-gray-500'}`}>
                   题目：{origin.title}
                 </div>
-                <div className={`text-[10px] ${diff(summary, origin.summary) ? 'text-amber-300' : 'text-gray-500'}`}>
+                <div className={`text-fs-aux ${diff(summary, origin.summary) ? 'text-amber-300' : 'text-gray-500'}`}>
                   摘要：{origin.summary}
                 </div>
-                <div className="text-[10px] text-gray-600">
+                <div className="text-fs-aux text-gray-600">
                   {origin.model && `模型 ${origin.model} · `}生成于 {origin.generated_at || '—'}
                   {origin.prompt_version && ` · ${origin.prompt_version}`}
                 </div>
               </div>
             )}
             <div className="mt-auto flex items-center gap-2 pt-2 border-t border-border">
-              <span className="text-[10px] text-gray-600">
+              <span className="text-fs-aux text-gray-600">
                 {selTouched && canRelate
                   ? `关联将更新为勾选的 ${selCount} 条（window/days 随动换算）`
                   : '关联保持不变（仅保存文本字段）'}

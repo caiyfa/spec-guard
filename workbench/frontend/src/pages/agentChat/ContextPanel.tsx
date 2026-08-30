@@ -18,13 +18,13 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
     <div className="px-3 py-2 border-b border-border">
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-medium text-gray-300">📊 上下文</span>
-        <span className={`text-[10px] font-mono ${pct > 80 ? 'text-red-400' : pct > 50 ? 'text-yellow-400' : 'text-gray-500'}`}>
+        <span className={`text-fs-aux font-mono ${pct > 80 ? 'text-red-400' : pct > 50 ? 'text-yellow-400' : 'text-gray-500'}`}>
           {pct}%
         </span>
       </div>
       {/* K-012: 会话统计（原底部栏指标迁入） */}
       {stats && (
-        <div className="text-[10px] text-gray-600 font-mono mb-1">
+        <div className="text-fs-aux text-gray-600 font-mono mb-1">
           {stats.tps !== undefined && <span title="tokens/sec">⚡{stats.tps}/s </span>}
           {stats.elapsed_time !== undefined && <span title="elapsed time">⏱{stats.elapsed_time}s </span>}
           {(stats.cache_hits !== undefined) && <span title="prompt cache 命中/未命中">cache {stats.cache_hits}/{stats.cache_misses}</span>}
@@ -40,7 +40,7 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
         })}
       </div>
       {/* 总量 */}
-      <div className="text-[10px] text-gray-600 font-mono mt-1">
+      <div className="text-fs-aux text-gray-600 font-mono mt-1">
         {fmt(total)} / {fmt(ctxLimit)} tokens
       </div>
       {/* 分角色明细 */}
@@ -49,7 +49,7 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
           const val = breakdown[r.key];
           const rolePct = Math.round((val / promptTotal) * 100);
           return (
-            <div key={r.key} className="flex items-center gap-1.5 text-[10px]">
+            <div key={r.key} className="flex items-center gap-1.5 text-fs-aux">
               <span className={`w-2 h-2 rounded-sm ${r.color}`} />
               <span className="text-gray-500 w-8">{r.label}</span>
               <span className="text-gray-400 font-mono flex-1 text-right">{fmt(val)}</span>
@@ -59,7 +59,7 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
         })}
       </div>
       {/* 输入/输出 */}
-      <div className="flex gap-3 mt-1.5 pt-1.5 border-t border-border/50 text-[10px] text-gray-600 font-mono">
+      <div className="flex gap-3 mt-1.5 pt-1.5 border-t border-border/50 text-fs-aux text-gray-600 font-mono">
         <span title="输入 tokens">↑ {fmt(ctxUsage.prompt_tokens)}</span>
         <span title="输出 tokens">↓ {fmt(ctxUsage.completion_tokens)}</span>
       </div>

@@ -28,7 +28,7 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
       <span className="text-base flex-shrink-0">📄</span>
       <span className="flex-1 min-w-0">
         <span className="block text-sm text-gray-200 truncate">{artifact.title}</span>
-        <span className="block text-[10px] text-gray-500 truncate">{metaParts.join(' · ')}</span>
+        <span className="block text-fs-aux text-gray-500 truncate">{metaParts.join(' · ')}</span>
       </span>
       <span className="text-xs text-info/70 flex-shrink-0 group-hover:text-info">预览 ›</span>
     </button>

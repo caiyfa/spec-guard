@@ -51,7 +51,7 @@ export function MorePanelsMenu({ items, activeId, onSelect, onClose }: {
             <span className="text-base leading-none">{t.emoji}</span>
             <span className="text-[11px] leading-tight text-center">{t.name}</span>
             {!!t.count && t.count > 0 && (
-              <span className="absolute top-1 right-1 min-w-[16px] px-1 rounded-full bg-info/20 text-info text-[10px] leading-4 text-center">
+              <span className="absolute top-1 right-1 min-w-[16px] px-1 rounded-full bg-info/20 text-info text-fs-aux leading-4 text-center">
                 {t.count > 99 ? '99+' : t.count}
               </span>
             )}

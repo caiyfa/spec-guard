@@ -255,9 +255,9 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                 }`}>
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span className="text-sm text-gray-300 font-medium truncate">{ws.name}</span>
-                  {selected === ws.name && <span className="px-1.5 py-0.5 rounded text-[10px] bg-info/20 text-info flex-shrink-0">当前</span>}
-                  {active === ws.name && <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-900/30 text-green-400 flex-shrink-0">全局激活</span>}
-                  {ws.system_pending && <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-900/30 text-amber-400 flex-shrink-0">⏳ 包待接入</span>}
+                  {selected === ws.name && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-info/20 text-info flex-shrink-0">当前</span>}
+                  {active === ws.name && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-green-900/30 text-green-400 flex-shrink-0">全局激活</span>}
+                  {ws.system_pending && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-amber-900/30 text-amber-400 flex-shrink-0">⏳ 包待接入</span>}
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-2 min-w-0">
                   <span className={`px-1 py-0.5 rounded flex-shrink-0 ${ws.source.type === 'git' ? 'bg-info/10 text-info/80' : 'bg-surface-3 text-gray-500'}`}>
@@ -317,27 +317,27 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
           <button onClick={() => setDocsOpen(v => !v)}
             className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 hover:text-gray-200">
             <span>📄 文档浏览{selected ? ` · ${selected}` : ''}</span>
-            <span className="text-[10px] text-gray-600">{docsOpen ? '▼ 收起' : '▶ 展开'}</span>
+            <span className="text-fs-aux text-gray-600">{docsOpen ? '▼ 收起' : '▶ 展开'}</span>
           </button>
           {docsOpen && (
             <div className="border-t border-border p-2 flex gap-2 h-96">
               <div className="w-52 flex-shrink-0 bg-surface-2 rounded border border-border overflow-hidden flex flex-col">
-                <div className="p-2 text-[10px] text-gray-500 border-b border-border flex items-center justify-between">
+                <div className="p-2 text-fs-aux text-gray-500 border-b border-border flex items-center justify-between">
                   <span>文档</span>
                   <span className="text-gray-600">{files.length} 文件</span>
                 </div>
                 {selected ? (
                   <FileTree files={files} selectedPath={activeFile} onSelect={readFile} mode="view" searchable className="flex-1" />
                 ) : (
-                  <div className="flex-1 flex items-center justify-center text-gray-600 text-[10px] p-3 text-center">选择上方工作区浏览文档</div>
+                  <div className="flex-1 flex items-center justify-center text-gray-600 text-fs-aux p-3 text-center">选择上方工作区浏览文档</div>
                 )}
               </div>
               <div className="flex-1 min-w-0 bg-surface-2 rounded border border-border overflow-hidden flex flex-col">
                 {activeFile ? (
                   <>
                     <div className="px-3 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
-                      <span className="text-[10px] font-mono text-gray-400 truncate">{activeFile}</span>
-                      {loadingFile && <span className="text-[10px] text-gray-500">读取中...</span>}
+                      <span className="text-fs-aux font-mono text-gray-400 truncate">{activeFile}</span>
+                      {loadingFile && <span className="text-fs-aux text-gray-500">读取中...</span>}
                     </div>
                     <FileViewer path={activeFile} content={fileContent} loading={loadingFile} />
                   </>

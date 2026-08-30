@@ -86,7 +86,7 @@ export function DiffOverlay({ item, onClose }: { item: DocWriteItem; onClose: ()
           <div className="text-[11px] text-gray-500 text-center py-10">{state.error}</div>
         ) : (
           <>
-            <div className="px-3 py-1.5 text-[10px] text-gray-500 border-b border-border flex-shrink-0">
+            <div className="px-3 py-1.5 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
               <span className="text-green-400">+{state.added}</span> / <span className="text-red-400">-{state.removed}</span> · 旧版（.bak）→ 当前
             </div>
             <div className="flex-1 min-h-0 overflow-auto font-mono text-[11px] leading-relaxed">
@@ -129,11 +129,11 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
         )}
         {verdictBadge(item.verdict)}
       </div>
-      <div className="text-[10px] text-gray-600 truncate mt-0.5" title={item.ref}>{item.ref}</div>
-      {item.thinking && <div className="text-[10px] text-gray-600 mt-1">💭 {item.thinking}</div>}
+      <div className="text-fs-aux text-gray-600 truncate mt-0.5" title={item.ref}>{item.ref}</div>
+      {item.thinking && <div className="text-fs-aux text-gray-600 mt-1">💭 {item.thinking}</div>}
       {/* 校验失败原因（与 verdict 同源，Agent 据此定位修复） */}
       {failed && findings.length > 0 && (
-        <div className="mt-1.5 text-[10px] rounded bg-red-900/20 px-1.5 py-1 space-y-0.5">
+        <div className="mt-1.5 text-fs-aux rounded bg-red-900/20 px-1.5 py-1 space-y-0.5">
           <div className="text-red-400 font-medium">失败原因（{findings.length} 条）</div>
           {visible.map((f, i) => (
             <div key={i} className="text-red-300/90 break-all">
@@ -148,7 +148,7 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
           )}
         </div>
       )}
-      <div className="text-[10px] text-gray-500 mt-1 font-mono whitespace-pre-wrap"
+      <div className="text-fs-aux text-gray-500 mt-1 font-mono whitespace-pre-wrap"
         style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
         {item.excerpt}
       </div>
@@ -191,7 +191,7 @@ export function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatc
         {onRefresh && (
           <div className="text-center">
             <button onClick={onRefresh}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] bg-surface-3 rounded hover:bg-surface-3/70 transition-colors">
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-fs-aux bg-surface-3 rounded hover:bg-surface-3/70 transition-colors">
               ↻ 刷新
             </button>
           </div>
@@ -205,13 +205,13 @@ export function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatc
         <div className="text-xs font-medium text-gray-300 flex-1">✏️ 更新足迹（{items.length}）</div>
         {failed.length > 0 && onAskAgentBatch && (
           <button onClick={() => onAskAgentBatch(failed)}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-warn/20 text-warn hover:bg-warn/30 mr-1"
+            className="text-fs-aux px-1.5 py-0.5 rounded bg-warn/20 text-warn hover:bg-warn/30 mr-1"
             title="把全部失败文件的原因带进对话，Agent 依次读取修复">
             🤖 批量修复（{failed.length}）
           </button>
         )}
         {onRefresh && (
-          <button onClick={onRefresh} className="text-[10px] text-gray-500 hover:text-info transition-colors px-1"
+          <button onClick={onRefresh} className="text-fs-aux text-gray-500 hover:text-info transition-colors px-1"
             title="重新加载更新足迹">↻</button>
         )}
       </div>

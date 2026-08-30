@@ -143,7 +143,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           />
         )}
         <button onClick={() => onSelectSession(s.id, s.workspace)}
-          className={`w-full text-left px-2 py-1 rounded text-[10px] transition-colors ${
+          className={`w-full text-left px-2 py-1 rounded text-fs-aux transition-colors ${
             s.id === currentSessionId
               ? 'bg-info/10 text-info border-l-2 border-info'
               : 'text-gray-400 hover:bg-surface-3 border-l-2 border-transparent'
@@ -177,7 +177,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
       <div key={wsKey} className="mb-1.5">
         {/* 工作区标题（空 workspace 组不显示，保持干净） */}
         {g.hasWs && (
-          <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-gray-500 font-medium">
+          <div className="flex items-center gap-1 px-2 py-1 text-fs-aux text-gray-500 font-medium">
             {batchMode && ownActive.length > 0 && (
               <input
                 type="checkbox"
@@ -201,15 +201,15 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
     <div className="w-60 flex-shrink-0 bg-surface-2 border-r border-border flex flex-col h-full">
       {/* 顶栏 */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="flex items-center gap-1 text-[10px] text-gray-500">
+        <span className="flex items-center gap-1 text-fs-aux text-gray-500">
           <button onClick={onToggleCollapse} title="收起会话列表"
-            className="w-4 h-4 rounded text-gray-600 hover:text-info hover:bg-surface-3 text-[10px] leading-none">
+            className="w-4 h-4 rounded text-gray-600 hover:text-info hover:bg-surface-3 text-fs-aux leading-none">
             «
           </button>
           会话列表
         </span>
         <button onClick={onNewSession}
-          className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">
+          className="text-fs-aux px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20">
           + 新会话
         </button>
       </div>
@@ -222,14 +222,14 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           return renderGroup(g, wsKey, label);
         })}
         {visibleSessions.length === 0 && (
-          <div className="text-center text-gray-600 text-[10px] py-8">暂无会话</div>
+          <div className="text-center text-gray-600 text-fs-aux py-8">暂无会话</div>
         )}
         {/* 已归档：跨工作区聚合到列表最底部 */}
         {allArchived.length > 0 && (
           <div className="mt-2 pt-1.5 border-t border-border/40">
             <button
               onClick={() => setShowArchived(v => !v)}
-              className="w-full flex items-center gap-1 px-2 py-1.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-surface-3 transition-colors">
+              className="w-full flex items-center gap-1 px-2 py-1.5 rounded text-fs-aux text-gray-500 hover:text-gray-300 hover:bg-surface-3 transition-colors">
               <span className="text-gray-600 text-fs-micro">{showArchived ? '▼' : '▶'}</span>
               <span>🗄 已归档</span>
               <span className="text-gray-600 ml-auto">{allArchived.length}</span>
@@ -242,30 +242,30 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
       {/* 底部操作区：批量模式切换 + 批量操作条 */}
       {batchMode ? (
         <div className="flex-shrink-0 border-t border-border p-2 flex items-center gap-1.5">
-          <span className="text-[10px] text-gray-400 flex-shrink-0">已选 {selectedCount}</span>
+          <span className="text-fs-aux text-gray-400 flex-shrink-0">已选 {selectedCount}</span>
           <button
             onClick={toggleShowSmoke}
-            className={`text-[10px] px-1.5 py-1 rounded flex-shrink-0 transition-colors ${showSmoke ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}
+            className={`text-fs-aux px-1.5 py-1 rounded flex-shrink-0 transition-colors ${showSmoke ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}
             title={showSmoke ? 'smoke 隔离会话展示中：点击隐藏' : '显示 smoke 隔离区冒烟会话（验收/调试产物，可勾选批量归档）'}>
             🧪 smoke{showSmoke ? ' ✓' : ''}
           </button>
           <button
             onClick={() => handleBatch(true)}
             disabled={busy || selectedCount === 0}
-            className="flex-1 text-[10px] px-1.5 py-1 rounded bg-amber-900/30 text-amber-300 hover:bg-amber-900/50 disabled:opacity-40"
+            className="flex-1 text-fs-aux px-1.5 py-1 rounded bg-amber-900/30 text-amber-300 hover:bg-amber-900/50 disabled:opacity-40"
             title="归档选中会话（列表瘦身，文件保留可恢复）">
             🗄 归档
           </button>
           <button
             onClick={() => handleBatch(false)}
             disabled={busy || selectedCount === 0}
-            className="flex-1 text-[10px] px-1.5 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40"
+            className="flex-1 text-fs-aux px-1.5 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40"
             title="恢复选中会话">
             ↺ 恢复
           </button>
           <button
             onClick={() => { setBatchMode(false); setSelected({}); }}
-            className="text-[10px] px-1.5 py-1 rounded text-gray-500 hover:text-gray-300"
+            className="text-fs-aux px-1.5 py-1 rounded text-gray-500 hover:text-gray-300"
             title="退出批量操作">
             ✕ 完成
           </button>
@@ -274,7 +274,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
         <div className="flex-shrink-0 border-t border-border p-2">
           <button
             onClick={() => setBatchMode(true)}
-            className="w-full text-[10px] px-1.5 py-1 rounded bg-surface-3 text-gray-400 hover:text-gray-200 hover:bg-surface-3/80 transition-colors"
+            className="w-full text-fs-aux px-1.5 py-1 rounded bg-surface-3 text-gray-400 hover:text-gray-200 hover:bg-surface-3/80 transition-colors"
             title="进入批量操作：勾选多个会话归档/恢复">
             ⚡ 批量操作
           </button>

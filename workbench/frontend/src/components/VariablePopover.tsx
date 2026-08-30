@@ -87,7 +87,7 @@ export default function VariablePopover({ localVars, upstreamVars, envVars, onIn
         type="button"
         onClick={() => setOpen(!open)}
         title="插入变量"
-        className={`ml-1 px-1 rounded text-[10px] font-mono leading-4 transition-colors ${
+        className={`ml-1 px-1 rounded text-fs-aux font-mono leading-4 transition-colors ${
           open ? 'bg-info/30 text-info' : 'text-gray-600 hover:text-info hover:bg-info/10'
         }`}
       >
@@ -96,12 +96,12 @@ export default function VariablePopover({ localVars, upstreamVars, envVars, onIn
 
       {open && (
         <div className="absolute z-50 top-6 left-0 w-64 max-h-72 overflow-y-auto bg-surface-2 border border-border rounded-lg shadow-xl">
-          <div className="px-2 py-1.5 border-b border-border text-[10px] text-gray-500 font-medium">
+          <div className="px-2 py-1.5 border-b border-border text-fs-aux text-gray-500 font-medium">
             可用变量（点击插入）
           </div>
           {sections.map((sec) => (
             <div key={sec.title}>
-              <div className="px-2 py-1 text-[10px] text-gray-500 bg-surface-3/50">
+              <div className="px-2 py-1 text-fs-aux text-gray-500 bg-surface-3/50">
                 {sec.icon} {sec.title}
               </div>
               {sec.items.map((item) => (
@@ -112,14 +112,14 @@ export default function VariablePopover({ localVars, upstreamVars, envVars, onIn
                 >
                   {`{{${item.path}}}`}
                   {item.label !== item.path && (
-                    <span className="ml-1.5 text-gray-600 text-[10px]">{item.label}</span>
+                    <span className="ml-1.5 text-gray-600 text-fs-aux">{item.label}</span>
                   )}
                 </button>
               ))}
             </div>
           ))}
           {/* 数组访问提示 */}
-          <div className="px-3 py-2 border-t border-border/50 text-[10px] text-gray-600">
+          <div className="px-3 py-2 border-t border-border/50 text-fs-aux text-gray-600">
             <div className="font-medium text-gray-500 mb-0.5">数组访问：</div>
             <code className="block text-info/50">{'{{resp.json.data[0].field}}'}</code>
             <code className="block text-info/50">{'path: "$.data.list[0].id"'}</code>

@@ -170,7 +170,7 @@ export default function MaterialsPanel() {
                               {t.confirmed ? '✓' : '○'} {t.title}
                             </span>
                             <button
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20"
+                              className="text-fs-aux px-1.5 py-0.5 rounded bg-info/10 text-info hover:bg-info/20"
                               onClick={() => handleConfirmTopic(m.mid, t, !t.confirmed)}>
                               {t.confirmed ? '取消' : '确认'}
                             </button>

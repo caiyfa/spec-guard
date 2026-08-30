@@ -52,12 +52,12 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
       <Handle type="target" position={Position.Left} style={{ width: 8, height: 8, background: cat.color }} />
       <div className="flex items-center gap-1.5">
         {data.isDraft && (
-          <span className="text-[10px]" title="草稿（未入库）">📝</span>
+          <span className="text-fs-aux" title="草稿（未入库）">📝</span>
         )}
         <span>{cat.icon}</span>
         <span className="font-mono font-semibold truncate">{data.label}</span>
         {data.isBreakpoint && (
-          <span className="text-[10px]" title="计划断点：执行到该场景前暂停">🔴</span>
+          <span className="text-fs-aux" title="计划断点：执行到该场景前暂停">🔴</span>
         )}
         {data.version && (
           <span
@@ -71,7 +71,7 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
       </div>
       {data.title && (
         <div
-          className="mt-1 text-[10px] leading-tight overflow-hidden"
+          className="mt-1 text-fs-aux leading-tight overflow-hidden"
           style={{
             color: tokens.nodeSubText,
             display: '-webkit-box',

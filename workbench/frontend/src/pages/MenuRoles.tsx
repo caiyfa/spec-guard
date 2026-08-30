@@ -91,7 +91,7 @@ function MenuTab({ menus, onChanged, flash, setError }: {
         <div key={g.menu_key} className="bg-surface-2 border border-border rounded-lg p-3">
           <div className="flex items-center gap-2 text-sm text-gray-200 font-medium">
             <span>{g.icon}</span><span>{g.label}</span>
-            {g.is_system ? <span className="text-[10px] bg-purple-900/50 text-purple-300 rounded px-1">系统</span> : null}
+            {g.is_system ? <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统</span> : null}
             <button onClick={() => setAdding(g.menu_key)} className="ml-auto text-xs text-gray-500 hover:text-gray-300">＋ 新增菜单</button>
           </div>
           <div className="mt-1 space-y-1 pl-4 border-l border-border/50">
@@ -191,7 +191,7 @@ function RolesTab({ roles, onChanged, flash, setError }: {
           ) : (
             <>
               <span className="text-gray-200">{r.label}</span>
-              {r.is_builtin && <span className="text-[10px] bg-purple-900/50 text-purple-300 rounded px-1">内置</span>}
+              {r.is_builtin && <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">内置</span>}
               {!r.is_builtin && (
                 <>
                   <button onClick={() => { setEditing(r.role_key); setLabel(r.label); }} className="ml-auto text-gray-500 hover:text-gray-300">重命名</button>
@@ -263,7 +263,7 @@ function GrantsTab({ roles, menus, flash, setError }: {
         {roles.map(r => (
           <button key={r.role_key} onClick={() => setSelRole(r.role_key)}
             className={`w-full text-left px-3 py-2 rounded text-sm ${selRole === r.role_key ? 'bg-info text-white' : 'bg-surface-2 text-gray-400'}`}>
-            {r.label} <span className="font-mono text-[10px] opacity-70">{r.role_key}</span>
+            {r.label} <span className="font-mono text-fs-aux opacity-70">{r.role_key}</span>
           </button>
         ))}
       </div>
@@ -287,8 +287,8 @@ function GrantsTab({ roles, menus, flash, setError }: {
                           disabled={(i.is_system && selRole === 'admin') || !!i.is_public}
                           onChange={() => toggle(i.menu_key, !!i.is_system, !!i.is_public)} />
                         {i.label}
-                        {i.is_system && <span className="text-[10px] bg-purple-900/50 text-purple-300 rounded px-1">系统保底</span>}
-                        {i.is_public && <span className="text-[10px] bg-green-900/50 text-green-300 rounded px-1">公开 · 登录即用</span>}
+                        {i.is_system && <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统保底</span>}
+                        {i.is_public && <span className="text-fs-aux bg-green-900/50 text-green-300 rounded px-1">公开 · 登录即用</span>}
                       </label>
                     ))}
                   </div>

@@ -52,7 +52,7 @@ export default function MermaidBlock({ code, fit = 'contain' }: { code: string; 
   if (error) {
     return (
       <div className="my-2">
-        <div className="text-[10px] text-fail/80 px-2 py-1 bg-red-900/20 border border-red-700/30 rounded-t">
+        <div className="text-fs-aux text-fail/80 px-2 py-1 bg-red-900/20 border border-red-700/30 rounded-t">
           mermaid 渲染失败（显示源码）：{error.slice(0, 120)}
         </div>
         <pre className="text-[11px] bg-black/30 rounded-b p-2 overflow-x-auto text-gray-400">{code}</pre>

@@ -42,7 +42,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
     <>
       <div className="px-3 py-2 border-b border-border">
         <span className="text-xs font-medium text-gray-300">📋 待办</span>
-        {loading && <span className="text-[10px] text-gray-600 ml-2 animate-pulse">执行中…</span>}
+        {loading && <span className="text-fs-aux text-gray-600 ml-2 animate-pulse">执行中…</span>}
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {hasStructured ? (

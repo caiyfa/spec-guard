@@ -194,11 +194,11 @@ export default function Schedules() {
                   <tr key={job.id} className="border-b border-border/50 hover:bg-surface-3/50">
                     <td className="px-3 py-2">
                       <div className="text-gray-300">{job.name}</div>
-                      <div className="text-[10px] text-gray-600 font-mono">{job.id}</div>
+                      <div className="text-fs-aux text-gray-600 font-mono">{job.id}</div>
                     </td>
                     <td className="px-3 py-2 text-gray-400">
                       {plan ? plan.name : job.plan_id}
-                      {plan && <span className="text-[10px] text-gray-600 ml-1">({plan.scenario_count} 场景)</span>}
+                      {plan && <span className="text-fs-aux text-gray-600 ml-1">({plan.scenario_count} 场景)</span>}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-gray-400">{job.cron}</td>
                     <td className="px-3 py-2">
@@ -211,7 +211,7 @@ export default function Schedules() {
                     <td className="px-3 py-2">
                       <div className={`text-xs ${statusInfo.color}`}>{statusInfo.text}</div>
                       {job.last_run_at && (
-                        <div className="text-[10px] text-gray-600">{job.last_run_at}</div>
+                        <div className="text-fs-aux text-gray-600">{job.last_run_at}</div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right space-x-1">
@@ -287,7 +287,7 @@ export default function Schedules() {
                   ))}
                 </select>
                 {plans.length === 0 && (
-                  <span className="text-[10px] text-gray-600">当前工作区暂无计划</span>
+                  <span className="text-fs-aux text-gray-600">当前工作区暂无计划</span>
                 )}
               </div>
 
@@ -299,7 +299,7 @@ export default function Schedules() {
                     <button
                       key={preset.value}
                       onClick={() => setFormCron(preset.value)}
-                      className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                      className={`text-fs-aux px-2 py-0.5 rounded border transition-colors ${
                         formCron === preset.value
                           ? 'bg-info/15 text-info border-info/30'
                           : 'bg-surface-2 text-gray-500 border-border hover:text-gray-300'
@@ -315,7 +315,7 @@ export default function Schedules() {
                   placeholder="0 2 * * *"
                   className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-sm text-gray-200 font-mono"
                 />
-                <span className="text-[10px] text-gray-600">标准 5 字段 cron 表达式</span>
+                <span className="text-fs-aux text-gray-600">标准 5 字段 cron 表达式</span>
               </div>
 
               {/* 通知配置（可选） */}

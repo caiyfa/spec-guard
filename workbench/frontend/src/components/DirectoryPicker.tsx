@@ -101,10 +101,10 @@ export default function DirectoryPicker({ open, title = '选择目录', onSelect
               >
                 <span className="text-gray-500 text-xs">📁</span>
                 <span className="flex-1 min-w-0 truncate text-xs text-gray-300">{e.name}</span>
-                <span className="text-[10px] font-mono text-gray-600 truncate max-w-[38%]">{e.path}</span>
+                <span className="text-fs-aux font-mono text-gray-600 truncate max-w-[38%]">{e.path}</span>
                 <button
                   onClick={ev => { ev.stopPropagation(); onSelect(e.path); }}
-                  className="text-[10px] px-1.5 py-0.5 rounded border border-border text-gray-500 hover:text-info hover:border-info/40 flex-shrink-0 opacity-0 group-hover:opacity-100"
+                  className="text-fs-aux px-1.5 py-0.5 rounded border border-border text-gray-500 hover:text-info hover:border-info/40 flex-shrink-0 opacity-0 group-hover:opacity-100"
                   title={`选择 ${e.path}`}
                 >
                   选择
@@ -116,7 +116,7 @@ export default function DirectoryPicker({ open, title = '选择目录', onSelect
 
         {/* 底部操作 */}
         <div className="flex items-center justify-between mt-2.5">
-          <span className="text-[10px] font-mono text-gray-600 truncate">{current || '（根视图）'}</span>
+          <span className="text-fs-aux font-mono text-gray-600 truncate">{current || '（根视图）'}</span>
           <div className="flex gap-2 flex-shrink-0">
             <button onClick={onClose} className="px-3 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2">取消</button>
             <button

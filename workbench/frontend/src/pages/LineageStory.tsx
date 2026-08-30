@@ -143,7 +143,7 @@ export default function LineageStory() {
                     return (
                       <div key={n.id} className="flex items-center gap-2">
                         {edgeType && (
-                          <span className="text-[10px] text-gray-600" title={edgeType}>
+                          <span className="text-fs-aux text-gray-600" title={edgeType}>
                             —{EDGE_LABEL[edgeType] || edgeType}→
                           </span>
                         )}

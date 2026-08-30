@@ -149,7 +149,7 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
           控制条：◎聚焦/⛶全图切换（聚焦=当前阶段±邻域其余折叠）+ ⚠错误节点定位 */}
       {graph && (
         <div data-testid="flow-graph" className="border border-border rounded bg-surface-3/40 p-1.5">
-          <div className="flex items-center justify-between pb-1 text-[10px]">
+          <div className="flex items-center justify-between pb-1 text-fs-aux">
             <span className="flex items-center gap-1">
               <button
                 className={`px-1.5 py-0.5 rounded ${viewMode === 'focus' ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-info'}`}
@@ -211,7 +211,7 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
         </div>
       )}
 
-      <div className="text-[10px] text-gray-600 border-t border-border pt-1.5">
+      <div className="text-fs-aux text-gray-600 border-t border-border pt-1.5">
         🟩 顺序正确 · 🟨 乱序 · 🟥 缺失必需 · ⬜ 跳过可选；每 5s 自动刷新（进行中的 run 实时可见）
       </div>
     </div>

@@ -552,7 +552,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 </button>
               )}
               {!pickUsable && messages !== null && messages.length > 0 && (
-                <span className="ml-auto text-[10px] text-amber-400"
+                <span className="ml-auto text-fs-aux text-amber-400"
                   title="旧快照为 md 视图（无精确消息 id）——「↻ 更新本群」重建快照后可勾选">
                   勾选不可用（需更新本群）
                 </span>
@@ -589,7 +589,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                       style={{ color: highlightIdx.has(i) ? undefined : senderColor(m.sender_id || m.sender_name || '') }}>
                       {m.sender_name || m.sender_id || '?'}
                     </span>
-                    <span className="text-[10px] text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
+                    <span className="text-fs-aux text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
                   </div>
                   <div className={highlightIdx.has(i) ? 'text-info' : 'text-gray-300'}>
                     {/* T-952：真实内容渲染——post 文本+内嵌图 / file 文件卡 / image 图 */}
@@ -637,12 +637,12 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               </select>
               {/* tag-taxonomy T3：词表管理入口移到工具行——不受标签芯片行
                   渲染条件（tagFacets 非空）限制，任何话题状态可达 */}
-              <button className="text-[10px] text-gray-500 hover:text-info"
+              <button className="text-fs-aux text-gray-500 hover:text-info"
                 title="标签词表管理（收录/归并/设域/丢弃——收口 AI 新词）"
                 onClick={() => setTagManageOpen(true)}>
                 词表管理
               </button>
-              <span className="text-[10px] text-gray-600">
+              <span className="text-fs-aux text-gray-600">
                 {shownDrafts.length + shownTopics.length} 项
               </span>
             </div>
@@ -653,9 +653,9 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
             {tagFacets.length > 0 && (
               <div className="mb-2">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] text-gray-600">标签</span>
+                  <span className="text-fs-aux text-gray-600">标签</span>
                   {tags.length > 0 && (
-                    <button className="text-[10px] text-gray-500 hover:text-red-400"
+                    <button className="text-fs-aux text-gray-500 hover:text-red-400"
                       title="清除全部已选标签"
                       onClick={() => setTags([])}>
                       清除
@@ -671,7 +671,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                     return (
                       <div key={gKey} className="flex items-center gap-1 flex-wrap">
                         {!flatTags && (
-                          <span className="text-[10px] text-amber-500/80 shrink-0"
+                          <span className="text-fs-aux text-amber-500/80 shrink-0"
                             title={`域：${g.domain}（${g.total} 张话题卡）`}>
                             {g.domain}
                           </span>
@@ -681,7 +681,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                           const pending = f.status === 'pending';
                           return (
                             <button key={f.kw}
-                              className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+                              className={`px-1.5 py-0.5 rounded border text-fs-aux transition-colors ${
                                 on ? 'border-info/60 bg-info/20 text-info'
                                    : pending
                                      ? 'border-dashed border-border bg-surface-3 text-gray-500 hover:border-gray-500'
@@ -694,14 +694,14 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                           );
                         })}
                         {overflow > 0 && (
-                          <button className="text-[10px] text-gray-500 hover:text-gray-300"
+                          <button className="text-fs-aux text-gray-500 hover:text-gray-300"
                             title="展开该组全部标签"
                             onClick={() => toggleTagGroup(gKey)}>
                             +{overflow}
                           </button>
                         )}
                         {expanded && g.items.length > TAG_GROUP_TOP_K && (
-                          <button className="text-[10px] text-gray-500 hover:text-gray-300"
+                          <button className="text-fs-aux text-gray-500 hover:text-gray-300"
                             onClick={() => toggleTagGroup(gKey)}>
                             收起
                           </button>
@@ -726,7 +726,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               ) : (
                 <>
                   {shownDrafts.length > 0 && (
-                    <div className="text-[10px] text-gray-500 pt-0.5">
+                    <div className="text-fs-aux text-gray-500 pt-0.5">
                       候选段（勾选后「生成话题卡」；未提交不入库）
                     </div>
                   )}
@@ -754,7 +754,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                     </label>
                   ))}
                   {shownDrafts.length > 0 && shownTopics.length > 0 && (
-                    <div className="text-[10px] text-gray-500 pt-1.5">话题卡</div>
+                    <div className="text-fs-aux text-gray-500 pt-1.5">话题卡</div>
                   )}
                   {shownTopics.map(t => (
                     <div key={t.id}>
@@ -825,7 +825,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 {refining ? '精筛中…' : '模型精筛'}
               </button>
               {unrefined && (
-                <span className="text-[10px] text-amber-400">未经模型复核（未配置 text 模型或不可达）</span>
+                <span className="text-fs-aux text-amber-400">未经模型复核（未配置 text 模型或不可达）</span>
               )}
               <button className="ml-auto text-gray-500 hover:text-gray-300"
                 onClick={() => setCrossOpen(false)}>✕</button>
@@ -846,13 +846,13 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                     {[a, b].map(t => (
                       <div key={t.id} className="min-w-0">
                         <div className="text-gray-200 truncate" title={t.title}>{t.title}</div>
-                        <div className="text-[10px] text-gray-500 truncate">
+                        <div className="text-fs-aux text-gray-500 truncate">
                           {chatNameOf(t.chat_sha8)} · {String(t.window?.[0] || '').slice(5, 16)}
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 mt-1.5 text-[10px] flex-wrap">
+                  <div className="flex items-center gap-2 mt-1.5 text-fs-aux flex-wrap">
                     <span className="text-gray-500">{c.reasons.join('；')} · 分 {c.score}</span>
                     {c.refined && (
                       <span className={c.llm_same ? 'text-green-400' : 'text-gray-500'}>
@@ -905,7 +905,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                   <span className="text-sky-400 truncate min-w-0 flex-1" title={c.dst}>
                     {(mat?.type === 'feishu_doc' ? '📄 ' : '🎙 ') + (mat?.title || c.dst)}
                   </span>
-                  <span className="text-[10px] text-gray-500 shrink-0">
+                  <span className="text-fs-aux text-gray-500 shrink-0">
                     {c.reasons.join('；')} · 分 {c.score}
                   </span>
                   <span className="flex gap-2 shrink-0">
@@ -937,21 +937,21 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 .map(id => topicById[id]).filter(Boolean)].map((t, i) => (
                 <div key={t.id} className="p-2 rounded border border-border bg-surface-3/60
                   flex items-start gap-2 text-xs">
-                  <span className="text-[10px] text-gray-600 shrink-0 mt-0.5">
+                  <span className="text-fs-aux text-gray-600 shrink-0 mt-0.5">
                     {i === 0 ? '本卡' : `群${i + 1}`}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-gray-200 truncate" title={t.title}>{t.title}</div>
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-fs-aux text-gray-500">
                       {chatNameOf(t.chat_sha8)} · {String(t.window?.[0] || '').slice(5, 16)}
                       {t.category ? ` · ${t.category}` : ''}
                     </div>
-                    <div className="text-[10px] text-gray-400 truncate mt-0.5">{t.summary}</div>
+                    <div className="text-fs-aux text-gray-400 truncate mt-0.5">{t.summary}</div>
                   </div>
-                  <button className="text-info hover:underline text-[10px] shrink-0"
+                  <button className="text-info hover:underline text-fs-aux shrink-0"
                     onClick={() => jumpToTopic(t)}>跳原文 →</button>
                   {i > 0 && (
-                    <button className="text-gray-500 hover:text-red-400 text-[10px] shrink-0"
+                    <button className="text-gray-500 hover:text-red-400 text-fs-aux shrink-0"
                       title="解除该关联（写 rejected 留痕）"
                       onClick={() => relate(relateDrawer.id, t.id, false)}>解除</button>
                   )}

@@ -47,9 +47,9 @@ export default function Skills() {
                 }`}>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-200">{s.name}</span>
-                  <span className="text-[10px] text-gray-500 font-mono">v{s.version}</span>
+                  <span className="text-fs-aux text-gray-500 font-mono">v{s.version}</span>
                   {s.source && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-surface-3 text-gray-500">{s.source}</span>
+                    <span className="text-fs-aux px-1 py-0.5 rounded bg-surface-3 text-gray-500">{s.source}</span>
                   )}
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{s.description}</p>
@@ -70,23 +70,23 @@ export default function Skills() {
               <div className="text-xs text-gray-400 leading-relaxed">{selected.description}</div>
               {selected.author && (
                 <div>
-                  <span className="text-[10px] text-gray-500">作者：</span>
+                  <span className="text-fs-aux text-gray-500">作者：</span>
                   <span className="text-xs text-gray-300">{selected.author}</span>
                 </div>
               )}
               {selected.depends_tools && selected.depends_tools.length > 0 && (
                 <div>
-                  <span className="text-[10px] text-gray-500 block mb-1">依赖工具：</span>
+                  <span className="text-fs-aux text-gray-500 block mb-1">依赖工具：</span>
                   <div className="flex flex-wrap gap-1">
                     {selected.depends_tools.map(t => (
-                      <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 text-info">{t}</span>
+                      <span key={t} className="text-fs-aux px-1.5 py-0.5 rounded bg-info/10 text-info">{t}</span>
                     ))}
                   </div>
                 </div>
               )}
               {selected.source && (
                 <div>
-                  <span className="text-[10px] text-gray-500">来源：</span>
+                  <span className="text-fs-aux text-gray-500">来源：</span>
                   <span className="text-xs text-gray-400">{selected.source}</span>
                 </div>
               )}

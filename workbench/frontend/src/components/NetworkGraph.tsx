@@ -84,7 +84,7 @@ export default function NetworkGraph() {
           ⚠ 节点总数 {data.total_nodes} 超过 500 护栏——已聚合为模块级视图（展开请用 L1/L2 下钻）
         </div>
       )}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border text-[10px] text-gray-500 flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border text-fs-aux text-gray-500 flex-wrap">
         <span>图例：</span>
         {LEGEND.map(([t, label]) => (
           <span key={t} className="flex items-center gap-1">

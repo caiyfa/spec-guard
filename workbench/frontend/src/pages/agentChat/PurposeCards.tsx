@@ -32,7 +32,7 @@ export function PurposeCards({ purposes, onPick }: { purposes: PurposeCardDef[];
               {p.chips && p.chips.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 justify-center mt-1">
                   {p.chips.map((chip, ci) => (
-                    <span key={ci} className={`text-[10px] px-2 py-0.5 rounded-full ${style.badge}`}>{chip}</span>
+                    <span key={ci} className={`text-fs-aux px-2 py-0.5 rounded-full ${style.badge}`}>{chip}</span>
                   ))}
                 </div>
               )}
