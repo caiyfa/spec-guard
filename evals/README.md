@@ -1,19 +1,50 @@
-# evals/ — Agent 评测体系（T-980）
+# evals/ — Agent 评测体系（T-980 通道 B + T-1042 Phase 0/通道 A）
 
 > 依据：《[2026-08-20-第二轮-六点反馈判定-多系统与智能层.md](../docs/架构反馈升级/2026-08-20-第二轮-六点反馈判定-多系统与智能层.md)》§5
 > （轨迹断言先行——确定性断言没穷尽前不上 LLM-as-judge）。
 > 定位：智能层后续一切的地基——T-982 工具收敛将用本 eval 集对比收敛前后
 > 工具选择轨迹；prompt / skills / 模型变更都应触发重跑。
+>
+> **T-1042 二期扩展**（依据《docs/SpecGuard-Agent评测体系-现状基线.md》§十五/§十六 +
+> 知识库《2026-08-26-2037 评估架构体系设计》）：在通道 B（golden case 回放）之上补
+> Phase 0 基线仪表盘（聚合已落盘信号出七指标）与通道 A（生产会话轨迹重放打分 +
+> 真实会话反向导出 golden case）。三件套分工见下表。
+
+## 三件套分工（T-980 → T-1042）
+
+| 模块 | 通道/阶段 | 干什么 | 数据源 | 退出码 |
+|------|-----------|--------|--------|--------|
+| `harness.py` + `run_evals.py` | 通道 B | golden case 前瞻性回放断言（合成 prompt + 脚本 LLM） | `evals/cases/*.json` | 0/1（挂 CI） |
+| `baseline.py` + `run_baseline.py` | Phase 0 | 聚合已落盘信号出七指标基线报告 | 会话 JSONL + metrics + audit 库 | 恒 0（只读报告） |
+| `replay.py` + `run_replay.py` | 通道 A | 生产会话轨迹重放打分（不重跑只打分，五维信号） | 会话 JSONL | 恒 0（只读报告） |
+| `export_case.py` | L1 样本层 | 真实会话 → golden case 反向导出（喂通道 B） | 会话 JSONL | — |
+
+通道 B 是守门（前瞻），Phase 0 / 通道 A 是度量（回顾）；export_case 把生产会话
+转成通道 B 的样本源，三者共享「工具结果成败判定」（`_RESULT_ERROR_PREFIXES`）。
 
 ## 一条命令
 
 ```powershell
+# ── 通道 B（T-980）：golden case 回放门禁 ──
 python evals/run_evals.py              # 全量（evals/cases/*.json）
 python evals/run_evals.py --list       # 只列 case
 python evals/run_evals.py evals/cases/001-list-scenarios.json   # 单个
+
+# ── Phase 0（T-1042）：七指标基线仪表盘 ──
+python evals/run_baseline.py --sessions-root <主库agent/sessions> --db <主库workbench.db>
+python evals/run_baseline.py --limit 50 --no-write   # 快速试跑不落盘
+
+# ── 通道 A（T-1042）：生产会话轨迹重放打分 ──
+python evals/run_replay.py --sessions-root <主库agent/sessions>
+python evals/run_replay.py --only-generate           # 只看「创建测试用例」会话
+
+# ── 反向导出（T-1042）：真实会话 → golden case ──
+python evals/run_replay.py --export <会话.jsonl> --export-out evals/cases/GC-PROD-xxx.json
 ```
 
-退出码 0/1（可挂 CI / pre-push）。pytest 侧回归：`python -m pytest test_specstd/test_evals.py -v`。
+pytest 侧回归：`python -m pytest test_specstd/test_evals.py test_specstd/test_evals_baseline.py test_specstd/test_evals_replay.py test_specstd/test_evals_export.py -v`。
+
+退出码：通道 B 0/1（可挂 CI / pre-push）；Phase 0 / 通道 A 恒 0（只读度量，不挂门禁）。
 
 ## 产物（`evals/results/`，不入 git）
 
@@ -108,3 +139,41 @@ case 只允许使用离线可用的真实工具（`scenario(action=list)` / `val
   clarity 占位分数清完才谈评分维度入 eval——本目录 v1 只做轨迹与 validator 断言。
 - **T-982**（工具收敛）：合并/削减工具前后各跑一次 `python evals/run_evals.py`，
   对比 `metrics.jsonl` 的 `tools_sequence` 与断言通过率——「收敛是否伤正确性」由数据回答。
+
+---
+
+## Phase 0 七指标基线（T-1042，§十五.5）
+
+`run_baseline.py` 聚合**已落盘**三类信号，产出七指标——后续一切改进的对照原点：
+
+| # | 指标 | 信号源 | 主库 2026-08-30 实测（274 生产会话） |
+|---|------|--------|--------------------------------------|
+| 1 | 工具调用成功率 | 会话 tool 行结果前缀 | 92.61% |
+| 2 | 越权拒绝率（denied-whitelist） | `sf_mcp_call_audit` verdict | 2.04% |
+| 3 | 熔断率 | 会话 `[FUSE]` system 行 | 5.84% |
+| 4 | 三闸通过率 | `audit_log` 三闸事件 | 占位（口径待确认） |
+| 5 | validate 一次通过率 | validate 结果 verdict | 43.24%（37 可评分） |
+| 6 | 纠正触发率 | user 消息纠正关键词 | 5.47% |
+| 7 | 每任务 token（均值/p50/p95） | metrics total_tokens | 388k / 163k / 1.9M |
+
+口径说明：① smoke 隔离区（T-1041）按路径标 `__smoke__` 排除出生产基线（单列）；
+② purpose 空 = T-010 体系（2026-08-10）前历史会话，标 `legacy(no-purpose)` 非解析失败；
+③ 审计库混有测试/探针工具（`nonexistent_*`/`switch_mode`），解读时剔除；
+④ 任一无足够数据给 `None` 并注明 reason，不造假数字（T-964 教训）。
+
+## 通道 A 五维信号（T-1042，§十六）
+
+`run_replay.py` 对生产会话**不重跑只打分**，按 §16.2 generate-scenario 轨迹基线比对：
+D2 多轮轨迹（阶段覆盖/序列合理/禁用工具）、D3 任务终局（validate 通过/写草稿达成）、
+D5 安全护栏（白名单拒绝/纯读副作用/熔断）、D1 工具选择、D4 效率成本。
+LLM-judge 主观维度（诚实性/SKIP 语义）留 Phase 3 不做。主库实测：306 会话识别
+28 个生成会话，D2 阶段覆盖 74.4%、序列合理率 56.25%（暴露过半会话写草稿前未先
+校验/读需求——正是通道 A 要度量的行为问题）。
+
+## 反向导出（T-1042，L1 样本层）
+
+`export_case.py` 把真实会话 JSONL 转成 golden case：`llm_script`←assistant 序列、
+`tool_mocks`←tool 结果（legacy 工具名经 `tool_meta.legacy_owner` 归一合并基名+action，
+旧会话也能在当前 runtime 回放）。**导出即起点**：轨迹未必正确，须人工评审
+（删错误步骤/收紧 expect/标注 verdict）后才入 `evals/cases/`——EDD 问题驱动补 case
+的入口，不是自动转 gold（case 只增不改）。

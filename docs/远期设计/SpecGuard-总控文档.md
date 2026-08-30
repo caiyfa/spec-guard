@@ -347,6 +347,15 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| evals/baseline.py | sess-agent-eval | 2026-08-30 | NEW | 939f28ba6cf4 | 已完成 | T-1042 Phase 0：七指标基线聚合器（会话 JSONL/metrics/audit 三表 → §十五.5 报告，smoke 分离/legacy 标注/诚实空态） |
+| evals/run_baseline.py | sess-agent-eval | 2026-08-30 | NEW | 26f4f5ed44ff | 已完成 | T-1042 Phase 0：基线仪表盘 CLI（控制台+落盘 evals/results/，退出码恒 0 只读报告） |
+| evals/replay.py | sess-agent-eval | 2026-08-30 | NEW | a06b67520edd | 已完成 | T-1042 通道 A：生产会话轨迹重放打分（§16.2 generate-scenario 基线比对+五维信号 D2/D3/D5/D1/D4，legacy 工具名兼容） |
+| evals/export_case.py | sess-agent-eval | 2026-08-30 | NEW | a0aeaf6f4e7f | 已完成 | T-1042 L1 样本层：真实会话→T-980 golden case 反向导出（tool_meta.legacy_owner 归一合并基名+action，导出经 harness 回放验证） |
+| evals/run_replay.py | sess-agent-eval | 2026-08-30 | NEW | e48c36b138bc | 已完成 | T-1042 通道 A CLI：重放打分（--only-generate）+ 反向导出（--export/--export-out） |
+| evals/README.md | sess-agent-eval | 2026-08-30 | 0c235eb2bac3 | d8c2f66a8f4a | 已完成 | T-1042：README 扩为三件套文档（通道 B/Phase 0/通道 A 分工表 + 七指标/五维/反向导出说明段，主库实测数字入档） |
+| test_specstd/test_evals_baseline.py | sess-agent-eval | 2026-08-30 | NEW | 8b462ef053d0 | 已完成 | T-1042 Phase 0 单测 19 例（行解析/成败判定/validate 一次通过/纠正/熔断/smoke 排除/审计聚合/七指标/诚实空态，含非空转翻案） |
+| test_specstd/test_evals_replay.py | sess-agent-eval | 2026-08-30 | NEW | fc1b68892803 | 已完成 | T-1042 通道 A 单测 18 例（stage 命中两形态/生成识别/序列合理/五维信号/批量报告/only-generate 过滤） |
+| test_specstd/test_evals_export.py | sess-agent-eval | 2026-08-30 | NEW | 600f5d6cfadd | 已完成 | T-1042 反向导出单测 11 例（legacy 归一/mock 累积/expect 生成/端到端 harness 回放打通） |
 | workbench/backend/routers/agent.py | sess-agent-aux | 2026-08-27 | 89d053ab16e6 | 7475abf36bfb | 已完成 | T-1031：_parent_snapshot 增强（草稿指路/聚焦场景/阅读足迹）+ 新增 _viewing_context_block + WS 收 focus_path |
 | agent/purposes/sql_assistant.md | sess-agent-aux | 2026-08-27 | 0b5dfb970805 | 7037cfd0503c | 已完成 | T-1031：定位升级辅助助手（title/icon/chips/description/正文重写；id 不变兼容存量） |
 | sg_core/session_context.py | sess-agent-aux | 2026-08-27 | 5407f3b3d51b | 7877508ab05b | 已完成 | T-1032：扩展运行时作用域 contextvar（runtime_scope：kind/purpose/parent_sid/sessions_dir），复用 T-1000 set_session_id 同位注入点 |
