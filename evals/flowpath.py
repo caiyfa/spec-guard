@@ -1,25 +1,32 @@
-"""evals.flowpath — 会话路径重放：§16.1 flow 图基线 vs 实际走径逐节点比对（T-1042）。
+"""evals.flowpath — 会话路径重放：golden flow 基线 vs 实际走径逐节点比对（T-1042）。
 
 用户视角的问题：「让它创建测试用例，它走的路和应该走的路差在哪？」
-本模块把基线文档 §16.1 的 mermaid flow 图编码为**可执行的 golden flow**
-（12 个阶段节点，必选/可选 + 硬顺序约束），对单个会话做逐节点重放：
+本模块把 golden flow 编码为**定义驱动的阶段图**（JSON 单一事实源
+`evals/flows/{name}.flow.json`，内置兜底），对单个会话做逐节点重放：
 
   - 实际路径：会话工具调用序列 →（基名, action）单元 → 映射到阶段（首次出现步号+次数）
   - 判定四态：in_order 顺序正确 / out_of_order 乱序 / missing 缺失必需 / skipped 跳过可选
   - 计划外工具：基线外旁支（benign 元工具剔除），旁支不等于违规，但跑偏可见
   - 产物：着色 mermaid 路径图（🟩对 🟨乱序 🟥缺失 ⬜跳过）+ 差异明细表（带步号证据）
 
+可扩展重建（改了 skill / 工具之后）：
+  python evals/build_flow.py --skill agent/skills/generate-scenario.md   # 从技能重建 flow 定义
+  python evals/run_replay.py --flow                                     # 可视化当前 golden flow
+定义只描述「阶段→工具候选 + 必选性 + 硬顺序」，工具名三种形态（助记/legacy/
+基名+action）在归一层统一消化（见 replay.normalize_tool_unit），换工具名不改图。
+
 与 replay.score_trajectory 的关系：replay 出聚合指标（会话集层面），本模块出
 **样本级可解释证据**（单会话层面）——聚合发现「序列合理率 56%」，路径重放回答
 「具体哪个会话、第几步、先写了草稿还是先读了需求」。
 
-硬顺序约束（只设两条，防噪声；其余为软顺序不判乱序）：
-  read_requirement < write_draft（生成前必读需求——§16 硬约束 1）
-  validate < write_draft（写草稿前必校验——§16 硬约束 2）
+实时扫描（工作台对话面板）：会话 JSONL 每轮增量落盘（runtime 每轮 save），
+后端按 session_id 读行 → baseline.scan_rows → trace_scan，即可在对话进行中
+拿到当前跑偏态——见 workbench GET /agent/sessions/{id}/flow-trace。
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,8 +37,11 @@ from evals.replay import (
     scan_units,
 )
 
+_FLOWS_DIR = Path(__file__).resolve().parent / "flows"
+DEFAULT_FLOW_NAME = "generate-scenario"
+
 # ══════════════════════════════════════════════════════════
-# golden flow：§16.1 主流程的阶段级编码（顺序即 flow 图主链）
+# flow 定义（JSON 单一事实源；内置兜底=文件缺失/损坏时诚实降级）
 # ══════════════════════════════════════════════════════════
 
 
@@ -44,61 +54,133 @@ class FlowStage:
     note: str = ""        # 判定说明（差异表里给上下文）
 
 
-def _st(*specs: str) -> tuple:
-    """阶段候选简写：助记/legacy/基名字符串 → 归一单元元组。"""
-    return tuple(normalize_tool_unit(s) for s in specs)
+@dataclass(frozen=True)
+class FlowDef:
+    """golden flow 定义：阶段图 + 硬顺序 + benign 集合。"""
+    id: str
+    title: str
+    source: str
+    stages: tuple[FlowStage, ...]
+    hard_order: tuple[tuple[str, str], ...]
+    benign_bases: frozenset[str]
+    rebuilt_from_file: bool = False   # True=来自 evals/flows/*.json；False=内置兜底
+
+    @property
+    def stage_by_key(self) -> dict[str, FlowStage]:
+        return {s.key: s for s in self.stages}
 
 
-FLOW_STAGES: list[FlowStage] = [
-    FlowStage("read_skill", "取技能正文", _st("knowledge", "read_skill"), False,
-              "knowledge(action=skill)——正文不常驻，执行任务前先取"),
-    FlowStage("read_requirement", "读需求", _st("info_pack", "read_info_pack",
-                                                "spec(action=read)", "spec(action=list)",
-                                                "spec(action=search)", "read_spec",
-                                                "list_spec_files"), True,
-              "info_pack(action=read) 或 spec(action=read, anchor=FR-xxx)"),
-    FlowStage("get_id", "取场景 ID", _st("scenario(action=next_id)", "next_scenario_id"), True,
-              "scenario(action=next_id)"),
-    FlowStage("query_registry", "查注册表", _st("query_registry"), True,
-              "确认 tool/oracle 已注册（禁编造）"),
-    FlowStage("find_reference", "找同类参照", _st("scenario(action=list)", "scenario(action=read)",
-                                                  "list_scenarios", "read_scenario"), True,
-              "scenario(action=list) 定位同类 → 读 1~2 个参照"),
-    FlowStage("permission_precheck", "权限预检/账号解析", _st("precheck_permission",
-                                                              "resolve_account"), False,
-              "权限/写操作场景必做（K-055），普通场景可跳过"),
-    FlowStage("dag_design", "DAG 拓扑预演", _st("scenario(action=check_dag)", "check_dag"), False,
-              "≥2 场景时必做（K-021），单场景可跳"),
-    FlowStage("validate", "validate 校验", _st("validate"), True,
-              "生成后必须 validate（UNKNOWN_TPL/BODY_KEY 硬伤拦在这里）"),
-    FlowStage("write_draft", "写草稿", _st("draft(action=write)", "write_draft"), True,
-              "draft(action=write) 写入 drafts/ 并自动登记三闸"),
-    FlowStage("suggest_deps", "依赖建议", _st("scenario(action=suggest_deps)", "suggest_deps"), False,
-              "写完草稿必做（K-046），拒绝建议须说明"),
-    FlowStage("trial_run", "试跑/归因", _st("scenario(action=run)", "run_scenario",
-                                            "attribution"), False,
-              "用户要求「跑一下」时；失败走 attribution 归因"),
-    FlowStage("promote", "入库 promote", _st("draft(action=promote)", "draft(action=promote_batch)",
-                                             "promote_draft", "promote_drafts"), False,
-              "用户明确确认后；自带三闸"),
-]
+def _builtin_flow_def() -> FlowDef:
+    """内置兜底定义（与 generate-scenario.flow.json 同源维护）。"""
+    def st(*specs: str) -> tuple:
+        return tuple(normalize_tool_unit(s) for s in specs)
+    return FlowDef(
+        id="generate-scenario",
+        title="创建测试用例 golden flow",
+        source="内置兜底（evals/flows/generate-scenario.flow.json 缺失）",
+        stages=(
+            FlowStage("read_skill", "取技能正文", st("knowledge", "read_skill"), False,
+                      "knowledge(action=skill)——正文不常驻，执行任务前先取"),
+            FlowStage("read_requirement", "读需求",
+                      st("info_pack", "read_info_pack", "spec(action=read)", "spec(action=list)",
+                         "spec(action=search)", "read_spec", "list_spec_files"), True,
+                      "info_pack(action=read) 或 spec(action=read, anchor=FR-xxx)"),
+            FlowStage("get_id", "取场景 ID", st("scenario(action=next_id)", "next_scenario_id"), True,
+                      "scenario(action=next_id)"),
+            FlowStage("query_registry", "查注册表", st("query_registry"), True,
+                      "确认 tool/oracle 已注册（禁编造）"),
+            FlowStage("find_reference", "找同类参照",
+                      st("scenario(action=list)", "scenario(action=read)",
+                         "list_scenarios", "read_scenario"), True,
+                      "scenario(action=list) 定位同类 → 读 1~2 个参照"),
+            FlowStage("permission_precheck", "权限预检/账号解析",
+                      st("precheck_permission", "resolve_account"), False,
+                      "权限/写操作场景必做（K-055），普通场景可跳过"),
+            FlowStage("dag_design", "DAG 拓扑预演",
+                      st("scenario(action=check_dag)", "check_dag"), False,
+                      "≥2 场景时必做（K-021），单场景可跳"),
+            FlowStage("validate", "validate 校验", st("validate"), True,
+                      "生成后必须 validate（UNKNOWN_TPL/BODY_KEY 硬伤拦在这里）"),
+            FlowStage("write_draft", "写草稿", st("draft(action=write)", "write_draft"), True,
+                      "draft(action=write) 写入 drafts/ 并自动登记三闸"),
+            FlowStage("suggest_deps", "依赖建议",
+                      st("scenario(action=suggest_deps)", "suggest_deps"), False,
+                      "写完草稿必做（K-046），拒绝建议须说明"),
+            FlowStage("trial_run", "试跑/归因",
+                      st("scenario(action=run)", "run_scenario", "attribution"), False,
+                      "用户要求「跑一下」时；失败走 attribution 归因"),
+            FlowStage("promote", "入库 promote",
+                      st("draft(action=promote)", "draft(action=promote_batch)",
+                         "promote_draft", "promote_drafts"), False,
+                      "用户明确确认后；自带三闸"),
+        ),
+        hard_order=(("read_requirement", "write_draft"), ("validate", "write_draft")),
+        benign_bases=frozenset({"todo_write", "topic", "gate_dock_status", "parent"}),
+    )
 
-# 硬顺序约束（earlier, later)：both hit 且 earlier 首步晚于 later → later 判乱序
-HARD_ORDER: tuple[tuple[str, str], ...] = (
-    ("read_requirement", "write_draft"),
-    ("validate", "write_draft"),
-)
 
-# 计划外统计时剔除的 benign 元工具（会话基建，不代表跑偏）
-BENIGN_BASES = {"todo_write", "topic", "gate_dock_status", "parent"}
+def load_flow(name: str = DEFAULT_FLOW_NAME) -> FlowDef:
+    """装载 golden flow 定义：evals/flows/{name}.flow.json 优先，缺失回退内置。
 
-_STAGE_BY_KEY = {s.key: s for s in FLOW_STAGES}
+    JSON 里 tools 是人写形态（助记/legacy/基名），装载时统一归一为（基名, action），
+    换工具名只需改 JSON 或跑 build_flow 重建，不改比对逻辑。
+    """
+    path = _FLOWS_DIR / f"{name}.flow.json"
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            stages = tuple(
+                FlowStage(
+                    key=s["key"], label=s["label"],
+                    units=tuple(normalize_tool_unit(t) for t in s.get("tools", [])),
+                    required=bool(s.get("required", False)),
+                    note=str(s.get("note", "")),
+                )
+                for s in raw.get("stages", [])
+            )
+            if stages:
+                return FlowDef(
+                    id=str(raw.get("id", name)), title=str(raw.get("title", name)),
+                    source=str(raw.get("source", "")), stages=stages,
+                    hard_order=tuple(tuple(p) for p in raw.get("hard_order", [])),
+                    benign_bases=frozenset(raw.get("benign_bases", [])),
+                    rebuilt_from_file=True,
+                )
+        except (json.JSONDecodeError, KeyError, TypeError, OSError):
+            pass  # 定义损坏 → 诚实回退内置（与体验基线①失效回退同款）
+    return _builtin_flow_def()
 
 
-def _unit_to_stage(unit: tuple[str, str]) -> str | None:
+def flow_def_to_mermaid(defn: FlowDef) -> str:
+    """渲染 golden flow 本体（无会话着色，重建后可视化用）。"""
+    lines = ["flowchart TD"]
+    n = len(defn.stages)
+    for i, st in enumerate(defn.stages, start=1):
+        mark = "必选" if st.required else "可选"
+        cls = "req" if st.required else "opt"
+        lines.append(f'    S{i}["{i}. {st.label}（{mark}）"]:::{cls}')
+        if i < n:
+            lines.append(f"    S{i} --> S{i + 1}")
+    lines += [
+        "    classDef req fill:#d4edda,stroke:#28a745,color:#155724",
+        "    classDef opt fill:#e9ecef,stroke:#6c757d,color:#6c757d,stroke-dasharray: 5 5",
+    ]
+    return "\n".join(lines)
+
+
+# 模块级默认定义（向后兼容旧导入面：FLOW_STAGES / HARD_ORDER / BENIGN_BASES）
+FLOW_DEF: FlowDef = load_flow()
+FLOW_STAGES: list[FlowStage] = list(FLOW_DEF.stages)
+HARD_ORDER: tuple[tuple[str, str], ...] = FLOW_DEF.hard_order
+BENIGN_BASES = set(FLOW_DEF.benign_bases)
+
+_STAGE_BY_KEY = FLOW_DEF.stage_by_key
+
+
+def _unit_to_stage(unit: tuple[str, str], defn: FlowDef | None = None) -> str | None:
     """单元 → 所属阶段 key（flow 图视角；一单元只归一个阶段，先命中先得）。"""
     b, a = unit
-    for st in FLOW_STAGES:
+    for st in (defn or FLOW_DEF).stages:
         for cb, ca in st.units:
             if b == cb and (ca == "" or a == ca):
                 return st.key
@@ -128,6 +210,9 @@ class FlowTrace:
     total_tokens: int = 0
     purpose: str = ""
     workspace: str = ""
+    flow_id: str = ""
+    flow_title: str = ""
+    flow_source: str = ""
 
     @property
     def n_missing(self) -> int:
@@ -138,16 +223,17 @@ class FlowTrace:
         return sum(1 for s in self.stages if s.status == "out_of_order")
 
 
-def trace_session(path: str | Path) -> FlowTrace | None:
-    """单会话路径重放：§16.1 golden flow vs 实际走径。解析失败返回 None。"""
+def trace_session(path: str | Path, flow: FlowDef | None = None) -> FlowTrace | None:
+    """单会话路径重放：golden flow vs 实际走径。解析失败返回 None。"""
     scan = scan_session(path)
     if scan is None:
         return None
-    return trace_scan(scan)
+    return trace_scan(scan, flow=flow)
 
 
-def trace_scan(scan: SessionScan) -> FlowTrace:
-    """对已扫描的会话做路径重放（复用 scan，避免重复读盘）。"""
+def trace_scan(scan: SessionScan, flow: FlowDef | None = None) -> FlowTrace:
+    """对已扫描的会话做路径重放（复用 scan，避免重复读盘；后端实时扫描走此口）。"""
+    defn = flow or FLOW_DEF
     units = scan_units(scan)
     # 每个工具调用 = 一步；单元映射到阶段，记首次步号/次数/原始名
     first: dict[str, int] = {}
@@ -155,9 +241,9 @@ def trace_scan(scan: SessionScan) -> FlowTrace:
     stage_tools: dict[str, list] = {}
     extras: dict[str, int] = {}
     for i, unit in enumerate(units, start=1):
-        key = _unit_to_stage(unit)
+        key = _unit_to_stage(unit, defn)
         if key is None:
-            if unit[0] not in BENIGN_BASES:
+            if unit[0] not in defn.benign_bases:
                 # 展示键带 action（sync_workspace 归一为 spec(sync)——基名裸列会误导成 read_spec）
                 disp = f"{unit[0]}({unit[1]})" if unit[1] else unit[0]
                 extras[disp] = extras.get(disp, 0) + 1
@@ -169,7 +255,7 @@ def trace_scan(scan: SessionScan) -> FlowTrace:
             stage_tools[key].append(raw_name)
 
     states: list[StageState] = []
-    for st in FLOW_STAGES:
+    for st in defn.stages:
         if st.key in times:
             states.append(StageState(st.key, st.label, st.required, "in_order",
                                      first[st.key], times[st.key], stage_tools.get(st.key, [])))
@@ -180,14 +266,15 @@ def trace_scan(scan: SessionScan) -> FlowTrace:
 
     # 硬顺序约束 → 乱序判定（flag 后来者：它开跑早了）
     deviations: list[str] = []
-    for earlier, later in HARD_ORDER:
+    for earlier, later in defn.hard_order:
         if earlier in first and later in first and first[earlier] > first[later]:
-            if _STAGE_BY_KEY[later].key and states[_state_idx(states, later)].status != "missing":
-                states[_state_idx(states, later)].status = "out_of_order"
+            idx = _state_idx(states, later)
+            if idx >= 0 and states[idx].status != "missing":
+                states[idx].status = "out_of_order"
             deviations.append(
-                f"「{_STAGE_BY_KEY[later].label}」（第 {first[later]} 步）先于"
-                f"「{_STAGE_BY_KEY[earlier].label}」（第 {first[earlier]} 步）——"
-                f"违反基线顺序（应先{_STAGE_BY_KEY[earlier].label}再{_STAGE_BY_KEY[later].label}）")
+                f"「{defn.stage_by_key[later].label}」（第 {first[later]} 步）先于"
+                f"「{defn.stage_by_key[earlier].label}」（第 {first[earlier]} 步）——"
+                f"违反基线顺序（应先{defn.stage_by_key[earlier].label}再{defn.stage_by_key[later].label}）")
     for st in states:
         if st.status == "missing":
             deviations.append(f"缺失必需阶段「{st.label}」——{st.note}")
@@ -202,6 +289,9 @@ def trace_scan(scan: SessionScan) -> FlowTrace:
         total_tokens=scan.total_tokens,
         purpose=scan.purpose,
         workspace=scan.workspace,
+        flow_id=defn.id,
+        flow_title=defn.title,
+        flow_source=defn.source,
     )
 
 
@@ -222,7 +312,7 @@ _STATUS_CN = {"in_order": "顺序正确", "out_of_order": "乱序", "missing": "
 
 
 def render_flow_mermaid(trace: FlowTrace) -> str:
-    """把重放结果着色回 §16.1 阶段级 flow 图（🟩对 🟨乱序 🟥缺失 ⬜跳过）。"""
+    """把重放结果着色回 golden flow 阶段图（🟩对 🟨乱序 🟥缺失 ⬜跳过）。"""
     cls = {"in_order": "hit", "out_of_order": "warn", "missing": "missing", "skipped": "skip"}
     lines = ["flowchart TD"]
     for i, st in enumerate(trace.stages, start=1):
@@ -250,9 +340,9 @@ def render_trace_markdown(trace: FlowTrace) -> str:
         "",
         f"> purpose={trace.purpose or '?'} · workspace={trace.workspace or '?'} · "
         f"工具调用 {trace.n_tool_calls} 步 · token {trace.total_tokens:,} · "
-        f"生成会话判定：**{verdict}** · 差异 {n_dev} 处",
+        f"生成会话判定：**{verdict}** · 差异 {n_dev} 处 · flow=`{trace.flow_id}`",
         "",
-        "## 路径重放图（§16.1 基线 vs 实际）",
+        "## 路径重放图（golden flow vs 实际）",
         "",
         "```mermaid",
         render_flow_mermaid(trace),
@@ -335,3 +425,23 @@ def trace_all_generate(sessions_root: str | Path, out_dir: str | Path,
             f"| {r['missing']} | {r['out_of_order']} | {r['tool_calls']} |")
     (out / "index.md").write_text("\n".join(idx_lines), encoding="utf-8")
     return {"traced": len(index), "out_dir": str(out), "index": index}
+
+
+def resolve_session_path(sessions_root: str | Path, session_id: str) -> Path | None:
+    """按会话 ID 解析 JSONL 路径（跨 emp/workspace 子目录全局查）。
+
+    多命中取最近修改（并注明）；0 命中返回 None。CLI --session 的解析口，
+    与后端 get_session 的子目录兜底语义对齐。
+    """
+    import glob
+    if not session_id or "/" in session_id or "\\" in session_id or ".." in session_id:
+        return None
+    root = Path(sessions_root)
+    if not root.exists():
+        return None
+    matches = [Path(f) for f in glob.glob(str(root / "**" / f"{session_id}.jsonl"), recursive=True)]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    return max(matches, key=lambda p: p.stat().st_mtime)

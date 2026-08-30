@@ -347,6 +347,19 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| evals/flows/generate-scenario.flow.json | sess-agent-eval | 2026-08-30 | NEW | 16d77430af61 | 已完成 | T-1042 flow 定义外置：golden flow 单一事实源 JSON（12 阶段/工具候选/必选性/硬顺序/benign 集），flowpath.load_flow 装载（缺失/损坏回退内置兜底） |
+| evals/build_flow.py | sess-agent-eval | 2026-08-30 | NEW | 07e70a0f7950 | 已完成 | T-1042 重建工具：skill depends_tools→flow 确定性合并（增量补充绝不摘除：权限/DAG/试跑/promote 属 flow 特有超集，legacy 候选保留供旧会话重放）；ACTION_STAGE_MAP 路由+基名回退+蕴含去重；--check 查漂移可挂门禁；drift/notes 双报告；重建演练幂等（阶段数 12 不变/hard_order 保留） |
+| workbench/backend/services/flow_trace.py | sess-agent-eval | 2026-08-30 | NEW | 37301f09b9f1 | 已完成 | T-1042 实时扫描服务：会话行→路径重放结构（懒加载 evals 函数级，依赖缺失 available=false 诚实降级不炸对话） |
+| workbench/frontend/src/pages/agentChat/FlowPanel.tsx | sess-agent-eval | 2026-08-30 | NEW | aba088095f48 | 已完成 | T-1042 🧭 路径面板：golden flow vs 实际走径实时展示（阶段四态点阵+跑偏点步号证据+计划外旁支）；每 5s 静默轮询（页签不可见暂停）+手动 ↻+会话切换即拉+过期响应竞态防护；三态分离（体验基线③） |
+| workbench/frontend/src/pages/agentChat/FlowPanel.test.tsx | sess-agent-eval | 2026-08-30 | NEW | b2bd018ecfe5 | 已完成 | T-1042 FlowPanel vitest 5 例（四态渲染/非生成会话标注/available=false 降级/错误+重试恢复/空态+会话切换重拉） |
+| test_specstd/test_flow_trace_endpoint.py | sess-agent-eval | 2026-08-30 | NEW | 7110aa9ce2e0 | 已完成 | T-1042 端点测试 4 例（生成会话阶段四态+跑偏清单+步号证据/404/非生成会话照常返回/非法 sid 400；与 deeplink 测试同款 monkeypatch 装配全离线） |
+| evals/flowpath.py | sess-agent-eval | 2026-08-30 | 9800735fd790 | 5756bd5ca64f | 已完成 | T-1042 定义驱动重构：FlowDef/FlowStage 数据类+load_flow（JSON 事实源/内置兜底）+trace_scan(scan, flow) 可注入+flow_def_to_mermaid（golden flow 本体可视化）+resolve_session_path（--session 按 ID 跨子目录解析，与 get_session 兜底语义对齐） |
+| evals/baseline.py | sess-agent-eval | 2026-08-30 | 4e4dc5a3759c | 8f4104bf9eb3 | 已完成 | T-1042 scan_rows 拆分：内存行扫描（后端实时扫描入口，不必有文件）；SessionScan.path 补默认值 |
+| evals/run_replay.py | sess-agent-eval | 2026-08-30 | 736139738af2 | faa22070952e | 已完成 | T-1042 CLI 扩 --session（按会话 ID 验证）/--flow（golden flow 本体可视化） |
+| workbench/backend/routers/agent.py | sess-agent-eval | 2026-08-30 | 8840ca10a1e9 | 4b1c0476539c | 已完成 | T-1042：GET /agent/sessions/{id}/flow-trace 端点（权限与 get_session 同口径 本人/admin；指定工作区→根→子目录三层兜底同口径；evals 懒加载函数级；B904 from None 修复后 agent.py 40=40 存量持平） |
+| workbench/frontend/src/api/agent.ts | sess-agent-eval | 2026-08-30 | da118790bba7 | dfa028e5ecc4 | 已完成 | T-1042：FlowTraceResult/FlowTraceStage 类型 + agentApi.getFlowTrace |
+| workbench/frontend/src/pages/agentChat/SidePanel.tsx | sess-agent-eval | 2026-08-30 | 1e43ab5ffd50 | 7b4d3517c17e | 已完成 | T-1042：SIDE_TABS 注册 🧭 路径（universal lowFreq，「更多」选择器内）+ 渲染分支 |
+| evals/README.md | sess-agent-eval | 2026-08-30 | e280cfe79a28 | 52dadf806545 | 已完成 | T-1042：README 增「flow 定义外置与重建」「对话中实时跑偏扫描」两节 + CLI 补 --session/--flow/build_flow |
 | evals/flowpath.py | sess-agent-eval | 2026-08-30 | NEW | 9800735fd790 | 已完成 | T-1042 路径重放：§16.1 flow 图编码为可执行 golden flow（12 阶段必选/可选+两条硬顺序约束），单会话逐节点比对四态判定（in_order/out_of_order/missing/skipped）+着色 mermaid 路径图+差异明细表（带步号证据）+计划外工具单列（benign 剔除）+批量 trace_all 索引按差异数降序 |
 | test_specstd/test_evals_flowpath.py | sess-agent-eval | 2026-08-30 | NEW | 9b8fcaae7beb | 已完成 | T-1042 路径重放单测 13 例（全绿路径/乱序双约束/缺失/可选跳过/计划外与 benign/新形态基名+action/promote 归段/mermaid 渲染/批量索引排序，含非空转翻案） |
 | evals/baseline.py | sess-agent-eval | 2026-08-30 | 939f28ba6cf4 | 4e4dc5a3759c | 已完成 | T-1042 路径重放地基：SessionScan 增 tool_calls_raw（名字+解析参数原始序）——T-982 后新会话 LLM 发基名+arguments.action，仅凭名字丢 action |

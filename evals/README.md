@@ -38,7 +38,13 @@ python evals/run_baseline.py --limit 50 --no-write   # 快速试跑不落盘
 python evals/run_replay.py --sessions-root <主库agent/sessions>
 python evals/run_replay.py --only-generate           # 只看「创建测试用例」会话
 python evals/run_replay.py --trace <会话.jsonl>      # 单会话路径重放（§16.1 flow 图比对，着色 mermaid+差异表）
+python evals/run_replay.py --session <会话ID>        # 按会话 ID 验证（跨 emp/workspace 子目录解析）
+python evals/run_replay.py --flow                    # 可视化 golden flow 本体（重建后核对用）
 python evals/run_replay.py --trace-all               # 全部生成会话批量路径重放 → traces/index.md（按差异数降序）
+
+# ── flow 定义重建（skill/工具变更后）──
+python evals/build_flow.py --skill agent/skills/generate-scenario.md --check   # 查漂移（可挂门禁，有漂移退出码 1）
+python evals/build_flow.py --skill agent/skills/generate-scenario.md           # 确定性合并重建（增量补充，绝不摘除）
 
 # ── 反向导出（T-1042）：真实会话 → golden case ──
 python evals/run_replay.py --export <会话.jsonl> --export-out evals/cases/GC-PROD-xxx.json
@@ -189,6 +195,31 @@ flow 图编码为可执行 golden flow（12 阶段，必选/可选 + 两条硬�
 
 主库 38 个生成会话批量重放实证：差异数 0~5 分布，头部会话缺 5 个必需阶段；
 教材级会话（20260727_193934）全绿 0 差异——好路径与跑偏路径在同一基线下立判。
+
+### flow 定义外置与重建（可扩展性）
+
+golden flow 定义单一事实源 = `evals/flows/{name}.flow.json`（阶段/工具候选/必选性/
+硬顺序/benign 集），`flowpath.load_flow` 装载（文件缺失/损坏回退内置兜底）。
+**skill 或工具变更后重建**：
+
+```
+python evals/build_flow.py --skill agent/skills/generate-scenario.md --check  # 查漂移（挂门禁）
+python evals/build_flow.py --skill agent/skills/generate-scenario.md          # 合并重建
+```
+
+重建是**增量补充**语义：depends_tools（权威工具清单）里新出现的工具按
+ACTION_STAGE_MAP 路由进既有阶段（归不进的追加为可选新阶段），**绝不摘除**
+既有候选——flow 特有阶段（权限预检/DAG/试跑/promote）与旧会话 legacy 候选
+本就不在 depends_tools，属合法超集；「flow 有而 skill 无」降为 INFO 提示人工
+复核。label/required/note/hard_order 等人工标注原样保留。
+
+### 对话中实时跑偏扫描（工作台 🧭 路径 面板）
+
+右侧面板新增「🧭 路径」（universal lowFreq，「更多」选择器内）：按当前会话
+轮询 `GET /agent/sessions/{id}/flow-trace`（权限与 get_session 同口径：本人/admin；
+懒加载 evals，依赖缺失 available=false 诚实降级不炸对话）。会话 JSONL 每轮增量
+落盘 → 每 5s 轮询已落盘行即得**当前跑偏态**（阶段四态点阵 + 跑偏点步号证据 +
+计划外旁支），run 进行中实时可见，手动 ↻ 随刷。
 
 ## 反向导出（T-1042，L1 样本层）
 

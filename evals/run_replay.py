@@ -54,7 +54,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="只输出 JSON 报告")
     ap.add_argument("--no-write", action="store_true", help="不落盘只打印")
     ap.add_argument("--trace", metavar="SESSION_JSONL", default=None,
-                    help="单会话路径重放：对照 §16.1 flow 图逐节点比对，输出着色 mermaid + 差异明细")
+                    help="单会话路径重放：对照 golden flow 逐节点比对，输出着色 mermaid + 差异明细")
+    ap.add_argument("--session", metavar="SID", default=None,
+                    help="按会话 ID 路径重放（--sessions-root 下跨 emp/workspace 子目录解析）")
+    ap.add_argument("--flow", metavar="NAME", nargs="?", const="generate-scenario", default=None,
+                    help="可视化 golden flow 本体（无会话着色；重建后核对用，默认 generate-scenario）")
     ap.add_argument("--trace-all", action="store_true",
                     help="全部生成会话批量路径重放（落盘 evals/results/traces/，索引按差异数降序）")
     ap.add_argument("--export", metavar="SESSION_JSONL", default=None,
@@ -63,6 +67,27 @@ def main(argv: list[str] | None = None) -> int:
                     help="golden case 输出路径（配合 --export）")
     ap.add_argument("--export-id", default=None, help="导出 case 的 ID（可选）")
     args = ap.parse_args(argv)
+
+    # golden flow 本体可视化（重建后核对）
+    if args.flow:
+        from evals.flowpath import flow_def_to_mermaid, load_flow
+        defn = load_flow(args.flow)
+        src = "evals/flows JSON 文件" if defn.rebuilt_from_file else "内置兜底（JSON 缺失）"
+        print(f"# golden flow：{defn.title}（{defn.id}）\n> 来源：{defn.source} · 定义面：{src}\n")
+        print("```mermaid")
+        print(flow_def_to_mermaid(defn))
+        print("```")
+        return 0
+
+    # 按会话 ID 路径重放（等价 --trace 解析出的文件路径）
+    if args.session:
+        from evals.flowpath import resolve_session_path
+        resolved = resolve_session_path(args.sessions_root, args.session)
+        if resolved is None:
+            print(f"错误：会话 ID 不存在或非法: {args.session}（root={args.sessions_root}）",
+                  file=sys.stderr)
+            return 2
+        args.trace = str(resolved)
 
     # 单会话路径重放
     if args.trace:

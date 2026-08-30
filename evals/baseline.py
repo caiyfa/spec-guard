@@ -53,7 +53,7 @@ _VALIDATE_TOOL_NAMES = ("validate", "spec_validate")
 class SessionScan:
     """单个会话 JSONL 的扫描结果（轨迹类信号）。"""
     session_id: str
-    path: str
+    path: str = ""
     purpose: str = ""
     workspace: str = ""
     emp_no: str = ""
@@ -111,10 +111,23 @@ def scan_session(path: str | Path) -> SessionScan | None:
         return None
     if not rows:
         return None
+    out = scan_rows(rows, session_id=path.stem, smoke=("smoke" in path.parts))
+    if out is not None:
+        out.path = str(path)
+    return out
 
-    scan = SessionScan(session_id=path.stem, path=str(path))
+
+def scan_rows(rows: list, session_id: str = "", smoke: bool = False) -> SessionScan | None:
+    """从内存行扫描（后端实时扫描入口：工作台按 session_id 读行后直接传入）。
+
+    smoke=True 强制打 __smoke__ 标（路径权威）；rows 为会话 JSONL 已解析行。
+    """
+    if not rows:
+        return None
+
+    scan = SessionScan(session_id=session_id)
     # smoke 隔离区（T-1041）：路径任一段为 smoke 即测试/验收产物，不计生产基线
-    if "smoke" in path.parts:
+    if smoke:
         scan.purpose = "__smoke__"
     # tool_call_id → tool_name（assistant 声明），用于把 tool 结果行归到具体工具
     call_id_to_tool: dict[str, str] = {}

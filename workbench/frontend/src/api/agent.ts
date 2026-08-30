@@ -1,6 +1,38 @@
 /** api/agent — T-997 自 api.ts 按域拆分（行为零变化纯重构） */
 import { request } from './core';
 
+// T-1042: 路径重放结果（golden flow 基线 vs 会话实际走径）
+export interface FlowTraceStage {
+  key: string;
+  label: string;
+  required: boolean;
+  status: 'in_order' | 'out_of_order' | 'missing' | 'skipped';
+  first_step: number | null;
+  times: number;
+  tools: string[];
+  note: string;
+}
+export interface FlowTraceResult {
+  available: boolean;
+  reason?: string;
+  session_id?: string;
+  flow_id?: string;
+  flow_title?: string;
+  flow_source?: string;
+  is_generate?: boolean;
+  n_tool_calls?: number;
+  total_tokens?: number;
+  purpose?: string;
+  workspace?: string;
+  stages?: FlowTraceStage[];
+  deviations?: string[];
+  extras?: string[];
+  n_missing?: number;
+  n_out_of_order?: number;
+  generated_at?: string;
+  owner?: string;
+  resolved_workspace?: string;
+}
 
 // ── Agent 对话 ──
 export const agentApi = {
@@ -21,6 +53,9 @@ export const agentApi = {
   // T-1021: run_in_progress/run_baseline_len 供前端 attach 续传（截断基线去重 + 续上实时流）
   getSession: (id: string, workspace = '') =>
     request<{ session_id: string; messages: any[]; reading_feed?: any[]; writing_feed?: any[]; run_in_progress?: boolean; run_baseline_len?: number }>(`/agent/sessions/${id}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
+  // T-1042: 路径重放——golden flow 基线 vs 会话实际走径（对话进行中轮询即实时跑偏态）
+  getFlowTrace: (id: string, workspace = '') =>
+    request<FlowTraceResult>(`/agent/sessions/${id}/flow-trace${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   exportSession: (id: string, workspace = '') =>
     request<any>(`/agent/sessions/${id}/export${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`),
   // T-402: 取消会话当前运行（真打断）

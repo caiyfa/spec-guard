@@ -16,6 +16,7 @@ import { ContextPanel } from './ContextPanel';
 import { RefPanel } from './RefPanel';
 import { InfoPackPanel } from './InfoPackPanel';
 import { WritingPanel } from './WritingPanel';
+import { FlowPanel } from './FlowPanel';
 import { DraftArtifactsPanel } from './DraftArtifactsPanel';
 import { DepGraphPanel } from './DepGraphPanel';
 import { MaterialsRefPanel } from './MaterialsRefPanel';
@@ -40,6 +41,7 @@ const SIDE_TABS: { id: string; label: string; scope: 'universal' | 'purpose'; lo
   // 草稿产物是评审主入口，前置独立成签
   { id: 'drafts',  label: '📝 草稿产物',   scope: 'universal' },
   { id: 'writing', label: '✏️ 更新足迹',   scope: 'universal', lowFreq: true },
+  { id: 'flow',    label: '🧭 路径',       scope: 'universal', lowFreq: true },  // T-1042：golden flow 实时跑偏扫描
   // T-996 菜单收缩收编：技能（只读）/合规校验/知识 收进对话页通用页签
   { id: 'skills',  label: '🛠 技能',       scope: 'universal' },
   { id: 'spec',    label: '📏 合规',       scope: 'universal', lowFreq: true },
@@ -225,6 +227,9 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
         )}
         {activeTab === 'writing' && (
           <WritingPanel items={writingFeed} onOpen={onOpenDocWrite} onDiff={onOpenDiff} onAskAgent={onAskAgentFix} onAskAgentBatch={onAskAgentBatch} onRefresh={onRefreshWritingFeed} />
+        )}
+        {activeTab === 'flow' && (
+          <FlowPanel sessionId={sessionId} onError={onError} />
         )}
         {activeTab === 'deps' && (
           <DepGraphPanel draftFiles={draftFiles} onError={onError} />

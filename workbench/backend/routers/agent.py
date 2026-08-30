@@ -1007,6 +1007,39 @@ def get_session(session_id: str, workspace: str = "", user: CurrentUser = Depend
     raise HTTPException(status_code=404, detail="会话不存在")
 
 
+@router.get("/sessions/{session_id}/flow-trace")
+def get_session_flow_trace(session_id: str, workspace: str = "", user: CurrentUser = Depends(get_current_user)):
+    """路径重放（T-1042）：golden flow 基线 vs 会话实际走径，对话进行中可实时扫描。
+
+    会话 JSONL 每轮增量落盘（runtime 每轮 save），本端点读已落盘行喂给
+    evals.flowpath 路径重放——前端 🧭 路径 面板轮询即得当前跑偏态。
+    权限与 get_session 同口径：本人会话；admin 可查全部。evals 依赖不可用时
+    available=false 诚实降级，不炸对话主链路。
+    """
+    try:
+        _validate_session_id(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法 session_id") from None
+    from services import flow_trace as flow_trace_service  # 懒加载：workbench→evals 函数级
+
+    dirs = _iter_all_session_dirs() if user.is_admin else [_sessions_dir(user.emp_no)]
+    for d in dirs:
+        # 指定工作区 → 根目录 → 子目录逐一兜底（与 get_session 同口径）
+        candidates = [{"ws": workspace}, {"ws": ""}] if workspace else [{"ws": ""}]
+        if d.is_dir():
+            candidates += [{"ws": sub.name} for sub in d.iterdir()
+                           if sub.is_dir() and sub.name != workspace]
+        for cand in candidates:
+            ws = cand["ws"]
+            messages = SessionManager(d, workspace=ws).load(session_id)
+            if messages is not None:
+                result = flow_trace_service.build_flow_trace(messages, session_id=session_id)
+                result["owner"] = d.name
+                result["resolved_workspace"] = ws
+                return result
+    raise HTTPException(status_code=404, detail="会话不存在")
+
+
 def _generate_session_title(llm: LLMClient, messages: list[dict]) -> str:
     """用 LLM 生成会话标题（首条用户消息 + 首条助手回复 → 简短标题）。
 

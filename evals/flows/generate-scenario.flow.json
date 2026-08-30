@@ -1,0 +1,176 @@
+{
+  "id": "generate-scenario",
+  "title": "创建测试用例 golden flow",
+  "source": "agent/skills/generate-scenario.md（核心流程 + depends_tools）× docs/SpecGuard-Agent评测体系-现状基线.md §16.1",
+  "rebuild": "python evals/build_flow.py --skill agent/skills/generate-scenario.md（skill/工具变更后重建；--check 可挂门禁）",
+  "hard_order": [
+    [
+      "read_requirement",
+      "write_draft"
+    ],
+    [
+      "validate",
+      "write_draft"
+    ]
+  ],
+  "benign_bases": [
+    "todo_write",
+    "topic",
+    "gate_dock_status",
+    "parent"
+  ],
+  "stages": [
+    {
+      "key": "read_skill",
+      "label": "取技能正文",
+      "tools": [
+        "knowledge",
+        "read_skill"
+      ],
+      "required": false,
+      "note": "knowledge(action=skill)——正文不常驻，执行任务前先取"
+    },
+    {
+      "key": "read_requirement",
+      "label": "读需求",
+      "tools": [
+        "info_pack",
+        "read_info_pack",
+        "spec(action=read)",
+        "spec(action=list)",
+        "spec(action=search)",
+        "read_spec",
+        "list_spec_files"
+      ],
+      "required": true,
+      "note": "info_pack(action=read) 或 spec(action=read, anchor=FR-xxx)"
+    },
+    {
+      "key": "get_id",
+      "label": "取场景 ID",
+      "tools": [
+        "scenario(action=next_id)",
+        "next_scenario_id"
+      ],
+      "required": true,
+      "note": "scenario(action=next_id)"
+    },
+    {
+      "key": "query_registry",
+      "label": "查注册表",
+      "tools": [
+        "query_registry"
+      ],
+      "required": true,
+      "note": "确认 tool/oracle 已注册（禁编造）"
+    },
+    {
+      "key": "find_reference",
+      "label": "找同类参照",
+      "tools": [
+        "scenario(action=list)",
+        "scenario(action=read)",
+        "list_scenarios",
+        "read_scenario"
+      ],
+      "required": true,
+      "note": "scenario(action=list) 定位同类 → 读 1~2 个参照"
+    },
+    {
+      "key": "permission_precheck",
+      "label": "权限预检/账号解析",
+      "tools": [
+        "precheck_permission",
+        "resolve_account"
+      ],
+      "required": false,
+      "note": "权限/写操作场景必做（K-055），普通场景可跳过"
+    },
+    {
+      "key": "dag_design",
+      "label": "DAG 拓扑预演",
+      "tools": [
+        "scenario(action=check_dag)",
+        "check_dag"
+      ],
+      "required": false,
+      "note": "≥2 场景时必做（K-021），单场景可跳"
+    },
+    {
+      "key": "validate",
+      "label": "validate 校验",
+      "tools": [
+        "validate"
+      ],
+      "required": true,
+      "note": "生成后必须 validate（UNKNOWN_TPL/BODY_KEY 硬伤拦在这里）"
+    },
+    {
+      "key": "write_draft",
+      "label": "写草稿",
+      "tools": [
+        "draft(action=write)",
+        "write_draft"
+      ],
+      "required": true,
+      "note": "draft(action=write) 写入 drafts/ 并自动登记三闸"
+    },
+    {
+      "key": "suggest_deps",
+      "label": "依赖建议",
+      "tools": [
+        "scenario(action=suggest_deps)",
+        "suggest_deps"
+      ],
+      "required": false,
+      "note": "写完草稿必做（K-046），拒绝建议须说明"
+    },
+    {
+      "key": "trial_run",
+      "label": "试跑/归因",
+      "tools": [
+        "scenario(action=run)",
+        "run_scenario",
+        "attribution"
+      ],
+      "required": false,
+      "note": "用户要求「跑一下」时；失败走 attribution 归因"
+    },
+    {
+      "key": "promote",
+      "label": "入库 promote",
+      "tools": [
+        "draft(action=promote)",
+        "draft(action=promote_batch)",
+        "promote_draft",
+        "promote_drafts"
+      ],
+      "required": false,
+      "note": "用户明确确认后；自带三闸"
+    }
+  ],
+  "_meta": {
+    "rebuilt_at": "2026-08-30T11:07:59",
+    "skill": "agent/skills/generate-scenario.md",
+    "skill_version": "1.1.0",
+    "depends_tools": [
+      "info_pack(action=read)",
+      "spec(action=read)",
+      "scenario(action=next_id)",
+      "query_registry",
+      "scenario(action=list)",
+      "scenario(action=read)",
+      "validate",
+      "draft(action=write)",
+      "scenario(action=suggest_deps)"
+    ],
+    "drift": [],
+    "notes": [
+      "阶段「取技能正文」候选 ['read_skill'] 不在 skill depends_tools（flow 特有/旧会话兼容候选——若确认废弃请人工摘除）",
+      "阶段「读需求」候选 ['read_info_pack', 'spec(action=list)', 'spec(action=search)', 'list_spec_files'] 不在 skill depends_tools（flow 特有/旧会话兼容候选——若确认废弃请人工摘除）",
+      "阶段「DAG 拓扑预演」候选 ['scenario(action=check_dag)', 'check_dag'] 不在 skill depends_tools（flow 特有/旧会话兼容候选——若确认废弃请人工摘除）",
+      "阶段「试跑/归因」候选 ['scenario(action=run)', 'run_scenario'] 不在 skill depends_tools（flow 特有/旧会话兼容候选——若确认废弃请人工摘除）",
+      "阶段「入库 promote」候选 ['draft(action=promote)', 'draft(action=promote_batch)', 'promote_draft', 'promote_drafts'] 不在 skill depends_tools（flow 特有/旧会话兼容候选——若确认废弃请人工摘除）"
+    ]
+  }
+}
