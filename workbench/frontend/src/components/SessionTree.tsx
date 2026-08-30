@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { filterSmokeSessions } from '../pages/agentChat/utils';
+import { StatusBadge } from './ui/StatusBadge';
+import { Button } from './ui/Button';
+import { IconButton } from './ui/IconButton';
+import { Icon } from './ui/icons';
 
 interface SessionItem {
   id: string;
@@ -239,36 +243,37 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
         )}
       </div>
 
-      {/* 底部操作区：批量模式切换 + 批量操作条 */}
+      {/* 底部操作区：批量模式切换 + 批量操作条（T-1044 U3 P2：两行化——
+          行 1 StatusBadge 计数 + smoke checkbox 小控件；行 2 归档/恢复 ghost + 完成图标钮） */}
       {batchMode ? (
-        <div className="flex-shrink-0 border-t border-border p-2 flex items-center gap-1.5">
-          <span className="text-fs-aux text-gray-400 flex-shrink-0">已选 {selectedCount}</span>
-          <button
-            onClick={toggleShowSmoke}
-            className={`text-fs-aux px-1.5 py-1 rounded flex-shrink-0 transition-colors ${showSmoke ? 'bg-blocked/12 text-blocked' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}
-            title={showSmoke ? 'smoke 隔离会话展示中：点击隐藏' : '显示 smoke 隔离区冒烟会话（验收/调试产物，可勾选批量归档）'}>
-            🧪 smoke{showSmoke ? ' ✓' : ''}
-          </button>
-          <button
-            onClick={() => handleBatch(true)}
-            disabled={busy || selectedCount === 0}
-            className="flex-1 text-fs-aux px-1.5 py-1 rounded bg-warn/12 text-warn hover:bg-warn/12 disabled:opacity-40"
-            title="归档选中会话（列表瘦身，文件保留可恢复）">
-            🗄 归档
-          </button>
-          <button
-            onClick={() => handleBatch(false)}
-            disabled={busy || selectedCount === 0}
-            className="flex-1 text-fs-aux px-1.5 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40"
-            title="恢复选中会话">
-            ↺ 恢复
-          </button>
-          <button
-            onClick={() => { setBatchMode(false); setSelected({}); }}
-            className="text-fs-aux px-1.5 py-1 rounded text-gray-500 hover:text-gray-300"
-            title="退出批量操作">
-            ✕ 完成
-          </button>
+        <div className="flex-shrink-0 border-t border-border p-2 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <StatusBadge status="info" size="sm" label={`已选 ${selectedCount}`} />
+            <label
+              className="flex items-center gap-1 text-fs-aux text-gray-400 cursor-pointer select-none ml-auto"
+              title={showSmoke ? 'smoke 隔离会话展示中：点击隐藏' : '显示 smoke 隔离区冒烟会话（验收/调试产物，可勾选批量归档）'}
+            >
+              <input type="checkbox" checked={showSmoke} onChange={toggleShowSmoke} className="w-3 h-3 accent-[rgb(var(--info))]" />
+              🧪 smoke
+            </label>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" className="flex-1"
+              onClick={() => handleBatch(true)}
+              disabled={busy || selectedCount === 0}
+              title="归档选中会话（列表瘦身，文件保留可恢复）">
+              归档
+            </Button>
+            <Button size="sm" className="flex-1"
+              onClick={() => handleBatch(false)}
+              disabled={busy || selectedCount === 0}
+              title="恢复选中会话">
+              恢复
+            </Button>
+            <IconButton label="退出批量操作" onClick={() => { setBatchMode(false); setSelected({}); }}>
+              <Icon name="close" size={12} />
+            </IconButton>
+          </div>
         </div>
       ) : (
         <div className="flex-shrink-0 border-t border-border p-2">
