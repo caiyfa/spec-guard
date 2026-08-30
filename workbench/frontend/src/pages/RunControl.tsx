@@ -10,6 +10,7 @@ import { useSearchParams } from 'react-router';
 import { runsApi, scenariosApi, authApi, settingsApi, type Scenario, type RunStatus, type PreflightResult } from '../api';
 import { useRunStream } from '../hooks/useRunStream';
 import Modal from '../components/Modal';
+import { StatusBadge } from '../components/ui/StatusBadge';
 
 const SCOPES = [
   { value: 'all', label: '全量（全部场景）' },
@@ -258,16 +259,13 @@ export default function RunControl() {
     catch (e: unknown) { setError(e instanceof Error ? e.message : '终止失败'); }
   };
 
-  const vColor: Record<string, string> = {
-    running: 'text-info animate-pulse',
-    PASSED: 'text-pass',
-    FAILED: 'text-fail',
-    SKIPPED: 'text-skip',
-    ERROR: 'text-fail',
+  // T-1044 U3 P2：verdict 符号列改状态圆点（✓✗⊘◉ 文本符退役，与 FlowPanel 圆点同语言）
+  const vDot: Record<string, string> = {
+    running: 'bg-info animate-pulse', PASSED: 'bg-pass', FAILED: 'bg-fail', SKIPPED: 'bg-skip', ERROR: 'bg-fail',
   };
-  const vIcon: Record<string, string> = {
-    running: '◉', PASSED: '✓', FAILED: '✗', SKIPPED: '⊘', ERROR: '✗',
-  };
+  const VerdictDot = ({ v }: { v: string }) => (
+    <span title={v || '未运行'} className={`w-2 h-2 rounded-full inline-block flex-shrink-0 ${vDot[v] || 'bg-gray-700'}`} />
+  );
 
   // K-050：当前任务编号（从 started 事件提取，日志头部展示）
   const currentRunId = useMemo(() => {
@@ -411,11 +409,11 @@ export default function RunControl() {
         </div>
       )}
 
-      {/* 断点命中面板 */}
+      {/* 断点命中面板（T-1044 U3 P2：描边卡归档 border-info/35 bg-info/10；🔴✅ 退役改圆点/StatusBadge） */}
       {isPaused && breakpointHit && (
-        <div className="border border-info/40 bg-info/5 rounded-lg p-4 space-y-3">
+        <div className="border border-info/35 bg-info/10 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <span className="text-fs-title">🔴</span>
+            <span className="w-3 h-3 rounded-full bg-fail animate-pulse flex-shrink-0" title="断点命中" />
             <div>
               <div className="text-fs-lead font-medium text-info">
                 断点命中：{breakpointHit.paused_at}
@@ -426,7 +424,7 @@ export default function RunControl() {
               </div>
             </div>
             <button onClick={resume}
-              className="ml-auto px-4 py-1.5 rounded text-fs-body bg-info/20 text-info hover:bg-info/30">
+              className="ml-auto px-4 py-1.5 rounded-md text-fs-body bg-info/15 text-info hover:bg-info/25">
               ▶ 放行继续
             </button>
           </div>
@@ -436,10 +434,12 @@ export default function RunControl() {
             <div className="grid grid-cols-2 gap-3">
               {/* 已完成场景 */}
               <div className="bg-surface-2 rounded-lg p-3">
-                <div className="text-fs-body text-gray-400 font-medium mb-1.5">✅ 已完成（{breakpointHit.context.completed_count}）</div>
+                <div className="mb-1.5"><StatusBadge size="sm" status="pass" label={`已完成 ${breakpointHit.context.completed_count}`} /></div>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {(breakpointHit.context.completed || []).map((sid: string) => (
-                    <div key={sid} className="text-fs-aux font-mono text-pass/70">✓ {sid}</div>
+                    <div key={sid} className="text-fs-aux font-mono text-pass/70 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-pass flex-shrink-0" />{sid}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -448,10 +448,8 @@ export default function RunControl() {
                 <div className="text-fs-body text-gray-400 font-medium mb-1.5">📊 最近结果</div>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {(breakpointHit.context.recent_verdicts || []).map((v: { scenario_id: string; verdict: string }, i: number) => (
-                    <div key={i} className={`text-fs-aux font-mono ${
-                      v.verdict === 'PASSED' ? 'text-pass' : v.verdict === 'FAILED' ? 'text-fail' : 'text-skip'
-                    }`}>
-                      {v.verdict === 'PASSED' ? '✓' : v.verdict === 'FAILED' ? '✗' : '⊘'} {v.scenario_id}
+                    <div key={i} className="text-fs-aux font-mono text-gray-400 flex items-center gap-1.5">
+                      <VerdictDot v={v.verdict} />{v.scenario_id}
                     </div>
                   ))}
                 </div>
@@ -474,9 +472,9 @@ export default function RunControl() {
       {/* 进度统计（本次选中场景） */}
       {[...verdictMap.keys()].some((id) => selectedIds.has(id)) && (
         <div className="flex gap-4 text-fs-lead">
-          <span className="text-pass">✓ {counts.passed} 通过</span>
-          <span className="text-fail">✗ {counts.failed} 失败</span>
-          <span className="text-skip">⊘ {counts.skipped} 跳过</span>
+          <StatusBadge size="sm" status="pass" label={`${counts.passed} 通过`} />
+          <StatusBadge size="sm" status="fail" label={`${counts.failed} 失败`} />
+          <StatusBadge size="sm" status="skip" label={`${counts.skipped} 跳过`} />
           <span className="text-gray-500">{counts.passed + counts.failed + counts.skipped}/{selectedIds.size}</span>
         </div>
       )}
@@ -524,8 +522,11 @@ export default function RunControl() {
                 <label key={s.id}
                   className={`flex items-center gap-2 px-3 py-1.5 text-fs-body border-b border-border/30 cursor-pointer hover:bg-surface-3/50 ${checked ? 'bg-info/5' : ''}`}>
                   <input type="checkbox" checked={checked} onChange={() => toggleId(s.id)} />
-                  <span className={`${vColor[v] || 'text-gray-700'} w-4 text-center`}>{vIcon[v] || '○'}</span>
-                  <span className="font-mono text-gray-400 w-28 truncate">{breakpoints.has(s.id) ? '🔴 ' : ''}{s.id}</span>
+                  <span className="w-4 flex justify-center flex-shrink-0"><VerdictDot v={v} /></span>
+                  <span className="font-mono text-gray-400 w-28 truncate inline-flex items-center gap-1">
+                    {breakpoints.has(s.id) && <span className="w-1.5 h-1.5 rounded-full bg-fail flex-shrink-0" title="断点" />}
+                    {s.id}
+                  </span>
                   <span className="text-gray-500 truncate flex-1">{s.title}</span>
                   {/* T-320：场景最后更新时间（YAML mtime） */}
                   {s.updated_at && (
