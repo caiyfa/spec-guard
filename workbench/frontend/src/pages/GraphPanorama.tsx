@@ -396,7 +396,7 @@ export default function GraphPanorama() {
                 onClick={() => queryBacklink(fr.id)}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${fr.cov === 'ok' ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <span className={`w-2 h-2 rounded-full ${fr.cov === 'ok' ? 'bg-pass' : 'bg-fail'}`} />
                   <span className="text-gray-200 font-medium">{fr.id}</span>
                   <span className="text-fs-aux text-gray-500">{fr.cov === 'ok' ? '已覆盖' : '缺口'}</span>
                 </div>

@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { feishuPoolApi, type FeishuChatMessage } from '../api';
+import { getJsTokens } from '../theme';
 
 // 窗口消息加载：逐日拉 JSONL 事实源拼接（空日跳过）；全部无 JSONL 时回退
 // 解析 md 视图（单日旧数据兼容，行号伪 id `md-line-N`——仅供展示与行匹配，
@@ -270,10 +271,10 @@ export function fmtMsgTime(ts: string, isMulti: boolean): string {
 }
 
 // T-955：发送人稳定配色（按 id 哈希取色相环——IM 惯例，一眼区分谁在说话）
-const SENDER_PALETTE = ['#60a5fa', '#f59e0b', '#34d399', '#a78bfa', '#f87171',
-  '#22d3ee', '#eab308', '#f472b6'];
+// T-1044：色环迁入 JS_THEME_TOKENS（浅主题用深一档色相保对比），此处不再硬编码
 export function senderColor(id: string): string {
+  const palette = getJsTokens().senderPalette;
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return SENDER_PALETTE[h % SENDER_PALETTE.length];
+  return palette[h % palette.length];
 }

@@ -99,7 +99,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
                       </div>
                       <div className="rounded bg-pass/12 px-1.5 py-1">
                         <div className="text-fs-micro text-pass mb-0.5">本地提交版本</div>
-                        <pre className="text-fs-aux font-mono text-green-200/80 whitespace-pre-wrap break-all max-h-32 overflow-auto">{seg.theirs.trim()}</pre>
+                        <pre className="text-fs-aux font-mono text-pass/80 whitespace-pre-wrap break-all max-h-32 overflow-auto">{seg.theirs.trim()}</pre>
                       </div>
                     </div>
                   ))}

@@ -175,7 +175,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
         <span className={`text-fs-micro px-1 py-0.5 rounded border ${
           c.level === 'L3'
             ? 'text-pass border-pass/35'
-            : 'text-warn border-yellow-500/40'}`}
+            : 'text-warn border-warn/35'}`}
           title={c.level === 'L3'
             ? '可逆低危操作（代执行白名单）'
             : '定性决策：Agent 可引导/预填，最后一下永远人点'}>
@@ -243,7 +243,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
   if (!spec) {
     // 白名单外 action：确定性拒绝，不执行（分档接管边界）
     return (
-      <div className={`${cardCls} border-yellow-500/40`}>
+      <div className={`${cardCls} border-warn/35`}>
         <div className="text-fs-body text-warn">
           🚫 Agent 提议的代执行「{action || '(缺 action)'}」不在白名单内——已拦截。
         </div>

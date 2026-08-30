@@ -198,7 +198,7 @@ function LifecycleBoard() {
                   <div className="text-fs-body text-gray-500 truncate mt-0.5">
                     {it.title || ''}
                     {it.module && <span className="text-gray-600"> · {it.module}</span>}
-                    {it.draft_filename && <span className="text-yellow-600/80"> · 📝 {it.draft_filename}</span>}
+                    {it.draft_filename && <span className="text-warn/80"> · 📝 {it.draft_filename}</span>}
                   </div>
                   {it.last_failure && (
                     <div className="text-fs-aux text-fail/80 truncate mt-0.5"

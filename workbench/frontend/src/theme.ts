@@ -90,11 +90,17 @@ export interface JsThemeTokens {
   minimapBg: string;
   minimapMask: string;
   minimapNode: string;
+  senderPalette: string[];  // T-1044：发送人配色环（T-955 自 ChatMessageView 迁入，浅主题用深一档色相保对比）
 }
+
+// T-955/T-1044：发送人配色环——深主题亮一档 / 浅主题深一档（categorical 色相环，非状态色）
+const SENDER_DARK = ['#60a5fa', '#f59e0b', '#34d399', '#a78bfa', '#f87171', '#22d3ee', '#eab308', '#f472b6'];
+const SENDER_LIGHT = ['#2563eb', '#d97706', '#059669', '#7c3aed', '#dc2626', '#0891b2', '#ca8a04', '#db2777'];
 
 const DARK_TOKENS: Omit<JsThemeTokens, 'dark' | 'monaco' | 'mermaid' | 'rfBackground'> = {
   codeBg: '#0a0e14', nodeBg: '#161b22', nodeSubBg: '#21262d', nodeText: '#e6edf3', nodeSubText: '#9da7b3',
   edgeStroke: '#2d3646', minimapBg: '#0d1117', minimapMask: 'rgba(13,17,23,0.8)', minimapNode: '#161b22',
+  senderPalette: SENDER_DARK,
 };
 
 export const JS_THEME_TOKENS: Record<string, JsThemeTokens> = {
@@ -115,7 +121,7 @@ export const JS_THEME_TOKENS: Record<string, JsThemeTokens> = {
     dark: false, monaco: 'vs', mermaid: 'default',
     codeBg: '#f6f8fa', nodeBg: '#ffffff', nodeSubBg: '#eef2f6', nodeText: '#1f2937', nodeSubText: '#6b7280',
     edgeStroke: '#d0d7e0', minimapBg: '#ffffff', minimapMask: 'rgba(246,248,250,0.8)', minimapNode: '#eef2f6',
-    rfBackground: '#d0d7e0',
+    rfBackground: '#d0d7e0', senderPalette: SENDER_LIGHT,
   },
   frost: {
     ...DARK_TOKENS, dark: true, monaco: 'vs-dark', mermaid: 'dark',

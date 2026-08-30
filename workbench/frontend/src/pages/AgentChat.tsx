@@ -1582,7 +1582,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               )}
               {reconnecting && (
                 <div className="bg-warn/12 border border-warn/35 rounded p-1.5 mb-2 flex items-center gap-1.5">
-                  <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+                  <span className="inline-block w-2 h-2 bg-warn rounded-full animate-pulse" />
                   <span className="text-warn text-fs-body">连接已断开，正在自动重连…</span>
                 </div>
               )}

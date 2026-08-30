@@ -326,7 +326,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                 {meta?.gates && g1 !== 'approved' && (
                   <button onClick={() => handleReview(file)} disabled={busyAll || !!st.reviewing}
                     title="第①闸人工评审通过（gate2 未 pass 时后端会打回）"
-                    className="px-2 py-1 rounded bg-yellow-600/80 text-white text-fs-body hover:bg-yellow-600 disabled:opacity-40">
+                    className="px-2 py-1 rounded bg-warn/80 text-white text-fs-body hover:bg-warn disabled:opacity-40">
                     {st.reviewing ? '评审中…' : '✓ 评审通过'}
                   </button>
                 )}
