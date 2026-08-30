@@ -1004,3 +1004,17 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 | docs/原型/ui-demo/c-terminal/index.html | sess-ui-upgrade | 2026-08-30 | NEW | db54c6c83513 | 已完成 | T-1043：方向 C「Terminal 终端」五画板自包含 demo |
 | docs/原型/ui-demo/README.md | sess-ui-upgrade | 2026-08-30 | NEW | e86c5e2c53ee | 已完成 | T-1043：三套对照说明 + 推荐意见（A 主线/B 养分/C 捐赠）+ flow 渲染器裁决建议 |
 | docs/远期设计/SpecGuard-总控文档.md | sess-ui-upgrade | 2026-08-30 | — | — | 已完成 | T-1043 §4.11/§5/§6 登记（自登记固有滞后一次编辑） |
+| workbench/frontend/tailwind.config.js | sess-ui-upgrade | 2026-08-30 | — | c7630157028a | 已完成 | T-1044 U0-1：字号五档+字体族 token+删 darkMode；U0-4a：overlay 色桥接 |
+| workbench/frontend/src/App.css | sess-ui-upgrade | 2026-08-30 | — | DELETED | 已完成 | T-1044 U0-1：E9 死文件删除（Vite 模板残留，零引用实证） |
+| workbench/frontend/src/index.css | sess-ui-upgrade | 2026-08-30 | — | db26a6a59a31 | 已完成 | T-1044 U0-1 五主题注释 + U1：.btn-*/.card/.spec-md B 重写 + skeleton-bar shimmer |
+| workbench/frontend/src/theme.ts | sess-ui-upgrade | 2026-08-30 | — | c0a54a1709bf | 已完成 | T-1044 U0-4b：senderPalette 入 JS_THEME_TOKENS（深亮/浅深双档） |
+| workbench/frontend/src/components/Modal.tsx | sess-ui-upgrade | 2026-08-30 | — | 40d521b9a870 | 已完成 | T-1044 U1：size 四档 sm/md/lg/xl（width 优先）+ rounded-lg B 化 |
+| workbench/frontend/src/components/ui/StatusBadge.tsx | sess-ui-upgrade | 2026-08-30 | NEW | 29f54bd1f7a9 | 已完成 | T-1044 U1：六状态唯一徽章（B 淡填无描边+duotone 图形符） |
+| workbench/frontend/src/components/ui/Button.tsx | sess-ui-upgrade | 2026-08-30 | NEW | 7c20187365ae | 已完成 | T-1044 U1：三档（墨色 primary/ghost/软红 danger） |
+| workbench/frontend/src/components/ui/Tabs.tsx | sess-ui-upgrade | 2026-08-30 | NEW | dcc3ec9f2c77 | 已完成 | T-1044 U1：唯一下划线页签（B 墨色下划线+计数丸） |
+| workbench/frontend/src/components/ui/StateView.tsx | sess-ui-upgrade | 2026-08-30 | NEW | 7c6359cee511 | 已完成 | T-1044 U1：三态分离（骨架/空态衬线/错误+重试） |
+| workbench/frontend/src/components/ui/Toast.tsx | sess-ui-upgrade | 2026-08-30 | NEW | 27f98e17ece8 | 已完成 | T-1044 U1：单例 toast.ok/fail/info/warn + 浮起纸条卡 |
+| workbench/frontend/src/App.tsx | sess-ui-upgrade | 2026-08-30 | — | 585193844a0c | 已完成 | T-1044 U1：ToastContainer 根挂载 |
+| workbench/frontend/scripts/u0_fontsize_codemod.py | sess-ui-upgrade | 2026-08-30 | NEW | 4b5bad6299a4 | 已完成 | T-1044 U0-2：字号 token 替换 codemod（dry-run/--apply，U4 ratchet 复用） |
+| workbench/frontend/scripts/u0_color_codemod.py | sess-ui-upgrade | 2026-08-30 | NEW | ed182894c11c | 已完成 | T-1044 U0-3/4：逃逸色九族+overlay 映射 codemod（长 token 先换防断裂） |
+| workbench/frontend/src/**/*.tsx（U0 codemod 批量面） | sess-ui-upgrade | 2026-08-30 | — | — | 已完成 | T-1044 U0-2/3/4：字号 870 处+逃逸色 811 处+bg-black 32 处机械替换（84 tsx 文件，逐映射独立提交 f6e6fb6~2757ae3，逐文件 diff 见各提交） |
