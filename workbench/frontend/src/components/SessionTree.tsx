@@ -1,6 +1,7 @@
-/** SessionTree — Agent 会话树（T-010 扩展：批量归档/恢复；复选框仅批量模式显示） */
+/** SessionTree — Agent 会话树（T-010 扩展：批量归档/恢复；复选框仅批量模式显示；T-1041 smoke 隔离会话默认隐藏，批量操作内开关查看） */
 
 import { useState } from 'react';
+import { filterSmokeSessions } from '../pages/agentChat/utils';
 
 interface SessionItem {
   id: string;
@@ -12,7 +13,13 @@ interface SessionItem {
   size?: number;
   title?: string;
   archived?: boolean;   // T-010 扩展：归档标记
+  smoke?: boolean;      // T-1041 扩展：smoke/ 隔离区冒烟会话（默认隐藏，批量操作内开关查看）
 }
+
+/** T-1041：smoke 开关持久化（体验基线①）——记忆用户选择；存储不可用时按次生效，默认隐藏 */
+const SMOKE_KEY = 'sg_agent_show_smoke';
+const readShowSmoke = () => { try { return localStorage.getItem(SMOKE_KEY) === '1'; } catch { return false; } };
+const writeShowSmoke = (v: boolean) => { try { localStorage.setItem(SMOKE_KEY, v ? '1' : '0'); } catch { /* 按次生效 */ } };
 
 interface Props {
   sessions: SessionItem[];
@@ -32,6 +39,9 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [showArchived, setShowArchived] = useState(false);
   const [busy, setBusy] = useState(false);
+  // T-1041：smoke 会话展示开关（持久化；展示范围锁定批量模式内，退出即恢复隐藏）
+  const [showSmoke, setShowSmoke] = useState(readShowSmoke);
+  const toggleShowSmoke = () => setShowSmoke(v => { writeShowSmoke(!v); return !v; });
 
   // K-037：收起态——细条（展开按钮 + 新会话 + 竖排标题）
   if (collapsed) {
@@ -51,8 +61,10 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
   }
 
   // 按工作区分组（空 workspace 归「会话」组——不渲染标题，保持列表干净）
+  // T-1041：smoke 隔离会话默认隐藏；仅批量模式内开关打开时放行（供批量勾选清理）
+  const visibleSessions = filterSmokeSessions(sessions, batchMode && showSmoke);
   const grouped: Record<string, { active: SessionItem[]; archived: SessionItem[]; hasWs: boolean }> = {};
-  for (const s of sessions) {
+  for (const s of visibleSessions) {
     const ws = s.workspace || '__plain__';
     if (!grouped[ws]) grouped[ws] = { active: [], archived: [], hasWs: !!s.workspace };
     (s.archived ? grouped[ws].archived : grouped[ws].active).push(s);
@@ -138,6 +150,9 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           }`}>
           <div className="truncate flex items-center gap-1">
             <span className="truncate">{s.title || s.id}</span>
+            {s.smoke && (
+              <span className="text-gray-500 text-[8px] flex-shrink-0" title="smoke 隔离区冒烟会话（验收/调试产物）">🧪</span>
+            )}
             {s.workspace && s.workspace !== currentWorkspace && (
               <span className="text-gray-600 text-[8px] flex-shrink-0">[{s.workspace}]</span>
             )}
@@ -206,7 +221,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           const label = wsKey === '__plain__' ? '会话' : wsKey;
           return renderGroup(g, wsKey, label);
         })}
-        {sessions.length === 0 && (
+        {visibleSessions.length === 0 && (
           <div className="text-center text-gray-600 text-[10px] py-8">暂无会话</div>
         )}
         {/* 已归档：跨工作区聚合到列表最底部 */}
@@ -228,6 +243,12 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
       {batchMode ? (
         <div className="flex-shrink-0 border-t border-border p-2 flex items-center gap-1.5">
           <span className="text-[10px] text-gray-400 flex-shrink-0">已选 {selectedCount}</span>
+          <button
+            onClick={toggleShowSmoke}
+            className={`text-[10px] px-1.5 py-1 rounded flex-shrink-0 transition-colors ${showSmoke ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}
+            title={showSmoke ? 'smoke 隔离会话展示中：点击隐藏' : '显示 smoke 隔离区冒烟会话（验收/调试产物，可勾选批量归档）'}>
+            🧪 smoke{showSmoke ? ' ✓' : ''}
+          </button>
           <button
             onClick={() => handleBatch(true)}
             disabled={busy || selectedCount === 0}

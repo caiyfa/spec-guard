@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isToolError, filterTreeSessions, filterMenuSessions, stripRefBlock, resolveViewingFocus, chatRouteForPurpose, chatStorageKeys } from './utils';
+import { isToolError, filterTreeSessions, filterMenuSessions, filterSmokeSessions, stripRefBlock, resolveViewingFocus, chatRouteForPurpose, chatStorageKeys } from './utils';
 
 describe('isToolError 工具结果语义判错', () => {
   // 回归用例：会话 20260824_172320_84d21cfa，spec sync 返回 ok:true 但
@@ -141,5 +141,26 @@ describe('filterMenuSessions（T-1039 会话树归属过滤）', () => {
 
   it('无固定用途（兼容模式）：不过滤', () => {
     expect(filterMenuSessions(sessions, '')).toHaveLength(4);
+  });
+});
+
+describe('filterSmokeSessions（T-1041 smoke 隔离会话树过滤）', () => {
+  const sessions = [
+    { id: 'a', workspace: '人才发展' },
+    { id: 'b', workspace: '人才发展', smoke: true },   // smoke/ 隔离区行
+    { id: 'c', workspace: 'smoke', smoke: true },
+  ] as any[];
+
+  it('默认隐藏 smoke 行，普通行原样保留', () => {
+    expect(filterSmokeSessions(sessions, false).map(s => s.id)).toEqual(['a']);
+  });
+
+  it('开关打开（批量模式内）原样放行', () => {
+    expect(filterSmokeSessions(sessions, true)).toHaveLength(3);
+  });
+
+  it('无 smoke 行时过滤为恒等', () => {
+    const plain = [{ id: 'x' }] as any[];
+    expect(filterSmokeSessions(plain, false)).toEqual(plain);
   });
 });

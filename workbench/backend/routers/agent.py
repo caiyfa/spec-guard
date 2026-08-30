@@ -694,6 +694,10 @@ def _list_sessions_in_dir(base_dir: Path, workspace: str = "") -> list[dict]:
             if sub.is_dir() and not sub.name.startswith("_") and not sub.name.startswith("."):
                 ws_sm = SessionManager(base_dir, workspace=sub.name)
                 for s in ws_sm.list_sessions():
+                    # T-1041：smoke/ 是冒烟会话隔离区（验收/调试产物）——行打 smoke 标，
+                    # 前端会话树默认过滤，批量操作内开关查看（展示后才可批量清理）
+                    if sub.name == "smoke":
+                        s["smoke"] = True
                     sessions.append(s)
     return sessions
 

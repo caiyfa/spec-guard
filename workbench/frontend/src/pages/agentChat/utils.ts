@@ -113,6 +113,13 @@ export function filterMenuSessions<T extends { purpose?: string }>(sessions: T[]
     || (!(s as any).purpose && fixedPurpose === 'test_workbench'));
 }
 
+/** T-1041：smoke 隔离会话树过滤——smoke/ 是验收/调试冒烟会话隔离区，默认从会话树
+ * 隐藏；仅批量模式内「🧪 smoke」开关打开（show=true）时放行，供批量勾选归档清理。 */
+export function filterSmokeSessions<T extends { smoke?: boolean }>(sessions: T[], show: boolean): T[] {
+  if (show) return sessions;
+  return sessions.filter(s => !s.smoke);
+}
+
 // ── T-1039：对话双菜单（测试=/agent · 产品=/agent-product）路由与存储键派生 ──
 
 /** 会话用途 → 归属菜单路由。产品用途归 /agent-product；测试/未知/辅助用途回落 /agent
