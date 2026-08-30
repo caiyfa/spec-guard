@@ -6,9 +6,23 @@ const v = (name) => `rgb(var(${name}) / <alpha-value>)`;
 
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  darkMode: 'class',
+  // T-1044：删除 darkMode:'class' 死配置（实际机制是 html[data-theme] CSS 变量，见 themes.css）
   theme: {
     extend: {
+      // T-1044 U0：字号五档语义阶梯（方案 §3.1）——散点 text-[Npx] 全量归档，ratchet 闸禁新增
+      fontSize: {
+        'fs-micro': ['9px', { lineHeight: '1.4' }],    // 徽标计数、极辅助标注
+        'fs-aux': ['10.5px', { lineHeight: '1.5' }],   // 辅助信息、证据行、表头
+        'fs-body': ['12px', { lineHeight: '1.6' }],    // 正文/列表/按钮主力
+        'fs-lead': ['13px', { lineHeight: '1.65' }],   // 段落正文、强调读文
+        'fs-title': ['15px', { lineHeight: '1.4' }],   // 页面标题/卡标题
+      },
+      // T-1044 U0（B·Paper 语言）：字体族 token——display=衬线（页面标题/阅读模式），
+      // body 走默认 font-sans；mono 供 ID/日志/代码
+      fontFamily: {
+        display: ['Georgia', 'Times New Roman', 'Songti SC', 'SimSun', 'serif'],
+        mono: ['ui-monospace', 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', 'monospace'],
+      },
       colors: {
         surface: { DEFAULT: v('--surface-1'), 1: v('--surface-1'), 2: v('--surface-2'), 3: v('--surface-3') },
         border: v('--border'),

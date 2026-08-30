@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* K-043：四主题变量引擎在 src/styles/themes.css，由 main.tsx 直接 import（postcss 无 import 插件，@import 无效） */
+/* K-043：五主题变量引擎在 src/styles/themes.css，由 main.tsx 直接 import（postcss 无 import 插件，@import 无效） */
 
 body {
   @apply bg-surface text-gray-200 font-sans antialiased;

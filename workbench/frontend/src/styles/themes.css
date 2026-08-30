@@ -1,5 +1,5 @@
 /**
- * themes.css — K-043 四主题 CSS 变量引擎
+ * themes.css — K-043 五主题 CSS 变量引擎
  *
  * 所有颜色走变量（RGB 三元组，tailwind 以 rgb(var(--x) / <alpha-value>) 引用，
  * 支持 /透明度 修饰）。切换主题 = <html data-theme="xxx">，全站零组件改动。
