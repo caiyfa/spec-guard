@@ -199,6 +199,7 @@ pwsh new-worktree.ps1 <功能域>                # 建树 + 自动同步主库�
 pwsh start-workbench.ps1                  # 本地开发（后端 :9100 默认无热重载 + 前端 :5173，依赖自检，幂等）
 pwsh start-workbench.ps1 -NoBrowser       # 同上，不自动开浏览器
 pwsh start-workbench.ps1 -Reload          # 显式开启后端热重载（改代码自动重启，WS 聊天会断连重连）
+pwsh start-workbench.ps1 -ListenAll       # 后端绑定 0.0.0.0，局域网同事经 http://<本机IP>:9100 试用（mock 认证仅内网可信环境）
 pwsh serve-prod.ps1                       # 生产部署（前端构建 + 单端口 :9100 UAC SSO，workers=1 不可改）
 cd workbench/backend && uvicorn main:app --reload --ws-ping-interval 30 --ws-ping-timeout 120 --port 9100   # 后端单独（仅调试用，聊天 WS 会断连）
 cd workbench/frontend && npm install && npm run dev             # 前端单独（:5173）

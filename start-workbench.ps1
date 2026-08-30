@@ -29,18 +29,24 @@
 .PARAMETER Stats
     只显示启动历史统计（不启动服务）
 
+.PARAMETER ListenAll
+    后端绑定 0.0.0.0：局域网同事可通过 http://<本机IP>:9100 访问完整工作台（9100 托管 dist；
+    5173 vite dev 仍仅本机）。⚠ mock 认证下任何人可用任意工号登录（含 admin），仅在内网可信环境使用。
+
 .EXAMPLE
     pwsh start-workbench.ps1
     pwsh start-workbench.ps1 -NoBrowser
     pwsh start-workbench.ps1 -Reload   # 开启后端热重载（改代码自动重启，聊天会断连）
     pwsh start-workbench.ps1 -BackendOnly   # 只重启后端（改 Python 代码后推荐；页面不刷新）
+    pwsh start-workbench.ps1 -ListenAll     # 局域网同事可通过 http://<本机IP>:9100 试用
     pwsh start-workbench.ps1 -Stats
 #>
 param(
     [switch]$Reload,
     [switch]$NoBrowser,
     [switch]$BackendOnly,
-    [switch]$Stats
+    [switch]$Stats,
+    [switch]$ListenAll
 )
 
 $ErrorActionPreference = 'Stop'
@@ -239,6 +245,17 @@ if (Test-Port 9100) {
 }
 
 $authMode = if ($env:SG_AUTH_MODE) { $env:SG_AUTH_MODE } else { 'mock' }
+# -ListenAll：0.0.0.0 全接口监听（局域网同事可访问 9100）；默认 127.0.0.1 仅本机
+$bindHost = if ($ListenAll) { '0.0.0.0' } else { '127.0.0.1' }
+$lanIps = @()
+if ($ListenAll) {
+    $lanIps = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.InterfaceAlias -notmatch 'Loopback|vEthernet|VMware|VirtualBox' } |
+        Select-Object -ExpandProperty IPAddress -Unique)
+    if ($authMode -eq 'mock') {
+        Write-Host "[警告] 0.0.0.0 + mock 认证：局域网内任何人可用任意工号登录（含你的工号/admin），仅在内网可信环境、试用期间使用" -ForegroundColor Yellow
+    }
+}
 $backendOut = Join-Path $LogDir 'backend.log'
 $backendErr = Join-Path $LogDir 'backend.err.log'
 # 热重载：默认关闭（改文件不重启后端，WS 聊天不断连）；-Reload 显式开启
@@ -248,10 +265,10 @@ if ($Reload) {
 }
 # WS ping 超时调大到 120s（默认 20s），LLM 生成长回复期间不因协议层 ping timeout 断连
 $wsPingArgs = ' --ws-ping-interval 30 --ws-ping-timeout 120'
-Write-Host "[启动] 后端 FastAPI  http://127.0.0.1:9100  (SG_AUTH_MODE=$authMode, reload=$(if ($Reload) { 'ON' } else { 'OFF' }), ws-ping-timeout=120s, 后台隐藏进程)" -ForegroundColor Green
+Write-Host "[启动] 后端 FastAPI  http://${bindHost}:9100  (SG_AUTH_MODE=$authMode, reload=$(if ($Reload) { 'ON' } else { 'OFF' }), ws-ping-timeout=120s, 后台隐藏进程)" -ForegroundColor Green
 $backendProc = Start-Process pwsh -ArgumentList @(
     '-NoProfile', '-Command',
-    "Set-Location '$BackendDir'; if (-not `$env:SG_AUTH_MODE) { `$env:SG_AUTH_MODE = '$authMode' }; python -m uvicorn main:app$reloadArgs$wsPingArgs --host 127.0.0.1 --port 9100"
+    "Set-Location '$BackendDir'; if (-not `$env:SG_AUTH_MODE) { `$env:SG_AUTH_MODE = '$authMode' }; python -m uvicorn main:app$reloadArgs$wsPingArgs --host $bindHost --port 9100"
 ) -WindowStyle Hidden -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru
 
 # ── 前端（Vite :5173，-BackendOnly 跳过：不动 Vite 就不会触发浏览器页面强制 reload）──
@@ -323,6 +340,15 @@ $record = [ordered]@{
 if ($ready) {
     Write-Host "启动完成 ✅（第 $($startHistory.Count + 1) 次启动）" -ForegroundColor Green
     Write-Host "  前端工作台:  http://127.0.0.1:9100  （dist 构建产物，源码改动自动重建）"
+    if ($ListenAll) {
+        foreach ($ip in $lanIps) {
+            Write-Host "  局域网访问:  http://${ip}:9100  （同事试用入口，dist 完整工作台）" -ForegroundColor Cyan
+        }
+        if ($lanIps.Count -eq 0) {
+            Write-Host "  局域网访问:  未检测到 LAN IPv4，请用 ipconfig 确认本机 IP 后告知同事" -ForegroundColor Yellow
+        }
+        Write-Host "  防火墙提示:  首次绑定 0.0.0.0 如弹 Windows 防火墙请选择允许；同事仍不通时手动放行 9100 入站" -ForegroundColor DarkGray
+    }
     Write-Host "  dev 热更新:   http://127.0.0.1:5173  （vite dev，改前端源码即时生效）"
     if ($Reload) {
         Write-Host "  后端 API:    http://127.0.0.1:9100/docs  （热重载 ON：改后端代码自动重载，WS 聊天会断连重连）" -ForegroundColor Yellow
