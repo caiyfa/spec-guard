@@ -17,7 +17,8 @@
     "todo_write",
     "topic",
     "gate_dock_status",
-    "parent"
+    "parent",
+    "flow"
   ],
   "stages": [
     {

@@ -180,6 +180,42 @@ def test_extras_listed_and_benign_excluded(tmp_path):
     assert trace.deviations == []
 
 
+def test_flow_selfcheck_excluded_as_benign(tmp_path):
+    """flow 自检是设计内观察行为（技能 v1.2.0 明示引导），benign 剔除不进旁支。"""
+    rows = _golden_rows("selfcheck")
+    rows += [
+        _asst("s1", "flow", {"action": "status"}), _tool("s1", "[flow 自检] …"),
+        _asst("s2", "flow", {"action": "status"}), _tool("s2", "[flow 自检] …"),
+    ]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "selfcheck.jsonl", rows)))
+    assert trace.extras == [], f"flow 自检不应进计划外旁支: {trace.extras}"
+    assert trace.deviations == []
+
+
+def test_build_flow_check_immune_to_benign_new_tool(tmp_path):
+    """--check 对 benign 新工具免疫（自检类元工具不进阶段、不算漂移）。"""
+    from evals.build_flow import build_flow
+
+    skill = tmp_path / "skill.md"
+    skill.write_text(
+        "---\nname: t\nversion: 1.0.0\n"
+        "depends_tools: [spec(action=read), flow(action=status)]\n---\n正文\n",
+        encoding="utf-8")
+    flow_json = tmp_path / "t.flow.json"
+    base = {"id": "t", "title": "t", "hard_order": [], "benign_bases": ["flow"],
+            "stages": [{"key": "read_requirement", "label": "读需求",
+                        "tools": ["spec(action=read)"], "required": True}]}
+    flow_json.write_text(json.dumps(base, ensure_ascii=False), encoding="utf-8")
+    # 免疫：flow 基名在 benign_bases → 不漂移、不追加阶段
+    assert build_flow(skill, flow_json, check=True) == 0
+    after = json.loads(flow_json.read_text(encoding="utf-8"))
+    assert [s["key"] for s in after["stages"]] == ["read_requirement"]
+    # 非空转对照：benign 摘除 flow → 同一技能报漂移
+    base["benign_bases"] = []
+    flow_json.write_text(json.dumps(base, ensure_ascii=False), encoding="utf-8")
+    assert build_flow(skill, flow_json, check=True) == 1
+
+
 def test_promote_maps_to_stage_not_extra(tmp_path):
     rows = _golden_rows("promo")
     rows += [_asst("p", "promote_draft"), _tool("p", "入库成功")]

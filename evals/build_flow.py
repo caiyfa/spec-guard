@@ -119,15 +119,21 @@ def build_flow(skill_path: str | Path, out_path: str | Path, check: bool = False
 
     # 1) 技能工具 → 路由进既有阶段（按 ACTION_STAGE_MAP：精确 (基名,action) 命中，
     #    回退 (基名,"") 基名键——info_pack 等按基名登记的阶段）；归不进的追加新阶段。
+    #    豁免：基名在 flow 定义 benign_bases 的元工具（自检 flow/待办 todo_write 等）
+    #    不进阶段、不算漂移——它们是观察/辅助行为，不是流程节点。
     #    语义：depends_tools 只做「增量补充」——绝不摘除既有候选。flow 是 depends
     #    的超集（权限/DAG/试跑/promote 等阶段本就不在 depends_tools，旧会话
     #    legacy 候选也必须保留供重放）；「flow 有而 skill 无」降为 INFO 提示人工复核。
+    benign = {str(b) for b in existing.get("benign_bases", [])}
     routed: dict[str, list] = {}
     for orig in dep_tools:
         unit = normalize_tool_unit(orig)
         stage_key = ACTION_STAGE_MAP.get(unit) or ACTION_STAGE_MAP.get((unit[0], ""))
         if stage_key and stage_key in key_set:
             routed.setdefault(stage_key, []).append(orig)
+        elif unit[0] in benign:
+            notes.append(f"技能工具 {orig!r} 是 benign 元工具（基名 {unit[0]} 在 benign_bases）"
+                         f"——自检/辅助行为不进阶段，非漂移")
         else:
             new_key = f"new_{unit[0]}_{unit[1] or 'x'}"
             drift.append(f"技能新工具 {orig!r} 无法路由到既有阶段（基名 {unit[0]}）"
@@ -206,7 +212,7 @@ def _no_existing_flow(skill: dict, skill_path: str | Path, dep_tools: list, out:
         "source": f"{skill_path} v{skill['version']}",
         "rebuild": "python evals/build_flow.py --skill <技能文件>",
         "hard_order": [],
-        "benign_bases": ["todo_write", "topic", "gate_dock_status", "parent"],
+        "benign_bases": ["todo_write", "topic", "gate_dock_status", "parent", "flow"],
         "stages": stages,
         "_meta": {"rebuilt_at": datetime.now().isoformat(timespec="seconds"),
                   "skill": str(skill_path), "skill_version": skill["version"],

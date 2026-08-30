@@ -115,7 +115,7 @@ def _builtin_flow_def() -> FlowDef:
                       "用户明确确认后；自带三闸"),
         ),
         hard_order=(("read_requirement", "write_draft"), ("validate", "write_draft")),
-        benign_bases=frozenset({"todo_write", "topic", "gate_dock_status", "parent"}),
+        benign_bases=frozenset({"todo_write", "topic", "gate_dock_status", "parent", "flow"}),
     )
 
 
@@ -369,7 +369,7 @@ def render_trace_markdown(trace: FlowTrace) -> str:
         lines.append(f"- {'、'.join(trace.extras)}")
         lines.append("")
         lines.append("> 旁支不等于违规（排查/执行类工具常合理出现），但对照 flow 图可见精力去向；"
-                     "benign 元工具（todo_write/topic/gate_dock_status/parent）已剔除。")
+                     "benign 元工具（flow 定义 benign_bases：自检/待办/话题等）已剔除。")
     else:
         lines.append("- （无——全部调用都落在基线阶段内）")
     lines.append("")
