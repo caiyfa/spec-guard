@@ -30,6 +30,9 @@ def build_flow_trace(rows: list, session_id: str = "") -> dict:
     except Exception as e:  # 路径重放自身异常 → 降级不炸
         return {"available": False, "reason": f"路径重放执行失败: {e}"}
 
+    by_key = {s.key: s for s in trace.stages}
+    cur = by_key.get(trace.current_key)
+
     return {
         "available": True,
         "session_id": trace.session_id,
@@ -41,15 +44,21 @@ def build_flow_trace(rows: list, session_id: str = "") -> dict:
         "total_tokens": trace.total_tokens,
         "purpose": trace.purpose,
         "workspace": trace.workspace,
+        "current_stage": ({"key": cur.key, "label": cur.label, "first_step": cur.first_step}
+                          if cur else None),
         "stages": [
             {"key": s.key, "label": s.label, "required": s.required, "status": s.status,
-             "first_step": s.first_step, "times": s.times, "tools": s.tools, "note": s.note}
+             "first_step": s.first_step, "times": s.times, "tools": s.tools, "note": s.note,
+             "fails": s.fails}
             for s in trace.stages
         ],
         "deviations": list(trace.deviations),
         "extras": list(trace.extras),
         "n_missing": trace.n_missing,
         "n_out_of_order": trace.n_out_of_order,
-        "mermaid": render_flow_mermaid(trace),  # 图形视图（前端 MermaidBlock 主题跟随渲染）
+        "mermaid": render_flow_mermaid(trace),  # 全图（前端 MermaidBlock 主题跟随渲染）
+        # 聚焦图：当前阶段±邻域展开、其余折叠——「正在做什么」一眼可见
+        "mermaid_focused": (render_flow_mermaid(trace, focus_key=trace.current_key)
+                            if trace.current_key else None),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }

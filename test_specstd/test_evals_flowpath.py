@@ -306,6 +306,40 @@ def test_legacy_def_without_topology_linear_fallback():
     assert [(e.from_key, e.to_key, e.kind) for e in topo] == [("a", "b", "main")]
 
 
+# ── 聚焦视图：当前阶段锚点 / 折叠占位 / 问题不折 ─────────────────────────────
+
+def test_current_key_is_last_call_stage(tmp_path):
+    rows = _golden_rows("cur")
+    trace = trace_session(_write_session(tmp_path / "cur.jsonl", rows))
+    assert trace.current_key == "write_draft"  # 最后落盘调用=写草稿
+
+
+def test_focus_subgraph_folds_others_keeps_problems(tmp_path):
+    """聚焦子图：当前阶段严格 1 跳邻域展开、其余按前后两段折叠；问题阶段（⚠fail）不折叠。"""
+    calls = [("knowledge", {}, "ok"), ("spec", {"action": "read"}, "ok"),
+             ("scenario", {"action": "next_id"}, "ok"), ("query_registry", {}, "ok"),
+             ("scenario", {"action": "list"}, "ok"),
+             ("validate", {}, "fail"), ("validate", {}, "ok"),
+             ("draft", {"action": "write"}, "ok")]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "f.jsonl", _rows_with_verdicts("f", calls))))
+    mm = render_flow_mermaid(trace, focus_key=trace.current_key)
+    # 当前阶段提权描边
+    assert "class S9 current" in mm
+    # focus（写草稿 S9）+ 问题（validate S8）+ 1 跳邻域（读需求/取ID/权限/DAG/依赖建议）可见
+    for frag in ('"9. 写草稿', '"8. validate 校验', '"2. 读需求', '"10. 依赖建议', "⚠1"):
+        assert frag in mm, frag
+    # 上游取技能正文折入「已走」、下游试跑/入库折入「后续」
+    assert "▸ 已走 3 阶段" in mm
+    assert "▸ 后续 2 阶段" in mm
+    assert '"1. 取技能正文' not in mm
+    assert '"11. 试跑/归因' not in mm
+    # 折叠占位不参与边（无 SB-->/SA--> 连线）
+    assert "SB -->" not in mm and "--> SB" not in mm
+    # 全图模式不受影响（focus_key=None 12 阶段全在）
+    full = render_flow_mermaid(trace)
+    assert '"11. 试跑/归因' in full and '"1. 取技能正文' in full
+
+
 def test_promote_maps_to_stage_not_extra(tmp_path):
     rows = _golden_rows("promo")
     rows += [_asst("p", "promote_draft"), _tool("p", "入库成功")]

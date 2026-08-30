@@ -11,6 +11,7 @@ export interface FlowTraceStage {
   times: number;
   tools: string[];
   note: string;
+  fails?: number;   // 问题调用次数（⚠N 角标，定位错误节点清单来源）
 }
 export interface FlowTraceResult {
   available: boolean;
@@ -24,12 +25,14 @@ export interface FlowTraceResult {
   total_tokens?: number;
   purpose?: string;
   workspace?: string;
+  current_stage?: { key: string; label: string; first_step: number | null } | null;
   stages?: FlowTraceStage[];
   deviations?: string[];
   extras?: string[];
   n_missing?: number;
   n_out_of_order?: number;
   mermaid?: string;
+  mermaid_focused?: string | null;   // 聚焦子图（当前阶段±邻域，其余折叠）
   generated_at?: string;
   owner?: string;
   resolved_workspace?: string;

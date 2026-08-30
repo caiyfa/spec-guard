@@ -87,6 +87,11 @@ class TestFlowTraceEndpoint:
         st_map = {s["key"]: s for s in r["stages"]}
         assert st_map["read_requirement"]["first_step"] == 1
         assert st_map["write_draft"]["first_step"] == 3
+        # 聚焦视图字段：当前阶段（最后落盘调用）+ 聚焦子图 + 问题调用计数透出
+        assert r["current_stage"]["key"] == "write_draft"
+        assert r["current_stage"]["label"] == "写草稿"
+        assert r["mermaid_focused"] and "class S9 current" in r["mermaid_focused"]
+        assert "fails" in st_map["write_draft"]
 
     def test_missing_session_404(self, routed):
         agent_mod, emp_dir = routed

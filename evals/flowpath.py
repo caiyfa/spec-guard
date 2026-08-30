@@ -294,6 +294,7 @@ class FlowTrace:
     # 历程边热力：(from_stage, to_stage) → 经过次数（按「命中阶段序列」相邻对推导，
     # 旁支/benign 调用不占位；自环=连续命中同阶段，即重试/修复轮次）
     edge_hits: dict = field(default_factory=dict)
+    current_key: str = ""          # 当前阶段=最后一次落盘调用所属阶段（聚焦视图的锚点）
 
     @property
     def n_missing(self) -> int:
@@ -385,6 +386,7 @@ def trace_scan(scan: SessionScan, flow: FlowDef | None = None) -> FlowTrace:
         flow_title=defn.title,
         flow_source=defn.source,
         edge_hits=edge_hits,
+        current_key=prev_key or "",
     )
 
 
@@ -419,6 +421,41 @@ _CLS_WARN = "fill:#f0b42926,stroke:#f0b429,stroke-width:2px"
 _CLS_MISSING = "fill:#eb57572b,stroke:#eb5757,stroke-width:2px"
 _CLS_SKIP = "fill:#94a3b81a,stroke:#94a3b8,stroke-width:1.2px,stroke-dasharray:4 4"
 _CLS_GATE = "fill:transparent,stroke:#94a3b8,stroke-width:1.2px"
+_CLS_CURRENT = "stroke:#58a6ff,stroke-width:3px"   # 当前阶段锚点（fill 沿用四态，描边提权）
+_CLS_FOLDED = "fill:transparent,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:2 3,opacity:0.7"
+
+
+def _focus_visible(defn: FlowDef, trace: FlowTrace, focus_key: str) -> set[str]:
+    """聚焦可见集：当前阶段 + 问题阶段（⚠fail/乱序/缺失必需——永不折叠）+ 拓扑严格 1 跳邻域
+    （以种子快照计算，不级联）+ 交互门（条件语义锚点全保留）+ hard_order 约束端点补全。"""
+    seed = {focus_key}
+    for s in trace.stages:
+        if s.fails > 0 or s.status == "out_of_order" or (s.status == "missing" and s.required):
+            seed.add(s.key)
+    visible = set(seed)
+    for e in defn.topology:
+        if e.from_key in seed:
+            visible.add(e.to_key)
+        if e.to_key in seed:
+            visible.add(e.from_key)
+    for g in defn.gates:
+        visible.add(g.key)
+    for a, b in defn.hard_order:
+        if a in visible or b in visible:
+            visible.add(a)
+            visible.add(b)
+    return visible
+
+
+def _fold_placeholders(defn: FlowDef, focus_key: str, visible: set[str]) -> tuple[list[str], list[str]]:
+    """被折阶段按「相对当前的阶段序前/后」分两段聚合（返回 before/after 的 key 列表）。"""
+    keys = [st.key for st in defn.stages]
+    if focus_key not in keys:
+        return [], []
+    fidx = keys.index(focus_key)
+    before = [k for k in keys[:fidx] if k not in visible]
+    after = [k for k in keys[fidx + 1:] if k not in visible]
+    return before, after
 
 
 def _hits_on_topology(edge_hits: dict, defn: FlowDef) -> tuple[dict, dict]:
@@ -456,8 +493,13 @@ def _hits_on_topology(edge_hits: dict, defn: FlowDef) -> tuple[dict, dict]:
 
 def _render_edges(defn: FlowDef, node_id: dict[str, str], gate_id: dict[str, str],
                   topo_hits: dict, wild: dict,
-                  violated: set[tuple[str, str]] | None = None) -> list[str]:
-    """拓扑边 + 野跳边 + hard_order 约束边 + linkStyle 行（mermaid 边索引按声明序）。"""
+                  violated: set[tuple[str, str]] | None = None,
+                  visible: set[str] | None = None,
+                  ) -> list[str]:
+    """拓扑边 + 野跳边 + hard_order 约束边 + linkStyle 行（mermaid 边索引按声明序）。
+
+    visible 给定（聚焦模式）时：一端被折的边不画（占位节点仅作「收起 N 阶段」提示牌）。
+    """
     violated = violated or set()
 
     def nid(k: str) -> str:
@@ -469,10 +511,12 @@ def _render_edges(defn: FlowDef, node_id: dict[str, str], gate_id: dict[str, str
         n = topo_hits.get((e.from_key, e.to_key), 0)
         label = " ".join(p for p in (e.label, f"×{n}" if n else "") if p)
         arrow = "-.->" if e.kind == "loop" else "-->"
+        if visible is not None and (e.from_key not in visible or e.to_key not in visible):
+            continue  # 聚焦态：一端被折即不画（占位节点仅作「收起 N 阶段」提示牌，不参与边）
         if label:
             lines.append(f'    {nid(e.from_key)} {arrow}|"{label}"| {nid(e.to_key)}')
         else:
-            lines.append(f"    {nid(e.from_key)} {arrow} {nid(e.to_key)}")
+            lines.append(f'    {nid(e.from_key)} {arrow} {nid(e.to_key)}')
         if n:
             styles.append("stroke-width:2.4px")
         elif e.kind == "loop":
@@ -480,8 +524,10 @@ def _render_edges(defn: FlowDef, node_id: dict[str, str], gate_id: dict[str, str
         else:
             styles.append("stroke-width:1px,opacity:0.5")
     # 野跳：历程里不在拓扑定义的相邻对——旁逸信号（琥珀虚线，退为背景纹理；
-    # 高频野跳（≥2 次）才加粗提权，视觉主角留给主干经过边）
+    # 高频野跳（≥2 次）才加粗提权，视觉主角留给主干经过边；聚焦态只画可见间）
     for (a, b), n in sorted(wild.items()):
+        if visible is not None and (a not in visible or b not in visible):
+            continue
         lines.append(f'    {nid(a)} -.->|"×{n}"| {nid(b)}')
         if n >= 2:
             styles.append("stroke:#f0b429,stroke-width:2px,stroke-dasharray:4 3,opacity:0.9")
@@ -500,17 +546,25 @@ def _render_edges(defn: FlowDef, node_id: dict[str, str], gate_id: dict[str, str
     return lines
 
 
-def render_flow_mermaid(trace: FlowTrace, defn: FlowDef | None = None) -> str:
+def render_flow_mermaid(trace: FlowTrace, defn: FlowDef | None = None,
+                        focus_key: str | None = None) -> str:
     """把重放结果叠加到 golden flow 条件拓扑（网状：主路+条件分支+回边+交互门）。
 
     节点两行徽章（四态描边+fail 角标），边带历程热力（×N 经过次数，经过加粗），
     野跳边=历程旁逸（琥珀虚线），hard_order 前置约束显式成边（违例红）。
+    focus_key 给定（聚焦模式）：只展开「当前阶段+问题阶段+拓扑邻域+门+约束端点」，
+    其余阶段按前/后两段折叠为占位节点（已走 N 阶段/后续 M 阶段），当前阶段加
+    current 提权描边——图大时聚焦「正在做什么」，问题节点永不折叠。
     """
     defn = defn or FLOW_DEF
     cls = {"in_order": "hit", "out_of_order": "warn", "missing": "missing", "skipped": "skip"}
     node_id = {st.key: f"S{i}" for i, st in enumerate(defn.stages, start=1)}
     gate_id = {g.key: f"G{i}" for i, g in enumerate(defn.gates, start=1)}
     by_key = {s.key: s for s in trace.stages}
+    if focus_key and focus_key not in node_id:
+        focus_key = None
+    visible = _focus_visible(defn, trace, focus_key) if focus_key else None
+    before, after = (_fold_placeholders(defn, focus_key, visible) if visible else ([], []))
 
     def _evidence(s: StageState) -> str:
         if s.status == "missing":
@@ -536,18 +590,28 @@ def render_flow_mermaid(trace: FlowTrace, defn: FlowDef | None = None) -> str:
     topo_hits, wild = _hits_on_topology(trace.edge_hits, defn)
     lines = [_MERMAID_INIT, "flowchart TD"]
     for st in defn.stages:
+        if visible is not None and st.key not in visible:
+            continue  # 聚焦折叠（占位节点统一表达）
         s = by_key[st.key]
         num = node_id[st.key][1:]
         lines.append(f'    {node_id[st.key]}("{num}. {st.label}<br/>{_evidence(s)}"):::{cls[s.status]}')
+    if before:
+        lines.append(f'    SB("▸ 已走 {len(before)} 阶段"):::folded')
+    if after:
+        lines.append(f'    SA("▸ 后续 {len(after)} 阶段"):::folded')
     for g in defn.gates:
         lines.append(f'    {gate_id[g.key]}{{"{g.label}"}}:::gate')
-    lines += _render_edges(defn, node_id, gate_id, topo_hits, wild, violated)
+    lines += _render_edges(defn, node_id, gate_id, topo_hits, wild, violated, visible)
+    if focus_key:
+        lines.append(f"    class {node_id[focus_key]} current")
     lines += [
         f"    classDef hit {_CLS_HIT}",
         f"    classDef warn {_CLS_WARN}",
         f"    classDef missing {_CLS_MISSING}",
         f"    classDef skip {_CLS_SKIP}",
         f"    classDef gate {_CLS_GATE}",
+        f"    classDef current {_CLS_CURRENT}",
+        f"    classDef folded {_CLS_FOLDED}",
     ]
     return "\n".join(lines)
 
