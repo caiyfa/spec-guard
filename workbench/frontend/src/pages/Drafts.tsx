@@ -13,6 +13,9 @@ import ScenarioFormEditor from '../components/ScenarioFormEditor';
 import { TrialRunDetailModal } from '../components/TrialRunDetailModal';
 import { CopyButton } from './agentChat/MessageWithToolbar';
 import { buildTrialErrorText } from '../utils/trialError';
+import Modal from '../components/Modal';
+import { Button } from '../components/ui/Button';
+import { DraftGateBadges } from './DraftGateBadges';
 
 /** verdict 配色（PASS/FAIL/SKIP/BLOCKED） */
 const VERDICT_STYLE: Record<string, string> = {
@@ -48,6 +51,12 @@ export default function Drafts() {
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [upstreamVars, setUpstreamVars] = useState<UpstreamVar[]>([]);
   const [allScenarios, setAllScenarios] = useState<{ id: string; title: string }[]>([]);
+  // T-1044 U2：window.confirm ×4 → 统一 Modal 确认弹层（试跑/入库/废弃/驳回）
+  const [confirmAsk, setConfirmAsk] = useState<{
+    title: string; body: string; danger?: boolean; yesLabel?: string; onYes: () => void;
+  } | null>(null);
+  const askConfirm = (title: string, body: string, onYes: () => void, danger = false, yesLabel = '确认') =>
+    setConfirmAsk({ title, body, onYes, danger, yesLabel });
 
   const refresh = useCallback(async () => {
     try {
@@ -167,9 +176,13 @@ export default function Drafts() {
   };
 
   /** K-046：草稿试跑（未入库先验证，与 Agent run_scenario 同一语义） */
-  const handleTrialRun = async () => {
+  const handleTrialRun = () => {
     if (!selected) return;
-    if (!window.confirm(`试跑将真实调用目标环境（按依赖闭包执行，会产生真实测试数据）。\n确认试跑 ${selectedScenarioId || selected}？`)) return;
+    askConfirm('确认试跑',
+      `试跑将真实调用目标环境（按依赖闭包执行，会产生真实测试数据）。\n确认试跑 ${selectedScenarioId || selected}？`,
+      doTrialRun, false, '试跑');
+  };
+  const doTrialRun = async () => {
     setBusy('trial');
     setMessage(null);
     setTrialResult(null);
@@ -183,7 +196,7 @@ export default function Drafts() {
     }
   };
 
-  const handlePromote = async () => {
+  const handlePromote = () => {
     if (!selected) return;
     // K-017：模块目录后端自动创建；「新建模块…」选项时使用手动输入的路径
     const effectiveModule = targetModule === '__new__' ? customModule.trim() : targetModule;
@@ -191,7 +204,11 @@ export default function Drafts() {
       setMessage({ ok: false, text: '❌ 请选择入库模块，或选择「新建模块…」输入新模块路径' });
       return;
     }
-    if (!window.confirm(`确认将 ${selected} 入库到 scenarios/${effectiveModule}/？\n将依次执行：格式校验 → 更新契约基线 → 发布门禁（失败自动回滚）${replace ? '\n（已勾选覆盖同名场景，原文件自动备份）' : ''}`)) return;
+    askConfirm('确认入库',
+      `确认将 ${selected} 入库到 scenarios/${effectiveModule}/？\n将依次执行：格式校验 → 更新契约基线 → 发布门禁（失败自动回滚）${replace ? '\n（已勾选覆盖同名场景，原文件自动备份）' : ''}`,
+      () => doPromote(effectiveModule), false, '入库');
+  };
+  const doPromote = async (effectiveModule: string) => {
     setBusy('promote');
     setMessage(null);
     try {
@@ -211,9 +228,11 @@ export default function Drafts() {
     }
   };
 
-  const handleDiscard = async () => {
+  const handleDiscard = () => {
     if (!selected) return;
-    if (!window.confirm(`确认废弃 ${selected}？（移入 drafts/_trash/，可人工恢复）`)) return;
+    askConfirm('确认废弃', `确认废弃 ${selected}？（移入 drafts/_trash/，可人工恢复）`, doDiscard, true, '废弃');
+  };
+  const doDiscard = async () => {
     setBusy('discard');
     setMessage(null);
     try {
@@ -231,9 +250,16 @@ export default function Drafts() {
   };
 
   // T-061：第①闸人工评审（人拍板，留痕 reviewer+ts）
-  const handleReview = async (decision: 'approved' | 'rejected') => {
+  const handleReview = (decision: 'approved' | 'rejected') => {
     if (!selected) return;
-    if (decision === 'rejected' && !window.confirm(`确认驳回 ${selected}？（第②闸校验通过前评审通过会被拒绝）`)) return;
+    if (decision === 'rejected') {
+      askConfirm('确认驳回', `确认驳回 ${selected}？（第②闸校验通过前评审通过会被拒绝）`,
+        () => doReview(decision), true, '驳回');
+      return;
+    }
+    doReview(decision);
+  };
+  const doReview = async (decision: 'approved' | 'rejected') => {
     setBusy('review');
     setMessage(null);
     try {
@@ -297,20 +323,12 @@ export default function Drafts() {
                 <div className="text-fs-aux text-gray-600 mt-0.5">
                   {d.modified}{d.author ? ` · ${d.author}` : ''}
                 </div>
-                {/* T-061：三闸状态徽章 */}
+                {/* T-061：三闸状态徽章（T-1044 U2：DraftGateBadges 唯一事实源，与操作栏同组） */}
                 {d.gates && (
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g1 === 'approved' ? 'bg-pass/12 text-pass' : d.gates.g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-warn/12 text-warn'}`}>
-                      ① {d.gates.g1 === 'approved' ? '已评审' : d.gates.g1 === 'rejected' ? '已驳回' : '待评审'}
-                    </span>
-                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g2 === 'pass' ? 'bg-pass/12 text-pass' : d.gates.g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
-                      ② {d.gates.g2 === 'pass' ? '校验✓' : d.gates.g2 === 'fail' ? '校验✗' : '待校验'}
-                    </span>
-                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g3 === 'pass' ? 'bg-pass/12 text-pass' : d.gates.g3 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
-                      ③ {d.gates.g3 === 'pass' ? '门禁✓' : d.gates.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
-                    </span>
+                    <DraftGateBadges gates={d.gates} size="sm" />
                     {d.source_delta && (
-                      <span className="text-fs-micro px-1 py-0.5 rounded bg-info/15 text-info/90" title="血缘挂链：来源 delta">
+                      <span className="text-fs-micro px-1.5 py-0.5 rounded-full bg-info/12 text-info" title="血缘挂链：来源 delta">
                         ← {d.source_delta}
                       </span>
                     )}
@@ -366,76 +384,75 @@ export default function Drafts() {
           </div>
         ) : (
           <>
-            {/* 操作栏 */}
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
-              {/* T-061：三闸状态卡（write 自动跑② → 人评审① → promote 跑③） */}
-              <div className="flex items-center gap-1 px-2 py-1 rounded bg-surface-2 border border-border text-fs-aux">
-                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g1 === 'approved' ? 'bg-pass/12 text-pass' : selectedDraft?.gates?.g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-warn/12 text-warn'}`}>
-                  ① {selectedDraft?.gates?.g1 === 'approved' ? '已评审' : selectedDraft?.gates?.g1 === 'rejected' ? '已驳回' : '待评审'}
-                </span>
-                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g2 === 'pass' ? 'bg-pass/12 text-pass' : selectedDraft?.gates?.g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
-                  ② {selectedDraft?.gates?.g2 === 'pass' ? '校验✓' : selectedDraft?.gates?.g2 === 'fail' ? '校验✗' : '待校验'}
-                </span>
-                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g3 === 'pass' ? 'bg-pass/12 text-pass' : selectedDraft?.gates?.g3 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
-                  ③ {selectedDraft?.gates?.g3 === 'pass' ? '门禁✓' : selectedDraft?.gates?.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
+            {/* 操作栏（T-1044 U2 P1：两行布局——行 1 三闸 StatusBadge 组 ·
+                行 2 操作区：入库唯一 primary 实心，其余 ghost，废弃/驳回 danger 统一软红） */}
+            <div className="mb-3 space-y-2">
+              {/* 行 1：三闸状态（T-061：write 自动跑② → 人评审① → promote 跑③） */}
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border">
+                <DraftGateBadges gates={selectedDraft?.gates} />
+              </div>
+              {/* 行 2：操作区 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button onClick={handleValidate} disabled={busy !== ''}>
+                  {busy === 'validate' ? '校验中…' : '② 格式校验'}
+                </Button>
+                {/* T-061：第①闸人工评审（人拍板） */}
+                <Button
+                  onClick={() => handleReview('approved')}
+                  disabled={busy !== ''}
+                  title="第①闸人工评审通过（gate2 未过时会被拒绝）；三闸全过才可入库"
+                >
+                  {busy === 'review' ? '评审中…' : '① 评审通过'}
+                </Button>
+                <Button variant="danger" onClick={() => handleReview('rejected')} disabled={busy !== ''}>
+                  驳回
+                </Button>
+                <Button
+                  onClick={handleTrialRun}
+                  disabled={busy !== ''}
+                  title="未入库先试跑：按依赖闭包真实执行（与 Agent run_scenario 同一语义）"
+                >
+                  {busy === 'trial' ? '试跑中…（联网执行，请稍候）' : '▶ 试跑'}
+                </Button>
+                <select
+                  value={targetModule}
+                  onChange={e => setTargetModule(e.target.value)}
+                  className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-fs-body text-gray-300"
+                >
+                  {modules.length === 0 && <option value="">（无已有模块）</option>}
+                  {modules.map(m => <option key={m} value={m}>{m}</option>)}
+                  <option value="__new__">＋ 新建模块…</option>
+                </select>
+                {targetModule === '__new__' && (
+                  <input
+                    value={customModule}
+                    onChange={e => setCustomModule(e.target.value)}
+                    placeholder="新模块路径（如 system-settings/tag-library）"
+                    className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-fs-body text-gray-300 w-56"
+                  />
+                )}
+                <label className="flex items-center gap-1.5 text-fs-body text-gray-400 cursor-pointer select-none"
+                  title="覆盖同名场景：原文件自动备份，任一步失败自动回滚（T-313）">
+                  <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} />
+                  覆盖同名场景
+                </label>
+                <span className="ml-auto flex items-center gap-2">
+                  <Button variant="danger" onClick={handleDiscard} disabled={busy !== ''}>
+                    废弃
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handlePromote}
+                    disabled={busy !== '' || (report !== null && report.verdict !== 'PASS')}
+                    title={report !== null && report.verdict !== 'PASS' ? '格式校验未通过，禁止入库' : ''}
+                  >
+                    {busy === 'promote' ? '入库中…' : '③ 三闸全过 · 入库'}
+                  </Button>
                 </span>
               </div>
-              <button
-                onClick={handleValidate}
-                disabled={busy !== ''}
-                className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-fs-lead hover:bg-surface-2 disabled:opacity-40"
-              >
-                {busy === 'validate' ? '校验中…' : '② 格式校验'}
-              </button>
-              {/* T-061：第①闸人工评审（人拍板） */}
-              <button
-                onClick={() => handleReview('approved')}
-                disabled={busy !== ''}
-                title="第①闸人工评审通过（gate2 未过时会被拒绝）；三闸全过才可入库"
-                className="px-3 py-1.5 bg-pass/12 text-pass rounded text-fs-lead hover:bg-pass/12 disabled:opacity-40"
-              >
-                {busy === 'review' ? '评审中…' : '① 评审通过'}
-              </button>
-              <button
-                onClick={() => handleReview('rejected')}
-                disabled={busy !== ''}
-                className="px-3 py-1.5 bg-fail/12 text-fail rounded text-fs-lead hover:bg-fail/12 disabled:opacity-40"
-              >
-                驳回
-              </button>
-              <button
-                onClick={handleTrialRun}
-                disabled={busy !== ''}
-                title="未入库先试跑：按依赖闭包真实执行（与 Agent run_scenario 同一语义）"
-                className="px-3 py-1.5 bg-warn/20 text-warn rounded text-fs-lead hover:bg-warn/30 disabled:opacity-40"
-              >
-                {busy === 'trial' ? '试跑中…（联网执行，请稍候）' : '▶ 试跑'}
-              </button>
-              <select
-                value={targetModule}
-                onChange={e => setTargetModule(e.target.value)}
-                className="bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300"
-              >
-                {modules.length === 0 && <option value="">（无已有模块）</option>}
-                {modules.map(m => <option key={m} value={m}>{m}</option>)}
-                <option value="__new__">＋ 新建模块…</option>
-              </select>
-              {targetModule === '__new__' && (
-                <input
-                  value={customModule}
-                  onChange={e => setCustomModule(e.target.value)}
-                  placeholder="新模块路径（如 system-settings/tag-library）"
-                  className="bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300 w-56"
-                />
-              )}
-              <label className="flex items-center gap-1.5 text-fs-lead text-gray-400 cursor-pointer select-none"
-                title="覆盖同名场景：原文件自动备份，任一步失败自动回滚（T-313）">
-                <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} />
-                覆盖同名场景
-              </label>
               {/* K-xxx：入库前冲突预检——草稿 ID 已存在于场景库时的可执行提示 */}
               {conflict?.existing && (
-                <div className="w-full text-fs-body rounded bg-warn/12 text-warn px-2 py-1.5 leading-relaxed">
+                <div className="text-fs-body rounded-lg bg-warn/12 text-warn px-2.5 py-1.5 leading-relaxed">
                   ⚠️ 场景 ID <span className="font-mono">{conflict.existing.id}</span> 已存在于
                   <span className="font-mono"> {conflict.existing.path}</span>
                   {conflict.existing.module === (targetModule === '__new__' ? customModule.trim() : targetModule)
@@ -443,21 +460,6 @@ export default function Drafts() {
                     : ' ——不在当前所选模块，请切换模块（更新）或改用 next_scenario_id 换新 ID（新增）'}
                 </div>
               )}
-              <button
-                onClick={handlePromote}
-                disabled={busy !== '' || (report !== null && report.verdict !== 'PASS')}
-                title={report !== null && report.verdict !== 'PASS' ? '格式校验未通过，禁止入库' : ''}
-                className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 disabled:opacity-40"
-              >
-                {busy === 'promote' ? '入库中…' : '③ 三闸全过 · 入库'}
-              </button>
-              <button
-                onClick={handleDiscard}
-                disabled={busy !== ''}
-                className="px-3 py-1.5 bg-fail/12 text-fail rounded text-fs-lead hover:bg-fail/12 disabled:opacity-40"
-              >
-                废弃
-              </button>
             </div>
 
             {/* A+B：依赖关系展示 */}
@@ -611,6 +613,25 @@ export default function Drafts() {
       {showTrialDetail && trialResult?.run_id && (
         <TrialRunDetailModal trial={trialResult} onClose={() => setShowTrialDetail(false)} />
       )}
+
+      {/* T-1044 U2：统一确认弹层（window.confirm ×4 → Modal，danger 动作用软红档） */}
+      <Modal open={!!confirmAsk} onClose={() => setConfirmAsk(null)} title={confirmAsk?.title} size="sm">
+        {confirmAsk && (
+          <div className="px-3.5 py-3">
+            <div className="text-fs-body text-gray-400 leading-6 whitespace-pre-line">{confirmAsk.body}</div>
+            <div className="flex justify-end gap-2 mt-3.5">
+              <Button size="sm" onClick={() => setConfirmAsk(null)}>取消</Button>
+              <Button
+                size="sm"
+                variant={confirmAsk.danger ? 'danger' : 'primary'}
+                onClick={() => { const fn = confirmAsk.onYes; setConfirmAsk(null); fn(); }}
+              >
+                {confirmAsk.yesLabel}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
