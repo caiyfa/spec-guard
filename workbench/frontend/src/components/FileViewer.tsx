@@ -195,7 +195,7 @@ function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
   return (
     <div className={`flex-shrink-0 mx-2 my-1 text-fs-aux rounded px-2 py-1 ${
       !outcome.ok ? 'bg-fail/12 text-fail'
-        : pass ? 'bg-green-900/20 text-green-400' : 'bg-yellow-900/20 text-yellow-500'
+        : pass ? 'bg-pass/12 text-pass' : 'bg-warn/12 text-warn'
     }`}>
       <div className="font-medium">
         {outcome.ok ? `✓ 已保存${outcome.verdict ? ` · 校验 ${outcome.verdict}` : ''}${outcome.summaryError != null ? ` · error ${outcome.summaryError} / warn ${outcome.summaryWarn ?? 0}` : ''}` : '✗ 保存失败'}

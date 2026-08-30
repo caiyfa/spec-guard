@@ -351,11 +351,11 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             {/* T-1008：页头合并状态行（监听 + 授权一行流；详情在「⚙ 通用」页签） */}
             <div className="mb-2 text-fs-body text-gray-500 flex items-center gap-3 flex-wrap">
               {watcher?.running
-                ? <span className="text-green-400">● 监听运行中（{watcher.count} 用户）</span>
+                ? <span className="text-pass">● 监听运行中（{watcher.count} 用户）</span>
                 : <span>○ 监听未运行（保存后自动拉起）</span>}
               {authStatus?.bound && (
                 <span>
-                  <span className="text-green-500">●</span> 飞书已绑定：{authStatus.identity_name}
+                  <span className="text-pass">●</span> 飞书已绑定：{authStatus.identity_name}
                   <button className="ml-1 text-gray-500 hover:text-gray-300" onClick={startAuth}>重新授权</button>
                 </span>
               )}
@@ -363,8 +363,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
 
             {/* 飞书授权块（T-942：未绑定/缺权限在弹层内闭环，无需接触服务器） */}
             {authPending ? (
-              <div className="mb-2 p-3 rounded border border-amber-500/40 bg-amber-500/5">
-                <div className="text-fs-body text-amber-300 mb-2">等待飞书授权完成…（用飞书 App 扫码，或打开授权链接）</div>
+              <div className="mb-2 p-3 rounded border border-warn/35 bg-warn/5">
+                <div className="text-fs-body text-warn mb-2">等待飞书授权完成…（用飞书 App 扫码，或打开授权链接）</div>
                 <div className="flex items-start gap-3">
                   {authPending.qr_data_uri && (
                     <img src={authPending.qr_data_uri} alt="飞书授权二维码"
@@ -385,8 +385,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             ) : /授权缺少权限|missing_scope|未绑定|认证未就绪/.test(error) ? (
               // 错误已表明授权问题 → 无条件显示带按钮的块（不依赖 authStatus 是否拉到——
               // status 请求失败时 authStatus=null，旧条件四分支全不渲染致按钮消失，用户实锄）
-              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-fs-body">
-                <span className="text-amber-300">
+              <div className="mb-2 px-3 py-2 rounded bg-warn/12 border border-warn/35 flex items-center gap-2 text-fs-body">
+                <span className="text-warn">
                   ⚠ {authStatus?.bound
                     ? `当前授权缺少部分权限（${authStatus.identity_name}），重新授权一次补全全部域`
                     : '飞书账号未绑定或授权不全，点击右侧按钮完成/补全授权'}
@@ -400,8 +400,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
               </div>
             ) : authStatus?.bound && (authStatus.reviewing || (authStatus.missing_scopes?.length)) ? (
               // T-943：已绑定但必需 scope 缺失——刚授权→审核中；否则引导重新授权
-              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-fs-body flex-wrap">
-                <span className="text-amber-300">
+              <div className="mb-2 px-3 py-2 rounded bg-warn/12 border border-warn/35 flex items-center gap-2 text-fs-body flex-wrap">
+                <span className="text-warn">
                   {authStatus.reviewing
                     ? `⏳ ${authStatus.identity_name}：授权已提交，${authStatus.missing_scopes?.length} 项权限管理员审核中（审核通过后自动生效，稍后重试即可）`
                     : `⚠ ${authStatus.identity_name}：已绑定但缺 ${authStatus.missing_scopes?.length} 项权限，重新授权一次补全`}
@@ -415,7 +415,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             {error && !/授权缺少权限|未绑定/.test(error) && (
               <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>
             )}
-            {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
+            {notice && <div className="mb-2 px-3 py-2 rounded bg-pass/12 text-pass text-fs-body">{notice}</div>}
 
             {!watch ? (
               <div className="py-10 text-center text-fs-body text-gray-500">配置加载中…</div>
@@ -665,7 +665,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                     <div className="flex items-center gap-3 flex-wrap">
                       {watcher?.running ? (
                         <>
-                          <span className="text-green-400">● 监听运行中（{watcher.count} 用户）</span>
+                          <span className="text-pass">● 监听运行中（{watcher.count} 用户）</span>
                           {watcher.watchers.map((w: any) => (
                             <span key={w.emp} className="text-gray-500">
                               {w.emp} · 事件 {w.events_received} · 最近 {w.last_event_at || '—'}

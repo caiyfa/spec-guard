@@ -9,7 +9,7 @@ const STAGE_META: Record<string, { label: string; color: string; bg: string }> =
   req: { label: '① 需求 specflow', color: 'text-purple-300', bg: 'bg-purple-900/30 border-purple-500/30' },
   dev_ext: { label: '② 研发·边界外', color: 'text-gray-400', bg: 'bg-gray-800/60 border-gray-600/40' },
   test: { label: '③ 验证 测试侧', color: 'text-cyan-300', bg: 'bg-cyan-900/30 border-cyan-500/30' },
-  feedback: { label: '④ 反哺 feedback', color: 'text-amber-300', bg: 'bg-amber-900/30 border-amber-500/30' },
+  feedback: { label: '④ 反哺 feedback', color: 'text-warn', bg: 'bg-warn/12 border-warn/35' },
 };
 
 const EDGE_LABEL: Record<string, string> = {
@@ -194,7 +194,7 @@ export default function LineageStory() {
             重跑校验
           </button>
         </div>
-        {checkError && <p className="text-fs-body text-yellow-400 mt-2">{checkError}</p>}
+        {checkError && <p className="text-fs-body text-warn mt-2">{checkError}</p>}
         {checkResult && (
           <div className="mt-2">
             <p className="text-fs-body text-gray-500">

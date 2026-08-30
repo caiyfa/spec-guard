@@ -17,17 +17,17 @@ const SEVERITIES = [
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  pending: 'text-yellow-400',
+  pending: 'text-warn',
   running: 'text-blue-400',
-  succeeded: 'text-green-400',
+  succeeded: 'text-pass',
   failed: 'text-fail',
   rolled_back: 'text-gray-400',
-  draft: 'text-yellow-400',
-  created: 'text-green-400',
+  draft: 'text-warn',
+  created: 'text-pass',
   cancelled: 'text-gray-400',
-  suggested: 'text-yellow-400',
+  suggested: 'text-warn',
   confirmed: 'text-blue-400',
-  written_back: 'text-green-400',
+  written_back: 'text-pass',
   rejected: 'text-gray-400',
 };
 
@@ -186,7 +186,7 @@ export default function ZentaoPanel() {
         </div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-pass/12 text-pass text-fs-body">{notice}</div>}
 
       {/* ── 区① 冻结 delta 交付 ── */}
       <div className={card}>

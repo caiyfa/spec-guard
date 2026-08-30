@@ -168,7 +168,7 @@ export default function MyActivity() {
                   <tr key={c.id} className="border-b border-border/50 text-gray-400">
                     <td className="px-3 py-1.5 font-mono whitespace-nowrap">{c.created_at}</td>
                     <td className="px-3 py-1.5 font-mono">{c.tool_name}</td>
-                    <td className={`px-3 py-1.5 ${c.verdict === 'ok' ? 'text-green-400' : 'text-fail'}`}>{c.verdict}</td>
+                    <td className={`px-3 py-1.5 ${c.verdict === 'ok' ? 'text-pass' : 'text-fail'}`}>{c.verdict}</td>
                     <td className="px-3 py-1.5 truncate max-w-[20rem]">{c.args_digest || '—'}</td>
                   </tr>
                 ))}

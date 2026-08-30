@@ -80,7 +80,7 @@ const MD_COMPONENTS: Components = {
   code: ({ className, children }: { className?: string; children?: ReactNode }) => {
     const inline = !className && !String(children).includes('\n');
     return inline
-      ? <code className="text-fs-body text-yellow-400/80 bg-black/30 rounded px-0.5">{children}</code>
+      ? <code className="text-fs-body text-warn/80 bg-black/30 rounded px-0.5">{children}</code>
       : <code className="block">{children}</code>;
   },
   blockquote: ({ children }: { children?: ReactNode }) => (

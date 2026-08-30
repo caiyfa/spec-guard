@@ -152,7 +152,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
       )}
 
       {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3 text-fail text-fs-lead">{error}</div>}
-      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-fs-lead">{success}</div>}
+      {success && <div className="bg-pass/12 border border-pass/35 rounded p-2 mb-3 text-pass text-fs-lead">{success}</div>}
 
       {/* 配置列表 */}
       <div className="mb-4">
@@ -166,7 +166,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
                   <div className="flex items-center gap-2">
                     <span className="text-fs-lead text-gray-300 font-medium">{cfg.name}</span>
                     <span className="text-fs-body px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{CHANNEL_LABELS[cfg.channel] || cfg.channel}</span>
-                    <span className={`text-fs-body px-1.5 py-0.5 rounded ${cfg.enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                    <span className={`text-fs-body px-1.5 py-0.5 rounded ${cfg.enabled ? 'bg-pass/12 text-pass' : 'bg-gray-700 text-gray-500'}`}>
                       {cfg.enabled ? '✅ 启用' : '⏸️ 禁用'}
                     </span>
                   </div>
@@ -264,7 +264,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
               <div>
                 <label className="text-fs-body text-gray-500">启用</label>
                 <button onClick={() => setEnabled(!enabled)}
-                  className={`ml-2 px-2 py-0.5 text-fs-body rounded ${enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                  className={`ml-2 px-2 py-0.5 text-fs-body rounded ${enabled ? 'bg-pass/12 text-pass' : 'bg-gray-700 text-gray-500'}`}>
                   {enabled ? '✅ 启用' : '⏸️ 禁用'}
                 </button>
               </div>

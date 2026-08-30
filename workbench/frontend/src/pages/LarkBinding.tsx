@@ -105,7 +105,7 @@ export default function LarkBinding() {
         {state === 'bound' && status && (
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="w-2 h-2 rounded-full bg-pass" />
               <span className="font-medium">已绑定</span>
               <span className="text-fs-body text-gray-500 ml-auto">
                 配置目录: {status.config_dir}
@@ -157,7 +157,7 @@ export default function LarkBinding() {
         {state === 'pending' && loginResult?.verification_url && (
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-warn animate-pulse" />
               <span className="font-medium">等待授权完成...</span>
             </div>
             {loginResult.qr_data_uri ? (
@@ -207,7 +207,7 @@ export default function LarkBinding() {
           <div className="space-y-1">
             {status.scopes.map((s, i) => (
               <div key={i} className="flex items-center gap-2 text-fs-body text-gray-400">
-                <span className="text-green-500">✅</span>
+                <span className="text-pass">✅</span>
                 <span className="font-mono">{s}</span>
               </div>
             ))}

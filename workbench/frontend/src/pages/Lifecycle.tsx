@@ -15,8 +15,8 @@ const FAILURE_VERDICTS = ['FAIL', 'ERROR', 'BLOCKED'];
 
 /** 状态徽标样式 */
 const STATUS_STYLE: Record<string, string> = {
-  in_library: 'bg-green-900/40 text-green-400 border-green-700/50',
-  draft_pending: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/50',
+  in_library: 'bg-pass/12 text-pass border-pass/35',
+  draft_pending: 'bg-warn/12 text-warn border-warn/35',
   draft_updating: 'bg-blue-900/40 text-blue-400 border-blue-700/50',
   discarded: 'bg-gray-700/40 text-gray-400 border-gray-600',
   unknown: 'bg-gray-700/40 text-gray-500 border-gray-600',
@@ -115,7 +115,7 @@ function LifecycleBoard() {
   const statsCards: { label: string; value: number; cls?: string; filter: typeof filter }[] = [
     { label: '测试总数', value: summary?.total || 0, filter: 'all' },
     { label: '已入库', value: summary?.in_library || 0, filter: 'in_library' },
-    { label: '草稿待评审', value: summary?.draft_pending || 0, cls: 'text-yellow-400', filter: 'draft' },
+    { label: '草稿待评审', value: summary?.draft_pending || 0, cls: 'text-warn', filter: 'draft' },
     { label: '更新中', value: summary?.draft_updating || 0, cls: 'text-blue-400', filter: 'updating' },
     { label: '7 天内失败', value: summary?.recent_failed_7d || 0, cls: 'text-fail', filter: 'failed' },
     { label: '修复闭环', value: summary?.closed_loops || 0, cls: 'text-pass', filter: 'loop' },
@@ -246,7 +246,7 @@ function LifecycleBoard() {
                 </button>
                 {detail.draft_status === 'draft' && (
                   <button onClick={() => navigate('/drafts')}
-                    className="px-2 py-1 rounded bg-yellow-900/40 text-yellow-400 text-fs-body hover:bg-yellow-900/60">
+                    className="px-2 py-1 rounded bg-warn/12 text-warn text-fs-body hover:bg-warn/12/60">
                     📝 草稿评审
                   </button>
                 )}
@@ -261,9 +261,9 @@ function LifecycleBoard() {
                     <div className="flex flex-col items-center">
                       <span className={`w-2 h-2 rounded-full mt-1.5 ${
                         e.type === 'loop_closed' ? 'bg-pass'
-                        : e.type === 'promoted' ? 'bg-green-500'
+                        : e.type === 'promoted' ? 'bg-pass'
                         : e.type === 'discarded' ? 'bg-gray-500'
-                        : e.type === 'draft_updated' ? 'bg-yellow-500'
+                        : e.type === 'draft_updated' ? 'bg-warn'
                         : e.verdict === 'PASS' ? 'bg-pass'
                         : FAILURE_VERDICTS.includes(e.verdict || '') ? 'bg-fail'
                         : 'bg-gray-600'

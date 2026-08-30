@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { systemsApi, type SystemEntry } from '../../api';
 
 const TIER_BADGE: Record<string, string> = {
-  config: 'bg-green-900/30 text-green-400',
+  config: 'bg-pass/12 text-pass',
   template: 'bg-cyan-900/30 text-cyan-400',
   code: 'bg-purple-900/30 text-purple-400',
 };
@@ -83,7 +83,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
       </div>
 
       {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-2 text-fail text-fs-body flex-shrink-0" onClick={() => setError('')}>{error}</div>}
-      {message && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-2 text-green-400 text-fs-body flex-shrink-0">{message}</div>}
+      {message && <div className="bg-pass/12 border border-pass/35 rounded p-2 mb-2 text-pass text-fs-body flex-shrink-0">{message}</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
         {/* 系统目录 */}
@@ -117,7 +117,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
             <div className="bg-surface-1 rounded-lg border border-border p-3">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`text-fs-body px-1.5 py-0.5 rounded ${TIER_BADGE[cur.tier] || ''}`}>{cur.tier_label || cur.tier}</span>
-                <span className={`text-fs-body px-1.5 py-0.5 rounded ${cur.enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                <span className={`text-fs-body px-1.5 py-0.5 rounded ${cur.enabled ? 'bg-pass/12 text-pass' : 'bg-gray-700 text-gray-500'}`}>
                   {cur.enabled ? '✅ 启用' : '⏸️ 停用'}
                 </span>
               </div>
@@ -145,14 +145,14 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
               <div className="text-fs-body font-medium text-gray-400 mb-1">🛂 extensions.py 评审闸</div>
               {gate?.present ? (
                 <>
-                  <div className={`text-fs-body ${gate.loadable ? 'text-green-400' : 'text-amber-400'}`}>
+                  <div className={`text-fs-body ${gate.loadable ? 'text-pass' : 'text-warn'}`}>
                     {gate.loadable ? `✅ 已评审加载（${gate.approved_by} @ ${gate.approved_at}）` : `⚠ ${gate.reason}`}
                   </div>
                   <div className="text-fs-aux text-gray-700 font-mono mt-1">sha256: {gate.sha256.slice(0, 16)}…</div>
                   {isAdmin && !gate.loadable && (
                     <button disabled={busy === 'review'}
                       onClick={() => run('review', () => systemsApi.review(cur.name), '评审通过，已绑定指纹并热加载')}
-                      className="mt-2 px-2 py-1 text-fs-body bg-green-900/30 text-green-400 rounded hover:bg-green-900/50 disabled:opacity-40">
+                      className="mt-2 px-2 py-1 text-fs-body bg-pass/12 text-pass rounded hover:bg-pass/12 disabled:opacity-40">
                       ✓ 评审通过（绑定当前 sha256）
                     </button>
                   )}

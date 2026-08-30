@@ -234,7 +234,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
       </div>
 
       {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-2 text-fail text-fs-body flex-shrink-0">{error}</div>}
-      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-2 text-green-400 text-fs-body flex-shrink-0">{success}</div>}
+      {success && <div className="bg-pass/12 border border-pass/35 rounded p-2 mb-2 text-pass text-fs-body flex-shrink-0">{success}</div>}
       {syncMsg && <div className="bg-info/10 border border-info/30 rounded p-2 mb-2 text-info text-fs-body flex-shrink-0">⟳ {syncMsg}</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
@@ -256,8 +256,8 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <span className="text-fs-lead text-gray-300 font-medium truncate">{ws.name}</span>
                   {selected === ws.name && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-info/20 text-info flex-shrink-0">当前</span>}
-                  {active === ws.name && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-green-900/30 text-green-400 flex-shrink-0">全局激活</span>}
-                  {ws.system_pending && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-amber-900/30 text-amber-400 flex-shrink-0">⏳ 包待接入</span>}
+                  {active === ws.name && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-pass/12 text-pass flex-shrink-0">全局激活</span>}
+                  {ws.system_pending && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-warn/12 text-warn flex-shrink-0">⏳ 包待接入</span>}
                 </div>
                 <div className="flex items-center gap-1.5 text-fs-body text-gray-500 mb-2 min-w-0">
                   <span className={`px-1 py-0.5 rounded flex-shrink-0 ${ws.source.type === 'git' ? 'bg-info/10 text-info/80' : 'bg-surface-3 text-gray-500'}`}>
@@ -294,12 +294,12 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
           <div className="bg-surface-1 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-fs-body text-gray-500">合规校验报告</span>
-              <span className={`text-fs-body font-bold ${conformance.verdict === 'PASS' ? 'text-green-400' : 'text-fail'}`}>{conformance.verdict}</span>
+              <span className={`text-fs-body font-bold ${conformance.verdict === 'PASS' ? 'text-pass' : 'text-fail'}`}>{conformance.verdict}</span>
             </div>
             {conformance.findings && conformance.findings.length > 0 ? (
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {conformance.findings.map((f: any, i: number) => (
-                  <div key={i} className={`text-fs-body flex gap-2 ${f.level === 'ERROR' ? 'text-fail' : f.level === 'WARN' ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  <div key={i} className={`text-fs-body flex gap-2 ${f.level === 'ERROR' ? 'text-fail' : f.level === 'WARN' ? 'text-warn' : 'text-gray-500'}`}>
                     <span className="font-mono">[{f.level}]</span>
                     <span className="font-mono text-gray-600">{f.rule}</span>
                     <span className="flex-1">{f.message}</span>
@@ -307,7 +307,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                 ))}
               </div>
             ) : (
-              <div className="text-fs-body text-green-400">全部通过，无违规项</div>
+              <div className="text-fs-body text-pass">全部通过，无违规项</div>
             )}
           </div>
         )}
@@ -378,7 +378,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                     环境: {cur.envs.join(', ') || '无'} · 账号别名: {cur.accounts.join(', ') || '无'}
                   </div>
                 ) : (
-                  <div className="col-span-2 text-fs-body text-amber-500/80 bg-amber-900/10 rounded px-2 py-1">
+                  <div className="col-span-2 text-fs-body text-warn/80 bg-warn/12 rounded px-2 py-1">
                     ⏳ 系统「{regSystem}」适配包未建——工作区可先注册（待接入），跑测试前需先在栏1注册系统
                   </div>
                 );

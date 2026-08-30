@@ -80,7 +80,7 @@ export default function NetworkGraph() {
   return (
     <div className="rounded-lg bg-surface-2 border border-border overflow-hidden">
       {data.truncated && (
-        <div className="px-3 py-2 text-fs-body bg-yellow-900/30 text-yellow-300 border-b border-border">
+        <div className="px-3 py-2 text-fs-body bg-warn/12 text-warn border-b border-border">
           ⚠ 节点总数 {data.total_nodes} 超过 500 护栏——已聚合为模块级视图（展开请用 L1/L2 下钻）
         </div>
       )}

@@ -20,8 +20,8 @@ function TruncText({ text, limit = 120, className = 'text-gray-400' }: { text: s
 /** 单个值渲染（标量/对象自适应） */
 function SmartValue({ value }: { value: any }) {
   if (value === null || value === undefined) return <span className="text-gray-600">null</span>;
-  if (typeof value === 'boolean') return <span className={value ? 'text-green-400' : 'text-fail'}>{String(value)}</span>;
-  if (typeof value === 'number') return <span className="text-yellow-300/80">{String(value)}</span>;
+  if (typeof value === 'boolean') return <span className={value ? 'text-pass' : 'text-fail'}>{String(value)}</span>;
+  if (typeof value === 'number') return <span className="text-warn/80">{String(value)}</span>;
   if (typeof value === 'object') return <TruncText text={JSON.stringify(value, null, 0)} limit={150} />;
   return <TruncText text={String(value)} />;
 }
@@ -65,7 +65,7 @@ function ResultView({ result }: { result: string }) {
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className={parsed.verdict === 'PASS' ? 'text-green-400 font-medium' : 'text-fail font-medium'}>
+          <span className={parsed.verdict === 'PASS' ? 'text-pass font-medium' : 'text-fail font-medium'}>
             {parsed.verdict}
           </span>
           {parsed.scenario && <span className="text-gray-500">{parsed.scenario}</span>}
@@ -108,14 +108,14 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         title={hasResult ? (isError ? '执行失败，点击查看详情' : '执行成功，点击查看详情') : '执行中…'}
       >
         <span className="text-gray-600 text-fs-aux">{expanded ? '▼' : '▶'}</span>
-        <span className="text-yellow-500/80 font-mono">🔧</span>
+        <span className="text-warn/80 font-mono">🔧</span>
         <span className="text-gray-400 font-mono">{tool.name}</span>
         {hasResult && (
-          <span className={isError ? 'text-fail' : 'text-green-500/70'}>
+          <span className={isError ? 'text-fail' : 'text-pass/70'}>
             {isError ? '❌' : '✅'}
           </span>
         )}
-        {!hasResult && <span className="text-yellow-500/50 animate-pulse">⏳</span>}
+        {!hasResult && <span className="text-warn/50 animate-pulse">⏳</span>}
         {/* 结果摘要内联（代替原第二行预览） */}
         {hasResult && resultPreview && (
           <span className={`flex-1 truncate text-fs-aux ${isError ? 'text-fail/80' : 'text-gray-500'}`}>{resultPreview}</span>
@@ -180,11 +180,11 @@ export function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLa
           {allDone ? `${successCount}/${tools.length} 工具` : `${tools.length} 工具 执行中…`}
         </span>
         {allDone && (
-          <span className={hasError ? 'text-fail text-fs-aux' : 'text-green-500/70 text-fs-aux'}>
+          <span className={hasError ? 'text-fail text-fs-aux' : 'text-pass/70 text-fs-aux'}>
             {hasError ? '⚠️' : '✅'}
           </span>
         )}
-        {!allDone && <span className="text-yellow-500/50 text-fs-aux animate-pulse">⏳</span>}
+        {!allDone && <span className="text-warn/50 text-fs-aux animate-pulse">⏳</span>}
       </button>
       {/* 展开时显示各工具调用（思考文本已在组外独立展示，K-024） */}
       {groupExpanded && (

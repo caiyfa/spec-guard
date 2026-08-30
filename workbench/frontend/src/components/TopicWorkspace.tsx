@@ -449,7 +449,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
         )}
       </div>
       {error && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
-      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
+      {notice && <div className="mb-2 px-3 py-2 rounded bg-pass/12 text-pass text-fs-body">{notice}</div>}
       {/* 顶栏：群/日期 + 重新分类 + 状态筛选（单一控制区，页面不再分上下两层） */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <select className={input} value={sha8}
@@ -552,7 +552,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 </button>
               )}
               {!pickUsable && messages !== null && messages.length > 0 && (
-                <span className="ml-auto text-fs-aux text-amber-400"
+                <span className="ml-auto text-fs-aux text-warn"
                   title="旧快照为 md 视图（无精确消息 id）——「↻ 更新本群」重建快照后可勾选">
                   勾选不可用（需更新本群）
                 </span>
@@ -671,7 +671,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                     return (
                       <div key={gKey} className="flex items-center gap-1 flex-wrap">
                         {!flatTags && (
-                          <span className="text-fs-aux text-amber-500/80 shrink-0"
+                          <span className="text-fs-aux text-warn/80 shrink-0"
                             title={`域：${g.domain}（${g.total} 张话题卡）`}>
                             {g.domain}
                           </span>
@@ -825,7 +825,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 {refining ? '精筛中…' : '模型精筛'}
               </button>
               {unrefined && (
-                <span className="text-fs-aux text-amber-400">未经模型复核（未配置 text 模型或不可达）</span>
+                <span className="text-fs-aux text-warn">未经模型复核（未配置 text 模型或不可达）</span>
               )}
               <button className="ml-auto text-gray-500 hover:text-gray-300"
                 onClick={() => setCrossOpen(false)}>✕</button>
@@ -855,7 +855,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                   <div className="flex items-center gap-2 mt-1.5 text-fs-aux flex-wrap">
                     <span className="text-gray-500">{c.reasons.join('；')} · 分 {c.score}</span>
                     {c.refined && (
-                      <span className={c.llm_same ? 'text-green-400' : 'text-gray-500'}>
+                      <span className={c.llm_same ? 'text-pass' : 'text-gray-500'}>
                         模型：{c.llm_same ? '同一主题' : '不同主题'}（{c.llm_confidence}）{c.llm_reason}
                       </span>
                     )}

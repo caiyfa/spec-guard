@@ -28,7 +28,7 @@ type Tab = 'materials' | 'topics';
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   feishu_doc: { label: '文档', cls: 'bg-sky-500/15 text-sky-400' },
   feishu_minutes: { label: '妙记', cls: 'bg-violet-500/15 text-violet-400' },
-  chat: { label: '群聊', cls: 'bg-amber-500/15 text-amber-400' },
+  chat: { label: '群聊', cls: 'bg-warn/12 text-warn' },
 };
 
 const SCOPE_LABEL: Record<string, string> = {
@@ -224,7 +224,7 @@ export default function FeishuPool() {
       )}
 
       {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-pass/12 text-pass text-fs-body">{notice}</div>}
 
       {!focusMode && (
         <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
@@ -298,7 +298,7 @@ export default function FeishuPool() {
                       </span>
                       {/* T-949：perm 缺失（需补授权）诚实标注——重新扫码授权后同步即补齐 */}
                       {m.type !== 'chat' && m.perm && !m.perm.pulled_at && (
-                        <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-fs-aux bg-amber-500/15 text-amber-400"
+                        <span className="ml-1 inline-block px-1.5 py-0.5 rounded text-fs-aux bg-warn/12 text-warn"
                           title={(m.perm.error || '').slice(0, 120) || '权限元数据缺失'}>
                           需补授权
                         </span>

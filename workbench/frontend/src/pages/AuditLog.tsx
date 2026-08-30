@@ -5,10 +5,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { auditApi, usersApi, type AuditCall } from '../api';
 
 const VERDICT_LABEL: Record<string, { label: string; color: string }> = {
-  ok: { label: '通过', color: 'text-green-400' },
+  ok: { label: '通过', color: 'text-pass' },
   'denied-whitelist': { label: '越权拒绝', color: 'text-fail' },
   'denied-side-effect': { label: '副作用违规', color: 'text-fail' },
-  warn: { label: '警告', color: 'text-amber-400' },
+  warn: { label: '警告', color: 'text-warn' },
 };
 
 function McpAudit() {

@@ -5,7 +5,7 @@ import type { ChatReference } from './types';
 // ── 新鲜度徽标 ──
 export function FreshBadge({ status }: { status: string }) {
   if (status === 'fresh') return <span className="text-pass text-fs-micro" title="与引用时一致">✓</span>;
-  if (status === 'stale') return <span className="text-yellow-400 text-fs-micro" title="内容已变更">⚠️</span>;
+  if (status === 'stale') return <span className="text-warn text-fs-micro" title="内容已变更">⚠️</span>;
   if (status === 'missing') return <span className="text-fail text-fs-micro" title="文件已删除">✗</span>;
   return null;
 }

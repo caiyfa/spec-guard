@@ -11,9 +11,9 @@ import FeishuReviewPanel from '../components/FeishuReviewPanel';
 
 const STATUS_COLOR: Record<string, string> = {
   uploaded: 'text-blue-400',
-  parsing: 'text-yellow-400',
-  parsed: 'text-green-400',
-  indexed: 'text-green-400',
+  parsing: 'text-warn',
+  parsed: 'text-pass',
+  indexed: 'text-pass',
   packed: 'text-emerald-400',
   failed: 'text-fail',
 };
@@ -108,7 +108,7 @@ export default function MaterialsPanel() {
         <div className="text-fs-body text-gray-500">候选确认/入包需 product 角色 · 解析失败可查看 parse_error</div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-pass/12 text-pass text-fs-body">{notice}</div>}
 
       <div className={card}>
         <div className="flex flex-wrap items-end gap-3">
@@ -166,7 +166,7 @@ export default function MaterialsPanel() {
                         <button className={btn} onClick={() => loadTopics(m.mid)}>查看候选</button>
                         {(topicsByMid[m.mid] || []).map(t => (
                           <div key={t.tid} className="flex items-center gap-1.5 text-fs-body">
-                            <span className={t.confirmed ? 'text-green-400' : 'text-gray-400'}>
+                            <span className={t.confirmed ? 'text-pass' : 'text-gray-400'}>
                               {t.confirmed ? '✓' : '○'} {t.title}
                             </span>
                             <button

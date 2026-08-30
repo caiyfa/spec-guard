@@ -193,14 +193,14 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
               )}
             </div>
             {!canRelate && messages !== null && (
-              <div className="px-2 py-1.5 text-fs-aux text-amber-400 border-b border-border/50">
+              <div className="px-2 py-1.5 text-fs-aux text-warn border-b border-border/50">
                 {messages.length === 0
                   ? '该话题覆盖日无消息快照——重关联不可用（文本编辑不受影响）'
                   : '旧快照为 md 视图（无精确消息 id），重关联不可用——「↻ 更新本群」重建快照后可用'}
               </div>
             )}
             {missingIds.length > 0 && (
-              <div className="px-2 py-1.5 text-fs-aux text-amber-400 border-b border-border/50"
+              <div className="px-2 py-1.5 text-fs-aux text-warn border-b border-border/50"
                 title={missingIds.join(', ')}>
                 {missingIds.length} 条已关联消息未在快照中找到（保存将解除其关联）
               </div>
@@ -254,7 +254,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
               {tagOptions.map(n => <option key={n} value={n} />)}
             </datalist>
             {tagHints.length > 0 && (
-              <div className="text-fs-aux text-amber-400/90 -mt-1">
+              <div className="text-fs-aux text-warn/90 -mt-1">
                 将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
               </div>
             )}
@@ -281,10 +281,10 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
                 <div className="text-fs-aux text-gray-500 mb-0.5">
                   AI 原稿对照（人工修改处标黄，生成优化依据）：
                 </div>
-                <div className={`text-fs-aux ${diff(title, origin.title) ? 'text-amber-300' : 'text-gray-500'}`}>
+                <div className={`text-fs-aux ${diff(title, origin.title) ? 'text-warn' : 'text-gray-500'}`}>
                   题目：{origin.title}
                 </div>
-                <div className={`text-fs-aux ${diff(summary, origin.summary) ? 'text-amber-300' : 'text-gray-500'}`}>
+                <div className={`text-fs-aux ${diff(summary, origin.summary) ? 'text-warn' : 'text-gray-500'}`}>
                   摘要：{origin.summary}
                 </div>
                 <div className="text-fs-aux text-gray-600">

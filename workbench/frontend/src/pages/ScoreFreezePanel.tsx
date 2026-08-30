@@ -142,7 +142,7 @@ export default function ScoreFreezePanel() {
         <div className="text-fs-body text-gray-500">评分确认/闸①确认/冻结需 product 角色 · 三闸全过才可冻结</div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-pass/12 text-pass text-fs-body">{notice}</div>}
 
       {/* ── 五维评分 ── */}
       <div className={card}>
@@ -185,7 +185,7 @@ export default function ScoreFreezePanel() {
                     <span className="text-fs-body text-gray-500 line-clamp-2 max-w-[360px]">{s.evidence}</span>
                   </td>
                   <td className={td}>
-                    <span className={s.status === 'confirmed' ? 'text-green-400' : s.status === 'rejected' ? 'text-gray-500' : 'text-yellow-400'}>
+                    <span className={s.status === 'confirmed' ? 'text-pass' : s.status === 'rejected' ? 'text-gray-500' : 'text-warn'}>
                       {s.status}
                     </span>
                   </td>
@@ -224,7 +224,7 @@ export default function ScoreFreezePanel() {
           <button className={`${btn} ${freezeAllowed ? '' : 'opacity-40'}`} onClick={handleFreeze}
                   disabled={!selDelta || !freezeAllowed}>执行冻结</button>
           <span className="text-fs-body text-gray-500">
-            {freezeAllowed ? <span className="text-green-400">三闸全过，可冻结</span> : '三闸未全过，冻结被拒'}
+            {freezeAllowed ? <span className="text-pass">三闸全过，可冻结</span> : '三闸未全过，冻结被拒'}
           </span>
         </div>
         {gates && (
@@ -232,20 +232,20 @@ export default function ScoreFreezePanel() {
             {Object.entries(gates).map(([key, g]) => (
               <div key={key} className="border border-border/60 rounded p-3">
                 <div className="text-fs-body font-medium mb-1">{GATE_LABEL[key] || key}</div>
-                <div className={`text-fs-lead font-bold ${g.status === 'pass' ? 'text-green-400' : 'text-fail'}`}>
+                <div className={`text-fs-lead font-bold ${g.status === 'pass' ? 'text-pass' : 'text-fail'}`}>
                   {g.status === 'pass' ? '✓ PASS' : '✗ ' + (g.status || 'FAIL')}
                 </div>
                 {g.errors && g.errors.length > 0 && (
                   <div className="text-fs-body text-fail mt-1">{g.errors.join('；')}</div>
                 )}
                 {g.findings && g.findings.length > 0 && (
-                  <div className="text-fs-body text-yellow-400 mt-1 max-h-20 overflow-auto">
+                  <div className="text-fs-body text-warn mt-1 max-h-20 overflow-auto">
                     {g.findings.slice(0, 5).map((f, i) => (
                       <div key={i}>[{f.level}] {f.message}</div>
                     ))}
                   </div>
                 )}
-                {g.degraded && <div className="text-fs-body text-yellow-400 mt-1">（降级执行）</div>}
+                {g.degraded && <div className="text-fs-body text-warn mt-1">（降级执行）</div>}
               </div>
             ))}
           </div>

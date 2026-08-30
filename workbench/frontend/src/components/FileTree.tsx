@@ -239,7 +239,7 @@ export default function FileTree({
           />
         )}
         <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
-        {node.is_delta && <span className="text-yellow-500 text-fs-aux flex-shrink-0">Δ</span>}
+        {node.is_delta && <span className="text-warn text-fs-aux flex-shrink-0">Δ</span>}
         <span className="truncate flex-1">{node.name}</span>
         {node.size !== undefined && (
           <span className="text-gray-600 text-fs-aux flex-shrink-0">{formatSize(node.size)}</span>

@@ -30,7 +30,7 @@ const LENS_COLOR: Record<Lens, string> = {
   topic: 'border-purple-500/60',
   debt: 'border-cyan-500/60',
   map: 'border-gray-500/60',
-  network: 'border-amber-500/60',
+  network: 'border-warn/35',
   lineage: 'border-blue-500/60',
 };
 
@@ -189,12 +189,12 @@ export default function GraphPanorama() {
           <h2 className="text-fs-title font-bold">🕸 全景图谱</h2>
           {status && (
             status.stale ? (
-              <span className="flex items-center gap-2 text-fs-body bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">
+              <span className="flex items-center gap-2 text-fs-body bg-warn/12 text-warn px-2 py-1 rounded">
                 ⚠ 源数据已变更，索引过期
-                <button onClick={handleRebuild} className="underline hover:text-yellow-100">重建</button>
+                <button onClick={handleRebuild} className="underline hover:text-warn">重建</button>
               </span>
             ) : (
-              <span className="text-fs-body bg-green-900/40 text-green-300 px-2 py-1 rounded">
+              <span className="text-fs-body bg-pass/12 text-pass px-2 py-1 rounded">
                 ✓ 索引新鲜{status.built_at ? ` · ${status.built_at.slice(0, 16).replace('T', ' ')}` : ''}
               </span>
             )
@@ -266,9 +266,9 @@ export default function GraphPanorama() {
           {diffResult && (
             <span className="text-fs-body text-gray-400">
               📸 {diffResult.from.slice(0, 22)} → 当前：
-              <b className="text-green-400">+{diffResult.added}</b> 新增 ·
+              <b className="text-pass">+{diffResult.added}</b> 新增 ·
               <b className="text-fail">-{diffResult.removed}</b> 移除 ·
-              <b className="text-yellow-400">~{diffResult.modified}</b> 修改
+              <b className="text-warn">~{diffResult.modified}</b> 修改
               <span className="text-gray-600 ml-1">｜指纹 {diffResult.fingerprint_from.slice(0, 8)} → {diffResult.fingerprint_to.slice(0, 8)}</span>
             </span>
           )}
@@ -360,10 +360,10 @@ export default function GraphPanorama() {
                   {isDebt && <span title="测试债：健康分 <80">❄</span>}
                   {isNew && <span className="text-fs-aux text-gray-500">新功能点（无健康分）</span>}
                   <span className="ml-auto flex items-center gap-2 text-fs-body text-gray-500">
-                    <span className="text-green-400">覆盖 {item.nCov}</span>
+                    <span className="text-pass">覆盖 {item.nCov}</span>
                     <span className="text-fail">缺口 {item.nGap}</span>
                     {health !== null && (
-                      <span className={`px-1.5 py-0.5 rounded ${health >= 80 ? 'bg-green-900/40 text-green-300' : 'bg-fail/12 text-fail'}`}>
+                      <span className={`px-1.5 py-0.5 rounded ${health >= 80 ? 'bg-pass/12 text-pass' : 'bg-fail/12 text-fail'}`}>
                         健康分 {health}
                       </span>
                     )}
@@ -371,7 +371,7 @@ export default function GraphPanorama() {
                 </div>
                 <div className="mt-2 h-1.5 bg-surface-3 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${health !== null && health >= 80 ? 'bg-green-500/70' : 'bg-fail/70'}`}
+                    className={`h-full rounded-full ${health !== null && health >= 80 ? 'bg-pass/70' : 'bg-fail/70'}`}
                     style={{ width: `${health ?? 0}%` }}
                   />
                 </div>
@@ -391,7 +391,7 @@ export default function GraphPanorama() {
               <div
                 key={fr.id}
                 className={`p-2 rounded border text-fs-body cursor-pointer transition-colors ${
-                  fr.cov === 'ok' ? 'border-green-500/30 bg-green-900/10' : 'border-fail/35 bg-fail/12'
+                  fr.cov === 'ok' ? 'border-pass/35/30 bg-pass/12/10' : 'border-fail/35 bg-fail/12'
                 } hover:border-info/50`}
                 onClick={() => queryBacklink(fr.id)}
               >
@@ -499,9 +499,9 @@ export default function GraphPanorama() {
                   const n = i + 1;
                   const highlight = source.line > 0 && n === source.line;
                   return (
-                    <div key={n} className={`flex ${highlight ? 'bg-yellow-900/40' : ''}`}>
+                    <div key={n} className={`flex ${highlight ? 'bg-warn/12' : ''}`}>
                       <span className="w-12 flex-shrink-0 text-right pr-3 text-gray-600 select-none">{n}</span>
-                      <span className={`whitespace-pre ${highlight ? 'text-yellow-100' : 'text-gray-300'}`}>{line}</span>
+                      <span className={`whitespace-pre ${highlight ? 'text-warn' : 'text-gray-300'}`}>{line}</span>
                     </div>
                   );
                 })

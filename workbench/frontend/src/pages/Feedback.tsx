@@ -65,9 +65,9 @@ export default function Feedback() {
   };
 
   const statusColor = (s: string) => ({
-    pending: 'text-yellow-400',
+    pending: 'text-warn',
     in_progress: 'text-blue-400',
-    closed: 'text-green-400',
+    closed: 'text-pass',
   }[s] || 'text-gray-400');
 
   const statusLabel = (s: string) => ({
@@ -84,7 +84,7 @@ export default function Feedback() {
       </div>
 
       {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3 text-fail text-fs-lead" onClick={() => setError('')}>{error}</div>}
-      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-fs-lead" onClick={() => setSuccess('')}>{success}</div>}
+      {success && <div className="bg-pass/12 border border-pass/35 rounded p-2 mb-3 text-pass text-fs-lead" onClick={() => setSuccess('')}>{success}</div>}
 
       {/* Tab */}
       <div className="flex gap-2 mb-4">
@@ -122,8 +122,8 @@ export default function Feedback() {
               <div className="text-fs-body text-gray-600 mt-1">来源: {e.source === 'loop_a' ? '循环 A' : '循环 B'} · 创建: {e.created_at}</div>
               <div className="flex gap-1 mt-2">
                 {e.status === 'pending' && <button onClick={() => transition(e.spq_id, 'in_progress')} className="px-2 py-0.5 text-fs-body bg-blue-900/30 text-blue-400 rounded">→ 研发修改中</button>}
-                {e.status === 'in_progress' && <button onClick={() => transition(e.spq_id, 'closed')} className="px-2 py-0.5 text-fs-body bg-green-900/30 text-green-400 rounded">→ 已闭环</button>}
-                {e.status !== 'pending' && <button onClick={() => transition(e.spq_id, 'pending')} className="px-2 py-0.5 text-fs-body bg-yellow-900/30 text-yellow-400 rounded">→ 待讨论</button>}
+                {e.status === 'in_progress' && <button onClick={() => transition(e.spq_id, 'closed')} className="px-2 py-0.5 text-fs-body bg-pass/12 text-pass rounded">→ 已闭环</button>}
+                {e.status !== 'pending' && <button onClick={() => transition(e.spq_id, 'pending')} className="px-2 py-0.5 text-fs-body bg-warn/12 text-warn rounded">→ 待讨论</button>}
               </div>
             </div>
           ))}

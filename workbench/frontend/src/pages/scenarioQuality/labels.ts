@@ -5,9 +5,9 @@ export const GRADE_LABEL: Record<QualityGrade, string> = {
   deep: '深断言', medium: '中等', shallow: '浅断言', 'no-verify': '无断言',
 };
 export const GRADE_CLS: Record<QualityGrade, string> = {
-  deep: 'bg-green-900/40 text-green-400',
+  deep: 'bg-pass/12 text-pass',
   medium: 'bg-blue-900/40 text-blue-400',
-  shallow: 'bg-yellow-900/40 text-yellow-400',
+  shallow: 'bg-warn/12 text-warn',
   'no-verify': 'bg-fail/12 text-fail',
 };
 export const ISSUE_LABEL: Record<string, string> = {
@@ -15,9 +15,9 @@ export const ISSUE_LABEL: Record<string, string> = {
   shallow: '浅断言', 'no-verify': '无断言', probe: '探针',
 };
 export const ISSUE_CLS: Record<string, string> = {
-  'missing-covers': 'bg-yellow-900/40 text-yellow-400',
+  'missing-covers': 'bg-warn/12 text-warn',
   'invalid-covers': 'bg-fail/12 text-fail',
-  shallow: 'bg-yellow-900/40 text-yellow-400',
+  shallow: 'bg-warn/12 text-warn',
   'no-verify': 'bg-fail/12 text-fail',
   probe: 'bg-fail/12 text-fail',
 };

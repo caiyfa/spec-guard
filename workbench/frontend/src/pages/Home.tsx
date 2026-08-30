@@ -19,7 +19,7 @@ const ROLE_LABEL: Record<string, string> = {
 const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-purple-900/50 text-purple-300',
   tester: 'bg-info/15 text-info',
-  product: 'bg-amber-900/50 text-amber-300',
+  product: 'bg-warn/12 text-warn',
   viewer: 'bg-gray-700 text-gray-400',
 };
 

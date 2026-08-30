@@ -142,7 +142,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
               {tagOptions.map(n => <option key={n} value={n} />)}
             </datalist>
             {tagHints.length > 0 && (
-              <div className="text-fs-aux text-amber-400/90 -mt-1">
+              <div className="text-fs-aux text-warn/90 -mt-1">
                 将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
               </div>
             )}

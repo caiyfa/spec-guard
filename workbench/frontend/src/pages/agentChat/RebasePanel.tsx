@@ -97,8 +97,8 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
                         <div className="text-fs-micro text-blue-400 mb-0.5">远端版本（rebase 目标）</div>
                         <pre className="text-fs-aux font-mono text-blue-200/80 whitespace-pre-wrap break-all max-h-32 overflow-auto">{seg.ours.trim()}</pre>
                       </div>
-                      <div className="rounded bg-green-900/20 px-1.5 py-1">
-                        <div className="text-fs-micro text-green-400 mb-0.5">本地提交版本</div>
+                      <div className="rounded bg-pass/12 px-1.5 py-1">
+                        <div className="text-fs-micro text-pass mb-0.5">本地提交版本</div>
                         <pre className="text-fs-aux font-mono text-green-200/80 whitespace-pre-wrap break-all max-h-32 overflow-auto">{seg.theirs.trim()}</pre>
                       </div>
                     </div>
@@ -107,7 +107,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
                     <button onClick={() => handleResolve(c.path, 'ours')} disabled={!!busy}
                       className="px-2 py-1 rounded bg-blue-900/30 text-blue-300 text-fs-aux hover:bg-blue-900/50 disabled:opacity-40">取远端版本</button>
                     <button onClick={() => handleResolve(c.path, 'theirs')} disabled={!!busy}
-                      className="px-2 py-1 rounded bg-green-900/30 text-green-300 text-fs-aux hover:bg-green-900/50 disabled:opacity-40">取本地提交</button>
+                      className="px-2 py-1 rounded bg-pass/12 text-pass text-fs-aux hover:bg-pass/12 disabled:opacity-40">取本地提交</button>
                     <button onClick={() => handleResolve(c.path, 'smart')} disabled={!!busy}
                       className="px-2 py-1 rounded bg-info/20 text-info text-fs-aux hover:bg-info/30 disabled:opacity-40"
                       title="以本地提交为基础，保留远端独有的新增行（编号等价自动识别）">
@@ -127,7 +127,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
       )}
 
       {msg && (
-        <div className={`text-fs-aux rounded px-1.5 py-1 ${msg.ok ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'}`}>
+        <div className={`text-fs-aux rounded px-1.5 py-1 ${msg.ok ? 'bg-pass/12 text-pass' : 'bg-fail/12 text-fail'}`}>
           {msg.text}
         </div>
       )}

@@ -13,10 +13,10 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 const GATE_BADGE: Record<string, { label: string; cls: string }> = {
-  approved: { label: '① 已评审', cls: 'bg-green-900/40 text-green-400' },
-  pending: { label: '① 待评审', cls: 'bg-yellow-900/40 text-yellow-400' },
+  approved: { label: '① 已评审', cls: 'bg-pass/12 text-pass' },
+  pending: { label: '① 待评审', cls: 'bg-warn/12 text-warn' },
   rejected: { label: '① 已驳回', cls: 'bg-fail/12 text-fail' },
-  pass: { label: '② 校验✓', cls: 'bg-green-900/40 text-green-400' },
+  pass: { label: '② 校验✓', cls: 'bg-pass/12 text-pass' },
   fail: { label: '② 校验✗', cls: 'bg-fail/12 text-fail' },
   blocked: { label: '③ 门禁⏸', cls: 'bg-surface-3 text-gray-500' },
 };
@@ -128,7 +128,7 @@ export default function CoveragePanel() {
       </div>
 
       {message && (
-        <div className={`px-3 py-2 rounded-lg text-fs-lead ${message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-fail/12 text-fail border border-fail/35'}`}>
+        <div className={`px-3 py-2 rounded-lg text-fs-lead ${message.ok ? 'bg-pass/12 text-pass border border-pass/35' : 'bg-fail/12 text-fail border border-fail/35'}`}>
           {message.text}
         </div>
       )}
@@ -147,7 +147,7 @@ export default function CoveragePanel() {
               <div className="text-fs-body text-gray-500 mb-2">
                 测试维度分布（场景库按 doc.dimensions 聚合，0 = 盲区）
                 {gaps.dimensions.unassigned.length > 0 && (
-                  <span className="ml-2 text-yellow-400/80">
+                  <span className="ml-2 text-warn/80">
                     ⚠ {gaps.dimensions.unassigned.length} 个场景未标注 dimensions：
                     <span className="font-mono">{gaps.dimensions.unassigned.join(', ')}</span>
                   </span>
@@ -170,8 +170,8 @@ export default function CoveragePanel() {
 
           <div className="flex gap-3 flex-1 min-h-0">
             {laneCard(gaps.lanes.gap, 'bg-fail/12 text-fail', '🔴 无覆盖')}
-            {laneCard(gaps.lanes.draft, 'bg-yellow-900/50 text-yellow-400', '🟡 草稿待审')}
-            {laneCard(gaps.lanes.covered, 'bg-green-900/50 text-green-400', '🟢 已覆盖')}
+            {laneCard(gaps.lanes.draft, 'bg-warn/12 text-warn', '🟡 草稿待审')}
+            {laneCard(gaps.lanes.covered, 'bg-pass/12 text-pass', '🟢 已覆盖')}
           </div>
 
           {/* 建议顺序 + 生成下一批 */}
@@ -216,9 +216,9 @@ export default function CoveragePanel() {
 
       {/* FR backlink 信息条 */}
       {backlink && (
-        <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
+        <div className="bg-warn/12 border border-warn/35 rounded-lg p-3">
           <div className="flex items-center justify-between">
-            <span className="text-fs-body font-mono text-yellow-400">
+            <span className="text-fs-body font-mono text-warn">
               covers ← {backlink.fr} {backlink.title ? `· ${backlink.title}` : ''}
             </span>
             <button onClick={() => setBacklink(null)} className="text-gray-500 text-fs-body hover:text-gray-300">✕</button>

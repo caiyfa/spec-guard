@@ -105,7 +105,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
       <div className="px-1 text-fs-body font-medium text-gray-300">
         📜 提交历史（{data.branch}）
         {data.synced ? (
-          <span className="ml-1.5 text-fs-aux text-green-400">✅ 已全部同步</span>
+          <span className="ml-1.5 text-fs-aux text-pass">✅ 已全部同步</span>
         ) : (
           <span className="ml-1.5 text-fs-aux text-warn">
             {ahead > 0 ? `⬆ ${ahead} 待推送` : ''}
@@ -140,7 +140,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
                   {c.files.map((f, i) => (
                     <div key={i} className="text-fs-aux font-mono text-gray-500 flex items-center gap-1">
                       <span className={
-                        f.status === 'A' ? 'text-green-400' : f.status === 'D' ? 'text-fail' : 'text-yellow-400'
+                        f.status === 'A' ? 'text-pass' : f.status === 'D' ? 'text-fail' : 'text-warn'
                       }>{f.status}</span>
                       <span className="truncate">{f.path}</span>
                     </div>
@@ -159,7 +159,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
       )}
 
       {pushResult && (
-        <div className={`text-fs-aux rounded px-1.5 py-1 ${pushResult.ok ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'}`}>
+        <div className={`text-fs-aux rounded px-1.5 py-1 ${pushResult.ok ? 'bg-pass/12 text-pass' : 'bg-fail/12 text-fail'}`}>
           {pushResult.ok ? '✅ ' : '❌ '}{pushResult.msg}
         </div>
       )}

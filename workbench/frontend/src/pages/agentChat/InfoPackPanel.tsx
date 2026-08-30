@@ -56,7 +56,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
           <span>
             📦 基础信息包（{meta.info_pack.length}）
             {freshness && freshness.stale_count > 0 && (
-              <span className="text-yellow-400 text-fs-micro ml-1">⚠️ {freshness.stale_count} 项已变更</span>
+              <span className="text-warn text-fs-micro ml-1">⚠️ {freshness.stale_count} 项已变更</span>
             )}
           </span>
           <span className="text-fs-micro text-gray-600">{open ? '▲' : '▼'}</span>
@@ -102,7 +102,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
           {/* K-013: git 变更发现——信息包外的相关变更/新增文件，一键补入 */}
           {outside.length > 0 && (
             <div className="mt-2 pt-2 border-t border-border/50">
-              <div className="text-fs-micro text-yellow-400/80 mb-1">
+              <div className="text-fs-micro text-warn/80 mb-1">
                 ⚠️ {outside.length} 个相关文件已变更/新增（{freshness?.base_commit}→{freshness?.head_commit}），未在信息包中：
               </div>
               <div className="max-h-24 overflow-y-auto space-y-0.5">

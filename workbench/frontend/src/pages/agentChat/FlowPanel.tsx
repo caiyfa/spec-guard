@@ -15,8 +15,8 @@ const POLL_MS = 5000;
 const VIEW_KEY = 'sg_flow_view';
 
 const STATUS_META: Record<string, { dot: string; text: string; cn: string }> = {
-  in_order: { dot: 'bg-green-500', text: 'text-green-400', cn: '顺序正确' },
-  out_of_order: { dot: 'bg-yellow-500', text: 'text-yellow-400', cn: '乱序' },
+  in_order: { dot: 'bg-pass', text: 'text-pass', cn: '顺序正确' },
+  out_of_order: { dot: 'bg-warn', text: 'text-warn', cn: '乱序' },
   missing: { dot: 'bg-fail', text: 'text-fail', cn: '缺失' },
   skipped: { dot: 'bg-gray-600', text: 'text-gray-500', cn: '跳过' },
 };
@@ -138,8 +138,8 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
           {!trace.is_generate && <span className="text-gray-600"> · 非生成会话（基线仅供参考）</span>}
         </span>
         <span className="flex items-center gap-2">
-          {nDev > 0 ? <span className="text-yellow-400 font-semibold">跑偏 {nDev}</span>
-            : <span className="text-green-400">无跑偏</span>}
+          {nDev > 0 ? <span className="text-warn font-semibold">跑偏 {nDev}</span>
+            : <span className="text-pass">无跑偏</span>}
           <button className="text-gray-500 hover:text-info" title="立即刷新" onClick={() => load()}>↻</button>
         </span>
       </div>
@@ -197,7 +197,7 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
       {/* 跑偏点（带步号证据） */}
       {nDev > 0 && (
         <div className="border-t border-border pt-1.5 space-y-1">
-          <div className="text-yellow-400 font-semibold">跑偏点</div>
+          <div className="text-warn font-semibold">跑偏点</div>
           {(trace.deviations || []).map((d, i) => (
             <div key={i} className="text-gray-400 leading-5">⚠ {d}</div>
           ))}

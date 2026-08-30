@@ -4,9 +4,9 @@ import type { DocWriteItem } from './types';
 
 function verdictBadge(v: string | null) {
   switch (v) {
-    case 'PASS': return <span className="text-fs-micro px-1 py-0.5 rounded bg-green-900/25 text-green-400 flex-shrink-0">✅ 校验通过</span>;
+    case 'PASS': return <span className="text-fs-micro px-1 py-0.5 rounded bg-pass/12/25 text-pass flex-shrink-0">✅ 校验通过</span>;
     case 'REJECT': return <span className="text-fs-micro px-1 py-0.5 rounded bg-fail/12/25 text-fail flex-shrink-0">❌ 校验未过</span>;
-    case 'ERROR': return <span className="text-fs-micro px-1 py-0.5 rounded bg-yellow-900/25 text-yellow-400 flex-shrink-0">⚠️ 校验异常</span>;
+    case 'ERROR': return <span className="text-fs-micro px-1 py-0.5 rounded bg-warn/12/25 text-warn flex-shrink-0">⚠️ 校验异常</span>;
     case 'SKIP': return <span className="text-fs-micro px-1 py-0.5 rounded bg-gray-700/40 text-gray-400 flex-shrink-0">⏭ 门禁跳过</span>;
     default: return null;
   }
@@ -87,12 +87,12 @@ export function DiffOverlay({ item, onClose }: { item: DocWriteItem; onClose: ()
         ) : (
           <>
             <div className="px-3 py-1.5 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
-              <span className="text-green-400">+{state.added}</span> / <span className="text-fail">-{state.removed}</span> · 旧版（.bak）→ 当前
+              <span className="text-pass">+{state.added}</span> / <span className="text-fail">-{state.removed}</span> · 旧版（.bak）→ 当前
             </div>
             <div className="flex-1 min-h-0 overflow-auto font-mono text-fs-body leading-relaxed">
               {state.diff!.map((l, i) => (
                 <div key={i} className={
-                  l.type === 'add' ? 'bg-green-900/25 text-green-300 px-2 whitespace-pre-wrap'
+                  l.type === 'add' ? 'bg-pass/12/25 text-pass px-2 whitespace-pre-wrap'
                     : l.type === 'del' ? 'bg-fail/12/25 text-fail px-2 whitespace-pre-wrap'
                       : 'text-gray-500 px-2 whitespace-pre-wrap'
                 }>

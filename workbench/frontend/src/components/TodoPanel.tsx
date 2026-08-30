@@ -29,7 +29,7 @@ const STATUS_ICONS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   done: 'text-gray-600 line-through',
-  in_progress: 'text-yellow-400',
+  in_progress: 'text-warn',
   blocked: 'text-fail',
   pending: 'text-gray-400',
 };
@@ -55,7 +55,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
               <div
                 key={todo.id || i}
                 className={`text-fs-body flex items-start gap-1.5 ${color} ${
-                  todo.status === 'in_progress' ? 'bg-yellow-500/5 rounded px-1 -mx-1' : ''
+                  todo.status === 'in_progress' ? 'bg-warn/5 rounded px-1 -mx-1' : ''
                 }`}
               >
                 <span className="flex-shrink-0 mt-0.5">{icon}</span>
@@ -77,7 +77,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
               <div
                 key={i}
                 className={`text-fs-body flex items-start gap-1.5 ${
-                  isDone ? 'text-gray-600 line-through' : isCurrent ? 'text-yellow-400' : 'text-gray-400'
+                  isDone ? 'text-gray-600 line-through' : isCurrent ? 'text-warn' : 'text-gray-400'
                 }`}
               >
                 <span className="flex-shrink-0 mt-0.5">

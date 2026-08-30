@@ -14,9 +14,9 @@ const CRON_PRESETS: { label: string; value: string }[] = [
 ];
 
 const STATUS_LABELS: Record<string, { text: string; color: string }> = {
-  success: { text: '✅ 成功', color: 'text-green-500' },
+  success: { text: '✅ 成功', color: 'text-pass' },
   failed: { text: '❌ 失败', color: 'text-fail' },
-  partial: { text: '⚠️ 部分成功', color: 'text-yellow-400' },
+  partial: { text: '⚠️ 部分成功', color: 'text-warn' },
   error: { text: '❌ 错误', color: 'text-fail' },
   skipped_busy: { text: '⏭️ 跳过（执行忙）', color: 'text-gray-500' },  // T-302：T-117 互斥跳过状态
   '': { text: '—', color: 'text-gray-600' },
@@ -203,7 +203,7 @@ export default function Schedules() {
                     <td className="px-3 py-2 font-mono text-fs-body text-gray-400">{job.cron}</td>
                     <td className="px-3 py-2">
                       {job.enabled ? (
-                        <span className="text-green-500 text-fs-body">✅ 启用</span>
+                        <span className="text-pass text-fs-body">✅ 启用</span>
                       ) : (
                         <span className="text-gray-500 text-fs-body">⏸️ 暂停</span>
                       )}

@@ -295,9 +295,9 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
     }
     if (item.type === 'step-complete') {
       return (
-        <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-fs-body">
-          <span className="text-green-500">✅</span>
-          <span className="text-green-400/80">完成：{item.content}</span>
+        <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-pass/12/10 border border-pass/35/20 rounded text-fs-body">
+          <span className="text-pass">✅</span>
+          <span className="text-pass/80">完成：{item.content}</span>
         </div>
       );
     }
@@ -310,7 +310,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
   return (
     <div className="flex flex-col h-full text-fs-body">
       <div className="flex items-center gap-2 py-1 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
-        <span className={wsState === 'open' ? 'text-green-500' : 'text-fail'}>{wsState === 'open' ? '●' : '○'}</span>
+        <span className={wsState === 'open' ? 'text-pass' : 'text-fail'}>{wsState === 'open' ? '●' : '○'}</span>
         <span className="whitespace-nowrap">辅助助手（辅助会话）</span>
         {auxSid && <span className="font-mono text-gray-600 truncate flex-1" title={auxSid}>{auxSid}</span>}
         {models.length > 0 && (

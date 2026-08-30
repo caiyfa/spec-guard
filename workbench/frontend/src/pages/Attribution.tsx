@@ -24,8 +24,8 @@ interface RunReport {
 
 const KIND_LABEL: Record<string, { label: string; cls: string }> = {
   product_defect: { label: '疑似产品缺陷', cls: 'bg-fail/12 text-fail' },
-  spec_question: { label: 'spec 质疑', cls: 'bg-yellow-900/40 text-yellow-400' },
-  environment: { label: '环境问题', cls: 'bg-orange-900/40 text-orange-400' },
+  spec_question: { label: 'spec 质疑', cls: 'bg-warn/12 text-warn' },
+  environment: { label: '环境问题', cls: 'bg-warn/12 text-warn' },
 };
 
 const SPQ_STATUS: Record<string, string> = {
@@ -98,8 +98,8 @@ export default function Attribution() {
   const categorize = (verdict: string) => {
     const categories: Record<string, { label: string; color: string }> = {
       FAIL: { label: '场景缺陷', color: 'text-fail' },
-      ERROR: { label: '环境异常', color: 'text-yellow-400' },
-      BLOCKED: { label: '上游阻塞', color: 'text-orange-400' },
+      ERROR: { label: '环境异常', color: 'text-warn' },
+      BLOCKED: { label: '上游阻塞', color: 'text-warn' },
     };
     return categories[verdict] || { label: verdict, color: 'text-gray-400' };
   };
@@ -207,7 +207,7 @@ export default function Attribution() {
         <div className="flex-1 overflow-y-auto space-y-3">
           {/* T-063：建档消息 */}
           {spqMessage && (
-            <div className={`px-3 py-2 rounded-lg text-fs-lead ${spqMessage.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-fail/12 text-fail border border-fail/35'}`}>
+            <div className={`px-3 py-2 rounded-lg text-fs-lead ${spqMessage.ok ? 'bg-pass/12 text-pass border border-pass/35' : 'bg-fail/12 text-fail border border-fail/35'}`}>
               {spqMessage.text}
             </div>
           )}
@@ -256,7 +256,7 @@ export default function Attribution() {
                     <div className="space-y-1">
                       {fc.assertions.map((a: any, j: number) => (
                         <div key={j} className="text-fs-body text-gray-400 flex items-start gap-2">
-                          <span className={a.passed ? 'text-green-500' : 'text-fail'}>
+                          <span className={a.passed ? 'text-pass' : 'text-fail'}>
                             {a.passed ? '✓' : '✗'}
                           </span>
                           <span className="flex-1">{a.type || a.assertion || 'assert'}: {a.detail || a.message || JSON.stringify(a).slice(0, 200)}</span>
@@ -280,7 +280,7 @@ export default function Attribution() {
                           </div>
                           <div className="text-fs-body text-gray-400">{attr.suggestion.rationale}</div>
                           {attr.honesty_review?.required && (
-                            <div className="mt-1 text-fs-aux px-1.5 py-1 rounded bg-orange-900/30 text-orange-400">
+                            <div className="mt-1 text-fs-aux px-1.5 py-1 rounded bg-warn/12 text-warn">
                               ⚠️ 诚实性复核：{attr.honesty_review.conclusion}
                             </div>
                           )}
@@ -317,8 +317,8 @@ export default function Attribution() {
 
           {/* BUG 单草稿 */}
           {report.failed_cases.length > 0 && (
-            <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
-              <div className="text-fs-body text-yellow-400 font-medium mb-1">📋 BUG 单草稿</div>
+            <div className="bg-warn/12 border border-warn/35 rounded-lg p-3">
+              <div className="text-fs-body text-warn font-medium mb-1">📋 BUG 单草稿</div>
               <div className="text-fs-body text-gray-500">
                 以下失败场景可生成 BUG 单草稿，人工确认后才可导出。
               </div>
@@ -351,13 +351,13 @@ export default function Attribution() {
                     <span className="text-fs-aux text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
                     {s.status === 'pending' && (
                       <button onClick={() => handleSpqTransition(s.spq_id, 'in_progress')}
-                        className="text-fs-aux px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded hover:bg-yellow-900/60">
+                        className="text-fs-aux px-1.5 py-0.5 bg-warn/12 text-warn rounded hover:bg-warn/12/60">
                         处理中
                       </button>
                     )}
                     {s.status !== 'closed' && (
                       <button onClick={() => handleSpqTransition(s.spq_id, 'closed')}
-                        className="text-fs-aux px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60">
+                        className="text-fs-aux px-1.5 py-0.5 bg-pass/12 text-pass rounded hover:bg-pass/12">
                         闭环
                       </button>
                     )}

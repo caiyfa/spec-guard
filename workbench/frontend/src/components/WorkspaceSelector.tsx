@@ -121,9 +121,9 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
           设为默认
         </button>
       )}
-      {saved && <span className="text-fs-body text-green-500">✓ 已设为默认</span>}
+      {saved && <span className="text-fs-body text-pass">✓ 已设为默认</span>}
       {tree.every(g => g.workspaces.length === 0) && (
-        <span className="text-fs-body text-yellow-500">无可用工作区，请到「系统配置」注册</span>
+        <span className="text-fs-body text-warn">无可用工作区，请到「系统配置」注册</span>
       )}
     </div>
   );

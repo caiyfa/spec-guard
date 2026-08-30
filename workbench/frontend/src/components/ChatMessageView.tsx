@@ -197,7 +197,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
           title="旧快照无附件下载信息——点「↻ 更新本群」重新同步后可下载">
           <span className="text-fs-lead">📎</span>
           <span className="text-gray-300">{msg.file_name || '文件'}</span>
-          <span className="text-fs-aux text-amber-500/80">需更新后可下载</span>
+          <span className="text-fs-aux text-warn/80">需更新后可下载</span>
         </span>
       );
     }

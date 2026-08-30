@@ -16,7 +16,7 @@ export function SqlResultTable({ rows, truncated, row_count }: SqlResultData & {
     <div className="text-fs-body">
       <div className="flex items-center gap-2 mb-1 text-gray-500">
         <span>{count} 行</span>
-        {truncated && <span className="text-yellow-500/80">（结果超上限，已截断）</span>}
+        {truncated && <span className="text-warn/80">（结果超上限，已截断）</span>}
       </div>
       <div className="overflow-x-auto max-h-72 border border-border rounded">
         <table className="min-w-full">

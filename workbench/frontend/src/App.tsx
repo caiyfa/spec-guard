@@ -322,7 +322,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             <span className={`text-fs-body px-1.5 py-0.5 rounded ${
               user.role === 'admin' ? 'bg-purple-900/50 text-purple-300'
               : user.role === 'tester' ? 'bg-info/15 text-info'
-              : user.role === 'product' ? 'bg-amber-900/50 text-amber-300'
+              : user.role === 'product' ? 'bg-warn/12 text-warn'
               : 'bg-gray-700 text-gray-400'
             }`}
               title={(user.roles ?? []).join(', ')}>

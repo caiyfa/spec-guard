@@ -179,7 +179,7 @@ function ModelsTab() {
               m.id === selectedId ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
             }`}>
             <div className="flex items-center gap-1">
-              {m.is_default && <span className="text-yellow-500 text-fs-aux">★</span>}
+              {m.is_default && <span className="text-warn text-fs-aux">★</span>}
               <span className="text-fs-body font-medium truncate">{m.name || '(未命名)'}</span>
             </div>
             <div className="text-fs-micro text-gray-600 font-mono truncate">{m.model || '(未配置)'}</div>
@@ -200,7 +200,7 @@ function ModelsTab() {
                   {probing ? '探测中...' : '🔌 探测'}
                 </button>
                 <button onClick={handleSetDefault}
-                  className="text-fs-aux px-2 py-1 rounded bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">
+                  className="text-fs-aux px-2 py-1 rounded bg-yellow-600/20 text-warn hover:bg-yellow-600/30">
                   ★ 设为默认
                 </button>
                 <button onClick={handleDelete}

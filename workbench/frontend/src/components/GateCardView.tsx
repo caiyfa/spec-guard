@@ -34,7 +34,7 @@ const DIM_LABEL: Record<string, string> = {
 
 const cardCls = 'bg-surface-1 border border-border rounded-lg p-3';
 const btn = 'px-2.5 py-1 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40 disabled:cursor-not-allowed';
-const btnOk = 'px-2.5 py-1 rounded text-fs-body font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
+const btnOk = 'px-2.5 py-1 rounded text-fs-body font-medium bg-pass/15 text-pass hover:bg-pass/25 disabled:opacity-40 disabled:cursor-not-allowed';
 const btnDanger = 'px-2 py-0.5 rounded text-fs-aux font-medium bg-fail/15 text-fail hover:bg-fail/25 disabled:opacity-40 disabled:cursor-not-allowed';
 
 // ══════════════════════════════════════════════════════════
@@ -122,7 +122,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
                   <span key={k}
                     className={`text-fs-aux px-1.5 py-0.5 rounded border ${
                       st === 'pass'
-                        ? 'text-green-400 border-green-500/40'
+                        ? 'text-pass border-pass/35'
                         : 'text-gray-500 border-border'}`}>
                     {label} {st === 'pass' ? '✓' : '·'}
                   </span>
@@ -174,8 +174,8 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
         <span className="text-fs-body font-medium text-gray-200 flex-1 truncate">{c.title}</span>
         <span className={`text-fs-micro px-1 py-0.5 rounded border ${
           c.level === 'L3'
-            ? 'text-green-400 border-green-500/40'
-            : 'text-yellow-400 border-yellow-500/40'}`}
+            ? 'text-pass border-pass/35'
+            : 'text-warn border-yellow-500/40'}`}
           title={c.level === 'L3'
             ? '可逆低危操作（代执行白名单）'
             : '定性决策：Agent 可引导/预填，最后一下永远人点'}>
@@ -244,7 +244,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
     // 白名单外 action：确定性拒绝，不执行（分档接管边界）
     return (
       <div className={`${cardCls} border-yellow-500/40`}>
-        <div className="text-fs-body text-yellow-400">
+        <div className="text-fs-body text-warn">
           🚫 Agent 提议的代执行「{action || '(缺 action)'}」不在白名单内——已拦截。
         </div>
         <div className="text-fs-aux text-gray-500 mt-1">
@@ -272,7 +272,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
       <div className="flex items-center gap-1.5 mb-1">
         <span>🤖</span>
         <span className="text-fs-body font-medium text-gray-200 flex-1">Agent 代执行提议（可逆操作）</span>
-        <span className="text-fs-micro px-1 py-0.5 rounded border text-green-400 border-green-500/40">L3 白名单</span>
+        <span className="text-fs-micro px-1 py-0.5 rounded border text-pass border-pass/35">L3 白名单</span>
       </div>
       <div className="text-fs-body text-gray-400 mb-2">{spec.describe(params)}</div>
       {state === 'pending' && (
@@ -282,7 +282,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
         </div>
       )}
       {state === 'running' && <div className="text-fs-body text-gray-500">执行中…</div>}
-      {state === 'ok' && <div className="text-fs-body text-green-400">✓ {result}</div>}
+      {state === 'ok' && <div className="text-fs-body text-pass">✓ {result}</div>}
       {state === 'failed' && <div className="text-fs-body text-fail">✗ {result}</div>}
       {state === 'dismissed' && <div className="text-fs-body text-gray-600">已忽略（未执行任何操作）</div>}
     </div>

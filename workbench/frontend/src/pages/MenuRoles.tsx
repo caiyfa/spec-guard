@@ -39,7 +39,7 @@ export default function MenuRoles() {
         </p>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-fail/12 text-fail border border-fail/35">{error}</div>}
-      {message && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-green-900/30 text-green-400 border border-green-700/50">{message}</div>}
+      {message && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-pass/12 text-pass border border-pass/35">{message}</div>}
       <div className="flex gap-2 mb-4">
         {([['menu', `菜单管理 (${menus.length})`], ['roles', `角色管理 (${roles.length})`], ['grants', '角色授权']] as [Tab, string][]).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
@@ -288,7 +288,7 @@ function GrantsTab({ roles, menus, flash, setError }: {
                           onChange={() => toggle(i.menu_key, !!i.is_system, !!i.is_public)} />
                         {i.label}
                         {i.is_system && <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统保底</span>}
-                        {i.is_public && <span className="text-fs-aux bg-green-900/50 text-green-300 rounded px-1">公开 · 登录即用</span>}
+                        {i.is_public && <span className="text-fs-aux bg-pass/12 text-pass rounded px-1">公开 · 登录即用</span>}
                       </label>
                     ))}
                   </div>

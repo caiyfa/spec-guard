@@ -252,7 +252,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           <button
             onClick={() => handleBatch(true)}
             disabled={busy || selectedCount === 0}
-            className="flex-1 text-fs-aux px-1.5 py-1 rounded bg-amber-900/30 text-amber-300 hover:bg-amber-900/50 disabled:opacity-40"
+            className="flex-1 text-fs-aux px-1.5 py-1 rounded bg-warn/12 text-warn hover:bg-warn/12 disabled:opacity-40"
             title="归档选中会话（列表瘦身，文件保留可恢复）">
             🗄 归档
           </button>

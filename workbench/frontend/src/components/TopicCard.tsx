@@ -17,8 +17,8 @@ import type { TagIndex } from './topicList';
 import ModelSetupModal from './ModelSetupModal';
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  draft: { label: '待确认', cls: 'bg-amber-500/15 text-amber-400' },
-  confirmed: { label: '已确认', cls: 'bg-green-500/15 text-green-400' },
+  draft: { label: '待确认', cls: 'bg-warn/12 text-warn' },
+  confirmed: { label: '已确认', cls: 'bg-pass/15 text-pass' },
   rejected: { label: '已拒绝', cls: 'bg-gray-600/30 text-gray-500 line-through' },
 };
 
@@ -26,7 +26,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
   chat: { label: '闲聊', cls: 'bg-gray-600/30 text-gray-500' },
   routine: { label: '沟通', cls: 'bg-sky-500/15 text-sky-400' },
-  requirement: { label: '需求', cls: 'bg-amber-500/15 text-amber-300' },
+  requirement: { label: '需求', cls: 'bg-warn/12 text-warn' },
   test: { label: '测试', cls: 'bg-blue-500/15 text-blue-400' },
   solution: { label: '方案', cls: 'bg-violet-500/15 text-violet-400' },
 };
@@ -146,7 +146,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
             🔗 {(relatedCount || 0) + 1} 群
           </button>
         )}
-        {t.continues && <span className="text-fs-aux text-amber-400">⤺ 延续</span>}
+        {t.continues && <span className="text-fs-aux text-warn">⤺ 延续</span>}
         <span className="ml-auto flex items-center gap-2 text-fs-aux text-gray-500 shrink-0">
           {time && <span>{time}</span>}
           <span>{t.message_count} 条 · {t.participants_count} 人</span>
@@ -225,7 +225,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
             {busy === 'regen' ? '生成中…' : '重新生成'}
           </button>
           {status !== 'confirmed' && (
-            <button className="text-green-400 hover:underline" onClick={() => flip('confirm')}
+            <button className="text-pass hover:underline" onClick={() => flip('confirm')}
               disabled={busy === 'confirm'}>
               {busy === 'confirm' ? '确认中…' : '✓ 确认'}
             </button>

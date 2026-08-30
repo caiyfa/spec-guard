@@ -309,7 +309,7 @@ export function ChatInput({
       {/* T-933：材料上传反馈（就地提示不踢人；失败红/引导黄） */}
       {matNotice && (
         <div className={`mb-2 px-2 py-1 rounded text-fs-body ${
-          matNotice.error ? 'bg-fail/12 text-fail' : 'bg-amber-500/10 text-amber-300'}`}>
+          matNotice.error ? 'bg-fail/12 text-fail' : 'bg-warn/12 text-warn'}`}>
           {matNotice.text}
           <button className="ml-2 text-gray-500 hover:text-gray-300"
             onClick={() => setMatNotice(null)}>✕</button>

@@ -213,7 +213,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             <div className="flex items-center gap-1.5">
               <span className="text-fs-body font-mono text-gray-200 truncate flex-1" title={file}>{file}</span>
               {meta?.stale && (
-                <span className="text-fs-micro text-yellow-400 flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
+                <span className="text-fs-micro text-warn flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
               )}
               {meta && suggCount[meta.scenario_id] > 0 && !st.promotedTo && (
                 <span className="text-fs-micro text-info flex-shrink-0" title={`${suggCount[meta.scenario_id]} 条依赖建议——到草稿评审页可一键采纳`}>
@@ -223,7 +223,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             </div>
             <div className="text-fs-aux truncate" title={meta?.title || libHit?.path || ''}>
               {libHit ? (
-                <span className="text-green-400/90">✅ 已在场景库 · {libHit.scenarioId} · {libHit.path}</span>
+                <span className="text-pass/90">✅ 已在场景库 · {libHit.scenarioId} · {libHit.path}</span>
               ) : gone ? (
                 <span className="text-gray-600">草稿已不存在（已废弃或删除）</span>
               ) : loadError ? (
@@ -238,10 +238,10 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {/* 三闸状态（T-061）：① 人工评审 / ② 格式校验（③ 发布门禁在入库时自动跑） */}
             {meta?.gates && !libHit && !gone && !loadError && (
               <div className="flex items-center gap-1.5 mt-1 text-fs-micro">
-                <span className={`px-1 py-0.5 rounded ${g1 === 'approved' ? 'bg-green-900/40 text-green-400' : g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                <span className={`px-1 py-0.5 rounded ${g1 === 'approved' ? 'bg-pass/12 text-pass' : g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-warn/12 text-warn'}`}>
                   ① {g1 === 'approved' ? '已评审' : g1 === 'rejected' ? '已驳回' : '待评审'}
                 </span>
-                <span className={`px-1 py-0.5 rounded ${g2 === 'pass' ? 'bg-green-900/40 text-green-400' : g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                <span className={`px-1 py-0.5 rounded ${g2 === 'pass' ? 'bg-pass/12 text-pass' : g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-warn/12 text-warn'}`}>
                   ② {g2 === 'pass' ? '校验通过' : g2 === 'fail' ? '校验未过' : '待校验'}
                 </span>
               </div>
@@ -250,7 +250,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {/* 校验结果 */}
             {st.validate && (
               <div className={`mt-1.5 text-fs-aux rounded px-1.5 py-1 ${
-                st.validate.verdict === 'PASS' ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'
+                st.validate.verdict === 'PASS' ? 'bg-pass/12 text-pass' : 'bg-fail/12 text-fail'
               }`}>
                 <div className="font-medium">
                   {st.validate.verdict}
@@ -266,7 +266,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {/* 试跑结果 */}
             {st.trial && (
               <div className={`mt-1.5 text-fs-aux rounded px-1.5 py-1 ${
-                st.trial.ok ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'
+                st.trial.ok ? 'bg-pass/12 text-pass' : 'bg-fail/12 text-fail'
               }`}>
                 <div className="flex items-start gap-1">
                   <span className="flex-1 break-all">
@@ -283,7 +283,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                   <button onClick={() => setDetailFile(file)}
                     className={`mt-1 px-2 py-0.5 rounded text-fs-aux border ${
                       st.trial.ok
-                        ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
+                        ? 'bg-pass/12 text-pass border-pass/35 hover:bg-pass/12'
                         : 'bg-fail/12 text-fail border-fail/35 hover:bg-fail/12'
                     }`}>
                     🔍 查看结果
@@ -366,7 +366,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             onClick={e => e.stopPropagation()}>
             <div className="text-fs-lead font-medium text-gray-200 mb-2">⬆ 入库评审 — <span className="font-mono">{dialog.file}</span></div>
             {dlgConflict?.existing && (
-              <div className="mb-2 text-fs-body rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
+              <div className="mb-2 text-fs-body rounded bg-warn/12 text-warn px-2 py-1.5 leading-relaxed">
                 ⚠️ 场景 ID <span className="font-mono">{dlgConflict.existing.id}</span> 已存在于
                 <span className="font-mono"> {dlgConflict.existing.path}</span>
                 <div className="mt-0.5">已自动选中该模块并勾选「覆盖」（覆盖更新会备份原文件，失败自动回滚）；新增场景请改用 next_scenario_id 换新 ID。</div>

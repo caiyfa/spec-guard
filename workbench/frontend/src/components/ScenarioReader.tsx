@@ -28,7 +28,7 @@ interface Props {
 
 function Chip({ text, tone = 'gray' }: { text: string; tone?: 'gray' | 'info' | 'warn' }) {
   const cls = tone === 'info' ? 'bg-info/15 text-info'
-    : tone === 'warn' ? 'bg-yellow-900/30 text-yellow-500'
+    : tone === 'warn' ? 'bg-warn/12 text-warn'
     : 'bg-surface-3 text-gray-400';
   return <span className={`px-1.5 py-0.5 rounded text-fs-aux ${cls}`}>{text}</span>;
 }
@@ -82,7 +82,7 @@ function AnchorChip({ aid, anchor, open, onToggle }: {
       <span className="font-mono">{aid}</span>
       <span className="ml-1 text-gray-400">{m.title.replace(/^[A-Z]+-[\w-]+[：:]\s*/, '').slice(0, 24)}</span>
       {anchor.matches.length > 1 && (
-        <span className="ml-1 text-fs-micro text-yellow-500/80" title="该编号跨模块同号，展开后可切换候选">
+        <span className="ml-1 text-fs-micro text-warn/80" title="该编号跨模块同号，展开后可切换候选">
           {anchor.matches.length}处
         </span>
       )}

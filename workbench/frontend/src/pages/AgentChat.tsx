@@ -1435,9 +1435,9 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
     // step-complete: 步骤完成提示
     if (item.type === 'step-complete') {
       return (
-        <div key={idx} className="mb-3 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-fs-body">
-          <span className="text-green-500">✅</span>
-          <span className="text-green-400/80">完成：{item.content}</span>
+        <div key={idx} className="mb-3 flex items-center gap-2 px-2 py-1 bg-pass/12/10 border border-pass/35/20 rounded text-fs-body">
+          <span className="text-pass">✅</span>
+          <span className="text-pass/80">完成：{item.content}</span>
         </div>
       );
     }
@@ -1479,7 +1479,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
               {sessCollapsed ? '»' : '«'} 会话
             </button>
-            <span className={wsState === 'open' ? 'text-green-500' : 'text-fail'}>
+            <span className={wsState === 'open' ? 'text-pass' : 'text-fail'}>
               {wsState === 'open' ? '●' : '○'}
             </span>
             {pickedPurpose && (() => {
@@ -1504,7 +1504,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
             {stats && (
               <>
                 <span>·</span>
-                <span className={stats.is_mock ? 'text-yellow-500' : 'text-green-500'}>
+                <span className={stats.is_mock ? 'text-warn' : 'text-pass'}>
                   {stats.is_mock ? 'MOCK' : 'LIVE'} ({stats.model})
                 </span>
               </>
@@ -1581,9 +1581,9 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                 </div>
               )}
               {reconnecting && (
-                <div className="bg-yellow-900/20 border border-yellow-700/30 rounded p-1.5 mb-2 flex items-center gap-1.5">
+                <div className="bg-warn/12 border border-warn/35 rounded p-1.5 mb-2 flex items-center gap-1.5">
                   <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
-                  <span className="text-yellow-300 text-fs-body">连接已断开，正在自动重连…</span>
+                  <span className="text-warn text-fs-body">连接已断开，正在自动重连…</span>
                 </div>
               )}
               {error && (
@@ -1592,8 +1592,8 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                 </div>
               )}
               {notice && (
-                <div className="bg-green-900/20 border border-green-700/30 rounded p-2 mb-2">
-                  <span className="text-green-400 text-fs-lead">✓ {notice}</span>
+                <div className="bg-pass/12 border border-pass/35 rounded p-2 mb-2">
+                  <span className="text-pass text-fs-lead">✓ {notice}</span>
                 </div>
               )}
               </ArtifactCtx.Provider>

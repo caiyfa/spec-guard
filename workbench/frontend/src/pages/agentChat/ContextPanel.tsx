@@ -10,15 +10,15 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
   const promptTotal = Object.values(breakdown).reduce((a, b) => a + b, 0) || 1;
   const roles = [
     { key: 'system' as const, color: 'bg-blue-500', label: '系统' },
-    { key: 'user' as const, color: 'bg-green-500', label: '用户' },
+    { key: 'user' as const, color: 'bg-pass', label: '用户' },
     { key: 'assistant' as const, color: 'bg-purple-500', label: '助手' },
-    { key: 'tool' as const, color: 'bg-orange-500', label: '工具' },
+    { key: 'tool' as const, color: 'bg-warn', label: '工具' },
   ];
   return (
     <div className="px-3 py-2 border-b border-border">
       <div className="flex items-center justify-between mb-1">
         <span className="text-fs-body font-medium text-gray-300">📊 上下文</span>
-        <span className={`text-fs-aux font-mono ${pct > 80 ? 'text-fail' : pct > 50 ? 'text-yellow-400' : 'text-gray-500'}`}>
+        <span className={`text-fs-aux font-mono ${pct > 80 ? 'text-fail' : pct > 50 ? 'text-warn' : 'text-gray-500'}`}>
           {pct}%
         </span>
       </div>

@@ -85,7 +85,7 @@ export default function AdminUsers() {
         </div>
       )}
       {message && (
-        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-green-900/30 text-green-400 border border-green-700/50">
+        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-pass/12 text-pass border border-pass/35">
           {message}
         </div>
       )}
