@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<!--
+════════════════════════════════════════════════════════════════════════════════
+  SpecGuard 工作台 UI 设计方向 A —「Instrument 仪表」
+  阶段一设计 demo · 自包含离线 HTML（零依赖/零 CDN/零构建，双击可开）
+
+  设计立意（三句话）：
+  ① 仪表感 = 每个像素都有读数职责——删除一切装饰性色块，用细分割线（hairline）、
+     留白与字重组织信息层级，像示波器面板一样克制、精确、可扫读。
+  ② 单强调色纪律：全站只有一个强调色（indigo #6b78e8），交互/当前/选中全部归它；
+     状态语义交给六个低饱和状态色的小面积「点 + 描边徽章」，视线永远先落在
+     「当前」与「异常」，而不是落在装饰上。
+  ③ 排版即界面：标题 15 / 正文 12 / 证据 10.5 / 微标 9 四档字号阶梯 +
+     uppercase 微标签分节，用排版分层替代色块分层；深色优先，浅色同构成立。
+
+  色板变量表（变量名对齐 workbench/frontend/src/styles/themes.css 语义）：
+    --surface-1/2/3   页面底/卡片面板/悬浮输入    dark #0b0c10·#13141b·#1c1e28 / light #f6f7f9·#ffffff·#eef0f4
+    --border          细分割线                     dark #2a2c38 / light #dfe2e9
+    --info            唯一强调色（交互/当前）       dark #6b78e8 / light #4653c7
+    --pass/--fail     通过/失败                    dark #4cc38a·#e5484d / light #1f9d63·#d92d20
+    --skip/--blocked  跳过/阻塞                    dark #c9a13b·#9d7bea / light #b07d10·#7c3aed
+    --warn            警告                         dark #e8934a / light #d97706
+    --gray-100..700   文字灰阶（语义反转，同 themes.css 手法）
+    --overlay/--code-bg/--shadow  遮罩/代码底/阴影
+  透明度档次（对齐方案 §3.2）：软填 10% · 徽章填 14% · 描边 40%
+
+  字体栈：
+    正文  ui-sans-serif, "Inter", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif
+    等宽  ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace
+
+  🧭 flow 图渲染说明（阶段二裁决输入）：
+    本 demo 的 flow 图为手绘 SVG。判断：mermaid 对本方向需要的「当前阶段外环发光 +
+    ⚠角标精确定位 + 徽章化双行节点」表达力已到极限（classDef 仅支持 fill/stroke，
+    无法 box-shadow/foreignObject 角标）。建议：落地若选本方向，flow 图升级为专用
+    SVG 渲染器（拓扑数据已结构化，evals/flows/*.flow.json 直接驱动）；其余方向可
+    继续沿用 mermaid。——一句话理由与替代方案，供阶段二裁决。
+
+  五个画板：01 🧭 flow 路径图（聚焦/全图） · 02 AgentChat 三栏 · 03 图标体系 ·
+            04 组件拼版 · 05 深浅主题秀（右上角可整页切深浅）
+  样例数据：evals/flows/generate-scenario.flow.json 真实 12 阶段 + 21 边 + 双交互门；
+            会话故事线 = 生成 HI-PERM-003 权限场景（S3 缺失必需 / S4 乱序 / S8 ⚠1）。
+  emoji 仅出现在画板 03 的「现状对照」区。
+════════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN" data-mode="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向 A · Instrument 仪表 — SpecGuard UI 设计 demo</title>
+<style>
+/* ── 色板：深色优先，浅色同构（.t-light 作用域供画板 05 局部对照） ── */
+:root, :root[data-mode='dark'], .t-dark {
+  color-scheme: dark;
+  --surface-1: 11 12 16;    /* #0b0c10 */
+  --surface-2: 19 20 27;    /* #13141b */
+  --surface-3: 28 30 40;    /* #1c1e28 */
+  --border: 42 44 56;       /* #2a2c38 */
+  --info: 107 120 232;      /* #6b78e8 唯一强调色 */
+  --pass: 76 195 138;       /* #4cc38a */
+  --fail: 229 72 77;        /* #e5484d */
+  --skip: 201 161 59;       /* #c9a13b */
+  --blocked: 157 123 234;   /* #9d7bea */
+  --warn: 232 147 74;       /* #e8934a */
+  --gray-100: 242 243 247;
+  --gray-200: 226 228 236;
+  --gray-300: 195 198 210;
+  --gray-400: 150 154 171;
+  --gray-500: 109 113 131;
+  --gray-600: 74 78 94;
+  --gray-700: 52 56 69;
+  --overlay: 4 5 8;
+  --code-bg: 9 10 13;
+  --shadow: 0 8px 28px rgb(0 0 0 / 0.5);
+  --dotgrid: 255 255 255;
+}
+:root[data-mode='light'], .t-light {
+  color-scheme: light;
+  --surface-1: 246 247 249; /* #f6f7f9 */
+  --surface-2: 255 255 255;
+  --surface-3: 238 240 244; /* #eef0f4 */
+  --border: 223 226 233;    /* #dfe2e9 */
+  --info: 70 83 199;        /* #4653c7 */
+  --pass: 31 157 99;        /* #1f9d63 */
+  --fail: 217 45 32;        /* #d92d20 */
+  --skip: 176 125 16;       /* #b07d10 */
+  --blocked: 124 58 237;    /* #7c3aed */
+  --warn: 217 119 6;        /* #d97706 */
+  --gray-100: 23 26 33;
+  --gray-200: 36 40 50;
+  --gray-300: 61 66 80;
+  --gray-400: 92 98 114;
+  --gray-500: 125 131 148;
+  --gray-600: 162 168 184;
+  --gray-700: 198 203 214;
+  --overlay: 30 34 48;
+  --code-bg: 241 242 245;
+  --shadow: 0 8px 24px rgb(30 34 48 / 0.10);
+  --dotgrid: 30 34 48;
+}
+
+/* ── 基座 ── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: rgb(var(--surface-1));
+  color: rgb(var(--gray-200));
+  font: 12px/1.6 ui-sans-serif, "Inter", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { /* 仪表底纹：极淡点阵（蓝图格） */
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: radial-gradient(rgb(var(--dotgrid) / 0.045) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.mono { font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, monospace; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+
+/* ── 字号四档阶梯（方案 §3.1） ── */
+.fs-micro { font-size: 9px; }
+.fs-aux   { font-size: 10.5px; }
+.fs-body  { font-size: 12px; }
+.fs-lead  { font-size: 13px; }
+.fs-title { font-size: 15px; }
+.micro-label { /* uppercase 微标签：分节用，仪表语言的核心件 */
+  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  color: rgb(var(--gray-500)); font-weight: 600;
+}
+
+/* ── 顶栏 ── */
+.topnav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 20px;
+  padding: 0 28px; height: 52px;
+  background: rgb(var(--surface-1) / 0.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgb(var(--border) / 0.6);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand .mark {
+  width: 22px; height: 22px; border: 1.5px solid rgb(var(--info)); border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: rgb(var(--info)); font-size: 11px; font-weight: 700; transform: translateY(5px);
+}
+.brand b { font-size: 13px; color: rgb(var(--gray-100)); font-weight: 600; letter-spacing: .01em; }
+.brand span { font-size: 10.5px; color: rgb(var(--gray-500)); }
+.nav-links { display: flex; gap: 2px; margin-left: 12px; }
+.nav-links a {
+  padding: 5px 11px; border-radius: 6px; font-size: 11px; color: rgb(var(--gray-400));
+  transition: color .15s, background .15s;
+}
+.nav-links a:hover { color: rgb(var(--gray-100)); background: rgb(var(--surface-3) / 0.7); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.chip-offline {
+  font-size: 9px; letter-spacing: .1em; color: rgb(var(--gray-500));
+  border: 1px solid rgb(var(--border)); border-radius: 999px; padding: 3px 10px;
+}
+.mode-toggle {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid rgb(var(--border)); border-radius: 6px; padding: 5px 11px;
+  font-size: 10.5px; color: rgb(var(--gray-300)); transition: border-color .15s, color .15s;
+}
+.mode-toggle:hover { border-color: rgb(var(--info) / 0.6); color: rgb(var(--info)); }
+
+/* ── 画板骨架 ── */
+.board { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 44px 32px 8px; }
+.board-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+.board-idx {
+  font-family: ui-monospace, monospace; font-size: 10.5px; color: rgb(var(--info));
+  border: 1px solid rgb(var(--info) / 0.4); border-radius: 5px; padding: 2px 7px;
+}
+.board-head h2 { font-size: 15px; font-weight: 600; color: rgb(var(--gray-100)); letter-spacing: .01em; }
+.board-sub { font-size: 10.5px; color: rgb(var(--gray-500)); margin-bottom: 18px; max-width: 900px; }
+.frame { /* 仪表外框：hairline + 微圆角，无阴影 */
+  border: 1px solid rgb(var(--border) / 0.8); border-radius: 10px;
+  background: rgb(var(--surface-2) / 0.65); overflow: hidden;
+}
+.frame-bar { /* 框内工具条 */
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-bottom: 1px solid rgb(var(--border) / 0.6);
+  font-size: 10.5px; color: rgb(var(--gray-400));
+}
+
+/* ── StatusBadge（唯一状态徽章：描边 + 14% 填 + 图形符，对齐方案 §四） ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 500; line-height: 1;
+  padding: 3.5px 8px; border-radius: 5px; border: 1px solid; white-space: nowrap;
+}
+.badge svg { width: 10px; height: 10px; }
+.b-pass    { color: rgb(var(--pass));    border-color: rgb(var(--pass) / 0.4);    background: rgb(var(--pass) / 0.14); }
+.b-fail    { color: rgb(var(--fail));    border-color: rgb(var(--fail) / 0.4);    background: rgb(var(--fail) / 0.14); }
+.b-skip    { color: rgb(var(--skip));    border-color: rgb(var(--skip) / 0.4);    background: rgb(var(--skip) / 0.14); }
+.b-blocked { color: rgb(var(--blocked)); border-color: rgb(var(--blocked) / 0.4); background: rgb(var(--blocked) / 0.14); }
+.b-warn    { color: rgb(var(--warn));    border-color: rgb(var(--warn) / 0.4);    background: rgb(var(--warn) / 0.14); }
+.b-info    { color: rgb(var(--info));    border-color: rgb(var(--info) / 0.4);    background: rgb(var(--info) / 0.14); }
+.b-neutral { color: rgb(var(--gray-400)); border-color: rgb(var(--gray-600) / 0.5); background: rgb(var(--gray-600) / 0.14); }
+
+/* ── 按钮三档（方案 §四：primary 每操作区至多 1 个 / ghost 默认 / danger 统一红） ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500;
+  padding: 6px 13px; border-radius: 6px; border: 1px solid transparent; transition: all .15s; }
+.btn svg { width: 13px; height: 13px; }
+.btn-primary { background: rgb(var(--info)); color: #fff; }
+.btn-primary:hover { background: rgb(var(--info) / 0.85); }
+.btn-ghost { border-color: rgb(var(--border)); color: rgb(var(--gray-300)); background: transparent; }
+.btn-ghost:hover { border-color: rgb(var(--gray-500)); color: rgb(var(--gray-100)); }
+.btn-danger { color: rgb(var(--fail)); border-color: rgb(var(--fail) / 0.4); background: rgb(var(--fail) / 0.1); }
+.btn-danger:hover { background: rgb(var(--fail) / 0.18); }
+.btn[disabled] { opacity: .38; cursor: not-allowed; }
+.btn-sm { font-size: 10.5px; padding: 4px 9px; }
+
+/* ── 页签（全站唯一样式：hairline 下划线） ── */
+.tabs { display: flex; align-items: center; border-bottom: 1px solid rgb(var(--border) / 0.6); }
+.tab {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;
+  padding: 8px 12px; font-size: 11px; color: rgb(var(--gray-500));
+  border-bottom: 1.5px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.tab svg { width: 12px; height: 12px; }
+.tab:hover { color: rgb(var(--gray-200)); }
+.tab.on { color: rgb(var(--gray-100)); border-bottom-color: rgb(var(--info)); }
+.tab .cnt {
+  font-size: 9px; padding: 1px 5px; border-radius: 999px;
+  background: rgb(var(--info) / 0.16); color: rgb(var(--info));
+}
+
+/* ── 图标基座 ── */
+.ic { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+/* ═══ 画板 01：flow 路径图 ═══ */
+.flow-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 14px; border-bottom: 1px solid rgb(var(--border) / 0.6); font-size: 10.5px;
+}
+.flow-toggle { display: flex; border: 1px solid rgb(var(--border)); border-radius: 6px; overflow: hidden; }
+.flow-toggle button {
+  padding: 4px 11px; font-size: 10.5px; color: rgb(var(--gray-500)); display: flex; align-items: center; gap: 5px;
+}
+.flow-toggle button.on { background: rgb(var(--info) / 0.16); color: rgb(var(--info)); }
+.flow-canvas { overflow-x: auto; background: rgb(var(--code-bg) / 0.55); padding: 10px 6px 4px; }
+.flow-canvas svg { display: block; width: 100%; min-width: 1180px; height: auto; }
+.flow-canvas svg text { user-select: none; }
+.stage-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 18px; padding: 12px 14px; }
+.stage-row { display: flex; align-items: center; gap: 8px; font-size: 10.5px; padding: 2.5px 0; }
+.stage-row .no { color: rgb(var(--gray-600)); font-family: ui-monospace, monospace; font-size: 9px; width: 14px; }
+.dot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+.stage-row .ev { color: rgb(var(--gray-500)); margin-left: auto; font-size: 9.5px; white-space: nowrap; }
+.stage-row.cur { color: rgb(var(--info)); }
+.stage-row.cur .ev { color: rgb(var(--info)); }
+.deviations { border-top: 1px solid rgb(var(--border) / 0.6); padding: 10px 14px; font-size: 10.5px; }
+.deviations .row { display: flex; gap: 7px; color: rgb(var(--gray-400)); padding: 2px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 9px 14px; border-top: 1px solid rgb(var(--border) / 0.6);
+  font-size: 9.5px; color: rgb(var(--gray-500)); align-items: center; }
+.legend .k { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ═══ 画板 02：AgentChat 三栏 ═══ */
+.ac { display: flex; height: 620px; font-size: 12px; }
+.ac-left { width: 218px; flex-shrink: 0; border-right: 1px solid rgb(var(--border) / 0.6);
+  display: flex; flex-direction: column; background: rgb(var(--surface-2) / 0.4); }
+.ac-ws { display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-bottom: 1px solid rgb(var(--border) / 0.6); }
+.ac-search { margin: 8px 10px; padding: 5px 9px; border: 1px solid rgb(var(--border)); border-radius: 6px;
+  font-size: 10.5px; color: rgb(var(--gray-500)); display: flex; gap: 6px; align-items: center; }
+.sess { padding: 7px 12px; border-left: 2px solid transparent; cursor: pointer; }
+.sess:hover { background: rgb(var(--surface-3) / 0.5); }
+.sess.on { border-left-color: rgb(var(--info)); background: rgb(var(--info) / 0.08); }
+.sess .t { font-size: 11px; color: rgb(var(--gray-200)); display: flex; align-items: center; gap: 6px; }
+.sess .m { font-size: 9px; color: rgb(var(--gray-600)); margin-top: 1px; display: flex; gap: 6px; }
+.sess:not(.on) .t { color: rgb(var(--gray-400)); }
+.ac-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ac-topbar { display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+  border-bottom: 1px solid rgb(var(--border) / 0.6); font-size: 10.5px; color: rgb(var(--gray-500)); }
+.ac-topbar .sep { width: 1px; height: 14px; background: rgb(var(--border)); }
+.icon-btn { width: 24px; height: 24px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center;
+  color: rgb(var(--gray-500)); transition: all .15s; }
+.icon-btn:hover { background: rgb(var(--surface-3)); color: rgb(var(--gray-100)); }
+.icon-btn svg { width: 13px; height: 13px; }
+.pinned { display: flex; align-items: center; gap: 8px; margin: 8px 12px 0; padding: 6px 10px;
+  border: 1px solid rgb(var(--info) / 0.35); background: rgb(var(--info) / 0.08); border-radius: 6px;
+  font-size: 10.5px; color: rgb(var(--gray-300)); }
+.ac-msgs { flex: 1; overflow-y: auto; padding: 12px 14px; }
+.msg-user { max-width: 78%; margin: 0 0 12px auto; padding: 7px 11px;
+  background: rgb(var(--info) / 0.12); border: 1px solid rgb(var(--info) / 0.28);
+  border-radius: 8px 8px 2px 8px; font-size: 12px; color: rgb(var(--gray-100)); }
+.msg-ai { margin: 0 0 12px 2px; padding-left: 11px; border-left: 2px solid rgb(var(--border));
+  font-size: 12px; color: rgb(var(--gray-300)); }
+.msg-ai .think { color: rgb(var(--gray-500)); font-size: 10.5px; font-style: italic; }
+.tool-card { border: 1px solid rgb(var(--border) / 0.7); border-radius: 7px; margin: 0 0 8px 2px; overflow: hidden; }
+.tool-head { display: flex; align-items: center; gap: 8px; padding: 5px 9px; font-size: 11px;
+  color: rgb(var(--gray-400)); cursor: pointer; }
+.tool-head:hover { background: rgb(var(--surface-3) / 0.5); }
+.tool-head .name { font-family: ui-monospace, monospace; color: rgb(var(--gray-300)); font-size: 10.5px; }
+.tool-head .preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 9.5px; color: rgb(var(--gray-600)); }
+.tool-body { border-top: 1px solid rgb(var(--border) / 0.5); padding: 8px 10px; }
+.kv { font-family: ui-monospace, monospace; font-size: 10px; background: rgb(var(--code-bg));
+  border-radius: 5px; padding: 7px 9px; color: rgb(var(--gray-400)); overflow-x: auto; }
+.kv .k { color: rgb(var(--info)); }
+.kv .err { color: rgb(var(--fail)); }
+.stream-caret { display: inline-block; width: 7px; height: 12px; background: rgb(var(--info) / 0.8);
+  border-radius: 1px; animation: blink 1s steps(2) infinite; vertical-align: -2px; }
+@keyframes blink { 50% { opacity: 0; } }
+.ac-input { border-top: 1px solid rgb(var(--border) / 0.6); padding: 10px 12px; display: flex; gap: 8px; align-items: center; }
+.ac-input .box { flex: 1; border: 1px solid rgb(var(--border)); border-radius: 7px; padding: 7px 11px;
+  color: rgb(var(--gray-500)); font-size: 11.5px; display: flex; justify-content: space-between; align-items: center; }
+.ac-right { width: 300px; flex-shrink: 0; border-left: 1px solid rgb(var(--border) / 0.6);
+  display: flex; flex-direction: column; background: rgb(var(--surface-2) / 0.4); }
+.panel-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.todo { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 11px; color: rgb(var(--gray-300)); }
+.todo .cb { width: 13px; height: 13px; border: 1.5px solid rgb(var(--gray-600)); border-radius: 4px; flex-shrink: 0;
+  margin-top: 2px; display: inline-flex; align-items: center; justify-content: center; color: rgb(var(--pass)); }
+.todo.done { color: rgb(var(--gray-600)); text-decoration: line-through; }
+.todo.done .cb { border-color: rgb(var(--pass) / 0.6); background: rgb(var(--pass) / 0.12); }
+.draft-card { border: 1px solid rgb(var(--border) / 0.7); border-radius: 7px; padding: 8px 10px; margin-bottom: 8px; }
+.draft-card:hover { border-color: rgb(var(--gray-500)); }
+.draft-card .n { font-family: ui-monospace, monospace; font-size: 10.5px; color: rgb(var(--gray-200)); }
+
+/* ═══ 画板 03：图标体系 ═══ */
+.icon-section { padding: 16px 20px 8px; }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; padding: 10px 20px 18px; }
+.icon-cell { border: 1px solid rgb(var(--border) / 0.6); border-radius: 7px; padding: 10px 8px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; background: rgb(var(--surface-2) / 0.4); }
+.icon-cell:hover { border-color: rgb(var(--info) / 0.5); }
+.icon-cell .sizes { display: flex; align-items: flex-end; gap: 12px; height: 26px; }
+.icon-cell .nm { font-size: 9px; color: rgb(var(--gray-500)); text-align: center; }
+.icon-cell .sem { font-size: 8.5px; color: rgb(var(--gray-600)); font-family: ui-monospace, monospace; }
+.emoji-compare { margin: 0 20px 18px; border: 1px dashed rgb(var(--gray-600) / 0.6); border-radius: 7px; padding: 10px 14px;
+  font-size: 10.5px; color: rgb(var(--gray-500)); line-height: 2; }
+
+/* ═══ 画板 04：组件拼版 ═══ */
+.comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 16px 20px 20px; }
+.comp-cell { border: 1px solid rgb(var(--border) / 0.6); border-radius: 8px; padding: 14px 16px;
+  background: rgb(var(--surface-2) / 0.4); }
+.comp-cell .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.card-demo { border: 1px solid rgb(var(--border)); border-radius: 8px; padding: 12px 14px;
+  background: rgb(var(--surface-2)); transition: border-color .15s; }
+.card-demo:hover { border-color: rgb(var(--gray-500)); }
+.card-demo.active { border-color: rgb(var(--info) / 0.6); background: rgb(var(--info) / 0.06); }
+.input-demo { display: flex; align-items: center; gap: 7px; border: 1px solid rgb(var(--border));
+  border-radius: 6px; padding: 6px 10px; font-size: 11px; color: rgb(var(--gray-500)); flex: 1; }
+.input-demo:focus-within { border-color: rgb(var(--info) / 0.7); }
+.modal-mock { border: 1px solid rgb(var(--border)); border-radius: 10px; background: rgb(var(--surface-2));
+  box-shadow: var(--shadow); overflow: hidden; }
+.modal-mock .m-head { display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 13px; border-bottom: 1px solid rgb(var(--border) / 0.6); font-size: 11px; color: rgb(var(--gray-200)); }
+.modal-mock .m-body { padding: 13px; font-size: 11px; color: rgb(var(--gray-400)); }
+.empty-demo { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 10px; text-align: center; }
+.empty-demo .glyph { width: 40px; height: 40px; border-radius: 10px; border: 1px dashed rgb(var(--gray-600));
+  display: flex; align-items: center; justify-content: center; color: rgb(var(--gray-500)); }
+.skel { border-radius: 5px; background: linear-gradient(90deg,
+  rgb(var(--surface-3)) 25%, rgb(var(--gray-700) / 0.8) 50%, rgb(var(--surface-3)) 75%);
+  background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.toast-demo { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 7px 11px;
+  border-radius: 7px; border: 1px solid; margin-bottom: 7px; }
+
+/* ═══ 画板 05：主题秀 ═══ */
+.theme-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.theme-pane { padding: 18px 20px; }
+.theme-pane + .theme-pane { border-left: 1px solid rgb(var(--border) / 0.6); }
+.t-scope { border-radius: 9px; border: 1px solid rgb(var(--border)); background: rgb(var(--surface-1)); padding: 14px; }
+.t-scope .inner-card { border: 1px solid rgb(var(--border)); border-radius: 8px;
+  background: rgb(var(--surface-2)); padding: 12px 14px; }
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; padding: 14px 20px 20px; }
+.sw { border: 1px solid rgb(var(--border) / 0.6); border-radius: 7px; overflow: hidden; }
+.sw .c { height: 34px; }
+.sw .n { font-size: 8.5px; font-family: ui-monospace, monospace; color: rgb(var(--gray-500)); padding: 4px 7px; }
+
+.footer-note { max-width: 1480px; margin: 0 auto; padding: 30px 32px 46px; font-size: 10px; color: rgb(var(--gray-600)); }
+</style>
+</head>
+<body>
+
+<!-- ═══ SVG 图标 sprite（stroke 1.5 / 24 视窗 / 圆角笔帽 —— Instrument 极简几何演绎） ═══ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <!-- 状态 6 枚：几何线框，去 emoji -->
+  <symbol id="i-pass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.4l2.5 2.5 5.1-6"/></symbol>
+  <symbol id="i-fail" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.4 9.4l5.2 5.2M14.6 9.4l-5.2 5.2"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/></symbol>
+  <symbol id="i-blocked" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.2 8.2l7.6 7.6"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.6L20.5 19h-17L12 4.6z"/><path d="M12 10v4.6"/><circle cx="12" cy="16.9" r=".4" fill="currentColor"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.4"/><circle cx="12" cy="8" r=".4" fill="currentColor"/></symbol>
+  <!-- 工具 16 枚 -->
+  <symbol id="t-spec" viewBox="0 0 24 24"><rect x="6" y="3.5" width="12" height="17" rx="2"/><path d="M9 8.5h6M9 12h6M9 15.5h4"/></symbol>
+  <symbol id="t-scenario" viewBox="0 0 24 24"><path d="M10 3.5h4M11 3.5v5.2l-4.6 8.6A2.1 2.1 0 0 0 8.3 20.5h7.4a2.1 2.1 0 0 0 1.9-3.2L13 8.7V3.5"/><path d="M8.8 15h6.4"/></symbol>
+  <symbol id="t-draft" viewBox="0 0 24 24"><path d="M5 19l.9-3.4L16.4 5.1a1.7 1.7 0 0 1 2.5 2.4L8.4 18.1 5 19z"/><path d="M14.5 7l2.5 2.5"/></symbol>
+  <symbol id="t-validate" viewBox="0 0 24 24"><path d="M12 3l7 2.6v5.2c0 4.8-3 8.6-7 10.2-4-1.6-7-5.4-7-10.2V5.6L12 3z"/><path d="M9 11.8l2.2 2.2 4-4.6"/></symbol>
+  <symbol id="t-run" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M10 8.4l6 3.6-6 3.6V8.4z"/></symbol>
+  <symbol id="t-attribution" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.8 14.8L20 20"/><path d="M8.8 8.8l3.4 3.4M12.2 8.8l-3.4 3.4"/></symbol>
+  <symbol id="t-audit" viewBox="0 0 24 24"><rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9.5 4.5V3h5v1.5"/><path d="M9 12l2 2 4-4.5"/></symbol>
+  <symbol id="t-knowledge" viewBox="0 0 24 24"><path d="M5 5.6A2.6 2.6 0 0 1 7.6 3H19v15H7.6A2.6 2.6 0 0 0 5 20.6v-15z"/><path d="M5 18a2.6 2.6 0 0 1 2.6-2.6H19"/></symbol>
+  <symbol id="t-graph" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="8" r="2.2"/><circle cx="10" cy="18" r="2.2"/><path d="M8.1 6.6l7.7 1M7 8l2.2 8M16.4 9.8l-4.7 6.5"/></symbol>
+  <symbol id="t-lineage" viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 5.7.4l2.3-2.3a4 4 0 1 0-5.7-5.7l-1.1 1.2"/><path d="M14 10.5a4 4 0 0 0-5.7-.4l-2.3 2.3a4 4 0 1 0 5.7 5.7l1.1-1.2"/></symbol>
+  <symbol id="t-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.6" rx="6.5" ry="2.6"/><path d="M5.5 5.6v12.8c0 1.4 2.9 2.6 6.5 2.6s6.5-1.2 6.5-2.6V5.6"/><path d="M5.5 12c0 1.4 2.9 2.6 6.5 2.6s6.5-1.2 6.5-2.6"/></symbol>
+  <symbol id="t-flow" viewBox="0 0 24 24"><circle cx="6.5" cy="6" r="2.2"/><circle cx="17.5" cy="18" r="2.2"/><path d="M6.5 8.2v3.3a4 4 0 0 0 4 4h4.6M17.5 15.8v-3.3a4 4 0 0 0-4-4h-2"/></symbol>
+  <symbol id="t-topic" viewBox="0 0 24 24"><path d="M4 4.5h6.6l8.4 8.4-6.6 6.6L4 11.1V4.5z"/><circle cx="8.5" cy="8.5" r="1.1"/></symbol>
+  <symbol id="t-material" viewBox="0 0 24 24"><path d="M15.8 12.2l-5.4 5.4a3 3 0 0 1-4.3-4.3l6.2-6.2a2 2 0 0 1 2.9 2.9l-5.8 5.8a1 1 0 0 1-1.5-1.5l5.1-5"/></symbol>
+  <symbol id="t-workspace" viewBox="0 0 24 24"><path d="M3.5 6.6a2 2 0 0 1 2-2h3.9l2.1 2.5h7a2 2 0 0 1 2 2v7.3a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6.6z"/></symbol>
+  <symbol id="t-promote" viewBox="0 0 24 24"><path d="M12 14.5V4.5M8.2 8.3L12 4.5l3.8 3.8"/><path d="M5 15v3.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V15"/></symbol>
+  <symbol id="t-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="5.5"/><path d="M15.2 15.2L20 20"/></symbol>
+  <symbol id="t-settings" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/><circle cx="9" cy="7" r="1.6" style="fill:rgb(var(--surface-1))"/><circle cx="15" cy="12" r="1.6" style="fill:rgb(var(--surface-1))"/><circle cx="8" cy="17" r="1.6" style="fill:rgb(var(--surface-1))"/></symbol>
+  <!-- 页签/操作 14 枚 -->
+  <symbol id="a-todos" viewBox="0 0 24 24"><path d="M4 6.2l1.6 1.6L8.4 5"/><path d="M11 6.5h9M11 12h9M11 17.5h9"/><path d="M4 12.2l1.6 1.6 2.8-2.8"/></symbol>
+  <symbol id="a-skills" viewBox="0 0 24 24"><path d="M14.6 6.2a4.1 4.1 0 0 0-5.5 5.1L4 16.4V20h3.6l5.1-5.1a4.1 4.1 0 0 0 5.1-5.5l-2.7 2.7-2.4-.6-.6-2.4 2.5-2.9z"/></symbol>
+  <symbol id="a-more" viewBox="0 0 24 24"><rect x="4" y="4" width="4.4" height="4.4" rx="1"/><rect x="9.8" y="4" width="4.4" height="4.4" rx="1"/><rect x="15.6" y="4" width="4.4" height="4.4" rx="1"/><rect x="4" y="9.8" width="4.4" height="4.4" rx="1"/><rect x="9.8" y="9.8" width="4.4" height="4.4" rx="1"/><rect x="15.6" y="9.8" width="4.4" height="4.4" rx="1"/><rect x="4" y="15.6" width="4.4" height="4.4" rx="1"/><rect x="9.8" y="15.6" width="4.4" height="4.4" rx="1"/><rect x="15.6" y="15.6" width="4.4" height="4.4" rx="1"/></symbol>
+  <symbol id="a-export" viewBox="0 0 24 24"><path d="M12 4v10.5M8 10.5l4 4 4-4"/><path d="M5 19.5h14"/></symbol>
+  <symbol id="a-focus" viewBox="0 0 24 24"><path d="M9 4.5H4.5V9M15 4.5h4.5V9M9 19.5H4.5V15M15 19.5h4.5V15"/></symbol>
+  <symbol id="a-refresh" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-4.9"/><path d="M19 4v4.5h-4.5"/></symbol>
+  <symbol id="a-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="1" fill="currentColor"/></symbol>
+  <symbol id="a-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="1.8"/><path d="M15 5.5V5a1.5 1.5 0 0 0-1.5-1.5h-8A1.5 1.5 0 0 0 4 5v8a1.5 1.5 0 0 0 1.5 1.5H6"/></symbol>
+  <symbol id="a-file" viewBox="0 0 24 24"><path d="M13.5 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8.5l-5-5z"/><path d="M13.5 3.5V8.5H18.5"/></symbol>
+  <symbol id="a-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="a-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="a-collapse" viewBox="0 0 24 24"><path d="M10.5 6L5 12l5.5 6M18 6l-5.5 6L18 18"/></symbol>
+  <symbol id="a-gate" viewBox="0 0 24 24"><path d="M12 4l7.5 8-7.5 8L4.5 12 12 4z"/></symbol>
+  <symbol id="a-send" viewBox="0 0 24 24"><path d="M20 4L4 11.2l5.8 2L12 19l8-15z"/><path d="M9.8 13.2L14.5 8.5"/></symbol>
+  <symbol id="a-pin" viewBox="0 0 24 24"><path d="M9 4h6l-.7 6.2 3.2 3.3v2H6.5v-2l3.2-3.3L9 4z"/><path d="M12 15.5V21"/></symbol>
+  <!-- flow 边箭头（放常驻 sprite：display:none 的 SVG 里的 marker 在部分浏览器不可被引用） -->
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0L10 5L0 10z" style="fill:rgb(var(--gray-500))"/>
+  </marker>
+  <marker id="arw-h" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0L10 5L0 10z" style="fill:rgb(var(--gray-300))"/>
+  </marker>
+  <marker id="arw-w" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0L10 5L0 10z" style="fill:rgb(var(--warn))"/>
+  </marker>
+</defs></svg>
+
+<!-- ═══ 顶栏 ═══ -->
+<nav class="topnav">
+  <div class="brand">
+    <span class="mark">Sg</span>
+    <b>SpecGuard</b>
+    <span>UI 方向 A — Instrument 仪表</span>
+  </div>
+  <div class="nav-links">
+    <a href="#b1">01 路径图</a><a href="#b2">02 AgentChat</a><a href="#b3">03 图标</a>
+    <a href="#b4">04 组件</a><a href="#b5">05 主题</a>
+  </div>
+  <div class="nav-right">
+    <span class="chip-offline">自包含 · 零依赖</span>
+    <button class="mode-toggle" onclick="var r=document.documentElement;r.dataset.mode=r.dataset.mode==='light'?'dark':'light';this.querySelector('span').textContent=r.dataset.mode==='light'?'深色':'浅色'">
+      <svg class="ic" style="width:12px;height:12px"><use href="#i-info"/></svg><span>浅色</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ═══ 画板 01：🧭 flow 路径图 ═══ -->
+<section class="board" id="b1">
+  <div class="board-head"><span class="board-idx">01</span><h2 style="display:flex;align-items:center;gap:8px"><svg class="ic" style="width:16px;height:16px;color:rgb(var(--info))"><use href="#t-flow"/></svg>flow 路径图 — golden flow vs 会话实际走径</h2></div>
+  <p class="board-sub">
+    真实数据：generate-scenario.flow.json 的 12 阶段 + 21 条拓扑边 + 双交互门 + 2 条前置约束。
+    会话故事线：生成 HI-PERM-003 权限场景 —— S3 取场景 ID 缺失必需（红）/ S4 查注册表乱序（黄）/
+    S8 validate ×2 带 ⚠1 / 当前停在 S9 写草稿（蓝环）。琥珀虚线 = 历程偏离拓扑的野跳（乱序的路径证据）。
+  </p>
+  <div class="frame">
+    <!-- FlowPanel 头部（对齐现况：flow 名 · 步数 · 当前阶段 · 跑偏 · 定位 · 刷新） -->
+    <div class="flow-head">
+      <span style="color:rgb(var(--gray-400))">
+        创建测试用例 golden flow · 步数 9 · 当前
+        <b style="color:rgb(var(--info))">写草稿（第9步）</b>
+      </span>
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="badge b-warn"><svg class="ic"><use href="#i-warn"/></svg>跑偏 2</span>
+        <button class="btn-ghost btn btn-sm"><svg class="ic"><use href="#a-locate"/></svg>定位 1/3</button>
+        <button class="icon-btn" title="立即刷新"><svg class="ic"><use href="#a-refresh"/></svg></button>
+        <span class="flow-toggle">
+          <button class="on" id="ft-focus" onclick="flowView('focus')">◎ 聚焦</button>
+          <button id="ft-full" onclick="flowView('full')">⛶ 全图</button>
+        </span>
+      </span>
+    </div>
+
+    <!-- 聚焦态：当前 S9 + 问题 S3/S4/S8 + 1 跳邻域 + 双门；S1 折为「已走 1 阶段」，S11/S12 折为「后续 2 阶段」 -->
+    <div class="flow-canvas" id="flow-focus">
+      <svg viewBox="0 0 1620 470" width="1620" height="470" role="img" aria-label="flow 聚焦视图">
+        <!-- 边：底层细线（未经过 50% 透明） -->
+        <g stroke="rgb(var(--gray-500))" stroke-width="1" opacity=".5" fill="none">
+          <path d="M160 150 H170" marker-end="url(#arw)"/>
+          <path d="M310 150 H320" marker-end="url(#arw)"/>
+          <path d="M460 150 H470" marker-end="url(#arw)"/>
+          <path d="M610 150 H620" marker-end="url(#arw)"/>
+          <path d="M756 150 H758" marker-end="url(#arw)"/>
+          <path d="M833 132 L872 87" marker-end="url(#arw)"/>
+          <path d="M948 60 H984 V131" marker-end="url(#arw)"/>
+          <path d="M833 168 L872 213" marker-end="url(#arw)"/>
+          <path d="M948 240 H984 V177" marker-end="url(#arw)"/>
+          <path d="M872 150 H880" marker-end="url(#arw)"/>
+          <path d="M1166 150 H1180" marker-end="url(#arw)"/>
+          <path d="M1240 127 C 1220 40, 1040 30, 990 118" marker-end="url(#arw)" stroke-dasharray="3 3"/>
+          <path d="M1316 150 H1326" marker-end="url(#arw)"/>
+          <path d="M1100 173 V430 H390 V177" marker-end="url(#arw)" stroke-dasharray="3 3" opacity=".55"/>
+          <path d="M882 83 V213" marker-end="url(#arw)" stroke-dasharray="3 3"/>
+        </g>
+        <!-- 经过边（×N 热力，加粗提权） -->
+        <g stroke="rgb(var(--gray-300))" stroke-width="2.4" fill="none">
+          <path d="M948 240 H984 V177" marker-end="url(#arw-h)"/>
+          <path d="M918 127 C 912 92, 988 92, 982 127" marker-end="url(#arw-h)"/>
+          <path d="M1016 150 H1030" marker-end="url(#arw-h)"/>
+        </g>
+        <!-- 野跳（历程偏离拓扑：琥珀虚线退背景） -->
+        <g stroke="rgb(var(--warn))" stroke-width="1.2" stroke-dasharray="4 3" opacity=".55" fill="none">
+          <path d="M280 127 C 380 72, 580 72, 655 121" marker-end="url(#arw-w)"/>
+          <path d="M660 173 C 640 205, 585 205, 562 179" marker-end="url(#arw-w)"/>
+          <path d="M560 173 C 585 262, 740 272, 812 246" marker-end="url(#arw-w)"/>
+        </g>
+        <!-- 前置约束（灰点线，未违例） -->
+        <g stroke="rgb(var(--gray-500))" stroke-width="1" stroke-dasharray="2 3" opacity=".6" fill="none">
+          <path d="M250 127 C 430 12, 940 8, 1092 120" marker-end="url(#arw)"/>
+          <path d="M962 127 C 990 105, 1062 105, 1088 127" marker-end="url(#arw)"/>
+        </g>
+        <!-- 边标签 -->
+        <g font-size="9" fill="rgb(var(--gray-500))" text-anchor="middle" font-family="ui-monospace,monospace">
+          <rect x="826" y="96" width="34" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="843" y="105.5">多场景</text>
+          <rect x="818" y="196" width="62" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="849" y="205.5">涉权限/写</text>
+          <rect x="854" y="131" width="40" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="874" y="140.5">确认规划</text>
+          <rect x="918" y="80" width="64" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="950" y="89.5" fill="rgb(var(--gray-300))">重新生成再校 ×1</text>
+          <rect x="1078" y="42" width="74" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1115" y="51.5">采纳建议边·重校</text>
+          <rect x="715" y="424" width="40" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="735" y="433.5">下一场景</text>
+          <rect x="522" y="64" width="46" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="545" y="73.5" fill="rgb(var(--warn))">野跳 ×1</text>
+          <rect x="587" y="202" width="46" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="610" y="211.5" fill="rgb(var(--warn))">野跳 ×1</text>
+          <rect x="677" y="264" width="46" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="700" y="273.5" fill="rgb(var(--warn))">野跳 ×1</text>
+          <rect x="638" y="10" width="52" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="664" y="19.5">须先 读需求</text>
+          <rect x="988" y="99" width="72" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1024" y="108.5">须先 validate 校验</text>
+        </g>
+        <!-- 占位牌：被折阶段（不参与边） -->
+        <g>
+          <rect x="24" y="127" width="132" height="46" rx="6" fill="none" stroke="rgb(var(--gray-500))" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>
+          <text x="90" y="147" text-anchor="middle" font-size="10.5" fill="rgb(var(--gray-500))">▸ 已走 1 阶段</text>
+          <text x="90" y="162" text-anchor="middle" font-size="8.5" fill="rgb(var(--gray-600))">聚焦时折叠</text>
+          <rect x="1449" y="127" width="132" height="46" rx="6" fill="none" stroke="rgb(var(--gray-500))" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>
+          <text x="1515" y="147" text-anchor="middle" font-size="10.5" fill="rgb(var(--gray-500))">▸ 后续 2 阶段</text>
+          <text x="1515" y="162" text-anchor="middle" font-size="8.5" fill="rgb(var(--gray-600))">试跑 · 入库</text>
+        </g>
+        <!-- 门（菱形描边） -->
+        <g>
+          <path d="M815 125 L870 150 L815 175 L760 150 Z" fill="rgb(var(--surface-2))" stroke="rgb(var(--gray-400))" stroke-width="1.2"/>
+          <text x="815" y="147" text-anchor="middle" font-size="10" fill="rgb(var(--gray-300))">规划确认</text>
+          <text x="815" y="160" text-anchor="middle" font-size="8.5" fill="rgb(var(--pass))">✓ 已通过</text>
+          <path d="M1385 125 L1440 150 L1385 175 L1330 150 Z" fill="rgb(var(--surface-2))" stroke="rgb(var(--gray-400))" stroke-width="1.2"/>
+          <text x="1385" y="147" text-anchor="middle" font-size="10" fill="rgb(var(--gray-300))">确认入库</text>
+          <text x="1385" y="160" text-anchor="middle" font-size="8.5" fill="rgb(var(--gray-500))">待到达</text>
+        </g>
+        <!-- 阶段节点（聚焦可见集 11 个） -->
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- S2 读需求 hit -->
+          <g><rect x="174" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="186" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="194" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">2. 读需求</text>
+          <text x="186" y="161" font-size="9" fill="rgb(var(--gray-400))">×2 · 第2步 ✓</text></g>
+          <!-- S3 取场景 ID missing（缺失必需，永不折叠） -->
+          <g><rect x="324" y="127" width="132" height="46" rx="6" fill="rgb(var(--fail)/0.1)" stroke="rgb(var(--fail)/0.7)" stroke-width="1.6"/>
+          <circle cx="336" cy="139" r="3" fill="rgb(var(--fail))"/>
+          <text x="344" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">3. 取场景 ID</text>
+          <text x="336" y="161" font-size="9" fill="rgb(var(--fail))">✗ 未调用 · 缺失必需</text></g>
+          <!-- S4 查注册表 乱序 -->
+          <g><rect x="474" y="127" width="132" height="46" rx="6" fill="rgb(var(--warn)/0.1)" stroke="rgb(var(--warn)/0.6)" stroke-width="1.4"/>
+          <circle cx="486" cy="139" r="3" fill="rgb(var(--warn))"/>
+          <text x="494" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">4. 查注册表</text>
+          <text x="486" y="161" font-size="9" fill="rgb(var(--warn))">第5步 · 乱序 ⇄</text></g>
+          <!-- S5 找同类参照 hit -->
+          <g><rect x="624" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="636" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="644" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">5. 找同类参照</text>
+          <text x="636" y="161" font-size="9" fill="rgb(var(--gray-400))">第4步 ✓</text></g>
+          <!-- S6 dag skip -->
+          <g><rect x="816" y="37" width="132" height="46" rx="6" fill="rgb(var(--gray-600)/0.08)" stroke="rgb(var(--gray-500)/0.6)" stroke-width="1" stroke-dasharray="4 4"/>
+          <circle cx="828" cy="49" r="3" fill="rgb(var(--gray-500))"/>
+          <text x="836" y="52.5" font-size="10.5" font-weight="600" fill="rgb(var(--gray-300))">6. DAG 拓扑预演</text>
+          <text x="828" y="71" font-size="9" fill="rgb(var(--gray-500))">－ 可跳过（单场景）</text></g>
+          <!-- S7 权限预检 hit -->
+          <g><rect x="816" y="217" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="828" cy="229" r="3" fill="rgb(var(--pass))"/>
+          <text x="836" y="232.5" font-size="10" font-weight="600" fill="rgb(var(--gray-100))">7. 权限预检/账号解析</text>
+          <text x="828" y="251" font-size="9" fill="rgb(var(--gray-400))">第6步 ✓</text></g>
+          <!-- S8 validate hit ⚠1 -->
+          <g><rect x="884" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="896" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="904" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">8. validate 校验</text>
+          <text x="896" y="161" font-size="9" fill="rgb(var(--gray-400))">×2 · 第7步 ✓</text>
+          <g><rect x="1002" y="119" width="26" height="15" rx="7.5" fill="rgb(var(--fail)/0.18)" stroke="rgb(var(--fail)/0.6)" stroke-width="1"/>
+          <text x="1015" y="130" text-anchor="middle" font-size="9" fill="rgb(var(--fail))">⚠1</text></g></g>
+          <!-- S9 写草稿 current（蓝环提权 + 外发光） -->
+          <g>
+          <rect x="1030" y="123" width="140" height="54" rx="8" fill="none" stroke="rgb(var(--info)/0.35)" stroke-width="4" opacity=".5"/>
+          <rect x="1034" y="127" width="132" height="46" rx="6" fill="rgb(var(--info)/0.12)" stroke="rgb(var(--info))" stroke-width="2"/>
+          <circle cx="1046" cy="139" r="3" fill="rgb(var(--info))"/>
+          <text x="1054" y="142.5" font-size="11" font-weight="700" fill="rgb(var(--gray-100))">9. 写草稿</text>
+          <text x="1046" y="161" font-size="9" fill="rgb(var(--info))">第9步 · 正在执行…</text>
+          <rect x="1083" y="112" width="34" height="13" rx="6.5" fill="rgb(var(--info))"/>
+          <text x="1100" y="121.5" text-anchor="middle" font-size="8.5" font-weight="600" fill="#fff">当前</text></g>
+          <!-- S10 依赖建议 未调用 -->
+          <g><rect x="1184" y="127" width="132" height="46" rx="6" fill="rgb(var(--gray-600)/0.08)" stroke="rgb(var(--gray-500)/0.6)" stroke-width="1" stroke-dasharray="4 4"/>
+          <circle cx="1196" cy="139" r="3" fill="rgb(var(--gray-500))"/>
+          <text x="1204" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-300))">10. 依赖建议</text>
+          <text x="1196" y="161" font-size="9" fill="rgb(var(--gray-500))">－ 未调用</text></g>
+        </g>
+      </svg>
+    </div>
+
+    <!-- 全图态：14 节点全量（S1/S11/S12 展开，无占位牌） -->
+    <div class="flow-canvas" id="flow-full" style="display:none">
+      <svg viewBox="0 0 1620 470" width="1620" height="470" role="img" aria-label="flow 全图视图">
+        <g stroke="rgb(var(--gray-500))" stroke-width="1" opacity=".5" fill="none">
+          <path d="M160 150 H170" marker-end="url(#arw)"/>
+          <path d="M310 150 H320" marker-end="url(#arw)"/>
+          <path d="M460 150 H470" marker-end="url(#arw)"/>
+          <path d="M610 150 H620" marker-end="url(#arw)"/>
+          <path d="M756 150 H758" marker-end="url(#arw)"/>
+          <path d="M833 132 L872 87" marker-end="url(#arw)"/>
+          <path d="M948 60 H984 V131" marker-end="url(#arw)"/>
+          <path d="M833 168 L872 213" marker-end="url(#arw)"/>
+          <path d="M948 240 H984 V177" marker-end="url(#arw)"/>
+          <path d="M872 150 H880" marker-end="url(#arw)"/>
+          <path d="M1166 150 H1180" marker-end="url(#arw)"/>
+          <path d="M1240 127 C 1220 40, 1040 30, 990 118" marker-end="url(#arw)" stroke-dasharray="3 3"/>
+          <path d="M1316 150 H1326" marker-end="url(#arw)"/>
+          <path d="M1441 150 H1445" marker-end="url(#arw)"/>
+          <path d="M1100 173 V430 H390 V177" marker-end="url(#arw)" stroke-dasharray="3 3" opacity=".55"/>
+          <path d="M882 83 V213" marker-end="url(#arw)" stroke-dasharray="3 3"/>
+          <path d="M1280 173 V233" marker-end="url(#arw)"/>
+          <path d="M1370 237 V190 Q 1370 180 1380 177 L1383 176" marker-end="url(#arw)"/>
+          <path d="M1288 283 C 1282 318, 1352 318, 1346 283" marker-end="url(#arw)" stroke-dasharray="3 3"/>
+        </g>
+        <g stroke="rgb(var(--gray-300))" stroke-width="2.4" fill="none">
+          <path d="M948 240 H984 V177" marker-end="url(#arw-h)"/>
+          <path d="M918 127 C 912 92, 988 92, 982 127" marker-end="url(#arw-h)"/>
+          <path d="M1016 150 H1030" marker-end="url(#arw-h)"/>
+        </g>
+        <g stroke="rgb(var(--warn))" stroke-width="1.2" stroke-dasharray="4 3" opacity=".55" fill="none">
+          <path d="M280 127 C 380 72, 580 72, 655 121" marker-end="url(#arw-w)"/>
+          <path d="M660 173 C 640 205, 585 205, 562 179" marker-end="url(#arw-w)"/>
+          <path d="M560 173 C 585 262, 740 272, 812 246" marker-end="url(#arw-w)"/>
+        </g>
+        <g stroke="rgb(var(--gray-500))" stroke-width="1" stroke-dasharray="2 3" opacity=".6" fill="none">
+          <path d="M250 127 C 430 12, 940 8, 1092 120" marker-end="url(#arw)"/>
+          <path d="M962 127 C 990 105, 1062 105, 1088 127" marker-end="url(#arw)"/>
+        </g>
+        <g font-size="9" fill="rgb(var(--gray-500))" text-anchor="middle" font-family="ui-monospace,monospace">
+          <rect x="826" y="96" width="34" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="843" y="105.5">多场景</text>
+          <rect x="818" y="196" width="62" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="849" y="205.5">涉权限/写</text>
+          <rect x="854" y="131" width="40" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="874" y="140.5">确认规划</text>
+          <rect x="918" y="80" width="64" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="950" y="89.5" fill="rgb(var(--gray-300))">重新生成再校 ×1</text>
+          <rect x="1078" y="42" width="74" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1115" y="51.5">采纳建议边·重校</text>
+          <rect x="715" y="424" width="40" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="735" y="433.5">下一场景</text>
+          <rect x="522" y="64" width="46" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="545" y="73.5" fill="rgb(var(--warn))">野跳 ×1</text>
+          <rect x="587" y="202" width="46" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="610" y="211.5" fill="rgb(var(--warn))">野跳 ×1</text>
+          <rect x="677" y="264" width="46" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="700" y="273.5" fill="rgb(var(--warn))">野跳 ×1</text>
+          <rect x="638" y="10" width="52" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="664" y="19.5">须先 读需求</text>
+          <rect x="988" y="99" width="72" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1024" y="108.5">须先 validate 校验</text>
+          <rect x="1262" y="196" width="52" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1288" y="205.5">用户要试跑</text>
+          <rect x="1355" y="208" width="30" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1370" y="217.5">PASS</text>
+          <rect x="1293" y="320" width="48" height="13" rx="3" fill="rgb(var(--surface-1))"/><text x="1317" y="329.5">归因重跑</text>
+        </g>
+        <!-- 门 -->
+        <g>
+          <path d="M815 125 L870 150 L815 175 L760 150 Z" fill="rgb(var(--surface-2))" stroke="rgb(var(--gray-400))" stroke-width="1.2"/>
+          <text x="815" y="147" text-anchor="middle" font-size="10" fill="rgb(var(--gray-300))">规划确认</text>
+          <text x="815" y="160" text-anchor="middle" font-size="8.5" fill="rgb(var(--pass))">✓ 已通过</text>
+          <path d="M1385 125 L1440 150 L1385 175 L1330 150 Z" fill="rgb(var(--surface-2))" stroke="rgb(var(--gray-400))" stroke-width="1.2"/>
+          <text x="1385" y="147" text-anchor="middle" font-size="10" fill="rgb(var(--gray-300))">确认入库</text>
+          <text x="1385" y="160" text-anchor="middle" font-size="8.5" fill="rgb(var(--gray-500))">待到达</text>
+        </g>
+        <!-- 全量 12 阶段 -->
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <g><rect x="24" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="36" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="44" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">1. 取技能正文</text>
+          <text x="36" y="161" font-size="9" fill="rgb(var(--gray-400))">第1步 ✓</text></g>
+          <g><rect x="174" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="186" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="194" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">2. 读需求</text>
+          <text x="186" y="161" font-size="9" fill="rgb(var(--gray-400))">×2 · 第2步 ✓</text></g>
+          <g><rect x="324" y="127" width="132" height="46" rx="6" fill="rgb(var(--fail)/0.1)" stroke="rgb(var(--fail)/0.7)" stroke-width="1.6"/>
+          <circle cx="336" cy="139" r="3" fill="rgb(var(--fail))"/>
+          <text x="344" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">3. 取场景 ID</text>
+          <text x="336" y="161" font-size="9" fill="rgb(var(--fail))">✗ 未调用 · 缺失必需</text></g>
+          <g><rect x="474" y="127" width="132" height="46" rx="6" fill="rgb(var(--warn)/0.1)" stroke="rgb(var(--warn)/0.6)" stroke-width="1.4"/>
+          <circle cx="486" cy="139" r="3" fill="rgb(var(--warn))"/>
+          <text x="494" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">4. 查注册表</text>
+          <text x="486" y="161" font-size="9" fill="rgb(var(--warn))">第5步 · 乱序 ⇄</text></g>
+          <g><rect x="624" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="636" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="644" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">5. 找同类参照</text>
+          <text x="636" y="161" font-size="9" fill="rgb(var(--gray-400))">第4步 ✓</text></g>
+          <g><rect x="816" y="37" width="132" height="46" rx="6" fill="rgb(var(--gray-600)/0.08)" stroke="rgb(var(--gray-500)/0.6)" stroke-width="1" stroke-dasharray="4 4"/>
+          <circle cx="828" cy="49" r="3" fill="rgb(var(--gray-500))"/>
+          <text x="836" y="52.5" font-size="10.5" font-weight="600" fill="rgb(var(--gray-300))">6. DAG 拓扑预演</text>
+          <text x="828" y="71" font-size="9" fill="rgb(var(--gray-500))">－ 可跳过（单场景）</text></g>
+          <g><rect x="816" y="217" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="828" cy="229" r="3" fill="rgb(var(--pass))"/>
+          <text x="836" y="232.5" font-size="10" font-weight="600" fill="rgb(var(--gray-100))">7. 权限预检/账号解析</text>
+          <text x="828" y="251" font-size="9" fill="rgb(var(--gray-400))">第6步 ✓</text></g>
+          <g><rect x="884" y="127" width="132" height="46" rx="6" fill="rgb(var(--pass)/0.1)" stroke="rgb(var(--pass)/0.55)" stroke-width="1.2"/>
+          <circle cx="896" cy="139" r="3" fill="rgb(var(--pass))"/>
+          <text x="904" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-100))">8. validate 校验</text>
+          <text x="896" y="161" font-size="9" fill="rgb(var(--gray-400))">×2 · 第7步 ✓</text>
+          <g><rect x="1002" y="119" width="26" height="15" rx="7.5" fill="rgb(var(--fail)/0.18)" stroke="rgb(var(--fail)/0.6)" stroke-width="1"/>
+          <text x="1015" y="130" text-anchor="middle" font-size="9" fill="rgb(var(--fail))">⚠1</text></g></g>
+          <g>
+          <rect x="1030" y="123" width="140" height="54" rx="8" fill="none" stroke="rgb(var(--info)/0.35)" stroke-width="4" opacity=".5"/>
+          <rect x="1034" y="127" width="132" height="46" rx="6" fill="rgb(var(--info)/0.12)" stroke="rgb(var(--info))" stroke-width="2"/>
+          <circle cx="1046" cy="139" r="3" fill="rgb(var(--info))"/>
+          <text x="1054" y="142.5" font-size="11" font-weight="700" fill="rgb(var(--gray-100))">9. 写草稿</text>
+          <text x="1046" y="161" font-size="9" fill="rgb(var(--info))">第9步 · 正在执行…</text>
+          <rect x="1083" y="112" width="34" height="13" rx="6.5" fill="rgb(var(--info))"/>
+          <text x="1100" y="121.5" text-anchor="middle" font-size="8.5" font-weight="600" fill="#fff">当前</text></g>
+          <g><rect x="1184" y="127" width="132" height="46" rx="6" fill="rgb(var(--gray-600)/0.08)" stroke="rgb(var(--gray-500)/0.6)" stroke-width="1" stroke-dasharray="4 4"/>
+          <circle cx="1196" cy="139" r="3" fill="rgb(var(--gray-500))"/>
+          <text x="1204" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-300))">10. 依赖建议</text>
+          <text x="1196" y="161" font-size="9" fill="rgb(var(--gray-500))">－ 未调用</text></g>
+          <g><rect x="1251" y="237" width="132" height="46" rx="6" fill="rgb(var(--gray-600)/0.08)" stroke="rgb(var(--gray-500)/0.6)" stroke-width="1" stroke-dasharray="4 4"/>
+          <circle cx="1263" cy="249" r="3" fill="rgb(var(--gray-500))"/>
+          <text x="1271" y="252.5" font-size="11" font-weight="600" fill="rgb(var(--gray-300))">11. 试跑/归因</text>
+          <text x="1263" y="271" font-size="9" fill="rgb(var(--gray-500))">－ 未调用</text></g>
+          <g><rect x="1449" y="127" width="132" height="46" rx="6" fill="rgb(var(--gray-600)/0.08)" stroke="rgb(var(--gray-500)/0.6)" stroke-width="1" stroke-dasharray="4 4"/>
+          <circle cx="1461" cy="139" r="3" fill="rgb(var(--gray-500))"/>
+          <text x="1469" y="142.5" font-size="11" font-weight="600" fill="rgb(var(--gray-300))">12. 入库 promote</text>
+          <text x="1461" y="161" font-size="9" fill="rgb(var(--gray-500))">－ 未调用</text></g>
+        </g>
+      </svg>
+    </div>
+
+    <!-- 阶段证据列表（图形的证据面） -->
+    <div class="stage-list">
+      <div class="stage-row"><span class="no">01</span><span class="dot" style="background:rgb(var(--pass))"></span>取技能正文<span class="ev">第1步</span></div>
+      <div class="stage-row"><span class="no">02</span><span class="dot" style="background:rgb(var(--pass))"></span>读需求<span class="ev">×2 · 第2步</span></div>
+      <div class="stage-row" style="color:rgb(var(--fail))"><span class="no">03</span><span class="dot" style="background:rgb(var(--fail))"></span>取场景 ID<span class="ev">未调用 · 必需</span></div>
+      <div class="stage-row" style="color:rgb(var(--warn))"><span class="no">04</span><span class="dot" style="background:rgb(var(--warn))"></span>查注册表<span class="ev">第5步 · 乱序</span></div>
+      <div class="stage-row"><span class="no">05</span><span class="dot" style="background:rgb(var(--pass))"></span>找同类参照<span class="ev">第4步</span></div>
+      <div class="stage-row" style="color:rgb(var(--gray-500))"><span class="no">06</span><span class="dot" style="background:rgb(var(--gray-600))"></span>DAG 拓扑预演<span class="ev">可跳过</span></div>
+      <div class="stage-row"><span class="no">07</span><span class="dot" style="background:rgb(var(--pass))"></span>权限预检/账号解析<span class="ev">第6步</span></div>
+      <div class="stage-row"><span class="no">08</span><span class="dot" style="background:rgb(var(--pass))"></span>validate 校验<span class="ev">×2 · 第7步 · ⚠1</span></div>
+      <div class="stage-row cur"><span class="no">09</span><span class="dot" style="background:rgb(var(--info))"></span>写草稿<span class="ev">第9步 · 当前</span></div>
+      <div class="stage-row" style="color:rgb(var(--gray-500))"><span class="no">10</span><span class="dot" style="background:rgb(var(--gray-600))"></span>依赖建议<span class="ev">未调用</span></div>
+      <div class="stage-row" style="color:rgb(var(--gray-500))"><span class="no">11</span><span class="dot" style="background:rgb(var(--gray-600))"></span>试跑/归因<span class="ev">未调用</span></div>
+      <div class="stage-row" style="color:rgb(var(--gray-500))"><span class="no">12</span><span class="dot" style="background:rgb(var(--gray-600))"></span>入库 promote<span class="ev">未调用</span></div>
+    </div>
+
+    <div class="deviations">
+      <div class="micro-label" style="margin-bottom:5px">跑偏点（带步号证据）</div>
+      <div class="row"><svg class="ic" style="color:rgb(var(--fail));width:12px;height:12px"><use href="#i-fail"/></svg>S3 取场景 ID 缺失必需：会话手工编写了场景 ID，未走 scenario(action=next_id)（违反 K-020 铁律）</div>
+      <div class="row"><svg class="ic" style="color:rgb(var(--warn));width:12px;height:12px"><use href="#i-warn"/></svg>S4 查注册表 乱序：第5步完成，应在 S5 找同类参照（第4步）之前——历程留下 3 条野跳边为证</div>
+    </div>
+
+    <div class="legend">
+      <span class="k"><span class="dot" style="background:rgb(var(--pass))"></span>顺序正确</span>
+      <span class="k"><span class="dot" style="background:rgb(var(--warn))"></span>乱序</span>
+      <span class="k"><span class="dot" style="background:rgb(var(--fail))"></span>缺失必需</span>
+      <span class="k"><span class="dot" style="background:rgb(var(--gray-600))"></span>跳过 / 未调用</span>
+      <span class="k"><svg width="22" height="8"><rect x="0" y="0" width="22" height="8" rx="2" fill="none" stroke="rgb(var(--info))" stroke-width="1.6"/></svg>当前阶段</span>
+      <span class="k"><svg width="26" height="6"><line x1="0" y1="3" x2="26" y2="3" stroke="rgb(var(--warn))" stroke-width="1.4" stroke-dasharray="4 3"/></svg>野跳（历程偏离拓扑）</span>
+      <span class="k"><svg width="26" height="6"><line x1="0" y1="3" x2="26" y2="3" stroke="rgb(var(--gray-500))" stroke-width="1" stroke-dasharray="2 3"/></svg>前置约束（违例变红）</span>
+      <span class="k"><svg width="26" height="6"><line x1="0" y1="3" x2="26" y2="3" stroke="rgb(var(--gray-300))" stroke-width="2.4"/></svg>历程经过 ×N</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 画板 02：AgentChat 三栏 ═══ -->
+<section class="board" id="b2">
+  <div class="board-head"><span class="board-idx">02</span><h2>AgentChat 会话页 — 三栏信息架构原样，视觉语言重写</h2></div>
+  <p class="board-sub">
+    顶栏三段分组（方案 §五 P1）：左「会话上下文」· 中「标题 + mono ID」· 右「操作区」；
+    状态全部退出 emoji，工具卡头部固定 grid 列对齐；右栏页签条只留高频签 + ⊞更多（T-1026 秩序保留）。
+  </p>
+  <div class="frame"><div class="ac">
+    <!-- 左栏：会话树 -->
+    <div class="ac-left">
+      <div class="ac-ws">
+        <svg class="ic" style="color:rgb(var(--info))"><use href="#t-workspace"/></svg>
+        <span style="font-size:11px;color:rgb(var(--gray-200));font-weight:600">tdm · 干部盘点</span>
+        <span class="badge b-info" style="margin-left:auto">测试工作台</span>
+      </div>
+      <div style="padding:8px 10px 0"><button class="btn btn-primary btn-sm" style="width:100%;justify-content:center"><svg class="ic"><use href="#a-plus"/></svg>新会话</button></div>
+      <div class="ac-search"><svg class="ic" style="width:11px;height:11px"><use href="#t-search"/></svg>搜索会话…</div>
+      <div style="flex:1;overflow-y:auto;padding:2px 0">
+        <div class="micro-label" style="padding:6px 12px 3px">最近会话</div>
+        <div class="sess on"><div class="t">生成 HI-PERM-003 权限场景<span class="badge b-pass" style="padding:2px 5px;font-size:8.5px">LIVE</span></div><div class="m"><span>12 轮</span><span>·</span><span>2 分钟前</span></div></div>
+        <div class="sess"><div class="t">PP-RC-008 档案接口超时排查</div><div class="m"><span>34 轮</span><span>·</span><span>1 小时前</span></div></div>
+        <div class="sess"><div class="t">九宫格落位 DAG 编排</div><div class="m"><span>21 轮</span><span>·</span><span>昨天</span></div></div>
+        <div class="sess"><div class="t">360 评价导出字段确认</div><div class="m"><span>8 轮</span><span>·</span><span>昨天</span></div></div>
+        <div class="sess"><div class="t">盘点会话回归用例补齐</div><div class="m"><span>47 轮</span><span>·</span><span>3 天前</span></div></div>
+        <div class="sess"><div class="t">HI-PERM-001 断言结构评审</div><div class="m"><span>15 轮</span><span>·</span><span>上周</span></div></div>
+      </div>
+      <div style="padding:8px 12px;border-top:1px solid rgb(var(--border)/0.6);font-size:9.5px;color:rgb(var(--gray-600))" class="mono">90024166 · admin</div>
+    </div>
+
+    <!-- 中栏：对话流 -->
+    <div class="ac-mid">
+      <div class="ac-topbar">
+        <button class="icon-btn" title="收起会话列表"><svg class="ic"><use href="#a-collapse"/></svg></button>
+        <span class="dot" style="background:rgb(var(--pass));width:7px;height:7px" title="WS 已连接"></span>
+        <span class="sep"></span>
+        <span style="color:rgb(var(--gray-200));font-weight:600;font-size:11px">生成 HI-PERM-003 权限场景</span>
+        <span class="mono" style="font-size:9px;color:rgb(var(--gray-600))">20260830_154822_a1b2c3d4</span>
+        <span class="badge b-info" style="font-size:9px">LIVE · kimi-k2</span>
+        <span style="margin-left:auto;display:flex;gap:2px;align-items:center">
+          <span class="fs-micro" style="color:rgb(var(--gray-600));margin-right:4px">12 轮</span>
+          <button class="icon-btn" title="导出会话 JSON"><svg class="ic"><use href="#a-export"/></svg></button>
+          <button class="icon-btn" title="专注模式"><svg class="ic"><use href="#a-focus"/></svg></button>
+          <button class="icon-btn" title="收起面板"><svg class="ic" style="transform:scaleX(-1)"><use href="#a-collapse"/></svg></button>
+        </span>
+      </div>
+      <div class="pinned">
+        <svg class="ic" style="color:rgb(var(--info));width:12px;height:12px"><use href="#a-pin"/></svg>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">帮我生成一个盘点会话的权限校验场景：无权限用户访问详情应返回 403…</span>
+        <svg class="ic" style="width:11px;height:11px;color:rgb(var(--gray-500))"><use href="#a-copy"/></svg>
+        <svg class="ic" style="width:11px;height:11px;color:rgb(var(--gray-500))"><use href="#a-close"/></svg>
+      </div>
+      <div class="ac-msgs">
+        <div class="msg-user">生成 HI-PERM-003：无盘点权限用户访问盘点会话详情接口，应返回 403 与标准错误码</div>
+        <div class="msg-ai">
+          我来按 golden flow 生成这个权限场景。先取技能正文并读取需求信息包，确认 FR 锚点与既有断言结构。
+        </div>
+        <!-- 工具组（完成态） -->
+        <div class="tool-card">
+          <div class="tool-head">
+            <svg class="ic" style="width:10px;height:10px;color:rgb(var(--gray-600))"><use href="#a-collapse" transform="rotate(-90 12 12)"/></svg>
+            <svg class="ic" style="color:rgb(var(--skip))"><use href="#a-skills"/></svg>
+            <span class="name">knowledge · info_pack · spec · scenario</span>
+            <span class="badge b-pass" style="font-size:9px"><svg class="ic"><use href="#i-pass"/></svg>5/5</span>
+            <span class="preview">取技能正文 → 读信息包 → spec.read FR-012 → next_id → list 参照</span>
+          </div>
+        </div>
+        <div class="msg-ai">
+          已定位同类参照 HI-PERM-001。本场景涉及权限校验，按 K-055 先做权限预检；检测到账号池缺 no_access 别名对应资源码，走自动解析兜底。
+          <div class="think">注意：刚才跳过了 scenario(action=next_id)，我已手工编号 HI-PERM-003 —— flow 面板会记一笔缺失，稍后补正。</div>
+        </div>
+        <!-- 工具卡（展开态：参数 + 结果） -->
+        <div class="tool-card" style="border-color:rgb(var(--info)/0.4)">
+          <div class="tool-head">
+            <svg class="ic" style="width:10px;height:10px;color:rgb(var(--gray-400))"><use href="#a-collapse" transform="rotate(-90 12 12)"/></svg>
+            <svg class="ic" style="color:rgb(var(--skip))"><use href="#t-validate"/></svg>
+            <span class="name">validate</span>
+            <span class="badge b-fail" style="font-size:9px"><svg class="ic"><use href="#i-fail"/></svg>FAIL</span>
+            <span class="preview">error 2 / warn 1 —— UNKNOWN_TPL / BODY_KEY</span>
+          </div>
+          <div class="tool-body">
+            <div class="micro-label" style="margin-bottom:4px">参数</div>
+            <div class="kv"><span class="k">path</span>: drafts/HI-PERM-003.yaml · <span class="k">strict</span>: true</div>
+            <div class="micro-label" style="margin:7px 0 4px">结果</div>
+            <div class="kv"><span class="err">[ERROR·UNKNOWN_TPL]</span> oracle `hr_perm_snapshot` 未注册（第 42 行）<br><span class="err">[ERROR·BODY_KEY]</span> body 使用了平铺键 name，应嵌套 json<br>[WARN·COVER] covers FR-012 在 spec 快照中存在但无 AC 交叉</div>
+          </div>
+        </div>
+        <!-- 工具卡（一行完成态） -->
+        <div class="tool-card">
+          <div class="tool-head">
+            <svg class="ic" style="width:10px;height:10px;color:rgb(var(--gray-600))"><use href="#a-collapse" transform="rotate(90 12 12)"/></svg>
+            <svg class="ic" style="color:rgb(var(--skip))"><use href="#t-validate"/></svg>
+            <span class="name">validate</span>
+            <span class="badge b-pass" style="font-size:9px"><svg class="ic"><use href="#i-pass"/></svg>PASS</span>
+            <span class="preview">error 0 / warn 1 —— 重新生成再校后通过（第2次）</span>
+          </div>
+        </div>
+        <!-- 工具卡（执行中） -->
+        <div class="tool-card">
+          <div class="tool-head">
+            <svg class="ic" style="width:10px;height:10px;color:rgb(var(--gray-600))"><use href="#a-collapse" transform="rotate(90 12 12)"/></svg>
+            <svg class="ic" style="color:rgb(var(--skip))"><use href="#t-draft"/></svg>
+            <span class="name">draft(action=write)</span>
+            <span class="badge b-skip" style="font-size:9px"><span class="dot" style="background:rgb(var(--skip));animation:blink 1.2s infinite"></span>执行中…</span>
+            <span class="preview">写入 drafts/HI-PERM-003.yaml 并登记三闸</span>
+          </div>
+        </div>
+        <div class="msg-ai">正在写入草稿 v1，保存后自动跑格式校验与三闸登记<span class="stream-caret"></span></div>
+      </div>
+      <div class="ac-input">
+        <div class="box"><span>输入消息，或输入 / 查看可用命令…</span><span class="mono fs-micro">kimi-k2 ▾</span></div>
+        <button class="btn btn-primary btn-sm"><svg class="ic"><use href="#a-send"/></svg>发送</button>
+      </div>
+    </div>
+
+    <!-- 右栏：页签面板 -->
+    <div class="ac-right">
+      <div class="tabs" style="padding:0 4px">
+        <button class="tab on"><svg class="ic"><use href="#a-todos"/></svg>待办</button>
+        <button class="tab"><svg class="ic"><use href="#t-draft"/></svg>草稿产物<span class="cnt">2</span></button>
+        <button class="tab"><svg class="ic"><use href="#a-skills"/></svg>技能</button>
+        <button class="tab" style="margin-left:auto" title="更多面板"><svg class="ic"><use href="#a-more"/></svg></button>
+        <button class="tab" title="最大化面板"><svg class="ic"><use href="#a-focus"/></svg></button>
+      </div>
+      <div class="panel-body">
+        <div class="micro-label" style="margin:2px 0 4px">计划 · todo_write</div>
+        <div class="todo done"><span class="cb"><svg class="ic" style="width:9px;height:9px"><use href="#i-pass"/></svg></span>读取需求信息包与 FR-012 锚点</div>
+        <div class="todo done"><span class="cb"><svg class="ic" style="width:9px;height:9px"><use href="#i-pass"/></svg></span>权限预检：no_access 账号解析</div>
+        <div class="todo done"><span class="cb"><svg class="ic" style="width:9px;height:9px"><use href="#i-pass"/></svg></span>validate 校验（×2，第二次 PASS）</div>
+        <div class="todo"><span class="cb"></span>写草稿 HI-PERM-003.yaml（进行中）</div>
+        <div class="todo"><span class="cb"></span>依赖建议 suggest_deps 并说明取舍</div>
+        <div class="todo"><span class="cb"></span>确认后入库 promote</div>
+        <div class="micro-label" style="margin:14px 0 6px">草稿产物 · 2</div>
+        <div class="draft-card">
+          <div class="n">HI-PERM-003.yaml <span style="color:rgb(var(--gray-600))">v2</span></div>
+          <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+            <span class="badge b-pass" style="font-size:9px">校验 PASS</span>
+            <span class="badge b-info" style="font-size:9px">三闸 2/3</span>
+            <span style="margin-left:auto;font-size:9px;color:rgb(var(--gray-600))">刚刚</span>
+          </div>
+        </div>
+        <div class="draft-card">
+          <div class="n">HI-PERM-002.yaml <span style="color:rgb(var(--gray-600))">v1</span></div>
+          <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+            <span class="badge b-warn" style="font-size:9px">待评审</span>
+            <span style="margin-left:auto;font-size:9px;color:rgb(var(--gray-600))">2 小时前</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<!-- ═══ 画板 03：图标体系 ═══ -->
+<section class="board" id="b3">
+  <div class="board-head"><span class="board-idx">03</span><h2>图标体系 — 内联 SVG 自绘 · stroke 1.5 · 24 视窗</h2></div>
+  <p class="board-sub">
+    三套方向共用同一套图标语义，各自风格演绎。本套 = Instrument 极简几何：单一线宽、圆角笔帽、无填充装饰。
+    每格左 24px / 右 16px（16px 下仍可辨不糊）。状态表达一律退出 emoji；emoji 只保留在页签/菜单情绪位（见底部现状对照）。
+  </p>
+  <div class="frame">
+    <div class="icon-section"><span class="micro-label">状态 · 6（六状态变量直出，StatusBadge 同源图形符）</span></div>
+    <div class="icon-grid">
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px;color:rgb(var(--pass))"><use href="#i-pass"/></svg><svg class="ic" style="color:rgb(var(--pass))"><use href="#i-pass"/></svg></div><span class="nm">通过 PASS</span><span class="sem">--pass</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px;color:rgb(var(--fail))"><use href="#i-fail"/></svg><svg class="ic" style="color:rgb(var(--fail))"><use href="#i-fail"/></svg></div><span class="nm">失败 FAIL</span><span class="sem">--fail</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px;color:rgb(var(--skip))"><use href="#i-skip"/></svg><svg class="ic" style="color:rgb(var(--skip))"><use href="#i-skip"/></svg></div><span class="nm">跳过 SKIP</span><span class="sem">--skip</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px;color:rgb(var(--blocked))"><use href="#i-blocked"/></svg><svg class="ic" style="color:rgb(var(--blocked))"><use href="#i-blocked"/></svg></div><span class="nm">阻塞 BLOCKED</span><span class="sem">--blocked</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px;color:rgb(var(--warn))"><use href="#i-warn"/></svg><svg class="ic" style="color:rgb(var(--warn))"><use href="#i-warn"/></svg></div><span class="nm">警告 WARN</span><span class="sem">--warn</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px;color:rgb(var(--info))"><use href="#i-info"/></svg><svg class="ic" style="color:rgb(var(--info))"><use href="#i-info"/></svg></div><span class="nm">信息 INFO</span><span class="sem">--info</span></div>
+    </div>
+    <div class="icon-section"><span class="micro-label">工具 · 16（MCP 合并工具域，对齐 mcp_server/tools 语义）</span></div>
+    <div class="icon-grid">
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-spec"/></svg><svg class="ic"><use href="#t-spec"/></svg></div><span class="nm">spec 文档</span><span class="sem">spec</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-scenario"/></svg><svg class="ic"><use href="#t-scenario"/></svg></div><span class="nm">场景用例</span><span class="sem">scenario</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-draft"/></svg><svg class="ic"><use href="#t-draft"/></svg></div><span class="nm">草稿</span><span class="sem">draft</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-validate"/></svg><svg class="ic"><use href="#t-validate"/></svg></div><span class="nm">校验</span><span class="sem">validate</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-run"/></svg><svg class="ic"><use href="#t-run"/></svg></div><span class="nm">试跑</span><span class="sem">run</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-attribution"/></svg><svg class="ic"><use href="#t-attribution"/></svg></div><span class="nm">归因</span><span class="sem">attribution</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-audit"/></svg><svg class="ic"><use href="#t-audit"/></svg></div><span class="nm">审计</span><span class="sem">audit</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-knowledge"/></svg><svg class="ic"><use href="#t-knowledge"/></svg></div><span class="nm">知识</span><span class="sem">knowledge</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-graph"/></svg><svg class="ic"><use href="#t-graph"/></svg></div><span class="nm">图谱</span><span class="sem">graph</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-lineage"/></svg><svg class="ic"><use href="#t-lineage"/></svg></div><span class="nm">血缘</span><span class="sem">lineage</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-db"/></svg><svg class="ic"><use href="#t-db"/></svg></div><span class="nm">数据库</span><span class="sem">db</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-flow"/></svg><svg class="ic"><use href="#t-flow"/></svg></div><span class="nm">路径 flow</span><span class="sem">flow</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-topic"/></svg><svg class="ic"><use href="#t-topic"/></svg></div><span class="nm">话题</span><span class="sem">topic</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-material"/></svg><svg class="ic"><use href="#t-material"/></svg></div><span class="nm">材料</span><span class="sem">material</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-workspace"/></svg><svg class="ic"><use href="#t-workspace"/></svg></div><span class="nm">工作区</span><span class="sem">workspace</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#t-promote"/></svg><svg class="ic"><use href="#t-promote"/></svg></div><span class="nm">入库</span><span class="sem">promote</span></div>
+    </div>
+    <div class="icon-section"><span class="micro-label">页签与操作 · 14</span></div>
+    <div class="icon-grid">
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-todos"/></svg><svg class="ic"><use href="#a-todos"/></svg></div><span class="nm">待办</span><span class="sem">todos</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-skills"/></svg><svg class="ic"><use href="#a-skills"/></svg></div><span class="nm">技能</span><span class="sem">skills</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-more"/></svg><svg class="ic"><use href="#a-more"/></svg></div><span class="nm">更多面板</span><span class="sem">more</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-export"/></svg><svg class="ic"><use href="#a-export"/></svg></div><span class="nm">导出</span><span class="sem">export</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-focus"/></svg><svg class="ic"><use href="#a-focus"/></svg></div><span class="nm">专注/最大化</span><span class="sem">focus</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-refresh"/></svg><svg class="ic"><use href="#a-refresh"/></svg></div><span class="nm">刷新</span><span class="sem">refresh</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-locate"/></svg><svg class="ic"><use href="#a-locate"/></svg></div><span class="nm">定位错误</span><span class="sem">locate</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-copy"/></svg><svg class="ic"><use href="#a-copy"/></svg></div><span class="nm">复制</span><span class="sem">copy</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-file"/></svg><svg class="ic"><use href="#a-file"/></svg></div><span class="nm">文件页签</span><span class="sem">file</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-close"/></svg><svg class="ic"><use href="#a-close"/></svg></div><span class="nm">关闭</span><span class="sem">close</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-plus"/></svg><svg class="ic"><use href="#a-plus"/></svg></div><span class="nm">新建</span><span class="sem">plus</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-collapse"/></svg><svg class="ic"><use href="#a-collapse"/></svg></div><span class="nm">收起/展开</span><span class="sem">collapse</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-gate"/></svg><svg class="ic"><use href="#a-gate"/></svg></div><span class="nm">交互门</span><span class="sem">gate</span></div>
+      <div class="icon-cell"><div class="sizes"><svg class="ic" style="width:24px;height:24px"><use href="#a-send"/></svg><svg class="ic"><use href="#a-send"/></svg></div><span class="nm">发送</span><span class="sem">send</span></div>
+    </div>
+    <div class="emoji-compare">
+      <b style="color:rgb(var(--gray-300))">现状对照（emoji 唯一允许出现的区域）</b>——现网：状态 ✅❌⏳⚠️🟩🟨🟥 与工具 🔧📋📝🛠📦🧭📖✏️🎛📏🧠🕸📜🤝 混用，
+      宽度不一、对齐靠运气（ToolBlocks 头部实证）。本方向的纪律：状态与工具一律改图形徽章（上方），
+      emoji 只保留在页签/菜单情绪位（📋 待办 / 🛠 技能这类「栏目名」），且不参与状态表达与对齐。
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 画板 04：组件拼版 ═══ -->
+<section class="board" id="b4">
+  <div class="board-head"><span class="board-idx">04</span><h2>组件拼版 — L1 六原语 + 基础控件</h2></div>
+  <p class="board-sub">StatusBadge / Button 三档 / Tabs / 卡片 / Modal / 空态（图形+文案+CTA）/ 骨架屏 / Toast / Input——方案 §四原语的 Instrument 演绎。</p>
+  <div class="frame"><div class="comp-grid">
+    <div class="comp-cell">
+      <span class="micro-label">StatusBadge — 六状态唯一徽章（描边 40% + 填 14%）</span>
+      <div class="row">
+        <span class="badge b-pass"><svg class="ic"><use href="#i-pass"/></svg>PASS</span>
+        <span class="badge b-fail"><svg class="ic"><use href="#i-fail"/></svg>FAIL</span>
+        <span class="badge b-skip"><svg class="ic"><use href="#i-skip"/></svg>SKIP</span>
+        <span class="badge b-blocked"><svg class="ic"><use href="#i-blocked"/></svg>BLOCKED</span>
+        <span class="badge b-warn"><svg class="ic"><use href="#i-warn"/></svg>WARN</span>
+        <span class="badge b-info"><svg class="ic"><use href="#i-info"/></svg>INFO</span>
+        <span class="badge b-neutral">未运行</span>
+      </div>
+      <div class="row" style="margin-top:12px;font-size:11px;color:rgb(var(--gray-400))">
+        列表内用法：HI-PERM-003 <span class="badge b-pass" style="font-size:9px">校验 PASS</span>
+        <span style="color:rgb(var(--gray-600))">·</span> PP-RC-008 <span class="badge b-fail" style="font-size:9px">FAIL</span>
+        <span style="color:rgb(var(--gray-600))">·</span> PP-SNAP-002 <span class="badge b-skip" style="font-size:9px">SKIP</span>
+      </div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">Button — 三档（primary 每操作区至多 1 个）</span>
+      <div class="row">
+        <button class="btn btn-primary"><svg class="ic"><use href="#t-promote"/></svg>确认入库</button>
+        <button class="btn btn-ghost"><svg class="ic"><use href="#a-refresh"/></svg>重新校验</button>
+        <button class="btn btn-danger"><svg class="ic"><use href="#a-close"/></svg>废弃草稿</button>
+        <button class="btn btn-ghost" disabled>禁用态</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary btn-sm">小号主按钮</button>
+        <button class="btn btn-ghost btn-sm">小号 ghost</button>
+        <button class="icon-btn" style="border:1px solid rgb(var(--border));width:26px;height:26px"><svg class="ic"><use href="#a-export"/></svg></button>
+        <span style="font-size:10px;color:rgb(var(--gray-600))">图标按钮统一 ghost 档 26×26</span>
+      </div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">Tabs — 全站唯一下划线式（segment 仅数据页保留）</span>
+      <div class="tabs" style="margin-top:10px">
+        <button class="tab on">执行记录<span class="cnt">15</span></button>
+        <button class="tab">失败台账<span class="cnt">3</span></button>
+        <button class="tab">覆盖率</button>
+        <button class="tab">形状契约</button>
+      </div>
+      <div style="padding:12px 2px 2px;font-size:11px;color:rgb(var(--gray-500))">选中 = 前景色 + info 下划线 1.5px；计数 = 16% 填充底丸，不贴边裸字。</div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">卡片 — 默认 / 悬浮 / 选中</span>
+      <div class="row" style="align-items:stretch">
+        <div class="card-demo" style="flex:1"><b style="font-size:11.5px;color:rgb(var(--gray-100))">默认卡</b><div style="font-size:10px;color:rgb(var(--gray-500));margin-top:3px">hairline 边框，无阴影</div></div>
+        <div class="card-demo active" style="flex:1"><b style="font-size:11.5px;color:rgb(var(--gray-100))">选中卡</b><div style="font-size:10px;color:rgb(var(--info));margin-top:3px">info 40% 边 + 6% 底</div></div>
+      </div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">Modal — 统一弹层（portal，消灭手写 fixed 弹层）</span>
+      <div style="background:rgb(var(--overlay)/0.45);border-radius:8px;padding:16px;margin-top:10px">
+        <div class="modal-mock" style="max-width:300px;margin:0 auto">
+          <div class="m-head"><span>废弃草稿 HI-PERM-003？</span><svg class="ic" style="width:12px;height:12px;color:rgb(var(--gray-500))"><use href="#a-close"/></svg></div>
+          <div class="m-body">废弃后进入已归档，可随时恢复；三闸登记保留审计痕迹。</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding:0 13px 13px">
+            <button class="btn btn-ghost btn-sm">取消</button>
+            <button class="btn btn-danger btn-sm">确认废弃</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">空态 — 图形 + 一句文案 + CTA（三态分离之「空」）</span>
+      <div class="empty-demo">
+        <span class="glyph"><svg class="ic" style="width:20px;height:20px"><use href="#t-scenario"/></svg></span>
+        <b style="font-size:12px;color:rgb(var(--gray-200))">该模块还没有场景用例</b>
+        <span style="font-size:10.5px;color:rgb(var(--gray-500))">从需求信息包生成第一个草稿，或上传既有 YAML</span>
+        <button class="btn btn-primary btn-sm" style="margin-top:4px"><svg class="ic"><use href="#a-plus"/></svg>生成场景</button>
+      </div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">骨架屏 — shimmer 条形（三态分离之「加载中」，替代 animate-pulse 文字）</span>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:9px">
+        <div class="skel" style="height:13px;width:42%"></div>
+        <div class="skel" style="height:10px;width:88%"></div>
+        <div class="skel" style="height:10px;width:73%"></div>
+        <div style="display:flex;gap:8px"><div class="skel" style="height:22px;width:64px"></div><div class="skel" style="height:22px;width:64px"></div><div class="skel" style="height:22px;width:48px"></div></div>
+      </div>
+    </div>
+    <div class="comp-cell">
+      <span class="micro-label">Toast — 单例容器 · ok / fail / info</span>
+      <div style="margin-top:12px">
+        <div class="toast-demo" style="color:rgb(var(--pass));border-color:rgb(var(--pass)/0.4);background:rgb(var(--pass)/0.1)"><svg class="ic"><use href="#i-pass"/></svg>HI-PERM-003 校验通过，已登记三闸</div>
+        <div class="toast-demo" style="color:rgb(var(--fail));border-color:rgb(var(--fail)/0.4);background:rgb(var(--fail)/0.1)"><svg class="ic"><use href="#i-fail"/></svg>入库失败：release_check 契约指纹漂移</div>
+        <div class="toast-demo" style="color:rgb(var(--info));border-color:rgb(var(--info)/0.4);background:rgb(var(--info)/0.1)"><svg class="ic"><use href="#i-info"/></svg>后台同步进行中，完成时会通知你</div>
+      </div>
+    </div>
+    <div class="comp-cell" style="grid-column:1/-1">
+      <span class="micro-label">Input — 搜索 / 下拉 / 只读证据行</span>
+      <div class="row">
+        <div class="input-demo"><svg class="ic" style="width:12px;height:12px"><use href="#t-search"/></svg>搜索场景 / FR 锚点…</div>
+        <div class="input-demo" style="max-width:180px;justify-content:space-between">kimi-k2<svg class="ic" style="width:11px;height:11px;transform:rotate(90deg)"><use href="#a-collapse"/></svg></div>
+        <span class="mono" style="font-size:10px;color:rgb(var(--gray-500));border:1px dashed rgb(var(--border));border-radius:6px;padding:6px 10px">EX-9e31916f · output.log</span>
+      </div>
+    </div>
+  </div></div>
+</section>
+
+<!-- ═══ 画板 05：深浅主题秀 ═══ -->
+<section class="board" id="b5">
+  <div class="board-head"><span class="board-idx">05</span><h2>主题秀 — 同一画板深 / 浅对照</h2></div>
+  <p class="board-sub">左深右浅，同一组件集渲染两遍：文字对比度、徽章描边、节点底色在两版都成立（无死角色）。右上角可切整页深浅。色板全部 CSS 变量化，变量名对齐 themes.css 语义。</p>
+  <div class="frame">
+    <div class="theme-pair">
+      <div class="theme-pane t-dark">
+        <div class="micro-label" style="margin-bottom:10px">dark · 默认</div>
+        <div class="t-scope"><div class="inner-card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="dot" style="background:rgb(var(--pass));width:7px;height:7px"></span>
+            <b style="font-size:12px;color:rgb(var(--gray-100))">写草稿 · HI-PERM-003</b>
+            <span class="badge b-info" style="margin-left:auto">当前</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+            <span class="badge b-pass"><svg class="ic"><use href="#i-pass"/></svg>PASS</span>
+            <span class="badge b-warn"><svg class="ic"><use href="#i-warn"/></svg>乱序</span>
+            <span class="badge b-fail"><svg class="ic"><use href="#i-fail"/></svg>缺失必需</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm">确认入库</button>
+            <button class="btn btn-ghost btn-sm">查看证据</button>
+          </div>
+        </div></div>
+      </div>
+      <div class="theme-pane t-light">
+        <div class="micro-label" style="margin-bottom:10px">light · 同构</div>
+        <div class="t-scope"><div class="inner-card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span class="dot" style="background:rgb(var(--pass));width:7px;height:7px"></span>
+            <b style="font-size:12px;color:rgb(var(--gray-100))">写草稿 · HI-PERM-003</b>
+            <span class="badge b-info" style="margin-left:auto">当前</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+            <span class="badge b-pass"><svg class="ic"><use href="#i-pass"/></svg>PASS</span>
+            <span class="badge b-warn"><svg class="ic"><use href="#i-warn"/></svg>乱序</span>
+            <span class="badge b-fail"><svg class="ic"><use href="#i-fail"/></svg>缺失必需</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm">确认入库</button>
+            <button class="btn btn-ghost btn-sm">查看证据</button>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div class="swatches">
+      <div class="sw"><div class="c" style="background:#0b0c10"></div><div class="n">surface-1 dark</div></div>
+      <div class="sw"><div class="c" style="background:#13141b"></div><div class="n">surface-2 dark</div></div>
+      <div class="sw"><div class="c" style="background:#6b78e8"></div><div class="n">info dark</div></div>
+      <div class="sw"><div class="c" style="background:#2a2c38"></div><div class="n">border dark</div></div>
+      <div class="sw"><div class="c" style="background:#f6f7f9"></div><div class="n">surface-1 light</div></div>
+      <div class="sw"><div class="c" style="background:#ffffff"></div><div class="n">surface-2 light</div></div>
+      <div class="sw"><div class="c" style="background:#4653c7"></div><div class="n">info light</div></div>
+      <div class="sw"><div class="c" style="background:#dfe2e9"></div><div class="n">border light</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="footer-note">
+  方向 A「Instrument 仪表」· SpecGuard 工作台 UI 阶段一设计 demo · 自包含离线 HTML（零依赖/零 CDN）·
+  图标全部内联 SVG 自绘 · 样例数据来自 evals/flows/generate-scenario.flow.json 真实拓扑 ·
+  emoji 仅限画板 03 现状对照区 · 阶段二落地约束：装入《2026-08-30-工作台UI升级方案》L0/L1/L2 结构
+</div>
+
+<script>
+/* 聚焦/全图切换（持久化语义同现网 sg_flow_view；demo 内不跨页存储） */
+function flowView(mode) {
+  var focus = document.getElementById('flow-focus'), full = document.getElementById('flow-full');
+  var bf = document.getElementById('ft-focus'), bu = document.getElementById('ft-full');
+  if (mode === 'focus') { focus.style.display = ''; full.style.display = 'none'; bf.classList.add('on'); bu.classList.remove('on'); }
+  else { focus.style.display = 'none'; full.style.display = ''; bu.classList.add('on'); bf.classList.remove('on'); }
+}
+</script>
+</body>
+</html>
