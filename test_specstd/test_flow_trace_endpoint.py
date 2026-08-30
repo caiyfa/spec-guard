@@ -81,6 +81,7 @@ class TestFlowTraceEndpoint:
         assert statuses["get_id"] == "missing"
         assert statuses["query_registry"] == "missing"
         assert r["n_missing"] >= 3
+        assert "flowchart TD" in r["mermaid"] and "classDef hit" in r["mermaid"]
         assert any("缺失必需阶段「取场景 ID」" in d for d in r["deviations"])
         # 步号证据（spec 第 1 步、draft 第 3 步）
         st_map = {s["key"]: s for s in r["stages"]}

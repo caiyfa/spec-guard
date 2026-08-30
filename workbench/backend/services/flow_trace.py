@@ -18,7 +18,7 @@ def build_flow_trace(rows: list, session_id: str = "") -> dict:
     """会话行（JSONL 已解析）→ 路径重放结构。纯读、无副作用。"""
     try:
         from evals.baseline import scan_rows
-        from evals.flowpath import trace_scan
+        from evals.flowpath import render_flow_mermaid, trace_scan
     except Exception as e:  # 评测依赖缺失/版本不齐 → 诚实降级，不影响对话
         return {"available": False, "reason": f"evals 模块加载失败: {e}"}
 
@@ -50,5 +50,6 @@ def build_flow_trace(rows: list, session_id: str = "") -> dict:
         "extras": list(trace.extras),
         "n_missing": trace.n_missing,
         "n_out_of_order": trace.n_out_of_order,
+        "mermaid": render_flow_mermaid(trace),  # 图形视图（前端 MermaidBlock 主题跟随渲染）
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }

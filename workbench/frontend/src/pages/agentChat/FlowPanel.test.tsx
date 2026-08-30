@@ -9,6 +9,14 @@ vi.mock('../../api', () => ({
   agentApi: { getFlowTrace: (...a: unknown[]) => getFlowTraceMock(...a) },
 }));
 
+// mermaid 动态导入打桩（MermaidBlock 内部消费；jsdom 下避免真实渲染）
+vi.mock('mermaid', () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn(async (_id: string, _code: string) => ({ svg: '<svg data-testsvg="1"/>' })),
+  },
+}));
+
 import { FlowPanel } from './FlowPanel';
 
 const TRACE = {
@@ -28,6 +36,7 @@ const TRACE = {
   extras: ['spec(sync)×2'],
   n_missing: 1,
   n_out_of_order: 1,
+  mermaid: ['flowchart TD', '    S1["1. 取技能正文 ✓"]:::hit', '    classDef hit fill:#d4edda'].join('\n'),
   generated_at: '2026-08-30T10:00:00',
 };
 
@@ -49,6 +58,9 @@ test('渲染阶段四态 + 跑偏点 + 计划外', async () => {
   expect(screen.getByText(/先于/)).toBeTruthy();
   // 计划外旁支
   expect(screen.getByText(/spec\(sync\)×2/)).toBeTruthy();
+
+  // 图形视图容器（MermaidBlock 渲染 golden flow 着色路径图；jsdom 下 mock mermaid）
+  await waitFor(() => expect(screen.getByTestId('flow-graph')).toBeTruthy());
 });
 
 test('非生成会话诚实标注（基线仅供参考）', async () => {

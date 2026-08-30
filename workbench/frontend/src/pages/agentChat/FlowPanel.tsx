@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentApi } from '../../api';
 import type { FlowTraceResult, FlowTraceStage } from '../../api';
+import MermaidBlock from '../../components/MermaidBlock';  // K-041：主题跟随 mermaid 渲染（渲染失败回退源码）
 
 /** 🧭 路径 面板（T-1042）：golden flow 基线 vs 会话实际走径——对话进行中实时跑偏扫描。
  *
@@ -97,7 +98,14 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
         </span>
       </div>
 
-      {/* 阶段四态列表 */}
+      {/* 图形视图：golden flow 着色路径图（MermaidBlock 主题跟随，渲染失败回退源码） */}
+      {trace.mermaid && (
+        <div data-testid="flow-graph" className="border border-border rounded bg-surface-3/40 p-1.5">
+          <MermaidBlock code={trace.mermaid} />
+        </div>
+      )}
+
+      {/* 阶段四态列表（图形的证据面：步号/次数/工具） */}
       <div className="space-y-1">
         {(trace.stages || []).map((s: FlowTraceStage, i: number) => {
           const m = STATUS_META[s.status] || STATUS_META.skipped;

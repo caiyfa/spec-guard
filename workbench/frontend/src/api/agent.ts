@@ -29,6 +29,7 @@ export interface FlowTraceResult {
   extras?: string[];
   n_missing?: number;
   n_out_of_order?: number;
+  mermaid?: string;
   generated_at?: string;
   owner?: string;
   resolved_workspace?: string;
