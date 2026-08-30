@@ -216,6 +216,96 @@ def test_build_flow_check_immune_to_benign_new_tool(tmp_path):
     assert build_flow(skill, flow_json, check=True) == 1
 
 
+# ── 网状拓扑：历程边热力 / 问题调用角标 / 门穿透 / 野跳 / 约束边 ─────────────
+
+def _rows_with_verdicts(sid, calls):
+    """calls: [(tool, args, verdict)]——assistant 声明 + tool 结果成败配对（失败按真实错误前缀形态）。"""
+    rows = [_meta(sid), {"role": "user", "content": "生成场景"}]
+    for i, (tool, args, verdict) in enumerate(calls):
+        cid = f"c{i}"
+        rows.append(_asst(cid, tool, args))
+        rows.append(_tool(cid, '{"ok": true}' if verdict == "ok" else "错误：模拟失败"))
+    return rows
+
+
+def test_edge_hits_and_gate_through(tmp_path):
+    """相邻阶段对推边热力；无直接边的相邻对单跳门穿透（find_reference→validate 穿过规划门）。"""
+    calls = [("spec", {"action": "read"}, "ok"), ("scenario", {"action": "next_id"}, "ok"),
+             ("query_registry", {}, "ok"), ("scenario", {"action": "list"}, "ok"),
+             ("validate", {}, "ok"), ("draft", {"action": "write"}, "ok")]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "e.jsonl", _rows_with_verdicts("e", calls))))
+    assert trace.edge_hits[("read_requirement", "get_id")] == 1
+    assert trace.edge_hits[("find_reference", "validate")] == 1  # 原始相邻对（穿透前）
+    mm = render_flow_mermaid(trace)
+    # 门穿透后：G1 入边与「确认规划」出边各 ×1
+    assert 'G1{"规划确认"}' in mm
+    assert '"确认规划 ×1"' in mm
+
+
+def test_loop_edges_and_fail_badges(tmp_path):
+    """validate 失败重试 → 自环回边 ×1 + 节点 ⚠1 角标；试跑 FAIL 归因 → trial_run 自环。"""
+    calls = [("spec", {"action": "read"}, "ok"), ("scenario", {"action": "next_id"}, "ok"),
+             ("query_registry", {}, "ok"), ("scenario", {"action": "list"}, "ok"),
+             ("validate", {}, "fail"), ("validate", {}, "ok"),
+             ("draft", {"action": "write"}, "ok"), ("scenario", {"action": "suggest_deps"}, "ok"),
+             ("scenario", {"action": "run"}, "fail"), ("attribution", {}, "ok")]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "l.jsonl", _rows_with_verdicts("l", calls))))
+    assert trace.edge_hits[("validate", "validate")] == 1
+    assert trace.edge_hits[("trial_run", "trial_run")] == 1
+    assert _state(trace, "validate").fails == 1
+    assert _state(trace, "trial_run").fails == 1
+    mm = render_flow_mermaid(trace)
+    assert "重新生成再校 ×1" in mm
+    assert "归因重跑 ×1" in mm
+    assert "⚠1" in mm  # 问题调用角标
+
+
+def test_self_loop_undefined_not_wild(tmp_path):
+    """拓扑未定义的自环（连读两次需求）不算野跳——阶段内重复由节点 ×N 表达。"""
+    calls = [("spec", {"action": "read"}, "ok"), ("spec", {"action": "search"}, "ok"),
+             ("scenario", {"action": "next_id"}, "ok")]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "s.jsonl", _rows_with_verdicts("s", calls))))
+    assert trace.edge_hits[("read_requirement", "read_requirement")] == 1
+    mm = render_flow_mermaid(trace)
+    assert "×2" in mm  # 节点次数表达
+    # 不出现野跳边样式（自环豁免；野跳独有 dasharray 4 3，约束边 2 3/回边 3 3 不撞）
+    assert "stroke-dasharray:4 3" not in mm
+
+
+def test_wild_jump_rendered(tmp_path):
+    """拓扑未定义的跨阶段跳（写草稿直接试跑，跳过依赖建议）→ 琥珀野跳虚线。"""
+    calls = [("spec", {"action": "read"}, "ok"), ("scenario", {"action": "next_id"}, "ok"),
+             ("query_registry", {}, "ok"), ("scenario", {"action": "list"}, "ok"),
+             ("validate", {}, "ok"), ("draft", {"action": "write"}, "ok"),
+             ("scenario", {"action": "run"}, "ok")]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "w.jsonl", _rows_with_verdicts("w", calls))))
+    assert trace.edge_hits[("write_draft", "trial_run")] == 1
+    mm = render_flow_mermaid(trace)
+    assert "stroke:#f0b429" in mm  # 野跳边样式（低频档退为背景纹理）
+    assert "opacity:0.45" in mm
+
+
+def test_hard_order_constraint_edge(tmp_path):
+    """前置约束显式成边：正常淡灰，乱序（写草稿先于 validate）红色加粗。"""
+    rows = [_meta("ho"), {"role": "user", "content": "x"},
+            _asst("a", "write_draft"), _tool("a", "ok"),
+            _asst("b", "validate"), _tool("b", "ok")]
+    trace = trace_scan(scan_session(_write_session(tmp_path / "ho.jsonl", rows)))
+    mm = render_flow_mermaid(trace)
+    assert "须先 validate 校验" in mm and "须先 读需求" in mm
+    assert "stroke:#eb5757,stroke-width:2.2px" in mm  # 违例红
+    mm2 = render_flow_mermaid(trace_session(_write_session(tmp_path / "g.jsonl", _golden_rows("g"))))
+    assert "stroke:#eb5757,stroke-width:2.2px" not in mm2  # 全绿无违例红
+
+
+def test_legacy_def_without_topology_linear_fallback():
+    """旧定义（无 topology）装载时按阶段序线性兜底。"""
+    from evals.flowpath import FlowStage, _linear_topology
+    stages = (FlowStage("a", "A", (("x", ""),), True), FlowStage("b", "B", (("y", ""),), True))
+    topo = _linear_topology(stages)
+    assert [(e.from_key, e.to_key, e.kind) for e in topo] == [("a", "b", "main")]
+
+
 def test_promote_maps_to_stage_not_extra(tmp_path):
     rows = _golden_rows("promo")
     rows += [_asst("p", "promote_draft"), _tool("p", "入库成功")]

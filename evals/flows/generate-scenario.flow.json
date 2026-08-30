@@ -20,6 +20,33 @@
     "parent",
     "flow"
   ],
+  "gates": [
+    {"key": "gate_plan", "label": "规划确认"},
+    {"key": "gate_promote", "label": "确认入库"}
+  ],
+  "topology": [
+    {"from": "read_skill", "to": "read_requirement"},
+    {"from": "read_requirement", "to": "get_id"},
+    {"from": "get_id", "to": "query_registry"},
+    {"from": "query_registry", "to": "find_reference"},
+    {"from": "find_reference", "to": "gate_plan"},
+    {"from": "gate_plan", "to": "dag_design", "label": "多场景", "kind": "cond"},
+    {"from": "gate_plan", "to": "permission_precheck", "label": "涉权限/写操作", "kind": "cond"},
+    {"from": "gate_plan", "to": "validate", "label": "确认规划"},
+    {"from": "dag_design", "to": "permission_precheck", "label": "涉权限/写操作", "kind": "cond"},
+    {"from": "dag_design", "to": "validate"},
+    {"from": "permission_precheck", "to": "validate"},
+    {"from": "validate", "to": "validate", "label": "重新生成再校", "kind": "loop"},
+    {"from": "validate", "to": "write_draft", "label": "PASS"},
+    {"from": "write_draft", "to": "suggest_deps"},
+    {"from": "suggest_deps", "to": "validate", "label": "采纳建议边·重校", "kind": "loop"},
+    {"from": "suggest_deps", "to": "trial_run", "label": "用户要试跑", "kind": "cond"},
+    {"from": "suggest_deps", "to": "gate_promote"},
+    {"from": "trial_run", "to": "trial_run", "label": "归因重跑", "kind": "loop"},
+    {"from": "trial_run", "to": "gate_promote", "label": "PASS"},
+    {"from": "gate_promote", "to": "promote", "label": "确认"},
+    {"from": "write_draft", "to": "get_id", "label": "下一场景", "kind": "loop"}
+  ],
   "stages": [
     {
       "key": "read_skill",

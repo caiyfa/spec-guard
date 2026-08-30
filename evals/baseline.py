@@ -75,6 +75,7 @@ class SessionScan:
     model: str = ""
     tools_used: list = field(default_factory=list)
     tool_calls_raw: list = field(default_factory=list)  # [(name, args_dict)] 原始序——路径重放按（基名, action）归一时用
+    tool_call_verdicts: list = field(default_factory=list)  # 与 tool_calls_raw 同序："ok"/"fail"/None（结果未回填）
     nudge_fires: int = 0                # [flow-nudge] 触发次数（T-1042 三期 EDD 指标）
     nudge_corrected: bool | None = None  # 首次 nudge 后出现 validate → True；未触发 nudge → None
 
@@ -136,6 +137,8 @@ def scan_rows(rows: list, session_id: str = "", smoke: bool = False) -> SessionS
         scan.purpose = "__smoke__"
     # tool_call_id → tool_name（assistant 声明），用于把 tool 结果行归到具体工具
     call_id_to_tool: dict[str, str] = {}
+    # tool_call_id → 调用序索引（与 tool_calls_raw/tool_call_verdicts 对齐），结果行回填成败
+    call_id_to_idx: dict[str, int] = {}
     validate_results: list[str | None] = []
     nudge_seen = False  # 首个 [flow-nudge] 出现后，其后 validate PASS 记纠正（EDD）
 
@@ -174,6 +177,8 @@ def scan_rows(rows: list, session_id: str = "", smoke: bool = False) -> SessionS
                     args_obj = raw_args
                 scan.tool_calls_raw.append(
                     (name, args_obj if isinstance(args_obj, dict) else {}))
+                scan.tool_call_verdicts.append(None)
+                call_id_to_idx[tc.get("id", "")] = len(scan.tool_calls_raw) - 1
                 if name in _VALIDATE_TOOL_NAMES:
                     scan.validate_calls += 1
         elif rtype == "tool":
@@ -183,6 +188,9 @@ def scan_rows(rows: list, session_id: str = "", smoke: bool = False) -> SessionS
                 scan.n_tool_ok += 1
             else:
                 scan.n_tool_fail += 1
+            vidx = call_id_to_idx.get(o.get("tool_call_id", ""))
+            if vidx is not None and vidx < len(scan.tool_call_verdicts):
+                scan.tool_call_verdicts[vidx] = "ok" if ok else "fail"
             # T-1042 三期 EDD：[flow-nudge] 触发计数 + 触发后 validate 记纠正
             if NUDGE_MARKER in result:
                 scan.nudge_fires += 1

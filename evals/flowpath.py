@@ -55,14 +55,41 @@ class FlowStage:
 
 
 @dataclass(frozen=True)
+class FlowEdge:
+    """拓扑边：阶段间真实走向（§16.1 的条件分支与回边，打破线性链失真）。
+
+    kind: main 主路径 / cond 条件分支（多场景/涉权限/用户要试跑） / loop 回边
+    （修复重校、FAIL 归因重跑、下一场景）——线性链只表达 main，loop/cond 是
+    「流程本来有条件」的证据面。
+    """
+    from_key: str
+    to_key: str
+    label: str = ""
+    kind: str = "main"
+
+
+@dataclass(frozen=True)
+class FlowGate:
+    """交互门（对话层决策点，无工具调用：规划确认/入库确认）。
+
+    只作拓扑语义节点（菱形展示），不参与四态判定——门的「经过」由相邻阶段
+    边推导（find_reference→…→validate 视为穿过规划门）。
+    """
+    key: str
+    label: str
+
+
+@dataclass(frozen=True)
 class FlowDef:
-    """golden flow 定义：阶段图 + 硬顺序 + benign 集合。"""
+    """golden flow 定义：阶段图 + 硬顺序 + 拓扑边 + 交互门 + benign 集合。"""
     id: str
     title: str
     source: str
     stages: tuple[FlowStage, ...]
     hard_order: tuple[tuple[str, str], ...]
     benign_bases: frozenset[str]
+    topology: tuple[FlowEdge, ...] = ()
+    gates: tuple[FlowGate, ...] = ()
     rebuilt_from_file: bool = False   # True=来自 evals/flows/*.json；False=内置兜底
 
     @property
@@ -116,7 +143,40 @@ def _builtin_flow_def() -> FlowDef:
         ),
         hard_order=(("read_requirement", "write_draft"), ("validate", "write_draft")),
         benign_bases=frozenset({"todo_write", "topic", "gate_dock_status", "parent", "flow"}),
+        gates=(
+            FlowGate("gate_plan", "规划确认"),
+            FlowGate("gate_promote", "确认入库"),
+        ),
+        # §16.1 条件拓扑：主路 + 条件分支 + 回边（与 flow JSON 同源维护）
+        topology=(
+            FlowEdge("read_skill", "read_requirement"),
+            FlowEdge("read_requirement", "get_id"),
+            FlowEdge("get_id", "query_registry"),
+            FlowEdge("query_registry", "find_reference"),
+            FlowEdge("find_reference", "gate_plan"),
+            FlowEdge("gate_plan", "dag_design", "多场景", "cond"),
+            FlowEdge("gate_plan", "permission_precheck", "涉权限/写操作", "cond"),
+            FlowEdge("gate_plan", "validate", "确认规划"),
+            FlowEdge("dag_design", "permission_precheck", "涉权限/写操作", "cond"),
+            FlowEdge("dag_design", "validate"),
+            FlowEdge("permission_precheck", "validate"),
+            FlowEdge("validate", "validate", "重新生成再校", "loop"),
+            FlowEdge("validate", "write_draft", "PASS"),
+            FlowEdge("write_draft", "suggest_deps"),
+            FlowEdge("suggest_deps", "validate", "采纳建议边·重校", "loop"),
+            FlowEdge("suggest_deps", "trial_run", "用户要试跑", "cond"),
+            FlowEdge("suggest_deps", "gate_promote"),
+            FlowEdge("trial_run", "trial_run", "归因重跑", "loop"),
+            FlowEdge("trial_run", "gate_promote", "PASS"),
+            FlowEdge("gate_promote", "promote", "确认"),
+            FlowEdge("write_draft", "get_id", "下一场景", "loop"),
+        ),
     )
+
+
+def _linear_topology(stages: tuple[FlowStage, ...]) -> tuple[FlowEdge, ...]:
+    """旧定义（无 topology 键）线性兜底：阶段序直链——兼容面，新定义都走真实拓扑。"""
+    return tuple(FlowEdge(stages[i].key, stages[i + 1].key) for i in range(len(stages) - 1))
 
 
 def load_flow(name: str = DEFAULT_FLOW_NAME) -> FlowDef:
@@ -124,6 +184,7 @@ def load_flow(name: str = DEFAULT_FLOW_NAME) -> FlowDef:
 
     JSON 里 tools 是人写形态（助记/legacy/基名），装载时统一归一为（基名, action），
     换工具名只需改 JSON 或跑 build_flow 重建，不改比对逻辑。
+    topology/gates 缺省时按阶段序线性兜底（旧 JSON 兼容）。
     """
     path = _FLOWS_DIR / f"{name}.flow.json"
     if path.exists():
@@ -139,11 +200,23 @@ def load_flow(name: str = DEFAULT_FLOW_NAME) -> FlowDef:
                 for s in raw.get("stages", [])
             )
             if stages:
+                topology = tuple(
+                    FlowEdge(str(e["from"]), str(e["to"]),
+                             str(e.get("label", "")), str(e.get("kind", "main")))
+                    for e in raw.get("topology", [])
+                )
+                if not topology:
+                    topology = _linear_topology(stages)
+                gates = tuple(
+                    FlowGate(str(g["key"]), str(g["label"]))
+                    for g in raw.get("gates", [])
+                )
                 return FlowDef(
                     id=str(raw.get("id", name)), title=str(raw.get("title", name)),
                     source=str(raw.get("source", "")), stages=stages,
                     hard_order=tuple(tuple(p) for p in raw.get("hard_order", [])),
                     benign_bases=frozenset(raw.get("benign_bases", [])),
+                    topology=topology, gates=gates,
                     rebuilt_from_file=True,
                 )
         except (json.JSONDecodeError, KeyError, TypeError, OSError):
@@ -152,18 +225,22 @@ def load_flow(name: str = DEFAULT_FLOW_NAME) -> FlowDef:
 
 
 def flow_def_to_mermaid(defn: FlowDef) -> str:
-    """渲染 golden flow 本体（无会话着色，重建后可视化用）。"""
+    """渲染 golden flow 本体拓扑（无会话着色：主路+条件分支+回边+交互门全展示）。"""
+    node_id = {st.key: f"S{i}" for i, st in enumerate(defn.stages, start=1)}
+    gate_id = {g.key: f"G{i}" for i, g in enumerate(defn.gates, start=1)}
     lines = [_MERMAID_INIT, "flowchart TD"]
-    n = len(defn.stages)
-    for i, st in enumerate(defn.stages, start=1):
+    for st in defn.stages:
+        num = node_id[st.key][1:]
         mark = "必选" if st.required else "可选"
         cls = "req" if st.required else "opt"
-        lines.append(f'    S{i}("{i}. {st.label}<br/>{mark}"):::{cls}')
-        if i < n:
-            lines.append(f"    S{i} --> S{i + 1}")
+        lines.append(f'    {node_id[st.key]}("{num}. {st.label}<br/>{mark}"):::{cls}')
+    for g in defn.gates:
+        lines.append(f'    {gate_id[g.key]}{{"{g.label}"}}:::gate')
+    lines += _render_edges(defn, node_id, gate_id, {}, {})
     lines += [
         f"    classDef req {_CLS_HIT}",
         f"    classDef opt {_CLS_SKIP}",
+        f"    classDef gate {_CLS_GATE}",
     ]
     return "\n".join(lines)
 
@@ -197,6 +274,7 @@ class StageState:
     times: int = 0               # 该阶段被命中的调用次数
     tools: list = field(default_factory=list)  # 命中的原始工具名（去重）
     note: str = ""
+    fails: int = 0               # 结果非 ok 的调用次数（问题调用角标）
 
 
 @dataclass
@@ -213,6 +291,9 @@ class FlowTrace:
     flow_id: str = ""
     flow_title: str = ""
     flow_source: str = ""
+    # 历程边热力：(from_stage, to_stage) → 经过次数（按「命中阶段序列」相邻对推导，
+    # 旁支/benign 调用不占位；自环=连续命中同阶段，即重试/修复轮次）
+    edge_hits: dict = field(default_factory=dict)
 
     @property
     def n_missing(self) -> int:
@@ -235,11 +316,15 @@ def trace_scan(scan: SessionScan, flow: FlowDef | None = None) -> FlowTrace:
     """对已扫描的会话做路径重放（复用 scan，避免重复读盘；后端实时扫描走此口）。"""
     defn = flow or FLOW_DEF
     units = scan_units(scan)
-    # 每个工具调用 = 一步；单元映射到阶段，记首次步号/次数/原始名
+    verdicts = list(getattr(scan, "tool_call_verdicts", []) or [])
+    # 每个工具调用 = 一步；单元映射到阶段，记首次步号/次数/原始名/失败数
     first: dict[str, int] = {}
     times: dict[str, int] = {}
     stage_tools: dict[str, list] = {}
+    fails: dict[str, int] = {}
     extras: dict[str, int] = {}
+    edge_hits: dict[tuple[str, str], int] = {}
+    prev_key: str | None = None
     for i, unit in enumerate(units, start=1):
         key = _unit_to_stage(unit, defn)
         if key is None:
@@ -250,6 +335,12 @@ def trace_scan(scan: SessionScan, flow: FlowDef | None = None) -> FlowTrace:
             continue
         times[key] = times.get(key, 0) + 1
         first.setdefault(key, i)
+        if i - 1 < len(verdicts) and verdicts[i - 1] == "fail":
+            fails[key] = fails.get(key, 0) + 1
+        if prev_key is not None:
+            pair = (prev_key, key)
+            edge_hits[pair] = edge_hits.get(pair, 0) + 1
+        prev_key = key
         raw_name = scan.tool_calls_raw[i - 1][0] if i - 1 < len(scan.tool_calls_raw) else unit[0]
         if raw_name not in stage_tools.setdefault(key, []):
             stage_tools[key].append(raw_name)
@@ -258,7 +349,8 @@ def trace_scan(scan: SessionScan, flow: FlowDef | None = None) -> FlowTrace:
     for st in defn.stages:
         if st.key in times:
             states.append(StageState(st.key, st.label, st.required, "in_order",
-                                     first[st.key], times[st.key], stage_tools.get(st.key, [])))
+                                     first[st.key], times[st.key], stage_tools.get(st.key, []),
+                                     fails=fails.get(st.key, 0)))
         elif st.required:
             states.append(StageState(st.key, st.label, True, "missing", note=st.note))
         else:
@@ -292,6 +384,7 @@ def trace_scan(scan: SessionScan, flow: FlowDef | None = None) -> FlowTrace:
         flow_id=defn.id,
         flow_title=defn.title,
         flow_source=defn.source,
+        edge_hits=edge_hits,
     )
 
 
@@ -315,8 +408,8 @@ _STATUS_CN = {"in_order": "顺序正确", "out_of_order": "乱序", "missing": "
 # 淡透明填充 + 状态色描边 + 文字色继承主题——K-041 按 dark/default 双主题渲染时都融合，
 # 不写死 color/fill 实色（旧实色卡片在深色面板下是突兀浅块，验收反馈「样式粗糙」）
 _MERMAID_INIT = (
-    '%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 14, "rankSpacing": 26, '
-    '"padding": 6}, "themeVariables": {"fontSize": "13px", '
+    '%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 10, "rankSpacing": 22, '
+    '"padding": 5}, "themeVariables": {"fontSize": "13px", '
     "\"fontFamily\": \"-apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif\"}}}%%"
 )
 # mermaid classDef 按逗号切分属性，rgba() 函数形式的逗号会触发 Parse error——
@@ -325,36 +418,136 @@ _CLS_HIT = "fill:#34c77b29,stroke:#34c77b,stroke-width:1.6px"
 _CLS_WARN = "fill:#f0b42926,stroke:#f0b429,stroke-width:2px"
 _CLS_MISSING = "fill:#eb57572b,stroke:#eb5757,stroke-width:2px"
 _CLS_SKIP = "fill:#94a3b81a,stroke:#94a3b8,stroke-width:1.2px,stroke-dasharray:4 4"
+_CLS_GATE = "fill:transparent,stroke:#94a3b8,stroke-width:1.2px"
 
 
-def render_flow_mermaid(trace: FlowTrace) -> str:
-    """把重放结果着色回 golden flow 阶段图（🟩对 🟨乱序 🟥缺失 ⬜跳过）。
+def _hits_on_topology(edge_hits: dict, defn: FlowDef) -> tuple[dict, dict]:
+    """历程相邻对 → 拓扑边命中（topo_hits）与野跳对（wild，历程偏离拓扑的信号）。
 
-    节点两行徽章：行 1 编号+阶段名，行 2 证据（次数·步号+状态符）；
-    圆角矩形 + 淡填描边，四态由 classDef 表达（色即语义，与列表同色）。
+    归一规则：直接边优先；无直接边时尝试「单跳门穿透」（a→gate→b 视作穿过交互门，
+    门无工具调用本不会产生边）；其余为野跳（如写草稿直接跳试跑——真实历程的旁逸）。
     """
+    direct = {(e.from_key, e.to_key) for e in defn.topology}
+    ins: dict[str, list] = {}
+    outs: dict[str, list] = {}
+    for e in defn.topology:
+        outs.setdefault(e.from_key, []).append(e.to_key)
+        ins.setdefault(e.to_key, []).append(e.from_key)
+    gate_through: dict[tuple[str, str], str] = {}
+    for g in defn.gates:
+        for a in ins.get(g.key, []):
+            for b in outs.get(g.key, []):
+                gate_through[(a, b)] = g.key
+    topo_hits: dict[tuple[str, str], int] = {}
+    wild: dict[tuple[str, str], int] = {}
+    for (a, b), n in edge_hits.items():
+        if (a, b) in direct:
+            topo_hits[(a, b)] = topo_hits.get((a, b), 0) + n
+        elif a == b:
+            pass  # 未定义的自环=阶段内多次调用（节点 ×N 已表达），不算旁逸
+        elif (a, b) in gate_through:
+            g = gate_through[(a, b)]
+            topo_hits[(a, g)] = topo_hits.get((a, g), 0) + n
+            topo_hits[(g, b)] = topo_hits.get((g, b), 0) + n
+        else:
+            wild[(a, b)] = wild.get((a, b), 0) + n
+    return topo_hits, wild
+
+
+def _render_edges(defn: FlowDef, node_id: dict[str, str], gate_id: dict[str, str],
+                  topo_hits: dict, wild: dict,
+                  violated: set[tuple[str, str]] | None = None) -> list[str]:
+    """拓扑边 + 野跳边 + hard_order 约束边 + linkStyle 行（mermaid 边索引按声明序）。"""
+    violated = violated or set()
+
+    def nid(k: str) -> str:
+        return node_id.get(k) or gate_id.get(k) or k
+
+    lines: list[str] = []
+    styles: list[str] = []
+    for e in defn.topology:
+        n = topo_hits.get((e.from_key, e.to_key), 0)
+        label = " ".join(p for p in (e.label, f"×{n}" if n else "") if p)
+        arrow = "-.->" if e.kind == "loop" else "-->"
+        if label:
+            lines.append(f'    {nid(e.from_key)} {arrow}|"{label}"| {nid(e.to_key)}')
+        else:
+            lines.append(f"    {nid(e.from_key)} {arrow} {nid(e.to_key)}")
+        if n:
+            styles.append("stroke-width:2.4px")
+        elif e.kind == "loop":
+            styles.append("stroke-width:1px,stroke-dasharray:3 3,opacity:0.55")
+        else:
+            styles.append("stroke-width:1px,opacity:0.5")
+    # 野跳：历程里不在拓扑定义的相邻对——旁逸信号（琥珀虚线，退为背景纹理；
+    # 高频野跳（≥2 次）才加粗提权，视觉主角留给主干经过边）
+    for (a, b), n in sorted(wild.items()):
+        lines.append(f'    {nid(a)} -.->|"×{n}"| {nid(b)}')
+        if n >= 2:
+            styles.append("stroke:#f0b429,stroke-width:2px,stroke-dasharray:4 3,opacity:0.9")
+        else:
+            styles.append("stroke:#f0b429,stroke-width:1.2px,stroke-dasharray:4 3,opacity:0.45")
+    # hard_order 前置约束：显式边（正常淡灰虚线提示，违例红色加粗）
+    for earlier, later in defn.hard_order:
+        elabel = defn.stage_by_key[earlier].label if earlier in defn.stage_by_key else earlier
+        lines.append(f'    {nid(earlier)} -. "须先 {elabel}" .-> {nid(later)}')
+        if (earlier, later) in violated:
+            styles.append("stroke:#eb5757,stroke-width:2.2px")
+        else:
+            styles.append("stroke:#94a3b8,stroke-width:1px,stroke-dasharray:2 3,opacity:0.6")
+    for i, stl in enumerate(styles):
+        lines.append(f"    linkStyle {i} {stl}")
+    return lines
+
+
+def render_flow_mermaid(trace: FlowTrace, defn: FlowDef | None = None) -> str:
+    """把重放结果叠加到 golden flow 条件拓扑（网状：主路+条件分支+回边+交互门）。
+
+    节点两行徽章（四态描边+fail 角标），边带历程热力（×N 经过次数，经过加粗），
+    野跳边=历程旁逸（琥珀虚线），hard_order 前置约束显式成边（违例红）。
+    """
+    defn = defn or FLOW_DEF
     cls = {"in_order": "hit", "out_of_order": "warn", "missing": "missing", "skipped": "skip"}
+    node_id = {st.key: f"S{i}" for i, st in enumerate(defn.stages, start=1)}
+    gate_id = {g.key: f"G{i}" for i, g in enumerate(defn.gates, start=1)}
+    by_key = {s.key: s for s in trace.stages}
 
-    def _evidence(st: StageState) -> str:
-        if st.status == "missing":
-            return "✗ 未调用"
-        if st.status == "skipped":
-            return "－ 可跳过"
-        cnt = f" ×{st.times}" if st.times > 1 else ""
-        step = f"第{st.first_step}步" if st.first_step else ""
-        sep = " · " if cnt and step else ""
-        return f"{cnt}{sep}{step} {_STATUS_GLYPH[st.status]}".strip()
+    def _evidence(s: StageState) -> str:
+        if s.status == "missing":
+            base = "✗ 未调用"
+        elif s.status == "skipped":
+            base = "－ 可跳过"
+        else:
+            cnt = f" ×{s.times}" if s.times > 1 else ""
+            step = f"第{s.first_step}步" if s.first_step else ""
+            sep = " · " if cnt and step else ""
+            base = f"{cnt}{sep}{step} {_STATUS_GLYPH[s.status]}".strip()
+        if s.fails:
+            base += f" ⚠{s.fails}"
+        return base
 
+    violated: set[tuple[str, str]] = set()
+    for earlier, later in defn.hard_order:
+        e_state, l_state = by_key.get(earlier), by_key.get(later)
+        if (e_state and l_state and e_state.first_step and l_state.first_step
+                and l_state.first_step < e_state.first_step):
+            violated.add((earlier, later))
+
+    topo_hits, wild = _hits_on_topology(trace.edge_hits, defn)
     lines = [_MERMAID_INIT, "flowchart TD"]
-    for i, st in enumerate(trace.stages, start=1):
-        lines.append(f'    S{i}("{i}. {st.label}<br/>{_evidence(st)}"):::{cls[st.status]}')
-    for i in range(len(trace.stages) - 1):
-        lines.append(f"    S{i + 1} --> S{i + 2}")
+    for st in defn.stages:
+        s = by_key[st.key]
+        num = node_id[st.key][1:]
+        lines.append(f'    {node_id[st.key]}("{num}. {st.label}<br/>{_evidence(s)}"):::{cls[s.status]}')
+    for g in defn.gates:
+        lines.append(f'    {gate_id[g.key]}{{"{g.label}"}}:::gate')
+    lines += _render_edges(defn, node_id, gate_id, topo_hits, wild, violated)
     lines += [
         f"    classDef hit {_CLS_HIT}",
         f"    classDef warn {_CLS_WARN}",
         f"    classDef missing {_CLS_MISSING}",
         f"    classDef skip {_CLS_SKIP}",
+        f"    classDef gate {_CLS_GATE}",
     ]
     return "\n".join(lines)
 

@@ -98,10 +98,11 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
         </span>
       </div>
 
-      {/* 图形视图：golden flow 着色路径图（MermaidBlock 主题跟随，渲染失败回退源码） */}
+      {/* 图形视图：golden flow 条件拓扑图（网状——MermaidBlock natural 档保持原始尺寸
+          横向滚动不压缩文字；主题跟随，渲染失败回退源码） */}
       {trace.mermaid && (
         <div data-testid="flow-graph" className="border border-border rounded bg-surface-3/40 p-1.5">
-          <MermaidBlock code={trace.mermaid} />
+          <MermaidBlock code={trace.mermaid} fit="natural" />
         </div>
       )}
 
