@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router';
 import { scenarioApi, workspaceApi, session } from '../api';
 import type { ScenarioMeta } from '../api';
 import FileTree from '../components/FileTree';
+import { Button } from '../components/ui/Button';
 import type { FlatFile } from '../components/FileTree';
 
 interface SearchResult {
@@ -162,7 +163,7 @@ export default function Scenarios() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="搜索文件内容（≥2字符）..."
-              className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300 placeholder-gray-600 focus:border-info outline-none"
+              className="input w-full text-fs-body"
             />
           </div>
 
@@ -229,15 +230,16 @@ export default function Scenarios() {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="如：员工全景档案-权限校验"
-                className="flex-1 bg-surface-3 border border-border rounded-lg px-3 py-2 text-fs-lead text-gray-200 placeholder-gray-600 focus:border-info outline-none"
+                className="input flex-1"
               />
-              <button
+              <Button
+                variant="primary"
                 onClick={handleCreate}
                 disabled={loading || !name.trim() || !!meta}
-                className="px-4 py-2 bg-info text-white rounded-lg text-fs-lead font-medium hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                className="whitespace-nowrap"
               >
                 {meta ? '✓ 已创建' : loading ? '创建中...' : '创建'}
-              </button>
+              </Button>
             </div>
             {meta && (
               <div className="mt-2 text-fs-aux text-gray-500">
@@ -282,20 +284,19 @@ export default function Scenarios() {
 
           {/* 底部操作栏 */}
           <div className="flex items-center gap-2 mt-3">
-            <button
+            <Button
               onClick={handleSaveInfoPack}
               disabled={loading || !meta || selectedFiles.size === 0}
-              className="px-4 py-2 bg-surface-3 text-gray-300 rounded-lg text-fs-lead hover:bg-surface-2 border border-border disabled:opacity-40 disabled:cursor-not-allowed"
             >
               💾 保存信息包
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleLaunchAgent}
               disabled={!meta || selectedFiles.size === 0}
-              className="px-5 py-2 bg-info text-white rounded-lg text-fs-lead font-medium hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               🚀 启动 Agent
-            </button>
+            </Button>
           </div>
         </div>
 
