@@ -141,7 +141,7 @@ export default function Scenarios() {
   return (
     <div className="h-full flex flex-col">
       <div className="mb-3">
-        <h2 className="text-lg font-bold text-gray-200">🧩 场景管理</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">🧩 场景管理</h2>
         <p className="text-fs-body text-gray-500 mt-0.5">
           输入名称 → 选择文件（支持搜索）→ 启动 Agent 生成；场景内容编辑与依赖编排在「DAG 编排」页
         </p>
@@ -149,7 +149,7 @@ export default function Scenarios() {
 
       {error && (
         <div className="mb-3 bg-red-900/30 border border-red-700/50 rounded-lg px-3 py-2">
-          <span className="text-red-400 text-sm">{error}</span>
+          <span className="text-red-400 text-fs-lead">{error}</span>
         </div>
       )}
 
@@ -229,12 +229,12 @@ export default function Scenarios() {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="如：员工全景档案-权限校验"
-                className="flex-1 bg-surface-3 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none"
+                className="flex-1 bg-surface-3 border border-border rounded-lg px-3 py-2 text-fs-lead text-gray-200 placeholder-gray-600 focus:border-info outline-none"
               />
               <button
                 onClick={handleCreate}
                 disabled={loading || !name.trim() || !!meta}
-                className="px-4 py-2 bg-info text-white rounded-lg text-sm font-medium hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                className="px-4 py-2 bg-info text-white rounded-lg text-fs-lead font-medium hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {meta ? '✓ 已创建' : loading ? '创建中...' : '创建'}
               </button>
@@ -285,14 +285,14 @@ export default function Scenarios() {
             <button
               onClick={handleSaveInfoPack}
               disabled={loading || !meta || selectedFiles.size === 0}
-              className="px-4 py-2 bg-surface-3 text-gray-300 rounded-lg text-sm hover:bg-surface-2 border border-border disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-surface-3 text-gray-300 rounded-lg text-fs-lead hover:bg-surface-2 border border-border disabled:opacity-40 disabled:cursor-not-allowed"
             >
               💾 保存信息包
             </button>
             <button
               onClick={handleLaunchAgent}
               disabled={!meta || selectedFiles.size === 0}
-              className="px-5 py-2 bg-info text-white rounded-lg text-sm font-medium hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-info text-white rounded-lg text-fs-lead font-medium hover:bg-info/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               🚀 启动 Agent
             </button>

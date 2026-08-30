@@ -193,10 +193,10 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
   }, [sel, view]);
 
   if (!wb) {
-    return <div className="h-full flex items-center justify-center text-fail text-sm">xlsx 解析失败</div>;
+    return <div className="h-full flex items-center justify-center text-fail text-fs-lead">xlsx 解析失败</div>;
   }
   if (!sheet || sheet.grid.length === 0) {
-    return <div className="h-full flex items-center justify-center text-gray-500 text-sm">空工作表</div>;
+    return <div className="h-full flex items-center justify-center text-gray-500 text-fs-lead">空工作表</div>;
   }
 
   const headerBlock = sheet.grid.slice(0, sheet.headerRows);

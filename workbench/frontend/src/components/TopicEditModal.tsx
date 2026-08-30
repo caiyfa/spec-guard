@@ -156,7 +156,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
       <div className="w-[1080px] max-w-[96vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-sm font-semibold">编辑话题</span>
+          <span className="text-fs-lead font-semibold">编辑话题</span>
           <span className="text-fs-body text-gray-400 truncate" title={topic.title}>{topic.title}</span>
           <span className="text-fs-aux text-gray-600">
             {days.join(' / ')} · {isMulti ? '跨日话题' : '单日'}

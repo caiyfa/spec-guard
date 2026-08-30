@@ -57,7 +57,7 @@ export default function SpecValidation() {
 
   return (
     <div className="h-full flex flex-col space-y-4">
-      <h2 className="text-lg font-semibold">🛡 Spec 校验</h2>
+      <h2 className="text-fs-title font-semibold">🛡 Spec 校验</h2>
 
       {/* 控制面板 */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -160,7 +160,7 @@ export default function SpecValidation() {
           )}
 
           {!specResult && !tcResult && (
-            <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+            <div className="h-full flex items-center justify-center text-gray-600 text-fs-lead">
               点击上方按钮运行校验
             </div>
           )}

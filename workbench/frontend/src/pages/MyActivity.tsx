@@ -78,20 +78,20 @@ export default function MyActivity() {
   return (
     <div className="flex flex-col h-full max-w-5xl">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-200">🧭 我的活动</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">🧭 我的活动</h2>
         <p className="text-fs-body text-gray-500 mt-1">我的产出/会话/工具调用/执行历史（仅本人数据，产出可溯源到产出会话）</p>
       </div>
 
       <div className="flex gap-1 mb-3 flex-shrink-0">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            className={`px-3 py-1.5 text-fs-lead rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-sm flex-shrink-0" onClick={() => setError('')}>{error}</div>}
+      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead flex-shrink-0" onClick={() => setError('')}>{error}</div>}
       {loading && <div className="text-fs-body text-gray-500 mb-2 flex-shrink-0">加载中…</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -106,13 +106,13 @@ export default function MyActivity() {
               ))}
             </div>
             {products.length === 0 && !loading && (
-              <div className="text-center text-gray-600 text-sm py-8">暂无产出记录（草稿/场景/计划产生后自动登记）</div>
+              <div className="text-center text-gray-600 text-fs-lead py-8">暂无产出记录（草稿/场景/计划产生后自动登记）</div>
             )}
             {products.map(p => (
               <div key={p.id} className="bg-surface-1 rounded-lg border border-border p-3">
                 <div className="flex items-center gap-2">
                   <span className="text-fs-body px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{TYPE_LABELS[p.product_type] || p.product_type}</span>
-                  <span className="text-sm text-gray-200 font-mono truncate">{p.product_path}</span>
+                  <span className="text-fs-lead text-gray-200 font-mono truncate">{p.product_path}</span>
                   <span className="text-fs-aux text-gray-600 ml-auto">{p.created_at}</span>
                 </div>
                 <div className="text-fs-body text-gray-600 mt-1">
@@ -133,12 +133,12 @@ export default function MyActivity() {
         {tab === 'sessions' && (
           <div className="space-y-2">
             {sessions.length === 0 && !loading && (
-              <div className="text-center text-gray-600 text-sm py-8">暂无会话</div>
+              <div className="text-center text-gray-600 text-fs-lead py-8">暂无会话</div>
             )}
             {sessions.map((s: any) => (
               <div key={s.session_id || s.id} className="bg-surface-1 rounded-lg border border-border p-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-gray-200 truncate">{s.title || s.session_id || s.id}</div>
+                  <div className="text-fs-lead text-gray-200 truncate">{s.title || s.session_id || s.id}</div>
                   <div className="text-fs-body text-gray-600">
                     {s.updated_at || s.created_at || ''}{s.workspace ? ` · ${s.workspace}` : ''}
                   </div>
@@ -183,11 +183,11 @@ export default function MyActivity() {
         {tab === 'runs' && (
           <div className="space-y-2">
             {runs.length === 0 && !loading && (
-              <div className="text-center text-gray-600 text-sm py-8">暂无执行记录</div>
+              <div className="text-center text-gray-600 text-fs-lead py-8">暂无执行记录</div>
             )}
             {runs.map((r: any) => (
               <div key={r.run_id} className="bg-surface-1 rounded-lg border border-border p-3 flex items-center gap-3">
-                <span className="text-sm font-mono text-info">{r.run_id}</span>
+                <span className="text-fs-lead font-mono text-info">{r.run_id}</span>
                 <span className="text-fs-body text-gray-500">{r.system} · {r.env}</span>
                 <span className="text-fs-body text-gray-600">{r.started_at}</span>
                 {r.stats && (

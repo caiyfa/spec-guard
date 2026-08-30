@@ -73,25 +73,25 @@ export default function AdminUsers() {
   return (
     <div className="max-w-5xl">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-200">👥 用户与授权</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">👥 用户与授权</h2>
         <p className="text-fs-body text-gray-500 mt-1">
           用户首次登录自动建档（默认只读角色）；工作区由高权限人员注册后在此开通给用户。
         </p>
       </div>
 
       {error && (
-        <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">
           {error}
         </div>
       )}
       {message && (
-        <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-green-900/30 text-green-400 border border-green-700/50">
+        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-green-900/30 text-green-400 border border-green-700/50">
           {message}
         </div>
       )}
 
       <div className="flex gap-2 mb-4 items-center">
-        <span className="text-sm text-gray-400">用户与授权 ({users.length})</span>
+        <span className="text-fs-lead text-gray-400">用户与授权 ({users.length})</span>
         <a href="/audit?tab=admin" className="text-fs-body text-gray-600 hover:text-info underline ml-auto">管理操作审计已移至「审计日志」页 →</a>
       </div>
 
@@ -99,7 +99,7 @@ export default function AdminUsers() {
           {users.map(u => (
             <div key={u.emp_no} className="bg-surface-2 border border-border rounded-lg p-4">
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-sm text-gray-200 font-medium">{u.name || u.emp_no}</span>
+                <span className="text-fs-lead text-gray-200 font-medium">{u.name || u.emp_no}</span>
                 <span className="text-fs-body text-gray-500 font-mono">{u.emp_no}</span>
                 <span className="text-fs-aux text-gray-600 ml-auto">
                   默认工作区: {u.default_workspace || '—'} · 最近登录: {u.last_login_at || '—'}
@@ -163,7 +163,7 @@ export default function AdminUsers() {
             </div>
           ))}
           {users.length === 0 && (
-            <div className="text-center text-gray-600 text-sm py-10">暂无用户（用户首次登录后出现在此）</div>
+            <div className="text-center text-gray-600 text-fs-lead py-10">暂无用户（用户首次登录后出现在此）</div>
           )}
       </div>
     </div>

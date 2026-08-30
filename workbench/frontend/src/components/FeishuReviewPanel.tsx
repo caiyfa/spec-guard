@@ -130,7 +130,7 @@ export default function FeishuReviewPanel() {
   return (
     <div className={card}>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold">🔗 关联复核（飞书材料 → FR）</h2>
+        <h2 className="text-fs-lead font-semibold">🔗 关联复核（飞书材料 → FR）</h2>
         <div className="flex items-center gap-2">
           {/* T-991：队列范围切换（默认我的；共享=多人协作互相复核建边建议） */}
           <select className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300 outline-none focus:border-info"

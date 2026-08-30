@@ -90,7 +90,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
         <div className="space-y-1">
           {systems.map(s => (
             <button key={s.name} onClick={() => onSelect(s.name)}
-              className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+              className={`w-full text-left px-3 py-2 rounded-lg border text-fs-lead transition-colors ${
                 selected === s.name ? 'border-info/60 bg-info/10 text-gray-200' : 'border-border bg-surface-1 text-gray-400 hover:text-gray-200'
               }`}>
               <div className="flex items-center gap-2">
@@ -193,17 +193,17 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-gray-200 mb-3">注册系统</h3>
+            <h3 className="text-fs-lead font-bold text-gray-200 mb-3">注册系统</h3>
             <div className="space-y-3">
               <div>
                 <label className="text-fs-body text-gray-500">系统标识（Python 模块名）</label>
                 <input value={cName} onChange={e => setCName(e.target.value)} placeholder="如 pbs"
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
               </div>
               <div>
                 <label className="text-fs-body text-gray-500">显示名</label>
                 <input value={cDisplay} onChange={e => setCDisplay(e.target.value)}
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
               </div>
               <div>
                 <label className="text-fs-body text-gray-500">接入分级（系统的扩展能力级别）</label>
@@ -218,16 +218,16 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
               <div>
                 <label className="text-fs-body text-gray-500">描述</label>
                 <input value={cDesc} onChange={e => setCDesc(e.target.value)}
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
               </div>
               <div className="text-fs-body text-gray-600 border-t border-border/50 pt-2">
                 环境配置（网关/账号池/资源码/db）注册后到栏3维护；通用键（sso/internal_token）放栏3「通用配置」层。
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm bg-surface-3 text-gray-400 rounded">取消</button>
+              <button onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-fs-lead bg-surface-3 text-gray-400 rounded">取消</button>
               <button onClick={handleCreate} disabled={busy === 'create'}
-                className="px-4 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40">
+                className="px-4 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 disabled:opacity-40">
                 {busy === 'create' ? '注册中…' : '注册'}
               </button>
             </div>

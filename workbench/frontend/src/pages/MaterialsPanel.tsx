@@ -96,7 +96,7 @@ export default function MaterialsPanel() {
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
   const label = 'block text-fs-body text-gray-400 mb-1';
-  const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-info';
+  const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-200 outline-none focus:border-info';
   const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
   const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
@@ -104,7 +104,7 @@ export default function MaterialsPanel() {
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-bold">📚 材料管理</h1>
+        <h1 className="text-fs-title font-bold">📚 材料管理</h1>
         <div className="text-fs-body text-gray-500">候选确认/入包需 product 角色 · 解析失败可查看 parse_error</div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
@@ -134,7 +134,7 @@ export default function MaterialsPanel() {
 
       <div className={card}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">材料列表（{materials.length}）</h2>
+          <h2 className="text-fs-lead font-semibold">材料列表（{materials.length}）</h2>
           <button className={btn} onClick={handleReassemble} disabled={!selIv}>六分区重新装配</button>
         </div>
         {materials.length === 0 ? (
@@ -196,7 +196,7 @@ export default function MaterialsPanel() {
       {packText && (
         <div className={card}>
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold">信息包（info_pack.yaml）</h2>
+            <h2 className="text-fs-lead font-semibold">信息包（info_pack.yaml）</h2>
             <button className={btn} onClick={() => setPackText('')}>收起</button>
           </div>
           <pre className="text-fs-body text-gray-400 bg-surface-3 rounded p-3 max-h-80 overflow-auto whitespace-pre-wrap">{packText}</pre>

@@ -190,7 +190,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
     <Modal open onClose={onClose} width={620} title={`试跑 ${scenarioId} · 执行准备`}>
       {/* covers 前置闸预警（全库级，服务端判定；不满足时不必点开始才知道失败） */}
       {coversBlocked && (
-        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
           <div>⛔ covers 前置闸将拦截本次触发：当前用例库有 <b>{invalidCoversCount}</b> 个用例的需求锚点
             在当前工作区查不到（全库级校验，任一失效即拦截所有触发）。</div>
           <div className="mt-1 text-fs-body">
@@ -201,7 +201,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
       )}
 
       {/* 链路范围 */}
-      <div className="text-sm mb-3">
+      <div className="text-fs-lead mb-3">
         <div className="text-fs-body text-gray-500 mb-1.5">链路范围</div>
         <label className="flex items-center gap-2 py-0.5 cursor-pointer">
           <input type="radio" checked={!withDownstream} onChange={() => setWithDownstream(false)} />
@@ -229,14 +229,14 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
       </div>
 
       {/* 执行环境：环境切换 + 账号三档 + 就绪度 + 参数微调 */}
-      <div className="text-sm mb-3">
+      <div className="text-fs-lead mb-3">
         <div className="text-fs-body text-gray-500 mb-1.5">执行环境</div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-2">
           <span className="flex items-center gap-1.5">
             <span className="text-fs-body text-gray-500">环境</span>
             <select value={envName} disabled={!!runId}
               onChange={e => setEnvName(e.target.value)}
-              className="input text-sm"
+              className="input text-fs-lead"
               title="执行环境（env.{name}.yaml）；Nacos 启用时配置优先从配置中心取（T-1036 单收点）">
               {(envs.length ? envs : [{ name: envName || 'sit', ok: true, source: '', error: '' }])
                 .map(e => (
@@ -250,7 +250,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
             <span className="text-fs-body text-gray-500">执行账号</span>
             <select value={accountSel} disabled={!!runId}
               onChange={e => setAccountSel(e.target.value)}
-              className="input text-sm"
+              className="input text-fs-lead"
               title="优先级：手动输入 / 按权限解析 > 固定配置；显式别名（如 no_access）保留配置语义">
               <option value={ACCOUNT_CONFIG}>默认（配置账号）</option>
               <option value={ACCOUNT_AUTO}>自动（按权限解析）</option>
@@ -396,14 +396,14 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
 
       {/* 触发与进度 */}
       {triggerError && (
-        <div className="mb-3 p-2.5 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+        <div className="mb-3 p-2.5 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
           ❌ 试跑触发失败：{triggerError}
         </div>
       )}
-      {queued && <div className="mb-3 text-sm text-warn">⏳ {queued}</div>}
+      {queued && <div className="mb-3 text-fs-lead text-warn">⏳ {queued}</div>}
       {runId && (
         <div className="mb-3">
-          <div className="text-sm mb-1">
+          <div className="text-fs-lead mb-1">
             任务号 <span className="font-mono text-info">{runId}</span>
             <span className={`ml-2 text-fs-body ${finished ? 'text-pass' : 'text-warn'}`}>
               {finished ? '● 已完成' : '● 执行中…'}
@@ -421,12 +421,12 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
 
       <div className="flex items-center justify-end gap-2">
         {finished && runId && (
-          <button className="btn-primary text-sm" onClick={() => setShowReport(true)}>
+          <button className="btn-primary text-fs-lead" onClick={() => setShowReport(true)}>
             查看完整报告
           </button>
         )}
         {!runId ? (
-          <button className="btn-primary text-sm" onClick={startRun}
+          <button className="btn-primary text-fs-lead" onClick={startRun}
             disabled={startDisabled}
             title={coversBlocked
               ? 'covers 前置闸未通过——按上方提示处置后重试'
@@ -436,7 +436,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
             {busy ? '触发中…' : '▶ 开始试跑（联网执行）'}
           </button>
         ) : (
-          <button className="btn-ghost text-sm" onClick={onClose}>关闭</button>
+          <button className="btn-ghost text-fs-lead" onClick={onClose}>关闭</button>
         )}
       </div>
 

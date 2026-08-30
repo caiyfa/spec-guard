@@ -80,7 +80,7 @@ export default function LineageStory() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-base font-bold">🔗 血缘链</h2>
+        <h2 className="text-fs-title font-bold">🔗 血缘链</h2>
         <span className="text-fs-body text-gray-500">审计动线：Q1 场景为什么存在 / Q2 需求被验证了吗（确定性图遍历，无 LLM）</span>
       </div>
 
@@ -91,7 +91,7 @@ export default function LineageStory() {
           onChange={e => setNodeInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') runTrace('both'); }}
           placeholder="节点 ID：PP-RC-005 / FR-012 / SPQ-001 / D-012 / IV-003…"
-          className="bg-surface-2 border border-border rounded px-3 py-1.5 text-sm text-gray-200 w-80"
+          className="bg-surface-2 border border-border rounded px-3 py-1.5 text-fs-lead text-gray-200 w-80"
         />
         <button
           onClick={() => runTrace('up')}

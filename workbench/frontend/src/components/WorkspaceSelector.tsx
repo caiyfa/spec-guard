@@ -83,14 +83,14 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
   };
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex items-center gap-2 text-fs-lead">
       <span className="text-gray-500 text-fs-body">工作区</span>
       {/* 第一级：系统 */}
       <select
         value={effSys}
         onChange={e => handleSysChange(e.target.value)}
         title="系统（适配包分组）"
-        className="bg-surface-1 border border-border rounded px-2 py-1 text-sm text-gray-200 focus:border-info outline-none max-w-[9rem]"
+        className="bg-surface-1 border border-border rounded px-2 py-1 text-fs-lead text-gray-200 focus:border-info outline-none max-w-[9rem]"
       >
         {tree.length === 0 && <option value="">（无系统）</option>}
         {tree.map(g => (
@@ -103,7 +103,7 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
       <select
         value={current}
         onChange={e => handleChange(e.target.value)}
-        className="bg-surface-1 border border-border rounded px-2 py-1 text-sm text-gray-200 focus:border-info outline-none min-w-[9rem]"
+        className="bg-surface-1 border border-border rounded px-2 py-1 text-fs-lead text-gray-200 focus:border-info outline-none min-w-[9rem]"
       >
         <option value="">（未选择）</option>
         {(curGroup?.workspaces || []).map(w => (

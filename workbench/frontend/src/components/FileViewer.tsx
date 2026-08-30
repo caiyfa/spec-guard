@@ -133,7 +133,7 @@ function MarkdownViewer({ content }: { content: string }) {
 
   return (
     <div className="h-full flex min-h-0 relative">
-      <div ref={containerRef} className="spec-md flex-1 min-w-0 h-full overflow-y-auto p-4 text-sm">
+      <div ref={containerRef} className="spec-md flex-1 min-w-0 h-full overflow-y-auto p-4 text-fs-lead">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>
       </div>
       {showOutline && headings.length > 1 && (
@@ -315,7 +315,7 @@ export default function FileViewer({ path, content, loading, format, hunks, onOp
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+      <div className="h-full flex items-center justify-center text-gray-500 text-fs-lead">
         读取中...
       </div>
     );

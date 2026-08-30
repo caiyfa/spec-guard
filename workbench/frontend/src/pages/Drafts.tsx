@@ -257,14 +257,14 @@ export default function Drafts() {
       {/* 左：草稿列表 */}
       <div className="w-80 flex-shrink-0 flex flex-col">
         <div className="mb-3">
-          <h2 className="text-lg font-bold text-gray-200">📝 草稿评审</h2>
+          <h2 className="text-fs-title font-bold text-gray-200">📝 草稿评审</h2>
           <p className="text-fs-body text-gray-500 mt-1">
             Agent 产物三道闸：人工评审（可微调）→ 格式校验 → 发布门禁，缺一不入库。
           </p>
         </div>
         <div className="flex-1 overflow-y-auto space-y-1.5">
           {drafts.length === 0 && (
-            <div className="text-center text-gray-600 text-sm py-10">草稿区为空</div>
+            <div className="text-center text-gray-600 text-fs-lead py-10">草稿区为空</div>
           )}
           {drafts.map(d => {
             const sugCount = allSuggestions.filter(s => s.consumer === d.scenario_id).length;
@@ -278,7 +278,7 @@ export default function Drafts() {
                     : 'border-border bg-surface-2 hover:bg-surface-3'
                 }`}
               >
-                <div className="text-sm text-gray-200 font-mono">
+                <div className="text-fs-lead text-gray-200 font-mono">
                   {d.scenario_id || d.filename}
                   {d.stale && (
                     <span className="ml-1.5 text-fs-micro px-1 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-normal"
@@ -349,19 +349,19 @@ export default function Drafts() {
       {/* 右：内容与操作 */}
       <div className="flex-1 flex flex-col min-w-0">
         {message && (
-          <div className={`mb-3 px-3 py-2 rounded-lg text-sm ${
+          <div className={`mb-3 px-3 py-2 rounded-lg text-fs-lead ${
             message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50'
                        : 'bg-red-900/30 text-red-400 border border-red-700/50'
           }`}>{message.text}</div>
         )}
         {error && (
-          <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+          <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">
             ❌ {error}
           </div>
         )}
 
         {!selected ? (
-          <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
+          <div className="flex-1 flex items-center justify-center text-gray-600 text-fs-lead">
             选择左侧草稿开始评审
           </div>
         ) : (
@@ -383,7 +383,7 @@ export default function Drafts() {
               <button
                 onClick={handleValidate}
                 disabled={busy !== ''}
-                className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-sm hover:bg-surface-2 disabled:opacity-40"
+                className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-fs-lead hover:bg-surface-2 disabled:opacity-40"
               >
                 {busy === 'validate' ? '校验中…' : '② 格式校验'}
               </button>
@@ -392,14 +392,14 @@ export default function Drafts() {
                 onClick={() => handleReview('approved')}
                 disabled={busy !== ''}
                 title="第①闸人工评审通过（gate2 未过时会被拒绝）；三闸全过才可入库"
-                className="px-3 py-1.5 bg-green-900/40 text-green-400 rounded text-sm hover:bg-green-900/60 disabled:opacity-40"
+                className="px-3 py-1.5 bg-green-900/40 text-green-400 rounded text-fs-lead hover:bg-green-900/60 disabled:opacity-40"
               >
                 {busy === 'review' ? '评审中…' : '① 评审通过'}
               </button>
               <button
                 onClick={() => handleReview('rejected')}
                 disabled={busy !== ''}
-                className="px-3 py-1.5 bg-red-900/30 text-red-400 rounded text-sm hover:bg-red-900/50 disabled:opacity-40"
+                className="px-3 py-1.5 bg-red-900/30 text-red-400 rounded text-fs-lead hover:bg-red-900/50 disabled:opacity-40"
               >
                 驳回
               </button>
@@ -407,14 +407,14 @@ export default function Drafts() {
                 onClick={handleTrialRun}
                 disabled={busy !== ''}
                 title="未入库先试跑：按依赖闭包真实执行（与 Agent run_scenario 同一语义）"
-                className="px-3 py-1.5 bg-warn/20 text-warn rounded text-sm hover:bg-warn/30 disabled:opacity-40"
+                className="px-3 py-1.5 bg-warn/20 text-warn rounded text-fs-lead hover:bg-warn/30 disabled:opacity-40"
               >
                 {busy === 'trial' ? '试跑中…（联网执行，请稍候）' : '▶ 试跑'}
               </button>
               <select
                 value={targetModule}
                 onChange={e => setTargetModule(e.target.value)}
-                className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300"
+                className="bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300"
               >
                 {modules.length === 0 && <option value="">（无已有模块）</option>}
                 {modules.map(m => <option key={m} value={m}>{m}</option>)}
@@ -425,10 +425,10 @@ export default function Drafts() {
                   value={customModule}
                   onChange={e => setCustomModule(e.target.value)}
                   placeholder="新模块路径（如 system-settings/tag-library）"
-                  className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300 w-56"
+                  className="bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300 w-56"
                 />
               )}
-              <label className="flex items-center gap-1.5 text-sm text-gray-400 cursor-pointer select-none"
+              <label className="flex items-center gap-1.5 text-fs-lead text-gray-400 cursor-pointer select-none"
                 title="覆盖同名场景：原文件自动备份，任一步失败自动回滚（T-313）">
                 <input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} />
                 覆盖同名场景
@@ -447,14 +447,14 @@ export default function Drafts() {
                 onClick={handlePromote}
                 disabled={busy !== '' || (report !== null && report.verdict !== 'PASS')}
                 title={report !== null && report.verdict !== 'PASS' ? '格式校验未通过，禁止入库' : ''}
-                className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40"
+                className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 disabled:opacity-40"
               >
                 {busy === 'promote' ? '入库中…' : '③ 三闸全过 · 入库'}
               </button>
               <button
                 onClick={handleDiscard}
                 disabled={busy !== ''}
-                className="px-3 py-1.5 bg-red-900/40 text-red-400 rounded text-sm hover:bg-red-900/60 disabled:opacity-40"
+                className="px-3 py-1.5 bg-red-900/40 text-red-400 rounded text-fs-lead hover:bg-red-900/60 disabled:opacity-40"
               >
                 废弃
               </button>
@@ -462,7 +462,7 @@ export default function Drafts() {
 
             {/* A+B：依赖关系展示 */}
             {dependsOn.length > 0 && (
-              <div className="mb-3 px-3 py-2 rounded-lg border border-yellow-700/30 bg-yellow-900/10 text-sm">
+              <div className="mb-3 px-3 py-2 rounded-lg border border-yellow-700/30 bg-yellow-900/10 text-fs-lead">
                 <div className="text-yellow-400 text-fs-body font-medium mb-1.5">
                   🕸 依赖关系（已声明 depends_on）
                 </div>
@@ -481,7 +481,7 @@ export default function Drafts() {
 
             {/* K-046：依赖建议面板 */}
             {(suggestions.length > 0 || selectedUnresolved.length > 0) && (
-              <div className="mb-3 px-3 py-2 rounded-lg border border-info/40 bg-info/5 text-sm">
+              <div className="mb-3 px-3 py-2 rounded-lg border border-info/40 bg-info/5 text-fs-lead">
                 <div className="text-info text-fs-body font-medium mb-1.5">
                   💡 依赖建议（确定性引擎扫描插值得出，采纳即写入 depends_on）
                 </div>
@@ -517,7 +517,7 @@ export default function Drafts() {
 
             {/* K-046：试跑结果 */}
             {trialResult && (
-              <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${
+              <div className={`mb-3 px-3 py-2 rounded-lg border text-fs-lead ${
                 trialResult.ok ? 'border-green-700/50 bg-green-900/20' : 'border-red-700/50 bg-red-900/20'
               }`}>
                 <div className={`flex items-start gap-1 ${trialResult.ok ? 'text-green-400' : 'text-red-400'}`}>
@@ -567,7 +567,7 @@ export default function Drafts() {
 
             {/* 校验报告 */}
             {report && (
-              <div className={`mb-3 px-3 py-2 rounded-lg border text-sm ${
+              <div className={`mb-3 px-3 py-2 rounded-lg border text-fs-lead ${
                 report.verdict === 'PASS' ? 'border-green-700/50 bg-green-900/20' : 'border-red-700/50 bg-red-900/20'
               }`}>
                 <div className={report.verdict === 'PASS' ? 'text-green-400' : 'text-red-400'}>
@@ -600,7 +600,7 @@ export default function Drafts() {
                   onSave={handleSave}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-600 text-sm">加载中…</div>
+                <div className="h-full flex items-center justify-center text-gray-600 text-fs-lead">加载中…</div>
               )}
             </div>
           </>

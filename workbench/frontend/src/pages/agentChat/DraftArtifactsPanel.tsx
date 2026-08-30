@@ -364,7 +364,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
           onClick={() => !promoting && setDialog({ file: '', open: false })}>
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[440px] max-w-[92vw] shadow-2xl"
             onClick={e => e.stopPropagation()}>
-            <div className="text-sm font-medium text-gray-200 mb-2">⬆ 入库评审 — <span className="font-mono">{dialog.file}</span></div>
+            <div className="text-fs-lead font-medium text-gray-200 mb-2">⬆ 入库评审 — <span className="font-mono">{dialog.file}</span></div>
             {dlgConflict?.existing && (
               <div className="mb-2 text-fs-body rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
                 ⚠️ 场景 ID <span className="font-mono">{dlgConflict.existing.id}</span> 已存在于
@@ -374,7 +374,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             )}
             <div className="text-fs-body text-gray-500 mb-1">入库模块（scenarios/ 下）</div>
             <select value={dlgModule} onChange={e => { setDlgModule(e.target.value); setDlgError(''); }}
-              className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-300 mb-2">
+              className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300 mb-2">
               {modules.length === 0 && <option value="">（无已有模块）</option>}
               {modules.map(m => <option key={m} value={m}>{m}</option>)}
               <option value="__new__">＋ 新建模块…</option>
@@ -382,7 +382,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {dlgModule === '__new__' && (
               <input value={dlgCustom} onChange={e => setDlgCustom(e.target.value)}
                 placeholder="新模块路径（如 system-settings/tag-library）"
-                className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-300 mb-2" />
+                className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300 mb-2" />
             )}
             <label className="flex items-center gap-2 text-fs-body text-gray-400 mb-2 cursor-pointer select-none">
               <input type="checkbox" checked={dlgReplace} onChange={e => setDlgReplace(e.target.checked)} />
@@ -391,9 +391,9 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {dlgError && <div className="mb-2 text-fs-body text-red-400">❌ {dlgError}</div>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setDialog({ file: '', open: false })} disabled={promoting}
-                className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-sm disabled:opacity-40">取消</button>
+                className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-fs-lead disabled:opacity-40">取消</button>
               <button onClick={handlePromote} disabled={promoting}
-                className="px-3 py-1.5 rounded bg-info text-white text-sm disabled:opacity-40">
+                className="px-3 py-1.5 rounded bg-info text-white text-fs-lead disabled:opacity-40">
                 {promoting ? '入库中…（校验→基线→门禁）' : '确认入库'}
               </button>
             </div>

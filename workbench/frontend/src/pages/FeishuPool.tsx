@@ -205,7 +205,7 @@ export default function FeishuPool() {
       {!focusMode && (
         <>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-bold">🪺 飞书话题</h1>
+        <h1 className="text-fs-title font-bold">🪺 飞书话题</h1>
         <div className="flex items-center gap-2">
           <span className="text-fs-body text-gray-500">为 agent 对话提供背景信息源 · 复核建边在「材料管理」页</span>
           <button className={btn} onClick={syncNow} disabled={busy === 'sync'}>
@@ -369,7 +369,7 @@ export default function FeishuPool() {
           <div className="w-[860px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
+              <h3 className="text-fs-lead font-semibold flex items-center gap-2 min-w-0">
                 <span className="truncate">{detail.m.title || detail.m.id}</span>
                 <span className={`px-1.5 py-0.5 rounded text-fs-aux shrink-0 ${TYPE_BADGE[detail.m.type]?.cls}`}>
                   {TYPE_BADGE[detail.m.type]?.label}

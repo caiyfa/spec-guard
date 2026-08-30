@@ -68,7 +68,7 @@ function RunDetail({ runId }: { runId: string }) {
 
   return (
     <div className="space-y-3">
-      {error && <div className="text-sm text-fail">❌ {error}</div>}
+      {error && <div className="text-fs-lead text-fail">❌ {error}</div>}
 
       {/* 触发上下文 */}
       <div className="bg-surface-2 border border-border rounded-lg p-3">
@@ -202,7 +202,7 @@ function RunRecords() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <div className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold">🗂 执行记录</h2>
+        <h2 className="text-fs-title font-semibold">🗂 执行记录</h2>
         <button
           onClick={() => setShowFailures(!showFailures)}
           className={`text-fs-body px-2.5 py-1 rounded border ${
@@ -248,7 +248,7 @@ function RunRecords() {
       )}
 
       <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
-        {runs.length === 0 && <div className="text-center text-gray-600 text-sm py-10">暂无执行记录</div>}
+        {runs.length === 0 && <div className="text-center text-gray-600 text-fs-lead py-10">暂无执行记录</div>}
         {runs.map((r) => {
           const open = selected === r.run_id;
           const total = r.stats.total || (r.stats.pass + r.stats.fail + r.stats.skip + r.stats.blocked);
@@ -259,7 +259,7 @@ function RunRecords() {
                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                   open ? 'bg-info/10' : 'bg-surface-2 hover:bg-surface-3'}`}
               >
-                <span className="font-mono text-sm text-info">{r.run_id}</span>
+                <span className="font-mono text-fs-lead text-info">{r.run_id}</span>
                 <span
                   onClick={(e) => { e.stopPropagation(); copyRunId(r.run_id); }}
                   className="text-gray-500 hover:text-info text-fs-body cursor-pointer"
@@ -314,7 +314,7 @@ export default function History() {
       <div className="flex gap-1 mb-4 flex-shrink-0">
         {EXEC_TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            className={`px-3 py-1.5 text-fs-lead rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
             {t.label}
           </button>
         ))}

@@ -57,9 +57,9 @@ function PreBlock({ children }: { children?: ReactNode }) {
 // ── Markdown 渲染（react-markdown + remark-gfm：标题/列表/表格/任务列表/引用/删除线全支持，
 //    替代自研简易渲染器——LLM 输出的结构化排版此前大量丢失，长文本挤成一段）──
 const MD_COMPONENTS: Components = {
-  h1: ({ children }: { children?: ReactNode }) => <h1 className="text-lg font-bold text-gray-100 mt-4 mb-2">{children}</h1>,
-  h2: ({ children }: { children?: ReactNode }) => <h2 className="text-base font-semibold text-gray-100 mt-3.5 mb-1.5 pb-1 border-b border-border/40">{children}</h2>,
-  h3: ({ children }: { children?: ReactNode }) => <h3 className="text-sm font-semibold text-gray-200 mt-3 mb-1">{children}</h3>,
+  h1: ({ children }: { children?: ReactNode }) => <h1 className="text-fs-title font-bold text-gray-100 mt-4 mb-2">{children}</h1>,
+  h2: ({ children }: { children?: ReactNode }) => <h2 className="text-fs-title font-semibold text-gray-100 mt-3.5 mb-1.5 pb-1 border-b border-border/40">{children}</h2>,
+  h3: ({ children }: { children?: ReactNode }) => <h3 className="text-fs-lead font-semibold text-gray-200 mt-3 mb-1">{children}</h3>,
   h4: ({ children }: { children?: ReactNode }) => <h4 className="text-fs-body font-semibold text-gray-300 mt-2 mb-1">{children}</h4>,
   p: ({ children }: { children?: ReactNode }) => <p className="text-gray-200 leading-7 my-2">{children}</p>,
   ul: ({ children }: { children?: ReactNode }) => <ul className="list-disc pl-4 my-2 space-y-1">{children}</ul>,
@@ -93,7 +93,7 @@ const MD_COMPONENTS: Components = {
 
 export const MarkdownText = memo(function MarkdownText({ content }: { content: string }) {
   return (
-    <div className="text-sm text-gray-200">
+    <div className="text-fs-lead text-gray-200">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{content}</ReactMarkdown>
     </div>
   );

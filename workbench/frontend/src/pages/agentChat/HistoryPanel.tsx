@@ -152,7 +152,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
 
           {/* 推送按钮 */}
           <button onClick={handlePushClick} disabled={pushing || rebaseInProgress}
-            className="w-full px-3 py-2 rounded bg-info text-white text-sm hover:bg-info/90 disabled:opacity-40">
+            className="w-full px-3 py-2 rounded bg-info text-white text-fs-lead hover:bg-info/90 disabled:opacity-40">
             {pushing ? '推送中…' : rebaseInProgress ? '🚫 rebase 中断中，请先处理冲突' : `🚀 推送 ${unpushed.length} 个提交到远端`}
           </button>
         </>
@@ -170,7 +170,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
           onClick={() => !saving && setShowTokenDialog(false)}>
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[440px] max-w-[92vw] shadow-2xl"
             onClick={e => e.stopPropagation()}>
-            <div className="text-sm font-medium text-gray-200 mb-2">🐙 配置 Git 推送 token</div>
+            <div className="text-fs-lead font-medium text-gray-200 mb-2">🐙 配置 Git 推送 token</div>
             <p className="text-fs-body text-gray-500 mb-2 leading-relaxed">
               首次推送需要配置 HTTPS Personal Access Token。参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。
               token 加密存储，仅用于推送远端。commit 时使用 user.name / user.email 作为提交身份。
@@ -184,9 +184,9 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
             {dlgError && <div className="text-fs-body text-red-400 mb-2">❌ {dlgError}</div>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowTokenDialog(false)} disabled={saving}
-                className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-sm disabled:opacity-40">取消</button>
+                className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-fs-lead disabled:opacity-40">取消</button>
               <button onClick={handleTokenSave} disabled={saving}
-                className="px-3 py-1.5 rounded bg-info text-white text-sm disabled:opacity-40">
+                className="px-3 py-1.5 rounded bg-info text-white text-fs-lead disabled:opacity-40">
                 {saving ? '保存并推送…' : '保存并推送'}
               </button>
             </div>

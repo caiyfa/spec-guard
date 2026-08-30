@@ -210,7 +210,7 @@ function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch
         {state === 'loading' && <div className="p-4 text-fs-body text-gray-600">文档加载中…</div>}
         {state === 'error' && <div className="p-4 text-fs-body text-fail">文档读取失败：{errMsg}</div>}
         {state === 'ready' && (
-          <div className="spec-md p-4 text-sm">
+          <div className="spec-md p-4 text-fs-lead">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content}</ReactMarkdown>
           </div>
         )}
@@ -323,13 +323,13 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
       {/* ── 头部（常驻）：id/版本/优先级/tags/dimensions + 标题 ── */}
       <div className="px-4 pt-3 pb-1 flex-shrink-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-mono text-sm text-info">{String(data.id || '')}</span>
+          <span className="font-mono text-fs-lead text-info">{String(data.id || '')}</span>
           {!!data.version && <Chip text={`v${String(data.version)}`} />}
           {!!data.priority && <Chip text={String(data.priority)} tone={data.priority === 'P0' ? 'warn' : 'gray'} />}
           {tags.map((t) => <Chip key={t} text={t} />)}
           {dimensions.map((t) => <Chip key={t} text={`◆${t}`} />)}
         </div>
-        {!!data.title && <div className="mt-1 text-[13px] text-gray-200">{String(data.title)}</div>}
+        {!!data.title && <div className="mt-1 text-fs-lead text-gray-200">{String(data.title)}</div>}
       </div>
 
       {/* ── 区块页签条 ── */}

@@ -186,7 +186,7 @@ export default function GraphPanorama() {
       {/* 顶栏：状态 + 三镜头 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-bold">🕸 全景图谱</h2>
+          <h2 className="text-fs-title font-bold">🕸 全景图谱</h2>
           {status && (
             status.stale ? (
               <span className="flex items-center gap-2 text-fs-body bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">
@@ -316,7 +316,7 @@ export default function GraphPanorama() {
                 className="p-4 rounded-lg bg-surface-2 border border-border hover:border-info/50 text-left transition-colors"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-200">{m.name}</span>
+                  <span className="text-fs-lead font-medium text-gray-200">{m.name}</span>
                   <span className="text-fs-aux bg-info/10 text-info px-1.5 py-0.5 rounded">FR {m.fr_count}</span>
                 </div>
                 <div className="mt-2 h-1.5 bg-surface-3 rounded-full overflow-hidden">
@@ -355,7 +355,7 @@ export default function GraphPanorama() {
                   isNew ? 'border-dashed border-border' : 'border-border'
                 }`}
               >
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-fs-lead">
                   <span className="text-gray-200 font-medium">{feat.split('/').pop()}</span>
                   {isDebt && <span title="测试债：健康分 <80">❄</span>}
                   {isNew && <span className="text-fs-aux text-gray-500">新功能点（无健康分）</span>}

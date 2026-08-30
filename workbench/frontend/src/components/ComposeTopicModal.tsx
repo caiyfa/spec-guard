@@ -85,7 +85,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
       <div className="w-[960px] max-w-[96vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-sm font-semibold">按勾选原文生成话题</span>
+          <span className="text-fs-lead font-semibold">按勾选原文生成话题</span>
           <span className="text-fs-aux text-gray-600">
             {days.join(' / ')} · {isMulti ? '跨日窗口' : '单日'}
           </span>

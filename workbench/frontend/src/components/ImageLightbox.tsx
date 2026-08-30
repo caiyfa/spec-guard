@@ -34,7 +34,7 @@ export default function ImageLightbox({ url, caption, onClose }: ImageLightboxPr
       <div className="relative" onClick={e => e.stopPropagation()}>
         <button
           onClick={onClose}
-          className="absolute -top-7 right-0 text-lg leading-none text-gray-400 hover:text-white"
+          className="absolute -top-7 right-0 text-fs-title leading-none text-gray-400 hover:text-white"
           title="关闭（Esc）"
         >✕</button>
         <img

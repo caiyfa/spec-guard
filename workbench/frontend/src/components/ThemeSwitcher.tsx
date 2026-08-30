@@ -62,7 +62,7 @@ export default function ThemeSwitcher() {
       <button
         onClick={() => setOpen(true)}
         title={`主题：${meta?.name}（点击切换）`}
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-sm text-gray-400 hover:text-info hover:bg-surface-3"
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-fs-lead text-gray-400 hover:text-info hover:bg-surface-3"
       >
         {meta?.icon || '🎨'}
       </button>

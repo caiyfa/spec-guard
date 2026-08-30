@@ -52,7 +52,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           »
         </button>
         <button onClick={onNewSession} title="新会话"
-          className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-sm">
+          className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-lead">
           ＋
         </button>
         <span className="text-fs-micro text-gray-600 mt-1" style={{ writingMode: 'vertical-rl' }}>会话列表</span>

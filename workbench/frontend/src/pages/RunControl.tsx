@@ -300,7 +300,7 @@ export default function RunControl() {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <h2 className="text-lg font-semibold">▶️ 执行控制</h2>
+      <h2 className="text-fs-title font-semibold">▶️ 执行控制</h2>
 
       {/* 触发面板（K-050：选择优先，无计划耦合，高级范围模式折叠） */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -314,18 +314,18 @@ export default function RunControl() {
           <input type="checkbox" checked={skipUpstreamVerify} onChange={(e) => setSkipUpstreamVerify(e.target.checked)} /> 上游不断言
         </label>
         <button onClick={openConfirm} disabled={(running && !isPaused) || (selectedIds.size === 0 && !showAdvanced) || preflightLoading}
-          className="px-4 py-1.5 rounded-md text-sm font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-40">
+          className="px-4 py-1.5 rounded-md text-fs-lead font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-40">
           {preflightLoading ? '🔍 扫描依赖中…' : isPaused ? '⏸ 已暂停' : running ? '⏳ 执行中…' : triggerLabel}
         </button>
         {isPaused && (
           <button onClick={resume}
-            className="px-4 py-1.5 rounded-md text-sm font-medium bg-info/20 text-info border border-info/30 hover:bg-info/30 animate-pulse">
+            className="px-4 py-1.5 rounded-md text-fs-lead font-medium bg-info/20 text-info border border-info/30 hover:bg-info/30 animate-pulse">
             ▶ 放行继续
           </button>
         )}
         {running && !isPaused && (
           <button onClick={abort}
-            className="px-4 py-1.5 rounded-md text-sm font-medium bg-fail/20 text-fail border border-fail/30 hover:bg-fail/30">
+            className="px-4 py-1.5 rounded-md text-fs-lead font-medium bg-fail/20 text-fail border border-fail/30 hover:bg-fail/30">
             ⏹ 终止
           </button>
         )}
@@ -365,19 +365,19 @@ export default function RunControl() {
         <div className="flex items-center gap-3 flex-wrap border border-border rounded-lg px-3 py-2 bg-surface-2">
           <span className="text-fs-body text-gray-500">按范围执行：</span>
           <select value={scope} onChange={(e) => setScope(e.target.value)}
-            className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-sm">
+            className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-fs-lead">
             {SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
           {(scope === 'tag' || scope === 'scenario' || scope === 'module') && (
             <input value={target} onChange={(e) => setTarget(e.target.value)}
               placeholder={scope === 'tag' ? 'P0 / permission / snapshot' : 'PP-RC-005'}
-              className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-sm w-48" />
+              className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-fs-lead w-48" />
           )}
           <span className="text-fs-aux text-gray-600">勾选列表非空时优先按勾选项直跑；清空勾选后此处生效</span>
         </div>
       )}
 
-      {error && <p className="text-sm text-fail">{error}</p>}
+      {error && <p className="text-fs-lead text-fail">{error}</p>}
 
       {/* 多用户执行归属与队列（M8） */}
       {(currentOwner || queue.length > 0) && (
@@ -415,9 +415,9 @@ export default function RunControl() {
       {isPaused && breakpointHit && (
         <div className="border border-info/40 bg-info/5 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-3">
-            <span className="text-lg">🔴</span>
+            <span className="text-fs-title">🔴</span>
             <div>
-              <div className="text-sm font-medium text-info">
+              <div className="text-fs-lead font-medium text-info">
                 断点命中：{breakpointHit.paused_at}
               </div>
               <div className="text-fs-body text-gray-400">
@@ -473,7 +473,7 @@ export default function RunControl() {
 
       {/* 进度统计（本次选中场景） */}
       {[...verdictMap.keys()].some((id) => selectedIds.has(id)) && (
-        <div className="flex gap-4 text-sm">
+        <div className="flex gap-4 text-fs-lead">
           <span className="text-pass">✓ {counts.passed} 通过</span>
           <span className="text-fail">✗ {counts.failed} 失败</span>
           <span className="text-skip">⊘ {counts.skipped} 跳过</span>
@@ -489,7 +489,7 @@ export default function RunControl() {
             className="w-10 flex-shrink-0 border border-border rounded-lg bg-surface-2 hover:bg-surface-3 flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-info"
             title="返回场景选择"
           >
-            <span className="text-sm">«</span>
+            <span className="text-fs-lead">«</span>
             <span className="text-fs-aux [writing-mode:vertical-rl]">{selectedIds.size} 已选</span>
           </button>
         )}
@@ -596,7 +596,7 @@ export default function RunControl() {
 
       {/* K-049：执行上下文确认弹窗——触发前看清「用什么上下文、实际跑什么」 */}
       <Modal open={showConfirm} onClose={() => setShowConfirm(false)} title="确认执行上下文" width={440}>
-        <div className="space-y-3 text-sm">
+        <div className="space-y-3 text-fs-lead">
           <div className="grid grid-cols-[88px_1fr] gap-y-2 gap-x-3">
             <span className="text-gray-500">执行方式</span>
             <span className="text-gray-200">
@@ -610,7 +610,7 @@ export default function RunControl() {
             <span className="text-gray-500">执行账号</span>
             <span>
               <select value={accountOverride} onChange={(e) => setAccountOverride(e.target.value)}
-                className="bg-surface-3 border border-border rounded px-2 py-1 text-sm text-gray-200">
+                className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-lead text-gray-200">
                 <option value="">场景声明（default）</option>
                 {Object.entries(accountOptions).map(([alias, info]) => (
                   <option key={alias} value={alias}>
@@ -776,11 +776,11 @@ export default function RunControl() {
           </p>
           <div className="flex gap-2 pt-1">
             <button onClick={doTrigger}
-              className="flex-1 py-2 rounded-md text-sm font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
+              className="flex-1 py-2 rounded-md text-fs-lead font-medium bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
               🚀 确认执行
             </button>
             <button onClick={() => setShowConfirm(false)}
-              className="px-4 py-2 rounded-md text-sm bg-surface-3 text-gray-400 hover:bg-surface-2">
+              className="px-4 py-2 rounded-md text-fs-lead bg-surface-3 text-gray-400 hover:bg-surface-2">
               取消
             </button>
           </div>

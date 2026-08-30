@@ -135,36 +135,36 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
       {!embedded && (
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-gray-200">🔔 通知配置</h2>
+            <h2 className="text-fs-title font-bold text-gray-200">🔔 通知配置</h2>
             <p className="text-fs-body text-gray-500 mt-1">配置钉钉/飞书群聊 webhook，接收漏洞和任务失败通知</p>
           </div>
-          <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90">
+          <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90">
             + 新建配置
           </button>
         </div>
       )}
       {embedded && (
         <div className="mb-3 flex justify-end">
-          <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90">
+          <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90">
             + 新建配置
           </button>
         </div>
       )}
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-sm">{error}</div>}
-      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-sm">{success}</div>}
+      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead">{error}</div>}
+      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-fs-lead">{success}</div>}
 
       {/* 配置列表 */}
       <div className="mb-4">
         {configs.length === 0 ? (
-          <div className="text-center text-gray-600 text-sm py-8">暂无通知配置，点击「新建配置」添加</div>
+          <div className="text-center text-gray-600 text-fs-lead py-8">暂无通知配置，点击「新建配置」添加</div>
         ) : (
           <div className="space-y-2">
             {configs.map(cfg => (
               <div key={cfg.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-1">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-300 font-medium">{cfg.name}</span>
+                    <span className="text-fs-lead text-gray-300 font-medium">{cfg.name}</span>
                     <span className="text-fs-body px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{CHANNEL_LABELS[cfg.channel] || cfg.channel}</span>
                     <span className={`text-fs-body px-1.5 py-0.5 rounded ${cfg.enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
                       {cfg.enabled ? '✅ 启用' : '⏸️ 禁用'}
@@ -196,13 +196,13 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-gray-200 mb-3">{editing ? '编辑配置' : '新建通知配置'}</h3>
+            <h3 className="text-fs-lead font-bold text-gray-200 mb-3">{editing ? '编辑配置' : '新建通知配置'}</h3>
 
             <div className="space-y-3">
               <div>
                 <label className="text-fs-body text-gray-500">配置名称</label>
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="如：TDM 研发群"
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
               </div>
 
               <div>
@@ -216,21 +216,21 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
               <div>
                 <label className="text-fs-body text-gray-500">Webhook URL</label>
                 <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
                 {editing && <p className="text-fs-aux text-gray-600 mt-0.5">留空则不修改现有 URL</p>}
               </div>
 
               <div>
                 <label className="text-fs-body text-gray-500">加签密钥{channel === 'feishu' ? '（飞书不需要）' : '（钉钉可选）'}</label>
                 <input value={secret} onChange={e => setSecret(e.target.value)} placeholder={editing ? '留空不修改' : 'SEC...'}
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300"
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300"
                   disabled={channel === 'feishu'} />
               </div>
 
               <div>
                 <label className="text-fs-body text-gray-500">@ 手机号（可选，逗号分隔）</label>
                 <input value={mentionMobiles} onChange={e => setMentionMobiles(e.target.value)} placeholder="13800138000,13900139000"
-                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                  className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
               </div>
 
               <div>
@@ -251,12 +251,12 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
                   <div>
                     <label className="text-fs-body text-gray-500">系统过滤（空 = 全部）</label>
                     <input value={system} onChange={e => setSystem(e.target.value)} placeholder="tdm"
-                      className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                      className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
                   </div>
                   <div>
                     <label className="text-fs-body text-gray-500">场景 pattern（fnmatch）</label>
                     <input value={pattern} onChange={e => setPattern(e.target.value)} placeholder="PP-*"
-                      className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
+                      className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-300" />
                   </div>
                 </div>
               )}
@@ -271,9 +271,9 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
             </div>
 
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm bg-surface-3 text-gray-400 rounded hover:bg-surface-2">取消</button>
+              <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-fs-lead bg-surface-3 text-gray-400 rounded hover:bg-surface-2">取消</button>
               <button onClick={handleSubmit} disabled={submitting}
-                className="px-4 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40">
+                className="px-4 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 disabled:opacity-40">
                 {submitting ? '保存中...' : editing ? '保存' : '创建'}
               </button>
             </div>

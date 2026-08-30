@@ -25,9 +25,9 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
       title={artifact.fileName ? `预览草稿 ${artifact.fileName}` : '预览文档'}
       className="w-full flex items-center gap-2.5 border border-border bg-surface-2/40 rounded-lg px-3 py-2 hover:border-info/40 hover:bg-surface-2/70 transition-colors text-left group"
     >
-      <span className="text-base flex-shrink-0">📄</span>
+      <span className="text-fs-title flex-shrink-0">📄</span>
       <span className="flex-1 min-w-0">
-        <span className="block text-sm text-gray-200 truncate">{artifact.title}</span>
+        <span className="block text-fs-lead text-gray-200 truncate">{artifact.title}</span>
         <span className="block text-fs-aux text-gray-500 truncate">{metaParts.join(' · ')}</span>
       </span>
       <span className="text-fs-body text-info/70 flex-shrink-0 group-hover:text-info">预览 ›</span>

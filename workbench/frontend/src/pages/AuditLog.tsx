@@ -44,7 +44,7 @@ function McpAudit() {
 
   return (
     <div className="max-w-6xl">
-      <h2 className="text-base font-bold mb-4">MCP 调用审计日志</h2>
+      <h2 className="text-fs-title font-bold mb-4">MCP 调用审计日志</h2>
 
       {/* 过滤栏 */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -67,7 +67,7 @@ function McpAudit() {
         </button>
       </div>
 
-      {error && <div className="text-red-400 text-sm mb-3">✗ {error}</div>}
+      {error && <div className="text-red-400 text-fs-lead mb-3">✗ {error}</div>}
 
       {/* 表格 */}
       <div className="overflow-x-auto">
@@ -158,7 +158,7 @@ function AdminAudit() {
 
   return (
     <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
-      {error && <div className="text-red-400 text-sm p-3">✗ {error}</div>}
+      {error && <div className="text-red-400 text-fs-lead p-3">✗ {error}</div>}
       <table className="w-full text-fs-body">
         <thead>
           <tr className="text-left text-gray-500 border-b border-border">
@@ -211,7 +211,7 @@ export default function AuditLog() {
       <div className="flex gap-1 mb-4">
         {AUDIT_TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            className={`px-3 py-1.5 text-fs-lead rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
             {t.label}
           </button>
         ))}

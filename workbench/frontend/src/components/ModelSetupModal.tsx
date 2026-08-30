@@ -73,7 +73,7 @@ export default function ModelSetupModal({ purpose, onClose, onConfigured }: {
       onClick={onClose}>
       <div className="w-[440px] max-w-[92vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-semibold mb-1">配置{preset.label}</h3>
+        <h3 className="text-fs-lead font-semibold mb-1">配置{preset.label}</h3>
         <div className="text-fs-body text-gray-500 mb-3">
           该用途尚未配置模型，填写后保存将自动重试操作（配置保存为「{purpose}」用途绑定；
           MiniMax M3 的 Key 在 platform.minimaxi.com 获取，也可改用任意 OpenAI 兼容服务）

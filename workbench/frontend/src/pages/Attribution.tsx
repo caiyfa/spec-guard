@@ -156,7 +156,7 @@ export default function Attribution() {
   return (
     <div className="flex flex-col h-full">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-200">🔍 失败归因</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">🔍 失败归因</h2>
         <p className="text-fs-body text-gray-500 mt-1">读取运行报告，分析失败场景的断言差异与根因分类</p>
       </div>
 
@@ -166,13 +166,13 @@ export default function Attribution() {
           value={runId}
           onChange={e => setRunId(e.target.value)}
           placeholder="运行 ID（如 2026-07-22_133056）"
-          className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none"
+          className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-fs-lead text-gray-200 placeholder-gray-600 focus:border-info outline-none"
           onKeyDown={e => e.key === 'Enter' && loadReport(runId)}
         />
         <button
           onClick={() => loadReport(runId)}
           disabled={loading || !runId}
-          className="px-4 py-2 bg-info text-white rounded-lg text-sm font-medium hover:bg-info/90 disabled:opacity-40"
+          className="px-4 py-2 bg-info text-white rounded-lg text-fs-lead font-medium hover:bg-info/90 disabled:opacity-40"
         >
           {loading ? '...' : '分析'}
         </button>
@@ -198,7 +198,7 @@ export default function Attribution() {
 
       {error && (
         <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3">
-          <span className="text-red-400 text-sm">❌ {error}</span>
+          <span className="text-red-400 text-fs-lead">❌ {error}</span>
         </div>
       )}
 
@@ -207,14 +207,14 @@ export default function Attribution() {
         <div className="flex-1 overflow-y-auto space-y-3">
           {/* T-063：建档消息 */}
           {spqMessage && (
-            <div className={`px-3 py-2 rounded-lg text-sm ${spqMessage.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
+            <div className={`px-3 py-2 rounded-lg text-fs-lead ${spqMessage.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
               {spqMessage.text}
             </div>
           )}
           {/* 概要 */}
           <div className="bg-surface-1 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-mono text-gray-400">{report.run_id}</span>
+              <span className="text-fs-lead font-mono text-gray-400">{report.run_id}</span>
               <span className="text-fs-body text-gray-500">环境: {report.env || 'N/A'}</span>
             </div>
             <div className="flex gap-4 text-fs-body">
@@ -225,7 +225,7 @@ export default function Attribution() {
 
           {/* 失败场景列表 */}
           {report.failed_cases.length === 0 ? (
-            <div className="text-center text-gray-600 text-sm py-8">
+            <div className="text-center text-gray-600 text-fs-lead py-8">
               无失败场景（或未获取到 cases 详情）
             </div>
           ) : (
@@ -234,7 +234,7 @@ export default function Attribution() {
               return (
                 <div key={i} className="bg-surface-1 rounded-lg border border-border p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-mono text-info">{fc.scenario_id}</span>
+                    <span className="text-fs-lead font-mono text-info">{fc.scenario_id}</span>
                     <div className="flex items-center gap-2">
                       <span className={`text-fs-body ${cat.color}`}>{cat.label}</span>
                       {/* T-063：触发归因 */}
@@ -338,7 +338,7 @@ export default function Attribution() {
 
       {/* T-063：SPQ 归因台账（独立渲染——不依赖报告加载，T-063 前端需求） */}
       <div className="bg-surface-1 rounded-lg border border-border p-3 mt-3">
-        <div className="text-sm text-gray-300 font-medium mb-2">📒 SPQ 归因台账</div>
+        <div className="text-fs-lead text-gray-300 font-medium mb-2">📒 SPQ 归因台账</div>
         {spqList.length === 0 ? (
           <div className="text-fs-body text-gray-600">暂无归因台账条目（归因建议经人拍板后在此建档）</div>
         ) : (

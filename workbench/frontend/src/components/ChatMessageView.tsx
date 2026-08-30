@@ -195,7 +195,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded mt-1
           bg-black/20 border border-border"
           title="旧快照无附件下载信息——点「↻ 更新本群」重新同步后可下载">
-          <span className="text-[13px]">📎</span>
+          <span className="text-fs-lead">📎</span>
           <span className="text-gray-300">{msg.file_name || '文件'}</span>
           <span className="text-fs-aux text-amber-500/80">需更新后可下载</span>
         </span>
@@ -220,7 +220,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
             })
             .catch(() => { /* 下载失败：提示由调用方 notice 承担（本组件无 state） */ });
         }}>
-        <span className="text-[13px]">📎</span>
+        <span className="text-fs-lead">📎</span>
         <span className="text-gray-300">{msg.file_name || '文件'}</span>
         <span className="text-fs-aux text-gray-600">点击下载</span>
       </button>

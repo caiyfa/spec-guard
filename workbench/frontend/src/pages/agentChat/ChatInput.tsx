@@ -345,7 +345,7 @@ export function ChatInput({
           title="上传附件（自动创建信息包并关联到本轮对话）"
           className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">📎</span>}
+          {attaching ? <span className="animate-spin text-fs-lead">⏳</span> : <span className="text-fs-title">📎</span>}
         </button>
         {/* T-933：材料上传（进当前面试材料池，Agent 可 read_material 读取） */}
         <input
@@ -361,7 +361,7 @@ export function ChatInput({
           title="上传材料（进入当前需求面试的材料池，随引用进入对话，Agent 可用 read_material 读取原文）"
           className="w-10 h-10 flex-shrink-0 bg-surface-2 border border-border text-gray-400 rounded-full flex items-center justify-center hover:text-info hover:border-info/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {attaching ? <span className="animate-spin text-sm">⏳</span> : <span className="text-lg">🧾</span>}
+          {attaching ? <span className="animate-spin text-fs-lead">⏳</span> : <span className="text-fs-title">🧾</span>}
         </button>
         <textarea
           ref={inputRef}
@@ -370,7 +370,7 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={wsState === 'open' ? '输入消息... (Enter 发送, / 命令, @ 引用)' : 'WebSocket 未连接'}
           rows={1}
-          className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-info outline-none resize-none max-h-32"
+          className="flex-1 bg-surface-2 border border-border rounded-lg px-3 py-2 text-fs-lead text-gray-200 placeholder-gray-600 focus:border-info outline-none resize-none max-h-32"
           disabled={loading || wsState !== 'open'}
         />
         {loading ? (
@@ -379,7 +379,7 @@ export function ChatInput({
             title="打断会话"
             className="w-10 h-10 flex-shrink-0 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors"
           >
-            <span className="text-lg">■</span>
+            <span className="text-fs-title">■</span>
           </button>
         ) : (
           <button

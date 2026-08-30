@@ -91,10 +91,10 @@ export default function Dashboard() {
           )}
 
           <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-border text-sm font-medium">
+            <div className="px-4 py-3 border-b border-border text-fs-lead font-medium">
               场景库（{scenarios.length} 个）
             </div>
-            <table className="w-full text-sm">
+            <table className="w-full text-fs-lead">
               <thead>
                 <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                   <th className="px-4 py-2">ID</th>
@@ -163,7 +163,7 @@ function SpecTab({ specMd, specLoading, exportMd }: {
           {specLoading ? (
             <div className="text-gray-500 text-fs-body text-center py-8">加载中…</div>
           ) : specMd ? (
-            <div className="spec-md text-[13px] leading-6 text-gray-300">
+            <div className="spec-md text-fs-lead leading-6 text-gray-300">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{specMd}</ReactMarkdown>
             </div>
           ) : (

@@ -20,20 +20,20 @@ export default function Skills() {
   return (
     <div className="max-w-4xl">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-200">Skill 注册表</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">Skill 注册表</h2>
         <p className="text-fs-body text-gray-500 mt-1">
           Agent 技能清单（{skills.length} 个技能，仅只读查询）
         </p>
       </div>
 
       {error && (
-        <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center text-gray-500 text-sm py-12">加载中…</div>
+        <div className="text-center text-gray-500 text-fs-lead py-12">加载中…</div>
       ) : (
         <div className="flex gap-4">
           {/* 技能列表 */}
@@ -46,7 +46,7 @@ export default function Skills() {
                     : 'border-border bg-surface-2 hover:bg-surface-3'
                 }`}>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-200">{s.name}</span>
+                  <span className="text-fs-lead font-medium text-gray-200">{s.name}</span>
                   <span className="text-fs-aux text-gray-500 font-mono">v{s.version}</span>
                   {s.source && (
                     <span className="text-fs-aux px-1 py-0.5 rounded bg-surface-3 text-gray-500">{s.source}</span>
@@ -56,7 +56,7 @@ export default function Skills() {
               </button>
             ))}
             {skills.length === 0 && (
-              <div className="text-center text-gray-600 text-sm py-10">暂无技能</div>
+              <div className="text-center text-gray-600 text-fs-lead py-10">暂无技能</div>
             )}
           </div>
 
@@ -64,7 +64,7 @@ export default function Skills() {
           {selected && (
             <div className="w-72 flex-shrink-0 bg-surface-2 border border-border rounded-lg p-4 space-y-3">
               <div>
-                <h3 className="text-sm font-bold text-gray-200">{selected.name}</h3>
+                <h3 className="text-fs-lead font-bold text-gray-200">{selected.name}</h3>
                 <p className="text-fs-body text-gray-500 mt-0.5">v{selected.version}</p>
               </div>
               <div className="text-fs-body text-gray-400 leading-relaxed">{selected.description}</div>

@@ -76,7 +76,7 @@ export default function Home({ user, navTree, navLoaded, navError, onRetryNav }:
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {groups.map(g => (
             <div key={g.label} className="card-hover">
-              <div className="text-sm font-medium text-gray-200 mb-2">
+              <div className="text-fs-lead font-medium text-gray-200 mb-2">
                 <span className="mr-1.5">{g.icon}</span>{g.label}
               </div>
               <div className="space-y-0.5">

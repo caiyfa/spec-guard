@@ -50,13 +50,13 @@ export default function SystemConfig({ role }: { role: string }) {
   return (
     <div className="h-full flex flex-col">
       <div className="mb-3 flex-shrink-0">
-        <h2 className="text-lg font-bold text-gray-200">🧩 系统配置</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">🧩 系统配置</h2>
         <p className="text-fs-body text-gray-500 mt-0.5">
           栏1 注册/选择系统 → 栏2 注册/管理工作区 → 栏3 环境配置（通用配置含 sso/internal_token，本系统配置含网关/账号池/数据库）
         </p>
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-sm flex-shrink-0" onClick={() => setError('')}>{error}</div>}
+      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead flex-shrink-0" onClick={() => setError('')}>{error}</div>}
 
       {/* 三栏：行高钉死、各栏内部滚动（T-1009 同款先例） */}
       <div className="flex-1 min-h-0 flex gap-3">

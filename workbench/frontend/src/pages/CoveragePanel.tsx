@@ -114,7 +114,7 @@ export default function CoveragePanel() {
   return (
     <div className="flex flex-col h-full gap-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-lg font-bold text-gray-200">🧭 覆盖缺口</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">🧭 覆盖缺口</h2>
         <input
           value={moduleFilter}
           onChange={e => setModuleFilter(e.target.value)}
@@ -122,13 +122,13 @@ export default function CoveragePanel() {
           className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-body text-gray-300 placeholder-gray-600 focus:border-info outline-none"
         />
         <button onClick={refresh} disabled={loading}
-          className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-sm hover:bg-surface-2 disabled:opacity-40">
+          className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-fs-lead hover:bg-surface-2 disabled:opacity-40">
           {loading ? '…' : '刷新'}
         </button>
       </div>
 
       {message && (
-        <div className={`px-3 py-2 rounded-lg text-sm ${message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
+        <div className={`px-3 py-2 rounded-lg text-fs-lead ${message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
           {message.text}
         </div>
       )}
@@ -204,7 +204,7 @@ export default function CoveragePanel() {
                 <button
                   onClick={handleNextBatch}
                   disabled={busy || batchFrs.length === 0}
-                  className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 disabled:opacity-40"
+                  className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 disabled:opacity-40"
                   title="只产草稿不产计划（铁律 6）；产物走三闸后入库">
                   {busy ? '生成中…' : '⚙ 生成下一批'}
                 </button>

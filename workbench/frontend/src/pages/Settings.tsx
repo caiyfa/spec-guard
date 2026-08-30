@@ -24,7 +24,7 @@ export default function Settings() {
     <div className="h-full flex flex-col">
       {/* 顶栏 */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">⚙️ 基础设置</h2>
+        <h2 className="text-fs-title font-semibold">⚙️ 基础设置</h2>
         <span className="text-fs-aux text-gray-600">SpecGuard 运行基础信息 · 被测系统配置见「🧩 系统配置」</span>
       </div>
 
@@ -32,7 +32,7 @@ export default function Settings() {
       <div className="flex gap-1 mb-3 border-b border-border">
         {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-fs-lead font-medium border-b-2 transition-colors ${
               tab === t ? 'border-info text-info' : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}>
             {TAB_LABELS[t]}
@@ -264,7 +264,7 @@ function ModelsTab() {
             </div>
           </>
         ) : (
-          <div className="text-center text-gray-600 text-sm py-12">选择左侧模型或点击「+ 添加」创建新模型</div>
+          <div className="text-center text-gray-600 text-fs-lead py-12">选择左侧模型或点击「+ 添加」创建新模型</div>
         )}
       </div>
     </div>
@@ -313,7 +313,7 @@ function RunTab() {
   return (
     <div className="max-w-2xl p-1">
       <div className="rounded-md border border-border bg-surface-3 p-4">
-        <h3 className="text-sm font-medium text-gray-200 mb-1">执行看门狗超时（T-118）</h3>
+        <h3 className="text-fs-lead font-medium text-gray-200 mb-1">执行看门狗超时（T-118）</h3>
         <p className="text-fs-body text-gray-500 mb-3">
           单次执行超过该时长（从触发起算）自动强制终止并标记 timeout——进程挂死不再永久占用执行队列。
           <span className="text-gray-600"> 0 = 禁用。</span>
@@ -325,7 +325,7 @@ function RunTab() {
             value={timeoutSec}
             disabled={loading}
             onChange={(e) => setTimeoutSec(Number(e.target.value) || 0)}
-            className="w-32 bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200"
+            className="w-32 bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-200"
             placeholder="0 = 禁用"
           />
           <span className="text-fs-body text-gray-500">秒</span>
@@ -371,7 +371,7 @@ function AuditTab() {
   return (
     <div className="max-w-2xl p-1">
       <div className="rounded-md border border-border bg-surface-3 p-4">
-        <h3 className="text-sm font-medium text-gray-200 mb-1">Spec 签名基线更新方式</h3>
+        <h3 className="text-fs-lead font-medium text-gray-200 mb-1">Spec 签名基线更新方式</h3>
         <p className="text-fs-body text-gray-500 mb-3">
           路由通过对比 spec 文件签名与基线检测变更，决定「研发修正场景包文件后是否自动进入审计模式」（K-007）。
         </p>
@@ -382,7 +382,7 @@ function AuditTab() {
             disabled={loading}
             onChange={(e) => save(e.target.checked)}
           />
-          <span className="text-sm text-gray-200">审计完成后自动更新基线</span>
+          <span className="text-fs-lead text-gray-200">审计完成后自动更新基线</span>
         </label>
         <div className="text-fs-aux text-gray-500 mt-2 space-y-1">
           <p>· 关闭（默认手动）：研发修正 spec 后需在 Agent 会话中或调用 POST /api/workspace/mark-audited 手动标记已审计，基线才复位。</p>
@@ -434,7 +434,7 @@ function GitTab() {
   return (
     <div className="max-w-2xl p-1">
       <div className="rounded-md border border-border bg-surface-3 p-4">
-        <h3 className="text-sm font-medium text-gray-200 mb-1">🐙 Git 远端推送配置</h3>
+        <h3 className="text-fs-lead font-medium text-gray-200 mb-1">🐙 Git 远端推送配置</h3>
         <p className="text-fs-body text-gray-500 mb-3">
           配置后，提交 delta 起草区后可以一键推送到远端仓库。
           参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。

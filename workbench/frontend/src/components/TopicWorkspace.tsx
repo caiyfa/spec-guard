@@ -436,7 +436,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
   return (
     <div className="bg-surface-2 border border-border rounded-lg p-4">
       <div className="flex items-center gap-2 flex-wrap mb-1">
-        <span className="text-sm font-semibold">人工介入工作台</span>
+        <span className="text-fs-lead font-semibold">人工介入工作台</span>
         <span className="text-fs-body text-gray-500">左栏原文时间轴 × 右栏话题列表（搜索/排序定位；「⌖ 定位原文」高亮对应消息）</span>
         {onToggleFocus && (
           <button

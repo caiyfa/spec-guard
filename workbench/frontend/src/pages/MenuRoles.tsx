@@ -33,17 +33,17 @@ export default function MenuRoles() {
   return (
     <div className="max-w-5xl">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-200">🗂 菜单与角色授权</h2>
+        <h2 className="text-fs-title font-bold text-gray-200">🗂 菜单与角色授权</h2>
         <p className="text-fs-body text-gray-500 mt-1">
           菜单树入库可配置；角色授权控制页面可见性与后端接口访问（前后端双控）。
         </p>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-900/30 text-red-400 border border-red-700/50">{error}</div>}
-      {message && <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-green-900/30 text-green-400 border border-green-700/50">{message}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">{error}</div>}
+      {message && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-green-900/30 text-green-400 border border-green-700/50">{message}</div>}
       <div className="flex gap-2 mb-4">
         {([['menu', `菜单管理 (${menus.length})`], ['roles', `角色管理 (${roles.length})`], ['grants', '角色授权']] as [Tab, string][]).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`px-3 py-1.5 text-sm rounded ${tab === k ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>
+            className={`px-3 py-1.5 text-fs-lead rounded ${tab === k ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>
             {label}
           </button>
         ))}
@@ -89,7 +89,7 @@ function MenuTab({ menus, onChanged, flash, setError }: {
       <button onClick={() => setAdding('')} className="text-fs-body bg-info text-white rounded px-2 py-1">＋ 新增分组</button>
       {groups.map(g => (
         <div key={g.menu_key} className="bg-surface-2 border border-border rounded-lg p-3">
-          <div className="flex items-center gap-2 text-sm text-gray-200 font-medium">
+          <div className="flex items-center gap-2 text-fs-lead text-gray-200 font-medium">
             <span>{g.icon}</span><span>{g.label}</span>
             {g.is_system ? <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统</span> : null}
             <button onClick={() => setAdding(g.menu_key)} className="ml-auto text-fs-body text-gray-500 hover:text-gray-300">＋ 新增菜单</button>
@@ -130,7 +130,7 @@ function MenuTab({ menus, onChanged, flash, setError }: {
       ))}
       {adding !== null && (
         <Modal open title={adding ? '新增菜单' : '新增分组'} onClose={() => setAdding(null)}>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-2 text-fs-lead">
             <input placeholder="menu_key（menu-xxx / group-xxx）" className="w-full bg-surface-1 border border-border rounded px-2 py-1"
               value={draft.menu_key ?? ''} onChange={e => setDraft({ ...draft, menu_key: e.target.value })} />
             <input placeholder="显示名" className="w-full bg-surface-1 border border-border rounded px-2 py-1"
@@ -179,7 +179,7 @@ function RolesTab({ roles, onChanged, flash, setError }: {
     <div className="space-y-2">
       <button onClick={() => setAdding(true)} className="text-fs-body bg-info text-white rounded px-2 py-1">＋ 新增角色</button>
       {roles.map(r => (
-        <div key={r.role_key} className="bg-surface-2 border border-border rounded-lg p-3 flex items-center gap-3 text-sm">
+        <div key={r.role_key} className="bg-surface-2 border border-border rounded-lg p-3 flex items-center gap-3 text-fs-lead">
           <span className="font-mono text-gray-400">{r.role_key}</span>
           {editing === r.role_key ? (
             <>
@@ -204,7 +204,7 @@ function RolesTab({ roles, onChanged, flash, setError }: {
       ))}
       {adding && (
         <Modal open title="新增角色" onClose={() => setAdding(false)}>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-2 text-fs-lead">
             <input placeholder="role_key（小写字母开头，如 dept-lead）" className="w-full bg-surface-1 border border-border rounded px-2 py-1"
               value={key} onChange={e => setKey(e.target.value)} />
             <input placeholder="显示名" className="w-full bg-surface-1 border border-border rounded px-2 py-1"
@@ -262,20 +262,20 @@ function GrantsTab({ roles, menus, flash, setError }: {
       <div className="w-44 space-y-1 flex-shrink-0">
         {roles.map(r => (
           <button key={r.role_key} onClick={() => setSelRole(r.role_key)}
-            className={`w-full text-left px-3 py-2 rounded text-sm ${selRole === r.role_key ? 'bg-info text-white' : 'bg-surface-2 text-gray-400'}`}>
+            className={`w-full text-left px-3 py-2 rounded text-fs-lead ${selRole === r.role_key ? 'bg-info text-white' : 'bg-surface-2 text-gray-400'}`}>
             {r.label} <span className="font-mono text-fs-aux opacity-70">{r.role_key}</span>
           </button>
         ))}
       </div>
       <div className="flex-1 bg-surface-2 border border-border rounded-lg p-4">
-        {!loaded ? <div className="text-sm text-gray-500">加载中…</div> : (
+        {!loaded ? <div className="text-fs-lead text-gray-500">加载中…</div> : (
           <div className="space-y-3">
             {groups.map(g => {
               const items = itemsOf(g.menu_key);
               const allChecked = items.length > 0 && items.every(i => checked.has(i.menu_key));
               return (
                 <div key={g.menu_key}>
-                  <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <label className="flex items-center gap-2 text-fs-lead text-gray-300">
                     <input type="checkbox" checked={allChecked}
                       onChange={() => items.forEach(i => toggle(i.menu_key, !!i.is_system, !!i.is_public))} />
                     {g.icon} {g.label}

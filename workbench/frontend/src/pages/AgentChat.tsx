@@ -1372,7 +1372,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
       return (
         <div key={idx} data-user-idx={idx}
           className={`${idx > 0 ? 'mt-4' : ''} mb-2 flex justify-end transition-all duration-500 ${highlightIdx === idx ? 'ring-1 ring-info bg-info/10 rounded-lg' : ''}`}>
-          <div className="max-w-[80%] rounded-lg rounded-br-sm px-3 py-1.5 text-sm bg-info/10 text-info/90 border border-info/20">
+          <div className="max-w-[80%] rounded-lg rounded-br-sm px-3 py-1.5 text-fs-lead bg-info/10 text-info/90 border border-info/20">
             {item.references && item.references.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1">
                 {item.references.map((r, i) => (
@@ -1549,7 +1549,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               <ArtifactCtx.Provider value={artifactCtxValue}>
               {grouped.length === 0 && !loading && (
                 purposeDenied ? (
-                  <div className="text-center text-gray-500 text-sm py-12">
+                  <div className="text-center text-gray-500 text-fs-lead py-12">
                     <div className="text-3xl mb-2">🔒</div>
                     {fixedPurpose === 'requirement_interview'
                       ? '当前角色无此工作台权限（需产品/开发/管理员角色）'
@@ -1567,7 +1567,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                     setShowPurposePicker(false);
                   }} />
                 ) : (
-                  <div className="text-center text-gray-600 text-sm py-12">
+                  <div className="text-center text-gray-600 text-fs-lead py-12">
                     输入消息开始对话，或输入 / 查看可用命令
                   </div>
                 )
@@ -1588,12 +1588,12 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               )}
               {error && (
                 <div className="bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
-                  <span className="text-red-400 text-sm">❌ {error}</span>
+                  <span className="text-red-400 text-fs-lead">❌ {error}</span>
                 </div>
               )}
               {notice && (
                 <div className="bg-green-900/20 border border-green-700/30 rounded p-2 mb-2">
-                  <span className="text-green-400 text-sm">✓ {notice}</span>
+                  <span className="text-green-400 text-fs-lead">✓ {notice}</span>
                 </div>
               )}
               </ArtifactCtx.Provider>

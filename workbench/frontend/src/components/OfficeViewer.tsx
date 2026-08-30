@@ -50,10 +50,10 @@ function DocxHtml({ buf }: { buf: ArrayBuffer }) {
     })();
     return () => { alive = false; };
   }, [buf]);
-  if (error) return <div className="h-full flex items-center justify-center text-fail text-sm">{error}</div>;
-  if (html == null) return <div className="h-full flex items-center justify-center text-gray-500 text-sm">解析中…</div>;
+  if (error) return <div className="h-full flex items-center justify-center text-fail text-fs-lead">{error}</div>;
+  if (html == null) return <div className="h-full flex items-center justify-center text-gray-500 text-fs-lead">解析中…</div>;
   return (
-    <div className="spec-md h-full overflow-y-auto p-4 text-sm bg-white/5"
+    <div className="spec-md h-full overflow-y-auto p-4 text-fs-lead bg-white/5"
       dangerouslySetInnerHTML={{ __html: html }} />
   );
 }
@@ -72,21 +72,21 @@ export default function OfficeViewer({ path }: { path: string }) {
   }, [path]);
 
   if (error) {
-    return <div className="h-full flex items-center justify-center text-fail text-sm px-4 text-center">{error}</div>;
+    return <div className="h-full flex items-center justify-center text-fail text-fs-lead px-4 text-center">{error}</div>;
   }
   if (!buf) {
-    return <div className="h-full flex items-center justify-center text-gray-500 text-sm">读取中…</div>;
+    return <div className="h-full flex items-center justify-center text-gray-500 text-fs-lead">读取中…</div>;
   }
 
   const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
   if (ext === '.xlsx') {
     return (
-      <Suspense fallback={<div className="h-full flex items-center justify-center text-gray-500 text-sm">加载表格引擎…</div>}>
+      <Suspense fallback={<div className="h-full flex items-center justify-center text-gray-500 text-fs-lead">加载表格引擎…</div>}>
         <SheetViewer data={buf} />
       </Suspense>
     );
   }
   if (ext === '.pdf') return <PdfFrame buf={buf} name={path} />;
   if (ext === '.docx') return <DocxHtml buf={buf} />;
-  return <div className="h-full flex items-center justify-center text-gray-500 text-sm">不支持的办公文档类型: {ext}</div>;
+  return <div className="h-full flex items-center justify-center text-gray-500 text-fs-lead">不支持的办公文档类型: {ext}</div>;
 }

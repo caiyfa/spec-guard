@@ -76,9 +76,9 @@ export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, 
           </span>
         ))}
         <div className="flex-1" />
-        {savedFlash && <span className="text-pass text-sm">✓ 已保存</span>}
+        {savedFlash && <span className="text-pass text-fs-lead">✓ 已保存</span>}
         {canRun && (
-          <button className="btn-primary text-sm" onClick={() => setShowRun(true)}>▶ 试跑</button>
+          <button className="btn-primary text-fs-lead" onClick={() => setShowRun(true)}>▶ 试跑</button>
         )}
       </div>
 
@@ -103,12 +103,12 @@ export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, 
 
       {/* 三态：错误 / 加载中 / 编辑器 */}
       {error && (
-        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
           ❌ 加载用例失败：{error}
         </div>
       )}
       {!error && content === null && (
-        <div className="py-16 text-center text-gray-500 text-sm">加载中…</div>
+        <div className="py-16 text-center text-gray-500 text-fs-lead">加载中…</div>
       )}
       {!error && content !== null && (
         <div className="h-[62vh] min-h-0 overflow-y-auto pr-1">

@@ -121,7 +121,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
         </>
       ) : (
         <button onClick={handleContinue} disabled={!!busy}
-          className="w-full px-3 py-2 rounded bg-pass/20 text-pass border border-pass/30 text-sm hover:bg-pass/30 disabled:opacity-40">
+          className="w-full px-3 py-2 rounded bg-pass/20 text-pass border border-pass/30 text-fs-lead hover:bg-pass/30 disabled:opacity-40">
           {busy === 'continue' ? '提交中…' : '✅ 冲突已全部解决，完成 rebase'}
         </button>
       )}

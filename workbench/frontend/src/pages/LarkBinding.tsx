@@ -89,7 +89,7 @@ export default function LarkBinding() {
 
   if (state === 'loading') {
     return (
-      <div className="p-6 text-gray-500 text-sm">加载飞书绑定状态...</div>
+      <div className="p-6 text-gray-500 text-fs-lead">加载飞书绑定状态...</div>
     );
   }
 
@@ -97,7 +97,7 @@ export default function LarkBinding() {
     <div className="h-full flex flex-col p-6 max-w-2xl">
       <div className="flex items-center gap-2 mb-6">
         <span className="text-xl">🐦</span>
-        <h2 className="text-lg font-semibold">绑定飞书账号</h2>
+        <h2 className="text-fs-title font-semibold">绑定飞书账号</h2>
       </div>
 
       {/* 状态卡片 */}
@@ -111,7 +111,7 @@ export default function LarkBinding() {
                 配置目录: {status.config_dir}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-3 text-fs-lead">
               <div>
                 <span className="text-gray-500">身份</span>
                 <span className="ml-2">{status.identity} / {status.identity_name}</span>
@@ -138,17 +138,17 @@ export default function LarkBinding() {
               <span className="w-2 h-2 rounded-full bg-gray-500" />
               <span className="font-medium">未绑定</span>
             </div>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-fs-lead text-gray-400 mb-4">
               绑定飞书账号后，可在 Agent 对话中使用飞书 CLI 能力
               （文档/多维表格/妙记/聊天/日程等）。
             </p>
-            <div className="space-y-2 text-sm text-gray-400 mb-4">
+            <div className="space-y-2 text-fs-lead text-gray-400 mb-4">
               <p>① 点击下方「绑定飞书」按钮</p>
               <p>② 在弹出的飞书授权页面完成授权</p>
               <p>③ 授权完成后页面自动刷新</p>
             </div>
             <button onClick={handleLogin}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+              className="px-4 py-2 text-fs-lead bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
               🔗 绑定飞书
             </button>
           </div>
@@ -167,7 +167,7 @@ export default function LarkBinding() {
                 <p className="text-fs-body text-gray-500">使用飞书 App 扫码完成授权</p>
               </div>
             ) : (
-              <p className="text-sm text-gray-400 mb-3">
+              <p className="text-fs-lead text-gray-400 mb-3">
                 请在弹出的页面中完成飞书授权。页面将自动检测授权状态。
               </p>
             )}
@@ -191,7 +191,7 @@ export default function LarkBinding() {
               <span className="w-2 h-2 rounded-full bg-red-500" />
               <span className="font-medium text-red-400">出错</span>
             </div>
-            <p className="text-sm text-red-400 mb-3">{error}</p>
+            <p className="text-fs-lead text-red-400 mb-3">{error}</p>
             <button onClick={loadStatus}
               className="px-3 py-1.5 text-fs-body bg-surface-1 rounded hover:bg-surface-3 transition-colors">
               重试
@@ -203,7 +203,7 @@ export default function LarkBinding() {
       {/* Scope 清单（已绑定时展开） */}
       {state === 'bound' && status?.scopes && status.scopes.length > 0 && (
         <div className="bg-surface-2 border border-border rounded-lg p-4">
-          <h3 className="text-sm font-medium mb-2">📋 已授权权限</h3>
+          <h3 className="text-fs-lead font-medium mb-2">📋 已授权权限</h3>
           <div className="space-y-1">
             {status.scopes.map((s, i) => (
               <div key={i} className="flex items-center gap-2 text-fs-body text-gray-400">

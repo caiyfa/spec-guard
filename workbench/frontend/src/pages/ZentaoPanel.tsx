@@ -171,7 +171,7 @@ export default function ZentaoPanel() {
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
   const label = 'block text-fs-body text-gray-400 mb-1';
-  const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-info';
+  const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-200 outline-none focus:border-info';
   const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const btnDanger = 'px-3 py-1.5 rounded text-fs-body font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40';
   const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
@@ -180,7 +180,7 @@ export default function ZentaoPanel() {
   return (
     <div className="p-4 max-w-[1200px] mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-bold">🔗 禅道集成</h1>
+        <h1 className="text-fs-title font-bold">🔗 禅道集成</h1>
         <div className="text-fs-body text-gray-500">
           写动作需 product/tester 角色 · 创建故事仅 product · Agent 产出草案需人确认
         </div>
@@ -190,7 +190,7 @@ export default function ZentaoPanel() {
 
       {/* ── 区① 冻结 delta 交付 ── */}
       <div className={card}>
-        <h2 className="text-sm font-semibold mb-3">① 冻结 spec 交付（一键创建禅道故事）</h2>
+        <h2 className="text-fs-lead font-semibold mb-3">① 冻结 spec 交付（一键创建禅道故事）</h2>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64">
             <span className={label}>冻结 delta（FREEZE.yaml 在库）</span>
@@ -251,7 +251,7 @@ export default function ZentaoPanel() {
 
       {/* ── 区② 提 BUG 双入口 ── */}
       <div className={card}>
-        <h2 className="text-sm font-semibold mb-3">② 提 BUG（双入口，SKIP/BLOCKED 被拒）</h2>
+        <h2 className="text-fs-lead font-semibold mb-3">② 提 BUG（双入口，SKIP/BLOCKED 被拒）</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="border border-border/60 rounded p-3">
             <span className={label}>入口①：执行失败（from-run，verdict=FAIL）</span>
@@ -288,7 +288,7 @@ export default function ZentaoPanel() {
 
       {/* ── 区③ 对话草案 ── */}
       <div className={card}>
-        <h2 className="text-sm font-semibold mb-3">③ 对话分析草案（飞书文档/多维表格 → Agent 分析 → 人确认建故事）</h2>
+        <h2 className="text-fs-lead font-semibold mb-3">③ 对话分析草案（飞书文档/多维表格 → Agent 分析 → 人确认建故事）</h2>
         {drafts.length === 0 ? (
           <div className="text-fs-body text-gray-500">暂无草案。在「对话」中粘贴飞书文档/多维表格链接，Agent 拉取分析后将自动产出草案。</div>
         ) : (
@@ -338,7 +338,7 @@ export default function ZentaoPanel() {
       {/* ── 区④ 锚点与作业 ── */}
       <div className={card}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">④ 外部锚点与作业</h2>
+          <h2 className="text-fs-lead font-semibold">④ 外部锚点与作业</h2>
           <button className={btn} onClick={handleReconcile}>对账补登记</button>
         </div>
         <div className="grid grid-cols-2 gap-4">

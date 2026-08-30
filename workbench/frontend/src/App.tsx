@@ -113,7 +113,7 @@ export default function App() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">
+      <div className="min-h-screen flex items-center justify-center text-gray-500 text-fs-lead">
         加载用户信息…
       </div>
     );
@@ -202,7 +202,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
       >
         {/* Logo 区（点击回首页） */}
         <NavLink to="/" className="block p-4 border-b border-border flex-shrink-0 hover:bg-surface-3/50 transition-colors" title="返回首页">
-          <h1 className="text-sm font-bold brand-gradient whitespace-nowrap">🛡 SpecGuard</h1>
+          <h1 className="text-fs-lead font-bold brand-gradient whitespace-nowrap">🛡 SpecGuard</h1>
           <p className="text-fs-body text-gray-500 mt-0.5 whitespace-nowrap">场景测试与AI智能编排平台</p>
         </NavLink>
 
@@ -213,7 +213,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             to="/"
             end
             className={({ isActive: a }) =>
-              `flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors whitespace-nowrap mb-0.5 ${
+              `flex items-center gap-2 px-2.5 py-2 rounded-md text-fs-lead transition-colors whitespace-nowrap mb-0.5 ${
                 a
                   ? 'bg-info/10 text-info font-medium'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-surface-3'
@@ -237,7 +237,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
                   to={item.to}
                   end={item.end}
                   className={({ isActive: a }) =>
-                    `flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors whitespace-nowrap ${
+                    `flex items-center gap-2 px-2.5 py-2 rounded-md text-fs-lead transition-colors whitespace-nowrap ${
                       a
                         ? 'bg-info/10 text-info font-medium'
                         : 'text-gray-400 hover:text-gray-200 hover:bg-surface-3'
@@ -255,7 +255,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               <div key={group.label} className="mb-0.5">
                 <button
                   onClick={() => toggleGroup(group.label)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-sm transition-colors whitespace-nowrap ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-fs-lead transition-colors whitespace-nowrap ${
                     isActive
                       ? 'text-gray-200 font-medium'
                       : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
@@ -316,7 +316,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             </button>
             <WorkspaceSelector user={user} />
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-3 text-fs-lead">
             <ThemeSwitcher />
             <span className="text-gray-300">{user.name}</span>
             <span className={`text-fs-body px-1.5 py-0.5 rounded ${
@@ -342,7 +342,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         {noAccess ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500">
             <span className="text-5xl">🔒</span>
-            <p className="text-sm">无权限访问该页面，请联系管理员开通菜单授权</p>
+            <p className="text-fs-lead">无权限访问该页面，请联系管理员开通菜单授权</p>
             <NavLink to="/" className="text-fs-body text-info hover:underline">返回首页</NavLink>
           </div>
         ) : (

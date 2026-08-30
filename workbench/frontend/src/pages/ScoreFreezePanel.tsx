@@ -130,7 +130,7 @@ export default function ScoreFreezePanel() {
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
   const label = 'block text-fs-body text-gray-400 mb-1';
-  const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-info';
+  const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-200 outline-none focus:border-info';
   const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
   const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
@@ -138,7 +138,7 @@ export default function ScoreFreezePanel() {
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-bold">⭐ 评分与冻结</h1>
+        <h1 className="text-fs-title font-bold">⭐ 评分与冻结</h1>
         <div className="text-fs-body text-gray-500">评分确认/闸①确认/冻结需 product 角色 · 三闸全过才可冻结</div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
@@ -146,7 +146,7 @@ export default function ScoreFreezePanel() {
 
       {/* ── 五维评分 ── */}
       <div className={card}>
-        <h2 className="text-sm font-semibold mb-3">五维评分（机打维度 + QA 确认）</h2>
+        <h2 className="text-fs-lead font-semibold mb-3">五维评分（机打维度 + QA 确认）</h2>
         <div className="flex flex-wrap items-end gap-3 mb-3">
           <div className="w-72">
             <span className={label}>面试（IV-xxx）</span>
@@ -210,7 +210,7 @@ export default function ScoreFreezePanel() {
 
       {/* ── 冻结三闸 ── */}
       <div className={card}>
-        <h2 className="text-sm font-semibold mb-3">冻结三闸（① 产品确认 ② specstd 合规 ③ P0 清零）</h2>
+        <h2 className="text-fs-lead font-semibold mb-3">冻结三闸（① 产品确认 ② specstd 合规 ③ P0 清零）</h2>
         <div className="flex flex-wrap items-end gap-3 mb-3">
           <div className="w-72">
             <span className={label}>冻结 delta（FREEZE.yaml 在库）</span>
@@ -232,7 +232,7 @@ export default function ScoreFreezePanel() {
             {Object.entries(gates).map(([key, g]) => (
               <div key={key} className="border border-border/60 rounded p-3">
                 <div className="text-fs-body font-medium mb-1">{GATE_LABEL[key] || key}</div>
-                <div className={`text-sm font-bold ${g.status === 'pass' ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-fs-lead font-bold ${g.status === 'pass' ? 'text-green-400' : 'text-red-400'}`}>
                   {g.status === 'pass' ? '✓ PASS' : '✗ ' + (g.status || 'FAIL')}
                 </div>
                 {g.errors && g.errors.length > 0 && (

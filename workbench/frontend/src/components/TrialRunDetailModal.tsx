@@ -337,7 +337,7 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
 
   return (
     <Modal open onClose={onClose} title={`🔍 试跑执行详情 — ${runId || '（无任务号）'}`} width={920}>
-      <div className="p-3 space-y-3 text-sm">
+      <div className="p-3 space-y-3 text-fs-lead">
         {/* 概要 */}
         <div className="flex flex-wrap items-center gap-2">
           <span className={`px-2 py-1 rounded text-fs-body font-medium ${pass ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>

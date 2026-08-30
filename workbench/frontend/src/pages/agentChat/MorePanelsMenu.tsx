@@ -36,7 +36,7 @@ export function MorePanelsMenu({ items, activeId, onSelect, onClose }: {
     <div ref={ref} data-testid="more-panels-menu"
       className="absolute right-2 top-full mt-1 z-50 w-72 max-w-[calc(100%-1rem)] rounded-lg border border-border bg-surface-1 shadow-xl p-4">
       <div className="text-center">
-        <div className="text-sm font-semibold text-gray-200">打开面板</div>
+        <div className="text-fs-lead font-semibold text-gray-200">打开面板</div>
         <div className="text-fs-body text-gray-500 mt-0.5">低频页签收在此处，选择要在侧边面板中打开的页签。</div>
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2 mt-3">
@@ -48,7 +48,7 @@ export function MorePanelsMenu({ items, activeId, onSelect, onClose }: {
                 ? 'border-info bg-surface-3/60 text-gray-200'
                 : 'border-border bg-surface-2/60 text-gray-400 hover:border-gray-600 hover:text-gray-200'
             }`}>
-            <span className="text-base leading-none">{t.emoji}</span>
+            <span className="text-fs-title leading-none">{t.emoji}</span>
             <span className="text-fs-body leading-tight text-center">{t.name}</span>
             {!!t.count && t.count > 0 && (
               <span className="absolute top-1 right-1 min-w-[16px] px-1 rounded-full bg-info/20 text-info text-fs-aux leading-4 text-center">

@@ -125,7 +125,7 @@ function LifecycleBoard() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-lg font-bold text-gray-200">🧬 测试生命周期</h2>
+          <h2 className="text-fs-title font-bold text-gray-200">🧬 测试生命周期</h2>
           <p className="text-fs-body text-gray-500 mt-0.5">
             一条测试的完整历程：草稿 → 入库 → 执行 → 失败 → 修复闭环（台账聚合，文件仍是真相源）
           </p>
@@ -165,17 +165,17 @@ function LifecycleBoard() {
           className="bg-surface-2 border border-border rounded px-2 py-1 text-fs-body text-gray-300 w-48" />
       </div>
 
-      {error && <div className="mb-2 text-sm text-fail">❌ {error}</div>}
+      {error && <div className="mb-2 text-fs-lead text-fail">❌ {error}</div>}
 
       <div className="flex-1 flex gap-3 min-h-0">
         {/* 左：生命周期列表 */}
         <div className="flex-1 flex flex-col min-w-0">
           {loading ? (
-            <div className="text-center text-gray-600 text-sm py-10">加载中…</div>
+            <div className="text-center text-gray-600 text-fs-lead py-10">加载中…</div>
           ) : (
             <div className="flex-1 overflow-y-auto space-y-1">
               {filtered.length === 0 && (
-                <div className="text-center text-gray-600 text-sm py-10">无匹配测试</div>
+                <div className="text-center text-gray-600 text-fs-lead py-10">无匹配测试</div>
               )}
               {filtered.map(it => (
                 <button key={it.id} onClick={() => loadDetail(it.id)}
@@ -185,7 +185,7 @@ function LifecycleBoard() {
                       : 'border-border bg-surface-2 hover:bg-surface-3'
                   }`}>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono text-gray-200">{it.id}</span>
+                    <span className="text-fs-lead font-mono text-gray-200">{it.id}</span>
                     <StatusBadge item={it} />
                     {it.closed_loops > 0 && (
                       <span className="text-fs-micro text-pass" title={`${it.closed_loops} 次失败修复闭环`}>🔄×{it.closed_loops}</span>
@@ -215,11 +215,11 @@ function LifecycleBoard() {
         {/* 右：生命周期详情 */}
         <div className="w-[420px] flex-shrink-0 flex flex-col min-h-0 border border-border rounded-lg bg-surface-2/50">
           {!selectedId ? (
-            <div className="flex-1 flex items-center justify-center text-gray-600 text-sm px-6 text-center">
+            <div className="flex-1 flex items-center justify-center text-gray-600 text-fs-lead px-6 text-center">
               选择左侧一条测试，查看完整生命周期时间线
             </div>
           ) : detailLoading ? (
-            <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">加载详情…</div>
+            <div className="flex-1 flex items-center justify-center text-gray-600 text-fs-lead">加载详情…</div>
           ) : detail ? (
             <div className="flex-1 min-h-0 overflow-y-auto p-3">
               <div className="flex items-center gap-2">
@@ -301,7 +301,7 @@ function LifecycleBoard() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">加载详情…</div>
+            <div className="flex-1 flex items-center justify-center text-gray-600 text-fs-lead">加载详情…</div>
           )}
         </div>
       </div>
@@ -332,7 +332,7 @@ export default function Lifecycle() {
       <div className="flex gap-1 mb-4 flex-shrink-0">
         {LC_TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 text-sm rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+            className={`px-3 py-1.5 text-fs-lead rounded ${tab === t.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
             {t.label}
           </button>
         ))}

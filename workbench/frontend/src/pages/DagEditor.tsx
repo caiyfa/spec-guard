@@ -419,7 +419,7 @@ export default function DagEditor() {
   return (
     <div className="h-full flex flex-col space-y-3">
       <div className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold">🔀 DAG 编排</h2>
+        <h2 className="text-fs-title font-semibold">🔀 DAG 编排</h2>
         {!dagValid && <span className="text-fs-body text-fail bg-fail/10 px-2 py-1 rounded">⚠️ 循环依赖</span>}
         {cycleItems.length > 0 && (
           <button
@@ -542,7 +542,7 @@ export default function DagEditor() {
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[620px] max-w-[92vw] max-h-[80vh] flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-200">
+              <div className="text-fs-lead font-medium text-gray-200">
                 🧩 选择编排场景（自动包含直接依赖闭包）
               </div>
               <button onClick={() => setSubsetOpen(false)} className="text-gray-500 hover:text-gray-300">✕</button>
@@ -628,7 +628,7 @@ export default function DagEditor() {
             <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
               <div className="bg-surface-2/95 border border-border rounded-xl p-8 text-center pointer-events-auto shadow-2xl">
                 <div className="text-4xl mb-3">🧩</div>
-                <div className="text-sm text-gray-200 mb-1 font-medium">先选择一组场景，再开始编排依赖</div>
+                <div className="text-fs-lead text-gray-200 mb-1 font-medium">先选择一组场景，再开始编排依赖</div>
                 <div className="text-fs-body text-gray-500 mb-4 leading-relaxed">
                   90+ 测试全部上画布会找不到重点——勾选目标场景（自动包含<br />
                   直接依赖闭包），或按计划 / 模块 / 搜索收敛视图
@@ -662,7 +662,7 @@ export default function DagEditor() {
           <div className="w-[46%] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-2">
               <span className="text-fs-body text-gray-400 font-mono">{selected}</span>
-              <button onClick={() => { setSelected(null); setSuggestions([]); }} className="text-gray-500 hover:text-fail text-sm" title="收起编辑器">✕</button>
+              <button onClick={() => { setSelected(null); setSuggestions([]); }} className="text-gray-500 hover:text-fail text-fs-lead" title="收起编辑器">✕</button>
             </div>
             {/* K-046：依赖建议面板（确定性引擎扫描插值得出，一键采纳连线） */}
             {suggestions.length > 0 && (

@@ -140,7 +140,7 @@ export default function ScenarioQuality({ role }: Props) {
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-xl font-bold">📋 测试用例管理</h1>
         <button onClick={() => refresh(true)} disabled={loading}
-          className="btn-ghost text-sm" title="强制重扫用例库（绕过 30s 缓存）">
+          className="btn-ghost text-fs-lead" title="强制重扫用例库（绕过 30s 缓存）">
           {loading ? '扫描中…' : '🔄 刷新'}
         </button>
       </div>
@@ -152,7 +152,7 @@ export default function ScenarioQuality({ role }: Props) {
 
       {/* 三态：错误横幅 */}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+        <div className="mb-4 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
           ❌ 加载用例库失败：{error}
           <button onClick={() => refresh(true)} className="ml-3 underline">重试</button>
         </div>
@@ -160,12 +160,12 @@ export default function ScenarioQuality({ role }: Props) {
 
       {/* 三态：加载中 */}
       {loading && !data && !error && (
-        <div className="py-16 text-center text-gray-500 text-sm">加载中…</div>
+        <div className="py-16 text-center text-gray-500 text-fs-lead">加载中…</div>
       )}
 
       {/* 三态：空库（独立文案，不与加载中混用） */}
       {!loading && !error && data && t?.scenarios === 0 && (
-        <div className="py-16 text-center text-gray-500 text-sm">
+        <div className="py-16 text-center text-gray-500 text-fs-lead">
           用例库为空（未扫描到场景 YAML）——库根目录：{data.root}
         </div>
       )}
@@ -176,43 +176,43 @@ export default function ScenarioQuality({ role }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
             <div className="card-hover p-3">
               <div className="text-fs-body text-gray-500 mb-1">用例总数</div>
-              <div className="text-lg font-semibold">{t.scenarios}<span className="text-fs-body text-gray-500 ml-1">/ {t.suites} 套件</span></div>
+              <div className="text-fs-title font-semibold">{t.scenarios}<span className="text-fs-body text-gray-500 ml-1">/ {t.suites} 套件</span></div>
             </div>
             <div className="card-hover p-3 cursor-pointer" title="查看未关联需求的用例"
               onClick={() => gotoIssue('missing-covers')}>
               <div className="text-fs-body text-gray-500 mb-1">需求关联率</div>
-              <div className="text-lg font-semibold">
+              <div className="text-fs-title font-semibold">
                 <span className={t.covers_rate < 50 ? 'text-fail' : 'text-pass'}>{t.covers_rate}%</span>
                 <span className="text-fs-body text-gray-500 ml-1">{t.covers_tagged}/{t.scenarios}</span>
               </div>
             </div>
             <div className="card-hover p-3">
               <div className="text-fs-body text-gray-500 mb-1">深断言</div>
-              <div className="text-lg font-semibold text-pass">{t.grades.deep}
+              <div className="text-fs-title font-semibold text-pass">{t.grades.deep}
                 <span className="text-fs-body text-gray-500 ml-1">{t.scenarios ? Math.round(100 * t.grades.deep / t.scenarios) : 0}%</span></div>
             </div>
             <div className="card-hover p-3 cursor-pointer" title="查看浅断言用例"
               onClick={() => gotoIssue('shallow')}>
               <div className="text-fs-body text-gray-500 mb-1">浅断言</div>
-              <div className="text-lg font-semibold text-warn">{t.grades.shallow}
+              <div className="text-fs-title font-semibold text-warn">{t.grades.shallow}
                 <span className="text-fs-body text-gray-500 ml-1">{t.scenarios ? Math.round(100 * t.grades.shallow / t.scenarios) : 0}%</span></div>
             </div>
             <div className="card-hover p-3 cursor-pointer" title="查看带待完善标记的用例"
               onClick={() => { setFilters(EMPTY_FILTERS); setTab('scenarios'); }}>
               <div className="text-fs-body text-gray-500 mb-1">待完善用例</div>
-              <div className={`text-lg font-semibold ${t.scenarios_with_issues ? 'text-fail' : 'text-pass'}`}>
+              <div className={`text-fs-title font-semibold ${t.scenarios_with_issues ? 'text-fail' : 'text-pass'}`}>
                 {t.scenarios_with_issues}</div>
             </div>
             <div className="card-hover p-3">
               <div className="text-fs-body text-gray-500 mb-1">需求覆盖</div>
               {data.anchors_available ? (
-                <Link to="/lifecycle?tab=coverage" className="text-lg font-semibold text-info hover:underline"
+                <Link to="/lifecycle?tab=coverage" className="text-fs-title font-semibold text-info hover:underline"
                   title="去覆盖缺口页看需求明细">
                   {t.anchors_covered}/{t.anchors_total}
                   <span className="text-fs-body text-gray-500 ml-1">缺口 {t.fr_gaps}</span>
                 </Link>
               ) : (
-                <div className="text-sm text-gray-500" title="当前工作区无 spec 锚点，需求覆盖与锚点失效未评估">未评估</div>
+                <div className="text-fs-lead text-gray-500" title="当前工作区无 spec 锚点，需求覆盖与锚点失效未评估">未评估</div>
               )}
             </div>
           </div>
@@ -221,7 +221,7 @@ export default function ScenarioQuality({ role }: Props) {
           <div className="flex gap-1 mb-4">
             {SQ_TABS.map(tb => (
               <button key={tb.id} onClick={() => setTab(tb.id)}
-                className={`px-3 py-1.5 text-sm rounded ${tab === tb.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
+                className={`px-3 py-1.5 text-fs-lead rounded ${tab === tb.id ? 'bg-info text-white' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
                 {tb.label}
               </button>
             ))}
@@ -230,7 +230,7 @@ export default function ScenarioQuality({ role }: Props) {
           {/* 套件视图 */}
           {tab === 'suites' && (
             <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-fs-lead">
                 <thead>
                   <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                     <th className="px-3 py-2">套件</th>
@@ -278,32 +278,32 @@ export default function ScenarioQuality({ role }: Props) {
             <>
               <div className="flex flex-wrap gap-2 mb-3">
                 <select value={filters.suite} onChange={e => setFilters(f => ({ ...f, suite: e.target.value }))}
-                  className="input text-sm" title="按套件筛选">
+                  className="input text-fs-lead" title="按套件筛选">
                   <option value="">全部套件</option>
                   {data.suites.map(s => <option key={s.key} value={s.key}>{s.key}</option>)}
                 </select>
                 <select value={filters.grade} onChange={e => setFilters(f => ({ ...f, grade: e.target.value }))}
-                  className="input text-sm" title="按评级筛选">
+                  className="input text-fs-lead" title="按评级筛选">
                   <option value="">全部评级</option>
                   {GRADES.map(g => <option key={g} value={g}>{GRADE_LABEL[g]}</option>)}
                 </select>
                 <select value={filters.issue} onChange={e => setFilters(f => ({ ...f, issue: e.target.value }))}
-                  className="input text-sm" title="按待完善类型筛选">
+                  className="input text-fs-lead" title="按待完善类型筛选">
                   <option value="">全部问题</option>
                   {ISSUES.map(i => <option key={i} value={i}>{ISSUE_LABEL[i]}</option>)}
                 </select>
                 <input value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value }))}
-                  className="input text-sm flex-1 min-w-40" placeholder="搜索用例 ID / 标题…" />
+                  className="input text-fs-lead flex-1 min-w-40" placeholder="搜索用例 ID / 标题…" />
                 {(filters.suite || filters.grade || filters.issue || filters.q) && (
-                  <button onClick={() => setFilters(EMPTY_FILTERS)} className="btn-ghost text-sm">清空筛选</button>
+                  <button onClick={() => setFilters(EMPTY_FILTERS)} className="btn-ghost text-fs-lead">清空筛选</button>
                 )}
               </div>
               <div className="text-fs-body text-gray-500 mb-2">{filtered.length} / {data.scenarios.length} 个用例</div>
               {filtered.length === 0 ? (
-                <div className="py-10 text-center text-gray-500 text-sm">无匹配用例（调整筛选条件试试）</div>
+                <div className="py-10 text-center text-gray-500 text-fs-lead">无匹配用例（调整筛选条件试试）</div>
               ) : (
                 <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-fs-lead">
                     <thead>
                       <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                         <th className="px-3 py-2">用例</th>
@@ -372,17 +372,17 @@ export default function ScenarioQuality({ role }: Props) {
                 <button className="btn-ghost text-fs-body" onClick={() => loadShape(true)}>🔄 重扫</button>
               </div>
               {shapeError && (
-                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
                   ❌ 形状契约分析失败：{shapeError}
                   <button className="ml-3 underline" onClick={() => loadShape(true)}>重试</button>
                 </div>
               )}
               {!shapeData && !shapeError && (
-                <div className="py-10 text-center text-gray-500 text-sm">加载中…</div>
+                <div className="py-10 text-center text-gray-500 text-fs-lead">加载中…</div>
               )}
               {shapeData && shapeData.findings.length > 0 && (
                 <div className="mb-4 bg-surface-2 border border-border rounded-lg overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-fs-lead">
                     <thead>
                       <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                         <th className="px-3 py-2">级别</th>
@@ -411,11 +411,11 @@ export default function ScenarioQuality({ role }: Props) {
                 </div>
               )}
               {shapeData && shapeData.findings.length === 0 && (
-                <div className="mb-4 text-sm text-pass">✅ 未发现形状契约问题（引用完整、无被引用路径漂移）</div>
+                <div className="mb-4 text-fs-lead text-pass">✅ 未发现形状契约问题（引用完整、无被引用路径漂移）</div>
               )}
               {shapeData && (
                 <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-fs-lead">
                     <thead>
                       <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                         <th className="px-3 py-2">API（METHOD path）</th>
@@ -458,28 +458,28 @@ export default function ScenarioQuality({ role }: Props) {
                 读-读并行安全、沾写全局互斥（保守模型，produces/consumes 落地后按资源粒度细化）。
               </p>
               {parallelError && (
-                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
+                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
                   ❌ 并行安全分析失败：{parallelError}
                   <button className="ml-3 underline" onClick={() => loadParallel(true)}>重试</button>
                 </div>
               )}
               {!parallelData && !parallelError && (
-                <div className="py-10 text-center text-gray-500 text-sm">加载中…</div>
+                <div className="py-10 text-center text-gray-500 text-fs-lead">加载中…</div>
               )}
               {parallelData && (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     <div className="card-hover p-3">
                       <div className="text-fs-body text-gray-500 mb-1">读场景（可全并行）</div>
-                      <div className="text-lg font-semibold text-pass">{parallelData.totals.readers}</div>
+                      <div className="text-fs-title font-semibold text-pass">{parallelData.totals.readers}</div>
                     </div>
                     <div className="card-hover p-3">
                       <div className="text-fs-body text-gray-500 mb-1">写场景（全局互斥）</div>
-                      <div className="text-lg font-semibold text-warn">{parallelData.totals.writers}</div>
+                      <div className="text-fs-title font-semibold text-warn">{parallelData.totals.writers}</div>
                     </div>
                     <div className="card-hover p-3">
                       <div className="text-fs-body text-gray-500 mb-1">最大理论并行度</div>
-                      <div className="text-lg font-semibold text-info">{parallelData.totals.max_parallelism}</div>
+                      <div className="text-fs-title font-semibold text-info">{parallelData.totals.max_parallelism}</div>
                     </div>
                     <div className="card-hover p-3">
                       <div className="text-fs-body text-gray-500 mb-1">判定模型</div>
@@ -488,7 +488,7 @@ export default function ScenarioQuality({ role }: Props) {
                   </div>
                   <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto mb-4">
                     <div className="px-3 py-2 text-fs-body text-gray-500 border-b border-border">串行瓶颈（写场景，按被依赖数排序）</div>
-                    <table className="w-full text-sm">
+                    <table className="w-full text-fs-lead">
                       <tbody>
                         {parallelData.writers.map(w => (
                           <tr key={w.id} className="border-b border-border/50">
@@ -500,14 +500,14 @@ export default function ScenarioQuality({ role }: Props) {
                           </tr>
                         ))}
                         {parallelData.writers.length === 0 && (
-                          <tr><td className="px-3 py-3 text-sm text-pass">无写场景——全库读-读可并行</td></tr>
+                          <tr><td className="px-3 py-3 text-fs-lead text-pass">无写场景——全库读-读可并行</td></tr>
                         )}
                       </tbody>
                     </table>
                   </div>
                   <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
                     <div className="px-3 py-2 text-fs-body text-gray-500 border-b border-border">读层（两两可并行，{parallelData.readers.length} 个）</div>
-                    <table className="w-full text-sm">
+                    <table className="w-full text-fs-lead">
                       <tbody>
                         {parallelData.readers.slice(0, 30).map(r => (
                           <tr key={r.id} className="border-b border-border/50">

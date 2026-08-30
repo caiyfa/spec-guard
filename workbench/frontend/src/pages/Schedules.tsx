@@ -151,10 +151,10 @@ export default function Schedules() {
   return (
     <div className="p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-gray-200">定时任务调度</h1>
+        <h1 className="text-fs-title font-semibold text-gray-200">定时任务调度</h1>
         <button
           onClick={handleCreate}
-          className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90 transition-colors"
+          className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 transition-colors"
         >
           + 新建任务
         </button>
@@ -162,20 +162,20 @@ export default function Schedules() {
 
       {error && (
         <div className="mb-3 bg-red-900/20 border border-red-700/30 rounded p-2">
-          <span className="text-red-400 text-sm">❌ {error}</span>
+          <span className="text-red-400 text-fs-lead">❌ {error}</span>
         </div>
       )}
 
       {/* 任务列表 */}
       {loading ? (
-        <div className="text-center text-gray-600 text-sm py-8">加载中…</div>
+        <div className="text-center text-gray-600 text-fs-lead py-8">加载中…</div>
       ) : jobs.length === 0 ? (
-        <div className="text-center text-gray-600 text-sm py-8">
+        <div className="text-center text-gray-600 text-fs-lead py-8">
           暂无定时任务，点击「新建任务」创建
         </div>
       ) : (
         <div className="bg-surface-2 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+          <table className="w-full text-fs-lead">
             <thead>
               <tr className="border-b border-border text-gray-500 text-fs-body">
                 <th className="px-3 py-2 text-left">名称</th>
@@ -255,7 +255,7 @@ export default function Schedules() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-surface-1 rounded-lg p-6 w-96 max-w-[90vw]">
-            <h2 className="text-sm font-semibold text-gray-200 mb-4">
+            <h2 className="text-fs-lead font-semibold text-gray-200 mb-4">
               {editingJob ? '编辑任务' : '新建定时任务'}
             </h2>
 
@@ -267,7 +267,7 @@ export default function Schedules() {
                   value={formName}
                   onChange={e => setFormName(e.target.value)}
                   placeholder="如：每日回归"
-                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-fs-lead text-gray-200"
                 />
               </div>
 
@@ -277,7 +277,7 @@ export default function Schedules() {
                 <select
                   value={formPlanId}
                   onChange={e => setFormPlanId(e.target.value)}
-                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-fs-lead text-gray-200"
                 >
                   <option value="">— 选择计划 —</option>
                   {plans.map(p => (
@@ -313,7 +313,7 @@ export default function Schedules() {
                   value={formCron}
                   onChange={e => setFormCron(e.target.value)}
                   placeholder="0 2 * * *"
-                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-sm text-gray-200 font-mono"
+                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-fs-lead text-gray-200 font-mono"
                 />
                 <span className="text-fs-aux text-gray-600">标准 5 字段 cron 表达式</span>
               </div>
@@ -325,7 +325,7 @@ export default function Schedules() {
                   value={formNotifyConfigId}
                   onChange={e => setFormNotifyConfigId(e.target.value)}
                   placeholder="通知配置 ID（留空则通知所有订阅者）"
-                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-sm text-gray-200"
+                  className="w-full bg-surface-2 border border-border rounded px-3 py-1.5 text-fs-lead text-gray-200"
                 />
               </div>
 
@@ -345,13 +345,13 @@ export default function Schedules() {
             <div className="flex gap-2 mt-5">
               <button
                 onClick={handleSubmit}
-                className="flex-1 px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90"
+                className="flex-1 px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90"
               >
                 {editingJob ? '保存' : '创建'}
               </button>
               <button
                 onClick={() => setShowForm(false)}
-                className="px-3 py-1.5 bg-surface-2 text-gray-400 rounded text-sm hover:text-gray-200"
+                className="px-3 py-1.5 bg-surface-2 text-gray-400 rounded text-fs-lead hover:text-gray-200"
               >
                 取消
               </button>

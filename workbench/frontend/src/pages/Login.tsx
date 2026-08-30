@@ -146,7 +146,7 @@ export default function Login() {
         </div>
 
         {error && (
-          <div className="mb-4 px-3 py-2 rounded-lg text-sm bg-fail/15 text-fail border border-fail/40">
+          <div className="mb-4 px-3 py-2 rounded-lg text-fs-lead bg-fail/15 text-fail border border-fail/40">
             {error}
           </div>
         )}
@@ -201,7 +201,7 @@ export default function Login() {
 
         {mode === 'uac' && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-400 text-center">
+            <p className="text-fs-lead text-gray-400 text-center">
               使用集团统一身份认证（Authing）登录
             </p>
             <button
@@ -243,11 +243,11 @@ export default function Login() {
         )}
 
         {checkingCookie && (
-          <div className="text-center text-gray-500 text-sm">检测登录状态…</div>
+          <div className="text-center text-gray-500 text-fs-lead">检测登录状态…</div>
         )}
 
         {mode === '' && !error && !checkingCookie && (
-          <div className="text-center text-gray-500 text-sm">加载认证配置…</div>
+          <div className="text-center text-gray-500 text-fs-lead">加载认证配置…</div>
         )}
       </div>
     </div>
