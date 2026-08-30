@@ -95,7 +95,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
                     const updated = await scenarioApi.updateInfoPack(meta.id, newFiles);
                     onUpdate(updated);
                   } catch { onError('移除文件失败'); }
-                }} className="text-red-500 text-fs-aux opacity-0 group-hover:opacity-100">✕</button>
+                }} className="text-fail text-fs-aux opacity-0 group-hover:opacity-100">✕</button>
               </div>
             ))}
           </div>

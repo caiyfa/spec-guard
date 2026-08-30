@@ -204,7 +204,7 @@ function ModelsTab() {
                   ★ 设为默认
                 </button>
                 <button onClick={handleDelete}
-                  className="text-fs-aux px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/30">
+                  className="text-fs-aux px-2 py-1 rounded bg-fail/12 text-fail hover:bg-fail/12">
                   🗑 删除
                 </button>
                 <button onClick={handleSave}

@@ -71,7 +71,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
         <div className="text-fs-aux text-gray-600 mb-2">
           词表作用于后续 AI 分类（prompt 复用清单）与标签栏归并展示；话题卡上已落的原始关键词不改写。
         </div>
-        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{err}</div>}
+        {err && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{err}</div>}
         {!registry ? (
           <div className="text-fs-body text-gray-500 text-center py-6">词表加载失败——关闭后重试</div>
         ) : Object.keys(tags).length === 0 ? (
@@ -107,7 +107,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
                         feishuPoolApi.mergeTag(name, (mergeTo[name] || '').trim()))}>
                       归并
                     </button>
-                    <button className={`${act} hover:text-red-400`} disabled={busy === name}
+                    <button className={`${act} hover:text-fail`} disabled={busy === name}
                       title="丢弃噪音词（话题卡原词保留，词表不再跟踪）"
                       onClick={() => run(name, () => feishuPoolApi.dropTag(name))}>
                       丢弃

@@ -6,8 +6,8 @@ import { auditApi, usersApi, type AuditCall } from '../api';
 
 const VERDICT_LABEL: Record<string, { label: string; color: string }> = {
   ok: { label: '通过', color: 'text-green-400' },
-  'denied-whitelist': { label: '越权拒绝', color: 'text-red-400' },
-  'denied-side-effect': { label: '副作用违规', color: 'text-red-400' },
+  'denied-whitelist': { label: '越权拒绝', color: 'text-fail' },
+  'denied-side-effect': { label: '副作用违规', color: 'text-fail' },
   warn: { label: '警告', color: 'text-amber-400' },
 };
 
@@ -67,7 +67,7 @@ function McpAudit() {
         </button>
       </div>
 
-      {error && <div className="text-red-400 text-fs-lead mb-3">✗ {error}</div>}
+      {error && <div className="text-fail text-fs-lead mb-3">✗ {error}</div>}
 
       {/* 表格 */}
       <div className="overflow-x-auto">
@@ -158,7 +158,7 @@ function AdminAudit() {
 
   return (
     <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
-      {error && <div className="text-red-400 text-fs-lead p-3">✗ {error}</div>}
+      {error && <div className="text-fail text-fs-lead p-3">✗ {error}</div>}
       <table className="w-full text-fs-body">
         <thead>
           <tr className="text-left text-gray-500 border-b border-border">

@@ -27,7 +27,7 @@ export default function Skills() {
       </div>
 
       {error && (
-        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">
+        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-fail/12 text-fail border border-fail/35">
           {error}
         </div>
       )}

@@ -352,7 +352,7 @@ export default function StepFormCard({
             {tryout && (
               <div className="mt-1 border border-border rounded p-2 bg-surface-2">
                 {tryout.loading && <div className="text-fs-body text-gray-500">查询中…</div>}
-                {tryout.error && <div className="text-fs-body text-red-400">❌ {tryout.error}</div>}
+                {tryout.error && <div className="text-fs-body text-fail">❌ {tryout.error}</div>}
                 {tryout.result && <SqlResultTable rows={tryout.result.rows} row_count={tryout.result.row_count} truncated={tryout.result.truncated} />}
                 <button type="button" onClick={() => setTryout(null)} className="text-fs-aux text-gray-500 hover:text-gray-300 mt-1">关闭</button>
               </div>

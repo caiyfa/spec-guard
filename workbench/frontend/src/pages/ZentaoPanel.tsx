@@ -20,7 +20,7 @@ const STATUS_COLOR: Record<string, string> = {
   pending: 'text-yellow-400',
   running: 'text-blue-400',
   succeeded: 'text-green-400',
-  failed: 'text-red-400',
+  failed: 'text-fail',
   rolled_back: 'text-gray-400',
   draft: 'text-yellow-400',
   created: 'text-green-400',
@@ -173,7 +173,7 @@ export default function ZentaoPanel() {
   const label = 'block text-fs-body text-gray-400 mb-1';
   const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-lead text-gray-200 outline-none focus:border-info';
   const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const btnDanger = 'px-3 py-1.5 rounded text-fs-body font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40';
+  const btnDanger = 'px-3 py-1.5 rounded text-fs-body font-medium bg-fail/12 text-fail hover:bg-fail/20 disabled:opacity-40';
   const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
   const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
 
@@ -185,7 +185,7 @@ export default function ZentaoPanel() {
           写动作需 product/tester 角色 · 创建故事仅 product · Agent 产出草案需人确认
         </div>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
       {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       {/* ── 区① 冻结 delta 交付 ── */}

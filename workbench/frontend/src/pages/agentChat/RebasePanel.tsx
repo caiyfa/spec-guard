@@ -68,11 +68,11 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
   const remaining = status.conflicts.length;
 
   return (
-    <div className="rounded-lg border border-red-800/50 bg-red-900/10 p-2 space-y-2">
+    <div className="rounded-lg border border-red-800/50 bg-fail/12 p-2 space-y-2">
       <div className="flex items-center gap-1.5">
-        <span className="text-fs-body font-medium text-red-300 flex-1">⚠️ rebase 中断（onto {status.onto || '?'}）</span>
+        <span className="text-fs-body font-medium text-fail flex-1">⚠️ rebase 中断（onto {status.onto || '?'}）</span>
         <button onClick={handleAbort} disabled={!!busy}
-          className="px-2 py-1 rounded text-fs-aux text-gray-400 hover:text-red-300 border border-border disabled:opacity-40">
+          className="px-2 py-1 rounded text-fs-aux text-gray-400 hover:text-fail border border-border disabled:opacity-40">
           {busy === 'abort' ? '处理中…' : '↩️ 放弃 rebase'}
         </button>
       </div>
@@ -127,7 +127,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
       )}
 
       {msg && (
-        <div className={`text-fs-aux rounded px-1.5 py-1 ${msg.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+        <div className={`text-fs-aux rounded px-1.5 py-1 ${msg.ok ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'}`}>
           {msg.text}
         </div>
       )}

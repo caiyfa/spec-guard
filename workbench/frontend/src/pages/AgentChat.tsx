@@ -1387,7 +1387,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               <CopyButton text={stripRefBlock(item.content || '')} className="text-fs-aux text-info/40 hover:text-info" />
               {item.msgIdx !== undefined && (
                 <button onClick={() => handleRetract(item.msgIdx!)}
-                  className="text-fs-aux text-gray-500 hover:text-red-400"
+                  className="text-fs-aux text-gray-500 hover:text-fail"
                   title="撤回该消息及后续内容">
                   撤回
                 </button>
@@ -1479,7 +1479,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
               {sessCollapsed ? '»' : '«'} 会话
             </button>
-            <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>
+            <span className={wsState === 'open' ? 'text-green-500' : 'text-fail'}>
               {wsState === 'open' ? '●' : '○'}
             </span>
             {pickedPurpose && (() => {
@@ -1587,8 +1587,8 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                 </div>
               )}
               {error && (
-                <div className="bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
-                  <span className="text-red-400 text-fs-lead">❌ {error}</span>
+                <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-2">
+                  <span className="text-fail text-fs-lead">❌ {error}</span>
                 </div>
               )}
               {notice && (

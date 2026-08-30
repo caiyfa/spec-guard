@@ -141,7 +141,7 @@ export default function ScoreFreezePanel() {
         <h1 className="text-fs-title font-bold">⭐ 评分与冻结</h1>
         <div className="text-fs-body text-gray-500">评分确认/闸①确认/冻结需 product 角色 · 三闸全过才可冻结</div>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
       {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       {/* ── 五维评分 ── */}
@@ -194,7 +194,7 @@ export default function ScoreFreezePanel() {
                       {s.status === 'suggested' && (
                         <>
                           <button className={btn} onClick={() => handleConfirmScore(s, 'confirm')}>确认</button>
-                          <button className="px-3 py-1.5 rounded text-fs-body font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                          <button className="px-3 py-1.5 rounded text-fs-body font-medium bg-fail/12 text-fail hover:bg-fail/20"
                                   onClick={() => handleConfirmScore(s, 'reject')}>驳回</button>
                         </>
                       )}
@@ -232,11 +232,11 @@ export default function ScoreFreezePanel() {
             {Object.entries(gates).map(([key, g]) => (
               <div key={key} className="border border-border/60 rounded p-3">
                 <div className="text-fs-body font-medium mb-1">{GATE_LABEL[key] || key}</div>
-                <div className={`text-fs-lead font-bold ${g.status === 'pass' ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-fs-lead font-bold ${g.status === 'pass' ? 'text-green-400' : 'text-fail'}`}>
                   {g.status === 'pass' ? '✓ PASS' : '✗ ' + (g.status || 'FAIL')}
                 </div>
                 {g.errors && g.errors.length > 0 && (
-                  <div className="text-fs-body text-red-400 mt-1">{g.errors.join('；')}</div>
+                  <div className="text-fs-body text-fail mt-1">{g.errors.join('；')}</div>
                 )}
                 {g.findings && g.findings.length > 0 && (
                   <div className="text-fs-body text-yellow-400 mt-1 max-h-20 overflow-auto">

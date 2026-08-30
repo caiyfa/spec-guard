@@ -15,9 +15,9 @@ const REASON_LABEL: Record<string, string> = {
 const GATE_BADGE: Record<string, { label: string; cls: string }> = {
   approved: { label: '① 已评审', cls: 'bg-green-900/40 text-green-400' },
   pending: { label: '① 待评审', cls: 'bg-yellow-900/40 text-yellow-400' },
-  rejected: { label: '① 已驳回', cls: 'bg-red-900/40 text-red-400' },
+  rejected: { label: '① 已驳回', cls: 'bg-fail/12 text-fail' },
   pass: { label: '② 校验✓', cls: 'bg-green-900/40 text-green-400' },
-  fail: { label: '② 校验✗', cls: 'bg-red-900/40 text-red-400' },
+  fail: { label: '② 校验✗', cls: 'bg-fail/12 text-fail' },
   blocked: { label: '③ 门禁⏸', cls: 'bg-surface-3 text-gray-500' },
 };
 
@@ -128,7 +128,7 @@ export default function CoveragePanel() {
       </div>
 
       {message && (
-        <div className={`px-3 py-2 rounded-lg text-fs-lead ${message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
+        <div className={`px-3 py-2 rounded-lg text-fs-lead ${message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-fail/12 text-fail border border-fail/35'}`}>
           {message.text}
         </div>
       )}
@@ -169,7 +169,7 @@ export default function CoveragePanel() {
           )}
 
           <div className="flex gap-3 flex-1 min-h-0">
-            {laneCard(gaps.lanes.gap, 'bg-red-900/50 text-red-400', '🔴 无覆盖')}
+            {laneCard(gaps.lanes.gap, 'bg-fail/12 text-fail', '🔴 无覆盖')}
             {laneCard(gaps.lanes.draft, 'bg-yellow-900/50 text-yellow-400', '🟡 草稿待审')}
             {laneCard(gaps.lanes.covered, 'bg-green-900/50 text-green-400', '🟢 已覆盖')}
           </div>

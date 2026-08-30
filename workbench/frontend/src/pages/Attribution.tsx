@@ -23,7 +23,7 @@ interface RunReport {
 }
 
 const KIND_LABEL: Record<string, { label: string; cls: string }> = {
-  product_defect: { label: '疑似产品缺陷', cls: 'bg-red-900/40 text-red-400' },
+  product_defect: { label: '疑似产品缺陷', cls: 'bg-fail/12 text-fail' },
   spec_question: { label: 'spec 质疑', cls: 'bg-yellow-900/40 text-yellow-400' },
   environment: { label: '环境问题', cls: 'bg-orange-900/40 text-orange-400' },
 };
@@ -97,7 +97,7 @@ export default function Attribution() {
 
   const categorize = (verdict: string) => {
     const categories: Record<string, { label: string; color: string }> = {
-      FAIL: { label: '场景缺陷', color: 'text-red-400' },
+      FAIL: { label: '场景缺陷', color: 'text-fail' },
       ERROR: { label: '环境异常', color: 'text-yellow-400' },
       BLOCKED: { label: '上游阻塞', color: 'text-orange-400' },
     };
@@ -197,8 +197,8 @@ export default function Attribution() {
       )}
 
       {error && (
-        <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3">
-          <span className="text-red-400 text-fs-lead">❌ {error}</span>
+        <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3">
+          <span className="text-fail text-fs-lead">❌ {error}</span>
         </div>
       )}
 
@@ -207,7 +207,7 @@ export default function Attribution() {
         <div className="flex-1 overflow-y-auto space-y-3">
           {/* T-063：建档消息 */}
           {spqMessage && (
-            <div className={`px-3 py-2 rounded-lg text-fs-lead ${spqMessage.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-red-900/30 text-red-400 border border-red-700/50'}`}>
+            <div className={`px-3 py-2 rounded-lg text-fs-lead ${spqMessage.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50' : 'bg-fail/12 text-fail border border-fail/35'}`}>
               {spqMessage.text}
             </div>
           )}
@@ -219,7 +219,7 @@ export default function Attribution() {
             </div>
             <div className="flex gap-4 text-fs-body">
               <span className="text-gray-400">总场景: {report.total_cases}</span>
-              <span className="text-red-400">失败: {report.failed_cases.length}</span>
+              <span className="text-fail">失败: {report.failed_cases.length}</span>
             </div>
           </div>
 
@@ -248,7 +248,7 @@ export default function Attribution() {
                     </div>
                   </div>
                   {fc.error && (
-                    <div className="bg-red-900/20 rounded p-2 mb-2 text-fs-body text-red-300 font-mono">
+                    <div className="bg-fail/12 rounded p-2 mb-2 text-fs-body text-fail font-mono">
                       {fc.error}
                     </div>
                   )}
@@ -256,7 +256,7 @@ export default function Attribution() {
                     <div className="space-y-1">
                       {fc.assertions.map((a: any, j: number) => (
                         <div key={j} className="text-fs-body text-gray-400 flex items-start gap-2">
-                          <span className={a.passed ? 'text-green-500' : 'text-red-500'}>
+                          <span className={a.passed ? 'text-green-500' : 'text-fail'}>
                             {a.passed ? '✓' : '✗'}
                           </span>
                           <span className="flex-1">{a.type || a.assertion || 'assert'}: {a.detail || a.message || JSON.stringify(a).slice(0, 200)}</span>

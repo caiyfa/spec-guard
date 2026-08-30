@@ -81,7 +81,7 @@ export default function DirectoryPicker({ open, title = '选择目录', onSelect
         </div>
 
         {error && (
-          <div className="mb-2 text-fs-body text-red-400 bg-red-900/30 border border-red-700/40 rounded px-2 py-1.5">{error}</div>
+          <div className="mb-2 text-fs-body text-fail bg-fail/12 border border-fail/35/40 rounded px-2 py-1.5">{error}</div>
         )}
 
         {/* 目录列表 */}

@@ -71,7 +71,7 @@ export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, 
         {row.covers_detail.length === 0 ? <span className="text-fs-body text-gray-600">—</span> : row.covers_detail.map(c => (
           <span key={c.fr}
             title={c.valid ? `${c.fr}：${c.title || '（无标题）'}${c.module ? `（${c.module}）` : ''}` : `${c.fr}：当前工作区锚点表查不到`}
-            className={`px-1.5 py-0.5 rounded text-fs-body ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
+            className={`px-1.5 py-0.5 rounded text-fs-body ${c.valid ? 'bg-surface-3' : 'bg-fail/12 text-fail'}`}>
             {c.fr}{!c.valid && ' ⚠'}
           </span>
         ))}
@@ -103,7 +103,7 @@ export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, 
 
       {/* 三态：错误 / 加载中 / 编辑器 */}
       {error && (
-        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
+        <div className="mb-3 p-3 rounded-lg bg-fail/12 text-fail border border-fail/35 text-fs-lead">
           ❌ 加载用例失败：{error}
         </div>
       )}

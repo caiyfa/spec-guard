@@ -116,7 +116,7 @@ export default function LineageStory() {
         {loading && <span className="text-fs-body text-gray-500">追溯中…</span>}
       </div>
 
-      {error && <div className="text-fs-body text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>}
+      {error && <div className="text-fs-body text-fail bg-fail/12 px-3 py-2 rounded">{error}</div>}
 
       {/* 四阶段分带 */}
       {trace && (
@@ -205,8 +205,8 @@ export default function LineageStory() {
             {checkResult.warnings.length > 0 && (
               <div className="mt-2 space-y-1">
                 {checkResult.warnings.map((w, i) => (
-                  <div key={i} className="flex items-start gap-2 text-fs-body bg-red-900/10 border border-red-500/20 rounded px-2 py-1">
-                    <span className="text-red-300 font-mono whitespace-nowrap">{w.rule}</span>
+                  <div key={i} className="flex items-start gap-2 text-fs-body bg-fail/12 border border-fail/35/20 rounded px-2 py-1">
+                    <span className="text-fail font-mono whitespace-nowrap">{w.rule}</span>
                     <span className="text-gray-300 font-mono whitespace-nowrap">{w.node}</span>
                     <span className="text-gray-500">{w.message}</span>
                   </div>

@@ -33,7 +33,7 @@ const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
 
 // T-991：优先级徽标（初值信号推导，人工可改）
 const PRIORITY_BADGE: Record<string, { label: string; cls: string }> = {
-  high: { label: '高优', cls: 'text-red-400' },
+  high: { label: '高优', cls: 'text-fail' },
   normal: { label: '中', cls: 'text-gray-500' },
   low: { label: '低', cls: 'text-gray-600' },
 };
@@ -201,7 +201,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
           {t.last_edited_by?.name ? ` · 最后编辑：${t.last_edited_by.name}` : ''}
         </div>
       )}
-      {err && <div className="text-fs-aux text-red-400 mt-1">{err}</div>}
+      {err && <div className="text-fs-aux text-fail mt-1">{err}</div>}
       {onLocate && (
         <div className="flex items-center gap-2 mt-1 text-fs-aux">
           <button className={`${selected ? 'text-info underline' : 'text-info hover:underline'}`}
@@ -231,7 +231,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
             </button>
           )}
           {status !== 'rejected' && (
-            <button className="text-red-400 hover:underline" onClick={() => flip('reject')}
+            <button className="text-fail hover:underline" onClick={() => flip('reject')}
               disabled={busy === 'reject'}>
               {busy === 'reject' ? '…' : '✕ 拒绝'}
             </button>

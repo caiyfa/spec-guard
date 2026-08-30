@@ -300,13 +300,13 @@ export default function Drafts() {
                 {/* T-061：三闸状态徽章 */}
                 {d.gates && (
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : d.gates.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : d.gates.g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-yellow-900/40 text-yellow-400'}`}>
                       ① {d.gates.g1 === 'approved' ? '已评审' : d.gates.g1 === 'rejected' ? '已驳回' : '待评审'}
                     </span>
-                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
                       ② {d.gates.g2 === 'pass' ? '校验✓' : d.gates.g2 === 'fail' ? '校验✗' : '待校验'}
                     </span>
-                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g3 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g3 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
                       ③ {d.gates.g3 === 'pass' ? '门禁✓' : d.gates.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
                     </span>
                     {d.source_delta && (
@@ -351,11 +351,11 @@ export default function Drafts() {
         {message && (
           <div className={`mb-3 px-3 py-2 rounded-lg text-fs-lead ${
             message.ok ? 'bg-green-900/30 text-green-400 border border-green-700/50'
-                       : 'bg-red-900/30 text-red-400 border border-red-700/50'
+                       : 'bg-fail/12 text-fail border border-fail/35'
           }`}>{message.text}</div>
         )}
         {error && (
-          <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">
+          <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-fail/12 text-fail border border-fail/35">
             ❌ {error}
           </div>
         )}
@@ -370,13 +370,13 @@ export default function Drafts() {
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               {/* T-061：三闸状态卡（write 自动跑② → 人评审① → promote 跑③） */}
               <div className="flex items-center gap-1 px-2 py-1 rounded bg-surface-2 border border-border text-fs-aux">
-                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-yellow-900/40 text-yellow-400'}`}>
                   ① {selectedDraft?.gates?.g1 === 'approved' ? '已评审' : selectedDraft?.gates?.g1 === 'rejected' ? '已驳回' : '待评审'}
                 </span>
-                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
                   ② {selectedDraft?.gates?.g2 === 'pass' ? '校验✓' : selectedDraft?.gates?.g2 === 'fail' ? '校验✗' : '待校验'}
                 </span>
-                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g3 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                <span className={`px-1 py-0.5 rounded ${selectedDraft?.gates?.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : selectedDraft?.gates?.g3 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-500'}`}>
                   ③ {selectedDraft?.gates?.g3 === 'pass' ? '门禁✓' : selectedDraft?.gates?.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
                 </span>
               </div>
@@ -399,7 +399,7 @@ export default function Drafts() {
               <button
                 onClick={() => handleReview('rejected')}
                 disabled={busy !== ''}
-                className="px-3 py-1.5 bg-red-900/30 text-red-400 rounded text-fs-lead hover:bg-red-900/50 disabled:opacity-40"
+                className="px-3 py-1.5 bg-fail/12 text-fail rounded text-fs-lead hover:bg-fail/12 disabled:opacity-40"
               >
                 驳回
               </button>
@@ -454,7 +454,7 @@ export default function Drafts() {
               <button
                 onClick={handleDiscard}
                 disabled={busy !== ''}
-                className="px-3 py-1.5 bg-red-900/40 text-red-400 rounded text-fs-lead hover:bg-red-900/60 disabled:opacity-40"
+                className="px-3 py-1.5 bg-fail/12 text-fail rounded text-fs-lead hover:bg-fail/12 disabled:opacity-40"
               >
                 废弃
               </button>
@@ -518,9 +518,9 @@ export default function Drafts() {
             {/* K-046：试跑结果 */}
             {trialResult && (
               <div className={`mb-3 px-3 py-2 rounded-lg border text-fs-lead ${
-                trialResult.ok ? 'border-green-700/50 bg-green-900/20' : 'border-red-700/50 bg-red-900/20'
+                trialResult.ok ? 'border-green-700/50 bg-green-900/20' : 'border-fail/35 bg-fail/12'
               }`}>
-                <div className={`flex items-start gap-1 ${trialResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`flex items-start gap-1 ${trialResult.ok ? 'text-green-400' : 'text-fail'}`}>
                   <span className="flex-1 break-all">
                     {trialResult.ok ? `✓ 试跑通过（${trialResult.env || 'sit'}）`
                       : `✗ 试跑 ${trialResult.verdict || '失败'}${trialResult.error ? `：${trialResult.error}` : ''}`}
@@ -531,7 +531,7 @@ export default function Drafts() {
                       className={`px-2 py-0.5 rounded text-fs-body border flex-shrink-0 ${
                         trialResult.ok
                           ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
-                          : 'bg-red-900/40 text-red-400 border-red-700/50 hover:bg-red-900/60'
+                          : 'bg-fail/12 text-fail border-fail/35 hover:bg-fail/12'
                       }`}>
                       🔍 查看结果
                     </button>
@@ -548,7 +548,7 @@ export default function Drafts() {
                           {r.verdict}
                         </span>
                         <span className="ml-2 font-mono text-gray-300">{r.scenario_id}</span>
-                        {r.error && <span className="ml-2 text-red-400/80">{r.error}</span>}
+                        {r.error && <span className="ml-2 text-fail/80">{r.error}</span>}
                         {r.reason && <span className="ml-2 text-gray-500">{r.reason}</span>}
                       </li>
                     ))}
@@ -568,16 +568,16 @@ export default function Drafts() {
             {/* 校验报告 */}
             {report && (
               <div className={`mb-3 px-3 py-2 rounded-lg border text-fs-lead ${
-                report.verdict === 'PASS' ? 'border-green-700/50 bg-green-900/20' : 'border-red-700/50 bg-red-900/20'
+                report.verdict === 'PASS' ? 'border-green-700/50 bg-green-900/20' : 'border-fail/35 bg-fail/12'
               }`}>
-                <div className={report.verdict === 'PASS' ? 'text-green-400' : 'text-red-400'}>
+                <div className={report.verdict === 'PASS' ? 'text-green-400' : 'text-fail'}>
                   {report.verdict === 'PASS' ? '✓ 格式校验通过' : '✗ 格式校验未通过'}
                   {report.summary && `（ERROR ${report.summary.error} / WARN ${report.summary.warn}）`}
                 </div>
                 {report.findings.length > 0 && (
                   <ul className="mt-1.5 space-y-1">
                     {report.findings.map((f, i) => (
-                      <li key={i} className={`text-fs-body ${f.level === 'ERROR' ? 'text-red-400' : 'text-yellow-500'}`}>
+                      <li key={i} className={`text-fs-body ${f.level === 'ERROR' ? 'text-fail' : 'text-yellow-500'}`}>
                         [{f.level}/{f.rule}] {f.message}{f.hint ? `（${f.hint}）` : ''}
                       </li>
                     ))}

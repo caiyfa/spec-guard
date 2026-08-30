@@ -8,7 +8,7 @@ export const GRADE_CLS: Record<QualityGrade, string> = {
   deep: 'bg-green-900/40 text-green-400',
   medium: 'bg-blue-900/40 text-blue-400',
   shallow: 'bg-yellow-900/40 text-yellow-400',
-  'no-verify': 'bg-red-900/40 text-red-400',
+  'no-verify': 'bg-fail/12 text-fail',
 };
 export const ISSUE_LABEL: Record<string, string> = {
   'missing-covers': '缺关联需求', 'invalid-covers': '需求锚点失效',
@@ -16,10 +16,10 @@ export const ISSUE_LABEL: Record<string, string> = {
 };
 export const ISSUE_CLS: Record<string, string> = {
   'missing-covers': 'bg-yellow-900/40 text-yellow-400',
-  'invalid-covers': 'bg-red-900/40 text-red-400',
+  'invalid-covers': 'bg-fail/12 text-fail',
   shallow: 'bg-yellow-900/40 text-yellow-400',
-  'no-verify': 'bg-red-900/40 text-red-400',
-  probe: 'bg-red-900/40 text-red-400',
+  'no-verify': 'bg-fail/12 text-fail',
+  probe: 'bg-fail/12 text-fail',
 };
 // 断言证据：后端从断言内容确定性提取的特征（评级的输入），此处翻译为人话
 export const EVIDENCE_LABEL: Record<string, string> = {

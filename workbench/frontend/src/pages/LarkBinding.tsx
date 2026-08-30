@@ -126,7 +126,7 @@ export default function LarkBinding() {
               </div>
             </div>
             <button onClick={handleLogout}
-              className="mt-4 px-3 py-1.5 text-fs-body bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
+              className="mt-4 px-3 py-1.5 text-fs-body bg-fail/12 text-fail rounded hover:bg-fail/12 transition-colors">
               解绑
             </button>
           </div>
@@ -188,10 +188,10 @@ export default function LarkBinding() {
         {state === 'error' && (
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="font-medium text-red-400">出错</span>
+              <span className="w-2 h-2 rounded-full bg-fail" />
+              <span className="font-medium text-fail">出错</span>
             </div>
-            <p className="text-fs-lead text-red-400 mb-3">{error}</p>
+            <p className="text-fs-lead text-fail mb-3">{error}</p>
             <button onClick={loadStatus}
               className="px-3 py-1.5 text-fs-body bg-surface-1 rounded hover:bg-surface-3 transition-colors">
               重试

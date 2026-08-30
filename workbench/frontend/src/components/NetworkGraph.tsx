@@ -71,7 +71,7 @@ export default function NetworkGraph() {
   const selNode = data?.nodes.find(n => n.id === selected);
 
   if (error) {
-    return <div className="text-fs-body text-red-400 bg-red-900/20 px-3 py-2 rounded">网状视图加载失败：{error}</div>;
+    return <div className="text-fs-body text-fail bg-fail/12 px-3 py-2 rounded">网状视图加载失败：{error}</div>;
   }
   if (!data || !positions) {
     return <div className="text-fs-body text-gray-500 px-3 py-6 text-center">力导向布局计算中…</div>;

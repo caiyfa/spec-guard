@@ -190,7 +190,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
     <Modal open onClose={onClose} width={620} title={`试跑 ${scenarioId} · 执行准备`}>
       {/* covers 前置闸预警（全库级，服务端判定；不满足时不必点开始才知道失败） */}
       {coversBlocked && (
-        <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
+        <div className="mb-3 p-3 rounded-lg bg-fail/12 text-fail border border-fail/35 text-fs-lead">
           <div>⛔ covers 前置闸将拦截本次触发：当前用例库有 <b>{invalidCoversCount}</b> 个用例的需求锚点
             在当前工作区查不到（全库级校验，任一失效即拦截所有触发）。</div>
           <div className="mt-1 text-fs-body">
@@ -396,7 +396,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
 
       {/* 触发与进度 */}
       {triggerError && (
-        <div className="mb-3 p-2.5 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
+        <div className="mb-3 p-2.5 rounded-lg bg-fail/12 text-fail border border-fail/35 text-fs-lead">
           ❌ 试跑触发失败：{triggerError}
         </div>
       )}

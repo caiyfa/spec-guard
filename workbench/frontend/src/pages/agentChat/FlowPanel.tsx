@@ -17,7 +17,7 @@ const VIEW_KEY = 'sg_flow_view';
 const STATUS_META: Record<string, { dot: string; text: string; cn: string }> = {
   in_order: { dot: 'bg-green-500', text: 'text-green-400', cn: '顺序正确' },
   out_of_order: { dot: 'bg-yellow-500', text: 'text-yellow-400', cn: '乱序' },
-  missing: { dot: 'bg-red-500', text: 'text-red-400', cn: '缺失' },
+  missing: { dot: 'bg-fail', text: 'text-fail', cn: '缺失' },
   skipped: { dot: 'bg-gray-600', text: 'text-gray-500', cn: '跳过' },
 };
 
@@ -107,7 +107,7 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
   }
   if (failed && !trace) {
     return (
-      <div className="text-fs-body text-red-400 px-3 py-4">
+      <div className="text-fs-body text-fail px-3 py-4">
         路径重放失败：{failed} <button className="underline ml-1" onClick={() => load()}>重试</button>
       </div>
     );

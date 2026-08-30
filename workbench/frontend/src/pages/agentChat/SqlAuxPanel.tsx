@@ -310,7 +310,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
   return (
     <div className="flex flex-col h-full text-fs-body">
       <div className="flex items-center gap-2 py-1 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
-        <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>{wsState === 'open' ? '●' : '○'}</span>
+        <span className={wsState === 'open' ? 'text-green-500' : 'text-fail'}>{wsState === 'open' ? '●' : '○'}</span>
         <span className="whitespace-nowrap">辅助助手（辅助会话）</span>
         {auxSid && <span className="font-mono text-gray-600 truncate flex-1" title={auxSid}>{auxSid}</span>}
         {models.length > 0 && (
@@ -353,7 +353,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
         {grouped.map(renderGrouped)}
         {loading && <div className="text-gray-500 animate-pulse">辅助助手思考中…</div>}
         {auxError && (
-          <div className="text-red-400 text-fs-body">❌ {auxError}</div>
+          <div className="text-fail text-fs-body">❌ {auxError}</div>
         )}
         <div ref={scrollRef} />
       </div>

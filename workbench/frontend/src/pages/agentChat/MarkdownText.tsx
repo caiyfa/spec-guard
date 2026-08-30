@@ -27,7 +27,7 @@ function PreBlock({ children }: { children?: ReactNode }) {
         </div>
       );
     } catch {
-      return <pre className="text-fs-body bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-red-400 whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
+      return <pre className="text-fs-body bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-fail whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
     }
   }
   // GateDock 三期：```gate-exec 围栏 → 代执行确认卡（白名单硬编码，人确认才执行）

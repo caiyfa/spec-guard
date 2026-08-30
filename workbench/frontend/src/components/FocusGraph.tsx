@@ -98,7 +98,7 @@ export default function FocusGraph({ nodeId, depth = 2, height = 360 }: Props) {
     return <div className="text-fs-body text-gray-500 p-2">未选择焦点节点</div>;
   }
   if (error) {
-    return <div className="text-fs-body text-red-400 p-2">子图加载失败：{error}</div>;
+    return <div className="text-fs-body text-fail p-2">子图加载失败：{error}</div>;
   }
   if (!data) {
     return <div className="text-fs-body text-gray-500 p-2">加载中…</div>;

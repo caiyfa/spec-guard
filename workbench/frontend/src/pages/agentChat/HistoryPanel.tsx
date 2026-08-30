@@ -140,7 +140,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
                   {c.files.map((f, i) => (
                     <div key={i} className="text-fs-aux font-mono text-gray-500 flex items-center gap-1">
                       <span className={
-                        f.status === 'A' ? 'text-green-400' : f.status === 'D' ? 'text-red-400' : 'text-yellow-400'
+                        f.status === 'A' ? 'text-green-400' : f.status === 'D' ? 'text-fail' : 'text-yellow-400'
                       }>{f.status}</span>
                       <span className="truncate">{f.path}</span>
                     </div>
@@ -159,7 +159,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
       )}
 
       {pushResult && (
-        <div className={`text-fs-aux rounded px-1.5 py-1 ${pushResult.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'}`}>
+        <div className={`text-fs-aux rounded px-1.5 py-1 ${pushResult.ok ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'}`}>
           {pushResult.ok ? '✅ ' : '❌ '}{pushResult.msg}
         </div>
       )}
@@ -181,7 +181,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
               <Field label="token (HTTPS PAT) *" value={dlgToken} onChange={setDlgToken}
                 placeholder="ghp_xxx..." type="password" />
             </div>
-            {dlgError && <div className="text-fs-body text-red-400 mb-2">❌ {dlgError}</div>}
+            {dlgError && <div className="text-fs-body text-fail mb-2">❌ {dlgError}</div>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowTokenDialog(false)} disabled={saving}
                 className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-fs-lead disabled:opacity-40">取消</button>

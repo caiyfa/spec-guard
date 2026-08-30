@@ -164,7 +164,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
           <button className="ml-auto text-gray-500 hover:text-gray-300"
             onClick={onClose}>✕</button>
         </div>
-        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{err}</div>}
+        {err && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{err}</div>}
         <div className="flex gap-3" style={{ height: 'min(70vh, 640px)' }}>
           {/* 左栏：原文消息（勾选=关联；展示话题覆盖日的全部消息，不限原 window） */}
           <div className="w-[52%] shrink-0 flex flex-col border border-border rounded bg-surface-3">
@@ -179,7 +179,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
                       setSelIds(new Set((messages || []).map(m => m.message_id))); }}>
                     全选
                   </button>
-                  <button className="text-gray-500 hover:text-red-400"
+                  <button className="text-gray-500 hover:text-fail"
                     onClick={() => { setSelTouched(true); setSelIds(new Set()); }}>
                     清空
                   </button>

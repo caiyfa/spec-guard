@@ -194,7 +194,7 @@ function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
   const pass = outcome.verdict === 'PASS';
   return (
     <div className={`flex-shrink-0 mx-2 my-1 text-fs-aux rounded px-2 py-1 ${
-      !outcome.ok ? 'bg-red-900/20 text-red-400'
+      !outcome.ok ? 'bg-fail/12 text-fail'
         : pass ? 'bg-green-900/20 text-green-400' : 'bg-yellow-900/20 text-yellow-500'
     }`}>
       <div className="font-medium">
@@ -202,7 +202,7 @@ function SaveOutcomeBanner({ outcome }: { outcome: EditSaveOutcome }) {
         {outcome.message && <span className="font-normal opacity-80"> — {outcome.message}</span>}
       </div>
       {(outcome.findings || []).slice(0, 4).map((f) => (
-        <div key={`${f.rule}:${f.message}`} className={f.level === 'ERROR' ? 'text-red-400' : 'opacity-70'}>
+        <div key={`${f.rule}:${f.message}`} className={f.level === 'ERROR' ? 'text-fail' : 'opacity-70'}>
           [{f.rule}] {f.message}
         </div>
       ))}

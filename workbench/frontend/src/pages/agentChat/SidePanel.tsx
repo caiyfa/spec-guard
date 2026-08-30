@@ -143,7 +143,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
       {closable && (
         <span
           onClick={(e) => { e.stopPropagation(); onCloseTab(path); }}
-          className="text-gray-600 hover:text-red-400 ml-0.5"
+          className="text-gray-600 hover:text-fail ml-0.5"
         >✕</span>
       )}
     </button>

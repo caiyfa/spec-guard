@@ -15,7 +15,7 @@ const STATUS_COLOR: Record<string, string> = {
   parsed: 'text-green-400',
   indexed: 'text-green-400',
   packed: 'text-emerald-400',
-  failed: 'text-red-400',
+  failed: 'text-fail',
 };
 
 export default function MaterialsPanel() {
@@ -107,7 +107,7 @@ export default function MaterialsPanel() {
         <h1 className="text-fs-title font-bold">📚 材料管理</h1>
         <div className="text-fs-body text-gray-500">候选确认/入包需 product 角色 · 解析失败可查看 parse_error</div>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
       {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       <div className={card}>
@@ -157,7 +157,7 @@ export default function MaterialsPanel() {
                   <td className={td}>{m.fmt}</td>
                   <td className={`${td} ${STATUS_COLOR[m.status] || ''}`}>
                     {m.status}
-                    {m.parse_error && <div className="text-fs-body text-red-400">{m.parse_error}</div>}
+                    {m.parse_error && <div className="text-fs-body text-fail">{m.parse_error}</div>}
                   </td>
                   <td className={td}><code className="text-fs-body">{m.sha256_12}</code></td>
                   <td className={td}>

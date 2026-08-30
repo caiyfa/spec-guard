@@ -64,8 +64,8 @@ interface RunDoc {
 
 const VERDICT_BADGE: Record<string, string> = {
   PASS: 'bg-green-900/40 text-green-400',
-  FAIL: 'bg-red-900/40 text-red-400',
-  ERROR: 'bg-red-900/40 text-red-400',
+  FAIL: 'bg-fail/12 text-fail',
+  ERROR: 'bg-fail/12 text-fail',
   BLOCKED: 'bg-orange-900/40 text-orange-400',
   SKIP: 'bg-yellow-900/40 text-yellow-400',
   DRIFT: 'bg-yellow-900/40 text-yellow-400',
@@ -107,7 +107,7 @@ function StepItem({ index, s }: { index: number; s: CaseStep }) {
         <span className="flex-shrink-0" title={typeLabel}>{icon}</span>
         <span className="font-mono text-gray-200 flex-1 min-w-0 break-all">{desc}</span>
         {!!status && (
-          <span className={`font-mono flex-shrink-0 ${statusOk ? 'text-green-400' : 'text-red-400'}`}>{status}</span>
+          <span className={`font-mono flex-shrink-0 ${statusOk ? 'text-green-400' : 'text-fail'}`}>{status}</span>
         )}
         {!!s.duration_ms && <span className="text-gray-600 flex-shrink-0">{s.duration_ms}ms</span>}
       </div>
@@ -175,13 +175,13 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
         <div className="border-t border-border/60 px-2.5 py-2 space-y-2.5">
           {/* 失败/跳过分析（FAIL 归类 + 原因；SKIP 原因） */}
           {detail?.failure?.message && (
-            <div className="rounded bg-red-900/20 border border-red-800/40 px-2 py-1.5 text-fs-body">
-              <div className="text-red-400">
-                <span className="font-mono text-fs-micro px-1 py-0.5 rounded bg-red-900/50 mr-1">{detail.failure.category || 'fail'}</span>
+            <div className="rounded bg-fail/12 border border-red-800/40 px-2 py-1.5 text-fs-body">
+              <div className="text-fail">
+                <span className="font-mono text-fs-micro px-1 py-0.5 rounded bg-fail/12 mr-1">{detail.failure.category || 'fail'}</span>
                 {detail.failure.message}
               </div>
               {detail.failure.evidence != null && (
-                <pre className="mt-1 px-2 py-1 rounded text-fs-aux font-mono text-red-300/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto"
+                <pre className="mt-1 px-2 py-1 rounded text-fs-aux font-mono text-fail/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto"
                   style={{ background: 'rgb(var(--code-bg))' }}>{pretty(detail.failure.evidence)}</pre>
               )}
             </div>
@@ -261,7 +261,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
               <div className="space-y-0.5">
                 {assertions.map((a, i) => (
                   <div key={i} className="text-fs-body flex items-start gap-1.5">
-                    <span className={a.passed ? 'text-green-400' : 'text-red-400'}>{a.passed ? '✓' : '✗'}</span>
+                    <span className={a.passed ? 'text-green-400' : 'text-fail'}>{a.passed ? '✓' : '✗'}</span>
                     <span className="flex-1 min-w-0">
                       <span className="text-gray-300 break-all">{a.expr || 'assert'}</span>
                       {!a.passed && (a.expected != null || a.actual != null) && (
@@ -269,7 +269,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
                           {' '}期望 {pretty(a.expected)} · 实际 {pretty(a.actual)}
                         </span>
                       )}
-                      {a.message && <span className="text-red-400/80">（{a.message}）</span>}
+                      {a.message && <span className="text-fail/80">（{a.message}）</span>}
                       {!!(a.warnings || []).length && <span className="text-yellow-500/80"> ⚠️ {pretty(a.warnings)}</span>}
                     </span>
                   </div>
@@ -340,7 +340,7 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
       <div className="p-3 space-y-3 text-fs-lead">
         {/* 概要 */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`px-2 py-1 rounded text-fs-body font-medium ${pass ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
+          <span className={`px-2 py-1 rounded text-fs-body font-medium ${pass ? 'bg-green-900/40 text-green-400' : 'bg-fail/12 text-fail'}`}>
             {pass ? '✓ 试跑通过' : `✗ 试跑${trial.verdict && trial.verdict !== 'FAIL' ? trial.verdict : '失败'}`}
           </span>
           {runId && <span className="font-mono text-fs-body text-gray-400 select-all">{runId}</span>}
@@ -351,19 +351,19 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
         {stats && (
           <div className="flex gap-3 text-fs-body">
             <span className="text-green-400">✓ {stats.pass ?? 0}</span>
-            {!!stats.fail && <span className="text-red-400">✗ {stats.fail}</span>}
+            {!!stats.fail && <span className="text-fail">✗ {stats.fail}</span>}
             {!!stats.skip && <span className="text-yellow-400">⊘ {stats.skip}</span>}
             {!!stats.blocked && <span className="text-orange-400">⊗ {stats.blocked}</span>}
             <span className="text-gray-600">/ {stats.total ?? 0} 条记录（含上游准备）</span>
           </div>
         )}
         {!pass && trial.error && (
-          <div className="rounded bg-red-900/20 border border-red-800/40 px-2.5 py-2 text-fs-body text-red-400 break-all">
+          <div className="rounded bg-fail/12 border border-red-800/40 px-2.5 py-2 text-fs-body text-fail break-all">
             {trial.error}
           </div>
         )}
         {loadError && (
-          <div className="rounded bg-red-900/20 border border-red-800/40 px-2.5 py-2 text-fs-body text-red-400">
+          <div className="rounded bg-fail/12 border border-red-800/40 px-2.5 py-2 text-fs-body text-fail">
             报告读取失败：{loadError}（任务号 {runId} 可发给 Agent 排查）
           </div>
         )}

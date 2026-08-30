@@ -82,7 +82,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
         )}
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-2 text-red-400 text-fs-body flex-shrink-0" onClick={() => setError('')}>{error}</div>}
+      {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-2 text-fail text-fs-body flex-shrink-0" onClick={() => setError('')}>{error}</div>}
       {message && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-2 text-green-400 text-fs-body flex-shrink-0">{message}</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">

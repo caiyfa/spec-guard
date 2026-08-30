@@ -233,7 +233,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
         </button>
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-2 text-red-400 text-fs-body flex-shrink-0">{error}</div>}
+      {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-2 text-fail text-fs-body flex-shrink-0">{error}</div>}
       {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-2 text-green-400 text-fs-body flex-shrink-0">{success}</div>}
       {syncMsg && <div className="bg-info/10 border border-info/30 rounded p-2 mb-2 text-info text-fs-body flex-shrink-0">⟳ {syncMsg}</div>}
 
@@ -280,7 +280,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                     <button onClick={() => handleConformance(ws.name)} className="px-2 py-1 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2">校验</button>
                   )}
                   {isAdmin && (
-                    <button onClick={() => handleUnregister(ws.name)} className="px-2 py-1 text-fs-body bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">注销</button>
+                    <button onClick={() => handleUnregister(ws.name)} className="px-2 py-1 text-fs-body bg-fail/12 text-fail rounded hover:bg-fail/12">注销</button>
                   )}
                 </div>
               </div>
@@ -294,12 +294,12 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
           <div className="bg-surface-1 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-fs-body text-gray-500">合规校验报告</span>
-              <span className={`text-fs-body font-bold ${conformance.verdict === 'PASS' ? 'text-green-400' : 'text-red-400'}`}>{conformance.verdict}</span>
+              <span className={`text-fs-body font-bold ${conformance.verdict === 'PASS' ? 'text-green-400' : 'text-fail'}`}>{conformance.verdict}</span>
             </div>
             {conformance.findings && conformance.findings.length > 0 ? (
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {conformance.findings.map((f: any, i: number) => (
-                  <div key={i} className={`text-fs-body flex gap-2 ${f.level === 'ERROR' ? 'text-red-400' : f.level === 'WARN' ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  <div key={i} className={`text-fs-body flex gap-2 ${f.level === 'ERROR' ? 'text-fail' : f.level === 'WARN' ? 'text-yellow-400' : 'text-gray-500'}`}>
                     <span className="font-mono">[{f.level}]</span>
                     <span className="font-mono text-gray-600">{f.rule}</span>
                     <span className="flex-1">{f.message}</span>

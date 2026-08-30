@@ -152,7 +152,7 @@ export default function ScenarioQuality({ role }: Props) {
 
       {/* 三态：错误横幅 */}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
+        <div className="mb-4 p-3 rounded-lg bg-fail/12 text-fail border border-fail/35 text-fs-lead">
           ❌ 加载用例库失败：{error}
           <button onClick={() => refresh(true)} className="ml-3 underline">重试</button>
         </div>
@@ -333,7 +333,7 @@ export default function ScenarioQuality({ role }: Props) {
                                     title={c.valid
                                       ? `${c.fr}：${c.title || '（无标题）'}${c.module ? `（${c.module}）` : ''}`
                                       : `${c.fr}：当前工作区锚点表查不到（spec 世代/编号体系可能不匹配）`}
-                                    className={`px-1.5 py-0.5 rounded text-fs-body ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
+                                    className={`px-1.5 py-0.5 rounded text-fs-body ${c.valid ? 'bg-surface-3' : 'bg-fail/12 text-fail'}`}>
                                     {c.fr}{!c.valid && ' ⚠'}
                                   </span>
                                 ))}
@@ -372,7 +372,7 @@ export default function ScenarioQuality({ role }: Props) {
                 <button className="btn-ghost text-fs-body" onClick={() => loadShape(true)}>🔄 重扫</button>
               </div>
               {shapeError && (
-                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
+                <div className="mb-3 p-3 rounded-lg bg-fail/12 text-fail border border-fail/35 text-fs-lead">
                   ❌ 形状契约分析失败：{shapeError}
                   <button className="ml-3 underline" onClick={() => loadShape(true)}>重试</button>
                 </div>
@@ -396,7 +396,7 @@ export default function ScenarioQuality({ role }: Props) {
                       {shapeData.findings.map((f, i) => (
                         <tr key={i} className="border-b border-border/50">
                           <td className="px-3 py-2">
-                            <span className={`px-1.5 py-0.5 rounded text-fs-body ${f.level === 'WARN' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-400'}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-fs-body ${f.level === 'WARN' ? 'bg-fail/12 text-fail' : 'bg-surface-3 text-gray-400'}`}>
                               {f.level}
                             </span>
                           </td>
@@ -458,7 +458,7 @@ export default function ScenarioQuality({ role }: Props) {
                 读-读并行安全、沾写全局互斥（保守模型，produces/consumes 落地后按资源粒度细化）。
               </p>
               {parallelError && (
-                <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-fs-lead">
+                <div className="mb-3 p-3 rounded-lg bg-fail/12 text-fail border border-fail/35 text-fs-lead">
                   ❌ 并行安全分析失败：{parallelError}
                   <button className="ml-3 underline" onClick={() => loadParallel(true)}>重试</button>
                 </div>

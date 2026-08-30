@@ -82,7 +82,7 @@ export function DbConsole() {
       </div>
 
       {/* 三态分离：错误 / 结果 / 空态 */}
-      {error && <div className="text-fs-body text-red-400 bg-red-900/10 border border-red-700/20 rounded p-2">❌ {error}</div>}
+      {error && <div className="text-fs-body text-fail bg-fail/12 border border-fail/35/20 rounded p-2">❌ {error}</div>}
       {result && (
         <div className="space-y-1">
           <div className="text-fs-aux text-gray-500">{result.elapsed_ms}ms{result.truncated ? ' · 结果超上限已截断' : ''}</div>

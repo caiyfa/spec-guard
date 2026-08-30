@@ -30,7 +30,7 @@ const STATUS_ICONS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   done: 'text-gray-600 line-through',
   in_progress: 'text-yellow-400',
-  blocked: 'text-red-400',
+  blocked: 'text-fail',
   pending: 'text-gray-400',
 };
 

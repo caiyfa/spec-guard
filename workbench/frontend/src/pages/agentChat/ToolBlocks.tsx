@@ -20,7 +20,7 @@ function TruncText({ text, limit = 120, className = 'text-gray-400' }: { text: s
 /** 单个值渲染（标量/对象自适应） */
 function SmartValue({ value }: { value: any }) {
   if (value === null || value === undefined) return <span className="text-gray-600">null</span>;
-  if (typeof value === 'boolean') return <span className={value ? 'text-green-400' : 'text-red-400'}>{String(value)}</span>;
+  if (typeof value === 'boolean') return <span className={value ? 'text-green-400' : 'text-fail'}>{String(value)}</span>;
   if (typeof value === 'number') return <span className="text-yellow-300/80">{String(value)}</span>;
   if (typeof value === 'object') return <TruncText text={JSON.stringify(value, null, 0)} limit={150} />;
   return <TruncText text={String(value)} />;
@@ -65,7 +65,7 @@ function ResultView({ result }: { result: string }) {
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className={parsed.verdict === 'PASS' ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
+          <span className={parsed.verdict === 'PASS' ? 'text-green-400 font-medium' : 'text-fail font-medium'}>
             {parsed.verdict}
           </span>
           {parsed.scenario && <span className="text-gray-500">{parsed.scenario}</span>}
@@ -76,7 +76,7 @@ function ResultView({ result }: { result: string }) {
         {findings.length > 0 && (
           <div className="space-y-0.5">
             {findings.slice(0, 5).map((f: any, i: number) => (
-              <div key={i} className={f.level === 'ERROR' ? 'text-red-400' : 'text-gray-500'}>
+              <div key={i} className={f.level === 'ERROR' ? 'text-fail' : 'text-gray-500'}>
                 [{f.level}·{f.rule}] <TruncText text={String(f.message ?? '')} limit={150} />
               </div>
             ))}
@@ -111,14 +111,14 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         <span className="text-yellow-500/80 font-mono">🔧</span>
         <span className="text-gray-400 font-mono">{tool.name}</span>
         {hasResult && (
-          <span className={isError ? 'text-red-400' : 'text-green-500/70'}>
+          <span className={isError ? 'text-fail' : 'text-green-500/70'}>
             {isError ? '❌' : '✅'}
           </span>
         )}
         {!hasResult && <span className="text-yellow-500/50 animate-pulse">⏳</span>}
         {/* 结果摘要内联（代替原第二行预览） */}
         {hasResult && resultPreview && (
-          <span className={`flex-1 truncate text-fs-aux ${isError ? 'text-red-400/80' : 'text-gray-500'}`}>{resultPreview}</span>
+          <span className={`flex-1 truncate text-fs-aux ${isError ? 'text-fail/80' : 'text-gray-500'}`}>{resultPreview}</span>
         )}
       </button>
       {/* 展开内容（K-024：键值化友好渲染，不再直接甩原始 JSON） */}
@@ -133,7 +133,7 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
           {hasResult && (
             <div>
               <div className="text-gray-600 text-fs-aux mb-0.5">结果</div>
-              <div className={`text-fs-body bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-red-400' : ''}`}>
+              <div className={`text-fs-body bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-fail' : ''}`}>
                 {(() => {
                   // G3：attribution(db_evidence) 结果含 rows → 表格化（设计 2026-08-25 §A5）
                   const dbData = tool.name === 'attribution' ? parseDbEvidenceResult(tool.result!) : null;
@@ -180,7 +180,7 @@ export function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLa
           {allDone ? `${successCount}/${tools.length} 工具` : `${tools.length} 工具 执行中…`}
         </span>
         {allDone && (
-          <span className={hasError ? 'text-red-400 text-fs-aux' : 'text-green-500/70 text-fs-aux'}>
+          <span className={hasError ? 'text-fail text-fs-aux' : 'text-green-500/70 text-fs-aux'}>
             {hasError ? '⚠️' : '✅'}
           </span>
         )}

@@ -149,7 +149,7 @@ export default function FeishuReviewPanel() {
           <FeishuWatchSettings />
         </div>
       </div>
-      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {error && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
       {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       <div className="flex items-center gap-3 mb-2 text-fs-body text-gray-500">
@@ -165,7 +165,7 @@ export default function FeishuReviewPanel() {
         </button>
         <button className={btn} disabled={selected.size === 0 || busy !== ''}
           onClick={() => handleBatch('confirm')}>批量确认</button>
-        <button className={`${btn} !bg-red-500/15 !text-red-400 hover:!bg-red-500/25`}
+        <button className={`${btn} !bg-fail/15 !text-fail hover:!bg-fail/25`}
           disabled={selected.size === 0 || busy !== ''}
           onClick={() => handleBatch('reject')}>批量拒绝</button>
       </div>
@@ -211,11 +211,11 @@ export default function FeishuReviewPanel() {
                     </div>
                   </td>
                   <td className={td}>
-                    <span className={it.valid ? 'text-gray-300' : 'text-red-400'}>
+                    <span className={it.valid ? 'text-gray-300' : 'text-fail'}>
                       {it.evidence || '（无依据）'}
                     </span>
                     {!it.valid && (
-                      <span className="ml-1 text-fs-aux text-red-400">invalid·不可确认</span>
+                      <span className="ml-1 text-fs-aux text-fail">invalid·不可确认</span>
                     )}
                   </td>
                 </tr>

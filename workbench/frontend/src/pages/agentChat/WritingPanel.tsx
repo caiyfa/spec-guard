@@ -5,7 +5,7 @@ import type { DocWriteItem } from './types';
 function verdictBadge(v: string | null) {
   switch (v) {
     case 'PASS': return <span className="text-fs-micro px-1 py-0.5 rounded bg-green-900/25 text-green-400 flex-shrink-0">✅ 校验通过</span>;
-    case 'REJECT': return <span className="text-fs-micro px-1 py-0.5 rounded bg-red-900/25 text-red-400 flex-shrink-0">❌ 校验未过</span>;
+    case 'REJECT': return <span className="text-fs-micro px-1 py-0.5 rounded bg-fail/12/25 text-fail flex-shrink-0">❌ 校验未过</span>;
     case 'ERROR': return <span className="text-fs-micro px-1 py-0.5 rounded bg-yellow-900/25 text-yellow-400 flex-shrink-0">⚠️ 校验异常</span>;
     case 'SKIP': return <span className="text-fs-micro px-1 py-0.5 rounded bg-gray-700/40 text-gray-400 flex-shrink-0">⏭ 门禁跳过</span>;
     default: return null;
@@ -87,13 +87,13 @@ export function DiffOverlay({ item, onClose }: { item: DocWriteItem; onClose: ()
         ) : (
           <>
             <div className="px-3 py-1.5 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
-              <span className="text-green-400">+{state.added}</span> / <span className="text-red-400">-{state.removed}</span> · 旧版（.bak）→ 当前
+              <span className="text-green-400">+{state.added}</span> / <span className="text-fail">-{state.removed}</span> · 旧版（.bak）→ 当前
             </div>
             <div className="flex-1 min-h-0 overflow-auto font-mono text-fs-body leading-relaxed">
               {state.diff!.map((l, i) => (
                 <div key={i} className={
                   l.type === 'add' ? 'bg-green-900/25 text-green-300 px-2 whitespace-pre-wrap'
-                    : l.type === 'del' ? 'bg-red-900/25 text-red-300 px-2 whitespace-pre-wrap'
+                    : l.type === 'del' ? 'bg-fail/12/25 text-fail px-2 whitespace-pre-wrap'
                       : 'text-gray-500 px-2 whitespace-pre-wrap'
                 }>
                   {l.type === 'add' ? '+ ' : l.type === 'del' ? '- ' : '  '}{l.text}
@@ -133,16 +133,16 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
       {item.thinking && <div className="text-fs-aux text-gray-600 mt-1">💭 {item.thinking}</div>}
       {/* 校验失败原因（与 verdict 同源，Agent 据此定位修复） */}
       {failed && findings.length > 0 && (
-        <div className="mt-1.5 text-fs-aux rounded bg-red-900/20 px-1.5 py-1 space-y-0.5">
-          <div className="text-red-400 font-medium">失败原因（{findings.length} 条）</div>
+        <div className="mt-1.5 text-fs-aux rounded bg-fail/12 px-1.5 py-1 space-y-0.5">
+          <div className="text-fail font-medium">失败原因（{findings.length} 条）</div>
           {visible.map((f, i) => (
-            <div key={i} className="text-red-300/90 break-all">
-              <span className="text-red-400/80 font-mono">[{f.rule || f.level || 'RULE'}]</span> {f.message}
+            <div key={i} className="text-fail/90 break-all">
+              <span className="text-fail/80 font-mono">[{f.rule || f.level || 'RULE'}]</span> {f.message}
             </div>
           ))}
           {findings.length > 3 && (
             <button onClick={() => setShowAll(v => !v)}
-              className="text-red-400 hover:text-red-300 underline">
+              className="text-fail hover:text-fail underline">
               {showAll ? '收起' : `全部 ${findings.length} 条`}
             </button>
           )}

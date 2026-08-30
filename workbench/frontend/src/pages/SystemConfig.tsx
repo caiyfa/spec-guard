@@ -56,7 +56,7 @@ export default function SystemConfig({ role }: { role: string }) {
         </p>
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead flex-shrink-0" onClick={() => setError('')}>{error}</div>}
+      {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3 text-fail text-fs-lead flex-shrink-0" onClick={() => setError('')}>{error}</div>}
 
       {/* 三栏：行高钉死、各栏内部滚动（T-1009 同款先例） */}
       <div className="flex-1 min-h-0 flex gap-3">

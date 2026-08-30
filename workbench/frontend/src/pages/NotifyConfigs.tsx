@@ -151,7 +151,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
         </div>
       )}
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead">{error}</div>}
+      {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3 text-fail text-fs-lead">{error}</div>}
       {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-fs-lead">{success}</div>}
 
       {/* 配置列表 */}
@@ -184,7 +184,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
                     {testingId === cfg.id ? '发送中...' : '测试'}
                   </button>
                   <button onClick={() => openEdit(cfg)} className="px-2 py-1 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2">编辑</button>
-                  <button onClick={() => handleDelete(cfg)} className="px-2 py-1 text-fs-body bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">删除</button>
+                  <button onClick={() => handleDelete(cfg)} className="px-2 py-1 text-fs-body bg-fail/12 text-fail rounded hover:bg-fail/12">删除</button>
                 </div>
               </div>
             ))}

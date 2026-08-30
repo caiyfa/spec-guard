@@ -448,7 +448,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           </button>
         )}
       </div>
-      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {error && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
       {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
       {/* 顶栏：群/日期 + 重新分类 + 状态筛选（单一控制区，页面不再分上下两层） */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -610,7 +610,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                   onClick={() => setPickedIds(new Set((messages || []).map(m => m.message_id)))}>
                   全选
                 </button>
-                <button className="text-gray-500 hover:text-red-400"
+                <button className="text-gray-500 hover:text-fail"
                   onClick={() => setPickedIds(new Set())}>
                   清空
                 </button>
@@ -655,7 +655,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-fs-aux text-gray-600">标签</span>
                   {tags.length > 0 && (
-                    <button className="text-fs-aux text-gray-500 hover:text-red-400"
+                    <button className="text-fs-aux text-gray-500 hover:text-fail"
                       title="清除全部已选标签"
                       onClick={() => setTags([])}>
                       清除
@@ -863,7 +863,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                       <span className="ml-auto flex gap-2">
                         <button className="text-emerald-400 hover:underline"
                           onClick={() => relate(c.src, c.dst, true)}>🔗 关联</button>
-                        <button className="text-gray-500 hover:text-red-400"
+                        <button className="text-gray-500 hover:text-fail"
                           title="忽略（留痕，不再重复推荐）"
                           onClick={() => relate(c.src, c.dst, false)}>忽略</button>
                       </span>
@@ -911,7 +911,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                   <span className="flex gap-2 shrink-0">
                     <button className="text-emerald-400 hover:underline"
                       onClick={() => relateMaterial(c.src, c.dst, true)}>🔗 关联</button>
-                    <button className="text-gray-500 hover:text-red-400"
+                    <button className="text-gray-500 hover:text-fail"
                       title="忽略（留痕，不再重复推荐）"
                       onClick={() => relateMaterial(c.src, c.dst, false)}>忽略</button>
                   </span>
@@ -951,7 +951,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                   <button className="text-info hover:underline text-fs-aux shrink-0"
                     onClick={() => jumpToTopic(t)}>跳原文 →</button>
                   {i > 0 && (
-                    <button className="text-gray-500 hover:text-red-400 text-fs-aux shrink-0"
+                    <button className="text-gray-500 hover:text-fail text-fs-aux shrink-0"
                       title="解除该关联（写 rejected 留痕）"
                       onClick={() => relate(relateDrawer.id, t.id, false)}>解除</button>
                   )}

@@ -91,7 +91,7 @@ export default function MyActivity() {
         ))}
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead flex-shrink-0" onClick={() => setError('')}>{error}</div>}
+      {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3 text-fail text-fs-lead flex-shrink-0" onClick={() => setError('')}>{error}</div>}
       {loading && <div className="text-fs-body text-gray-500 mb-2 flex-shrink-0">加载中…</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -168,7 +168,7 @@ export default function MyActivity() {
                   <tr key={c.id} className="border-b border-border/50 text-gray-400">
                     <td className="px-3 py-1.5 font-mono whitespace-nowrap">{c.created_at}</td>
                     <td className="px-3 py-1.5 font-mono">{c.tool_name}</td>
-                    <td className={`px-3 py-1.5 ${c.verdict === 'ok' ? 'text-green-400' : 'text-red-400'}`}>{c.verdict}</td>
+                    <td className={`px-3 py-1.5 ${c.verdict === 'ok' ? 'text-green-400' : 'text-fail'}`}>{c.verdict}</td>
                     <td className="px-3 py-1.5 truncate max-w-[20rem]">{c.args_digest || '—'}</td>
                   </tr>
                 ))}

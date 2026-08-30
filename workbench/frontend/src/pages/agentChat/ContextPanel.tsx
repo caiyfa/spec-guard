@@ -18,7 +18,7 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
     <div className="px-3 py-2 border-b border-border">
       <div className="flex items-center justify-between mb-1">
         <span className="text-fs-body font-medium text-gray-300">📊 上下文</span>
-        <span className={`text-fs-aux font-mono ${pct > 80 ? 'text-red-400' : pct > 50 ? 'text-yellow-400' : 'text-gray-500'}`}>
+        <span className={`text-fs-aux font-mono ${pct > 80 ? 'text-fail' : pct > 50 ? 'text-yellow-400' : 'text-gray-500'}`}>
           {pct}%
         </span>
       </div>

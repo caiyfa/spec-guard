@@ -161,7 +161,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
               }} />
           ) : imgFailed.has(key) ? (
             <span className="inline-block w-16 h-16 leading-[3.5rem] text-center rounded
-              border border-red-500/30 bg-red-500/5 text-fs-aux text-red-400 align-top"
+              border border-fail/35 bg-fail/5 text-fs-aux text-fail align-top"
               title="图片加载失败（当前飞书账号无该图权限或下载失败，刷新页面重试）">加载失败</span>
           ) : (
             <span className="inline-block w-16 h-16 leading-[4rem] text-center rounded

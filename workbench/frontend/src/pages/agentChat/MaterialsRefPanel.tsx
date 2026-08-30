@@ -6,7 +6,7 @@ import type { ChatReference } from './types';
 // T-933：材料状态徽标配色（与独立材料管理页语义一致）
 const MAT_STATUS_COLOR: Record<string, string> = {
   uploaded: 'text-gray-500', parsing: 'text-amber-400', parsed: 'text-blue-400',
-  indexed: 'text-green-500', packed: 'text-info', failed: 'text-red-400',
+  indexed: 'text-green-500', packed: 'text-info', failed: 'text-fail',
 };
 
 // T-933：材料页签——本会话绑定面试的材料清单（标题/解析状态/摘要），
@@ -59,7 +59,7 @@ export function MaterialsRefPanel({ sessionId, references, onError }: {
       </div>
       {loading && <div className="text-fs-body text-gray-500 text-center py-4">材料加载中…</div>}
       {!loading && loadErr && (
-        <div className="text-fs-body text-red-400 text-center py-4">材料列表加载失败：{loadErr}</div>
+        <div className="text-fs-body text-fail text-center py-4">材料列表加载失败：{loadErr}</div>
       )}
       {!loading && !loadErr && items === null && (
         <div className="text-fs-body text-gray-600 text-center py-4">
@@ -87,7 +87,7 @@ export function MaterialsRefPanel({ sessionId, references, onError }: {
             <div className="text-fs-aux text-gray-500 mt-0.5 line-clamp-2">{heads[m.mid]}</div>
           )}
           {m.parse_error && (
-            <div className="text-fs-aux text-red-400/80 mt-0.5 truncate" title={m.parse_error}>
+            <div className="text-fs-aux text-fail/80 mt-0.5 truncate" title={m.parse_error}>
               {m.parse_error}
             </div>
           )}

@@ -38,7 +38,7 @@ export default function MenuRoles() {
           菜单树入库可配置；角色授权控制页面可见性与后端接口访问（前后端双控）。
         </p>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">{error}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-fail/12 text-fail border border-fail/35">{error}</div>}
       {message && <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-green-900/30 text-green-400 border border-green-700/50">{message}</div>}
       <div className="flex gap-2 mb-4">
         {([['menu', `菜单管理 (${menus.length})`], ['roles', `角色管理 (${roles.length})`], ['grants', '角色授权']] as [Tab, string][]).map(([k, label]) => (
@@ -120,7 +120,7 @@ function MenuTab({ menus, onChanged, flash, setError }: {
                     <button onClick={() => { setEditing(m.menu_key); setDraft({ label: m.label, path: m.path, sort: m.sort }); }}
                       className="text-gray-500 hover:text-gray-300">编辑</button>
                     <button onClick={() => remove(m.menu_key)} disabled={!!m.is_system}
-                      className="text-red-400 hover:text-red-300 disabled:opacity-30">删除</button>
+                      className="text-fail hover:text-fail disabled:opacity-30">删除</button>
                   </>
                 )}
               </div>
@@ -195,7 +195,7 @@ function RolesTab({ roles, onChanged, flash, setError }: {
               {!r.is_builtin && (
                 <>
                   <button onClick={() => { setEditing(r.role_key); setLabel(r.label); }} className="ml-auto text-gray-500 hover:text-gray-300">重命名</button>
-                  <button onClick={() => remove(r.role_key)} className="text-red-400 hover:text-red-300">删除</button>
+                  <button onClick={() => remove(r.role_key)} className="text-fail hover:text-fail">删除</button>
                 </>
               )}
             </>

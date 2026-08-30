@@ -83,7 +83,7 @@ export default function Feedback() {
         <p className="text-fs-body text-gray-500 mt-1">SPQ 台账管理 + 群聊 webhook 通知配置（用例级 fail/drift/skip 与计划级事件统一在此维护）</p>
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-fs-lead" onClick={() => setError('')}>{error}</div>}
+      {error && <div className="bg-fail/12 border border-fail/35 rounded p-2 mb-3 text-fail text-fs-lead" onClick={() => setError('')}>{error}</div>}
       {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-3 text-green-400 text-fs-lead" onClick={() => setSuccess('')}>{success}</div>}
 
       {/* Tab */}

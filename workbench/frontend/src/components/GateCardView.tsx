@@ -35,7 +35,7 @@ const DIM_LABEL: Record<string, string> = {
 const cardCls = 'bg-surface-1 border border-border rounded-lg p-3';
 const btn = 'px-2.5 py-1 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40 disabled:cursor-not-allowed';
 const btnOk = 'px-2.5 py-1 rounded text-fs-body font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
-const btnDanger = 'px-2 py-0.5 rounded text-fs-aux font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
+const btnDanger = 'px-2 py-0.5 rounded text-fs-aux font-medium bg-fail/15 text-fail hover:bg-fail/25 disabled:opacity-40 disabled:cursor-not-allowed';
 
 // ══════════════════════════════════════════════════════════
 // GateCardView：单张闸门卡片（人拍板按钮直调原有 REST + RBAC）
@@ -238,7 +238,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
   const spec = action ? GATE_EXEC_ACTIONS[action] : undefined;
 
   if (parseError) {
-    return <div className={`${cardCls} border-red-500/40 text-fs-body text-red-400`}>⚠ {parseError}</div>;
+    return <div className={`${cardCls} border-fail/35/40 text-fs-body text-fail`}>⚠ {parseError}</div>;
   }
   if (!spec) {
     // 白名单外 action：确定性拒绝，不执行（分档接管边界）
@@ -283,7 +283,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
       )}
       {state === 'running' && <div className="text-fs-body text-gray-500">执行中…</div>}
       {state === 'ok' && <div className="text-fs-body text-green-400">✓ {result}</div>}
-      {state === 'failed' && <div className="text-fs-body text-red-400">✗ {result}</div>}
+      {state === 'failed' && <div className="text-fs-body text-fail">✗ {result}</div>}
       {state === 'dismissed' && <div className="text-fs-body text-gray-600">已忽略（未执行任何操作）</div>}
     </div>
   );

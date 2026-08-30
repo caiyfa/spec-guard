@@ -148,8 +148,8 @@ export default function Scenarios() {
       </div>
 
       {error && (
-        <div className="mb-3 bg-red-900/30 border border-red-700/50 rounded-lg px-3 py-2">
-          <span className="text-red-400 text-fs-lead">{error}</span>
+        <div className="mb-3 bg-fail/12 border border-fail/35 rounded-lg px-3 py-2">
+          <span className="text-fail text-fs-lead">{error}</span>
         </div>
       )}
 
@@ -272,7 +272,7 @@ export default function Scenarios() {
                     <span className="text-fs-body font-mono text-gray-400 truncate flex-1">{path}</span>
                     <button
                       onClick={() => toggleFile(path)}
-                      className="text-red-500 text-fs-aux opacity-0 group-hover:opacity-100"
+                      className="text-fail text-fs-aux opacity-0 group-hover:opacity-100"
                     >✕</button>
                   </div>
                 ))}

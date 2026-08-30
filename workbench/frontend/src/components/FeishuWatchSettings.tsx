@@ -394,8 +394,8 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 <button className={btn} onClick={startAuth}>{authStatus?.bound ? '重新授权' : '绑定飞书'}</button>
               </div>
             ) : authStatus && !authStatus.bound ? (
-              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-fs-body">
-                <span className="text-red-400">⚠ 飞书账号未绑定（群聊/用户/文档搜索不可用）</span>
+              <div className="mb-2 px-3 py-2 rounded bg-fail/12 border border-fail/35 flex items-center gap-2 text-fs-body">
+                <span className="text-fail">⚠ 飞书账号未绑定（群聊/用户/文档搜索不可用）</span>
                 <button className={btn} onClick={startAuth}>绑定飞书</button>
               </div>
             ) : authStatus?.bound && (authStatus.reviewing || (authStatus.missing_scopes?.length)) ? (
@@ -413,7 +413,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             ) : null}
             {/* 授权类错误不在红框重复显示（顶部黄横幅已给提示与按钮） */}
             {error && !/授权缺少权限|未绑定/.test(error) && (
-              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>
+              <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>
             )}
             {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
@@ -562,7 +562,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                                   onChange={() => toggleScope(u.open_id, s)} />{label}
                               </label>
                             ))}
-                          <button className="ml-auto text-fs-body text-red-400 hover:text-red-300"
+                          <button className="ml-auto text-fs-body text-fail hover:text-fail"
                             onClick={() => setWatchUsers(watchUsers.filter(w => w.open_id !== u.open_id))}>
                             移除</button>
                         </div>

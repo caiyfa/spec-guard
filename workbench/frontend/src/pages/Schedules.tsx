@@ -15,9 +15,9 @@ const CRON_PRESETS: { label: string; value: string }[] = [
 
 const STATUS_LABELS: Record<string, { text: string; color: string }> = {
   success: { text: '✅ 成功', color: 'text-green-500' },
-  failed: { text: '❌ 失败', color: 'text-red-400' },
+  failed: { text: '❌ 失败', color: 'text-fail' },
   partial: { text: '⚠️ 部分成功', color: 'text-yellow-400' },
-  error: { text: '❌ 错误', color: 'text-red-400' },
+  error: { text: '❌ 错误', color: 'text-fail' },
   skipped_busy: { text: '⏭️ 跳过（执行忙）', color: 'text-gray-500' },  // T-302：T-117 互斥跳过状态
   '': { text: '—', color: 'text-gray-600' },
 };
@@ -161,8 +161,8 @@ export default function Schedules() {
       </div>
 
       {error && (
-        <div className="mb-3 bg-red-900/20 border border-red-700/30 rounded p-2">
-          <span className="text-red-400 text-fs-lead">❌ {error}</span>
+        <div className="mb-3 bg-fail/12 border border-fail/35 rounded p-2">
+          <span className="text-fail text-fs-lead">❌ {error}</span>
         </div>
       )}
 
@@ -238,7 +238,7 @@ export default function Schedules() {
                       </button>
                       <button
                         onClick={() => handleDelete(job.id)}
-                        className="text-fs-body px-2 py-0.5 rounded bg-surface-3 text-red-500/70 hover:text-red-400"
+                        className="text-fs-body px-2 py-0.5 rounded bg-surface-3 text-fail/70 hover:text-fail"
                       >
                         🗑️
                       </button>

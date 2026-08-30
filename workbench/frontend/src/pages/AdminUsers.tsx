@@ -80,7 +80,7 @@ export default function AdminUsers() {
       </div>
 
       {error && (
-        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-red-900/30 text-red-400 border border-red-700/50">
+        <div className="mb-3 px-3 py-2 rounded-lg text-fs-lead bg-fail/12 text-fail border border-fail/35">
           {error}
         </div>
       )}
@@ -114,7 +114,7 @@ export default function AdminUsers() {
                     <span key={r} className="inline-flex items-center gap-1 text-fs-body bg-info/10 text-info rounded px-2 py-0.5">
                       {rl?.label || r}
                       <button onClick={() => handleSetRoles(u.emp_no, (u.roles ?? []).filter(x => x !== r))}
-                        className="text-red-400 hover:text-red-300" title="移除角色">×</button>
+                        className="text-fail hover:text-fail" title="移除角色">×</button>
                     </span>
                   );
                 })}
@@ -141,7 +141,7 @@ export default function AdminUsers() {
                   <span key={g.id} className="inline-flex items-center gap-1 text-fs-body bg-info/10 text-info rounded px-2 py-0.5">
                     {g.workspace_name}
                     <button onClick={() => handleRevoke(u.emp_no, g.workspace_name)}
-                      className="text-red-400 hover:text-red-300" title="撤销授权">×</button>
+                      className="text-fail hover:text-fail" title="撤销授权">×</button>
                   </span>
                 ))}
                 {grantsOf(u.emp_no).length === 0 && (

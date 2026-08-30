@@ -92,7 +92,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
           <button className="ml-auto text-gray-500 hover:text-gray-300"
             onClick={onClose}>✕</button>
         </div>
-        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{err}</div>}
+        {err && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{err}</div>}
         <div className="flex gap-3" style={{ height: 'min(64vh, 560px)' }}>
           {/* 左栏：已选消息（按时间序；✕ 移除微调——移除即不再关联） */}
           <div className="w-[46%] shrink-0 flex flex-col border border-border rounded bg-surface-3">
@@ -111,7 +111,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
                       {m.sender_name || m.sender_id || '?'}
                     </span>
                     <span className="text-fs-aux text-gray-600">{fmtMsgTime(m.ts, isMulti)}</span>
-                    <button className="ml-auto text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    <button className="ml-auto text-gray-600 hover:text-fail opacity-0 group-hover:opacity-100 transition-opacity"
                       title="从本话题移除该条"
                       onClick={() => removeMsg(m.message_id)}>✕</button>
                   </div>

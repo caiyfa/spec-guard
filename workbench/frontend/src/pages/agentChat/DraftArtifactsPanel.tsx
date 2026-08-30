@@ -183,9 +183,9 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
     <div className="px-2 py-2 space-y-2">
       <div className="px-1 text-fs-body font-medium text-gray-300">📝 草稿产物（Agent 会话内评审）</div>
       {loadError && (
-        <div className="flex items-center gap-2 rounded border border-red-800/50 bg-red-900/20 px-2 py-1.5 text-fs-body text-red-400">
+        <div className="flex items-center gap-2 rounded border border-red-800/50 bg-fail/12 px-2 py-1.5 text-fs-body text-fail">
           <span className="flex-1">草稿列表加载失败：{loadError}</span>
-          <button onClick={refresh} className="px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-900/60">重试</button>
+          <button onClick={refresh} className="px-1.5 py-0.5 rounded bg-fail/12 hover:bg-fail/12">重试</button>
         </div>
       )}
       {draftFiles.length === 0 && !loadError && (
@@ -238,10 +238,10 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {/* 三闸状态（T-061）：① 人工评审 / ② 格式校验（③ 发布门禁在入库时自动跑） */}
             {meta?.gates && !libHit && !gone && !loadError && (
               <div className="flex items-center gap-1.5 mt-1 text-fs-micro">
-                <span className={`px-1 py-0.5 rounded ${g1 === 'approved' ? 'bg-green-900/40 text-green-400' : g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                <span className={`px-1 py-0.5 rounded ${g1 === 'approved' ? 'bg-green-900/40 text-green-400' : g1 === 'rejected' ? 'bg-fail/12 text-fail' : 'bg-yellow-900/40 text-yellow-400'}`}>
                   ① {g1 === 'approved' ? '已评审' : g1 === 'rejected' ? '已驳回' : '待评审'}
                 </span>
-                <span className={`px-1 py-0.5 rounded ${g2 === 'pass' ? 'bg-green-900/40 text-green-400' : g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                <span className={`px-1 py-0.5 rounded ${g2 === 'pass' ? 'bg-green-900/40 text-green-400' : g2 === 'fail' ? 'bg-fail/12 text-fail' : 'bg-yellow-900/40 text-yellow-400'}`}>
                   ② {g2 === 'pass' ? '校验通过' : g2 === 'fail' ? '校验未过' : '待校验'}
                 </span>
               </div>
@@ -250,14 +250,14 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {/* 校验结果 */}
             {st.validate && (
               <div className={`mt-1.5 text-fs-aux rounded px-1.5 py-1 ${
-                st.validate.verdict === 'PASS' ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'
+                st.validate.verdict === 'PASS' ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'
               }`}>
                 <div className="font-medium">
                   {st.validate.verdict}
                   {st.validate.summary && ` · error ${st.validate.summary.error ?? 0} / warn ${st.validate.summary.warn ?? 0}`}
                 </div>
                 {(st.validate.findings || []).slice(0, 4).map((f, i) => (
-                  <div key={i} className={f.level === 'ERROR' ? 'text-red-400' : 'text-gray-500'}>
+                  <div key={i} className={f.level === 'ERROR' ? 'text-fail' : 'text-gray-500'}>
                     [{f.rule}] {f.message}
                   </div>
                 ))}
@@ -266,7 +266,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             {/* 试跑结果 */}
             {st.trial && (
               <div className={`mt-1.5 text-fs-aux rounded px-1.5 py-1 ${
-                st.trial.ok ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'
+                st.trial.ok ? 'bg-green-900/20 text-green-400' : 'bg-fail/12 text-fail'
               }`}>
                 <div className="flex items-start gap-1">
                   <span className="flex-1 break-all">
@@ -284,7 +284,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                     className={`mt-1 px-2 py-0.5 rounded text-fs-aux border ${
                       st.trial.ok
                         ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
-                        : 'bg-red-900/40 text-red-400 border-red-700/50 hover:bg-red-900/60'
+                        : 'bg-fail/12 text-fail border-fail/35 hover:bg-fail/12'
                     }`}>
                     🔍 查看结果
                   </button>
@@ -343,7 +343,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                   title={meta?.gates && g1 !== 'approved' ? '第①闸人工评审未通过——先点「✓ 评审通过」' : ''}
                   className="px-2 py-1 rounded bg-info text-white text-fs-body hover:bg-info/90 disabled:opacity-40">⬆ 入库</button>
                 <button onClick={() => handleDiscard(file)} disabled={busyAll || !!st.promotedTo}
-                  className="ml-auto px-2 py-1 rounded text-gray-500 text-fs-body hover:text-red-400 disabled:opacity-40">废弃</button>
+                  className="ml-auto px-2 py-1 rounded text-gray-500 text-fs-body hover:text-fail disabled:opacity-40">废弃</button>
               </div>
             )}
           </div>
@@ -388,7 +388,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
               <input type="checkbox" checked={dlgReplace} onChange={e => setDlgReplace(e.target.checked)} />
               覆盖同名场景（原文件备份 + 失败自动回滚）
             </label>
-            {dlgError && <div className="mb-2 text-fs-body text-red-400">❌ {dlgError}</div>}
+            {dlgError && <div className="mb-2 text-fs-body text-fail">❌ {dlgError}</div>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setDialog({ file: '', open: false })} disabled={promoting}
                 className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-fs-lead disabled:opacity-40">取消</button>

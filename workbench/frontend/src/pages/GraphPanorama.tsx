@@ -267,7 +267,7 @@ export default function GraphPanorama() {
             <span className="text-fs-body text-gray-400">
               📸 {diffResult.from.slice(0, 22)} → 当前：
               <b className="text-green-400">+{diffResult.added}</b> 新增 ·
-              <b className="text-red-400">-{diffResult.removed}</b> 移除 ·
+              <b className="text-fail">-{diffResult.removed}</b> 移除 ·
               <b className="text-yellow-400">~{diffResult.modified}</b> 修改
               <span className="text-gray-600 ml-1">｜指纹 {diffResult.fingerprint_from.slice(0, 8)} → {diffResult.fingerprint_to.slice(0, 8)}</span>
             </span>
@@ -284,7 +284,7 @@ export default function GraphPanorama() {
         )}
       </div>
 
-      {error && <div className="text-fs-body text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>}
+      {error && <div className="text-fs-body text-fail bg-fail/12 px-3 py-2 rounded">{error}</div>}
 
       {/* 面包屑 */}
       <div className="flex items-center gap-1.5 text-fs-body text-gray-500">
@@ -361,9 +361,9 @@ export default function GraphPanorama() {
                   {isNew && <span className="text-fs-aux text-gray-500">新功能点（无健康分）</span>}
                   <span className="ml-auto flex items-center gap-2 text-fs-body text-gray-500">
                     <span className="text-green-400">覆盖 {item.nCov}</span>
-                    <span className="text-red-400">缺口 {item.nGap}</span>
+                    <span className="text-fail">缺口 {item.nGap}</span>
                     {health !== null && (
-                      <span className={`px-1.5 py-0.5 rounded ${health >= 80 ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'}`}>
+                      <span className={`px-1.5 py-0.5 rounded ${health >= 80 ? 'bg-green-900/40 text-green-300' : 'bg-fail/12 text-fail'}`}>
                         健康分 {health}
                       </span>
                     )}
@@ -371,7 +371,7 @@ export default function GraphPanorama() {
                 </div>
                 <div className="mt-2 h-1.5 bg-surface-3 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${health !== null && health >= 80 ? 'bg-green-500/70' : 'bg-red-500/70'}`}
+                    className={`h-full rounded-full ${health !== null && health >= 80 ? 'bg-green-500/70' : 'bg-fail/70'}`}
                     style={{ width: `${health ?? 0}%` }}
                   />
                 </div>
@@ -391,7 +391,7 @@ export default function GraphPanorama() {
               <div
                 key={fr.id}
                 className={`p-2 rounded border text-fs-body cursor-pointer transition-colors ${
-                  fr.cov === 'ok' ? 'border-green-500/30 bg-green-900/10' : 'border-red-500/30 bg-red-900/10'
+                  fr.cov === 'ok' ? 'border-green-500/30 bg-green-900/10' : 'border-fail/35 bg-fail/12'
                 } hover:border-info/50`}
                 onClick={() => queryBacklink(fr.id)}
               >

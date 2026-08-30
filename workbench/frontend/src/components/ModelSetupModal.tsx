@@ -78,7 +78,7 @@ export default function ModelSetupModal({ purpose, onClose, onConfigured }: {
           该用途尚未配置模型，填写后保存将自动重试操作（配置保存为「{purpose}」用途绑定；
           MiniMax M3 的 Key 在 platform.minimaxi.com 获取，也可改用任意 OpenAI 兼容服务）
         </div>
-        {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+        {error && <div className="mb-2 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}
         <div className="space-y-2">
           <label className="block">
             <span className="text-fs-body text-gray-500">Base URL（OpenAI 兼容端点）</span>
