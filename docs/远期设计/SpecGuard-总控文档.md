@@ -347,6 +347,11 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| workbench/backend/services/flow_trace.py | sess-agent-eval | 2026-08-30 | 37301f09b9f1 | d6fe765abf82 | 已完成 | T-1042 图形视图：端点响应增 mermaid 字段（render_flow_mermaid 着色路径图，前端 MermaidBlock 主题跟随渲染） |
+| workbench/frontend/src/pages/agentChat/FlowPanel.tsx | sess-agent-eval | 2026-08-30 | aba088095f48 | 0c4a2cb46b98 | 已完成 | T-1042 图形视图：图+四态列表双视图（图=形态一览 MermaidBlock 复用 K-041 主题跟随/动态 import/失败回退源码；列表=步号/次数证据面） |
+| workbench/frontend/src/pages/agentChat/FlowPanel.test.tsx | sess-agent-eval | 2026-08-30 | b2bd018ecfe5 | 8c015d1d256e | 已完成 | T-1042 图形视图：fixture 补 mermaid 字段+图容器断言（mock mermaid 动态导入，jsdom 免真实渲染） |
+| workbench/frontend/src/api/agent.ts | sess-agent-eval | 2026-08-30 | dfa028e5ecc4 | 48bc47924d69 | 已完成 | T-1042 图形视图：FlowTraceResult 增 mermaid?: string |
+| test_specstd/test_flow_trace_endpoint.py | sess-agent-eval | 2026-08-30 | 7110aa9ce2e0 | 2e701aa6a889 | 已完成 | T-1042 图形视图：生成会话断言增 mermaid 字段（flowchart TD+classDef hit） |
 | docs/superpowers/specs/2026-08-30-Agent路径自检与纠正提示-design.md | sess-agent-eval | 2026-08-30 | NEW | 650d88bda7ba | 已完成 | T-1042 三期设计单（已实施）：图在看提示不打断边界裁决（Dify 对比/薄 Harness 理由/Goodhart 缓解/负空间清单）+阶段 2 flow 自检工具+阶段 3 nudge/EDD 指标+验收标准 |
 | docs/远期设计/SpecGuard-Agent评测体系-评估架构设计-20260826.md | sess-agent-eval | 2026-08-30 | NEW | 3a1b010dca75 | 已完成 | 知识库 2037 评估架构五层设计 repo 副本（验收自足性入库；原发在 stu_llm_wiki，附实施进度注记） |
 | sg_core/tool_units.py | sess-agent-eval | 2026-08-30 | NEW | bd0f95c2d465 | 已完成 | T-1042 三期地基：工具名三形态归一（助记/legacy/基名+action→（基名,action)）自 evals.replay 下沉（T-975 转发模式），agent runtime 与 evals 共享一份防漂移；tool_meta 引用函数级懒加载零新模块边 |
