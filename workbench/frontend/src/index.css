@@ -25,11 +25,11 @@ button, a, select, input, textarea, [role='button'] {
 }
 button:active:not(:disabled) { transform: scale(0.98); }
 
-/* ── K-043：卡片与按钮组件类 ── */
+/* ── K-043：卡片与按钮组件类（T-1044 U1：B·Paper 形态重写——墨色 primary/软红 danger/纸影卡片） ── */
 @layer components {
   .card {
-    @apply bg-surface-2 border border-border rounded-xl p-4;
-    box-shadow: 0 1px 2px rgb(var(--overlay) / 0.08);
+    @apply bg-surface-2 border border-border rounded-lg p-4;
+    box-shadow: 0 1px 2px rgb(var(--overlay) / 0.06), 0 4px 16px rgb(var(--overlay) / 0.06);
   }
   .card-hover {
     @apply card;
@@ -41,29 +41,42 @@ button:active:not(:disabled) { transform: scale(0.98); }
     border-color: rgb(var(--info) / 0.35);
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-info;
+    /* B 形态：墨色实心（随主题自动反转的「编辑印章」），每操作区至多 1 个 */
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-md text-fs-body font-semibold bg-gray-100 text-surface-2;
   }
-  .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn-primary:hover:not(:disabled) { opacity: 0.85; }
   .btn-primary:disabled { @apply opacity-40 cursor-not-allowed; }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm text-gray-400 border border-border bg-surface-2;
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-md text-fs-body text-gray-300 border border-border bg-surface-2;
   }
-  .btn-ghost:hover:not(:disabled) { @apply text-info border-info/50; }
+  .btn-ghost:hover:not(:disabled) { @apply text-gray-100 border-gray-500; }
   .btn-ghost:disabled { @apply opacity-40 cursor-not-allowed; }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-fail;
+    /* B 形态：统一软红（消灭 bg-red-900/30、bg-red-900/40、bg-red-600 三种危险红） */
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-md text-fs-body font-semibold bg-fail/12 text-fail border border-fail/35;
   }
-  .btn-danger:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn-danger:hover:not(:disabled) { @apply bg-fail/20; }
   .btn-danger:disabled { @apply opacity-40 cursor-not-allowed; }
   .input {
-    @apply bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 outline-none;
+    @apply bg-surface-2 border border-border rounded-lg px-3 py-1.5 text-fs-body text-gray-200 placeholder-gray-600 outline-none;
   }
   .input:focus { @apply border-info; }
 }
 
+/* T-1044 U1：StateView 骨架屏 shimmer（替代 animate-pulse 文字，体验基线③） */
+.skeleton-bar {
+  background: linear-gradient(90deg,
+    rgb(var(--surface-3)) 25%, rgb(var(--border) / 0.9) 50%, rgb(var(--surface-3)) 75%);
+  background-size: 200% 100%;
+  animation: sg-skeleton-shimmer 1.6s linear infinite;
+}
+@keyframes sg-skeleton-shimmer {
+  to { background-position: -200% 0; }
+}
+
 /* React Flow 主题适配（颜色走变量） */
 .react-flow__node {
-  @apply text-xs;
+  @apply text-fs-body;
 }
 .react-flow__edge-path {
   stroke: rgb(var(--border));
@@ -72,21 +85,21 @@ button:active:not(:disabled) { transform: scale(0.98); }
   stroke: rgb(var(--warn));
 }
 
-/* MD 渲染样式 */
-.spec-md h1 { @apply text-lg font-bold text-gray-100 mt-6 mb-3 pb-2 border-b border-border; }
-.spec-md h2 { @apply text-base font-semibold text-gray-200 mt-5 mb-2; }
-.spec-md h3 { @apply text-sm font-semibold text-gray-300 mt-4 mb-1.5; }
-.spec-md h4 { @apply text-xs font-semibold text-gray-400 mt-3 mb-1; }
+/* MD 渲染样式（T-1044：字号归五档阶梯；标题走衬线 display——B 阅读语言） */
+.spec-md h1 { @apply font-display text-fs-title font-bold text-gray-100 mt-6 mb-3 pb-2 border-b border-border; }
+.spec-md h2 { @apply font-display text-fs-title font-semibold text-gray-200 mt-5 mb-2; }
+.spec-md h3 { @apply text-fs-lead font-semibold text-gray-300 mt-4 mb-1.5; }
+.spec-md h4 { @apply text-fs-body font-semibold text-gray-400 mt-3 mb-1; }
 .spec-md p { @apply my-2 text-gray-400; }
 .spec-md ul, .spec-md ol { @apply my-2 ml-5 space-y-1; }
 .spec-md li { @apply text-gray-400; }
 .spec-md ul li::marker { content: '• '; color: rgb(var(--info)); }
-.spec-md table { @apply w-full my-3 text-xs border-collapse; }
+.spec-md table { @apply w-full my-3 text-fs-body border-collapse; }
 .spec-md th { @apply text-left text-gray-500 font-medium px-2 py-1.5 border-b border-border bg-surface-3/50; }
 .spec-md td { @apply px-2 py-1.5 border-b border-border/30 text-gray-400; }
-.spec-md code { @apply bg-surface-3 text-info/80 px-1 py-0.5 rounded text-[11px] font-mono; }
+.spec-md code { @apply bg-surface-3 text-info/80 px-1 py-0.5 rounded text-fs-body font-mono; }
 .spec-md pre { @apply border border-border rounded-lg p-3 my-3 overflow-x-auto; background: rgb(var(--code-bg)); }
-.spec-md pre code { @apply bg-transparent text-gray-300 p-0 text-[11px]; }
+.spec-md pre code { @apply bg-transparent text-gray-300 p-0 text-fs-body; }
 .spec-md blockquote { @apply border-l-2 border-info/40 pl-3 my-3 text-gray-500 italic; }
 .spec-md hr { @apply border-border my-4; }
 .spec-md a { @apply text-info hover:underline; }

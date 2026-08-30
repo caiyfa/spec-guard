@@ -6,21 +6,27 @@
  * header 定位并显示在顶部被裁剪。portal 到 body 后彻底脱离任何祖先上下文。
  *
  * 用法：
- *   <Modal open={open} onClose={...} title="标题" width={288}>内容</Modal>
+ *   <Modal open={open} onClose={...} title="标题" size="md">内容</Modal>
+ *   （T-1044 U1：size 四档 sm/md/lg/xl 吸收各手写弹层尺寸；width 数值仍可显式覆盖）
  */
 
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+/** T-1044 U1：size → 宽度档（px） */
+const SIZE_WIDTH = { sm: 288, md: 384, lg: 560, xl: 760 } as const;
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  /** 尺寸档（默认 md=384）；显式 width 优先 */
+  size?: keyof typeof SIZE_WIDTH;
   width?: number;
   children: React.ReactNode;
 }
 
-export default function Modal({ open, onClose, title, width = 320, children }: ModalProps) {
+export default function Modal({ open, onClose, title, size = 'md', width, children }: ModalProps) {
   // ESC 关闭
   useEffect(() => {
     if (!open) return;
@@ -38,15 +44,15 @@ export default function Modal({ open, onClose, title, width = 320, children }: M
       onClick={onClose}
     >
       <div
-        className="bg-surface-2 border border-border rounded-2xl max-h-[85vh] overflow-y-auto"
-        style={{ width, boxShadow: 'var(--shadow)' }}
+        className="bg-surface-2 border border-border rounded-lg max-h-[85vh] overflow-y-auto"
+        style={{ width: width ?? SIZE_WIDTH[size], boxShadow: 'var(--shadow)' }}
         onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
         {title && (
           <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/60 sticky top-0 bg-surface-2 z-10">
-            <span className="text-fs-body font-medium text-gray-300">{title}</span>
+            <span className="text-fs-body font-semibold text-gray-200">{title}</span>
             <button onClick={onClose} className="text-gray-600 hover:text-gray-300 text-fs-lead leading-none">✕</button>
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router';
+import { ToastContainer } from './components/ui/Toast';
 import Dashboard from './pages/Dashboard';
 import Lifecycle from './pages/Lifecycle';
 import Scenarios from './pages/Scenarios';
@@ -122,6 +123,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppContent user={user} onLogout={handleLogout} />
+      <ToastContainer />  {/* T-1044 U1：单例 Toast 容器（toast.ok/fail/info 全局可用） */}
     </BrowserRouter>
   );
 }
