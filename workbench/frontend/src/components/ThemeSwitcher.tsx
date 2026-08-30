@@ -74,7 +74,7 @@ export default function ThemeSwitcher() {
           {THEMES.map(t => (
             <button key={t.id}
               onClick={() => applyTheme(t.id)}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-fs-body transition-colors ${
                 t.id === current ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
               }`}>
               <span className="flex-shrink-0 rounded border border-border/60 overflow-hidden flex" style={{ width: 36, height: 22 }}>
@@ -96,12 +96,12 @@ export default function ThemeSwitcher() {
               <input ref={fileRef} type="file" accept="image/*" className="hidden"
                 onChange={e => handleBgFile(e.target.files?.[0])} />
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="text-[11px] text-info hover:underline disabled:opacity-50">
+                className="text-fs-body text-info hover:underline disabled:opacity-50">
                 {uploading ? '处理中…' : bg.image ? '更换' : '上传'}
               </button>
               {bg.image && (
                 <button onClick={() => applyBackground({ image: '' })}
-                  className="text-[11px] text-gray-500 hover:text-fail">
+                  className="text-fs-body text-gray-500 hover:text-fail">
                   清除
                 </button>
               )}
@@ -110,18 +110,18 @@ export default function ThemeSwitcher() {
           {bg.image && (
             <>
               <label className="flex items-center gap-2 py-1" title="越高图片越透（越看不清）">
-                <span className="text-[11px] text-gray-500 w-11">透明度</span>
+                <span className="text-fs-body text-gray-500 w-11">透明度</span>
                 <input type="range" min={0} max={100} value={bg.transparency}
                   onChange={e => applyBackground({ transparency: Number(e.target.value) })}
                   className="flex-1 h-1 accent-info" />
-                <span className="text-[11px] text-gray-500 w-9 text-right">{bg.transparency}%</span>
+                <span className="text-fs-body text-gray-500 w-9 text-right">{bg.transparency}%</span>
               </label>
               <label className="flex items-center gap-2 py-1" title="越高图片越模糊">
-                <span className="text-[11px] text-gray-500 w-11">模糊度</span>
+                <span className="text-fs-body text-gray-500 w-11">模糊度</span>
                 <input type="range" min={0} max={100} value={bg.blurPct}
                   onChange={e => applyBackground({ blurPct: Number(e.target.value) })}
                   className="flex-1 h-1 accent-info" />
-                <span className="text-[11px] text-gray-500 w-9 text-right">{bg.blurPct}%</span>
+                <span className="text-fs-body text-gray-500 w-9 text-right">{bg.blurPct}%</span>
               </label>
             </>
           )}
@@ -136,7 +136,7 @@ export default function ThemeSwitcher() {
           <div className="px-1.5 py-1 text-fs-aux text-gray-600">对话导航</div>
           {/* 图标颜色 */}
           <div className="flex items-center justify-between py-1 px-1.5">
-            <span className="text-[11px] text-gray-500">图标颜色</span>
+            <span className="text-fs-body text-gray-500">图标颜色</span>
             <span className="flex items-center gap-2">
               <input type="color" value={dotHex}
                 onChange={e => applyRailDot(e.target.value)}
@@ -144,13 +144,13 @@ export default function ThemeSwitcher() {
                 title="多轮对话图标颜色" />
               {railDot && (
                 <button onClick={() => applyRailDot('')}
-                  className="text-[11px] text-gray-500 hover:text-fail">重置</button>
+                  className="text-fs-body text-gray-500 hover:text-fail">重置</button>
               )}
             </span>
           </div>
           {/* 置顶背景 */}
           <div className="flex items-center justify-between py-1 px-1.5">
-            <span className="text-[11px] text-gray-500">置顶背景</span>
+            <span className="text-fs-body text-gray-500">置顶背景</span>
             <span className="flex items-center gap-2">
               <input type="color" value={pinnedHex}
                 onChange={e => applyPinnedBg(e.target.value)}
@@ -158,7 +158,7 @@ export default function ThemeSwitcher() {
                 title="置顶消息背景颜色" />
               {pinnedBg && (
                 <button onClick={() => applyPinnedBg('')}
-                  className="text-[11px] text-gray-500 hover:text-fail">重置</button>
+                  className="text-fs-body text-gray-500 hover:text-fail">重置</button>
               )}
             </span>
           </div>

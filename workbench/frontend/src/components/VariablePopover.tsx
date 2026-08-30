@@ -108,7 +108,7 @@ export default function VariablePopover({ localVars, upstreamVars, envVars, onIn
                 <button
                   key={item.path}
                   onClick={() => pick(item.path)}
-                  className="w-full text-left px-3 py-1 text-[11px] font-mono text-info/70 hover:bg-info/10 hover:text-info"
+                  className="w-full text-left px-3 py-1 text-fs-body font-mono text-info/70 hover:bg-info/10 hover:text-info"
                 >
                   {`{{${item.path}}}`}
                   {item.label !== item.path && (

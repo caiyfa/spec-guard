@@ -258,7 +258,7 @@ export default function Drafts() {
       <div className="w-80 flex-shrink-0 flex flex-col">
         <div className="mb-3">
           <h2 className="text-lg font-bold text-gray-200">📝 草稿评审</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-fs-body text-gray-500 mt-1">
             Agent 产物三道闸：人工评审（可微调）→ 格式校验 → 发布门禁，缺一不入库。
           </p>
         </div>
@@ -293,7 +293,7 @@ export default function Drafts() {
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-gray-500 truncate">{d.title || d.filename}</div>
+                <div className="text-fs-body text-gray-500 truncate">{d.title || d.filename}</div>
                 <div className="text-fs-aux text-gray-600 mt-0.5">
                   {d.modified}{d.author ? ` · ${d.author}` : ''}
                 </div>
@@ -435,7 +435,7 @@ export default function Drafts() {
               </label>
               {/* K-xxx：入库前冲突预检——草稿 ID 已存在于场景库时的可执行提示 */}
               {conflict?.existing && (
-                <div className="w-full text-[11px] rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
+                <div className="w-full text-fs-body rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
                   ⚠️ 场景 ID <span className="font-mono">{conflict.existing.id}</span> 已存在于
                   <span className="font-mono"> {conflict.existing.path}</span>
                   {conflict.existing.module === (targetModule === '__new__' ? customModule.trim() : targetModule)
@@ -463,12 +463,12 @@ export default function Drafts() {
             {/* A+B：依赖关系展示 */}
             {dependsOn.length > 0 && (
               <div className="mb-3 px-3 py-2 rounded-lg border border-yellow-700/30 bg-yellow-900/10 text-sm">
-                <div className="text-yellow-400 text-xs font-medium mb-1.5">
+                <div className="text-yellow-400 text-fs-body font-medium mb-1.5">
                   🕸 依赖关系（已声明 depends_on）
                 </div>
                 <ul className="space-y-1">
                   {dependsOn.map((dep, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs">
+                    <li key={i} className="flex items-center gap-2 text-fs-body">
                       <span className="px-1.5 py-0.5 rounded bg-info/20 text-info font-mono text-fs-aux">
                         {dep}
                       </span>
@@ -482,12 +482,12 @@ export default function Drafts() {
             {/* K-046：依赖建议面板 */}
             {(suggestions.length > 0 || selectedUnresolved.length > 0) && (
               <div className="mb-3 px-3 py-2 rounded-lg border border-info/40 bg-info/5 text-sm">
-                <div className="text-info text-xs font-medium mb-1.5">
+                <div className="text-info text-fs-body font-medium mb-1.5">
                   💡 依赖建议（确定性引擎扫描插值得出，采纳即写入 depends_on）
                 </div>
                 <ul className="space-y-1">
                   {suggestions.map((s, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs">
+                    <li key={i} className="flex items-center gap-2 text-fs-body">
                       <span className={`px-1 py-0.5 rounded ${
                         s.confidence === 'high' ? 'bg-pass/20 text-pass' : 'bg-warn/20 text-warn'
                       }`}>{s.confidence === 'high' ? '高置信' : '中置信'}</span>
@@ -507,7 +507,7 @@ export default function Drafts() {
                   ))}
                 </ul>
                 {selectedUnresolved.length > 0 && (
-                  <div className="mt-1.5 text-[11px] text-gray-500"
+                  <div className="mt-1.5 text-fs-body text-gray-500"
                     title="这些插值根没有匹配到任何生产者，可能是运行时内置变量或悬空引用">
                     ⚠️ 未解析引用：{selectedUnresolved.join('、')}
                   </div>
@@ -528,7 +528,7 @@ export default function Drafts() {
                   {/* K-xxx：查看结果——成功绿/失败红，点开读 run 报告展示完整执行过程（步骤/断言/DB 证据/日志） */}
                   {trialResult.run_id && (
                     <button onClick={() => setShowTrialDetail(true)}
-                      className={`px-2 py-0.5 rounded text-xs border flex-shrink-0 ${
+                      className={`px-2 py-0.5 rounded text-fs-body border flex-shrink-0 ${
                         trialResult.ok
                           ? 'bg-green-900/40 text-green-400 border-green-700/50 hover:bg-green-900/60'
                           : 'bg-red-900/40 text-red-400 border-red-700/50 hover:bg-red-900/60'
@@ -543,7 +543,7 @@ export default function Drafts() {
                 {trialResult.records && trialResult.records.length > 0 && (
                   <ul className="mt-1.5 space-y-0.5">
                     {trialResult.records.map((r, i) => (
-                      <li key={i} className="text-xs">
+                      <li key={i} className="text-fs-body">
                         <span className={`font-medium ${VERDICT_STYLE[r.verdict] || 'text-gray-400'}`}>
                           {r.verdict}
                         </span>
@@ -577,7 +577,7 @@ export default function Drafts() {
                 {report.findings.length > 0 && (
                   <ul className="mt-1.5 space-y-1">
                     {report.findings.map((f, i) => (
-                      <li key={i} className={`text-xs ${f.level === 'ERROR' ? 'text-red-400' : 'text-yellow-500'}`}>
+                      <li key={i} className={`text-fs-body ${f.level === 'ERROR' ? 'text-red-400' : 'text-yellow-500'}`}>
                         [{f.level}/{f.rule}] {f.message}{f.hint ? `（${f.hint}）` : ''}
                       </li>
                     ))}

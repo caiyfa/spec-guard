@@ -11,7 +11,7 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
     <div>
       <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
+        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono placeholder-gray-600" />
     </div>
   );
 }
@@ -96,13 +96,13 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
     }
   };
 
-  if (loading) return <div className="text-[11px] text-gray-600 text-center py-8">加载中…</div>;
-  if (!data) return <div className="text-[11px] text-gray-600 text-center py-8">加载失败</div>;
+  if (loading) return <div className="text-fs-body text-gray-600 text-center py-8">加载中…</div>;
+  if (!data) return <div className="text-fs-body text-gray-600 text-center py-8">加载失败</div>;
 
   return (
     <div className="px-2 py-2 space-y-2">
       {/* 分支状态行 */}
-      <div className="px-1 text-xs font-medium text-gray-300">
+      <div className="px-1 text-fs-body font-medium text-gray-300">
         📜 提交历史（{data.branch}）
         {data.synced ? (
           <span className="ml-1.5 text-fs-aux text-green-400">✅ 已全部同步</span>
@@ -119,7 +119,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
 
       {/* 未推送提交列表 */}
       {unpushed.length === 0 ? (
-        <div className="text-[11px] text-gray-600 text-center py-6">
+        <div className="text-fs-body text-gray-600 text-center py-6">
           {data.synced ? '本地与远端完全同步' : '无未推送提交'}
         </div>
       ) : (
@@ -129,7 +129,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
               <div className="flex items-center gap-1.5 cursor-pointer"
                 onClick={() => setExpanded(prev => ({ ...prev, [c.sha]: !prev[c.sha] }))}>
                 <span className="text-fs-aux font-mono text-info">{c.short_sha}</span>
-                <span className="text-[11px] text-gray-200 truncate flex-1" title={c.message}>{c.message}</span>
+                <span className="text-fs-body text-gray-200 truncate flex-1" title={c.message}>{c.message}</span>
                 <span className="text-fs-micro text-gray-600 flex-shrink-0">{expanded[c.sha] ? '▲' : '▼'}</span>
               </div>
               <div className="text-fs-aux text-gray-600 mt-0.5">
@@ -171,7 +171,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[440px] max-w-[92vw] shadow-2xl"
             onClick={e => e.stopPropagation()}>
             <div className="text-sm font-medium text-gray-200 mb-2">🐙 配置 Git 推送 token</div>
-            <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+            <p className="text-fs-body text-gray-500 mb-2 leading-relaxed">
               首次推送需要配置 HTTPS Personal Access Token。参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。
               token 加密存储，仅用于推送远端。commit 时使用 user.name / user.email 作为提交身份。
             </p>
@@ -181,7 +181,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
               <Field label="token (HTTPS PAT) *" value={dlgToken} onChange={setDlgToken}
                 placeholder="ghp_xxx..." type="password" />
             </div>
-            {dlgError && <div className="text-[11px] text-red-400 mb-2">❌ {dlgError}</div>}
+            {dlgError && <div className="text-fs-body text-red-400 mb-2">❌ {dlgError}</div>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowTokenDialog(false)} disabled={saving}
                 className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-sm disabled:opacity-40">取消</button>

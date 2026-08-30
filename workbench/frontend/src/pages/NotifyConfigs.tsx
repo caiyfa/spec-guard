@@ -136,7 +136,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-200">🔔 通知配置</h2>
-            <p className="text-xs text-gray-500 mt-1">配置钉钉/飞书群聊 webhook，接收漏洞和任务失败通知</p>
+            <p className="text-fs-body text-gray-500 mt-1">配置钉钉/飞书群聊 webhook，接收漏洞和任务失败通知</p>
           </div>
           <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-sm hover:bg-info/90">
             + 新建配置
@@ -165,12 +165,12 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-300 font-medium">{cfg.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{CHANNEL_LABELS[cfg.channel] || cfg.channel}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${cfg.enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                    <span className="text-fs-body px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{CHANNEL_LABELS[cfg.channel] || cfg.channel}</span>
+                    <span className={`text-fs-body px-1.5 py-0.5 rounded ${cfg.enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
                       {cfg.enabled ? '✅ 启用' : '⏸️ 禁用'}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">
+                  <div className="text-fs-body text-gray-600 mt-1">
                     {cfg.events.map(e => EVENT_LABELS[e] || e).join(' · ')}
                     {cfg.mention_mobiles && <span className="ml-2">@{cfg.mention_mobiles}</span>}
                     {cfg.events.some(e => CASE_EVENTS.includes(e)) && (
@@ -180,11 +180,11 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => handleTest(cfg)} disabled={testingId === cfg.id}
-                    className="px-2 py-1 text-xs bg-info/20 text-info rounded hover:bg-info/30 disabled:opacity-40">
+                    className="px-2 py-1 text-fs-body bg-info/20 text-info rounded hover:bg-info/30 disabled:opacity-40">
                     {testingId === cfg.id ? '发送中...' : '测试'}
                   </button>
-                  <button onClick={() => openEdit(cfg)} className="px-2 py-1 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2">编辑</button>
-                  <button onClick={() => handleDelete(cfg)} className="px-2 py-1 text-xs bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">删除</button>
+                  <button onClick={() => openEdit(cfg)} className="px-2 py-1 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2">编辑</button>
+                  <button onClick={() => handleDelete(cfg)} className="px-2 py-1 text-fs-body bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">删除</button>
                 </div>
               </div>
             ))}
@@ -200,45 +200,45 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500">配置名称</label>
+                <label className="text-fs-body text-gray-500">配置名称</label>
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="如：TDM 研发群"
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">渠道</label>
+                <label className="text-fs-body text-gray-500">渠道</label>
                 <div className="flex gap-2 mt-1">
-                  <button onClick={() => setChannel('dingtalk')} className={`px-3 py-1.5 text-xs rounded ${channel === 'dingtalk' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>钉钉</button>
-                  <button onClick={() => setChannel('feishu')} className={`px-3 py-1.5 text-xs rounded ${channel === 'feishu' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>飞书</button>
+                  <button onClick={() => setChannel('dingtalk')} className={`px-3 py-1.5 text-fs-body rounded ${channel === 'dingtalk' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>钉钉</button>
+                  <button onClick={() => setChannel('feishu')} className={`px-3 py-1.5 text-fs-body rounded ${channel === 'feishu' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>飞书</button>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">Webhook URL</label>
+                <label className="text-fs-body text-gray-500">Webhook URL</label>
                 <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
                 {editing && <p className="text-fs-aux text-gray-600 mt-0.5">留空则不修改现有 URL</p>}
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">加签密钥{channel === 'feishu' ? '（飞书不需要）' : '（钉钉可选）'}</label>
+                <label className="text-fs-body text-gray-500">加签密钥{channel === 'feishu' ? '（飞书不需要）' : '（钉钉可选）'}</label>
                 <input value={secret} onChange={e => setSecret(e.target.value)} placeholder={editing ? '留空不修改' : 'SEC...'}
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300"
                   disabled={channel === 'feishu'} />
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">@ 手机号（可选，逗号分隔）</label>
+                <label className="text-fs-body text-gray-500">@ 手机号（可选，逗号分隔）</label>
                 <input value={mentionMobiles} onChange={e => setMentionMobiles(e.target.value)} placeholder="13800138000,13900139000"
                   className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">订阅事件</label>
+                <label className="text-fs-body text-gray-500">订阅事件</label>
                 <div className="flex gap-2 mt-1 flex-wrap">
                   {Object.entries(EVENT_LABELS).map(([event, label]) => (
                     <button key={event} onClick={() => toggleEvent(event)}
-                      className={`px-3 py-1.5 text-xs rounded ${events.includes(event) ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500'}`}>
+                      className={`px-3 py-1.5 text-fs-body rounded ${events.includes(event) ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500'}`}>
                       {events.includes(event) ? '✅ ' : ''}{label}
                     </button>
                   ))}
@@ -249,12 +249,12 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
               {events.some(e => CASE_EVENTS.includes(e)) && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-gray-500">系统过滤（空 = 全部）</label>
+                    <label className="text-fs-body text-gray-500">系统过滤（空 = 全部）</label>
                     <input value={system} onChange={e => setSystem(e.target.value)} placeholder="tdm"
                       className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">场景 pattern（fnmatch）</label>
+                    <label className="text-fs-body text-gray-500">场景 pattern（fnmatch）</label>
                     <input value={pattern} onChange={e => setPattern(e.target.value)} placeholder="PP-*"
                       className="w-full mt-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
                   </div>
@@ -262,9 +262,9 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
               )}
 
               <div>
-                <label className="text-xs text-gray-500">启用</label>
+                <label className="text-fs-body text-gray-500">启用</label>
                 <button onClick={() => setEnabled(!enabled)}
-                  className={`ml-2 px-2 py-0.5 text-xs rounded ${enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                  className={`ml-2 px-2 py-0.5 text-fs-body rounded ${enabled ? 'bg-green-900/30 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
                   {enabled ? '✅ 启用' : '⏸️ 禁用'}
                 </button>
               </div>

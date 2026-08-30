@@ -142,7 +142,7 @@ export default function Scenarios() {
     <div className="h-full flex flex-col">
       <div className="mb-3">
         <h2 className="text-lg font-bold text-gray-200">🧩 场景管理</h2>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-fs-body text-gray-500 mt-0.5">
           输入名称 → 选择文件（支持搜索）→ 启动 Agent 生成；场景内容编辑与依赖编排在「DAG 编排」页
         </p>
       </div>
@@ -162,7 +162,7 @@ export default function Scenarios() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="搜索文件内容（≥2字符）..."
-              className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-300 placeholder-gray-600 focus:border-info outline-none"
+              className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300 placeholder-gray-600 focus:border-info outline-none"
             />
           </div>
 
@@ -176,7 +176,7 @@ export default function Scenarios() {
                 <div
                   key={i}
                   onClick={() => toggleFile(r.path)}
-                  className={`px-2 py-1.5 rounded text-xs cursor-pointer transition-colors mb-0.5 ${
+                  className={`px-2 py-1.5 rounded text-fs-body cursor-pointer transition-colors mb-0.5 ${
                     selectedFiles.has(r.path)
                       ? 'bg-info/10 text-info'
                       : 'text-gray-400 hover:bg-surface-3'
@@ -203,7 +203,7 @@ export default function Scenarios() {
                 </div>
               ))}
               {searchResults.length === 0 && !searching && (
-                <div className="text-center text-gray-600 text-xs py-4">无匹配结果</div>
+                <div className="text-center text-gray-600 text-fs-body py-4">无匹配结果</div>
               )}
             </div>
           ) : (
@@ -223,7 +223,7 @@ export default function Scenarios() {
         <div className="flex-1 flex flex-col min-w-0">
           {/* 场景名称 */}
           <div className="bg-surface-2 border border-border rounded-lg p-3 mb-3">
-            <label className="block text-xs text-gray-400 mb-1">场景名称</label>
+            <label className="block text-fs-body text-gray-400 mb-1">场景名称</label>
             <div className="flex gap-2">
               <input
                 value={name}
@@ -250,7 +250,7 @@ export default function Scenarios() {
           {/* 已选文件 + 操作 */}
           <div className="flex-1 bg-surface-2 border border-border rounded-lg p-3 overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400">基础信息包（{selectedFiles.size} 个文件）</span>
+              <span className="text-fs-body text-gray-400">基础信息包（{selectedFiles.size} 个文件）</span>
               {selectedFiles.size > 0 && (
                 <button
                   onClick={() => setSelectedFiles(new Set())}
@@ -261,7 +261,7 @@ export default function Scenarios() {
               )}
             </div>
             {selectedFiles.size === 0 ? (
-              <div className="text-center text-gray-600 text-xs py-8">
+              <div className="text-center text-gray-600 text-fs-body py-8">
                 从左侧文件树或搜索结果中选择文件
               </div>
             ) : (
@@ -269,7 +269,7 @@ export default function Scenarios() {
                 {Array.from(selectedFiles).map(path => (
                   <div key={path} className="flex items-center gap-2 px-2 py-1 hover:bg-surface-3 rounded group">
                     <span className="text-fs-aux">📄</span>
-                    <span className="text-xs font-mono text-gray-400 truncate flex-1">{path}</span>
+                    <span className="text-fs-body font-mono text-gray-400 truncate flex-1">{path}</span>
                     <button
                       onClick={() => toggleFile(path)}
                       className="text-red-500 text-fs-aux opacity-0 group-hover:opacity-100"
@@ -301,19 +301,19 @@ export default function Scenarios() {
 
         {/* 右栏：已有场景（全高独立栏） */}
         <div className="w-72 flex-shrink-0 bg-surface-1 rounded-lg border border-border overflow-hidden flex flex-col">
-          <div className="px-3 py-2 border-b border-border text-xs text-gray-500 bg-surface-2 flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-border text-fs-body text-gray-500 bg-surface-2 flex items-center justify-between">
             <span>已有场景（{existingMetas.length}）</span>
             <button onClick={loadMetas} className="text-fs-aux text-gray-600 hover:text-info">刷新</button>
           </div>
           <div className="flex-1 overflow-y-auto p-1">
             {existingMetas.length === 0 ? (
-              <div className="text-center text-gray-600 text-xs py-8">暂无场景</div>
+              <div className="text-center text-gray-600 text-fs-body py-8">暂无场景</div>
             ) : (
               existingMetas.map(m => (
                 <button
                   key={m.id}
                   onClick={() => handleLoadMeta(m)}
-                  className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded text-xs mb-0.5 transition-colors ${
+                  className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded text-fs-body mb-0.5 transition-colors ${
                     meta?.id === m.id ? 'bg-info/10 text-info' : 'hover:bg-surface-3 text-gray-400'
                   }`}
                 >

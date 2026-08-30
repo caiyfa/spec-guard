@@ -9,11 +9,11 @@ export interface SqlResultData {
 export function SqlResultTable({ rows, truncated, row_count }: SqlResultData & { truncated?: boolean; row_count?: number }) {
   const count = row_count ?? rows.length;
   if (!rows.length) {
-    return <div className="text-xs text-gray-500 py-2">{count} 行（无数据）</div>;
+    return <div className="text-fs-body text-gray-500 py-2">{count} 行（无数据）</div>;
   }
   const columns = Object.keys(rows[0]);
   return (
-    <div className="text-xs">
+    <div className="text-fs-body">
       <div className="flex items-center gap-2 mb-1 text-gray-500">
         <span>{count} 行</span>
         {truncated && <span className="text-yellow-500/80">（结果超上限，已截断）</span>}

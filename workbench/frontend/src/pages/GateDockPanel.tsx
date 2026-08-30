@@ -60,7 +60,7 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
       <div className="flex gap-1 px-1 py-1 border-b border-border/50 flex-shrink-0">
         {GATE_TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-2 py-1 text-[11px] rounded ${tab === t.id ? 'bg-info/15 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
+            className={`px-2 py-1 text-fs-body rounded ${tab === t.id ? 'bg-info/15 text-info' : 'text-gray-500 hover:text-gray-300'}`}>
             {t.label}
           </button>
         ))}
@@ -73,7 +73,7 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
     <div className="p-2 space-y-2">
       {/* 上下文标头 */}
       <div className="flex items-center justify-between px-1">
-        <div className="text-[11px] text-gray-500 truncate">
+        <div className="text-fs-body text-gray-500 truncate">
           {interview
             ? <>🎯 <span className="font-mono text-info">{interview.iv_id}</span> · {interview.title}
                 <span className="text-gray-600">（{interview.status}）</span></>
@@ -87,12 +87,12 @@ export default function GateDockPanel({ sessionId, onAskAgent, onError }: Props)
 
       {/* 空态 */}
       {!loading && interview && cards.length === 0 && (
-        <div className="text-xs text-gray-600 text-center py-6">
+        <div className="text-fs-body text-gray-600 text-center py-6">
           当前无待办闸门——材料/评分/冻结/禅道均已就位
         </div>
       )}
       {!loading && !interview && (
-        <div className="text-xs text-gray-600 text-center py-6 space-y-1">
+        <div className="text-fs-body text-gray-600 text-center py-6 space-y-1">
           <div>操作台跟随需求面试会话工作</div>
           <div className="text-fs-aux text-gray-700">在产品工作台开标后，此处聚合材料/评分/冻结/禅道待办</div>
         </div>

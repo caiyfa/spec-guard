@@ -226,23 +226,23 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
-        <span className="text-xs font-medium text-gray-300">🗂 工作区（{system || '—'}）</span>
+        <span className="text-fs-body font-medium text-gray-300">🗂 工作区（{system || '—'}）</span>
         <button onClick={() => setShowRegister(true)}
-          className="px-2 py-1 bg-info text-white rounded text-xs hover:bg-info/90">
+          className="px-2 py-1 bg-info text-white rounded text-fs-body hover:bg-info/90">
           + 注册工作区
         </button>
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-2 text-red-400 text-xs flex-shrink-0">{error}</div>}
-      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-2 text-green-400 text-xs flex-shrink-0">{success}</div>}
-      {syncMsg && <div className="bg-info/10 border border-info/30 rounded p-2 mb-2 text-info text-xs flex-shrink-0">⟳ {syncMsg}</div>}
+      {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-2 text-red-400 text-fs-body flex-shrink-0">{error}</div>}
+      {success && <div className="bg-green-900/30 border border-green-700/50 rounded p-2 mb-2 text-green-400 text-fs-body flex-shrink-0">{success}</div>}
+      {syncMsg && <div className="bg-info/10 border border-info/30 rounded p-2 mb-2 text-info text-fs-body flex-shrink-0">⟳ {syncMsg}</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
         {/* 当前系统的工作区卡片 */}
         {!system ? (
-          <div className="text-center text-gray-600 text-xs py-6">先在栏1选择系统</div>
+          <div className="text-center text-gray-600 text-fs-body py-6">先在栏1选择系统</div>
         ) : workspaces.length === 0 ? (
-          <div className="text-center text-gray-600 text-xs py-6">
+          <div className="text-center text-gray-600 text-fs-body py-6">
             系统「{system}」下暂无工作区，点击右上「注册工作区」接入
           </div>
         ) : (
@@ -259,7 +259,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                   {active === ws.name && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-green-900/30 text-green-400 flex-shrink-0">全局激活</span>}
                   {ws.system_pending && <span className="px-1.5 py-0.5 rounded text-fs-aux bg-amber-900/30 text-amber-400 flex-shrink-0">⏳ 包待接入</span>}
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-2 min-w-0">
+                <div className="flex items-center gap-1.5 text-fs-body text-gray-500 mb-2 min-w-0">
                   <span className={`px-1 py-0.5 rounded flex-shrink-0 ${ws.source.type === 'git' ? 'bg-info/10 text-info/80' : 'bg-surface-3 text-gray-500'}`}>
                     {ws.source.type === 'git' ? 'git' : 'local'}
                   </span>
@@ -269,18 +269,18 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                 <div className="flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
                   {ws.source.type === 'git' && canSync && (
                     <button onClick={() => handleSync(ws.name)} disabled={syncing === ws.name}
-                      className="px-2 py-1 text-xs bg-info/20 text-info rounded hover:bg-info/30 disabled:opacity-40">
+                      className="px-2 py-1 text-fs-body bg-info/20 text-info rounded hover:bg-info/30 disabled:opacity-40">
                       {syncing === ws.name ? '同步中...' : '⟳ 同步'}
                     </button>
                   )}
                   {active !== ws.name && (
-                    <button onClick={() => handleActivate(ws.name)} className="px-2 py-1 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2">激活</button>
+                    <button onClick={() => handleActivate(ws.name)} className="px-2 py-1 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2">激活</button>
                   )}
                   {isAdmin && (
-                    <button onClick={() => handleConformance(ws.name)} className="px-2 py-1 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2">校验</button>
+                    <button onClick={() => handleConformance(ws.name)} className="px-2 py-1 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2">校验</button>
                   )}
                   {isAdmin && (
-                    <button onClick={() => handleUnregister(ws.name)} className="px-2 py-1 text-xs bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">注销</button>
+                    <button onClick={() => handleUnregister(ws.name)} className="px-2 py-1 text-fs-body bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">注销</button>
                   )}
                 </div>
               </div>
@@ -289,17 +289,17 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
         )}
 
         {/* 合规报告（admin） */}
-        {isAdmin && loadingConformance && <div className="text-center text-gray-500 text-xs py-2">校验中...</div>}
+        {isAdmin && loadingConformance && <div className="text-center text-gray-500 text-fs-body py-2">校验中...</div>}
         {isAdmin && conformance && (
           <div className="bg-surface-1 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500">合规校验报告</span>
-              <span className={`text-xs font-bold ${conformance.verdict === 'PASS' ? 'text-green-400' : 'text-red-400'}`}>{conformance.verdict}</span>
+              <span className="text-fs-body text-gray-500">合规校验报告</span>
+              <span className={`text-fs-body font-bold ${conformance.verdict === 'PASS' ? 'text-green-400' : 'text-red-400'}`}>{conformance.verdict}</span>
             </div>
             {conformance.findings && conformance.findings.length > 0 ? (
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {conformance.findings.map((f: any, i: number) => (
-                  <div key={i} className={`text-xs flex gap-2 ${f.level === 'ERROR' ? 'text-red-400' : f.level === 'WARN' ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  <div key={i} className={`text-fs-body flex gap-2 ${f.level === 'ERROR' ? 'text-red-400' : f.level === 'WARN' ? 'text-yellow-400' : 'text-gray-500'}`}>
                     <span className="font-mono">[{f.level}]</span>
                     <span className="font-mono text-gray-600">{f.rule}</span>
                     <span className="flex-1">{f.message}</span>
@@ -307,7 +307,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                 ))}
               </div>
             ) : (
-              <div className="text-xs text-green-400">全部通过，无违规项</div>
+              <div className="text-fs-body text-green-400">全部通过，无违规项</div>
             )}
           </div>
         )}
@@ -315,7 +315,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
         {/* 文档浏览（折叠区） */}
         <div className="bg-surface-1 rounded-lg border border-border">
           <button onClick={() => setDocsOpen(v => !v)}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 hover:text-gray-200">
+            className="w-full flex items-center justify-between px-3 py-2 text-fs-body text-gray-400 hover:text-gray-200">
             <span>📄 文档浏览{selected ? ` · ${selected}` : ''}</span>
             <span className="text-fs-aux text-gray-600">{docsOpen ? '▼ 收起' : '▶ 展开'}</span>
           </button>
@@ -342,7 +342,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                     <FileViewer path={activeFile} content={fileContent} loading={loadingFile} />
                   </>
                 ) : (
-                  <div className="flex-1 flex items-center justify-center text-gray-600 text-xs">选择左侧文件查看内容</div>
+                  <div className="flex-1 flex items-center justify-center text-gray-600 text-fs-body">选择左侧文件查看内容</div>
                 )}
               </div>
             </div>
@@ -355,10 +355,10 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40" onClick={() => setShowRegister(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-sm font-bold text-gray-200 mb-1">注册工作区</h3>
-            <div className="text-xs text-gray-500 mb-3">注册人即归属人，系统包未建可先用待接入态</div>
+            <div className="text-fs-body text-gray-500 mb-3">注册人即归属人，系统包未建可先用待接入态</div>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => setRegType('local')} className={`px-3 py-1 text-xs rounded ${regType === 'local' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>本地文件夹</button>
-              <button onClick={() => setRegType('git')} className={`px-3 py-1 text-xs rounded ${regType === 'git' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>Git 仓库</button>
+              <button onClick={() => setRegType('local')} className={`px-3 py-1 text-fs-body rounded ${regType === 'local' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>本地文件夹</button>
+              <button onClick={() => setRegType('git')} className={`px-3 py-1 text-fs-body rounded ${regType === 'git' ? 'bg-info text-white' : 'bg-surface-3 text-gray-400'}`}>Git 仓库</button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="工作区名称" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
@@ -374,11 +374,11 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
               {(() => {
                 const cur = systems.find(s => s.name === regSystem);
                 return cur ? (
-                  <div className="col-span-2 text-[11px] text-gray-500 bg-surface-2/50 rounded px-2 py-1">
+                  <div className="col-span-2 text-fs-body text-gray-500 bg-surface-2/50 rounded px-2 py-1">
                     环境: {cur.envs.join(', ') || '无'} · 账号别名: {cur.accounts.join(', ') || '无'}
                   </div>
                 ) : (
-                  <div className="col-span-2 text-[11px] text-amber-500/80 bg-amber-900/10 rounded px-2 py-1">
+                  <div className="col-span-2 text-fs-body text-amber-500/80 bg-amber-900/10 rounded px-2 py-1">
                     ⏳ 系统「{regSystem}」适配包未建——工作区可先注册（待接入），跑测试前需先在栏1注册系统
                   </div>
                 );
@@ -386,7 +386,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
               {regType === 'local' ? (
                 <div className="col-span-2 flex gap-2">
                   <input value={regPath} onChange={e => setRegPath(e.target.value)} placeholder="本地路径 (D:/work/spec-tdm)" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                  <button onClick={() => setPickerFor('local')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
+                  <button onClick={() => setPickerFor('local')} className="px-2.5 py-1.5 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
                 </div>
               ) : (
                 <>
@@ -394,7 +394,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
                   <input value={regBranch} onChange={e => setRegBranch(e.target.value)} placeholder="分支 (main)" className="bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
                   <div className="col-span-2 flex gap-2">
                     <input value={regCloneDir} onChange={e => setRegCloneDir(e.target.value)} placeholder="克隆目录（可选，默认 {specguard}/workspaces/_clones/{名称}）" className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-sm text-gray-300" />
-                    <button onClick={() => setPickerFor('git')} className="px-2.5 py-1.5 text-xs bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
+                    <button onClick={() => setPickerFor('git')} className="px-2.5 py-1.5 text-fs-body bg-surface-3 text-gray-400 rounded hover:bg-surface-2 flex-shrink-0" title="浏览选择目录">📂 浏览</button>
                   </div>
                 </>
               )}

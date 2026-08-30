@@ -100,14 +100,14 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
   }, [sessionId, load]);
 
   if (!sessionId) {
-    return <div className="text-xs text-gray-600 text-center py-6">暂无会话——发起对话后可实时查看路径跑偏</div>;
+    return <div className="text-fs-body text-gray-600 text-center py-6">暂无会话——发起对话后可实时查看路径跑偏</div>;
   }
   if (loading && !trace) {
-    return <div className="text-xs text-gray-500 text-center py-6">路径重放加载中…</div>;
+    return <div className="text-fs-body text-gray-500 text-center py-6">路径重放加载中…</div>;
   }
   if (failed && !trace) {
     return (
-      <div className="text-xs text-red-400 px-3 py-4">
+      <div className="text-fs-body text-red-400 px-3 py-4">
         路径重放失败：{failed} <button className="underline ml-1" onClick={() => load()}>重试</button>
       </div>
     );
@@ -116,7 +116,7 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
 
   if (!trace.available) {
     return (
-      <div className="px-3 py-4 text-xs text-gray-500 space-y-2">
+      <div className="px-3 py-4 text-fs-body text-gray-500 space-y-2">
         <div>⚠ 当前无法给出路径重放：{trace.reason}</div>
         <button className="text-info underline" onClick={() => load()}>↻ 重试</button>
       </div>
@@ -128,7 +128,7 @@ export function FlowPanel({ sessionId, onError }: { sessionId: string; onError?:
   const cur = trace.current_stage;
   const graph = (viewMode === 'focus' && trace.mermaid_focused) ? trace.mermaid_focused : trace.mermaid;
   return (
-    <div className="px-3 py-2 text-xs space-y-2" data-testid="flow-panel">
+    <div className="px-3 py-2 text-fs-body space-y-2" data-testid="flow-panel">
       <style>{FLASH_CSS}</style>
       {/* 头：flow 名 + 当前阶段 + 差异数 + 手动刷新 */}
       <div className="flex items-center justify-between border-b border-border pb-1.5">

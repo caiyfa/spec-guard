@@ -180,7 +180,7 @@ function ModelsTab() {
             }`}>
             <div className="flex items-center gap-1">
               {m.is_default && <span className="text-yellow-500 text-fs-aux">★</span>}
-              <span className="text-xs font-medium truncate">{m.name || '(未命名)'}</span>
+              <span className="text-fs-body font-medium truncate">{m.name || '(未命名)'}</span>
             </div>
             <div className="text-fs-micro text-gray-600 font-mono truncate">{m.model || '(未配置)'}</div>
           </button>
@@ -193,7 +193,7 @@ function ModelsTab() {
         {selectedId ? (
           <>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-gray-300">编辑模型：{editForm.name || '(未命名)'}</span>
+              <span className="text-fs-body font-medium text-gray-300">编辑模型：{editForm.name || '(未命名)'}</span>
               <div className="flex items-center gap-2">
                 <button onClick={handleProbe} disabled={probing}
                   className="text-fs-aux px-2 py-1 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40">
@@ -228,7 +228,7 @@ function ModelsTab() {
                 <label className="block text-fs-aux text-gray-500 mb-0.5">启用思考</label>
                 <select value={editForm.thinking_enabled}
                   onChange={(e) => setEditForm(p => ({ ...p, thinking_enabled: e.target.value }))}
-                  className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono">
+                  className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono">
                   <option value="false">关闭</option>
                   <option value="true">开启</option>
                 </select>
@@ -239,7 +239,7 @@ function ModelsTab() {
                 <select value={editForm.reasoning_effort}
                   onChange={(e) => setEditForm(p => ({ ...p, reasoning_effort: e.target.value }))}
                   disabled={editForm.thinking_enabled !== 'true'}
-                  className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono disabled:opacity-40">
+                  className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono disabled:opacity-40">
                   <option value="">默认</option>
                   <option value="low">low</option>
                   <option value="medium">medium</option>
@@ -314,7 +314,7 @@ function RunTab() {
     <div className="max-w-2xl p-1">
       <div className="rounded-md border border-border bg-surface-3 p-4">
         <h3 className="text-sm font-medium text-gray-200 mb-1">执行看门狗超时（T-118）</h3>
-        <p className="text-[11px] text-gray-500 mb-3">
+        <p className="text-fs-body text-gray-500 mb-3">
           单次执行超过该时长（从触发起算）自动强制终止并标记 timeout——进程挂死不再永久占用执行队列。
           <span className="text-gray-600"> 0 = 禁用。</span>
           {source === 'env' && <span className="text-warn"> 当前由环境变量 SG_RUN_TIMEOUT 控制，保存后以设置值为准。</span>}
@@ -328,12 +328,12 @@ function RunTab() {
             className="w-32 bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200"
             placeholder="0 = 禁用"
           />
-          <span className="text-xs text-gray-500">秒</span>
+          <span className="text-fs-body text-gray-500">秒</span>
           <button onClick={save}
-            className="px-3 py-1.5 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
+            className="px-3 py-1.5 rounded text-fs-body bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
             💾 保存
           </button>
-          {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
+          {msg && <span className={`text-fs-body ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
         </div>
       </div>
     </div>
@@ -372,7 +372,7 @@ function AuditTab() {
     <div className="max-w-2xl p-1">
       <div className="rounded-md border border-border bg-surface-3 p-4">
         <h3 className="text-sm font-medium text-gray-200 mb-1">Spec 签名基线更新方式</h3>
-        <p className="text-[11px] text-gray-500 mb-3">
+        <p className="text-fs-body text-gray-500 mb-3">
           路由通过对比 spec 文件签名与基线检测变更，决定「研发修正场景包文件后是否自动进入审计模式」（K-007）。
         </p>
         <label className="flex items-center gap-2 cursor-pointer">
@@ -388,7 +388,7 @@ function AuditTab() {
           <p>· 关闭（默认手动）：研发修正 spec 后需在 Agent 会话中或调用 POST /api/workspace/mark-audited 手动标记已审计，基线才复位。</p>
           <p>· 开启：Agent 写审计报告成功后自动更新基线，无需手动标记。</p>
         </div>
-        {msg && <p className={`text-[11px] mt-2 ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</p>}
+        {msg && <p className={`text-fs-body mt-2 ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</p>}
       </div>
     </div>
   );
@@ -435,7 +435,7 @@ function GitTab() {
     <div className="max-w-2xl p-1">
       <div className="rounded-md border border-border bg-surface-3 p-4">
         <h3 className="text-sm font-medium text-gray-200 mb-1">🐙 Git 远端推送配置</h3>
-        <p className="text-[11px] text-gray-500 mb-3">
+        <p className="text-fs-body text-gray-500 mb-3">
           配置后，提交 delta 起草区后可以一键推送到远端仓库。
           参考：Gitee 设置 → 私人令牌 → 创建令牌（勾选 projects 写入权限）。
           token 使用 Fernet 加密存储（同模型 api_key 方案），仅用于推送不落地远程 URL。
@@ -450,10 +450,10 @@ function GitTab() {
           {hasToken ? '✅ 已配置 token（重新输入可覆盖）' : '未配置 token——推送到远端需要 HTTPS PAT'}
         </div>
         <button onClick={handleSave} disabled={saving}
-          className="mt-3 px-3 py-1.5 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
+          className="mt-3 px-3 py-1.5 rounded text-fs-body bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30">
           {saving ? '保存中…' : '💾 保存'}
         </button>
-        {message && <p className={`text-[11px] mt-2 ${message.startsWith('✅') ? 'text-pass' : 'text-fail'}`}>{message}</p>}
+        {message && <p className={`text-fs-body mt-2 ${message.startsWith('✅') ? 'text-pass' : 'text-fail'}`}>{message}</p>}
       </div>
     </div>
   );
@@ -470,7 +470,7 @@ function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
     <div>
       <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600" />
+        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono placeholder-gray-600" />
     </div>
   );
 }
@@ -486,7 +486,7 @@ function SelectField({ label, value, onChange, options }: {
     <div>
       <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono">
+        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono">
         {items.map(([l, v]) => <option key={v} value={v}>{l}</option>)}
       </select>
     </div>

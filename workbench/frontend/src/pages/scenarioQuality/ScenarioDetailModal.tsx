@@ -63,15 +63,15 @@ export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, 
     <Modal open onClose={onClose} width={980} title={`${row.id}　${row.title}`}>
       {/* 徽标与动作行 */}
       <div className="flex flex-wrap items-center gap-1.5 mb-2">
-        <span className={`px-2 py-0.5 rounded text-xs ${GRADE_CLS[row.grade]}`}>{GRADE_LABEL[row.grade]}</span>
+        <span className={`px-2 py-0.5 rounded text-fs-body ${GRADE_CLS[row.grade]}`}>{GRADE_LABEL[row.grade]}</span>
         {row.issues.map(i => (
-          <span key={i} className={`px-1.5 py-0.5 rounded text-xs ${ISSUE_CLS[i]}`}>{ISSUE_LABEL[i]}</span>
+          <span key={i} className={`px-1.5 py-0.5 rounded text-fs-body ${ISSUE_CLS[i]}`}>{ISSUE_LABEL[i]}</span>
         ))}
-        <span className="text-xs text-gray-500 ml-2">关联需求：</span>
-        {row.covers_detail.length === 0 ? <span className="text-xs text-gray-600">—</span> : row.covers_detail.map(c => (
+        <span className="text-fs-body text-gray-500 ml-2">关联需求：</span>
+        {row.covers_detail.length === 0 ? <span className="text-fs-body text-gray-600">—</span> : row.covers_detail.map(c => (
           <span key={c.fr}
             title={c.valid ? `${c.fr}：${c.title || '（无标题）'}${c.module ? `（${c.module}）` : ''}` : `${c.fr}：当前工作区锚点表查不到`}
-            className={`px-1.5 py-0.5 rounded text-xs ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
+            className={`px-1.5 py-0.5 rounded text-fs-body ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
             {c.fr}{!c.valid && ' ⚠'}
           </span>
         ))}
@@ -84,14 +84,14 @@ export default function ScenarioDetailModal({ row, scenarios, anchorsAvailable, 
 
       {/* doc 语义速览（完整结构化内容见下方编辑器） */}
       {hasDoc && (
-        <div className="text-xs text-gray-400 mb-2 space-y-0.5">
+        <div className="text-fs-body text-gray-400 mb-2 space-y-0.5">
           {doc.given && <div>· 给定：{doc.given}</div>}
           {doc.when && <div>· 操作：{doc.when}</div>}
           {doc.then && <div>· 预期：{doc.then}</div>}
         </div>
       )}
       {row.evidence.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 mb-3 text-xs">
+        <div className="flex flex-wrap items-center gap-1 mb-3 text-fs-body">
           <span className="text-gray-500">断言证据（评级的确定性输入）：</span>
           {row.evidence.map(e => (
             <span key={e} className="px-1.5 py-0.5 rounded bg-surface-3" title={`证据特征 ${e}`}>

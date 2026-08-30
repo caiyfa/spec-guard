@@ -38,7 +38,7 @@ function Section({ icon, title, count, children }: {
 }) {
   return (
     <div>
-      <div className="text-[11px] font-medium text-gray-400 mb-1.5">
+      <div className="text-fs-body font-medium text-gray-400 mb-1.5">
         {icon} {title}{count != null && <span className="ml-1 text-fs-micro text-gray-600">({count})</span>}
       </div>
       {children}
@@ -143,7 +143,7 @@ function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
           </button>
         )}
       </div>
-      <pre className="px-2.5 py-1.5 text-[11px] text-gray-300 whitespace-pre-wrap break-all max-h-56 overflow-y-auto"
+      <pre className="px-2.5 py-1.5 text-fs-body text-gray-300 whitespace-pre-wrap break-all max-h-56 overflow-y-auto"
         style={{ background: 'rgb(var(--code-bg))' }}>
         {m.chunk}
       </pre>
@@ -207,8 +207,8 @@ function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch
         {match.title} · 行 {match.start}-{match.end}（高亮段）
       </div>
       <div ref={containerRef} style={{ height: '66vh' }} className="overflow-y-auto">
-        {state === 'loading' && <div className="p-4 text-[11px] text-gray-600">文档加载中…</div>}
-        {state === 'error' && <div className="p-4 text-[11px] text-fail">文档读取失败：{errMsg}</div>}
+        {state === 'loading' && <div className="p-4 text-fs-body text-gray-600">文档加载中…</div>}
+        {state === 'error' && <div className="p-4 text-fs-body text-fail">文档读取失败：{errMsg}</div>}
         {state === 'ready' && (
           <div className="spec-md p-4 text-sm">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content}</ReactMarkdown>
@@ -359,7 +359,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
             <>
               {(!!doc.given || !!doc.when || !!doc.then) && (
                 <Section icon="📖" title="业务语义">
-                  <div className="rounded-lg border border-border bg-surface-2/70 px-3 py-2.5 space-y-1.5 text-[12px]">
+                  <div className="rounded-lg border border-border bg-surface-2/70 px-3 py-2.5 space-y-1.5 text-fs-body">
                     {!!doc.given && (
                       <div className="flex gap-2"><span className="text-gray-600 flex-shrink-0 w-10">Given</span>
                         <span className="text-gray-300 whitespace-pre-wrap">{String(doc.given)}</span></div>
@@ -377,8 +377,8 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
               )}
               {!!doc.note && (
                 <details className="rounded border border-border/60 bg-surface-2/50 px-3 py-1.5">
-                  <summary className="text-[11px] text-gray-500 cursor-pointer">📝 编写备注（关键决策）</summary>
-                  <div className="mt-1.5 text-[11px] text-gray-400 whitespace-pre-wrap">{String(doc.note)}</div>
+                  <summary className="text-fs-body text-gray-500 cursor-pointer">📝 编写备注（关键决策）</summary>
+                  <div className="mt-1.5 text-fs-body text-gray-400 whitespace-pre-wrap">{String(doc.note)}</div>
                 </details>
               )}
             </>
@@ -425,18 +425,18 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                   const comment = flowComments[i] || '';
                   return (
                     <div key={i} className="rounded-lg border border-border bg-surface-2/70 px-3 py-2">
-                      <div className="flex items-center gap-2 text-[12px]">
+                      <div className="flex items-center gap-2 text-fs-body">
                         <span className="text-gray-600 text-fs-aux w-4 flex-shrink-0">{i + 1}</span>
                         <span>{d.icon}</span>
                         <span className="text-gray-500 flex-shrink-0">{d.typeLabel}</span>
-                        <span className="text-gray-200 font-mono text-[11px] break-all">{d.title}</span>
+                        <span className="text-gray-200 font-mono text-fs-body break-all">{d.title}</span>
                         {d.save && (
                           <span className="ml-auto text-fs-micro text-gray-600 flex-shrink-0"
                             title={`结果存为变量，后续步骤以 {{${d.save}.…}} 引用`}>→ {d.save}</span>
                         )}
                       </div>
                       {comment && (
-                        <div className="mt-1 ml-6 text-[11px] text-gray-500 whitespace-pre-wrap border-l-2 border-info/20 pl-2">
+                        <div className="mt-1 ml-6 text-fs-body text-gray-500 whitespace-pre-wrap border-l-2 border-info/20 pl-2">
                           {comment}
                         </div>
                       )}
@@ -467,7 +467,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                   const d = describeVerify(v);
                   const comment = verifyComments[i] || '';
                   return (
-                    <div key={i} className="text-[11px]">
+                    <div key={i} className="text-fs-body">
                       <div className="flex items-start gap-1.5">
                         <span className="flex-shrink-0">{d.icon}</span>
                         <span className="text-gray-300 break-all flex-1">{d.text}</span>

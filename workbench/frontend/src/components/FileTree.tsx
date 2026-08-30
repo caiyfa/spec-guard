@@ -192,7 +192,7 @@ export default function FileTree({
         <div key={node.path}>
           <button
             onClick={() => toggleDir(node.path)}
-            className="w-full text-left flex items-center gap-1 px-1 py-0.5 hover:bg-surface-3 rounded text-xs text-gray-400"
+            className="w-full text-left flex items-center gap-1 px-1 py-0.5 hover:bg-surface-3 rounded text-fs-body text-gray-400"
             style={{ paddingLeft: `${node.level * 12 + 4}px` }}
           >
             <span className="text-fs-aux">{isExpanded ? '▼' : '▶'}</span>
@@ -218,7 +218,7 @@ export default function FileTree({
       <div
         key={node.path}
         onClick={handleClick}
-        className={`flex items-center gap-1 px-1 py-0.5 rounded text-xs cursor-pointer transition-colors ${
+        className={`flex items-center gap-1 px-1 py-0.5 rounded text-fs-body cursor-pointer transition-colors ${
           mode === 'select'
             ? isChecked
               ? 'bg-info/10 text-info'
@@ -256,13 +256,13 @@ export default function FileTree({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索文件名..."
-            className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-300 placeholder-gray-600 focus:border-info outline-none"
+            className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300 placeholder-gray-600 focus:border-info outline-none"
           />
         </div>
       )}
       <div className="flex-1 overflow-y-auto p-1">
         {tree.length === 0 ? (
-          <div className="text-center text-gray-600 text-xs py-4">
+          <div className="text-center text-gray-600 text-fs-body py-4">
             {search ? '无匹配文件' : '无文件'}
           </div>
         ) : (

@@ -55,7 +55,7 @@ export default function Dashboard() {
       <div className="flex items-center gap-1 bg-surface-3 rounded-lg p-1 w-fit">
         {([['overview', '📊 运行总览'], ['spec', '📐 YAML 格式规范']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-md text-fs-body font-medium transition-colors ${
               tab === key ? 'bg-surface text-info shadow' : 'text-gray-500 hover:text-gray-300'
             }`}>
             {label}
@@ -77,14 +77,14 @@ export default function Dashboard() {
               ].map((c) => (
                 <div key={c.label} className="card-hover">
                   <div className={`text-2xl font-bold font-mono ${c.color}`}>{c.value}</div>
-                  <div className="text-xs text-gray-500 mt-1">{c.label}</div>
+                  <div className="text-fs-body text-gray-500 mt-1">{c.label}</div>
                 </div>
               ))}
             </div>
           )}
 
           {latest && (
-            <p className="text-xs text-gray-500">
+            <p className="text-fs-body text-gray-500">
               最近运行：{latest.run_id} · {latest.env} · {latest.started_at}
               {latest.stats.warnings > 0 && ` · ⚠️ ${latest.stats.warnings} 条 WARN`}
             </p>
@@ -96,7 +96,7 @@ export default function Dashboard() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-gray-500 border-b border-border">
+                <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                   <th className="px-4 py-2">ID</th>
                   <th className="px-4 py-2">标题</th>
                   <th className="px-4 py-2">优先级</th>
@@ -110,22 +110,22 @@ export default function Dashboard() {
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">加载中…</td></tr>
                 ) : scenarios.map((s) => (
                   <tr key={s.id} className="border-b border-border/50 hover:bg-surface-3 transition-colors">
-                    <td className="px-4 py-2 font-mono text-info text-xs">{s.id}</td>
+                    <td className="px-4 py-2 font-mono text-info text-fs-body">{s.id}</td>
                     <td className="px-4 py-2">{s.title}</td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${s.priority === 'P0' ? 'bg-fail/10 text-fail' : 'bg-surface-3 text-gray-400'}`}>
+                      <span className={`text-fs-body px-1.5 py-0.5 rounded ${s.priority === 'P0' ? 'bg-fail/10 text-fail' : 'bg-surface-3 text-gray-400'}`}>
                         {s.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-xs text-gray-400">{s.tags.join(', ')}</td>
-                    <td className="px-4 py-2 text-xs">
+                    <td className="px-4 py-2 text-fs-body text-gray-400">{s.tags.join(', ')}</td>
+                    <td className="px-4 py-2 text-fs-body">
                       {s.depends_on.length > 0 ? (
                         <span className={s.depends_on.some(d => d.mode === 'exclusive') ? 'text-warn' : 'text-gray-500'}>
                           ⛓ {s.depends_on.map(d => d.id).join(', ')}
                         </span>
                       ) : <span className="text-gray-600">—</span>}
                     </td>
-                    <td className="px-4 py-2 text-xs font-mono text-gray-500">{s.covers.join(', ') || '—'}</td>
+                    <td className="px-4 py-2 text-fs-body font-mono text-gray-500">{s.covers.join(', ') || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -161,13 +161,13 @@ function SpecTab({ specMd, specLoading, exportMd }: {
         <div ref={contentRef}
           className="flex-1 bg-surface-2 border border-border rounded-lg p-5 overflow-y-auto">
           {specLoading ? (
-            <div className="text-gray-500 text-xs text-center py-8">加载中…</div>
+            <div className="text-gray-500 text-fs-body text-center py-8">加载中…</div>
           ) : specMd ? (
             <div className="spec-md text-[13px] leading-6 text-gray-300">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{specMd}</ReactMarkdown>
             </div>
           ) : (
-            <div className="text-gray-500 text-xs text-center py-8">切换到格式规范 Tab 加载</div>
+            <div className="text-gray-500 text-fs-body text-center py-8">切换到格式规范 Tab 加载</div>
           )}
         </div>
       </div>
@@ -198,13 +198,13 @@ function TocSidebar({ md, contentRef }: { md: string; contentRef: React.RefObjec
 
   return (
     <div className="w-[220px] flex-shrink-0 bg-surface-2 border border-border rounded-lg overflow-hidden flex flex-col">
-      <div className="px-3 py-2 border-b border-border text-[11px] font-medium text-gray-400 bg-surface-3/50">
+      <div className="px-3 py-2 border-b border-border text-fs-body font-medium text-gray-400 bg-surface-3/50">
         📑 大纲
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {toc.map((item) => (
           <button key={item.id} onClick={() => scrollTo(item)}
-            className={`w-full text-left px-3 py-1 text-[11px] transition-colors ${
+            className={`w-full text-left px-3 py-1 text-fs-body transition-colors ${
               activeId === item.id
                 ? 'text-info bg-info/10'
                 : item.level === 1 ? 'text-gray-300 font-medium hover:text-info' :
@@ -257,7 +257,7 @@ function CollapsibleCodeBlock({ language, children }: { language: string; childr
       </div>
       {collapsed ? (
         <div className="border border-border rounded-b-lg px-3 py-2" style={{ background: tokens.codeBg }}>
-          <pre className="text-[11px] text-gray-500 font-mono">{preview}{lines > 3 ? '\n…' : ''}</pre>
+          <pre className="text-fs-body text-gray-500 font-mono">{preview}{lines > 3 ? '\n…' : ''}</pre>
         </div>
       ) : (
         <SyntaxHighlighter
@@ -291,7 +291,7 @@ const mdComponents = {
     if (match) {
       return <CollapsibleCodeBlock language={match[1]}>{code}</CollapsibleCodeBlock>;
     }
-    return <code className="bg-surface-3 text-info/80 px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>;
+    return <code className="bg-surface-3 text-info/80 px-1 py-0.5 rounded text-fs-body font-mono">{children}</code>;
   },
 };
 

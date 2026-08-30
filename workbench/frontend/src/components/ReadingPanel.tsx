@@ -38,7 +38,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
 }) {
   if (items.length === 0) {
     return (
-      <div className="text-xs text-gray-600 text-center py-6 px-4 space-y-3">
+      <div className="text-fs-body text-gray-600 text-center py-6 px-4 space-y-3">
         <div>暂无阅读足迹——agent 调用读型文档工具后自动汇聚到这里</div>
         {onRefresh && (
           <button onClick={onRefresh}
@@ -64,7 +64,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
           className="rounded-lg border border-border bg-surface-2/70 p-2 hover:border-info/40 transition-colors">
           {/* 标题行：意义标注 + 读取次数 */}
           <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => onOpen(item)}>
-            <span className="text-[11px] text-gray-200 font-medium truncate flex-1" title={item.label}>
+            <span className="text-fs-body text-gray-200 font-medium truncate flex-1" title={item.label}>
               {item.label}
             </span>
             {item.reads > 1 && (

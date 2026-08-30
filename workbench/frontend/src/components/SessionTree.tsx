@@ -48,7 +48,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
     return (
       <div className="w-9 flex-shrink-0 bg-surface-2 border-r border-border flex flex-col items-center py-2 gap-1.5">
         <button onClick={onToggleCollapse} title="展开会话列表"
-          className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+          className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
           »
         </button>
         <button onClick={onNewSession} title="新会话"

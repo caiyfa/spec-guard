@@ -36,7 +36,7 @@ export function isShortReply(content: string): boolean {
 export function MessageWithToolbar({ content }: { content: string }) {
   const [view, setView] = useState<'preview' | 'text'>('preview');
   const tabBtn = (active: boolean) =>
-    `px-2 py-0.5 rounded text-[11px] transition-colors ${active ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-info hover:bg-surface-3'}`;
+    `px-2 py-0.5 rounded text-fs-body transition-colors ${active ? 'bg-info/20 text-info' : 'text-gray-500 hover:text-info hover:bg-surface-3'}`;
   return (
     <div className="rounded-lg border border-border/60 bg-surface-2/40 overflow-hidden">
       {/* 内容框内部顶部工具栏 */}
@@ -49,7 +49,7 @@ export function MessageWithToolbar({ content }: { content: string }) {
         </button>
         <span className="flex-1" />
         <CopyButton text={content}
-          className="w-6 h-6 flex items-center justify-center rounded bg-surface-3 text-gray-400 hover:text-info hover:bg-surface-1 text-xs border border-border/50 flex-shrink-0" />
+          className="w-6 h-6 flex items-center justify-center rounded bg-surface-3 text-gray-400 hover:text-info hover:bg-surface-1 text-fs-body border border-border/50 flex-shrink-0" />
       </div>
       {/* 内容区（预览 = Markdown 渲染 / 文本 = 原始源码，独立深色背景） */}
       {view === 'preview' ? (
@@ -57,7 +57,7 @@ export function MessageWithToolbar({ content }: { content: string }) {
           <MarkdownText content={unwrapTextBlock(content)} />
         </div>
       ) : (
-        <pre className="text-xs font-mono text-gray-300 bg-gray-900/50 rounded-b-lg p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
+        <pre className="text-fs-body font-mono text-gray-300 bg-gray-900/50 rounded-b-lg p-3 overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
           {content}
         </pre>
       )}

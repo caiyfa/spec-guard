@@ -170,23 +170,23 @@ export default function ZentaoPanel() {
   };
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
-  const label = 'block text-xs text-gray-400 mb-1';
+  const label = 'block text-fs-body text-gray-400 mb-1';
   const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-info';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const btnDanger = 'px-3 py-1.5 rounded text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40';
-  const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
-  const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const btnDanger = 'px-3 py-1.5 rounded text-fs-body font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40';
+  const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
+  const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
 
   return (
     <div className="p-4 max-w-[1200px] mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-bold">🔗 禅道集成</h1>
-        <div className="text-[11px] text-gray-500">
+        <div className="text-fs-body text-gray-500">
           写动作需 product/tester 角色 · 创建故事仅 product · Agent 产出草案需人确认
         </div>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       {/* ── 区① 冻结 delta 交付 ── */}
       <div className={card}>
@@ -210,7 +210,7 @@ export default function ZentaoPanel() {
         <div className="mt-3">
           <span className={label}>故事点评估记录（恒 suggested，产品确认后才可回写）</span>
           {estimates.length === 0 ? (
-            <div className="text-xs text-gray-500">暂无评估记录</div>
+            <div className="text-fs-body text-gray-500">暂无评估记录</div>
           ) : (
             <table className="w-full">
               <thead>
@@ -238,7 +238,7 @@ export default function ZentaoPanel() {
                         {est.status === 'confirmed' && (
                           <button className={btn} onClick={() => handleWriteback(est)}>回写禅道</button>
                         )}
-                        {est.status === 'written_back' && <span className="text-[11px] text-gray-500">已回写</span>}
+                        {est.status === 'written_back' && <span className="text-fs-body text-gray-500">已回写</span>}
                       </div>
                     </td>
                   </tr>
@@ -259,7 +259,7 @@ export default function ZentaoPanel() {
             <input className={`${input} mb-2`} placeholder="场景 ID（如 IS-RVT-002）" value={scenarioId} onChange={e => setScenarioId(e.target.value)} />
             <input className={`${input} mb-2`} placeholder="SPQ 编号（可选，如 SPQ-005）" value={spqId} onChange={e => setSpqId(e.target.value)} />
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs text-gray-400">严重度</span>
+              <span className="text-fs-body text-gray-400">严重度</span>
               <select className={`${input} w-24`} value={fromRunSev} onChange={e => setFromRunSev(Number(e.target.value))}>
                 {SEVERITIES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}
               </select>
@@ -271,7 +271,7 @@ export default function ZentaoPanel() {
             <input className={`${input} mb-2`} placeholder="BUG 标题" value={bugTitle} onChange={e => setBugTitle(e.target.value)} />
             <textarea className={`${input} mb-2 min-h-[80px]`} placeholder="复现步骤（多行）" value={bugSteps} onChange={e => setBugSteps(e.target.value)} />
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs text-gray-400">严重度</span>
+              <span className="text-fs-body text-gray-400">严重度</span>
               <select className={`${input} w-24`} value={bugSev} onChange={e => setBugSev(Number(e.target.value))}>
                 {SEVERITIES.map(s => <option key={s.v} value={s.v}>{s.label}</option>)}
               </select>
@@ -280,7 +280,7 @@ export default function ZentaoPanel() {
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-xs text-gray-400">禅道状态回查</span>
+          <span className="text-fs-body text-gray-400">禅道状态回查</span>
           <input className={`${input} w-48`} placeholder="BUG 编号（如 ZT-BUG-9917）" value={pollBugId} onChange={e => setPollBugId(e.target.value)} />
           <button className={btn} onClick={handlePollBug} disabled={!pollBugId}>回查</button>
         </div>
@@ -290,7 +290,7 @@ export default function ZentaoPanel() {
       <div className={card}>
         <h2 className="text-sm font-semibold mb-3">③ 对话分析草案（飞书文档/多维表格 → Agent 分析 → 人确认建故事）</h2>
         {drafts.length === 0 ? (
-          <div className="text-xs text-gray-500">暂无草案。在「对话」中粘贴飞书文档/多维表格链接，Agent 拉取分析后将自动产出草案。</div>
+          <div className="text-fs-body text-gray-500">暂无草案。在「对话」中粘贴飞书文档/多维表格链接，Agent 拉取分析后将自动产出草案。</div>
         ) : (
           <table className="w-full">
             <thead>
@@ -305,11 +305,11 @@ export default function ZentaoPanel() {
                   <td className={td}>{d.id}</td>
                   <td className={td}>
                     <div className="font-medium">{d.title}</div>
-                    <div className="text-[11px] text-gray-500 line-clamp-2 max-w-[420px]">{d.spec}</div>
+                    <div className="text-fs-body text-gray-500 line-clamp-2 max-w-[420px]">{d.spec}</div>
                   </td>
                   <td className={td}>
                     {(d.source_refs || []).map((s, i) => (
-                      <div key={i} className="text-[11px]">
+                      <div key={i} className="text-fs-body">
                         {s.type === 'feishu_doc' ? '📄' : s.type === 'feishu_base' ? '📊' : '✍️'} {s.note || s.ref || s.url || s.type}
                       </div>
                     ))}
@@ -324,8 +324,8 @@ export default function ZentaoPanel() {
                           <button className={btnDanger} onClick={() => handleCancelDraft(d)}>取消</button>
                         </>
                       )}
-                      {d.status === 'created' && <span className="text-[11px] text-gray-500">已创建</span>}
-                      {d.status === 'cancelled' && <span className="text-[11px] text-gray-500">已取消</span>}
+                      {d.status === 'created' && <span className="text-fs-body text-gray-500">已创建</span>}
+                      {d.status === 'cancelled' && <span className="text-fs-body text-gray-500">已取消</span>}
                     </div>
                   </td>
                 </tr>
@@ -345,7 +345,7 @@ export default function ZentaoPanel() {
           <div>
             <span className={label}>外部锚点（sf_external_refs，M10 血缘链数据源）</span>
             {refs.length === 0 ? (
-              <div className="text-xs text-gray-500">暂无锚点登记</div>
+              <div className="text-fs-body text-gray-500">暂无锚点登记</div>
             ) : (
               <div className="max-h-64 overflow-y-auto border border-border/60 rounded">
                 <table className="w-full">
@@ -373,7 +373,7 @@ export default function ZentaoPanel() {
           <div>
             <span className={label}>最近作业（幂等/重试/审计）</span>
             {jobs.length === 0 ? (
-              <div className="text-xs text-gray-500">暂无作业</div>
+              <div className="text-fs-body text-gray-500">暂无作业</div>
             ) : (
               <div className="max-h-64 overflow-y-auto border border-border/60 rounded">
                 <table className="w-full">

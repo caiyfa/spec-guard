@@ -95,13 +95,13 @@ export default function FocusGraph({ nodeId, depth = 2, height = 360 }: Props) {
   const selNode = data?.nodes.find(n => n.id === selected);
 
   if (!nodeId) {
-    return <div className="text-[11px] text-gray-500 p-2">未选择焦点节点</div>;
+    return <div className="text-fs-body text-gray-500 p-2">未选择焦点节点</div>;
   }
   if (error) {
-    return <div className="text-[11px] text-red-400 p-2">子图加载失败：{error}</div>;
+    return <div className="text-fs-body text-red-400 p-2">子图加载失败：{error}</div>;
   }
   if (!data) {
-    return <div className="text-[11px] text-gray-500 p-2">加载中…</div>;
+    return <div className="text-fs-body text-gray-500 p-2">加载中…</div>;
   }
 
   return (
@@ -115,7 +115,7 @@ export default function FocusGraph({ nodeId, depth = 2, height = 360 }: Props) {
         <Background gap={18} size={1} color="#2a2f3f" />
       </ReactFlow>
       {selNode && (
-        <div className="absolute right-2 top-2 w-60 rounded border border-border bg-surface-2 p-2.5 text-[11px] shadow-lg">
+        <div className="absolute right-2 top-2 w-60 rounded border border-border bg-surface-2 p-2.5 text-fs-body shadow-lg">
           <div className="flex items-center justify-between mb-1">
             <span className="font-semibold text-gray-200">{selNode.title || selNode.id}</span>
             <button className="text-gray-500 hover:text-gray-300" onClick={() => setSelected(null)}>✕</button>
@@ -146,7 +146,7 @@ export function FocusGraphTab({ messages = [] }: { messages?: { role: string; co
   const [nodeId, setNodeId] = useState('');
   const [depth, setDepth] = useState(2);
   const [manual, setManual] = useState(false);
-  const inputCls = 'flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info';
+  const inputCls = 'flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info';
 
   // T-921：消息锚点自动焦点（手动输入过则以手动为准）
   useEffect(() => {
@@ -161,18 +161,18 @@ export function FocusGraphTab({ messages = [] }: { messages?: { role: string; co
         <input className={inputCls} value={input} onChange={e => setInput(e.target.value)}
           placeholder="FR-xxx / tp:xxx / fd:xxx"
           onKeyDown={e => { if (e.key === 'Enter') { setManual(true); setNodeId(input.trim()); } }} />
-        <select className="bg-surface-3 border border-border rounded px-1.5 py-1 text-xs text-gray-300"
+        <select className="bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body text-gray-300"
           value={depth} onChange={e => setDepth(Number(e.target.value))}>
           <option value={1}>1 跳</option>
           <option value={2}>2 跳</option>
           <option value={3}>3 跳</option>
         </select>
-        <button className="px-2.5 py-1 rounded text-xs bg-info/15 text-info hover:bg-info/25"
+        <button className="px-2.5 py-1 rounded text-fs-body bg-info/15 text-info hover:bg-info/25"
           onClick={() => { setManual(true); setNodeId(input.trim()); }}>查看</button>
       </div>
       {nodeId
         ? <FocusGraph nodeId={nodeId} depth={depth} height={420} />
-        : <div className="text-[11px] text-gray-500 px-1 py-4 text-center">
+        : <div className="text-fs-body text-gray-500 px-1 py-4 text-center">
             对话中提及 FR/话题/材料锚点时自动显示其子图；也可手动输入节点 ID
           </div>}
     </div>

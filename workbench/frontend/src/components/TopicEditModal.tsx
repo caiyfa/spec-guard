@@ -142,8 +142,8 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
     return () => window.removeEventListener('keydown', h);
   }, [onClose, previewImg]);
 
-  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body text-gray-200 outline-none focus:border-info';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
   const origin = topic.agent_origin;
   const diff = (cur: string, orig?: string) =>
     orig !== undefined && orig !== cur;
@@ -157,18 +157,18 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-sm font-semibold">编辑话题</span>
-          <span className="text-xs text-gray-400 truncate" title={topic.title}>{topic.title}</span>
+          <span className="text-fs-body text-gray-400 truncate" title={topic.title}>{topic.title}</span>
           <span className="text-fs-aux text-gray-600">
             {days.join(' / ')} · {isMulti ? '跨日话题' : '单日'}
           </span>
           <button className="ml-auto text-gray-500 hover:text-gray-300"
             onClick={onClose}>✕</button>
         </div>
-        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{err}</div>}
+        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{err}</div>}
         <div className="flex gap-3" style={{ height: 'min(70vh, 640px)' }}>
           {/* 左栏：原文消息（勾选=关联；展示话题覆盖日的全部消息，不限原 window） */}
           <div className="w-[52%] shrink-0 flex flex-col border border-border rounded bg-surface-3">
-            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border text-[11px]">
+            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border text-fs-body">
               <span className="text-gray-400">原文消息</span>
               <span className="text-gray-600">勾选=关联到本话题（已选 {selCount}
                 {messages ? ` / ${messages.length}` : ''}）</span>
@@ -207,14 +207,14 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
             )}
             <div className="flex-1 min-h-0 overflow-auto p-2">
               {messages === null ? (
-                <div className="text-xs text-gray-500">消息加载中…</div>
+                <div className="text-fs-body text-gray-500">消息加载中…</div>
               ) : messages.length === 0 ? (
-                <div className="text-xs text-gray-500">窗口内无消息快照</div>
+                <div className="text-fs-body text-gray-500">窗口内无消息快照</div>
               ) : messages.map((m, i) => {
                 const on = selIds.has(m.message_id);
                 return (
                   <div key={`${m.message_id}-${i}`}
-                    className={`text-[11px] leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
+                    className={`text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
                       on ? 'bg-info/20' : 'hover:bg-black/20'}`}
                     onClick={() => canRelate && toggleSel(m.message_id)}>
                     <div className="flex items-baseline gap-1.5">
@@ -241,13 +241,13 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
           </div>
           {/* 右栏：话题内容表单 */}
           <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <label className="text-[11px] text-gray-500">标题</label>
+            <label className="text-fs-body text-gray-500">标题</label>
             <input className={input} value={title}
               onChange={e => setTitle(e.target.value)} />
-            <label className="text-[11px] text-gray-500">摘要</label>
+            <label className="text-fs-body text-gray-500">摘要</label>
             <textarea className={input} rows={5} value={summary}
               onChange={e => setSummary(e.target.value)} />
-            <label className="text-[11px] text-gray-500">关键词（逗号分隔，2~5 个）</label>
+            <label className="text-fs-body text-gray-500">关键词（逗号分隔，2~5 个）</label>
             <input className={input} value={keywords} list="tag-active-edit"
               onChange={e => setKeywords(e.target.value)} />
             <datalist id="tag-active-edit">
@@ -300,7 +300,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
                   : '关联保持不变（仅保存文本字段）'}
               </span>
               <span className="ml-auto flex gap-2">
-                <button className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200"
+                <button className="px-3 py-1.5 rounded text-fs-body text-gray-400 hover:text-gray-200"
                   onClick={onClose}>取消</button>
                 <button className={btn} onClick={save} disabled={busy}>
                   {busy ? '保存中…' : '保存'}

@@ -77,14 +77,14 @@ export default function CoveragePanel() {
 
   const laneCard = (items: any[], color: string, empty: string) => (
     <div className="flex-1 min-w-0 bg-surface-1 rounded-lg border border-border p-3">
-      <div className="text-xs text-gray-500 mb-2">{empty}（{items.length}）</div>
+      <div className="text-fs-body text-gray-500 mb-2">{empty}（{items.length}）</div>
       <div className="space-y-1.5">
         {items.map((it) => (
           <div key={it.fr + (it.draft_id || '')}
             className="px-2 py-1.5 rounded border border-border bg-surface-2 cursor-pointer hover:border-info/60"
             onClick={() => showBacklink(it.fr)}>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-mono text-gray-200">{it.fr}</span>
+              <span className="text-fs-body font-mono text-gray-200">{it.fr}</span>
               <span className={`text-fs-micro px-1 py-0.5 rounded ${color}`}>{it.reason ? (REASON_LABEL[it.reason] || it.reason) : '已覆盖'}</span>
             </div>
             <div className="text-fs-aux text-gray-500 truncate mt-0.5">{it.name}</div>
@@ -119,7 +119,7 @@ export default function CoveragePanel() {
           value={moduleFilter}
           onChange={e => setModuleFilter(e.target.value)}
           placeholder="模块过滤（如 system-settings/inventory-activity）"
-          className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-xs text-gray-300 placeholder-gray-600 focus:border-info outline-none"
+          className="flex-1 bg-surface-2 border border-border rounded px-2 py-1.5 text-fs-body text-gray-300 placeholder-gray-600 focus:border-info outline-none"
         />
         <button onClick={refresh} disabled={loading}
           className="px-3 py-1.5 bg-surface-3 text-gray-200 rounded text-sm hover:bg-surface-2 disabled:opacity-40">
@@ -135,7 +135,7 @@ export default function CoveragePanel() {
 
       {gaps && (
         <>
-          <div className="text-xs text-gray-500">
+          <div className="text-fs-body text-gray-500">
             真实基线 FR 总数：<span className="text-gray-300">{gaps.fr_total}</span>
             {' '}· 指纹 <span className="font-mono text-gray-600">{gaps.fingerprint}</span>
             {' '}· 草稿不计覆盖（🟡 与 🔴 同 FR 可并存）
@@ -144,7 +144,7 @@ export default function CoveragePanel() {
           {/* T-981：测试维度分布（按 doc.dimensions 聚合；0 计数 = 测试设计盲区） */}
           {gaps.dimensions && (
             <div className="bg-surface-1 rounded-lg border border-border p-3">
-              <div className="text-xs text-gray-500 mb-2">
+              <div className="text-fs-body text-gray-500 mb-2">
                 测试维度分布（场景库按 doc.dimensions 聚合，0 = 盲区）
                 {gaps.dimensions.unassigned.length > 0 && (
                   <span className="ml-2 text-yellow-400/80">
@@ -156,7 +156,7 @@ export default function CoveragePanel() {
               <div className="flex gap-2 flex-wrap">
                 {gaps.dimensions.lanes.map(d => (
                   <div key={d.dimension}
-                    className={`px-2 py-1.5 rounded border text-xs ${d.count > 0 ? 'border-border bg-surface-2' : 'border-dashed border-border/60 opacity-60'}`}
+                    className={`px-2 py-1.5 rounded border text-fs-body ${d.count > 0 ? 'border-border bg-surface-2' : 'border-dashed border-border/60 opacity-60'}`}
                     title={d.count > 0
                       ? `${d.label}\n${d.scenarios.join(', ')}\n覆盖 FR：${d.frs.join(', ') || '（无）'}`
                       : `${d.label}\n（无场景——测试设计盲区）`}>
@@ -176,7 +176,7 @@ export default function CoveragePanel() {
 
           {/* 建议顺序 + 生成下一批 */}
           <div className="bg-surface-1 rounded-lg border border-border p-3">
-            <div className="text-xs text-gray-400 mb-2">
+            <div className="text-fs-body text-gray-400 mb-2">
               建议补齐顺序（确定性排序：delta 新增 P0 &gt; 修改触及 &gt; 历史缺口）：
               <span className="ml-2 font-mono text-info">
                 {gaps.suggested_order.length ? gaps.suggested_order.map((fr, i) => `${i + 1}.${fr}`).join(' → ') : '（无缺口）'}
@@ -184,12 +184,12 @@ export default function CoveragePanel() {
             </div>
             {gaps.suggested_order.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-500">生成下一批：</span>
+                <span className="text-fs-body text-gray-500">生成下一批：</span>
                 <select
                   multiple
                   value={batchFrs}
                   onChange={e => setBatchFrs(Array.from(e.target.selectedOptions).map(o => o.value))}
-                  className="bg-surface-2 border border-border rounded px-2 py-1 text-xs text-gray-300 min-w-48 h-16"
+                  className="bg-surface-2 border border-border rounded px-2 py-1 text-fs-body text-gray-300 min-w-48 h-16"
                   title="Ctrl/Shift 多选要圈定的缺口 FR（人确认后执行）">
                   {gaps.suggested_order.map(fr => (
                     <option key={fr} value={fr}>{fr}</option>
@@ -199,7 +199,7 @@ export default function CoveragePanel() {
                   value={sourceDelta}
                   onChange={e => setSourceDelta(e.target.value)}
                   placeholder="source_delta（挂链，如 extend-void-scope）"
-                  className="bg-surface-2 border border-border rounded px-2 py-1 text-xs text-gray-300 w-48 placeholder-gray-600"
+                  className="bg-surface-2 border border-border rounded px-2 py-1 text-fs-body text-gray-300 w-48 placeholder-gray-600"
                 />
                 <button
                   onClick={handleNextBatch}
@@ -218,12 +218,12 @@ export default function CoveragePanel() {
       {backlink && (
         <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-mono text-yellow-400">
+            <span className="text-fs-body font-mono text-yellow-400">
               covers ← {backlink.fr} {backlink.title ? `· ${backlink.title}` : ''}
             </span>
-            <button onClick={() => setBacklink(null)} className="text-gray-500 text-xs hover:text-gray-300">✕</button>
+            <button onClick={() => setBacklink(null)} className="text-gray-500 text-fs-body hover:text-gray-300">✕</button>
           </div>
-          <div className="mt-2 space-y-1 text-xs text-gray-400">
+          <div className="mt-2 space-y-1 text-fs-body text-gray-400">
             <div>场景：{backlink.scenarios.length ? backlink.scenarios.map(s => s.id).join(', ') : '（无）'}</div>
             <div>草稿：{backlink.drafts.length ? backlink.drafts.map(d => `${d.draft_id}（${d.scenario_id}）`).join(', ') : '（无）'}</div>
             <div>最近执行：{backlink.recent_runs.length ? backlink.recent_runs.map(r => `${r.run_id}:${r.verdict}`).join(', ') : '（无）'}</div>

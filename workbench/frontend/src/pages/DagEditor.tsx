@@ -420,11 +420,11 @@ export default function DagEditor() {
     <div className="h-full flex flex-col space-y-3">
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">🔀 DAG 编排</h2>
-        {!dagValid && <span className="text-xs text-fail bg-fail/10 px-2 py-1 rounded">⚠️ 循环依赖</span>}
+        {!dagValid && <span className="text-fs-body text-fail bg-fail/10 px-2 py-1 rounded">⚠️ 循环依赖</span>}
         {cycleItems.length > 0 && (
           <button
             onClick={() => setShowDrift(!showDrift)}
-            className="text-xs px-2 py-1 rounded hover:opacity-80"
+            className="text-fs-body px-2 py-1 rounded hover:opacity-80"
             style={{ color: '#f85149', background: '#f8514915' }}
             title="点击展开环清单">
             ⛔ {cycleItems.length} 条依赖环（已降级显示）{showDrift ? '▲' : '▼'}
@@ -433,7 +433,7 @@ export default function DagEditor() {
         {driftCount > 0 && (
           <button
             onClick={() => setShowDrift(!showDrift)}
-            className="text-xs px-2 py-1 rounded hover:opacity-80"
+            className="text-fs-body px-2 py-1 rounded hover:opacity-80"
             style={{ color: '#d29922', background: '#d2992215' }}
             title="点击展开漂移报告">
             ⚠️ {driftCount} 条版本漂移 {showDrift ? '▲' : '▼'}
@@ -441,7 +441,7 @@ export default function DagEditor() {
         )}
         {/* K-xxx：子集编排入口——先勾选一组场景再进画布（含直接依赖闭包） */}
         <button onClick={() => setSubsetOpen(true)}
-          className={`px-2.5 py-1 rounded text-xs border transition-colors ${
+          className={`px-2.5 py-1 rounded text-fs-body border transition-colors ${
             subset.size > 0
               ? 'bg-info/15 text-info border-info/40 hover:bg-info/25'
               : 'bg-surface-3 text-gray-300 border-border hover:border-info/40'
@@ -451,14 +451,14 @@ export default function DagEditor() {
         </button>
         {/* 计划选择器 */}
         <select value={selectedPlan} onChange={(e) => setSelectedPlan(e.target.value)}
-          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+          className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body"
           title="按测试计划筛选场景">
           <option value="">全部场景</option>
           {plans.map((p) => <option key={p.id} value={p.id}>📋 {p.name}{(p.breakpoints || []).length > 0 ? ` 🔴${(p.breakpoints || []).length}` : ''}</option>)}
         </select>
         {/* K-027：模块分组筛选（含直接上下游，保持依赖边可见） */}
         <select value={selectedModule} onChange={(e) => setSelectedModule(e.target.value)}
-          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+          className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body"
           title="按模块分组筛选（含直接上下游）">
           <option value="">全部模块</option>
           {modules.map((m) => <option key={m} value={m}>📁 {m}</option>)}
@@ -468,7 +468,7 @@ export default function DagEditor() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="🔍 搜索场景 ID / 标题"
-          className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-xs"
+          className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body"
         />
         <span className="text-fs-aux text-gray-600">
           {filteredDag && dagData ? `${filteredDag.nodes.length}/${dagData.nodes.length} 节点` : ''}
@@ -478,21 +478,21 @@ export default function DagEditor() {
           <>
             <button
               onClick={() => navigate(`/run?ids=${selectedIds.join(',')}`)}
-              className="px-2.5 py-1 bg-info text-white rounded text-xs hover:bg-info/90"
+              className="px-2.5 py-1 bg-info text-white rounded text-fs-body hover:bg-info/90"
               title={`执行选中场景：${selectedIds.join('、')}`}
             >
               ▶ 执行选中（{selectedIds.length}）
             </button>
             <button
               onClick={() => navigate(`/run?ids=${selectedIds.join(',')}&bps=${selectedIds.join(',')}`)}
-              className="px-2.5 py-1 bg-warn/90 text-black rounded text-xs hover:opacity-85"
+              className="px-2.5 py-1 bg-warn/90 text-black rounded text-fs-body hover:opacity-85"
               title="全部选中场景设为断点（执行到每个断点前暂停），跳 RunControl 确认"
             >
               🔴 批量设断点
             </button>
             <button
               onClick={handleBatchAcceptSuggestions}
-              className="px-2.5 py-1 bg-surface-3 border border-border rounded text-xs text-info hover:border-info/40"
+              className="px-2.5 py-1 bg-surface-3 border border-border rounded text-fs-body text-info hover:border-info/40"
               title="对选中场景批量扫描并采纳依赖建议（服务端环校验兜底）"
             >
               💡 批量采纳建议
@@ -529,7 +529,7 @@ export default function DagEditor() {
       </div>
 
       {error && (
-        <div className="text-xs text-fail bg-fail/10 border border-fail/30 rounded px-3 py-2 flex items-center">
+        <div className="text-fs-body text-fail bg-fail/10 border border-fail/30 rounded px-3 py-2 flex items-center">
           <span className="flex-1">⛔ {error}</span>
           <button onClick={() => setError('')} className="text-gray-500 hover:text-fail ml-2">✕</button>
         </div>
@@ -547,7 +547,7 @@ export default function DagEditor() {
               </div>
               <button onClick={() => setSubsetOpen(false)} className="text-gray-500 hover:text-gray-300">✕</button>
             </div>
-            <div className="flex items-center gap-2 mb-2 text-[11px]">
+            <div className="flex items-center gap-2 mb-2 text-fs-body">
               <button onClick={() => setSubset(new Set(scenarios.map(s => s.id)))}
                 className="px-2 py-0.5 rounded bg-surface-3 text-gray-300 hover:bg-surface-1">全选</button>
               <button onClick={() => setSubset(new Set())}
@@ -561,11 +561,11 @@ export default function DagEditor() {
                 const modScs = scenarios.filter(s => s.module === mod);
                 return (
                   <div key={mod}>
-                    <div className="text-[11px] text-gray-500 mb-1">📁 {mod}</div>
+                    <div className="text-fs-body text-gray-500 mb-1">📁 {mod}</div>
                     <div className="grid grid-cols-3 gap-1">
                       {modScs.map(s => (
                         <label key={s.id}
-                          className="flex items-center gap-1.5 text-[11px] text-gray-300 cursor-pointer hover:bg-surface-3 rounded px-1.5 py-0.5 truncate"
+                          className="flex items-center gap-1.5 text-fs-body text-gray-300 cursor-pointer hover:bg-surface-3 rounded px-1.5 py-0.5 truncate"
                           title={s.title}>
                           <input type="checkbox" className="flex-shrink-0" checked={subset.has(s.id)}
                             onChange={(e) => {
@@ -590,9 +590,9 @@ export default function DagEditor() {
         <div className="border rounded-lg px-4 py-3 space-y-1.5" style={{ borderColor: '#d2992240', background: '#d2992208' }}>
           {cycleItems.length > 0 && (
             <>
-              <div className="text-xs font-medium" style={{ color: '#f85149' }}>依赖环（DAG 仲裁已降级，请修正后重载）</div>
+              <div className="text-fs-body font-medium" style={{ color: '#f85149' }}>依赖环（DAG 仲裁已降级，请修正后重载）</div>
               {cycleItems.map((c, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-[11px] font-mono">
+                <div key={idx} className="flex items-start gap-2 text-fs-body font-mono">
                   <span style={{ color: '#f85149' }}>⛔</span>
                   <span>{c.join(' → ')}</span>
                 </div>
@@ -601,9 +601,9 @@ export default function DagEditor() {
           )}
           {driftCount > 0 && (
             <>
-              <div className="text-xs font-medium" style={{ color: '#d29922' }}>版本漂移报告（归档前必须清零）</div>
+              <div className="text-fs-body font-medium" style={{ color: '#d29922' }}>版本漂移报告（归档前必须清零）</div>
               {driftItems.filter((i) => i.status === 'major_drift' || i.status === 'orphan').map((i, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-[11px]">
+                <div key={idx} className="flex items-start gap-2 text-fs-body">
                   <span style={{ color: i.status === 'orphan' ? '#f85149' : '#d29922' }}>
                     {i.status === 'orphan' ? '✗' : '⚠'}
                   </span>
@@ -629,12 +629,12 @@ export default function DagEditor() {
               <div className="bg-surface-2/95 border border-border rounded-xl p-8 text-center pointer-events-auto shadow-2xl">
                 <div className="text-4xl mb-3">🧩</div>
                 <div className="text-sm text-gray-200 mb-1 font-medium">先选择一组场景，再开始编排依赖</div>
-                <div className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                <div className="text-fs-body text-gray-500 mb-4 leading-relaxed">
                   90+ 测试全部上画布会找不到重点——勾选目标场景（自动包含<br />
                   直接依赖闭包），或按计划 / 模块 / 搜索收敛视图
                 </div>
                 <button onClick={() => setSubsetOpen(true)}
-                  className="px-4 py-1.5 bg-info text-white rounded text-xs hover:bg-info/90">
+                  className="px-4 py-1.5 bg-info text-white rounded text-fs-body hover:bg-info/90">
                   🧩 选择场景
                 </button>
               </div>
@@ -661,13 +661,13 @@ export default function DagEditor() {
         {selected && (
           <div className="w-[46%] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-2">
-              <span className="text-xs text-gray-400 font-mono">{selected}</span>
+              <span className="text-fs-body text-gray-400 font-mono">{selected}</span>
               <button onClick={() => { setSelected(null); setSuggestions([]); }} className="text-gray-500 hover:text-fail text-sm" title="收起编辑器">✕</button>
             </div>
             {/* K-046：依赖建议面板（确定性引擎扫描插值得出，一键采纳连线） */}
             {suggestions.length > 0 && (
               <div className="px-3 py-2 border-b border-info/40 bg-info/5">
-                <div className="text-info text-[11px] font-medium mb-1">
+                <div className="text-info text-fs-body font-medium mb-1">
                   💡 {suggestions.length} 条依赖建议（扫描 {'{{...}}'} 插值匹配生产者）
                 </div>
                 {suggestError && (
@@ -677,7 +677,7 @@ export default function DagEditor() {
                 )}
                 <ul className="space-y-1">
                   {suggestions.map((s, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs">
+                    <li key={i} className="flex items-center gap-2 text-fs-body">
                       <span className={`px-1 py-0.5 rounded ${
                         s.confidence === 'high' ? 'bg-pass/20 text-pass' : 'bg-warn/20 text-warn'
                       }`}>{s.confidence === 'high' ? '高置信' : '中置信'}</span>

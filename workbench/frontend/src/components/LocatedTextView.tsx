@@ -48,7 +48,7 @@ export function LocatedTextView({ content, hunks }: { content: string; hunks: Do
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* 多处导航条（git-diff 式跳上处/下处） */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border flex-shrink-0 text-[11px]">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border flex-shrink-0 text-fs-body">
         <button onClick={() => jump((active - 1 + hunks.length) % hunks.length)} title="上一处"
           className="px-1.5 py-0.5 rounded bg-surface-3 text-gray-400 hover:text-info">▲</button>
         <span className="text-gray-400">{active + 1}/{hunks.length} 处</span>

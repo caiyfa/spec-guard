@@ -77,19 +77,19 @@ export function DiffOverlay({ item, onClose }: { item: DocWriteItem; onClose: ()
       <div className="bg-surface-2 border border-border rounded-xl w-[760px] max-w-[92vw] max-h-[80vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border flex-shrink-0">
-          <span className="text-xs font-medium text-gray-200 truncate flex-1">🔄 更新对比 — <span className="font-mono">{item.label}</span></span>
+          <span className="text-fs-body font-medium text-gray-200 truncate flex-1">🔄 更新对比 — <span className="font-mono">{item.label}</span></span>
           <button onClick={onClose} className="px-1.5 text-gray-500 hover:text-gray-300">✕</button>
         </div>
         {state.loading ? (
-          <div className="text-[11px] text-gray-600 text-center py-10">对比中…</div>
+          <div className="text-fs-body text-gray-600 text-center py-10">对比中…</div>
         ) : state.error ? (
-          <div className="text-[11px] text-gray-500 text-center py-10">{state.error}</div>
+          <div className="text-fs-body text-gray-500 text-center py-10">{state.error}</div>
         ) : (
           <>
             <div className="px-3 py-1.5 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
               <span className="text-green-400">+{state.added}</span> / <span className="text-red-400">-{state.removed}</span> · 旧版（.bak）→ 当前
             </div>
-            <div className="flex-1 min-h-0 overflow-auto font-mono text-[11px] leading-relaxed">
+            <div className="flex-1 min-h-0 overflow-auto font-mono text-fs-body leading-relaxed">
               {state.diff!.map((l, i) => (
                 <div key={i} className={
                   l.type === 'add' ? 'bg-green-900/25 text-green-300 px-2 whitespace-pre-wrap'
@@ -122,7 +122,7 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
   return (
     <div className="rounded-lg border border-border bg-surface-2/70 p-2">
       <div className="flex items-center gap-1.5">
-        <span className="text-[11px] font-mono text-gray-200 truncate flex-1 cursor-pointer hover:text-info"
+        <span className="text-fs-body font-mono text-gray-200 truncate flex-1 cursor-pointer hover:text-info"
           onClick={() => onOpen(item)} title={item.path || item.ref || ''}>{item.label}</span>
         {item.writes > 1 && (
           <span className="text-fs-micro text-gray-500 flex-shrink-0" title="同文件累计更新次数">×{item.writes}</span>
@@ -154,14 +154,14 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
       </div>
       <div className="flex items-center gap-1.5 mt-1.5">
         <button onClick={() => onOpen(item)}
-          className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1">查看</button>
+          className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-fs-body hover:bg-surface-1">查看</button>
         {item.path && (item.tool === 'write_delta_doc' || item.tool === 'write_draft' || item.tool === 'undo_draft') && (
           <button onClick={() => onDiff(item)}
-            className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1">🔄 对比 .bak</button>
+            className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-fs-body hover:bg-surface-1">🔄 对比 .bak</button>
         )}
         {failed && onAskAgent && (
           <button onClick={() => onAskAgent(item)}
-            className="ml-auto px-2 py-1 rounded bg-warn/20 text-warn text-[11px] hover:bg-warn/30"
+            className="ml-auto px-2 py-1 rounded bg-warn/20 text-warn text-fs-body hover:bg-warn/30"
             title="把失败原因带进对话，让 Agent 分析并继续更新">
             🤖 让 Agent 修复
           </button>
@@ -184,8 +184,8 @@ export function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatc
   if (items.length === 0) {
     return (
       <div className="px-2 py-2">
-        <div className="px-1 text-xs font-medium text-gray-300">✏️ 更新足迹</div>
-        <div className="text-[11px] text-gray-600 text-center py-6 leading-relaxed">
+        <div className="px-1 text-fs-body font-medium text-gray-300">✏️ 更新足迹</div>
+        <div className="text-fs-body text-gray-600 text-center py-6 leading-relaxed">
           Agent 尚未更新任何文件。<br />写入草稿 / delta 文档 / 入库后<br />自动出现在这里
         </div>
         {onRefresh && (
@@ -202,7 +202,7 @@ export function WritingPanel({ items, onOpen, onDiff, onAskAgent, onAskAgentBatc
   return (
     <div className="px-2 py-2 space-y-1.5">
       <div className="flex items-center px-1">
-        <div className="text-xs font-medium text-gray-300 flex-1">✏️ 更新足迹（{items.length}）</div>
+        <div className="text-fs-body font-medium text-gray-300 flex-1">✏️ 更新足迹（{items.length}）</div>
         {failed.length > 0 && onAskAgentBatch && (
           <button onClick={() => onAskAgentBatch(failed)}
             className="text-fs-aux px-1.5 py-0.5 rounded bg-warn/20 text-warn hover:bg-warn/30 mr-1"

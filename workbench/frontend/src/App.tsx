@@ -203,7 +203,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
         {/* Logo 区（点击回首页） */}
         <NavLink to="/" className="block p-4 border-b border-border flex-shrink-0 hover:bg-surface-3/50 transition-colors" title="返回首页">
           <h1 className="text-sm font-bold brand-gradient whitespace-nowrap">🛡 SpecGuard</h1>
-          <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">场景测试与AI智能编排平台</p>
+          <p className="text-fs-body text-gray-500 mt-0.5 whitespace-nowrap">场景测试与AI智能编排平台</p>
         </NavLink>
 
         {/* 菜单区 */}
@@ -220,7 +220,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
               }`
             }
           >
-            <span className="text-xs">🏠</span>
+            <span className="text-fs-body">🏠</span>
             <span>首页</span>
           </NavLink>
           {visibleGroups.map(group => {
@@ -244,7 +244,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
                     }`
                   }
                 >
-                  <span className="text-xs">{group.icon}</span>
+                  <span className="text-fs-body">{group.icon}</span>
                   <span>{item.label}</span>
                 </NavLink>
               );
@@ -261,7 +261,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
                       : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
                   }`}
                 >
-                  <span className="text-xs">{group.icon}</span>
+                  <span className="text-fs-body">{group.icon}</span>
                   <span className="flex-1 text-left">{group.label}</span>
                   <span className="text-fs-aux text-gray-600">{isExpanded ? '▼' : '▶'}</span>
                 </button>
@@ -273,7 +273,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
                         to={item.to}
                         end={item.end}
                         className={({ isActive: a }) =>
-                          `block px-2.5 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
+                          `block px-2.5 py-1.5 rounded text-fs-body transition-colors whitespace-nowrap ${
                             a
                               ? 'bg-info/10 text-info font-medium'
                               : 'text-gray-500 hover:text-gray-300 hover:bg-surface-3'
@@ -319,7 +319,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
           <div className="flex items-center gap-3 text-sm">
             <ThemeSwitcher />
             <span className="text-gray-300">{user.name}</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
+            <span className={`text-fs-body px-1.5 py-0.5 rounded ${
               user.role === 'admin' ? 'bg-purple-900/50 text-purple-300'
               : user.role === 'tester' ? 'bg-info/15 text-info'
               : user.role === 'product' ? 'bg-amber-900/50 text-amber-300'
@@ -331,7 +331,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
             </span>
             <button
               onClick={onLogout}
-              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              className="text-fs-body text-gray-500 hover:text-gray-300 transition-colors"
             >
               登出
             </button>
@@ -343,7 +343,7 @@ function AppContent({ user, onLogout }: { user: CurrentUser; onLogout: () => voi
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500">
             <span className="text-5xl">🔒</span>
             <p className="text-sm">无权限访问该页面，请联系管理员开通菜单授权</p>
-            <NavLink to="/" className="text-xs text-info hover:underline">返回首页</NavLink>
+            <NavLink to="/" className="text-fs-body text-info hover:underline">返回首页</NavLink>
           </div>
         ) : (
           <main className={`flex-1 overflow-hidden ${noPadding ? '' : 'overflow-y-auto p-6'}`}>

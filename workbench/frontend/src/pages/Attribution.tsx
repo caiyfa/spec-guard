@@ -157,7 +157,7 @@ export default function Attribution() {
     <div className="flex flex-col h-full">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-200">🔍 失败归因</h2>
-        <p className="text-xs text-gray-500 mt-1">读取运行报告，分析失败场景的断言差异与根因分类</p>
+        <p className="text-fs-body text-gray-500 mt-1">读取运行报告，分析失败场景的断言差异与根因分类</p>
       </div>
 
       {/* 运行选择 */}
@@ -181,13 +181,13 @@ export default function Attribution() {
       {/* 历史运行列表 */}
       {history.length > 0 && !report && (
         <div className="mb-4">
-          <div className="text-xs text-gray-500 mb-2">最近运行</div>
+          <div className="text-fs-body text-gray-500 mb-2">最近运行</div>
           <div className="flex flex-wrap gap-2">
             {history.map((h: any) => (
               <button
                 key={h.run_id}
                 onClick={() => { setRunId(h.run_id); loadReport(h.run_id); }}
-                className="px-2 py-1 bg-surface-2 border border-border rounded text-xs text-gray-400 hover:text-info hover:border-info"
+                className="px-2 py-1 bg-surface-2 border border-border rounded text-fs-body text-gray-400 hover:text-info hover:border-info"
               >
                 {h.run_id}
               </button>
@@ -215,9 +215,9 @@ export default function Attribution() {
           <div className="bg-surface-1 rounded-lg border border-border p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-mono text-gray-400">{report.run_id}</span>
-              <span className="text-xs text-gray-500">环境: {report.env || 'N/A'}</span>
+              <span className="text-fs-body text-gray-500">环境: {report.env || 'N/A'}</span>
             </div>
-            <div className="flex gap-4 text-xs">
+            <div className="flex gap-4 text-fs-body">
               <span className="text-gray-400">总场景: {report.total_cases}</span>
               <span className="text-red-400">失败: {report.failed_cases.length}</span>
             </div>
@@ -236,7 +236,7 @@ export default function Attribution() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-mono text-info">{fc.scenario_id}</span>
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs ${cat.color}`}>{cat.label}</span>
+                      <span className={`text-fs-body ${cat.color}`}>{cat.label}</span>
                       {/* T-063：触发归因 */}
                       <button
                         onClick={() => handleAttribute(fc.scenario_id)}
@@ -248,14 +248,14 @@ export default function Attribution() {
                     </div>
                   </div>
                   {fc.error && (
-                    <div className="bg-red-900/20 rounded p-2 mb-2 text-xs text-red-300 font-mono">
+                    <div className="bg-red-900/20 rounded p-2 mb-2 text-fs-body text-red-300 font-mono">
                       {fc.error}
                     </div>
                   )}
                   {fc.assertions && fc.assertions.length > 0 && (
                     <div className="space-y-1">
                       {fc.assertions.map((a: any, j: number) => (
-                        <div key={j} className="text-xs text-gray-400 flex items-start gap-2">
+                        <div key={j} className="text-fs-body text-gray-400 flex items-start gap-2">
                           <span className={a.passed ? 'text-green-500' : 'text-red-500'}>
                             {a.passed ? '✓' : '✗'}
                           </span>
@@ -278,7 +278,7 @@ export default function Attribution() {
                             </span>
                             <span className="text-fs-aux text-gray-500">仅建议——人确认才建档</span>
                           </div>
-                          <div className="text-[11px] text-gray-400">{attr.suggestion.rationale}</div>
+                          <div className="text-fs-body text-gray-400">{attr.suggestion.rationale}</div>
                           {attr.honesty_review?.required && (
                             <div className="mt-1 text-fs-aux px-1.5 py-1 rounded bg-orange-900/30 text-orange-400">
                               ⚠️ 诚实性复核：{attr.honesty_review.conclusion}
@@ -318,13 +318,13 @@ export default function Attribution() {
           {/* BUG 单草稿 */}
           {report.failed_cases.length > 0 && (
             <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
-              <div className="text-xs text-yellow-400 font-medium mb-1">📋 BUG 单草稿</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-fs-body text-yellow-400 font-medium mb-1">📋 BUG 单草稿</div>
+              <div className="text-fs-body text-gray-500">
                 以下失败场景可生成 BUG 单草稿，人工确认后才可导出。
               </div>
               <div className="mt-2 space-y-1">
                 {report.failed_cases.map((fc, i) => (
-                  <div key={i} className="text-xs text-gray-400 flex items-center gap-2">
+                  <div key={i} className="text-fs-body text-gray-400 flex items-center gap-2">
                     <input type="checkbox" className="accent-yellow-500" />
                     <span>{fc.scenario_id}</span>
                     <span className="text-gray-600">— {categorize(fc.verdict).label}</span>
@@ -340,13 +340,13 @@ export default function Attribution() {
       <div className="bg-surface-1 rounded-lg border border-border p-3 mt-3">
         <div className="text-sm text-gray-300 font-medium mb-2">📒 SPQ 归因台账</div>
         {spqList.length === 0 ? (
-          <div className="text-xs text-gray-600">暂无归因台账条目（归因建议经人拍板后在此建档）</div>
+          <div className="text-fs-body text-gray-600">暂无归因台账条目（归因建议经人拍板后在此建档）</div>
         ) : (
           <div className="space-y-1.5">
             {spqList.map((s) => (
               <div key={s.spq_id} className="px-2 py-1.5 rounded bg-surface-2 border border-border">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-mono text-info">{s.spq_id}</span>
+                  <span className="text-fs-body font-mono text-info">{s.spq_id}</span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-fs-aux text-gray-500">{SPQ_STATUS[s.status] || s.status}</span>
                     {s.status === 'pending' && (
@@ -363,7 +363,7 @@ export default function Attribution() {
                     )}
                   </div>
                 </div>
-                <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={s.title}>{s.title}</div>
+                <div className="text-fs-body text-gray-400 mt-0.5 truncate" title={s.title}>{s.title}</div>
                 <div className="text-fs-aux text-gray-600 mt-0.5 flex gap-2 flex-wrap">
                   {s.run_id && <span>← {s.run_id}</span>}
                   {s.scenario_id && <span>{s.scenario_id}</span>}

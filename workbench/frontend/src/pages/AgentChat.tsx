@@ -1401,7 +1401,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
       // K-024：思考文本（工具调用前的意图说明）用轻量样式——常驻可见但视觉上轻于正式回复
       if (item.thought) {
         return (
-          <div key={idx} className="mb-2 px-2 py-1 border-l-2 border-info/30 text-xs text-gray-400 italic">
+          <div key={idx} className="mb-2 px-2 py-1 border-l-2 border-info/30 text-fs-body text-gray-400 italic">
             <MarkdownText content={item.content || ''} />
           </div>
         );
@@ -1435,7 +1435,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
     // step-complete: 步骤完成提示
     if (item.type === 'step-complete') {
       return (
-        <div key={idx} className="mb-3 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
+        <div key={idx} className="mb-3 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-fs-body">
           <span className="text-green-500">✅</span>
           <span className="text-green-400/80">完成：{item.content}</span>
         </div>
@@ -1524,7 +1524,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
 
           {/* 多轮会话导航：最近一条用户消息置顶（可收起，新消息到达自动恢复） */}
           {pinnedText && !pinnedDismissed && (
-            <div className="flex-shrink-0 mx-4 mt-2 px-3 py-1.5 rounded-lg bg-pinnedBg/15 border border-pinnedBg/40 flex items-center gap-2 text-xs">
+            <div className="flex-shrink-0 mx-4 mt-2 px-3 py-1.5 rounded-lg bg-pinnedBg/15 border border-pinnedBg/40 flex items-center gap-2 text-fs-body">
               <span className="text-pinnedBg flex-shrink-0">📌</span>
               <span className="flex-1 truncate text-gray-300" title={pinnedText}>{pinnedText}</span>
               <CopyButton text={pinnedText} className="text-gray-500 hover:text-info flex-shrink-0" />
@@ -1554,7 +1554,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                     {fixedPurpose === 'requirement_interview'
                       ? '当前角色无此工作台权限（需产品/开发/管理员角色）'
                       : '当前角色无此工作台权限（需测试/只读/管理员角色）'}<br />
-                    <span className="text-xs text-gray-600">
+                    <span className="text-fs-body text-gray-600">
                       {fixedPurpose === 'requirement_interview'
                         ? '测试场景制作请使用「测试对话」菜单，或联系管理员调整角色'
                         : '需求访谈与规格维护请使用「产品对话」菜单，或联系管理员调整角色'}
@@ -1583,7 +1583,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               {reconnecting && (
                 <div className="bg-yellow-900/20 border border-yellow-700/30 rounded p-1.5 mb-2 flex items-center gap-1.5">
                   <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
-                  <span className="text-yellow-300 text-xs">连接已断开，正在自动重连…</span>
+                  <span className="text-yellow-300 text-fs-body">连接已断开，正在自动重连…</span>
                 </div>
               )}
               {error && (
@@ -1626,7 +1626,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
         {dbExplore && (
           <div className="w-9 flex-shrink-0 border-r border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
             <button onClick={() => setDbExplore(false)} title="返回主会话（主对话区已最小化，WS/滚动状态保留）"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">💬</button>
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">💬</button>
             <span className="text-fs-micro text-gray-600" style={{ writingMode: 'vertical-rl' }}>主会话</span>
           </div>
         )}
@@ -1635,48 +1635,48 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
         {sideCollapsed && !dbExplore ? (
           <div className="w-9 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
             <button onClick={toggleSideCollapsed} title="展开面板"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
               «
             </button>
             <button onClick={() => expandSideTo('todos')} title="待办"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
               📋
             </button>
             <button onClick={() => expandSideTo('reading')} title={`阅读足迹（${readingFeed.length}）`}
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
               📖
               {readingFeed.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{readingFeed.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('drafts')} title={`草稿产物（${sessionDrafts.length}）`}
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
               📝
               {sessionDrafts.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{sessionDrafts.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('writing')} title={`更新足迹（${writingFeed.length}）`}
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
               ✏️
               {writingFeed.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{writingFeed.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('history')} title="提交历史 / 推送远端"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
               📜
             </button>
             {scenarioMeta && (
               <button onClick={() => expandSideTo('pack')} title={`信息包（${scenarioMeta.info_pack.length}）`}
-                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">
+                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
                 📦
               </button>
             )}
             {fileTabs.length > 0 && (
               <button onClick={() => expandSideTo(activeSideTab.startsWith('file:') ? activeSideTab : `file:${fileTabs[fileTabs.length - 1].path}`)}
                 title={`文件页签（${fileTabs.length}）`}
-                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
+                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
                 📄
                 <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{fileTabs.length}</span>
               </button>

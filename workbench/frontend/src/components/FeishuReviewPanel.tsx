@@ -123,9 +123,9 @@ export default function FeishuReviewPanel() {
   };
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
-  const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
+  const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
 
   return (
     <div className={card}>
@@ -133,7 +133,7 @@ export default function FeishuReviewPanel() {
         <h2 className="text-sm font-semibold">🔗 关联复核（飞书材料 → FR）</h2>
         <div className="flex items-center gap-2">
           {/* T-991：队列范围切换（默认我的；共享=多人协作互相复核建边建议） */}
-          <select className="bg-surface-3 border border-border rounded px-2 py-1 text-[11px] text-gray-300 outline-none focus:border-info"
+          <select className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300 outline-none focus:border-info"
             value={scope}
             onChange={e => setScope(e.target.value as 'mine' | 'shared')}
             title="我的=仅本人同步产生的建议（默认）；共享=工作区共享队列（多人协作可互相复核）">
@@ -149,10 +149,10 @@ export default function FeishuReviewPanel() {
           <FeishuWatchSettings />
         </div>
       </div>
-      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
-      <div className="flex items-center gap-3 mb-2 text-[11px] text-gray-500">
+      <div className="flex items-center gap-3 mb-2 text-fs-body text-gray-500">
         <span>置信度过滤：</span>
         {[{ v: 0, l: '全部' }, { v: 0.6, l: '≥60%' }, { v: 0.8, l: '≥80%' }].map(o => (
           <button key={o.v}
@@ -171,7 +171,7 @@ export default function FeishuReviewPanel() {
       </div>
 
       {visible.length === 0 ? (
-        <div className="text-xs text-gray-500">
+        <div className="text-fs-body text-gray-500">
           暂无待复核建议——先「同步设置」配置授权范围并「立即同步」，LLM 建边建议将出现在这里
         </div>
       ) : (
@@ -196,16 +196,16 @@ export default function FeishuReviewPanel() {
                     <span className={`inline-block px-1.5 py-0.5 rounded text-fs-aux mr-1.5 ${badge.cls}`}>
                       {badge.label}
                     </span>
-                    <code className="text-[11px]">{it.src}</code>
+                    <code className="text-fs-body">{it.src}</code>
                   </td>
-                  <td className={td}><code className="text-[11px]">{it.dst}</code></td>
+                  <td className={td}><code className="text-fs-body">{it.dst}</code></td>
                   <td className={td}>
                     <div className="flex items-center gap-1.5">
                       <div className="w-14 h-1.5 rounded bg-surface-3 overflow-hidden">
                         <div className={`h-full ${confColor(it.confidence)}`}
                           style={{ width: `${Math.round(it.confidence * 100)}%` }} />
                       </div>
-                      <span className="text-[11px] text-gray-400">
+                      <span className="text-fs-body text-gray-400">
                         {Math.round(it.confidence * 100)}%
                       </span>
                     </div>
@@ -229,12 +229,12 @@ export default function FeishuReviewPanel() {
       {ivPrompt.length > 0 && (
         <div className="mb-3 border border-info/40 rounded-lg p-3 bg-info/5">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-info">同时入包以下面试信息包？（默认不入包）</h3>
-            <button className="text-gray-500 hover:text-gray-300 text-xs" onClick={() => setIvPrompt([])}>✕</button>
+            <h3 className="text-fs-body font-semibold text-info">同时入包以下面试信息包？（默认不入包）</h3>
+            <button className="text-gray-500 hover:text-gray-300 text-fs-body" onClick={() => setIvPrompt([])}>✕</button>
           </div>
           <div className="space-y-1 mb-2">
             {ivPrompt.map(iv => (
-              <label key={iv.iv_id} className="flex items-center gap-2 text-xs text-gray-300">
+              <label key={iv.iv_id} className="flex items-center gap-2 text-fs-body text-gray-300">
                 <input type="checkbox"
                   checked={ivChecked.has(iv.iv_id)}
                   onChange={() => setIvChecked(prev => {

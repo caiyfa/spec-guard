@@ -70,7 +70,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
   return (
     <div className="rounded-lg border border-red-800/50 bg-red-900/10 p-2 space-y-2">
       <div className="flex items-center gap-1.5">
-        <span className="text-[11px] font-medium text-red-300 flex-1">⚠️ rebase 中断（onto {status.onto || '?'}）</span>
+        <span className="text-fs-body font-medium text-red-300 flex-1">⚠️ rebase 中断（onto {status.onto || '?'}）</span>
         <button onClick={handleAbort} disabled={!!busy}
           className="px-2 py-1 rounded text-fs-aux text-gray-400 hover:text-red-300 border border-border disabled:opacity-40">
           {busy === 'abort' ? '处理中…' : '↩️ 放弃 rebase'}

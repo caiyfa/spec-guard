@@ -252,7 +252,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
     if (item.type === 'user') {
       return (
         <div key={idx} className={`${idx > 0 ? 'mt-3' : ''} mb-2 flex justify-end`}>
-          <div className="max-w-[85%] rounded-lg rounded-br-sm px-2.5 py-1.5 text-xs bg-info/10 text-info/90 border border-info/20 whitespace-pre-wrap break-words">
+          <div className="max-w-[85%] rounded-lg rounded-br-sm px-2.5 py-1.5 text-fs-body bg-info/10 text-info/90 border border-info/20 whitespace-pre-wrap break-words">
             {stripRefBlock(item.content || '')}
             <div className="flex items-center gap-1 mt-1">
               <CopyButton text={stripRefBlock(item.content || '')} className="text-fs-aux text-info/40 hover:text-info" />
@@ -264,7 +264,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
     if (item.type === 'assistant-text') {
       if (item.thought) {
         return (
-          <div key={idx} className="mb-2 px-1.5 py-1 border-l-2 border-info/30 text-xs text-gray-400 italic">
+          <div key={idx} className="mb-2 px-1.5 py-1 border-l-2 border-info/30 text-fs-body text-gray-400 italic">
             <MarkdownText content={item.content || ''} />
           </div>
         );
@@ -272,7 +272,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
       if (isShortReply(item.content || '')) {
         return (
           <div key={idx} className="mb-2 ml-1 border-l-2 border-border/50 pl-2 py-0.5 flex items-center gap-1.5">
-            <div className="flex-1 min-w-0 text-xs">
+            <div className="flex-1 min-w-0 text-fs-body">
               <MarkdownText content={item.content || ''} />
             </div>
             <CopyButton text={item.content || ''} className="text-fs-aux text-gray-500 hover:text-info flex-shrink-0" />
@@ -295,7 +295,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
     }
     if (item.type === 'step-complete') {
       return (
-        <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-xs">
+        <div key={idx} className="mb-2 flex items-center gap-2 px-2 py-1 bg-green-900/10 border border-green-700/20 rounded text-fs-body">
           <span className="text-green-500">✅</span>
           <span className="text-green-400/80">完成：{item.content}</span>
         </div>
@@ -308,7 +308,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
   };
 
   return (
-    <div className="flex flex-col h-full text-xs">
+    <div className="flex flex-col h-full text-fs-body">
       <div className="flex items-center gap-2 py-1 text-fs-aux text-gray-500 border-b border-border flex-shrink-0">
         <span className={wsState === 'open' ? 'text-green-500' : 'text-red-400'}>{wsState === 'open' ? '●' : '○'}</span>
         <span className="whitespace-nowrap">辅助助手（辅助会话）</span>
@@ -353,7 +353,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
         {grouped.map(renderGrouped)}
         {loading && <div className="text-gray-500 animate-pulse">辅助助手思考中…</div>}
         {auxError && (
-          <div className="text-red-400 text-xs">❌ {auxError}</div>
+          <div className="text-red-400 text-fs-body">❌ {auxError}</div>
         )}
         <div ref={scrollRef} />
       </div>
@@ -398,7 +398,7 @@ export function SqlAuxPanel({ mainSessionId, workspace, onCiteToMain, onPreview 
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }}
           placeholder="问点什么…（Enter 发送）"
-          className="flex-1 bg-surface-2 border border-border rounded px-2 py-1 text-xs resize-none"
+          className="flex-1 bg-surface-2 border border-border rounded px-2 py-1 text-fs-body resize-none"
           rows={2}
         />
         <button onClick={() => send(input)} disabled={loading || !auxSid || wsState !== 'open'}

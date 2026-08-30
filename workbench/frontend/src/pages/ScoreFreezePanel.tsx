@@ -129,20 +129,20 @@ export default function ScoreFreezePanel() {
   };
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
-  const label = 'block text-xs text-gray-400 mb-1';
+  const label = 'block text-fs-body text-gray-400 mb-1';
   const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-info';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
-  const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
+  const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
 
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-bold">⭐ 评分与冻结</h1>
-        <div className="text-[11px] text-gray-500">评分确认/闸①确认/冻结需 product 角色 · 三闸全过才可冻结</div>
+        <div className="text-fs-body text-gray-500">评分确认/闸①确认/冻结需 product 角色 · 三闸全过才可冻结</div>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       {/* ── 五维评分 ── */}
       <div className={card}>
@@ -166,7 +166,7 @@ export default function ScoreFreezePanel() {
           <button className={btn} onClick={handleEvaluate} disabled={!selIv}>机打采集</button>
         </div>
         {scores.length === 0 ? (
-          <div className="text-xs text-gray-500">暂无评分，点击「机打采集」生成 suggested 评分</div>
+          <div className="text-fs-body text-gray-500">暂无评分，点击「机打采集」生成 suggested 评分</div>
         ) : (
           <table className="w-full">
             <thead>
@@ -182,7 +182,7 @@ export default function ScoreFreezePanel() {
                   <td className={td}>{s.score}</td>
                   <td className={td}>{s.source}</td>
                   <td className={td}>
-                    <span className="text-[11px] text-gray-500 line-clamp-2 max-w-[360px]">{s.evidence}</span>
+                    <span className="text-fs-body text-gray-500 line-clamp-2 max-w-[360px]">{s.evidence}</span>
                   </td>
                   <td className={td}>
                     <span className={s.status === 'confirmed' ? 'text-green-400' : s.status === 'rejected' ? 'text-gray-500' : 'text-yellow-400'}>
@@ -194,11 +194,11 @@ export default function ScoreFreezePanel() {
                       {s.status === 'suggested' && (
                         <>
                           <button className={btn} onClick={() => handleConfirmScore(s, 'confirm')}>确认</button>
-                          <button className="px-3 py-1.5 rounded text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                          <button className="px-3 py-1.5 rounded text-fs-body font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20"
                                   onClick={() => handleConfirmScore(s, 'reject')}>驳回</button>
                         </>
                       )}
-                      {s.status !== 'suggested' && <span className="text-[11px] text-gray-600">已处理</span>}
+                      {s.status !== 'suggested' && <span className="text-fs-body text-gray-600">已处理</span>}
                     </div>
                   </td>
                 </tr>
@@ -223,7 +223,7 @@ export default function ScoreFreezePanel() {
           <button className={btn} onClick={handleGate2} disabled={!selDelta}>② 合规校验</button>
           <button className={`${btn} ${freezeAllowed ? '' : 'opacity-40'}`} onClick={handleFreeze}
                   disabled={!selDelta || !freezeAllowed}>执行冻结</button>
-          <span className="text-xs text-gray-500">
+          <span className="text-fs-body text-gray-500">
             {freezeAllowed ? <span className="text-green-400">三闸全过，可冻结</span> : '三闸未全过，冻结被拒'}
           </span>
         </div>
@@ -231,21 +231,21 @@ export default function ScoreFreezePanel() {
           <div className="grid grid-cols-3 gap-3">
             {Object.entries(gates).map(([key, g]) => (
               <div key={key} className="border border-border/60 rounded p-3">
-                <div className="text-xs font-medium mb-1">{GATE_LABEL[key] || key}</div>
+                <div className="text-fs-body font-medium mb-1">{GATE_LABEL[key] || key}</div>
                 <div className={`text-sm font-bold ${g.status === 'pass' ? 'text-green-400' : 'text-red-400'}`}>
                   {g.status === 'pass' ? '✓ PASS' : '✗ ' + (g.status || 'FAIL')}
                 </div>
                 {g.errors && g.errors.length > 0 && (
-                  <div className="text-[11px] text-red-400 mt-1">{g.errors.join('；')}</div>
+                  <div className="text-fs-body text-red-400 mt-1">{g.errors.join('；')}</div>
                 )}
                 {g.findings && g.findings.length > 0 && (
-                  <div className="text-[11px] text-yellow-400 mt-1 max-h-20 overflow-auto">
+                  <div className="text-fs-body text-yellow-400 mt-1 max-h-20 overflow-auto">
                     {g.findings.slice(0, 5).map((f, i) => (
                       <div key={i}>[{f.level}] {f.message}</div>
                     ))}
                   </div>
                 )}
-                {g.degraded && <div className="text-[11px] text-yellow-400 mt-1">（降级执行）</div>}
+                {g.degraded && <div className="text-fs-body text-yellow-400 mt-1">（降级执行）</div>}
               </div>
             ))}
           </div>

@@ -21,7 +21,7 @@ export default function Skills() {
     <div className="max-w-4xl">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-200">Skill 注册表</h2>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-fs-body text-gray-500 mt-1">
           Agent 技能清单（{skills.length} 个技能，仅只读查询）
         </p>
       </div>
@@ -52,7 +52,7 @@ export default function Skills() {
                     <span className="text-fs-aux px-1 py-0.5 rounded bg-surface-3 text-gray-500">{s.source}</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{s.description}</p>
+                <p className="text-fs-body text-gray-400 mt-0.5 line-clamp-2">{s.description}</p>
               </button>
             ))}
             {skills.length === 0 && (
@@ -65,13 +65,13 @@ export default function Skills() {
             <div className="w-72 flex-shrink-0 bg-surface-2 border border-border rounded-lg p-4 space-y-3">
               <div>
                 <h3 className="text-sm font-bold text-gray-200">{selected.name}</h3>
-                <p className="text-xs text-gray-500 mt-0.5">v{selected.version}</p>
+                <p className="text-fs-body text-gray-500 mt-0.5">v{selected.version}</p>
               </div>
-              <div className="text-xs text-gray-400 leading-relaxed">{selected.description}</div>
+              <div className="text-fs-body text-gray-400 leading-relaxed">{selected.description}</div>
               {selected.author && (
                 <div>
                   <span className="text-fs-aux text-gray-500">作者：</span>
-                  <span className="text-xs text-gray-300">{selected.author}</span>
+                  <span className="text-fs-body text-gray-300">{selected.author}</span>
                 </div>
               )}
               {selected.depends_tools && selected.depends_tools.length > 0 && (
@@ -87,7 +87,7 @@ export default function Skills() {
               {selected.source && (
                 <div>
                   <span className="text-fs-aux text-gray-500">来源：</span>
-                  <span className="text-xs text-gray-400">{selected.source}</span>
+                  <span className="text-fs-body text-gray-400">{selected.source}</span>
                 </div>
               )}
             </div>

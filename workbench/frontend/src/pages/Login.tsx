@@ -142,7 +142,7 @@ export default function Login() {
       <div className="w-96 relative bg-surface-2/80 border border-border rounded-2xl p-8 backdrop-blur-sm" style={{ boxShadow: 'var(--shadow)' }}>
         <div className="text-center mb-6">
           <h1 className="text-xl font-bold brand-gradient">🛡 SpecGuard</h1>
-          <p className="text-xs text-gray-500 mt-1">契约驱动的场景测试与AI智能编排平台</p>
+          <p className="text-fs-body text-gray-500 mt-1">契约驱动的场景测试与AI智能编排平台</p>
         </div>
 
         {error && (
@@ -155,7 +155,7 @@ export default function Login() {
         {mode === 'dual' && (
           <div>
             <div className="space-y-3 mb-4">
-              <p className="text-xs text-skip text-center">
+              <p className="text-fs-body text-skip text-center">
                 开发模式，输入工号直接登录
               </p>
               <input
@@ -182,11 +182,11 @@ export default function Login() {
             </div>
             <div className="flex items-center gap-2 my-3">
               <div className="flex-1 border-t border-border"></div>
-              <span className="text-xs text-gray-400">或</span>
+              <span className="text-fs-body text-gray-400">或</span>
               <div className="flex-1 border-t border-border"></div>
             </div>
             <div>
-              <p className="text-xs text-gray-400 text-center mb-3">
+              <p className="text-fs-body text-gray-400 text-center mb-3">
                 使用集团统一身份认证（Authing）登录
               </p>
               <button
@@ -215,7 +215,7 @@ export default function Login() {
 
         {mode === 'mock' && (
           <div className="space-y-3">
-            <p className="text-xs text-skip text-center">
+            <p className="text-fs-body text-skip text-center">
               开发模式（SG_AUTH_MODE=mock），输入工号直接登录
             </p>
             <input

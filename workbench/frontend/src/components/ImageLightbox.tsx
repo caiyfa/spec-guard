@@ -43,7 +43,7 @@ export default function ImageLightbox({ url, caption, onClose }: ImageLightboxPr
           className="max-w-[92vw] max-h-[82vh] rounded-lg shadow-2xl"
         />
         {caption && (
-          <div className="mt-2 text-center text-xs text-gray-300">{caption}</div>
+          <div className="mt-2 text-center text-fs-body text-gray-300">{caption}</div>
         )}
       </div>
     </div>,

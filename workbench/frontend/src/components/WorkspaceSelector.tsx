@@ -84,7 +84,7 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className="text-gray-500 text-xs">工作区</span>
+      <span className="text-gray-500 text-fs-body">工作区</span>
       {/* 第一级：系统 */}
       <select
         value={effSys}
@@ -115,15 +115,15 @@ export default function WorkspaceSelector({ user }: { user: CurrentUser }) {
       {current && current !== myDefault && (
         <button
           onClick={handleSetDefault}
-          className="text-xs text-info hover:underline"
+          className="text-fs-body text-info hover:underline"
           title="设为我的默认工作区"
         >
           设为默认
         </button>
       )}
-      {saved && <span className="text-xs text-green-500">✓ 已设为默认</span>}
+      {saved && <span className="text-fs-body text-green-500">✓ 已设为默认</span>}
       {tree.every(g => g.workspaces.length === 0) && (
-        <span className="text-xs text-yellow-500">无可用工作区，请到「系统配置」注册</span>
+        <span className="text-fs-body text-yellow-500">无可用工作区，请到「系统配置」注册</span>
       )}
     </div>
   );

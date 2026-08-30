@@ -31,7 +31,7 @@ interface BodyRow { cells: string[]; no: number }  // no = Excel 原行号（排
 interface Sel { r1: number; c1: number; r2: number; c2: number }
 
 const MAX_PARSE_ROWS = 5000;   // 单 sheet 解析上限
-const ROW_H = 26;              // 虚拟滚动行高（text-xs + py-1 + border ≈ 26px）
+const ROW_H = 26;              // 虚拟滚动行高（text-fs-body + py-1 + border ≈ 26px）
 const OVERSCAN = 8;            // 可视区外多渲染行数
 
 function parseSheet(ws: XLSX.WorkSheet, name: string): SheetData {
@@ -245,7 +245,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
           <div className="flex gap-0.5">
             {wb.SheetNames.map((name, i) => (
               <button key={name} onClick={() => setSheetIdx(i)}
-                className={`px-2.5 py-1 text-[11px] rounded-t border-b-2 transition-colors ${
+                className={`px-2.5 py-1 text-fs-body rounded-t border-b-2 transition-colors ${
                   i === sheetIdx ? 'text-info border-info bg-info/5' : 'text-gray-500 border-transparent hover:text-gray-300'
                 }`}>
                 {name}
@@ -257,7 +257,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
           value={keyword}
           onChange={e => setKeyword(e.target.value)}
           placeholder="搜索本表…"
-          className="ml-auto bg-surface-2 border border-border rounded px-2 py-1 text-[11px] text-gray-300 placeholder-gray-600 focus:border-info outline-none w-40"
+          className="ml-auto bg-surface-2 border border-border rounded px-2 py-1 text-fs-body text-gray-300 placeholder-gray-600 focus:border-info outline-none w-40"
         />
         <span className="text-fs-aux text-gray-600 whitespace-nowrap">
           {view.length === body.length ? `${body.length} 行` : `筛选后 ${view.length} / ${body.length} 行`}
@@ -265,7 +265,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
         </span>
         {sel && (
           <button onClick={copySel}
-            className="text-[11px] px-2 py-1 rounded bg-info/10 text-info border border-info/30 hover:bg-info/20">
+            className="text-fs-body px-2 py-1 rounded bg-info/10 text-info border border-info/30 hover:bg-info/20">
             {copied ? '✓ 已复制' : '复制选中'}
           </button>
         )}
@@ -274,7 +274,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
       {/* 表格区（冻结表头 + 虚拟滚动） */}
       <div ref={scrollRef} onScroll={e => setScrollTop((e.target as HTMLDivElement).scrollTop)}
         className="flex-1 min-h-0 overflow-auto">
-        <table className="text-xs border-collapse" style={{ tableLayout: sheet.colWidths.some(w => w > 0) ? 'fixed' : 'auto' }}>
+        <table className="text-fs-body border-collapse" style={{ tableLayout: sheet.colWidths.some(w => w > 0) ? 'fixed' : 'auto' }}>
           {sheet.colWidths.some(w => w > 0) && (
             <colgroup>
               <col style={{ width: 44 }} />
@@ -307,7 +307,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
                               <span className="absolute left-0 top-full mt-1 z-20 w-48 bg-surface-2 border border-border rounded-lg shadow-xl p-2 block font-normal">
                                 <input autoFocus value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
                                   placeholder="搜索值…"
-                                  className="w-full bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-info mb-1" />
+                                  className="w-full bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body text-gray-300 outline-none focus:border-info mb-1" />
                                 <span className="flex gap-2 mb-1 text-fs-aux">
                                   <button className="text-info hover:underline"
                                     onClick={() => setFilters(prev => ({ ...prev, [c]: new Set() }))}>清除</button>
@@ -315,7 +315,7 @@ export default function SheetViewer({ data }: { data: ArrayBuffer }) {
                                 </span>
                                 <span className="block max-h-40 overflow-y-auto">
                                   {uniqueValues.map(v => (
-                                    <label key={v} className="flex items-center gap-1.5 px-1 py-0.5 text-[11px] text-gray-400 hover:bg-surface-3 rounded cursor-pointer">
+                                    <label key={v} className="flex items-center gap-1.5 px-1 py-0.5 text-fs-body text-gray-400 hover:bg-surface-3 rounded cursor-pointer">
                                       <input type="checkbox" checked={filters[c]?.has(v) ?? false}
                                         onChange={() => toggleFilterVal(c, v)} className="accent-info" />
                                       <span className="truncate">{v || '(空)'}</span>

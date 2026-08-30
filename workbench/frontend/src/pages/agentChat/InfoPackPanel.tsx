@@ -52,7 +52,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
     <div className="px-3 py-2 border-b border-border">
       <div className="flex items-center justify-between">
         <button onClick={() => setOpen(v => !v)}
-          className="flex-1 flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
+          className="flex-1 flex items-center justify-between text-fs-body font-medium text-gray-300 hover:text-gray-100">
           <span>
             📦 基础信息包（{meta.info_pack.length}）
             {freshness && freshness.stale_count > 0 && (

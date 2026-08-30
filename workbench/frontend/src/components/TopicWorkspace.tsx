@@ -430,14 +430,14 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body text-gray-200 outline-none focus:border-info';
 
   return (
     <div className="bg-surface-2 border border-border rounded-lg p-4">
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className="text-sm font-semibold">人工介入工作台</span>
-        <span className="text-[11px] text-gray-500">左栏原文时间轴 × 右栏话题列表（搜索/排序定位；「⌖ 定位原文」高亮对应消息）</span>
+        <span className="text-fs-body text-gray-500">左栏原文时间轴 × 右栏话题列表（搜索/排序定位；「⌖ 定位原文」高亮对应消息）</span>
         {onToggleFocus && (
           <button
             className={`ml-auto transition-colors px-1 rounded hover:bg-surface-3
@@ -448,8 +448,8 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           </button>
         )}
       </div>
-      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
       {/* 顶栏：群/日期 + 重新分类 + 状态筛选（单一控制区，页面不再分上下两层） */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <select className={input} value={sha8}
@@ -501,7 +501,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
         </button>
         {sha8 && daySel && (
           <span className="ml-auto flex items-center gap-1.5">
-            <select className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-300 outline-none focus:border-info"
+            <select className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body text-gray-300 outline-none focus:border-info"
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
               title="按五分类筛选话题">
@@ -512,7 +512,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               <option value="routine">沟通</option>
               <option value="chat">闲聊</option>
             </select>
-            <label className="flex items-center gap-1 text-[11px] text-gray-400 cursor-pointer"
+            <label className="flex items-center gap-1 text-fs-body text-gray-400 cursor-pointer"
               title="闲聊话题分类保留但默认隐藏（可审计/统计群噪声率）——拍板③">
               <input type="checkbox" checked={hideChat}
                 onChange={e => setHideChat(e.target.checked)} />
@@ -520,7 +520,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
             </label>
             {TOPIC_STATUS_TABS.map(s => (
               <button key={s.key}
-                className={`px-2 py-0.5 rounded text-[11px] ${
+                className={`px-2 py-0.5 rounded text-fs-body ${
                   statusFilter === s.key ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400'}`}
                 onClick={() => setStatusFilter(s.key)}>
                 {s.label}{statusCountNum(s.key) > 0 ? ` ${statusCountNum(s.key)}` : ''}
@@ -537,13 +537,13 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           {/* 左栏：消息时间轴（多日拼接；行带 MM-DD 日期前缀跨日不歧义；
               T-1002：勾选模式生成话题） */}
           <div className={`w-[46%] shrink-0 flex flex-col min-h-0 ${focus ? '' : 'max-h-[560px]'}`}>
-            <div className="flex items-center gap-2 mb-1.5 text-[11px]">
+            <div className="flex items-center gap-2 mb-1.5 text-fs-body">
               <span className="text-gray-500">原文消息</span>
               <span className="text-gray-600">
                 {pickMode && pickedIds.size > 0 ? `已选 ${pickedIds.size} 条` : ''}
               </span>
               {pickUsable && (
-                <button className={`ml-auto px-2 py-0.5 rounded text-[11px] ${
+                <button className={`ml-auto px-2 py-0.5 rounded text-fs-body ${
                   pickMode ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400 hover:text-info'}`}
                   title={pickMode ? '退出勾选模式'
                     : '勾选任意消息生成话题卡（可补充背景，LLM 据此出标题/摘要/关键词）'}
@@ -561,15 +561,15 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
             <div ref={timelineRef}
               className={`flex-1 min-h-0 border border-border rounded p-2 bg-surface-3 overflow-auto`}>
             {messages === null ? (
-              <div className="text-xs text-gray-500">消息加载中…</div>
+              <div className="text-fs-body text-gray-500">消息加载中…</div>
             ) : msgEmpty ? (
-              <div className="text-xs text-gray-500">
+              <div className="text-fs-body text-gray-500">
                 窗口内无消息快照——点「立即同步」补拉（chat_days 窗口内自动重建）
               </div>
             ) : (
               messages.map((m, i) => (
                 <div key={`${m.message_id}-${i}`} data-hl={highlightIdx.has(i) ? '1' : '0'}
-                  className={`text-[11px] leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
+                  className={`text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
                     highlightIdx.has(i) || pickedIds.has(m.message_id)
                       ? 'bg-info/20'
                       : 'hover:bg-black/20'
@@ -604,7 +604,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
             </div>
             {/* T-1002：勾选模式底部动作条（选中数 + 全选/清空 + 生成话题入口） */}
             {pickMode && (
-              <div className="flex items-center gap-2 mt-1.5 text-[11px]">
+              <div className="flex items-center gap-2 mt-1.5 text-fs-body">
                 <span className="text-gray-500">已选 {pickedIds.size} 条</span>
                 <button className="text-info hover:underline"
                   onClick={() => setPickedIds(new Set((messages || []).map(m => m.message_id)))}>
@@ -628,7 +628,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               <input className={`${input} w-48`} placeholder="搜索标题/摘要/关键词…"
                 value={query} onChange={e => setQuery(e.target.value)}
                 title="支持多词（空格分隔，AND 语义）；命中标题/摘要/关键词" />
-              <select className="bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] text-gray-300 outline-none focus:border-info"
+              <select className="bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body text-gray-300 outline-none focus:border-info"
                 value={sortKey} onChange={e => setSortKey(e.target.value as TopicSortKey)}
                 title="列表排序">
                 {TOPIC_SORT_OPTIONS.map(o => (
@@ -714,7 +714,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
             )}
             <div className="flex-1 min-h-0 overflow-auto pr-1 space-y-1.5">
               {shownDrafts.length === 0 && shownTopics.length === 0 ? (
-                <div className="text-xs text-gray-500">
+                <div className="text-fs-body text-gray-500">
                   {query
                     ? '无匹配话题（调整搜索词或筛选条件）'
                     : tags.length > 0
@@ -774,7 +774,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           </div>
         </div>
       ) : (
-        <div className="text-xs text-gray-500">请先选择群聊与日期。</div>
+        <div className="text-fs-body text-gray-500">请先选择群聊与日期。</div>
       )}
       {/* T-1002：按勾选原文生成话题（左已选右表单；补充说明拼入 LLM 输入） */}
       {composeOpen && (
@@ -819,7 +819,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold">🔗 跨群同主题候选（只推荐不合并，关联需人工确认）</span>
+              <span className="text-fs-body font-semibold">🔗 跨群同主题候选（只推荐不合并，关联需人工确认）</span>
               <button className={btn} onClick={runRefine} disabled={refining}
                 title="用 text 模型逐对复核是否同一主题（未配置时诚实降级为预筛结果）">
                 {refining ? '精筛中…' : '模型精筛'}
@@ -831,7 +831,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                 onClick={() => setCrossOpen(false)}>✕</button>
             </div>
             {crossSugg.length === 0 ? (
-              <div className="text-xs text-gray-500 text-center py-6">
+              <div className="text-fs-body text-gray-500 text-center py-6">
                 暂无跨群候选（预筛条件：跨群 + 同分类非闲聊 + 时间近 7 天 + 标题相似或关键词交集）
               </div>
             ) : crossSugg.map(c => {
@@ -842,7 +842,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               return (
                 <div key={`${c.src}|${c.dst}`}
                   className="mb-2 p-2 rounded border border-border bg-surface-3/60">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2 text-fs-body">
                     {[a, b].map(t => (
                       <div key={t.id} className="min-w-0">
                         <div className="text-gray-200 truncate" title={t.title}>{t.title}</div>
@@ -884,12 +884,12 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold">🗂 话题↔材料关联候选（只推荐不自动挂，关联需人工确认）</span>
+              <span className="text-fs-body font-semibold">🗂 话题↔材料关联候选（只推荐不自动挂，关联需人工确认）</span>
               <button className="ml-auto text-gray-500 hover:text-gray-300"
                 onClick={() => setMatSuggOpen(false)}>✕</button>
             </div>
             {matSugg.length === 0 ? (
-              <div className="text-xs text-gray-500 text-center py-6">
+              <div className="text-fs-body text-gray-500 text-center py-6">
                 暂无候选——话题与文档/妙记时间+关键词均不沾边，或均已处理
               </div>
             ) : matSugg.map(c => {
@@ -897,7 +897,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               const mat = materialById[c.dst];
               return (
                 <div key={`${c.src}|${c.dst}`}
-                  className="mb-2 p-2 rounded border border-border bg-surface-3/60 flex items-center gap-2 text-xs">
+                  className="mb-2 p-2 rounded border border-border bg-surface-3/60 flex items-center gap-2 text-fs-body">
                   <span className="text-gray-200 truncate min-w-0 flex-1" title={c.src}>
                     {tp?.title || c.src}
                   </span>
@@ -928,7 +928,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
           <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold">🔗 跨群关联（{(relatedMap[relateDrawer.id] || []).length + 1} 群并排）</span>
+              <span className="text-fs-body font-semibold">🔗 跨群关联（{(relatedMap[relateDrawer.id] || []).length + 1} 群并排）</span>
               <button className="ml-auto text-gray-500 hover:text-gray-300"
                 onClick={() => setRelateDrawer(null)}>✕</button>
             </div>
@@ -936,7 +936,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
               {[relateDrawer, ...(relatedMap[relateDrawer.id] || [])
                 .map(id => topicById[id]).filter(Boolean)].map((t, i) => (
                 <div key={t.id} className="p-2 rounded border border-border bg-surface-3/60
-                  flex items-start gap-2 text-xs">
+                  flex items-start gap-2 text-fs-body">
                   <span className="text-fs-aux text-gray-600 shrink-0 mt-0.5">
                     {i === 0 ? '本卡' : `群${i + 1}`}
                   </span>

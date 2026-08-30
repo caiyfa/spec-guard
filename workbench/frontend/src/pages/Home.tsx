@@ -43,14 +43,14 @@ export default function Home({ user, navTree, navLoaded, navError, onRetryNav }:
           <h2 className="text-xl font-bold">
             <span className="brand-gradient">👋 {greeting()}，{user.name}</span>
             <span
-              className={`ml-2 align-middle text-xs px-1.5 py-0.5 rounded ${ROLE_BADGE[user.role] ?? ROLE_BADGE.viewer}`}
+              className={`ml-2 align-middle text-fs-body px-1.5 py-0.5 rounded ${ROLE_BADGE[user.role] ?? ROLE_BADGE.viewer}`}
               title={(user.roles ?? []).join(', ')}
             >
               {ROLE_LABEL[user.role] || user.role}
               {(user.roles ?? []).length > 1 ? ` +${user.roles.length - 1}` : ''}
             </span>
           </h2>
-          <p className="text-xs text-gray-500 mt-1.5">契约驱动的场景测试与 AI 智能编排平台</p>
+          <p className="text-fs-body text-gray-500 mt-1.5">契约驱动的场景测试与 AI 智能编排平台</p>
           <NavLink to="/agent" className="btn-primary mt-4">
             💬 开始 Agent 对话
           </NavLink>
@@ -59,17 +59,17 @@ export default function Home({ user, navTree, navLoaded, navError, onRetryNav }:
 
       {/* 零权限提示条（D3） */}
       {navLoaded && !navError && onlyPublicMenus(navTree) && (
-        <div className="rounded-lg border border-warn/40 bg-warn/10 text-warn text-xs px-4 py-2.5">
+        <div className="rounded-lg border border-warn/40 bg-warn/10 text-warn text-fs-body px-4 py-2.5">
           ℹ️ 当前账号暂未开通功能菜单，可先在 Agent 对话中体验；更多功能请联系管理员在「菜单管理 → 角色授权」中开通
         </div>
       )}
 
       {/* 功能入口卡区：数据即权限（menus/me 实时返回） */}
       {!navLoaded ? (
-        <div className="text-center text-gray-500 text-xs py-10">菜单加载中…</div>
+        <div className="text-center text-gray-500 text-fs-body py-10">菜单加载中…</div>
       ) : navError ? (
         <div className="text-center py-10 space-y-3">
-          <p className="text-gray-500 text-xs">菜单加载失败</p>
+          <p className="text-gray-500 text-fs-body">菜单加载失败</p>
           <button onClick={onRetryNav} className="btn-primary">重试</button>
         </div>
       ) : (
@@ -84,7 +84,7 @@ export default function Home({ user, navTree, navLoaded, navError, onRetryNav }:
                   <NavLink
                     key={i.to}
                     to={i.to}
-                    className="block text-xs text-gray-500 hover:text-info hover:bg-info/5 rounded px-2 py-1.5 transition-colors"
+                    className="block text-fs-body text-gray-500 hover:text-info hover:bg-info/5 rounded px-2 py-1.5 transition-colors"
                   >
                     {i.label}
                   </NavLink>

@@ -71,16 +71,16 @@ export default function NetworkGraph() {
   const selNode = data?.nodes.find(n => n.id === selected);
 
   if (error) {
-    return <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded">网状视图加载失败：{error}</div>;
+    return <div className="text-fs-body text-red-400 bg-red-900/20 px-3 py-2 rounded">网状视图加载失败：{error}</div>;
   }
   if (!data || !positions) {
-    return <div className="text-xs text-gray-500 px-3 py-6 text-center">力导向布局计算中…</div>;
+    return <div className="text-fs-body text-gray-500 px-3 py-6 text-center">力导向布局计算中…</div>;
   }
 
   return (
     <div className="rounded-lg bg-surface-2 border border-border overflow-hidden">
       {data.truncated && (
-        <div className="px-3 py-2 text-[11px] bg-yellow-900/30 text-yellow-300 border-b border-border">
+        <div className="px-3 py-2 text-fs-body bg-yellow-900/30 text-yellow-300 border-b border-border">
           ⚠ 节点总数 {data.total_nodes} 超过 500 护栏——已聚合为模块级视图（展开请用 L1/L2 下钻）
         </div>
       )}
@@ -109,7 +109,7 @@ export default function NetworkGraph() {
         </ReactFlow>
       </div>
       {selNode && (
-        <div className="border-t border-border px-3 py-2 text-[11px] flex items-start gap-3">
+        <div className="border-t border-border px-3 py-2 text-fs-body flex items-start gap-3">
           <span className="font-semibold text-gray-200">{selNode.title || selNode.id}</span>
           <span style={{ color: TYPE_COLOR[selNode.node_type] || '#9ca3af' }}>{selNode.node_type}</span>
           <code className="text-gray-500">{selNode.id}</code>

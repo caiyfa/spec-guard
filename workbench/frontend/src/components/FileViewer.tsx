@@ -93,7 +93,7 @@ function OutlinePanel({ items, onJump }: { items: OutlineItem[]; onJump: (anchor
       <div className="px-2 pb-1 text-fs-aux text-gray-600 border-b border-border/50">大纲</div>
       {items.map((it, i) => (
         <button key={i} onClick={() => onJump(it.anchor)}
-          className={`w-full text-left px-2 py-0.5 text-[11px] truncate text-gray-500 hover:text-info hover:bg-surface-3 transition-colors ${
+          className={`w-full text-left px-2 py-0.5 text-fs-body truncate text-gray-500 hover:text-info hover:bg-surface-3 transition-colors ${
             it.level === 1 ? 'font-medium text-gray-400' : ''
           }`}
           style={{ paddingLeft: 8 + (it.level - 1) * 12 }}
@@ -338,7 +338,7 @@ export default function FileViewer({ path, content, loading, format, hunks, onOp
   }
   if (format === 'text') {
     return (
-      <pre className="h-full overflow-auto p-3 text-xs font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap block">
+      <pre className="h-full overflow-auto p-3 text-fs-body font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap block">
         {content}
       </pre>
     );
@@ -394,7 +394,7 @@ export default function FileViewer({ path, content, loading, format, hunks, onOp
     const rows = lines.map(l => l.split(','));
     return (
       <div className="h-full overflow-auto p-3">
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full text-fs-body border-collapse">
           <thead>
             <tr>{rows[0]?.map((h, i) => (
               <th key={i} className="text-left text-gray-500 font-medium px-2 py-1.5 border-b border-border bg-surface-3/50">
@@ -420,7 +420,7 @@ export default function FileViewer({ path, content, loading, format, hunks, onOp
 
   // 纯文本
   return (
-    <pre className="h-full overflow-auto p-3 text-xs font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap block">
+    <pre className="h-full overflow-auto p-3 text-fs-body font-mono text-gray-300 bg-gray-900/50 whitespace-pre-wrap block">
       {content}
     </pre>
   );

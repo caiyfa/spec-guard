@@ -100,7 +100,7 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
     : '';
 
   return (
-    <div className="border border-border rounded text-xs">
+    <div className="border border-border rounded text-fs-body">
       {/* 工具头部 - 始终可见（状态 + 名称 + 结果摘要同一行） */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -126,14 +126,14 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         <div className="px-2 pb-2 space-y-1.5">
           <div>
             <div className="text-gray-600 text-fs-aux mb-0.5">参数</div>
-            <div className="text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-60">
+            <div className="text-fs-body bg-black/30 rounded p-1.5 overflow-x-auto max-h-60">
               <KeyValueView text={tool.args} />
             </div>
           </div>
           {hasResult && (
             <div>
               <div className="text-gray-600 text-fs-aux mb-0.5">结果</div>
-              <div className={`text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-red-400' : ''}`}>
+              <div className={`text-fs-body bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-red-400' : ''}`}>
                 {(() => {
                   // G3：attribution(db_evidence) 结果含 rows → 表格化（设计 2026-08-25 §A5）
                   const dbData = tool.name === 'attribution' ? parseDbEvidenceResult(tool.result!) : null;
@@ -169,7 +169,7 @@ export function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLa
       {/* 工具组标题栏（可折叠整个组） */}
       <button
         onClick={() => setGroupExpanded(!groupExpanded)}
-        className="w-full flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-2 py-1 text-fs-body text-gray-500 hover:text-gray-300 transition-colors text-left"
       >
         <span className="text-fs-aux">{groupExpanded ? '▼' : '▶'}</span>
         <span className="text-gray-400 font-mono">{toolLabel}</span>

@@ -52,29 +52,29 @@ export function MaterialsRefPanel({ sessionId, references, onError }: {
 
   return (
     <div className="p-2 space-y-1">
-      <div className="flex items-center gap-2 text-[11px] text-gray-500 pb-1 border-b border-border">
+      <div className="flex items-center gap-2 text-fs-body text-gray-500 pb-1 border-b border-border">
         <span>📎 会话材料{ivTitle ? `（${ivTitle}）` : ''}</span>
         <button className="ml-auto text-gray-500 hover:text-info" onClick={() => void load()}
           title="刷新材料列表与状态">⟳ 刷新</button>
       </div>
-      {loading && <div className="text-xs text-gray-500 text-center py-4">材料加载中…</div>}
+      {loading && <div className="text-fs-body text-gray-500 text-center py-4">材料加载中…</div>}
       {!loading && loadErr && (
-        <div className="text-xs text-red-400 text-center py-4">材料列表加载失败：{loadErr}</div>
+        <div className="text-fs-body text-red-400 text-center py-4">材料列表加载失败：{loadErr}</div>
       )}
       {!loading && !loadErr && items === null && (
-        <div className="text-xs text-gray-600 text-center py-4">
+        <div className="text-fs-body text-gray-600 text-center py-4">
           当前会话未绑定需求面试——材料随面试归档；
           <br />在输入区点 🧾 上传前，先在对话中开标（如「开启需求面试」）
         </div>
       )}
       {!loading && !loadErr && items !== null && items.length === 0 && (
-        <div className="text-xs text-gray-600 text-center py-4">
+        <div className="text-fs-body text-gray-600 text-center py-4">
           面试尚未上传材料——点输入区 🧾 选择文件上传，上传成功自动挂入引用
         </div>
       )}
       {!loading && (items || []).map(m => (
         <div key={m.mid} className="px-2 py-1.5 rounded bg-surface-3/60 border border-border/50">
-          <div className="flex items-center gap-1.5 text-xs">
+          <div className="flex items-center gap-1.5 text-fs-body">
             <span className="text-gray-200 truncate" title={m.filename}>{m.filename}</span>
             {refMids.has(m.mid) && (
               <span className="text-fs-aux text-info shrink-0" title="已在对话消息中引用">📌</span>

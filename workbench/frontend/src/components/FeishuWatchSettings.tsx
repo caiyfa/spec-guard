@@ -80,7 +80,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
   };
   useEffect(() => stopAuthPoll, []);   // 组件卸载清理轮询
 
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
   // ── 弹层秒开：点击立即渲染骨架，数据并行加载填充 ──
   const openWatch = () => {
@@ -346,10 +346,10 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
           <div className="w-[720px] max-w-[92vw] max-h-[88vh] flex flex-col border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-xs font-semibold">同步设置（同步范围即授权范围 · 保存即拉起监听）</h3>
+              <h3 className="text-fs-body font-semibold">同步设置（同步范围即授权范围 · 保存即拉起监听）</h3>
             </div>
             {/* T-1008：页头合并状态行（监听 + 授权一行流；详情在「⚙ 通用」页签） */}
-            <div className="mb-2 text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
+            <div className="mb-2 text-fs-body text-gray-500 flex items-center gap-3 flex-wrap">
               {watcher?.running
                 ? <span className="text-green-400">● 监听运行中（{watcher.count} 用户）</span>
                 : <span>○ 监听未运行（保存后自动拉起）</span>}
@@ -364,13 +364,13 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             {/* 飞书授权块（T-942：未绑定/缺权限在弹层内闭环，无需接触服务器） */}
             {authPending ? (
               <div className="mb-2 p-3 rounded border border-amber-500/40 bg-amber-500/5">
-                <div className="text-xs text-amber-300 mb-2">等待飞书授权完成…（用飞书 App 扫码，或打开授权链接）</div>
+                <div className="text-fs-body text-amber-300 mb-2">等待飞书授权完成…（用飞书 App 扫码，或打开授权链接）</div>
                 <div className="flex items-start gap-3">
                   {authPending.qr_data_uri && (
                     <img src={authPending.qr_data_uri} alt="飞书授权二维码"
                       className="w-36 h-36 bg-white rounded p-1 shrink-0" />
                   )}
-                  <div className="min-w-0 text-[11px] break-all">
+                  <div className="min-w-0 text-fs-body break-all">
                     <a href={authPending.verification_url} target="_blank" rel="noreferrer"
                       className="text-info hover:underline">{authPending.verification_url}</a>
                     <div className="text-gray-500 mt-1">扫码同意后自动检测（自动检测中…）；若长时间未跳转，点下方按钮手动确认</div>
@@ -385,7 +385,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             ) : /授权缺少权限|missing_scope|未绑定|认证未就绪/.test(error) ? (
               // 错误已表明授权问题 → 无条件显示带按钮的块（不依赖 authStatus 是否拉到——
               // status 请求失败时 authStatus=null，旧条件四分支全不渲染致按钮消失，用户实锄）
-              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs">
+              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-fs-body">
                 <span className="text-amber-300">
                   ⚠ {authStatus?.bound
                     ? `当前授权缺少部分权限（${authStatus.identity_name}），重新授权一次补全全部域`
@@ -394,13 +394,13 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 <button className={btn} onClick={startAuth}>{authStatus?.bound ? '重新授权' : '绑定飞书'}</button>
               </div>
             ) : authStatus && !authStatus.bound ? (
-              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-xs">
+              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-fs-body">
                 <span className="text-red-400">⚠ 飞书账号未绑定（群聊/用户/文档搜索不可用）</span>
                 <button className={btn} onClick={startAuth}>绑定飞书</button>
               </div>
             ) : authStatus?.bound && (authStatus.reviewing || (authStatus.missing_scopes?.length)) ? (
               // T-943：已绑定但必需 scope 缺失——刚授权→审核中；否则引导重新授权
-              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs flex-wrap">
+              <div className="mb-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-fs-body flex-wrap">
                 <span className="text-amber-300">
                   {authStatus.reviewing
                     ? `⏳ ${authStatus.identity_name}：授权已提交，${authStatus.missing_scopes?.length} 项权限管理员审核中（审核通过后自动生效，稍后重试即可）`
@@ -413,12 +413,12 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
             ) : null}
             {/* 授权类错误不在红框重复显示（顶部黄横幅已给提示与按钮） */}
             {error && !/授权缺少权限|未绑定/.test(error) && (
-              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>
+              <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>
             )}
-            {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+            {notice && <div className="mb-2 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
             {!watch ? (
-              <div className="py-10 text-center text-xs text-gray-500">配置加载中…</div>
+              <div className="py-10 text-center text-fs-body text-gray-500">配置加载中…</div>
             ) : (
               <>
               {/* T-1008 四页签：授权群聊/监听用户/监听文档/通用（状态与节奏配置收通用） */}
@@ -427,7 +427,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                    ['docs', '📄 监听文档'], ['general', '⚙ 通用']] as const)
                   .map(([id, label]) => (
                     <button key={id} onClick={() => setTab(id)}
-                      className={`px-3 py-1.5 rounded text-xs ${tab === id ? 'bg-info/15 text-info font-medium' : 'text-gray-400 hover:text-gray-200'}`}>
+                      className={`px-3 py-1.5 rounded text-fs-body ${tab === id ? 'bg-info/15 text-info font-medium' : 'text-gray-400 hover:text-gray-200'}`}>
                       {label}{id === 'chats' && chatSel.size > 0 ? `（${chatSel.size}）` : ''}
                       {id === 'users' && watchUsers.length > 0 ? `（${watchUsers.length}）` : ''}
                       {id === 'docs' && docSel.size > 0 ? `（${docSel.size}）` : ''}
@@ -439,10 +439,10 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 {tab === 'chats' && (
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info"
                       value={chatFilter} onChange={e => setChatFilter(e.target.value)}
                       placeholder="搜索群名（本地过滤，已加载全部群后可搜全部）" />
-                    <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                    <span className="text-fs-body text-gray-500 whitespace-nowrap">
                       {chatsLoading ? '加载中…' : `${chatSelList.length} 群${chatsFullLoaded ? '' : '（后台同步全部中…）'}`}
                     </span>
                     {!chatsFullLoaded && !chatsLoading && (
@@ -451,9 +451,9 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   </div>
                   <div className="max-h-56 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
                     {chatsLoading && chatSelList.length === 0
-                      && <div className="text-[11px] text-gray-500">群聊列表加载中（最近活跃优先）…</div>}
+                      && <div className="text-fs-body text-gray-500">群聊列表加载中（最近活跃优先）…</div>}
                     {!chatsLoading && chatSelList.length === 0
-                      && <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                      && <div className="flex items-center gap-2 text-fs-body text-gray-600">
                         群聊列表为空（或加载失败）
                         <button className={btn} onClick={() => void loadChatsQuick()}>重试</button>
                       </div>}
@@ -463,7 +463,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                         || (c.name || '').includes(chatFilter.trim())
                         || c.chat_id.includes(chatFilter.trim()))
                       .map(c => (
-                      <label key={c.chat_id} className="flex items-center gap-2 text-xs cursor-pointer">
+                      <label key={c.chat_id} className="flex items-center gap-2 text-fs-body cursor-pointer">
                         <input type="checkbox"
                           checked={chatSel.has(c.chat_id)}
                           onChange={e => {
@@ -505,7 +505,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                       && chatSelList.filter(c => c.chat_mode !== 'p2p'
                         && ((c.name || '').includes(chatFilter.trim())
                           || c.chat_id.includes(chatFilter.trim()))).length === 0 && (
-                      <div className="text-[11px] text-gray-600">
+                      <div className="text-fs-body text-gray-600">
                         当前已加载的群中无匹配{chatsFullLoaded ? '' : '——后台同步全部群后可搜全部，或点「拉取全部」'}</div>
                     )}
                   </div>
@@ -515,12 +515,12 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 {/* Tab 2 用户：搜索选择 + scopes（T-1008 诚实语义文案 + 空态引导） */}
                 {tab === 'users' && (
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-1">
+                  <div className="text-fs-body text-gray-500 mb-1">
                     监听用户 = 拉取该用户产出的妙记 / 文档，并作为材料页「按人筛选」维度。
                     群聊消息始终来自「授权群聊」全量入池，与是否添加用户无关。
                   </div>
                   <div className="flex gap-2 mb-1.5">
-                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info"
                       value={userQuery} onChange={e => setUserQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && searchUsers()}
                       placeholder="姓名 / 邮箱关键词" />
@@ -529,7 +529,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   {userResults.length > 0 && (
                     <div className="max-h-28 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1 mb-1.5">
                       {userResults.map(u => (
-                        <div key={u.open_id} className="flex items-center gap-2 text-xs">
+                        <div key={u.open_id} className="flex items-center gap-2 text-fs-body">
                           <span className="text-gray-200">{u.name || u.open_id}</span>
                           <span className="text-fs-aux text-gray-600">
                             {u.department}{u.email ? ` · ${u.email}` : ''}</span>
@@ -542,14 +542,14 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   {/* T-1008 空态引导：添加入口是「先搜后加」——此前空态只有搜索框，
                       用户报告找不到添加的地方 */}
                   {watchUsers.length === 0 && userResults.length === 0 && (
-                    <div className="px-3 py-4 border border-dashed border-border rounded text-center text-[11px] text-gray-500">
+                    <div className="px-3 py-4 border border-dashed border-border rounded text-center text-fs-body text-gray-500">
                       还没有监听用户——在上方输入姓名 / 邮箱关键词搜索，在结果中点「添加」
                     </div>
                   )}
                   {watchUsers.length > 0 && (
                     <div className="bg-surface-3 border border-border rounded p-2 space-y-1">
                       {watchUsers.map(u => (
-                        <div key={u.open_id} className="flex items-center gap-3 text-xs">
+                        <div key={u.open_id} className="flex items-center gap-3 text-fs-body">
                           <span className="text-gray-200 w-20 truncate">{u.name || u.open_id}</span>
                           {([['group_sender', '群消息'], ['minutes', '妙记'], ['docs', '文档']] as const)
                             .map(([s, label]) => (
@@ -562,7 +562,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                                   onChange={() => toggleScope(u.open_id, s)} />{label}
                               </label>
                             ))}
-                          <button className="ml-auto text-[11px] text-red-400 hover:text-red-300"
+                          <button className="ml-auto text-fs-body text-red-400 hover:text-red-300"
                             onClick={() => setWatchUsers(watchUsers.filter(w => w.open_id !== u.open_id))}>
                             移除</button>
                         </div>
@@ -575,11 +575,11 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 {/* Tab 3 文档：三条独立路径（按名搜/按用户/粘链接）+ 勾选清单 */}
                 {tab === 'docs' && (
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-1">
+                  <div className="text-fs-body text-gray-500 mb-1">
                     添加监听文档（三条独立路径任选：按文档名搜 / 按用户检索 / 粘贴链接）</div>
                   {/* 路径 A：按文档名全局搜索（无需选人） */}
                   <div className="flex gap-2 mb-1.5">
-                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info"
                       value={nameQuery} onChange={e => setNameQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && searchDocsByName()}
                       placeholder="按文档名搜索（如：ERD 评审），结果带产出人标注" />
@@ -588,7 +588,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   </div>
                   {/* 路径 B：按用户检索（选人 → 搜其产出） */}
                   <div className="flex gap-2 mb-1.5">
-                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info"
                       value={docUserQuery} onChange={e => setDocUserQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && searchDocUsers()}
                       placeholder="按用户检索：搜通讯录姓名 → 选为检索目标" />
@@ -598,7 +598,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   {docUserResults.length > 0 && (
                     <div className="max-h-24 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1 mb-1.5">
                       {docUserResults.map(u => (
-                        <div key={u.open_id} className="flex items-center gap-2 text-xs">
+                        <div key={u.open_id} className="flex items-center gap-2 text-fs-body">
                           <span className="text-gray-200">{u.name || u.open_id}</span>
                           <span className="text-fs-aux text-gray-600">{u.department}</span>
                           <button className={btn}
@@ -610,7 +610,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   )}
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     {docOwner && (
-                      <span className="px-2 py-0.5 rounded bg-info/15 text-info text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-info/15 text-info text-fs-body">
                         检索目标：{docOwner.name || docOwner.open_id}
                         <button className="ml-1 text-gray-500 hover:text-gray-300"
                           onClick={() => setDocOwner(null)}>×</button>
@@ -618,11 +618,11 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                     )}
                     {docQuickUsers.map(u => (
                       <button key={u.open_id}
-                        className={`px-2 py-0.5 rounded text-[11px] border border-border ${docOwner?.open_id === u.open_id ? 'bg-info/20 text-info' : 'text-gray-400 hover:text-gray-200'}`}
+                        className={`px-2 py-0.5 rounded text-fs-body border border-border ${docOwner?.open_id === u.open_id ? 'bg-info/20 text-info' : 'text-gray-400 hover:text-gray-200'}`}
                         onClick={() => setDocOwner({ open_id: u.open_id, name: u.name || u.open_id })}>
                         {u.name || u.open_id}</button>
                     ))}
-                    <input className="flex-1 min-w-[140px] bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                    <input className="flex-1 min-w-[140px] bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info"
                       value={docQuery} onChange={e => setDocQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && searchUserDocs()}
                       placeholder="文档关键词（可空）" />
@@ -630,7 +630,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                       disabled={busy === 'doc-search' || !docOwner}>搜文档</button>
                   </div>
                   <div className="flex gap-2 mb-1.5">
-                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-info"
+                    <input className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info"
                       value={linkInput} onChange={e => setLinkInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && resolveLink()}
                       placeholder="粘贴飞书云文档链接（/docx/ 或 /wiki/），token 自动解析" />
@@ -640,7 +640,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   {docSelList.length > 0 && (
                     <div className="max-h-32 overflow-y-auto bg-surface-3 border border-border rounded p-2 space-y-1">
                       {docSelList.map(d => (
-                        <label key={d.token} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <label key={d.token} className="flex items-center gap-2 text-fs-body cursor-pointer">
                           <input type="checkbox" checked={docSel.has(d.token)}
                             onChange={e => {
                               const next = new Set(docSel);
@@ -661,7 +661,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                 {tab === 'general' && (
                 <div className="space-y-3">
                   {/* 监听运行状态详情（T-1004 状态条的完整版，自页头搬入） */}
-                  <div className="px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-[11px]">
+                  <div className="px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-fs-body">
                     <div className="flex items-center gap-3 flex-wrap">
                       {watcher?.running ? (
                         <>
@@ -688,7 +688,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   </div>
 
                   {/* 当前监听范围只读摘要（T-1004 摘要自页头搬入；编辑走前三个页签） */}
-                  <div className="px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-[11px] space-y-1.5">
+                  <div className="px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-fs-body space-y-1.5">
                     <div className="flex items-start gap-2 flex-wrap">
                       <span className="text-gray-500 shrink-0 mt-0.5">监听用户</span>
                       {watchUsers.length === 0
@@ -723,11 +723,11 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                   </div>
 
                   {/* 同步节奏与自动话题分类（T-952 定时同步自底部栏搬入；T-1008 双阈值新增） */}
-                  <div className="px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-[11px] space-y-2">
+                  <div className="px-3 py-2 rounded bg-surface-3/60 border border-border/50 text-fs-body space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-gray-500 shrink-0">定时全量同步</span>
                       <input type="number" min={0} max={1440}
-                        className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none focus:border-info"
+                        className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body text-gray-200 outline-none focus:border-info"
                         value={watch.chat_sync_minutes ?? 0}
                         onChange={e => setWatch(prev => prev ? {
                           ...prev, chat_sync_minutes: Number(e.target.value) || 0,
@@ -738,14 +738,14 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
                       <span className="text-gray-500 shrink-0">自动话题分类</span>
                       <span>积累</span>
                       <input type="number" min={0} max={1000}
-                        className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none focus:border-info"
+                        className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body text-gray-200 outline-none focus:border-info"
                         value={watch.topic_auto_count ?? 50}
                         onChange={e => setWatch(prev => prev ? {
                           ...prev, topic_auto_count: Math.max(0, Number(e.target.value) || 0),
                         } : prev)} />
                       <span>条新消息即分类；未达条数时距上次</span>
                       <input type="number" min={0} max={1440}
-                        className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none focus:border-info"
+                        className="w-16 bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body text-gray-200 outline-none focus:border-info"
                         value={watch.topic_auto_minutes ?? 60}
                         onChange={e => setWatch(prev => prev ? {
                           ...prev, topic_auto_minutes: Math.max(0, Number(e.target.value) || 0),
@@ -765,7 +765,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
 
             {/* T-1008：保存/取消移固定页脚（原在页头挤压状态区） */}
             <div className="mt-3 pt-3 border-t border-border flex items-center gap-2">
-              <span className="mr-auto text-[11px] text-gray-600">保存即生效：监听按配置拉起或热更新</span>
+              <span className="mr-auto text-fs-body text-gray-600">保存即生效：监听按配置拉起或热更新</span>
               <button className={btn} onClick={saveWatch}
                 disabled={busy === 'watch' || !watch}>{busy === 'watch' ? '保存中…' : '保存'}</button>
               <button className={btn} onClick={() => { stopAuthPoll(); setOpen(false); }}>取消</button>

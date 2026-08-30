@@ -33,8 +33,8 @@ const DIM_LABEL: Record<string, string> = {
 };
 
 const cardCls = 'bg-surface-1 border border-border rounded-lg p-3';
-const btn = 'px-2.5 py-1 rounded text-[11px] font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40 disabled:cursor-not-allowed';
-const btnOk = 'px-2.5 py-1 rounded text-[11px] font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
+const btn = 'px-2.5 py-1 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40 disabled:cursor-not-allowed';
+const btnOk = 'px-2.5 py-1 rounded text-fs-body font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
 const btnDanger = 'px-2 py-0.5 rounded text-fs-aux font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed';
 
 // ══════════════════════════════════════════════════════════
@@ -73,7 +73,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
         return (
           <div className="space-y-1">
             {(p.topics || []).map((t: any) => (
-              <div key={t.tid} className="flex items-center gap-1.5 text-[11px]">
+              <div key={t.tid} className="flex items-center gap-1.5 text-fs-body">
                 <span className="text-gray-300 flex-1 truncate" title={t.summary}>○ {t.title}</span>
                 <button className={btn} disabled={!!busy}
                   onClick={() => run(`topic:${t.tid}`,
@@ -96,7 +96,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
         return (
           <div className="space-y-1">
             {(p.scores || []).map((s: any) => (
-              <div key={s.id} className="flex items-center gap-1.5 text-[11px]">
+              <div key={s.id} className="flex items-center gap-1.5 text-fs-body">
                 <span className="text-gray-300 flex-1 truncate" title={s.evidence}>
                   {DIM_LABEL[s.dimension] || s.dimension} · {s.score} 分
                   <span className="text-gray-600">（{s.source}）</span>
@@ -153,7 +153,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
           <div className="flex items-center gap-1.5">
             <input value={storyTitle} onChange={e => setStoryTitle(e.target.value)}
               placeholder="故事标题（可改）"
-              className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-info" />
+              className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-200 outline-none focus:border-info" />
             <button className={btnOk} disabled={!!busy || !storyTitle.trim() || !!done}
               title="从冻结 delta 创建禅道故事（product 角色，幂等防重）"
               onClick={() => run(`story:${p.delta_id}`,
@@ -171,7 +171,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
     <div className={cardCls}>
       <div className="flex items-center gap-1.5 mb-1">
         <span>{KIND_ICON[c.kind] || '🔧'}</span>
-        <span className="text-xs font-medium text-gray-200 flex-1 truncate">{c.title}</span>
+        <span className="text-fs-body font-medium text-gray-200 flex-1 truncate">{c.title}</span>
         <span className={`text-fs-micro px-1 py-0.5 rounded border ${
           c.level === 'L3'
             ? 'text-green-400 border-green-500/40'
@@ -189,7 +189,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
           </button>
         )}
       </div>
-      <div className="text-[11px] text-gray-500 mb-2">{c.summary}
+      <div className="text-fs-body text-gray-500 mb-2">{c.summary}
         <span className="text-gray-700 font-mono"> · {c.ref_id}</span>
       </div>
       {renderActions()}
@@ -238,13 +238,13 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
   const spec = action ? GATE_EXEC_ACTIONS[action] : undefined;
 
   if (parseError) {
-    return <div className={`${cardCls} border-red-500/40 text-[11px] text-red-400`}>⚠ {parseError}</div>;
+    return <div className={`${cardCls} border-red-500/40 text-fs-body text-red-400`}>⚠ {parseError}</div>;
   }
   if (!spec) {
     // 白名单外 action：确定性拒绝，不执行（分档接管边界）
     return (
       <div className={`${cardCls} border-yellow-500/40`}>
-        <div className="text-[11px] text-yellow-400">
+        <div className="text-fs-body text-yellow-400">
           🚫 Agent 提议的代执行「{action || '(缺 action)'}」不在白名单内——已拦截。
         </div>
         <div className="text-fs-aux text-gray-500 mt-1">
@@ -271,20 +271,20 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
     <div className={`${cardCls} border-info/40`}>
       <div className="flex items-center gap-1.5 mb-1">
         <span>🤖</span>
-        <span className="text-xs font-medium text-gray-200 flex-1">Agent 代执行提议（可逆操作）</span>
+        <span className="text-fs-body font-medium text-gray-200 flex-1">Agent 代执行提议（可逆操作）</span>
         <span className="text-fs-micro px-1 py-0.5 rounded border text-green-400 border-green-500/40">L3 白名单</span>
       </div>
-      <div className="text-[11px] text-gray-400 mb-2">{spec.describe(params)}</div>
+      <div className="text-fs-body text-gray-400 mb-2">{spec.describe(params)}</div>
       {state === 'pending' && (
         <div className="flex items-center gap-1.5">
           <button className={btnOk} onClick={doExec}>✓ 确认执行</button>
           <button className={btn} onClick={() => setState('dismissed')}>忽略</button>
         </div>
       )}
-      {state === 'running' && <div className="text-[11px] text-gray-500">执行中…</div>}
-      {state === 'ok' && <div className="text-[11px] text-green-400">✓ {result}</div>}
-      {state === 'failed' && <div className="text-[11px] text-red-400">✗ {result}</div>}
-      {state === 'dismissed' && <div className="text-[11px] text-gray-600">已忽略（未执行任何操作）</div>}
+      {state === 'running' && <div className="text-fs-body text-gray-500">执行中…</div>}
+      {state === 'ok' && <div className="text-fs-body text-green-400">✓ {result}</div>}
+      {state === 'failed' && <div className="text-fs-body text-red-400">✗ {result}</div>}
+      {state === 'dismissed' && <div className="text-fs-body text-gray-600">已忽略（未执行任何操作）</div>}
     </div>
   );
 }

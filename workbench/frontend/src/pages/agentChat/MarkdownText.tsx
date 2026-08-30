@@ -27,7 +27,7 @@ function PreBlock({ children }: { children?: ReactNode }) {
         </div>
       );
     } catch {
-      return <pre className="text-[11px] bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-red-400 whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
+      return <pre className="text-fs-body bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-red-400 whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
     }
   }
   // GateDock 三期：```gate-exec 围栏 → 代执行确认卡（白名单硬编码，人确认才执行）
@@ -50,7 +50,7 @@ function PreBlock({ children }: { children?: ReactNode }) {
     }
   }
   return (
-    <pre className="text-[11px] bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-gray-400 whitespace-pre-wrap">{children}</pre>
+    <pre className="text-fs-body bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-gray-400 whitespace-pre-wrap">{children}</pre>
   );
 }
 
@@ -60,7 +60,7 @@ const MD_COMPONENTS: Components = {
   h1: ({ children }: { children?: ReactNode }) => <h1 className="text-lg font-bold text-gray-100 mt-4 mb-2">{children}</h1>,
   h2: ({ children }: { children?: ReactNode }) => <h2 className="text-base font-semibold text-gray-100 mt-3.5 mb-1.5 pb-1 border-b border-border/40">{children}</h2>,
   h3: ({ children }: { children?: ReactNode }) => <h3 className="text-sm font-semibold text-gray-200 mt-3 mb-1">{children}</h3>,
-  h4: ({ children }: { children?: ReactNode }) => <h4 className="text-xs font-semibold text-gray-300 mt-2 mb-1">{children}</h4>,
+  h4: ({ children }: { children?: ReactNode }) => <h4 className="text-fs-body font-semibold text-gray-300 mt-2 mb-1">{children}</h4>,
   p: ({ children }: { children?: ReactNode }) => <p className="text-gray-200 leading-7 my-2">{children}</p>,
   ul: ({ children }: { children?: ReactNode }) => <ul className="list-disc pl-4 my-2 space-y-1">{children}</ul>,
   ol: ({ children }: { children?: ReactNode }) => <ol className="list-decimal pl-4 my-2 space-y-1">{children}</ol>,
@@ -71,7 +71,7 @@ const MD_COMPONENTS: Components = {
   ),
   // 表格：LLM 常用表格做对比/清单（版本仲裁、边变更、步骤清单）
   table: ({ children }: { children?: ReactNode }) => (
-    <div className="overflow-x-auto my-2.5"><table className="w-full text-[11px] border-collapse">{children}</table></div>
+    <div className="overflow-x-auto my-2.5"><table className="w-full text-fs-body border-collapse">{children}</table></div>
   ),
   th: ({ children }: { children?: ReactNode }) => <th className="border border-border px-2.5 py-1 text-left text-gray-300">{children}</th>,
   td: ({ children }: { children?: ReactNode }) => <td className="border border-border px-2.5 py-1 text-gray-400">{children}</td>,
@@ -80,7 +80,7 @@ const MD_COMPONENTS: Components = {
   code: ({ className, children }: { className?: string; children?: ReactNode }) => {
     const inline = !className && !String(children).includes('\n');
     return inline
-      ? <code className="text-[11px] text-yellow-400/80 bg-black/30 rounded px-0.5">{children}</code>
+      ? <code className="text-fs-body text-yellow-400/80 bg-black/30 rounded px-0.5">{children}</code>
       : <code className="block">{children}</code>;
   },
   blockquote: ({ children }: { children?: ReactNode }) => (

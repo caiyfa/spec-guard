@@ -104,9 +104,9 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-2 mb-2 flex-shrink-0 flex-wrap">
-        <span className="text-xs font-medium text-gray-300">🌐 环境配置（{system || '—'}）</span>
+        <span className="text-fs-body font-medium text-gray-300">🌐 环境配置（{system || '—'}）</span>
         {/* 配置层：通用（共享文件）vs 本系统 */}
-        <div className="flex rounded border border-border overflow-hidden text-xs ml-auto">
+        <div className="flex rounded border border-border overflow-hidden text-fs-body ml-auto">
           {(Object.keys(SCOPE_LABELS) as Scope[]).map((sc) => (
             <button key={sc} onClick={() => loadEnv(currentEnv, sc, system)}
               className={`px-2.5 py-1 ${scope === sc ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
@@ -115,7 +115,7 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
           ))}
         </div>
         <select value={currentEnv} onChange={(e) => loadEnv(e.target.value, scope, system)}
-          className="bg-surface-3 border border-border rounded px-2 py-1 text-xs" title="切换环境（env.{env}.yaml）">
+          className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body" title="切换环境（env.{env}.yaml）">
           {sysEnvs.map((n) => <option key={n} value={n}>{n}</option>)}
           {!sysEnvs.includes(currentEnv) && <option value={currentEnv}>{currentEnv}</option>}
           {scope === 'shared' && sharedEnvNames.filter((n) => !sysEnvs.includes(n) && n !== currentEnv)
@@ -123,15 +123,15 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
         </select>
         {isAdmin && effView === 'raw' && (
           <button onClick={save} disabled={saving || loading}
-            className="px-3 py-1 rounded text-xs bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-50">
+            className="px-3 py-1 rounded text-fs-body bg-pass/20 text-pass border border-pass/30 hover:bg-pass/30 disabled:opacity-50">
             💾 保存
           </button>
         )}
-        {msg && <span className={`text-xs ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
+        {msg && <span className={`text-fs-body ${msg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{msg}</span>}
       </div>
       <div className="flex items-center gap-2 mb-2 flex-shrink-0">
         {/* 显示模式：原文/预览（+本系统层数据库），各自占满栏内空间 */}
-        <div className="flex rounded border border-border overflow-hidden text-xs">
+        <div className="flex rounded border border-border overflow-hidden text-fs-body">
           {viewModes.map((v) => (
             <button key={v} onClick={() => switchView(v)}
               className={`px-2.5 py-1 ${effView === v ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}>
@@ -143,7 +143,7 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
       </div>
 
       {!exists && effView !== 'db' && (
-        <div className="text-xs text-warn bg-warn/10 border border-warn/30 rounded px-3 py-2 mb-2 flex-shrink-0">
+        <div className="text-fs-body text-warn bg-warn/10 border border-warn/30 rounded px-3 py-2 mb-2 flex-shrink-0">
           ⚠️ 该配置层/环境文件不存在——{isAdmin ? '保存后创建' : '需管理员创建'}（引擎缺配置时相关执行会 SKIP；共享层缺失时仅用系统层）。
         </div>
       )}
@@ -153,7 +153,7 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
           /* YAML 原文编辑（Monaco，防 js-yaml 往返丢中文注释） */
           <div className="h-full border border-border rounded-lg overflow-hidden">
             {loading ? (
-              <div className="h-full flex items-center justify-center text-gray-500 text-xs">加载中…</div>
+              <div className="h-full flex items-center justify-center text-gray-500 text-fs-body">加载中…</div>
             ) : (
               <Editor language="yaml" theme={tokens.monaco} value={raw}
                 onChange={(v) => setRaw(v || '')}
@@ -165,10 +165,10 @@ export default function EnvConfigPanel({ system, systems, isAdmin }: Props) {
         {effView === 'preview' && (
           /* 结构化预览（占满栏内空间，内部滚动） */
           <div className="h-full border border-border rounded-lg overflow-hidden flex flex-col">
-            <div className="px-3 py-2 border-b border-border text-xs font-medium bg-surface-2 flex-shrink-0">
+            <div className="px-3 py-2 border-b border-border text-fs-body font-medium bg-surface-2 flex-shrink-0">
               {SCOPE_LABELS[scope].label}预览（{scope === 'shared' ? '_shared' : system} · env.{currentEnv}）
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs text-gray-400">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 text-fs-body text-gray-400">
               {loading ? (
                 <div className="text-center text-gray-500 py-6">加载中…</div>
               ) : scope === 'system' ? (
@@ -299,7 +299,7 @@ function DbView({ system, env, isAdmin, onSaved }: {
     <div className="h-full overflow-y-auto">
       <div className="bg-surface-2 border border-border rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-gray-300">🗄 数据库连接（{system || '—'} · env.{env}）</span>
+          <span className="text-fs-body font-medium text-gray-300">🗄 数据库连接（{system || '—'} · env.{env}）</span>
           {isAdmin && (
             <div className="flex items-center gap-2">
               <button onClick={save} disabled={saving || !system}
@@ -315,7 +315,7 @@ function DbView({ system, env, isAdmin, onSaved }: {
           {isAdmin && <span className="text-warn"> 与「📝 原文」编辑同一文件——请先保存原文再改库连接，避免互相覆盖。</span>}
         </p>
         {!system ? (
-          <div className="text-center text-gray-600 text-xs py-3">先在栏1选择系统</div>
+          <div className="text-center text-gray-600 text-fs-body py-3">先在栏1选择系统</div>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             <Field label="主机" value={dbForm.host} onChange={(v) => updateDb('host', v)} disabled={!isAdmin} />
@@ -336,7 +336,7 @@ function DbView({ system, env, isAdmin, onSaved }: {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] font-medium text-gray-300 mb-1">{title}</div>
+      <div className="text-fs-body font-medium text-gray-300 mb-1">{title}</div>
       <div className="space-y-0.5">{children}</div>
     </div>
   );
@@ -344,7 +344,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function KV({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-center gap-2 text-[11px]">
+    <div className="flex items-center gap-2 text-fs-body">
       <span className="text-gray-500 font-mono w-36 truncate flex-shrink-0">{k}</span>
       <span className="text-gray-300 truncate">{v || '—'}</span>
     </div>
@@ -358,7 +358,7 @@ function Field({ label, value, onChange, type = 'text', placeholder = '', disabl
     <div>
       <label className="block text-fs-aux text-gray-500 mb-0.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono placeholder-gray-600 disabled:opacity-50" />
+        className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono placeholder-gray-600 disabled:opacity-50" />
     </div>
   );
 }

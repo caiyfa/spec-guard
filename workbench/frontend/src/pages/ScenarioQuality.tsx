@@ -144,7 +144,7 @@ export default function ScenarioQuality({ role }: Props) {
           {loading ? '扫描中…' : '🔄 刷新'}
         </button>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-fs-body text-gray-500 mb-4">
         {data
           ? `扫描于 ${data.generated_at} · ${data.root} · 评级口径：深=oracle/DB校对/python 或 db_query；浅=仅状态+字段存在性断言且≤3条；无=verify 为空`
           : '需求关联 / 断言深度 / 待完善项一屏可见'}
@@ -175,41 +175,41 @@ export default function ScenarioQuality({ role }: Props) {
           {/* 统计卡 */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
             <div className="card-hover p-3">
-              <div className="text-xs text-gray-500 mb-1">用例总数</div>
-              <div className="text-lg font-semibold">{t.scenarios}<span className="text-xs text-gray-500 ml-1">/ {t.suites} 套件</span></div>
+              <div className="text-fs-body text-gray-500 mb-1">用例总数</div>
+              <div className="text-lg font-semibold">{t.scenarios}<span className="text-fs-body text-gray-500 ml-1">/ {t.suites} 套件</span></div>
             </div>
             <div className="card-hover p-3 cursor-pointer" title="查看未关联需求的用例"
               onClick={() => gotoIssue('missing-covers')}>
-              <div className="text-xs text-gray-500 mb-1">需求关联率</div>
+              <div className="text-fs-body text-gray-500 mb-1">需求关联率</div>
               <div className="text-lg font-semibold">
                 <span className={t.covers_rate < 50 ? 'text-fail' : 'text-pass'}>{t.covers_rate}%</span>
-                <span className="text-xs text-gray-500 ml-1">{t.covers_tagged}/{t.scenarios}</span>
+                <span className="text-fs-body text-gray-500 ml-1">{t.covers_tagged}/{t.scenarios}</span>
               </div>
             </div>
             <div className="card-hover p-3">
-              <div className="text-xs text-gray-500 mb-1">深断言</div>
+              <div className="text-fs-body text-gray-500 mb-1">深断言</div>
               <div className="text-lg font-semibold text-pass">{t.grades.deep}
-                <span className="text-xs text-gray-500 ml-1">{t.scenarios ? Math.round(100 * t.grades.deep / t.scenarios) : 0}%</span></div>
+                <span className="text-fs-body text-gray-500 ml-1">{t.scenarios ? Math.round(100 * t.grades.deep / t.scenarios) : 0}%</span></div>
             </div>
             <div className="card-hover p-3 cursor-pointer" title="查看浅断言用例"
               onClick={() => gotoIssue('shallow')}>
-              <div className="text-xs text-gray-500 mb-1">浅断言</div>
+              <div className="text-fs-body text-gray-500 mb-1">浅断言</div>
               <div className="text-lg font-semibold text-warn">{t.grades.shallow}
-                <span className="text-xs text-gray-500 ml-1">{t.scenarios ? Math.round(100 * t.grades.shallow / t.scenarios) : 0}%</span></div>
+                <span className="text-fs-body text-gray-500 ml-1">{t.scenarios ? Math.round(100 * t.grades.shallow / t.scenarios) : 0}%</span></div>
             </div>
             <div className="card-hover p-3 cursor-pointer" title="查看带待完善标记的用例"
               onClick={() => { setFilters(EMPTY_FILTERS); setTab('scenarios'); }}>
-              <div className="text-xs text-gray-500 mb-1">待完善用例</div>
+              <div className="text-fs-body text-gray-500 mb-1">待完善用例</div>
               <div className={`text-lg font-semibold ${t.scenarios_with_issues ? 'text-fail' : 'text-pass'}`}>
                 {t.scenarios_with_issues}</div>
             </div>
             <div className="card-hover p-3">
-              <div className="text-xs text-gray-500 mb-1">需求覆盖</div>
+              <div className="text-fs-body text-gray-500 mb-1">需求覆盖</div>
               {data.anchors_available ? (
                 <Link to="/lifecycle?tab=coverage" className="text-lg font-semibold text-info hover:underline"
                   title="去覆盖缺口页看需求明细">
                   {t.anchors_covered}/{t.anchors_total}
-                  <span className="text-xs text-gray-500 ml-1">缺口 {t.fr_gaps}</span>
+                  <span className="text-fs-body text-gray-500 ml-1">缺口 {t.fr_gaps}</span>
                 </Link>
               ) : (
                 <div className="text-sm text-gray-500" title="当前工作区无 spec 锚点，需求覆盖与锚点失效未评估">未评估</div>
@@ -232,7 +232,7 @@ export default function ScenarioQuality({ role }: Props) {
             <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-gray-500 border-b border-border">
+                  <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                     <th className="px-3 py-2">套件</th>
                     <th className="px-3 py-2">关联 spec</th>
                     <th className="px-3 py-2 text-right">用例数</th>
@@ -248,9 +248,9 @@ export default function ScenarioQuality({ role }: Props) {
                       title="点击查看该套件用例明细">
                       <td className="px-3 py-2">
                         <div className="font-medium">{s.feature || s.key}</div>
-                        <div className="text-xs text-gray-500">{s.key}</div>
+                        <div className="text-fs-body text-gray-500">{s.key}</div>
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-400">
+                      <td className="px-3 py-2 text-fs-body text-gray-400">
                         {s.spec_ref ? `${s.spec_ref}${s.spec_version ? ` @${s.spec_version}` : ''}` : '—'}
                       </td>
                       <td className="px-3 py-2 text-right">{s.scenarios}</td>
@@ -298,14 +298,14 @@ export default function ScenarioQuality({ role }: Props) {
                   <button onClick={() => setFilters(EMPTY_FILTERS)} className="btn-ghost text-sm">清空筛选</button>
                 )}
               </div>
-              <div className="text-xs text-gray-500 mb-2">{filtered.length} / {data.scenarios.length} 个用例</div>
+              <div className="text-fs-body text-gray-500 mb-2">{filtered.length} / {data.scenarios.length} 个用例</div>
               {filtered.length === 0 ? (
                 <div className="py-10 text-center text-gray-500 text-sm">无匹配用例（调整筛选条件试试）</div>
               ) : (
                 <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-xs text-gray-500 border-b border-border">
+                      <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                         <th className="px-3 py-2">用例</th>
                         <th className="px-3 py-2">套件</th>
                         <th className="px-3 py-2">关联需求</th>
@@ -322,9 +322,9 @@ export default function ScenarioQuality({ role }: Props) {
                           title="点击打开详情（结构化查看/编辑/试跑）">
                           <td className="px-3 py-2">
                             <div className="font-medium">{s.id}</div>
-                            <div className="text-xs text-gray-500">{s.title}</div>
+                            <div className="text-fs-body text-gray-500">{s.title}</div>
                           </td>
-                          <td className="px-3 py-2 text-xs text-gray-400">{s.suite}</td>
+                          <td className="px-3 py-2 text-fs-body text-gray-400">{s.suite}</td>
                           <td className="px-3 py-2">
                             {s.covers_detail.length === 0 ? <span className="text-gray-600">—</span> : (
                               <div className="flex flex-wrap gap-1">
@@ -333,7 +333,7 @@ export default function ScenarioQuality({ role }: Props) {
                                     title={c.valid
                                       ? `${c.fr}：${c.title || '（无标题）'}${c.module ? `（${c.module}）` : ''}`
                                       : `${c.fr}：当前工作区锚点表查不到（spec 世代/编号体系可能不匹配）`}
-                                    className={`px-1.5 py-0.5 rounded text-xs ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
+                                    className={`px-1.5 py-0.5 rounded text-fs-body ${c.valid ? 'bg-surface-3' : 'bg-red-900/40 text-red-400'}`}>
                                     {c.fr}{!c.valid && ' ⚠'}
                                   </span>
                                 ))}
@@ -342,16 +342,16 @@ export default function ScenarioQuality({ role }: Props) {
                           </td>
                           <td className="px-3 py-2 text-right">{s.verify_count}</td>
                           <td className="px-3 py-2">
-                            <span className={`px-2 py-0.5 rounded text-xs ${GRADE_CLS[s.grade]}`}>{GRADE_LABEL[s.grade]}</span>
+                            <span className={`px-2 py-0.5 rounded text-fs-body ${GRADE_CLS[s.grade]}`}>{GRADE_LABEL[s.grade]}</span>
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex flex-wrap gap-1">
                               {s.issues.map(i => (
-                                <span key={i} className={`px-1.5 py-0.5 rounded text-xs ${ISSUE_CLS[i]}`}>{ISSUE_LABEL[i]}</span>
+                                <span key={i} className={`px-1.5 py-0.5 rounded text-fs-body ${ISSUE_CLS[i]}`}>{ISSUE_LABEL[i]}</span>
                               ))}
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-gray-500 text-xs">详情 ›</td>
+                          <td className="px-3 py-2 text-gray-500 text-fs-body">详情 ›</td>
                         </tr>
                       ))}
                     </tbody>
@@ -364,12 +364,12 @@ export default function ScenarioQuality({ role }: Props) {
           {tab === 'shape' && (
             <>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-gray-500">
+                <p className="text-fs-body text-gray-500">
                   {shapeData
                     ? `形状基线来自最近 ${shapeData.n_runs} 个执行 run（response_body 落盘面派生）· 口径：新增字段放行（INFO）；被引用路径消失才报警；引用路径从未出现=疑似幻觉路径`
                     : '按 API 聚合的响应形状事实与消费方引用完整性'}
                 </p>
-                <button className="btn-ghost text-xs" onClick={() => loadShape(true)}>🔄 重扫</button>
+                <button className="btn-ghost text-fs-body" onClick={() => loadShape(true)}>🔄 重扫</button>
               </div>
               {shapeError && (
                 <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
@@ -384,7 +384,7 @@ export default function ScenarioQuality({ role }: Props) {
                 <div className="mb-4 bg-surface-2 border border-border rounded-lg overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-xs text-gray-500 border-b border-border">
+                      <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                         <th className="px-3 py-2">级别</th>
                         <th className="px-3 py-2">类型</th>
                         <th className="px-3 py-2">API</th>
@@ -396,14 +396,14 @@ export default function ScenarioQuality({ role }: Props) {
                       {shapeData.findings.map((f, i) => (
                         <tr key={i} className="border-b border-border/50">
                           <td className="px-3 py-2">
-                            <span className={`px-1.5 py-0.5 rounded text-xs ${f.level === 'WARN' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-400'}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-fs-body ${f.level === 'WARN' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-400'}`}>
                               {f.level}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-xs">{FINDING_TYPE_LABEL[f.type] || f.type}</td>
-                          <td className="px-3 py-2 text-xs font-mono">{f.api}</td>
-                          <td className="px-3 py-2 text-xs text-gray-300">{f.message}</td>
-                          <td className="px-3 py-2 text-xs text-gray-500">{f.consumers?.join('、') || '—'}</td>
+                          <td className="px-3 py-2 text-fs-body">{FINDING_TYPE_LABEL[f.type] || f.type}</td>
+                          <td className="px-3 py-2 text-fs-body font-mono">{f.api}</td>
+                          <td className="px-3 py-2 text-fs-body text-gray-300">{f.message}</td>
+                          <td className="px-3 py-2 text-fs-body text-gray-500">{f.consumers?.join('、') || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -417,7 +417,7 @@ export default function ScenarioQuality({ role }: Props) {
                 <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-xs text-gray-500 border-b border-border">
+                      <tr className="text-left text-fs-body text-gray-500 border-b border-border">
                         <th className="px-3 py-2">API（METHOD path）</th>
                         <th className="px-3 py-2 text-right">样本 run</th>
                         <th className="px-3 py-2 text-right">字段数</th>
@@ -429,7 +429,7 @@ export default function ScenarioQuality({ role }: Props) {
                     <tbody>
                       {shapeData.apis.map(a => (
                         <tr key={a.api} className="border-b border-border/50">
-                          <td className="px-3 py-2 font-mono text-xs">{a.api}</td>
+                          <td className="px-3 py-2 font-mono text-fs-body">{a.api}</td>
                           <td className="px-3 py-2 text-right">{a.runs}</td>
                           <td className="px-3 py-2 text-right">{a.fields}</td>
                           <td className="px-3 py-2 text-right">{a.refs}</td>
@@ -438,9 +438,9 @@ export default function ScenarioQuality({ role }: Props) {
                               : a.importance === 2 ? <span className="text-warn">●●</span>
                               : a.importance === 1 ? <span className="text-info">●</span>
                               : <span className="text-gray-600">○</span>}
-                            <span className="text-xs text-gray-500 ml-1">{a.category}</span>
+                            <span className="text-fs-body text-gray-500 ml-1">{a.category}</span>
                           </td>
-                          <td className="px-3 py-2 text-xs text-gray-500">{a.owner_scenarios.join('、') || '—'}</td>
+                          <td className="px-3 py-2 text-fs-body text-gray-500">{a.owner_scenarios.join('、') || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -453,7 +453,7 @@ export default function ScenarioQuality({ role }: Props) {
           {/* 并行安全（T-1038） */}
           {tab === 'parallel' && (
             <>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-fs-body text-gray-500 mb-2">
                 当前调度仍为串行——本页是 V3 并行执行（T-802）的静态前置判定：
                 读-读并行安全、沾写全局互斥（保守模型，produces/consumes 落地后按资源粒度细化）。
               </p>
@@ -470,33 +470,33 @@ export default function ScenarioQuality({ role }: Props) {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     <div className="card-hover p-3">
-                      <div className="text-xs text-gray-500 mb-1">读场景（可全并行）</div>
+                      <div className="text-fs-body text-gray-500 mb-1">读场景（可全并行）</div>
                       <div className="text-lg font-semibold text-pass">{parallelData.totals.readers}</div>
                     </div>
                     <div className="card-hover p-3">
-                      <div className="text-xs text-gray-500 mb-1">写场景（全局互斥）</div>
+                      <div className="text-fs-body text-gray-500 mb-1">写场景（全局互斥）</div>
                       <div className="text-lg font-semibold text-warn">{parallelData.totals.writers}</div>
                     </div>
                     <div className="card-hover p-3">
-                      <div className="text-xs text-gray-500 mb-1">最大理论并行度</div>
+                      <div className="text-fs-body text-gray-500 mb-1">最大理论并行度</div>
                       <div className="text-lg font-semibold text-info">{parallelData.totals.max_parallelism}</div>
                     </div>
                     <div className="card-hover p-3">
-                      <div className="text-xs text-gray-500 mb-1">判定模型</div>
-                      <div className="text-xs text-gray-400">{parallelData.totals.model}</div>
+                      <div className="text-fs-body text-gray-500 mb-1">判定模型</div>
+                      <div className="text-fs-body text-gray-400">{parallelData.totals.model}</div>
                     </div>
                   </div>
                   <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto mb-4">
-                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-border">串行瓶颈（写场景，按被依赖数排序）</div>
+                    <div className="px-3 py-2 text-fs-body text-gray-500 border-b border-border">串行瓶颈（写场景，按被依赖数排序）</div>
                     <table className="w-full text-sm">
                       <tbody>
                         {parallelData.writers.map(w => (
                           <tr key={w.id} className="border-b border-border/50">
-                            <td className="px-3 py-2 font-medium">{w.id}<span className="text-xs text-gray-500 ml-2">{w.title}</span></td>
-                            <td className="px-3 py-2 text-xs text-gray-400">{w.category}</td>
-                            <td className="px-3 py-2 text-xs text-gray-400">被依赖 {w.dependents}</td>
-                            <td className="px-3 py-2 text-xs text-gray-400">{w.priority}</td>
-                            <td className="px-3 py-2 text-xs text-gray-500">账号：{w.accounts.join('、') || '—'}</td>
+                            <td className="px-3 py-2 font-medium">{w.id}<span className="text-fs-body text-gray-500 ml-2">{w.title}</span></td>
+                            <td className="px-3 py-2 text-fs-body text-gray-400">{w.category}</td>
+                            <td className="px-3 py-2 text-fs-body text-gray-400">被依赖 {w.dependents}</td>
+                            <td className="px-3 py-2 text-fs-body text-gray-400">{w.priority}</td>
+                            <td className="px-3 py-2 text-fs-body text-gray-500">账号：{w.accounts.join('、') || '—'}</td>
                           </tr>
                         ))}
                         {parallelData.writers.length === 0 && (
@@ -506,20 +506,20 @@ export default function ScenarioQuality({ role }: Props) {
                     </table>
                   </div>
                   <div className="bg-surface-2 border border-border rounded-lg overflow-x-auto">
-                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-border">读层（两两可并行，{parallelData.readers.length} 个）</div>
+                    <div className="px-3 py-2 text-fs-body text-gray-500 border-b border-border">读层（两两可并行，{parallelData.readers.length} 个）</div>
                     <table className="w-full text-sm">
                       <tbody>
                         {parallelData.readers.slice(0, 30).map(r => (
                           <tr key={r.id} className="border-b border-border/50">
-                            <td className="px-3 py-2 font-medium">{r.id}<span className="text-xs text-gray-500 ml-2">{r.title}</span></td>
-                            <td className="px-3 py-2 text-xs text-gray-400">{r.category}</td>
-                            <td className="px-3 py-2 text-xs text-gray-500">账号：{r.accounts.join('、') || '—'}</td>
+                            <td className="px-3 py-2 font-medium">{r.id}<span className="text-fs-body text-gray-500 ml-2">{r.title}</span></td>
+                            <td className="px-3 py-2 text-fs-body text-gray-400">{r.category}</td>
+                            <td className="px-3 py-2 text-fs-body text-gray-500">账号：{r.accounts.join('、') || '—'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {parallelData.readers.length > 30 && (
-                      <div className="px-3 py-2 text-xs text-gray-600">…其余 {parallelData.readers.length - 30} 个略</div>
+                      <div className="px-3 py-2 text-fs-body text-gray-600">…其余 {parallelData.readers.length - 30} 个略</div>
                     )}
                   </div>
                 </>

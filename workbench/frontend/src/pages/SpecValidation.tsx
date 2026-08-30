@@ -64,7 +64,7 @@ export default function SpecValidation() {
         <div className="flex bg-surface-3 rounded overflow-hidden">
           {(['spec', 'testcase'] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-[11px] ${tab === t ? 'bg-info/20 text-info' : 'text-gray-500'}`}>
+              className={`px-3 py-1.5 text-fs-body ${tab === t ? 'bg-info/20 text-info' : 'text-gray-500'}`}>
               {t === 'spec' ? '📄 Spec 文档校验' : '🧪 TestCase 格式校验'}
             </button>
           ))}
@@ -73,7 +73,7 @@ export default function SpecValidation() {
         {tab === 'spec' && (
           <>
             <select value={selectedDelta} onChange={(e) => setSelectedDelta(e.target.value)}
-              className="bg-surface-3 border border-border rounded px-2 py-1.5 text-xs">
+              className="bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body">
               {deltas.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.id}{d.id === currentDelta ? '（当前）' : ''}
@@ -81,13 +81,13 @@ export default function SpecValidation() {
               ))}
             </select>
             <select value={mode} onChange={(e) => setMode(e.target.value)}
-              className="bg-surface-3 border border-border rounded px-2 py-1.5 text-xs">
+              className="bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body">
               <option value="create">create（创建时结构校验）</option>
               <option value="pre">pre（合并前检查）</option>
               <option value="post">post（合并后验证）</option>
             </select>
             <button onClick={runSpecValidation} disabled={loading}
-              className="px-4 py-1.5 rounded text-xs bg-info/20 text-info hover:bg-info/30 disabled:opacity-40">
+              className="px-4 py-1.5 rounded text-fs-body bg-info/20 text-info hover:bg-info/30 disabled:opacity-40">
               {loading ? '校验中…' : '🔍 运行校验'}
             </button>
           </>
@@ -95,7 +95,7 @@ export default function SpecValidation() {
 
         {tab === 'testcase' && (
           <button onClick={runTcValidation} disabled={loading}
-            className="px-4 py-1.5 rounded text-xs bg-info/20 text-info hover:bg-info/30 disabled:opacity-40">
+            className="px-4 py-1.5 rounded text-fs-body bg-info/20 text-info hover:bg-info/30 disabled:opacity-40">
             {loading ? '校验中…' : '🔍 校验全部 TestCase'}
           </button>
         )}
@@ -110,7 +110,7 @@ export default function SpecValidation() {
               <div className={`px-3 py-2 border-b border-border flex items-center justify-between ${
                 specResult.verdict === 'PASS' ? 'bg-pass/10' : 'bg-fail/10'
               }`}>
-                <span className="text-xs font-medium">
+                <span className="text-fs-body font-medium">
                   {specResult.verdict === 'PASS' ? '✅ PASS' : '❌ REJECT'}
                   <span className="text-gray-500 ml-2">delta: {specResult.delta} · mode: {specResult.mode}</span>
                 </span>
@@ -120,14 +120,14 @@ export default function SpecValidation() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {specResult.findings.map((f, i) => (
-                  <div key={i} className={`flex items-start gap-2 px-3 py-1.5 border-b border-border/20 text-xs ${levelBg[f.level] || ''}`}>
+                  <div key={i} className={`flex items-start gap-2 px-3 py-1.5 border-b border-border/20 text-fs-body ${levelBg[f.level] || ''}`}>
                     <span className={`font-mono w-12 flex-shrink-0 ${levelColor[f.level]}`}>{f.level}</span>
                     <span className="font-mono text-gray-500 w-8 flex-shrink-0">{f.vid}</span>
                     <span className="text-gray-300">{f.message}</span>
                   </div>
                 ))}
                 {specResult.findings.length === 0 && (
-                  <div className="p-4 text-center text-gray-500 text-xs">无发现问题</div>
+                  <div className="p-4 text-center text-gray-500 text-fs-body">无发现问题</div>
                 )}
               </div>
             </>
@@ -138,7 +138,7 @@ export default function SpecValidation() {
               <div className={`px-3 py-2 border-b border-border flex items-center justify-between ${
                 tcResult.verdict === 'PASS' ? 'bg-pass/10' : 'bg-fail/10'
               }`}>
-                <span className="text-xs font-medium">
+                <span className="text-fs-body font-medium">
                   {tcResult.verdict === 'PASS' ? '✅ PASS' : '❌ REJECT'}
                   <span className="text-gray-500 ml-2">共 {tcResult.total_scenarios} 个场景</span>
                 </span>
@@ -148,7 +148,7 @@ export default function SpecValidation() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {tcResult.findings.map((f, i) => (
-                  <div key={i} className={`flex items-start gap-2 px-3 py-1.5 border-b border-border/20 text-xs ${levelBg[f.level] || ''}`}>
+                  <div key={i} className={`flex items-start gap-2 px-3 py-1.5 border-b border-border/20 text-fs-body ${levelBg[f.level] || ''}`}>
                     <span className={`font-mono w-12 flex-shrink-0 ${levelColor[f.level]}`}>{f.level}</span>
                     <span className="font-mono text-gray-500 w-8 flex-shrink-0">{f.vid}</span>
                     <span className="font-mono text-info/60 w-28 flex-shrink-0 truncate">{f.scenario}</span>
@@ -169,11 +169,11 @@ export default function SpecValidation() {
         {/* 右侧：报告预览 */}
         {reportContent && tab === 'spec' && (
           <div className="w-[480px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
-            <div className="px-3 py-2 border-b border-border text-xs font-medium bg-surface-2">
+            <div className="px-3 py-2 border-b border-border text-fs-body font-medium bg-surface-2">
               📄 校验报告
             </div>
             <div className="flex-1 overflow-y-auto p-3">
-              <pre className="text-[11px] text-gray-300 whitespace-pre-wrap font-mono leading-5">{reportContent}</pre>
+              <pre className="text-fs-body text-gray-300 whitespace-pre-wrap font-mono leading-5">{reportContent}</pre>
             </div>
           </div>
         )}

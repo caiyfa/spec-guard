@@ -76,8 +76,8 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
     } finally { setBusy(false); }
   };
 
-  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body text-gray-200 outline-none focus:border-info';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-6"
@@ -92,19 +92,19 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
           <button className="ml-auto text-gray-500 hover:text-gray-300"
             onClick={onClose}>✕</button>
         </div>
-        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{err}</div>}
+        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{err}</div>}
         <div className="flex gap-3" style={{ height: 'min(64vh, 560px)' }}>
           {/* 左栏：已选消息（按时间序；✕ 移除微调——移除即不再关联） */}
           <div className="w-[46%] shrink-0 flex flex-col border border-border rounded bg-surface-3">
-            <div className="px-2 py-1.5 border-b border-border text-[11px] text-gray-400">
+            <div className="px-2 py-1.5 border-b border-border text-fs-body text-gray-400">
               已选原文（{msgs.length} 条；✕ 移除后不再关联本话题）
             </div>
             <div className="flex-1 min-h-0 overflow-auto p-2">
               {msgs.length === 0 ? (
-                <div className="text-xs text-gray-500">已全部移除——至少保留一条才能生成</div>
+                <div className="text-fs-body text-gray-500">已全部移除——至少保留一条才能生成</div>
               ) : msgs.map((m, i) => (
                 <div key={`${m.message_id}-${i}`}
-                  className="text-[11px] leading-relaxed px-1.5 py-1 mb-0.5 rounded hover:bg-black/20 group">
+                  className="text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded hover:bg-black/20 group">
                   <div className="flex items-baseline gap-1.5">
                     <span className="font-medium"
                       style={{ color: senderColor(m.sender_id || m.sender_name || '') }}>
@@ -126,15 +126,15 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
           </div>
           {/* 右栏：话题表单（标题/摘要/关键词留空=LLM 生成；补充说明拼入 LLM 输入） */}
           <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <label className="text-[11px] text-gray-500">标题（留空由 LLM 生成）</label>
+            <label className="text-fs-body text-gray-500">标题（留空由 LLM 生成）</label>
             <input className={input} value={title} maxLength={40}
               onChange={e => setTitle(e.target.value)}
               placeholder="≤20 字；留空自动生成" />
-            <label className="text-[11px] text-gray-500">摘要（留空由 LLM 生成）</label>
+            <label className="text-fs-body text-gray-500">摘要（留空由 LLM 生成）</label>
             <textarea className={input} rows={3} value={summary}
               onChange={e => setSummary(e.target.value)}
               placeholder="≤80 字结论摘要；留空自动生成" />
-            <label className="text-[11px] text-gray-500">关键词（逗号分隔，留空由 LLM 生成）</label>
+            <label className="text-fs-body text-gray-500">关键词（逗号分隔，留空由 LLM 生成）</label>
             <input className={input} value={keywords} list="tag-active-compose"
               onChange={e => setKeywords(e.target.value)}
               placeholder="2~5 个；留空自动生成" />
@@ -146,7 +146,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
                 将归一：{tagHints.map(h => `${h.from} → ${h.to}`).join('；')}（词表别名）
               </div>
             )}
-            <label className="text-[11px] text-gray-500">
+            <label className="text-fs-body text-gray-500">
               补充说明（拼入 LLM 输入——纠正归类判断、补充背景，如「这是 817 上线的回归问题」）
             </label>
             <textarea className={input} rows={3} value={extra}
@@ -157,7 +157,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
                 生成后落右栏「候选段」——勾选「生成话题卡」提交入库
               </span>
               <span className="ml-auto flex gap-2">
-                <button className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200"
+                <button className="px-3 py-1.5 rounded text-fs-body text-gray-400 hover:text-gray-200"
                   onClick={onClose}>取消</button>
                 <button className={btn} onClick={generate}
                   disabled={busy || msgs.length === 0}>

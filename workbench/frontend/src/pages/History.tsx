@@ -72,9 +72,9 @@ function RunDetail({ runId }: { runId: string }) {
 
       {/* 触发上下文 */}
       <div className="bg-surface-2 border border-border rounded-lg p-3">
-        <div className="text-xs font-medium text-gray-400 mb-2">执行上下文</div>
+        <div className="text-fs-body font-medium text-gray-400 mb-2">执行上下文</div>
         {context ? (
-          <div className="grid grid-cols-[88px_1fr] gap-y-1.5 gap-x-3 text-xs">
+          <div className="grid grid-cols-[88px_1fr] gap-y-1.5 gap-x-3 text-fs-body">
             <span className="text-gray-500">环境</span>
             <span className="font-mono text-gray-200">{String(context.env || 'sit')}</span>
             <span className="text-gray-500">选中场景</span>
@@ -98,17 +98,17 @@ function RunDetail({ runId }: { runId: string }) {
             <span className="text-gray-200">{String(context.emp_no || '—')} · 工作区 {String(context.workspace || '—')}</span>
           </div>
         ) : (
-          <div className="text-xs text-gray-600">（K-053 之前的运行无 trigger.json 上下文）</div>
+          <div className="text-fs-body text-gray-600">（K-053 之前的运行无 trigger.json 上下文）</div>
         )}
       </div>
 
       {/* 单元测试清单 */}
       <div className="bg-surface-2 border border-border rounded-lg p-3">
-        <div className="text-xs font-medium text-gray-400 mb-2">单元测试（{cases.length}）</div>
+        <div className="text-fs-body font-medium text-gray-400 mb-2">单元测试（{cases.length}）</div>
         <div className="space-y-0.5 max-h-48 overflow-y-auto">
           {cases.map((c, i) => (
             <div key={i} className="py-0.5">
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-fs-body">
                 <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
                 <span className="font-mono text-gray-300">{c.id}</span>
                 {['FAIL', 'BLOCKED', 'ERROR'].includes(c.verdict) && (
@@ -134,11 +134,11 @@ function RunDetail({ runId }: { runId: string }) {
       {/* T-203：断点批次详情（{run_id}-bN 的 case，T-120 归组后的可读面） */}
       {((detail?.batches || []) as { dir: string; cases: CaseBrief[] }[]).map((b) => (
         <div key={b.dir} className="bg-surface-2 border border-border rounded-lg p-3">
-          <div className="text-xs font-medium text-gray-400 mb-2">批次 {b.dir.replace(/^.*-b/, '#')}（{b.cases.length}）</div>
+          <div className="text-fs-body font-medium text-gray-400 mb-2">批次 {b.dir.replace(/^.*-b/, '#')}（{b.cases.length}）</div>
           <div className="space-y-0.5 max-h-40 overflow-y-auto">
             {b.cases.map((c, i) => (
               <div key={i} className="py-0.5">
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-fs-body">
                   <span className={`font-medium w-14 ${VERDICT_STYLE[c.verdict] || 'text-gray-400'}`}>{c.verdict}</span>
                   <span className="font-mono text-gray-300">{c.id}</span>
                   {!!c.duration_ms && <span className="text-gray-600 ml-auto">{(c.duration_ms / 1000).toFixed(1)}s</span>}
@@ -157,12 +157,12 @@ function RunDetail({ runId }: { runId: string }) {
       {/* 执行日志 */}
       <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
         <button onClick={() => setShowLog(!showLog)}
-          className="w-full px-3 py-2 flex items-center text-xs text-gray-400 hover:text-info">
+          className="w-full px-3 py-2 flex items-center text-fs-body text-gray-400 hover:text-info">
           <span className="font-medium">执行日志（{logTotal} 行）</span>
           <span className="ml-auto">{showLog ? '▾ 收起' : '▸ 展开'}</span>
         </button>
         {showLog && (
-          <pre className="px-3 py-2 text-[11px] text-gray-400 font-mono max-h-96 overflow-y-auto border-t border-border"
+          <pre className="px-3 py-2 text-fs-body text-gray-400 font-mono max-h-96 overflow-y-auto border-t border-border"
             style={{ background: 'rgb(var(--code-bg))' }}>
             {log || '加载中…'}
           </pre>
@@ -205,33 +205,33 @@ function RunRecords() {
         <h2 className="text-lg font-semibold">🗂 执行记录</h2>
         <button
           onClick={() => setShowFailures(!showFailures)}
-          className={`text-xs px-2.5 py-1 rounded border ${
+          className={`text-fs-body px-2.5 py-1 rounded border ${
             showFailures ? 'bg-fail/15 border-fail/40 text-fail' : 'bg-surface-2 border-border text-gray-400 hover:text-fail'}`}
           title="按场景查最近失败原因（K-052 失败索引台账）">
           ✗ 失败台账（{failures.length}）
         </button>
       </div>
-      <p className="text-xs text-gray-500 -mt-2">按时间倒序；点击任务编号展开执行上下文 / 单元测试 / 执行日志。</p>
+      <p className="text-fs-body text-gray-500 -mt-2">按时间倒序；点击任务编号展开执行上下文 / 单元测试 / 执行日志。</p>
 
       {/* T-121：失败索引台账——场景 × 任务号 × 失败原因 + 一键重试 */}
       {showFailures && (
         <div className="border border-fail/25 bg-fail/5 rounded-lg px-3 py-2.5 space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-fail">失败台账（场景 × 任务号 × 原因）</span>
+            <span className="text-fs-body font-medium text-fail">失败台账（场景 × 任务号 × 原因）</span>
             <input
               value={failureFilter}
               onChange={(e) => queryFailures(e.target.value.trim())}
               placeholder="🔍 按场景 ID 过滤…"
-              className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]"
+              className="w-44 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body"
             />
             <button onClick={() => queryFailures('')}
               className="text-fs-aux text-gray-500 hover:text-info">清除</button>
             <span className="ml-auto text-fs-aux text-gray-500">{failures.length} 条（最近 30）</span>
           </div>
           <div className="max-h-48 overflow-y-auto space-y-1">
-            {failures.length === 0 && <div className="text-xs text-gray-600">暂无失败记录</div>}
+            {failures.length === 0 && <div className="text-fs-body text-gray-600">暂无失败记录</div>}
             {failures.map((f, i) => (
-              <div key={i} className="flex items-center gap-2 text-[11px] bg-surface-2/60 rounded px-2 py-1">
+              <div key={i} className="flex items-center gap-2 text-fs-body bg-surface-2/60 rounded px-2 py-1">
                 <span className="text-fail font-medium w-14">{f.verdict}</span>
                 <span className="font-mono text-gray-300">{f.scenario_id}</span>
                 <span className="text-gray-500 font-mono text-fs-aux">{f.run_id}</span>
@@ -262,20 +262,20 @@ function RunRecords() {
                 <span className="font-mono text-sm text-info">{r.run_id}</span>
                 <span
                   onClick={(e) => { e.stopPropagation(); copyRunId(r.run_id); }}
-                  className="text-gray-500 hover:text-info text-xs cursor-pointer"
+                  className="text-gray-500 hover:text-info text-fs-body cursor-pointer"
                   title="复制任务编号">
                   {copiedId === r.run_id ? <span className="text-pass">✓</span> : '📋'}
                 </span>
-                <span className="text-xs text-gray-500 font-mono">{r.env}</span>
-                <span className="flex gap-2 text-xs ml-2">
+                <span className="text-fs-body text-gray-500 font-mono">{r.env}</span>
+                <span className="flex gap-2 text-fs-body ml-2">
                   <span className="text-pass">✓{r.stats.pass}</span>
                   {r.stats.fail > 0 && <span className="text-fail">✗{r.stats.fail}</span>}
                   {r.stats.skip > 0 && <span className="text-skip">⊘{r.stats.skip}</span>}
                   {r.stats.blocked > 0 && <span className="text-blocked">⊗{r.stats.blocked}</span>}
                   <span className="text-gray-600">/{total}</span>
                 </span>
-                <span className="text-[11px] text-gray-600 ml-auto font-mono">{String(r.started_at || '')}</span>
-                <span className="text-gray-500 text-xs">{open ? '▾' : '▸'}</span>
+                <span className="text-fs-body text-gray-600 ml-auto font-mono">{String(r.started_at || '')}</span>
+                <span className="text-gray-500 text-fs-body">{open ? '▾' : '▸'}</span>
               </button>
               {open && (
                 <div className="border-t border-border p-3 bg-surface-1">

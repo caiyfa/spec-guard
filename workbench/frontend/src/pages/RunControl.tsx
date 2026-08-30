@@ -305,11 +305,11 @@ export default function RunControl() {
       {/* 触发面板（K-050：选择优先，无计划耦合，高级范围模式折叠） */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* K-046：轻量执行选项（conftest 原生支持，runner 透传） */}
-        <label className="text-xs text-gray-500 flex items-center gap-1"
+        <label className="text-fs-body text-gray-500 flex items-center gap-1"
           title="只跑上游环境准备（prep 场景），跳过消费场景">
           <input type="checkbox" checked={prepOnly} onChange={(e) => setPrepOnly(e.target.checked)} /> 仅准备
         </label>
-        <label className="text-xs text-gray-500 flex items-center gap-1"
+        <label className="text-fs-body text-gray-500 flex items-center gap-1"
           title="上游场景只跑 flow 不做 verify 断言（加快闭包执行）">
           <input type="checkbox" checked={skipUpstreamVerify} onChange={(e) => setSkipUpstreamVerify(e.target.checked)} /> 上游不断言
         </label>
@@ -329,12 +329,12 @@ export default function RunControl() {
             ⏹ 终止
           </button>
         )}
-        <span className={`text-xs ${connected ? 'text-pass' : 'text-fail'}`}>
+        <span className={`text-fs-body ${connected ? 'text-pass' : 'text-fail'}`}>
           {connected ? '● 已连接' : '○ 未连接'}
         </span>
         {/* K-046 补：执行上下文——环境 + 闭包预览（实际要跑什么，触发前可见） */}
         {selectedIds.size > 0 && (
-          <details className="text-xs text-gray-500">
+          <details className="text-fs-body text-gray-500">
             <summary className="cursor-pointer hover:text-info">
               环境 sit · 闭包共 {closureInfo.total}（选中 {selectedIds.size}
               {closureInfo.upstream.length > 0 ? ` + 上游 ${closureInfo.upstream.length}` : ''}）
@@ -351,11 +351,11 @@ export default function RunControl() {
             )}
           </details>
         )}
-        <label className="text-xs text-gray-500 flex items-center gap-1">
+        <label className="text-fs-body text-gray-500 flex items-center gap-1">
           <input type="checkbox" checked={showLog} onChange={(e) => setShowLog(e.target.checked)} /> 日志
         </label>
         <button onClick={() => setShowAdvanced(!showAdvanced)}
-          className="text-xs text-gray-500 hover:text-info ml-auto">
+          className="text-fs-body text-gray-500 hover:text-info ml-auto">
           {showAdvanced ? '▾ 收起高级' : '▸ 高级（按范围执行）'}
         </button>
       </div>
@@ -363,7 +363,7 @@ export default function RunControl() {
       {/* 高级模式：按范围执行（tag / 单场景表达式 / 全量 / 引擎自测） */}
       {showAdvanced && (
         <div className="flex items-center gap-3 flex-wrap border border-border rounded-lg px-3 py-2 bg-surface-2">
-          <span className="text-xs text-gray-500">按范围执行：</span>
+          <span className="text-fs-body text-gray-500">按范围执行：</span>
           <select value={scope} onChange={(e) => setScope(e.target.value)}
             className="bg-surface-3 border border-border rounded-md px-3 py-1.5 text-sm">
             {SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -383,7 +383,7 @@ export default function RunControl() {
       {(currentOwner || queue.length > 0) && (
         <div className="border border-border rounded-lg px-3 py-2 bg-surface-2 space-y-1.5">
           {currentOwner && (
-            <div className="text-xs text-gray-400">
+            <div className="text-fs-body text-gray-400">
               当前执行：<span className="text-info font-medium">{currentOwner}</span>
               {currentOwner === myEmpNo && <span className="text-gray-600">（我）</span>}
               {runStatus?.current_workspace && <span className="text-gray-600"> · 工作区 {runStatus.current_workspace}</span>}
@@ -391,9 +391,9 @@ export default function RunControl() {
           )}
           {queue.length > 0 && (
             <div className="space-y-1">
-              <div className="text-[11px] text-gray-500">排队中（{queue.length}）：</div>
+              <div className="text-fs-body text-gray-500">排队中（{queue.length}）：</div>
               {queue.map((q, i) => (
-                <div key={q.id} className="flex items-center gap-2 text-xs">
+                <div key={q.id} className="flex items-center gap-2 text-fs-body">
                   <span className="text-gray-600 font-mono">#{i + 1}</span>
                   <span className={q.emp_no === myEmpNo ? 'text-info' : 'text-gray-400'}>
                     {q.emp_no}{q.emp_no === myEmpNo && '（我）'}
@@ -420,13 +420,13 @@ export default function RunControl() {
               <div className="text-sm font-medium text-info">
                 断点命中：{breakpointHit.paused_at}
               </div>
-              <div className="text-[11px] text-gray-400">
+              <div className="text-fs-body text-gray-400">
                 批次 {breakpointHit.batch_index + 1}/{breakpointHit.total_batches} ·
                 已完成 {breakpointHit.completed?.length || 0} 个场景
               </div>
             </div>
             <button onClick={resume}
-              className="ml-auto px-4 py-1.5 rounded text-xs bg-info/20 text-info hover:bg-info/30">
+              className="ml-auto px-4 py-1.5 rounded text-fs-body bg-info/20 text-info hover:bg-info/30">
               ▶ 放行继续
             </button>
           </div>
@@ -436,7 +436,7 @@ export default function RunControl() {
             <div className="grid grid-cols-2 gap-3">
               {/* 已完成场景 */}
               <div className="bg-surface-2 rounded-lg p-3">
-                <div className="text-[11px] text-gray-400 font-medium mb-1.5">✅ 已完成（{breakpointHit.context.completed_count}）</div>
+                <div className="text-fs-body text-gray-400 font-medium mb-1.5">✅ 已完成（{breakpointHit.context.completed_count}）</div>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {(breakpointHit.context.completed || []).map((sid: string) => (
                     <div key={sid} className="text-fs-aux font-mono text-pass/70">✓ {sid}</div>
@@ -445,7 +445,7 @@ export default function RunControl() {
               </div>
               {/* 最近 verdict */}
               <div className="bg-surface-2 rounded-lg p-3">
-                <div className="text-[11px] text-gray-400 font-medium mb-1.5">📊 最近结果</div>
+                <div className="text-fs-body text-gray-400 font-medium mb-1.5">📊 最近结果</div>
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
                   {(breakpointHit.context.recent_verdicts || []).map((v: { scenario_id: string; verdict: string }, i: number) => (
                     <div key={i} className={`text-fs-aux font-mono ${
@@ -499,7 +499,7 @@ export default function RunControl() {
         <div className="w-[380px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col">
           <div className="px-3 py-2 border-b border-border bg-surface-2 space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium">场景选择（{selectedIds.size} 已选）</span>
+              <span className="text-fs-body font-medium">场景选择（{selectedIds.size} 已选）</span>
               <button onClick={() => setSelectedIds(new Set(filteredScenarios.map(s => s.id)))}
                 className="text-fs-aux text-info hover:underline ml-auto">全选当前</button>
               <button onClick={() => setSelectedIds(new Set())}
@@ -508,9 +508,9 @@ export default function RunControl() {
             <div className="flex gap-1.5">
               <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)}
                 placeholder="🔍 ID / 标题"
-                className="flex-1 min-w-0 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]" />
+                className="flex-1 min-w-0 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body" />
               <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}
-                className="bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] max-w-[120px]">
+                className="bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body max-w-[120px]">
                 <option value="">全部模块</option>
                 {modules.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -522,7 +522,7 @@ export default function RunControl() {
               const checked = selectedIds.has(s.id);
               return (
                 <label key={s.id}
-                  className={`flex items-center gap-2 px-3 py-1.5 text-xs border-b border-border/30 cursor-pointer hover:bg-surface-3/50 ${checked ? 'bg-info/5' : ''}`}>
+                  className={`flex items-center gap-2 px-3 py-1.5 text-fs-body border-b border-border/30 cursor-pointer hover:bg-surface-3/50 ${checked ? 'bg-info/5' : ''}`}>
                   <input type="checkbox" checked={checked} onChange={() => toggleId(s.id)} />
                   <span className={`${vColor[v] || 'text-gray-700'} w-4 text-center`}>{vIcon[v] || '○'}</span>
                   <span className="font-mono text-gray-400 w-28 truncate">{breakpoints.has(s.id) ? '🔴 ' : ''}{s.id}</span>
@@ -537,7 +537,7 @@ export default function RunControl() {
               );
             })}
             {filteredScenarios.length === 0 && (
-              <div className="text-center text-gray-600 text-xs py-8">无匹配场景</div>
+              <div className="text-center text-gray-600 text-fs-body py-8">无匹配场景</div>
             )}
           </div>
         </div>
@@ -546,7 +546,7 @@ export default function RunControl() {
         {/* 日志流（K-050：头部含任务编号 + 专注切换；专注模式下占满宽度） */}
         {showLog && (
           <div className="flex-1 min-w-0 border border-border rounded-lg overflow-hidden flex flex-col">
-            <div className="px-3 py-1.5 border-b border-border bg-surface-2 flex items-center gap-2 text-[11px]">
+            <div className="px-3 py-1.5 border-b border-border bg-surface-2 flex items-center gap-2 text-fs-body">
               <span className="text-gray-500 font-medium">执行日志</span>
               {currentRunId && (
                 <span className="flex items-center gap-1">
@@ -567,7 +567,7 @@ export default function RunControl() {
               </button>
             </div>
             <div ref={logRef}
-              className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-5" style={{ background: 'rgb(var(--code-bg))' }}>
+              className="flex-1 overflow-y-auto p-4 font-mono text-fs-body leading-5" style={{ background: 'rgb(var(--code-bg))' }}>
             {events.length === 0 ? (
               <p className="text-gray-600">勾选场景后点击「执行选中」；或在高级模式按范围执行…</p>
             ) : (
@@ -639,7 +639,7 @@ export default function RunControl() {
             {selectedIds.size > 0 && (
               <>
                 <span className="text-gray-500">依赖扫描</span>
-                <span className="text-xs">
+                <span className="text-fs-body">
                   {preflightLoading ? <span className="text-gray-500">扫描中…</span> : !preflight ? (
                     <span className="text-gray-500">未扫描</span>
                   ) : preflight.has_gaps ? (
@@ -653,7 +653,7 @@ export default function RunControl() {
             {preflight && preflight.has_gaps && (
               <div className="col-span-2 px-2 py-1.5 bg-fail/5 border border-fail/30 rounded space-y-1.5 max-h-36 overflow-y-auto">
                 {preflight.missing_accounts.map((g) => (
-                  <div key={g.account} className="text-[11px]">
+                  <div key={g.account} className="text-fs-body">
                     <div className="text-fail">
                       🔑 账号 <span className="font-mono">{g.account}</span> 未在环境配置 accounts 定义
                       <span className="text-gray-500">（{g.scenarios.join('、')} → 将 SKIP）</span>
@@ -664,7 +664,7 @@ export default function RunControl() {
                         value={overrideInputs[`account::${g.account}`] || ''}
                         onChange={(e) => setOverrideInputs(prev => ({ ...prev, [`account::${g.account}`]: e.target.value }))}
                         placeholder={`输入 AD 账号（或 ad:工号）替代配置`}
-                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-0.5 text-[11px] font-mono text-gray-200 focus:border-info outline-none" />
+                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-0.5 text-fs-body font-mono text-gray-200 focus:border-info outline-none" />
                       {!!overrideInputs[`account::${g.account}`]?.trim() && (
                         <span className="text-pass shrink-0">✓ 覆盖执行</span>
                       )}
@@ -672,7 +672,7 @@ export default function RunControl() {
                   </div>
                 ))}
                 {preflight.missing_env.map((g) => (
-                  <div key={g.key} className="text-[11px]">
+                  <div key={g.key} className="text-fs-body">
                     <div className="text-warn">
                       🌐 环境键 <span className="font-mono">{g.key}</span> 缺失
                       <span className="text-gray-500">（{g.scenarios.join('、')}）</span>
@@ -683,7 +683,7 @@ export default function RunControl() {
                         value={overrideInputs[`env::${g.key}`] || ''}
                         onChange={(e) => setOverrideInputs(prev => ({ ...prev, [`env::${g.key}`]: e.target.value }))}
                         placeholder={`输入 ${g.key} 的值`}
-                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-0.5 text-[11px] font-mono text-gray-200 focus:border-info outline-none" />
+                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-0.5 text-fs-body font-mono text-gray-200 focus:border-info outline-none" />
                       {!!overrideInputs[`env::${g.key}`]?.trim() && (
                         <span className="text-pass shrink-0">✓ 覆盖执行</span>
                       )}
@@ -691,20 +691,20 @@ export default function RunControl() {
                   </div>
                 ))}
                 {preflight.unresolved_upstream.map((g) => (
-                  <div key={g.ref} className="text-[11px] text-warn">
+                  <div key={g.ref} className="text-fs-body text-warn">
                     🔗 跨场景引用 <span className="font-mono">{g.ref}</span> 不在本次依赖闭包
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
                   </div>
                 ))}
                 {(preflight.unresolved_templates_gaps || []).map((g) => (
-                  <div key={g.tpl} className="text-[11px] text-warn">
+                  <div key={g.tpl} className="text-fs-body text-warn">
                     ❓ 插值 <span className="font-mono">{`{{${g.tpl}}}`}</span> 无法解析（非 fn/env/上游/本场景变量）
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期变量未定义）</span>
                   </div>
                 ))}
                 {/* T-502：fixtures 文件引用——缺失 = 仓库缺陷（预检阻断，无覆盖输入框） */}
                 {(preflight.missing_files || []).map((g) => (
-                  <div key={g.file} className="text-[11px]">
+                  <div key={g.file} className="text-fs-body">
                     <div className="text-fail">
                       📎 fixtures 文件 <span className="font-mono">{g.file}</span> 不存在
                       <span className="text-gray-500">（{g.scenarios.join('、')} → 仓库缺陷，预检阻断）</span>
@@ -712,7 +712,7 @@ export default function RunControl() {
                   </div>
                 ))}
                 {(preflight.unknown_file_refs_gaps || []).map((g) => (
-                  <div key={g.file} className="text-[11px] text-warn">
+                  <div key={g.file} className="text-fs-body text-warn">
                     ❓ 文件引用 <span className="font-mono">{g.file}</span> 含插值，静态不可判
                     <span className="text-gray-500">（{g.scenarios.join('、')} → 运行期按实际值判定）</span>
                   </div>
@@ -736,7 +736,7 @@ export default function RunControl() {
             {selectedIds.size > 0 && (
               <div className="space-y-1">
                 {[...selectedIds].map((sid, idx) => (
-                  <label key={sid} className="flex items-center gap-2 text-xs cursor-pointer hover:opacity-80">
+                  <label key={sid} className="flex items-center gap-2 text-fs-body cursor-pointer hover:opacity-80">
                     <input type="checkbox" checked={breakpoints.has(sid)}
                       onChange={() => toggleBreakpoint(sid)} />
                     <span className="text-gray-600 font-mono text-fs-aux">#{idx + 1}</span>
@@ -769,7 +769,7 @@ export default function RunControl() {
               </div>
             </div>
           )}
-          <p className="text-[11px] text-gray-500 leading-relaxed">
+          <p className="text-fs-body text-gray-500 leading-relaxed">
             引擎按依赖闭包执行；执行日志包含每次接口调用的 method/path/status 与响应体
             <span className="text-info"> ifelc-trace_id</span>（网关全链追踪 ID，排查 BUG 直接可用）。
             执行真实调用目标环境，会产生真实测试数据。

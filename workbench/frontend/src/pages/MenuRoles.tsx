@@ -34,7 +34,7 @@ export default function MenuRoles() {
     <div className="max-w-5xl">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-200">🗂 菜单与角色授权</h2>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-fs-body text-gray-500 mt-1">
           菜单树入库可配置；角色授权控制页面可见性与后端接口访问（前后端双控）。
         </p>
       </div>
@@ -86,17 +86,17 @@ function MenuTab({ menus, onChanged, flash, setError }: {
 
   return (
     <div className="space-y-2">
-      <button onClick={() => setAdding('')} className="text-xs bg-info text-white rounded px-2 py-1">＋ 新增分组</button>
+      <button onClick={() => setAdding('')} className="text-fs-body bg-info text-white rounded px-2 py-1">＋ 新增分组</button>
       {groups.map(g => (
         <div key={g.menu_key} className="bg-surface-2 border border-border rounded-lg p-3">
           <div className="flex items-center gap-2 text-sm text-gray-200 font-medium">
             <span>{g.icon}</span><span>{g.label}</span>
             {g.is_system ? <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统</span> : null}
-            <button onClick={() => setAdding(g.menu_key)} className="ml-auto text-xs text-gray-500 hover:text-gray-300">＋ 新增菜单</button>
+            <button onClick={() => setAdding(g.menu_key)} className="ml-auto text-fs-body text-gray-500 hover:text-gray-300">＋ 新增菜单</button>
           </div>
           <div className="mt-1 space-y-1 pl-4 border-l border-border/50">
             {itemsOf(g.menu_key).map(m => (
-              <div key={m.menu_key} className="flex items-center gap-2 text-xs text-gray-400 py-0.5">
+              <div key={m.menu_key} className="flex items-center gap-2 text-fs-body text-gray-400 py-0.5">
                 <span className="font-mono text-gray-600">{m.menu_key}</span>
                 {editing === m.menu_key ? (
                   <>
@@ -177,7 +177,7 @@ function RolesTab({ roles, onChanged, flash, setError }: {
 
   return (
     <div className="space-y-2">
-      <button onClick={() => setAdding(true)} className="text-xs bg-info text-white rounded px-2 py-1">＋ 新增角色</button>
+      <button onClick={() => setAdding(true)} className="text-fs-body bg-info text-white rounded px-2 py-1">＋ 新增角色</button>
       {roles.map(r => (
         <div key={r.role_key} className="bg-surface-2 border border-border rounded-lg p-3 flex items-center gap-3 text-sm">
           <span className="font-mono text-gray-400">{r.role_key}</span>
@@ -282,7 +282,7 @@ function GrantsTab({ roles, menus, flash, setError }: {
                   </label>
                   <div className="ml-5 pl-3 border-l border-border/50 space-y-1">
                     {items.map(i => (
-                      <label key={i.menu_key} className="flex items-center gap-2 text-xs text-gray-400">
+                      <label key={i.menu_key} className="flex items-center gap-2 text-fs-body text-gray-400">
                         <input type="checkbox" checked={checked.has(i.menu_key)}
                           disabled={(i.is_system && selRole === 'admin') || !!i.is_public}
                           onChange={() => toggle(i.menu_key, !!i.is_system, !!i.is_public)} />
@@ -295,7 +295,7 @@ function GrantsTab({ roles, menus, flash, setError }: {
                 </div>
               );
             })}
-            <button onClick={save} className="mt-2 text-xs bg-info text-white rounded px-3 py-1.5">保存授权</button>
+            <button onClick={save} className="mt-2 text-fs-body bg-info text-white rounded px-3 py-1.5">保存授权</button>
           </div>
         )}
       </div>

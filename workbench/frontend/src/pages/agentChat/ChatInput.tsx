@@ -283,8 +283,8 @@ export function ChatInput({
               className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
                 i === slashIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
               }`}>
-              <span className="font-mono text-xs text-info/70">{c.cmd}</span>
-              <span className="text-xs">{c.label}</span>
+              <span className="font-mono text-fs-body text-info/70">{c.cmd}</span>
+              <span className="text-fs-body">{c.label}</span>
               <span className="text-fs-aux text-gray-600 ml-auto">{c.desc}</span>
             </button>
           ))}
@@ -299,7 +299,7 @@ export function ChatInput({
               className={`w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors ${
                 i === atIndex ? 'bg-info/10 text-info' : 'text-gray-400 hover:bg-surface-3'
               }`}>
-              <span className="text-xs truncate">{c.label}</span>
+              <span className="text-fs-body truncate">{c.label}</span>
               <span className="text-fs-aux text-gray-600 ml-auto flex-shrink-0">{c.hint}</span>
             </button>
           ))}
@@ -308,7 +308,7 @@ export function ChatInput({
 
       {/* T-933：材料上传反馈（就地提示不踢人；失败红/引导黄） */}
       {matNotice && (
-        <div className={`mb-2 px-2 py-1 rounded text-[11px] ${
+        <div className={`mb-2 px-2 py-1 rounded text-fs-body ${
           matNotice.error ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-300'}`}>
           {matNotice.text}
           <button className="ml-2 text-gray-500 hover:text-gray-300"

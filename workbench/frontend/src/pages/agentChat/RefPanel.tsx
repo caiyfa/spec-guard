@@ -43,7 +43,7 @@ export function RefPanel({ refs, onView }: {
   return (
     <div className="px-3 py-2 border-b border-border">
       <button onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
+        className="w-full flex items-center justify-between text-fs-body font-medium text-gray-300 hover:text-gray-100">
         <span>🔗 引用（{refs.length}）</span>
         <span className="text-fs-micro text-gray-600">{open ? '▲' : '▼'}</span>
       </button>

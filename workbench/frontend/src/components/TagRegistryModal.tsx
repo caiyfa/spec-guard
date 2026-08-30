@@ -49,7 +49,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
     finally { setBusy(''); }
   };
 
-  const input = 'bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none focus:border-info';
+  const input = 'bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body text-gray-200 outline-none focus:border-info';
   const act = 'px-1.5 py-0.5 rounded border border-border text-fs-aux text-gray-400 hover:border-gray-500 disabled:opacity-40 shrink-0';
 
   return (
@@ -58,7 +58,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
       <div className="w-[720px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-semibold">标签词表管理</span>
+          <span className="text-fs-body font-semibold">标签词表管理</span>
           <span className="text-fs-aux text-gray-600">
             待收录 {Object.values(tags).filter(t => t.status === 'pending').length} ·
             已收录 {activeNames.length} · 域 {domains.length}
@@ -71,25 +71,25 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
         <div className="text-fs-aux text-gray-600 mb-2">
           词表作用于后续 AI 分类（prompt 复用清单）与标签栏归并展示；话题卡上已落的原始关键词不改写。
         </div>
-        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{err}</div>}
+        {err && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{err}</div>}
         {!registry ? (
-          <div className="text-xs text-gray-500 text-center py-6">词表加载失败——关闭后重试</div>
+          <div className="text-fs-body text-gray-500 text-center py-6">词表加载失败——关闭后重试</div>
         ) : Object.keys(tags).length === 0 ? (
-          <div className="text-xs text-gray-500 text-center py-6">
+          <div className="text-fs-body text-gray-500 text-center py-6">
             词表为空——AI 分类产生的新词会自动进入待收录区
           </div>
         ) : (
           <>
             {/* 待收录区：新词闸门（收录转正 / 归并为别名 / 丢弃噪音） */}
-            <div className="text-[11px] text-gray-400 mb-1">
+            <div className="text-fs-body text-gray-400 mb-1">
               待收录（pending，{pending.length}）
             </div>
             <div className="max-h-48 overflow-auto border border-border rounded bg-surface-3/40 p-1.5 mb-3">
               {pending.length === 0 ? (
-                <div className="text-[11px] text-gray-600 px-1 py-1">无待收录词</div>
+                <div className="text-fs-body text-gray-600 px-1 py-1">无待收录词</div>
               ) : pending.map(([name]) => (
                 <div key={name} className="flex items-center gap-1.5 px-1 py-1">
-                  <span className="text-[11px] text-gray-300 min-w-0 truncate">{name}</span>
+                  <span className="text-fs-body text-gray-300 min-w-0 truncate">{name}</span>
                   <span className="ml-auto flex items-center gap-1 shrink-0">
                     <button className={act} disabled={busy === name}
                       title="收录为正式标签（进入 prompt 复用清单）"
@@ -117,15 +117,15 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
               ))}
             </div>
             {/* 已收录区：别名展示 + 设域（datalist 可输新域名，失焦/回车提交） */}
-            <div className="text-[11px] text-gray-400 mb-1">
+            <div className="text-fs-body text-gray-400 mb-1">
               已收录（active，{active.length}）
             </div>
             <div className="max-h-64 overflow-auto border border-border rounded bg-surface-3/40 p-1.5">
               {active.length === 0 ? (
-                <div className="text-[11px] text-gray-600 px-1 py-1">无已收录标签</div>
+                <div className="text-fs-body text-gray-600 px-1 py-1">无已收录标签</div>
               ) : active.map(([name, e]) => (
                 <div key={name} className="flex items-center gap-1.5 px-1 py-1">
-                  <span className="text-[11px] text-gray-200 shrink-0">{name}</span>
+                  <span className="text-fs-body text-gray-200 shrink-0">{name}</span>
                   {(e.aliases || []).length > 0 && (
                     <span className="text-fs-aux text-gray-600 truncate"
                       title={`别名：${(e.aliases || []).join('、')}`}>

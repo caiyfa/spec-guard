@@ -191,7 +191,7 @@ export default function ScenarioFormEditor({
     <div className="h-full flex flex-col">
       {/* ── 顶栏：场景 ID + 模式切换 + 保存 ── */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface-2 flex-shrink-0">
-        <span className="text-xs font-mono text-info">{scenarioId}</span>
+        <span className="text-fs-body font-mono text-info">{scenarioId}</span>
         <div className="flex items-center gap-2">
           <div className="flex bg-surface-3 rounded overflow-hidden">
             {(['read', 'form', 'yaml'] as const).map((m) => (
@@ -203,13 +203,13 @@ export default function ScenarioFormEditor({
           </div>
           {mode !== 'read' && (
             <button onClick={save} disabled={saving}
-              className="px-3 py-1 rounded text-[11px] bg-pass/20 text-pass hover:bg-pass/30 disabled:opacity-40">
+              className="px-3 py-1 rounded text-fs-body bg-pass/20 text-pass hover:bg-pass/30 disabled:opacity-40">
               {saving ? '…' : '💾 保存'}
             </button>
           )}
         </div>
       </div>
-      {saveMsg && mode !== 'read' && <div className={`px-3 py-1 text-[11px] flex-shrink-0 ${saveMsg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{saveMsg}</div>}
+      {saveMsg && mode !== 'read' && <div className={`px-3 py-1 text-fs-body flex-shrink-0 ${saveMsg.startsWith('✓') ? 'text-pass' : 'text-fail'}`}>{saveMsg}</div>}
 
       {/* ── 阅读模式（T-1023 只读结构化视图） ── */}
       {mode === 'read' && (
@@ -234,7 +234,7 @@ export default function ScenarioFormEditor({
           <div className="flex border-b border-border bg-surface-2 flex-shrink-0">
             {TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex-1 py-2 text-[11px] text-center transition-colors ${
+                className={`flex-1 py-2 text-fs-body text-center transition-colors ${
                   tab === t.key
                     ? 'text-info border-b-2 border-info bg-surface-3/50 font-medium'
                     : 'text-gray-500 hover:text-gray-300'
@@ -254,29 +254,29 @@ export default function ScenarioFormEditor({
             {tab === 'info' && (
               <div className="space-y-3 max-w-lg">
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="ID"><input value={String(data.id || '')} readOnly className="w-full bg-surface-3/50 border border-border/50 rounded px-2 py-1.5 text-xs font-mono text-gray-500" /></F>
-                  <F label="标题"><input value={String(data.title || '')} onChange={(e) => update('title', e.target.value)} className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-xs" /></F>
+                  <F label="ID"><input value={String(data.id || '')} readOnly className="w-full bg-surface-3/50 border border-border/50 rounded px-2 py-1.5 text-fs-body font-mono text-gray-500" /></F>
+                  <F label="标题"><input value={String(data.title || '')} onChange={(e) => update('title', e.target.value)} className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body" /></F>
                   <F label="优先级">
-                    <select value={String(data.priority || 'P1')} onChange={(e) => update('priority', e.target.value)} className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-xs">
+                    <select value={String(data.priority || 'P1')} onChange={(e) => update('priority', e.target.value)} className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body">
                       {['P0', 'P1', 'P2'].map((p) => <option key={p}>{p}</option>)}
                     </select>
                   </F>
                   <F label="标签">
                     <input value={((data.tags as string[]) || []).join(', ')} onChange={(e) => update('tags', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
-                      placeholder="resolver, permission" className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-xs" />
+                      placeholder="resolver, permission" className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body" />
                   </F>
                 </div>
                 <div className="border-t border-border/30 pt-3">
-                  <div className="text-[11px] text-gray-400 font-medium mb-2">人读层（doc）</div>
+                  <div className="text-fs-body text-gray-400 font-medium mb-2">人读层（doc）</div>
                   {(['given', 'when', 'then'] as const).map((k) => (
                     <F key={k} label={k}>
                       <input value={String(doc[k] || '')} onChange={(e) => update('doc', { ...doc, [k]: e.target.value })}
-                        className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-xs" />
+                        className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body" />
                     </F>
                   ))}
                   <F label="覆盖 FR">
                     <input value={((doc.covers as string[]) || []).join(', ')} onChange={(e) => update('doc', { ...doc, covers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-                      placeholder="FR-001, FR-002" className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-xs font-mono" />
+                      placeholder="FR-001, FR-002" className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body font-mono" />
                   </F>
                 </div>
               </div>
@@ -286,7 +286,7 @@ export default function ScenarioFormEditor({
             {tab === 'deps' && (
               <div className="space-y-4 max-w-xl">
                 <div>
-                  <div className="text-[11px] text-gray-400 font-medium mb-2">依赖（depends_on）</div>
+                  <div className="text-fs-body text-gray-400 font-medium mb-2">依赖（depends_on）</div>
                   {deps.map((d, i) => (
                     <DepRow key={`${d.id}-${i}`} dep={d}
                       allScenarios={allScenarios} scenarioId={scenarioId}
@@ -301,17 +301,17 @@ export default function ScenarioFormEditor({
                     className="text-fs-aux text-gray-500 hover:text-info">+ 添加依赖</button>
                 </div>
                 <div className="border-t border-border/30 pt-3">
-                  <div className="text-[11px] text-gray-400 font-medium mb-2">产出声明（produces）</div>
+                  <div className="text-fs-body text-gray-400 font-medium mb-2">产出声明（produces）</div>
                   {produces.map((p, i) => (
                     <div key={i} className="flex items-center gap-2 mb-1.5">
                       <input value={p.resource || ''} placeholder="资源（inv_session）"
                         onChange={(e) => { const np = [...produces]; np[i] = { ...p, resource: e.target.value }; update('produces', np); }}
-                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs font-mono" />
+                        className="flex-1 bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body font-mono" />
                       <input value={p.state || ''} placeholder="状态（IN_PROGRESS）"
                         onChange={(e) => { const np = [...produces]; np[i] = { ...p, state: e.target.value }; update('produces', np); }}
-                        className="w-36 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs font-mono" />
+                        className="w-36 bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body font-mono" />
                       <button onClick={() => update('produces', produces.filter((_, j) => j !== i))}
-                        className="text-gray-600 hover:text-fail text-xs">✕</button>
+                        className="text-gray-600 hover:text-fail text-fs-body">✕</button>
                     </div>
                   ))}
                   <button onClick={() => update('produces', [...produces, { resource: '', state: '' }])}
@@ -336,7 +336,7 @@ export default function ScenarioFormEditor({
                   />
                 ))}
                 <button onClick={() => setFlowSteps([...flowSteps, { type: 'call', body: { method: 'GET', save: '' } }])}
-                  className="w-full py-2 border border-dashed border-border/50 rounded-lg text-[11px] text-gray-500 hover:text-info hover:border-info/40">
+                  className="w-full py-2 border border-dashed border-border/50 rounded-lg text-fs-body text-gray-500 hover:text-info hover:border-info/40">
                   + 添加步骤
                 </button>
               </div>
@@ -352,7 +352,7 @@ export default function ScenarioFormEditor({
                   />
                 ))}
                 <button onClick={() => setVerifyItems([...verifyItems, { status: { eq: 200 } }])}
-                  className="w-full py-2 border border-dashed border-border/50 rounded-lg text-[11px] text-gray-500 hover:text-info hover:border-info/40">
+                  className="w-full py-2 border border-dashed border-border/50 rounded-lg text-fs-body text-gray-500 hover:text-info hover:border-info/40">
                   + 添加断言
                 </button>
               </div>
@@ -373,7 +373,7 @@ export default function ScenarioFormEditor({
                   />
                 ))}
                 <button onClick={() => setTeardownSteps([...teardownSteps, { type: 'call', body: { method: 'POST', save: '' } }])}
-                  className="w-full py-2 border border-dashed border-border/50 rounded-lg text-[11px] text-gray-500 hover:text-info hover:border-info/40">
+                  className="w-full py-2 border border-dashed border-border/50 rounded-lg text-fs-body text-gray-500 hover:text-info hover:border-info/40">
                   + 添加清理步骤
                 </button>
               </div>
@@ -409,7 +409,7 @@ function VerifyCard({ item, oracles, onChange, onRemove }: {
     <div className="border border-border/50 rounded-lg bg-surface-2 p-3">
       <div className="flex items-center gap-2 mb-2">
         <select value={type} onChange={(e) => setType(e.target.value)}
-          className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px]">
+          className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body">
           <option value="status">status</option>
           <option value="json">json</option>
           <option value="oracle">oracle</option>
@@ -418,15 +418,15 @@ function VerifyCard({ item, oracles, onChange, onRemove }: {
       </div>
       {type === 'status' && (
         <div className="flex gap-2 items-end">
-          <F label="变量"><input value={String(body.of || '')} onChange={(e) => setBody('of', e.target.value || undefined)} placeholder="最后call" className="w-20 bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono" /></F>
-          <F label="="><input type="number" value={Number(body.eq || 200)} onChange={(e) => setBody('eq', Number(e.target.value))} className="w-16 bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]" /></F>
+          <F label="变量"><input value={String(body.of || '')} onChange={(e) => setBody('of', e.target.value || undefined)} placeholder="最后call" className="w-20 bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body font-mono" /></F>
+          <F label="="><input type="number" value={Number(body.eq || 200)} onChange={(e) => setBody('eq', Number(e.target.value))} className="w-16 bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body" /></F>
         </div>
       )}
       {type === 'json' && (
         <div className="space-y-1.5">
           <div className="flex gap-2">
-            <F label="变量" className="w-20"><input value={String(body.of || '')} onChange={(e) => setBody('of', e.target.value || undefined)} placeholder="最后call" className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono" /></F>
-            <F label="JSONPath" className="flex-1"><input value={String(body.path || '')} onChange={(e) => setBody('path', e.target.value)} placeholder="$.data.field" className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono" /></F>
+            <F label="变量" className="w-20"><input value={String(body.of || '')} onChange={(e) => setBody('of', e.target.value || undefined)} placeholder="最后call" className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body font-mono" /></F>
+            <F label="JSONPath" className="flex-1"><input value={String(body.path || '')} onChange={(e) => setBody('path', e.target.value)} placeholder="$.data.field" className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body font-mono" /></F>
           </div>
           <div className="flex gap-2">
             <F label="操作" className="w-28">
@@ -440,7 +440,7 @@ function VerifyCard({ item, oracles, onChange, onRemove }: {
                   else if (op === 'contains') onChange({ json: { ...base, contains: '' } });
                   else if (op === 'absent') onChange({ json: { ...base, absent: true } });
                 }}
-                className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                 <option value="eq">==</option><option value="ne">!=</option>
                 <option value="not_null">非null</option><option value="contains">包含</option>
                 <option value="absent">不存在</option>
@@ -452,14 +452,14 @@ function VerifyCard({ item, oracles, onChange, onRemove }: {
                   const key = 'eq' in body ? 'eq' : 'ne' in body ? 'ne' : 'contains' in body ? 'contains' : 'eq';
                   setBody(key, e.target.value);
                 }}
-                className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px] font-mono" />
+                className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body font-mono" />
             </F>
           </div>
         </div>
       )}
       {type === 'oracle' && (
         <select value={String(item.oracle || '')} onChange={(e) => onChange({ oracle: e.target.value })}
-          className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+          className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
           {oracles.map((o) => <option key={o.name} value={o.name}>{o.name} — {o.desc}</option>)}
         </select>
       )}
@@ -488,7 +488,7 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
       {/* 选择行 */}
       <div className="flex items-center gap-2 px-3 py-2">
         <select value={dep.id} onChange={(e) => onChange({ ...dep, id: e.target.value })}
-          className="flex-1 bg-surface-3 border border-border rounded px-2 py-1.5 text-xs">
+          className="flex-1 bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body">
           <option value="">选择上游场景…</option>
           {allScenarios.filter((s) => s.id !== scenarioId).map((s) => (
             <option key={s.id} value={s.id}>{s.id} — {s.title}</option>
@@ -498,7 +498,7 @@ function DepRow({ dep, allScenarios, scenarioId, onChange, onRemove }: {
           className={`text-fs-aux px-2 py-1 rounded border flex-shrink-0 ${dep.mode === 'exclusive' ? 'border-warn text-warn bg-warn/10' : 'border-border text-gray-500'}`}>
           {dep.mode}
         </button>
-        <button onClick={onRemove} className="text-gray-600 hover:text-fail text-xs flex-shrink-0">✕</button>
+        <button onClick={onRemove} className="text-gray-600 hover:text-fail text-fs-body flex-shrink-0">✕</button>
       </div>
 
       {/* 上游产出详情 */}

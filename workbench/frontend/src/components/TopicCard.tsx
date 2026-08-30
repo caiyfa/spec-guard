@@ -110,7 +110,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
   const time = fmtWindow(t);
 
   return (
-    <div className={`min-w-0 w-full text-xs rounded-lg border p-2 transition-colors
+    <div className={`min-w-0 w-full text-fs-body rounded-lg border p-2 transition-colors
       ${selected ? 'border-info/60 bg-info/10' : 'border-border bg-surface-3 hover:border-gray-500'}
       ${status === 'rejected' ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-2 flex-wrap">

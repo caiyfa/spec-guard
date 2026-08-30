@@ -79,7 +79,7 @@ export default function MyActivity() {
     <div className="flex flex-col h-full max-w-5xl">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-200">🧭 我的活动</h2>
-        <p className="text-xs text-gray-500 mt-1">我的产出/会话/工具调用/执行历史（仅本人数据，产出可溯源到产出会话）</p>
+        <p className="text-fs-body text-gray-500 mt-1">我的产出/会话/工具调用/执行历史（仅本人数据，产出可溯源到产出会话）</p>
       </div>
 
       <div className="flex gap-1 mb-3 flex-shrink-0">
@@ -92,7 +92,7 @@ export default function MyActivity() {
       </div>
 
       {error && <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-3 text-red-400 text-sm flex-shrink-0" onClick={() => setError('')}>{error}</div>}
-      {loading && <div className="text-xs text-gray-500 mb-2 flex-shrink-0">加载中…</div>}
+      {loading && <div className="text-fs-body text-gray-500 mb-2 flex-shrink-0">加载中…</div>}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'products' && (
@@ -100,7 +100,7 @@ export default function MyActivity() {
             <div className="flex gap-1 flex-shrink-0">
               {['', 'draft', 'scenario', 'plan'].map(t => (
                 <button key={t} onClick={() => setTypeFilter(t)}
-                  className={`px-2 py-1 text-xs rounded ${typeFilter === t ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500'}`}>
+                  className={`px-2 py-1 text-fs-body rounded ${typeFilter === t ? 'bg-info/20 text-info' : 'bg-surface-3 text-gray-500'}`}>
                   {t === '' ? '全部' : TYPE_LABELS[t] || t}
                 </button>
               ))}
@@ -111,17 +111,17 @@ export default function MyActivity() {
             {products.map(p => (
               <div key={p.id} className="bg-surface-1 rounded-lg border border-border p-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{TYPE_LABELS[p.product_type] || p.product_type}</span>
+                  <span className="text-fs-body px-1.5 py-0.5 rounded bg-surface-3 text-gray-400">{TYPE_LABELS[p.product_type] || p.product_type}</span>
                   <span className="text-sm text-gray-200 font-mono truncate">{p.product_path}</span>
                   <span className="text-fs-aux text-gray-600 ml-auto">{p.created_at}</span>
                 </div>
-                <div className="text-[11px] text-gray-600 mt-1">
+                <div className="text-fs-body text-gray-600 mt-1">
                   {p.workspace && <span>工作区: {p.workspace}</span>}
                   {p.fr_anchor && <span className="ml-2">FR: {p.fr_anchor}</span>}
                 </div>
                 {p.session_id && (
                   <button onClick={() => openSession(p.session_id)}
-                    className="mt-1.5 px-2 py-0.5 text-xs bg-info/15 text-info rounded hover:bg-info/25">
+                    className="mt-1.5 px-2 py-0.5 text-fs-body bg-info/15 text-info rounded hover:bg-info/25">
                     🔗 溯源：打开产出会话
                   </button>
                 )}
@@ -139,12 +139,12 @@ export default function MyActivity() {
               <div key={s.session_id || s.id} className="bg-surface-1 rounded-lg border border-border p-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-gray-200 truncate">{s.title || s.session_id || s.id}</div>
-                  <div className="text-[11px] text-gray-600">
+                  <div className="text-fs-body text-gray-600">
                     {s.updated_at || s.created_at || ''}{s.workspace ? ` · ${s.workspace}` : ''}
                   </div>
                 </div>
                 <button onClick={() => openSession(s.session_id || s.id, s.purpose)}
-                  className="px-2 py-1 text-xs bg-info/15 text-info rounded hover:bg-info/25 flex-shrink-0">
+                  className="px-2 py-1 text-fs-body bg-info/15 text-info rounded hover:bg-info/25 flex-shrink-0">
                   打开
                 </button>
               </div>
@@ -154,7 +154,7 @@ export default function MyActivity() {
 
         {tab === 'tools' && (
           <div className="bg-surface-1 rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-xs">
+            <table className="w-full text-fs-body">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-border">
                   <th className="px-3 py-2">时间</th>
@@ -188,10 +188,10 @@ export default function MyActivity() {
             {runs.map((r: any) => (
               <div key={r.run_id} className="bg-surface-1 rounded-lg border border-border p-3 flex items-center gap-3">
                 <span className="text-sm font-mono text-info">{r.run_id}</span>
-                <span className="text-xs text-gray-500">{r.system} · {r.env}</span>
-                <span className="text-[11px] text-gray-600">{r.started_at}</span>
+                <span className="text-fs-body text-gray-500">{r.system} · {r.env}</span>
+                <span className="text-fs-body text-gray-600">{r.started_at}</span>
                 {r.stats && (
-                  <span className="text-[11px] text-gray-500 ml-auto">
+                  <span className="text-fs-body text-gray-500 ml-auto">
                     ✅{r.stats.pass ?? 0} ❌{r.stats.fail ?? 0} ⏭{r.stats.skip ?? 0}
                   </span>
                 )}

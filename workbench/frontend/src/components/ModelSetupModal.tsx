@@ -65,8 +65,8 @@ export default function ModelSetupModal({ purpose, onClose, onConfigured }: {
     } catch (e: any) { setError(e.message); } finally { setBusy(''); }
   };
 
-  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-info w-full';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const input = 'bg-surface-3 border border-border rounded px-2 py-1.5 text-fs-body text-gray-200 outline-none focus:border-info w-full';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -74,33 +74,33 @@ export default function ModelSetupModal({ purpose, onClose, onConfigured }: {
       <div className="w-[440px] max-w-[92vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
         <h3 className="text-sm font-semibold mb-1">配置{preset.label}</h3>
-        <div className="text-[11px] text-gray-500 mb-3">
+        <div className="text-fs-body text-gray-500 mb-3">
           该用途尚未配置模型，填写后保存将自动重试操作（配置保存为「{purpose}」用途绑定；
           MiniMax M3 的 Key 在 platform.minimaxi.com 获取，也可改用任意 OpenAI 兼容服务）
         </div>
-        {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
+        {error && <div className="mb-2 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
         <div className="space-y-2">
           <label className="block">
-            <span className="text-[11px] text-gray-500">Base URL（OpenAI 兼容端点）</span>
+            <span className="text-fs-body text-gray-500">Base URL（OpenAI 兼容端点）</span>
             <input className={input} value={baseUrl}
               onChange={e => setBaseUrl(e.target.value)}
               placeholder="https://api.minimaxi.com" />
           </label>
           <label className="block">
-            <span className="text-[11px] text-gray-500">模型名</span>
+            <span className="text-fs-body text-gray-500">模型名</span>
             <input className={input} value={model}
               onChange={e => setModel(e.target.value)}
               placeholder="MiniMax-M3" />
           </label>
           <label className="block">
-            <span className="text-[11px] text-gray-500">API Key{existing?.has_api_key ? '（已配置，填写即覆盖）' : ''}</span>
+            <span className="text-fs-body text-gray-500">API Key{existing?.has_api_key ? '（已配置，填写即覆盖）' : ''}</span>
             <input className={input} type="password" value={apiKey}
               onChange={e => setApiKey(e.target.value)}
               placeholder={existing?.has_api_key ? '留空保持现有 Key' : 'sk-…'} />
           </label>
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <button className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200"
+          <button className="px-3 py-1.5 rounded text-fs-body text-gray-400 hover:text-gray-200"
             onClick={onClose}>取消</button>
           <button className={btn} disabled={busy === 'save'} onClick={save}>
             {busy === 'save' ? '保存中…' : '保存并重试'}

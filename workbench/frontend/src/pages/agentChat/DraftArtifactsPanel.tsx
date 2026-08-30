@@ -181,15 +181,15 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
 
   return (
     <div className="px-2 py-2 space-y-2">
-      <div className="px-1 text-xs font-medium text-gray-300">📝 草稿产物（Agent 会话内评审）</div>
+      <div className="px-1 text-fs-body font-medium text-gray-300">📝 草稿产物（Agent 会话内评审）</div>
       {loadError && (
-        <div className="flex items-center gap-2 rounded border border-red-800/50 bg-red-900/20 px-2 py-1.5 text-[11px] text-red-400">
+        <div className="flex items-center gap-2 rounded border border-red-800/50 bg-red-900/20 px-2 py-1.5 text-fs-body text-red-400">
           <span className="flex-1">草稿列表加载失败：{loadError}</span>
           <button onClick={refresh} className="px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-900/60">重试</button>
         </div>
       )}
       {draftFiles.length === 0 && !loadError && (
-        <div className="text-[11px] text-gray-600 text-center py-8 leading-relaxed">
+        <div className="text-fs-body text-gray-600 text-center py-8 leading-relaxed">
           Agent 尚未写入草稿。<br />写入后自动出现在这里，<br />可直接查看 / 校验 / 试跑 / 入库
         </div>
       )}
@@ -211,7 +211,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
         return (
           <div key={file} className="rounded-lg border border-border bg-surface-2/70 p-2">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono text-gray-200 truncate flex-1" title={file}>{file}</span>
+              <span className="text-fs-body font-mono text-gray-200 truncate flex-1" title={file}>{file}</span>
               {meta?.stale && (
                 <span className="text-fs-micro text-yellow-400 flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
               )}
@@ -302,7 +302,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
               <div className="flex items-center gap-1 mt-2">
                 <button
                   onClick={() => navigate(`/dag?focus=${encodeURIComponent(libHit.scenarioId)}`)}
-                  className="px-2 py-1 rounded bg-info/20 text-info text-[11px] hover:bg-info/30"
+                  className="px-2 py-1 rounded bg-info/20 text-info text-fs-body hover:bg-info/30"
                   title="入库不是终点：到 DAG 编排里查看节点 / 连线 / 执行">
                   🕸 DAG 编排
                 </button>
@@ -317,33 +317,33 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             ) : loadError ? (
               <div className="flex flex-wrap gap-1 mt-2">
                 <button onClick={() => onViewFile(file, 'draft')} disabled={busyAll}
-                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1 disabled:opacity-40">查看</button>
+                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-fs-body hover:bg-surface-1 disabled:opacity-40">查看</button>
               </div>
             ) : (
               <div className="flex flex-wrap gap-1 mt-2">
                 <button onClick={() => onViewFile(file, 'draft')} disabled={busyAll}
-                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1 disabled:opacity-40">查看</button>
+                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-fs-body hover:bg-surface-1 disabled:opacity-40">查看</button>
                 {meta?.gates && g1 !== 'approved' && (
                   <button onClick={() => handleReview(file)} disabled={busyAll || !!st.reviewing}
                     title="第①闸人工评审通过（gate2 未 pass 时后端会打回）"
-                    className="px-2 py-1 rounded bg-yellow-600/80 text-white text-[11px] hover:bg-yellow-600 disabled:opacity-40">
+                    className="px-2 py-1 rounded bg-yellow-600/80 text-white text-fs-body hover:bg-yellow-600 disabled:opacity-40">
                     {st.reviewing ? '评审中…' : '✓ 评审通过'}
                   </button>
                 )}
                 <button onClick={() => handleValidate(file)} disabled={busyAll}
-                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-[11px] hover:bg-surface-1 disabled:opacity-40">
+                  className="px-2 py-1 rounded bg-surface-3 text-gray-300 text-fs-body hover:bg-surface-1 disabled:opacity-40">
                   {st.validating ? '校验中…' : '校验'}
                 </button>
                 <button onClick={() => handleTrial(file)} disabled={busyAll}
-                  className="px-2 py-1 rounded bg-warn/20 text-warn text-[11px] hover:bg-warn/30 disabled:opacity-40">
+                  className="px-2 py-1 rounded bg-warn/20 text-warn text-fs-body hover:bg-warn/30 disabled:opacity-40">
                   {st.running ? '试跑中…' : '▶ 试跑'}
                 </button>
                 <button onClick={() => openPromote(file)}
                   disabled={busyAll || !!st.promotedTo || (meta?.gates ? g1 !== 'approved' : false)}
                   title={meta?.gates && g1 !== 'approved' ? '第①闸人工评审未通过——先点「✓ 评审通过」' : ''}
-                  className="px-2 py-1 rounded bg-info text-white text-[11px] hover:bg-info/90 disabled:opacity-40">⬆ 入库</button>
+                  className="px-2 py-1 rounded bg-info text-white text-fs-body hover:bg-info/90 disabled:opacity-40">⬆ 入库</button>
                 <button onClick={() => handleDiscard(file)} disabled={busyAll || !!st.promotedTo}
-                  className="ml-auto px-2 py-1 rounded text-gray-500 text-[11px] hover:text-red-400 disabled:opacity-40">废弃</button>
+                  className="ml-auto px-2 py-1 rounded text-gray-500 text-fs-body hover:text-red-400 disabled:opacity-40">废弃</button>
               </div>
             )}
           </div>
@@ -366,13 +366,13 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             onClick={e => e.stopPropagation()}>
             <div className="text-sm font-medium text-gray-200 mb-2">⬆ 入库评审 — <span className="font-mono">{dialog.file}</span></div>
             {dlgConflict?.existing && (
-              <div className="mb-2 text-[11px] rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
+              <div className="mb-2 text-fs-body rounded bg-yellow-900/30 text-yellow-400 px-2 py-1.5 leading-relaxed">
                 ⚠️ 场景 ID <span className="font-mono">{dlgConflict.existing.id}</span> 已存在于
                 <span className="font-mono"> {dlgConflict.existing.path}</span>
                 <div className="mt-0.5">已自动选中该模块并勾选「覆盖」（覆盖更新会备份原文件，失败自动回滚）；新增场景请改用 next_scenario_id 换新 ID。</div>
               </div>
             )}
-            <div className="text-[11px] text-gray-500 mb-1">入库模块（scenarios/ 下）</div>
+            <div className="text-fs-body text-gray-500 mb-1">入库模块（scenarios/ 下）</div>
             <select value={dlgModule} onChange={e => { setDlgModule(e.target.value); setDlgError(''); }}
               className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-300 mb-2">
               {modules.length === 0 && <option value="">（无已有模块）</option>}
@@ -384,11 +384,11 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                 placeholder="新模块路径（如 system-settings/tag-library）"
                 className="w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-300 mb-2" />
             )}
-            <label className="flex items-center gap-2 text-[12px] text-gray-400 mb-2 cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-fs-body text-gray-400 mb-2 cursor-pointer select-none">
               <input type="checkbox" checked={dlgReplace} onChange={e => setDlgReplace(e.target.checked)} />
               覆盖同名场景（原文件备份 + 失败自动回滚）
             </label>
-            {dlgError && <div className="mb-2 text-[11px] text-red-400">❌ {dlgError}</div>}
+            {dlgError && <div className="mb-2 text-fs-body text-red-400">❌ {dlgError}</div>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setDialog({ file: '', open: false })} disabled={promoting}
                 className="px-3 py-1.5 rounded bg-surface-3 text-gray-300 text-sm disabled:opacity-40">取消</button>

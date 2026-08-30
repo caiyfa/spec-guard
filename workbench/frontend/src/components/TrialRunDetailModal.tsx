@@ -102,7 +102,7 @@ function StepItem({ index, s }: { index: number; s: CaseStep }) {
   const hasDetail = isCall || s.response_body != null || (s.request && Object.keys(s.request).length > 0);
   return (
     <div className="py-1 border-b border-border/40 last:border-b-0">
-      <div className="flex items-center gap-2 text-[11px] leading-relaxed">
+      <div className="flex items-center gap-2 text-fs-body leading-relaxed">
         <span className="text-gray-600 font-mono w-4 text-right flex-shrink-0">{index}.</span>
         <span className="flex-shrink-0" title={typeLabel}>{icon}</span>
         <span className="font-mono text-gray-200 flex-1 min-w-0 break-all">{desc}</span>
@@ -154,8 +154,8 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
         <span className={`px-1.5 py-0.5 rounded text-fs-aux font-medium flex-shrink-0 ${VERDICT_BADGE[brief.verdict] || 'bg-surface-3 text-gray-400'}`}>
           {brief.verdict}
         </span>
-        <span className="font-mono text-xs text-gray-200 flex-shrink-0">{brief.id}</span>
-        <span className="text-[11px] text-gray-500 truncate flex-1" title={brief.title || detail?.title || ''}>
+        <span className="font-mono text-fs-body text-gray-200 flex-shrink-0">{brief.id}</span>
+        <span className="text-fs-body text-gray-500 truncate flex-1" title={brief.title || detail?.title || ''}>
           {brief.title || detail?.title || ''}
         </span>
         {!!detail?.upstream_of && (
@@ -175,7 +175,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
         <div className="border-t border-border/60 px-2.5 py-2 space-y-2.5">
           {/* 失败/跳过分析（FAIL 归类 + 原因；SKIP 原因） */}
           {detail?.failure?.message && (
-            <div className="rounded bg-red-900/20 border border-red-800/40 px-2 py-1.5 text-[11px]">
+            <div className="rounded bg-red-900/20 border border-red-800/40 px-2 py-1.5 text-fs-body">
               <div className="text-red-400">
                 <span className="font-mono text-fs-micro px-1 py-0.5 rounded bg-red-900/50 mr-1">{detail.failure.category || 'fail'}</span>
                 {detail.failure.message}
@@ -187,14 +187,14 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
             </div>
           )}
           {!detail?.failure?.message && detail?.skip_reason && (
-            <div className="rounded bg-yellow-900/20 border border-yellow-800/40 px-2 py-1.5 text-[11px] text-yellow-400">
+            <div className="rounded bg-yellow-900/20 border border-yellow-800/40 px-2 py-1.5 text-fs-body text-yellow-400">
               SKIP（{detail.skip_category || 'uncategorized'}）：{detail.skip_reason}
             </div>
           )}
 
           {/* 原始内容（doc 层给人看） */}
           {(detail?.doc?.given || detail?.doc?.when || detail?.doc?.then) && (
-            <div className="text-[11px] space-y-0.5">
+            <div className="text-fs-body space-y-0.5">
               <div className="text-gray-500 text-fs-micro">原始内容</div>
               {detail.doc?.given && <div className="text-gray-400"><span className="text-gray-600">Given </span>{detail.doc.given}</div>}
               {detail.doc?.when && <div className="text-gray-400"><span className="text-gray-600">When </span>{detail.doc.when}</div>}
@@ -215,8 +215,8 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
               </div>
             </div>
           )}
-          {!detail && loading && <div className="text-[11px] text-gray-600">用例快照加载中…</div>}
-          {!detail && !loading && <div className="text-[11px] text-gray-600">用例快照读取失败（cases/{brief.id}.json）</div>}
+          {!detail && loading && <div className="text-fs-body text-gray-600">用例快照加载中…</div>}
+          {!detail && !loading && <div className="text-fs-body text-gray-600">用例快照读取失败（cases/{brief.id}.json）</div>}
 
           {/* 权限预言 */}
           {oracles.length > 0 && (
@@ -260,7 +260,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
               <div className="text-gray-500 text-fs-micro mb-0.5">断言（{assertions.length}）</div>
               <div className="space-y-0.5">
                 {assertions.map((a, i) => (
-                  <div key={i} className="text-[11px] flex items-start gap-1.5">
+                  <div key={i} className="text-fs-body flex items-start gap-1.5">
                     <span className={a.passed ? 'text-green-400' : 'text-red-400'}>{a.passed ? '✓' : '✗'}</span>
                     <span className="flex-1 min-w-0">
                       <span className="text-gray-300 break-all">{a.expr || 'assert'}</span>
@@ -340,16 +340,16 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
       <div className="p-3 space-y-3 text-sm">
         {/* 概要 */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`px-2 py-1 rounded text-xs font-medium ${pass ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
+          <span className={`px-2 py-1 rounded text-fs-body font-medium ${pass ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
             {pass ? '✓ 试跑通过' : `✗ 试跑${trial.verdict && trial.verdict !== 'FAIL' ? trial.verdict : '失败'}`}
           </span>
-          {runId && <span className="font-mono text-xs text-gray-400 select-all">{runId}</span>}
-          {(trial.env || run?.env) && <span className="text-[11px] text-gray-500 font-mono">@{(trial.env || run?.env) || ''}</span>}
-          {run?.system && <span className="text-[11px] text-gray-500 font-mono">{run.system}</span>}
+          {runId && <span className="font-mono text-fs-body text-gray-400 select-all">{runId}</span>}
+          {(trial.env || run?.env) && <span className="text-fs-body text-gray-500 font-mono">@{(trial.env || run?.env) || ''}</span>}
+          {run?.system && <span className="text-fs-body text-gray-500 font-mono">{run.system}</span>}
           {run?.started_at && <span className="text-fs-aux text-gray-600 font-mono ml-auto">{run.started_at}{run.finished_at ? ` → ${run.finished_at}` : ''}</span>}
         </div>
         {stats && (
-          <div className="flex gap-3 text-[11px]">
+          <div className="flex gap-3 text-fs-body">
             <span className="text-green-400">✓ {stats.pass ?? 0}</span>
             {!!stats.fail && <span className="text-red-400">✗ {stats.fail}</span>}
             {!!stats.skip && <span className="text-yellow-400">⊘ {stats.skip}</span>}
@@ -358,12 +358,12 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
           </div>
         )}
         {!pass && trial.error && (
-          <div className="rounded bg-red-900/20 border border-red-800/40 px-2.5 py-2 text-[11px] text-red-400 break-all">
+          <div className="rounded bg-red-900/20 border border-red-800/40 px-2.5 py-2 text-fs-body text-red-400 break-all">
             {trial.error}
           </div>
         )}
         {loadError && (
-          <div className="rounded bg-red-900/20 border border-red-800/40 px-2.5 py-2 text-[11px] text-red-400">
+          <div className="rounded bg-red-900/20 border border-red-800/40 px-2.5 py-2 text-fs-body text-red-400">
             报告读取失败：{loadError}（任务号 {runId} 可发给 Agent 排查）
           </div>
         )}
@@ -379,13 +379,13 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
             onToggle={() => setOpenCaseId(openCaseId === c.id ? '' : c.id)}
           />
         ))}
-        {!run && !loadError && <div className="text-center text-gray-600 text-xs py-6">报告加载中…</div>}
+        {!run && !loadError && <div className="text-center text-gray-600 text-fs-body py-6">报告加载中…</div>}
 
         {/* 执行日志 */}
         {log && (
           <div className="rounded-lg border border-border overflow-hidden">
             <button onClick={() => setShowLog(!showLog)}
-              className="w-full px-2.5 py-2 flex items-center text-[11px] text-gray-400 hover:text-info">
+              className="w-full px-2.5 py-2 flex items-center text-fs-body text-gray-400 hover:text-info">
               <span className="font-medium">执行日志（{logLines} 行）</span>
               <span className="ml-auto">{showLog ? '▾ 收起' : '▸ 展开'}</span>
             </button>

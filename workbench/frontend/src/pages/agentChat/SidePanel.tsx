@@ -132,7 +132,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
     <button
       key={id}
       onClick={() => onSelectTab(id)}
-      className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] border-b-2 whitespace-nowrap transition-colors ${
+      className={`flex items-center gap-1 px-2.5 py-1.5 text-fs-body border-b-2 whitespace-nowrap transition-colors ${
         activeTab === id
           ? 'border-info text-gray-200 bg-surface-3/50'
           : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -162,7 +162,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
           <div className="ml-auto flex items-center flex-shrink-0">
             {overflowTabs.length > 0 && (
               <button onClick={() => setMoreOpen(v => !v)} title="更多面板（低频页签聚合）"
-                className={`px-2 py-1.5 text-[11px] whitespace-nowrap transition-colors ${
+                className={`px-2 py-1.5 text-fs-body whitespace-nowrap transition-colors ${
                   moreOpen || activeOverflow ? 'text-info' : 'text-gray-600 hover:text-info'
                 }`}>
                 ⊞ 更多
@@ -170,13 +170,13 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
             )}
             {onToggleMaximize && (
               <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
-                className="px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0">
+                className="px-2 py-1.5 text-fs-body text-gray-600 hover:text-info flex-shrink-0">
                 {maximized ? '⤡' : '⤢'}
               </button>
             )}
             {onCollapse && (
               <button onClick={onCollapse} title="收起面板"
-                className="px-2 py-1.5 text-[11px] text-gray-600 hover:text-info flex-shrink-0">
+                className="px-2 py-1.5 text-fs-body text-gray-600 hover:text-info flex-shrink-0">
                 »
               </button>
             )}
@@ -201,7 +201,7 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
             )}
             {ctxUsage && <ContextPanel ctxUsage={ctxUsage} messages={messages} ctxLimit={ctxLimit} stats={stats} />}
             {references.length === 0 && planItems.length === 0 && structuredTodos.length === 0 && !ctxUsage && (
-              <div className="text-xs text-gray-600 text-center py-6">暂无上下文与待办</div>
+              <div className="text-fs-body text-gray-600 text-center py-6">暂无上下文与待办</div>
             )}
           </>
         )}

@@ -71,7 +71,7 @@ function McpAudit() {
 
       {/* 表格 */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-fs-body">
           <thead>
             <tr className="text-gray-500 border-b border-border">
               <th className="text-left py-2 pr-2 w-36">时间</th>
@@ -109,7 +109,7 @@ function McpAudit() {
 
       {/* 分页 */}
       <div className="flex items-center justify-between mt-4">
-        <div className="text-xs text-gray-500">
+        <div className="text-fs-body text-gray-500">
           {calls.length > 0 && `显示第 ${offset + 1}–${offset + calls.length} 条`}
         </div>
         <div className="flex gap-2">
@@ -135,7 +135,7 @@ function McpAudit() {
         const call = calls.find(c => c.id === expanded);
         if (!call) return null;
         return (
-          <div className="mt-4 p-3 bg-surface-3/50 rounded border border-border text-xs space-y-2">
+          <div className="mt-4 p-3 bg-surface-3/50 rounded border border-border text-fs-body space-y-2">
             <div><span className="text-gray-500">会话 ID：</span><span className="text-gray-300 font-mono">{call.session_id || '—'}</span></div>
             <div><span className="text-gray-500">用途：</span><span className="text-gray-300">{call.purpose || '—'}</span></div>
             <div><span className="text-gray-500">工作区：</span><span className="text-gray-300">{call.workspace || '—'}</span></div>
@@ -159,7 +159,7 @@ function AdminAudit() {
   return (
     <div className="bg-surface-2 border border-border rounded-lg overflow-hidden">
       {error && <div className="text-red-400 text-sm p-3">✗ {error}</div>}
-      <table className="w-full text-xs">
+      <table className="w-full text-fs-body">
         <thead>
           <tr className="text-left text-gray-500 border-b border-border">
             <th className="px-3 py-2">时间</th>

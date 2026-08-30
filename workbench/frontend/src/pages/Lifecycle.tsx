@@ -126,7 +126,7 @@ function LifecycleBoard() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-lg font-bold text-gray-200">🧬 测试生命周期</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-fs-body text-gray-500 mt-0.5">
             一条测试的完整历程：草稿 → 入库 → 执行 → 失败 → 修复闭环（台账聚合，文件仍是真相源）
           </p>
         </div>
@@ -149,20 +149,20 @@ function LifecycleBoard() {
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         {([['all', '全部'], ['failed', '❌ 最近失败'], ['draft', '📝 草稿待评审'], ['updating', '🔄 更新中'], ['loop', '✅ 有闭环']] as const).map(([k, label]) => (
           <button key={k} onClick={() => setFilter(k)}
-            className={`px-2.5 py-1 rounded text-xs ${
+            className={`px-2.5 py-1 rounded text-fs-body ${
               filter === k ? 'bg-info/20 text-info' : 'bg-surface-2 text-gray-400 hover:text-gray-200'
             }`}>
             {label}
           </button>
         ))}
         <select value={module} onChange={e => setModule(e.target.value)}
-          className="ml-auto bg-surface-2 border border-border rounded px-2 py-1 text-xs text-gray-300">
+          className="ml-auto bg-surface-2 border border-border rounded px-2 py-1 text-fs-body text-gray-300">
           <option value="">全部模块</option>
           {modules.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         <input value={keyword} onChange={e => setKeyword(e.target.value)}
           placeholder="搜索 ID / 标题…"
-          className="bg-surface-2 border border-border rounded px-2 py-1 text-xs text-gray-300 w-48" />
+          className="bg-surface-2 border border-border rounded px-2 py-1 text-fs-body text-gray-300 w-48" />
       </div>
 
       {error && <div className="mb-2 text-sm text-fail">❌ {error}</div>}
@@ -195,7 +195,7 @@ function LifecycleBoard() {
                       {it.last_run_id ? `${fmtAt(it.last_run_at)} · ${it.last_run_id}` : '未执行过'}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 truncate mt-0.5">
+                  <div className="text-fs-body text-gray-500 truncate mt-0.5">
                     {it.title || ''}
                     {it.module && <span className="text-gray-600"> · {it.module}</span>}
                     {it.draft_filename && <span className="text-yellow-600/80"> · 📝 {it.draft_filename}</span>}
@@ -228,7 +228,7 @@ function LifecycleBoard() {
                   {detail.status_label}
                 </span>
               </div>
-              <div className="text-xs text-gray-500 mt-0.5">{detail.title}</div>
+              <div className="text-fs-body text-gray-500 mt-0.5">{detail.title}</div>
               <div className="text-fs-aux text-gray-600 mt-0.5">
                 {detail.module && `模块 ${detail.module} · `}v{detail.version || '—'}
                 {detail.file_path && ` · ${detail.file_path}`}
@@ -237,23 +237,23 @@ function LifecycleBoard() {
               {/* 快捷操作 */}
               <div className="flex gap-1.5 mt-2 flex-wrap">
                 <button onClick={() => navigate(`/dag?focus=${encodeURIComponent(detail.id)}`)}
-                  className="px-2 py-1 rounded bg-info/20 text-info text-[11px] hover:bg-info/30">
+                  className="px-2 py-1 rounded bg-info/20 text-info text-fs-body hover:bg-info/30">
                   🕸 DAG 编排
                 </button>
                 <button onClick={() => navigate('/run')}
-                  className="px-2 py-1 rounded bg-warn/20 text-warn text-[11px] hover:bg-warn/30">
+                  className="px-2 py-1 rounded bg-warn/20 text-warn text-fs-body hover:bg-warn/30">
                   ▶ 测试执行
                 </button>
                 {detail.draft_status === 'draft' && (
                   <button onClick={() => navigate('/drafts')}
-                    className="px-2 py-1 rounded bg-yellow-900/40 text-yellow-400 text-[11px] hover:bg-yellow-900/60">
+                    className="px-2 py-1 rounded bg-yellow-900/40 text-yellow-400 text-fs-body hover:bg-yellow-900/60">
                     📝 草稿评审
                   </button>
                 )}
               </div>
 
               {/* 时间线 */}
-              <div className="mt-3 text-xs font-medium text-gray-300">生命周期时间线</div>
+              <div className="mt-3 text-fs-body font-medium text-gray-300">生命周期时间线</div>
               <div className="mt-1.5 space-y-0">
                 {detail.timeline.length === 0 && <div className="text-fs-aux text-gray-600">暂无事件</div>}
                 {detail.timeline.map((e, i) => (
@@ -271,7 +271,7 @@ function LifecycleBoard() {
                       {i < detail.timeline.length - 1 && <span className="w-px flex-1 bg-border/60 my-0.5" />}
                     </div>
                     <div className="pb-2.5 min-w-0">
-                      <div className="flex items-center gap-1.5 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-fs-body">
                         <span className="text-gray-300">{e.label}</span>
                         {e.verdict && (
                           <span className={`font-medium ${VERDICT_STYLE[e.verdict] || 'text-gray-400'}`}>{e.verdict}</span>
@@ -285,12 +285,12 @@ function LifecycleBoard() {
               </div>
 
               {/* 执行历史 */}
-              <div className="mt-3 text-xs font-medium text-gray-300">执行历史（{detail.runs.length}）</div>
+              <div className="mt-3 text-fs-body font-medium text-gray-300">执行历史（{detail.runs.length}）</div>
               <div className="mt-1.5 space-y-1">
                 {detail.runs.length === 0 && <div className="text-fs-aux text-gray-600">暂无执行记录</div>}
                 {detail.runs.map(r => (
                   <div key={r.run_id} className="rounded bg-surface-2 border border-border/60 px-2 py-1.5">
-                    <div className="flex items-center gap-2 text-[11px]">
+                    <div className="flex items-center gap-2 text-fs-body">
                       <span className={`font-medium ${VERDICT_STYLE[r.verdict] || 'text-gray-400'}`}>{r.verdict}</span>
                       <span className="font-mono text-gray-400">{r.run_id}</span>
                       <span className="ml-auto text-fs-aux text-gray-600">{r.duration_ms}ms · {fmtAt(r.finished_at)}</span>

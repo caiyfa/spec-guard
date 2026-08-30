@@ -41,7 +41,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
   return (
     <>
       <div className="px-3 py-2 border-b border-border">
-        <span className="text-xs font-medium text-gray-300">📋 待办</span>
+        <span className="text-fs-body font-medium text-gray-300">📋 待办</span>
         {loading && <span className="text-fs-aux text-gray-600 ml-2 animate-pulse">执行中…</span>}
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
@@ -54,7 +54,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
             return (
               <div
                 key={todo.id || i}
-                className={`text-xs flex items-start gap-1.5 ${color} ${
+                className={`text-fs-body flex items-start gap-1.5 ${color} ${
                   todo.status === 'in_progress' ? 'bg-yellow-500/5 rounded px-1 -mx-1' : ''
                 }`}
               >
@@ -76,7 +76,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
             return (
               <div
                 key={i}
-                className={`text-xs flex items-start gap-1.5 ${
+                className={`text-fs-body flex items-start gap-1.5 ${
                   isDone ? 'text-gray-600 line-through' : isCurrent ? 'text-yellow-400' : 'text-gray-400'
                 }`}
               >
@@ -89,7 +89,7 @@ export default function TodoPanel({ todos, planItems, loading }: TodoPanelProps)
           })
         )}
         {!hasStructured && planItems.length === 0 && (
-          <div className="text-xs text-gray-600 text-center py-2">
+          <div className="text-fs-body text-gray-600 text-center py-2">
             {loading ? '模型正在分析任务…' : '暂无待办'}
           </div>
         )}

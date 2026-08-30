@@ -46,7 +46,7 @@ export default function Modal({ open, onClose, title, width = 320, children }: M
       >
         {title && (
           <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/60 sticky top-0 bg-surface-2 z-10">
-            <span className="text-xs font-medium text-gray-300">{title}</span>
+            <span className="text-fs-body font-medium text-gray-300">{title}</span>
             <button onClick={onClose} className="text-gray-600 hover:text-gray-300 text-sm leading-none">✕</button>
           </div>
         )}

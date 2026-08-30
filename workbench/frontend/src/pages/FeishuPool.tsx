@@ -189,12 +189,12 @@ export default function FeishuPool() {
   useEffect(() => { setMatPage(1); }, [matType, ownerFilter]);
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
-  const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
+  const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
   const tabBtn = (id: Tab, label: string) => (
     <button key={id} onClick={() => setTab(id)}
-      className={`px-3 py-1.5 rounded text-xs ${tab === id ? 'bg-info/15 text-info font-medium' : 'text-gray-400 hover:text-gray-200'}`}>
+      className={`px-3 py-1.5 rounded text-fs-body ${tab === id ? 'bg-info/15 text-info font-medium' : 'text-gray-400 hover:text-gray-200'}`}>
       {label}
     </button>
   );
@@ -207,7 +207,7 @@ export default function FeishuPool() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-bold">🪺 飞书话题</h1>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-500">为 agent 对话提供背景信息源 · 复核建边在「材料管理」页</span>
+          <span className="text-fs-body text-gray-500">为 agent 对话提供背景信息源 · 复核建边在「材料管理」页</span>
           <button className={btn} onClick={syncNow} disabled={busy === 'sync'}>
             {busy === 'sync' ? '同步中…' : '⇩ 立即同步'}
           </button>
@@ -217,14 +217,14 @@ export default function FeishuPool() {
 
       {/* 计数条（T-1004：监听运行中/监听范围两卡收进「⚙ 同步设置」弹层——
           主页只留材料/话题计数） */}
-      <div className={`${card} flex items-center gap-4 text-xs`}>
+      <div className={`${card} flex items-center gap-4 text-fs-body`}>
         <span className="ml-auto text-gray-500">材料 {materials.length} · 候选话题 {topics.candidates.length} · 已确认话题 {topics.confirmed.length}</span>
       </div>
         </>
       )}
 
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       {!focusMode && (
         <div className="flex items-center gap-1.5 mb-3 border-b border-border pb-2">
@@ -241,7 +241,7 @@ export default function FeishuPool() {
             {([['all', '全部'], ['feishu_doc', '文档'],
                ['feishu_minutes', '妙记']] as const).map(([id, label]) => (
               <button key={id} onClick={() => setMatType(id)}
-                className={`px-2.5 py-1 rounded text-[11px] ${matType === id
+                className={`px-2.5 py-1 rounded text-fs-body ${matType === id
                   ? 'bg-info/15 text-info font-medium'
                   : 'text-gray-400 hover:text-gray-200'}`}>
                 {label}（{matTypeCount(id)}）
@@ -254,7 +254,7 @@ export default function FeishuPool() {
           {/* T-1004：监听用户筛选芯片行（原监听范围卡的「只看产出」入口保留在
               其作用对象旁——材料清单；范围展示本身已收进同步设置弹层） */}
           {watchUsers.length > 0 && (
-            <div className="mb-2 flex items-center gap-2 flex-wrap text-[11px]">
+            <div className="mb-2 flex items-center gap-2 flex-wrap text-fs-body">
               <span className="text-gray-500 shrink-0">按监听用户筛选</span>
               {watchUsers.map(u => (
                 <button key={u.open_id}
@@ -270,16 +270,16 @@ export default function FeishuPool() {
             </div>
           )}
           {ownerFilter && (
-            <div className="mb-2 flex items-center gap-2 text-[11px] text-info">
+            <div className="mb-2 flex items-center gap-2 text-fs-body text-info">
               ▸ 只看 {(watchUsers.find(u => u.open_id === ownerFilter)?.name) || ownerFilter} 的产出（文档+妙记）
               <button className="text-gray-500 hover:text-gray-300"
                 onClick={() => setOwnerFilter('')}>× 取消</button>
             </div>
           )}
           {materials.length === 0 ? (
-            <div className="text-xs text-gray-500">暂无话题材料——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
+            <div className="text-fs-body text-gray-500">暂无话题材料——点右上「⚙ 同步设置」配置授权范围（群聊/用户/文档）后「⇩ 立即同步」</div>
           ) : typeMaterials.length === 0 ? (
-            <div className="text-xs text-gray-500">
+            <div className="text-fs-body text-gray-500">
               {ownerFilter
                 ? '该用户暂无产出材料（重新同步后新落盘材料才带归属）'
                 : `该类型暂无材料（全部 ${filteredMaterials.length} 条）`}
@@ -306,7 +306,7 @@ export default function FeishuPool() {
                     </td>
                     <td className={td}>
                       <div className="text-gray-200">{m.title || m.id}</div>
-                      {m.summary && <div className="text-[11px] text-gray-500 truncate max-w-[360px]">{m.summary}</div>}
+                      {m.summary && <div className="text-fs-body text-gray-500 truncate max-w-[360px]">{m.summary}</div>}
                       <div className="text-fs-aux text-gray-600">{m.id} · {m.sha}</div>
                     </td>
                     <td className={td}>{m.owner_name || <span className="text-gray-600">—</span>}</td>
@@ -317,9 +317,9 @@ export default function FeishuPool() {
                         {m.source_url && (
                           <a href={m.source_url} target="_blank" rel="noreferrer"
                             onClick={e => e.stopPropagation()}
-                            className="text-[11px] text-info hover:underline">飞书原文 ↗</a>
+                            className="text-fs-body text-info hover:underline">飞书原文 ↗</a>
                         )}
-                        <span className="text-[11px] text-gray-500">本地快照 →</span>
+                        <span className="text-fs-body text-gray-500">本地快照 →</span>
                       </div>
                     </td>
                   </tr>
@@ -329,7 +329,7 @@ export default function FeishuPool() {
           )}
           {/* T-1007：分页条（>1 页才出现；页码随 tab/筛选变化自动收敛） */}
           {typeMaterials.length > MAT_PAGE_SIZE && (
-            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
+            <div className="mt-2 flex items-center gap-2 text-fs-body text-gray-500">
               <span>共 {typeMaterials.length} 条 · 第 {matPageSafe}/{matPageCount} 页</span>
               <span className="ml-auto flex items-center gap-1">
                 <button className="px-2 py-0.5 rounded border border-border hover:border-gray-500 disabled:opacity-40"
@@ -376,20 +376,20 @@ export default function FeishuPool() {
                 </span>
                 {detail.m.source_url && (
                   <a href={detail.m.source_url} target="_blank" rel="noreferrer"
-                    className="shrink-0 text-[11px] text-info hover:underline">在飞书打开原始文件 ↗</a>
+                    className="shrink-0 text-fs-body text-info hover:underline">在飞书打开原始文件 ↗</a>
                 )}
               </h3>
               <button className={btn} onClick={() => setDetail(null)}>关闭</button>
             </div>
             {!detail.data ? (
-              <div className="py-10 text-center text-xs text-gray-500">原文加载中…</div>
+              <div className="py-10 text-center text-fs-body text-gray-500">原文加载中…</div>
             ) : !(detail.data.content || '').trim() ? (
-              <div className="py-10 text-center text-xs text-gray-500">
+              <div className="py-10 text-center text-fs-body text-gray-500">
                 该快照内容为空（可能当日无消息或文档为空）
               </div>
             ) : (
               <>
-                <div className="text-xs text-gray-400 prose prose-invert prose-sm max-w-none
+                <div className="text-fs-body text-gray-400 prose prose-invert prose-sm max-w-none
                   [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border [&_img]:my-2">
                   <Markdown remarkPlugins={[remarkGfm]}>
                     {inlineImages(detail.data.content, detail.imgUrls)}
@@ -397,16 +397,16 @@ export default function FeishuPool() {
                 </div>
                 {detail.data.type === 'feishu_minutes' && detail.data.raw && (
                   <details className="mt-3">
-                    <summary className="text-[11px] text-gray-500 cursor-pointer">原始 JSON</summary>
+                    <summary className="text-fs-body text-gray-500 cursor-pointer">原始 JSON</summary>
                     <pre className="mt-2 max-h-64 overflow-auto text-fs-aux text-gray-500
                       bg-surface-3 border border-border rounded p-2">{detail.data.raw}</pre>
                   </details>
                 )}
                 {(detail.data.images || []).some(i => i.caption) && (
                   <div className="mt-3 border-t border-border pt-2 space-y-1">
-                    <div className="text-[11px] text-gray-500">图片描述（供 agent 检索用）：</div>
+                    <div className="text-fs-body text-gray-500">图片描述（供 agent 检索用）：</div>
                     {detail.data.images.filter(i => i.caption).map(i => (
-                      <div key={i.placeholder} className="text-[11px] text-gray-400">
+                      <div key={i.placeholder} className="text-fs-body text-gray-400">
                         <span className="text-gray-600">{i.placeholder}</span> {i.caption}
                         <span className="ml-1 text-gray-600">（{i.caption_by === 'manual' ? '人工' : 'AI 转述'}）</span>
                       </div>

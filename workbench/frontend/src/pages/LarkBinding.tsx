@@ -107,7 +107,7 @@ export default function LarkBinding() {
             <div className="flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-green-500" />
               <span className="font-medium">已绑定</span>
-              <span className="text-xs text-gray-500 ml-auto">
+              <span className="text-fs-body text-gray-500 ml-auto">
                 配置目录: {status.config_dir}
               </span>
             </div>
@@ -118,7 +118,7 @@ export default function LarkBinding() {
               </div>
               <div>
                 <span className="text-gray-500">OpenID</span>
-                <span className="ml-2 text-xs font-mono">{status.open_id}</span>
+                <span className="ml-2 text-fs-body font-mono">{status.open_id}</span>
               </div>
               <div>
                 <span className="text-gray-500">授权 scope</span>
@@ -126,7 +126,7 @@ export default function LarkBinding() {
               </div>
             </div>
             <button onClick={handleLogout}
-              className="mt-4 px-3 py-1.5 text-xs bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
+              className="mt-4 px-3 py-1.5 text-fs-body bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
               解绑
             </button>
           </div>
@@ -164,14 +164,14 @@ export default function LarkBinding() {
               <div className="mb-3 flex flex-col items-center gap-2">
                 <img src={loginResult.qr_data_uri} alt="飞书授权二维码"
                   className="w-48 h-48 bg-white rounded-lg p-2" />
-                <p className="text-xs text-gray-500">使用飞书 App 扫码完成授权</p>
+                <p className="text-fs-body text-gray-500">使用飞书 App 扫码完成授权</p>
               </div>
             ) : (
               <p className="text-sm text-gray-400 mb-3">
                 请在弹出的页面中完成飞书授权。页面将自动检测授权状态。
               </p>
             )}
-            <div className="bg-surface-1 rounded p-3 mb-3 text-xs break-all">
+            <div className="bg-surface-1 rounded p-3 mb-3 text-fs-body break-all">
               <p className="text-gray-500 mb-1">授权 URL:</p>
               <a href={loginResult.verification_url} target="_blank"
                 rel="noopener noreferrer"
@@ -179,7 +179,7 @@ export default function LarkBinding() {
                 {loginResult.verification_url}
               </a>
             </div>
-            <p className="text-xs text-gray-600">
+            <p className="text-fs-body text-gray-600">
               若页面未自动打开，请手动复制上方链接在浏览器中打开，或用飞书扫码。
             </p>
           </div>
@@ -193,7 +193,7 @@ export default function LarkBinding() {
             </div>
             <p className="text-sm text-red-400 mb-3">{error}</p>
             <button onClick={loadStatus}
-              className="px-3 py-1.5 text-xs bg-surface-1 rounded hover:bg-surface-3 transition-colors">
+              className="px-3 py-1.5 text-fs-body bg-surface-1 rounded hover:bg-surface-3 transition-colors">
               重试
             </button>
           </div>
@@ -206,7 +206,7 @@ export default function LarkBinding() {
           <h3 className="text-sm font-medium mb-2">📋 已授权权限</h3>
           <div className="space-y-1">
             {status.scopes.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
+              <div key={i} className="flex items-center gap-2 text-fs-body text-gray-400">
                 <span className="text-green-500">✅</span>
                 <span className="font-mono">{s}</span>
               </div>

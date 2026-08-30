@@ -193,7 +193,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
         <div className="mb-3 p-3 rounded-lg bg-red-900/30 text-red-400 border border-red-700/50 text-sm">
           <div>⛔ covers 前置闸将拦截本次触发：当前用例库有 <b>{invalidCoversCount}</b> 个用例的需求锚点
             在当前工作区查不到（全库级校验，任一失效即拦截所有触发）。</div>
-          <div className="mt-1 text-xs">
+          <div className="mt-1 text-fs-body">
             处置：① 顶栏切换到与用例库同世代的工作区（如「干部盘点 (TDM)」）后重试；
             ② 或修复用例的 covers 标签（见用例详情「需求锚点失效」标记）。
           </div>
@@ -202,11 +202,11 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
 
       {/* 链路范围 */}
       <div className="text-sm mb-3">
-        <div className="text-xs text-gray-500 mb-1.5">链路范围</div>
+        <div className="text-fs-body text-gray-500 mb-1.5">链路范围</div>
         <label className="flex items-center gap-2 py-0.5 cursor-pointer">
           <input type="radio" checked={!withDownstream} onChange={() => setWithDownstream(false)} />
           <span>本用例 + 上游准备链
-            <span className="text-xs text-gray-500 ml-1">
+            <span className="text-fs-body text-gray-500 ml-1">
               {upstream.length ? `（连带 ${upstream.length} 个上游）` : '（无上游）'}
             </span>
           </span>
@@ -214,26 +214,26 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
         <label className="flex items-center gap-2 py-0.5 cursor-pointer">
           <input type="radio" checked={withDownstream} onChange={() => setWithDownstream(true)} />
           <span>上下链路一起跑
-            <span className="text-xs text-gray-500 ml-1"
+            <span className="text-fs-body text-gray-500 ml-1"
               title={downstream.join('、') || undefined}>
               （上游 {upstream.length} + 下游 {downstream.length}）
             </span>
           </span>
         </label>
         {upstream.length > 0 && (
-          <div className="text-[11px] text-gray-600 mt-0.5">上游闭包：{upstream.join('、')}</div>
+          <div className="text-fs-body text-gray-600 mt-0.5">上游闭包：{upstream.join('、')}</div>
         )}
         {withDownstream && downstream.length > 0 && (
-          <div className="text-[11px] text-gray-600 mt-0.5">下游消费方：{downstream.join('、')}</div>
+          <div className="text-fs-body text-gray-600 mt-0.5">下游消费方：{downstream.join('、')}</div>
         )}
       </div>
 
       {/* 执行环境：环境切换 + 账号三档 + 就绪度 + 参数微调 */}
       <div className="text-sm mb-3">
-        <div className="text-xs text-gray-500 mb-1.5">执行环境</div>
+        <div className="text-fs-body text-gray-500 mb-1.5">执行环境</div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-2">
           <span className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500">环境</span>
+            <span className="text-fs-body text-gray-500">环境</span>
             <select value={envName} disabled={!!runId}
               onChange={e => setEnvName(e.target.value)}
               className="input text-sm"
@@ -247,7 +247,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
             </select>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500">执行账号</span>
+            <span className="text-fs-body text-gray-500">执行账号</span>
             <select value={accountSel} disabled={!!runId}
               onChange={e => setAccountSel(e.target.value)}
               className="input text-sm"
@@ -261,7 +261,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
             </select>
           </span>
           {configSource && (
-            <span className="text-xs text-gray-400"
+            <span className="text-fs-body text-gray-400"
               title="当前环境的配置来源（T-1036）：nacos 表示统一管理配置中心，file 表示本地 env yaml；降级时已 WARN">
               配置源：{configSource.startsWith('nacos') ? 'Nacos' : '本地文件'}
               {configSource.startsWith('nacos') && `（${configSource.slice('nacos:'.length)}）`}
@@ -269,12 +269,12 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
             </span>
           )}
           {!preflightLoading && preflight && !preflight.has_gaps && (
-            <span className="text-xs text-pass"
+            <span className="text-fs-body text-pass"
               title={`账号：${(preflight.accounts || []).join('、') || '—'}｜环境键：${(preflight.env_keys || []).join('、') || '—'}`}>
               ✅ 依赖就绪（账号 {preflight.accounts?.length ?? 0} · 环境键 {preflight.env_keys?.length ?? 0}）
             </span>
           )}
-          {preflightLoading && <span className="text-xs text-gray-500">扫描中…</span>}
+          {preflightLoading && <span className="text-fs-body text-gray-500">扫描中…</span>}
         </div>
 
         {/* 手动输入档（T-1039）：自由账号替换 default 别名，仅本次执行生效 */}
@@ -284,8 +284,8 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
               value={manualAccount}
               onChange={e => setManualAccount(e.target.value)}
               placeholder="AD 账号 或 AD:工号（替换 default 别名，仅本次执行生效）"
-              className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-xs font-mono text-gray-200 focus:border-info outline-none" />
-            <div className="text-[11px] text-gray-600 mt-0.5">
+              className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono text-gray-200 focus:border-info outline-none" />
+            <div className="text-fs-body text-gray-600 mt-0.5">
               场景中 <code>as: default</code> 及未声明账号的步骤将以该账号执行；显式别名（如 no_access）保留配置语义。
             </div>
           </div>
@@ -293,7 +293,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
 
         {/* 自动档（T-1039）：按权限解析——探针矩阵 + 匹配结果 + 诚实回退说明 */}
         {accountSel === ACCOUNT_AUTO && (
-          <div className="mb-2 px-2 py-1.5 bg-surface-1 border border-border rounded space-y-1 text-[11px]">
+          <div className="mb-2 px-2 py-1.5 bg-surface-1 border border-border rounded space-y-1 text-fs-body">
             {resolving && <div className="text-gray-500">🔍 探针中…（SSO 登录 + hr-center 权限查询，数秒）</div>}
             {!resolving && !resolution && <div className="text-warn">解析失败（网络/服务异常）——将按固定配置账号执行</div>}
             {!resolving && resolution && (
@@ -315,7 +315,7 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
                   <div key={e} className="text-fail">⚠ {e}</div>
                 ))}
                 {resolution.candidates.length > 0 && (
-                  <table className="w-full text-[11px]">
+                  <table className="w-full text-fs-body">
                     <thead>
                       <tr className="text-gray-500">
                         <th className="text-left font-normal py-0.5">候选</th>
@@ -361,9 +361,9 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
         {/* 参数微调：预检缺失项就地填写（T-312 同款，只本次执行生效） */}
         {preflight && preflight.has_gaps && (
           <div className="px-2 py-1.5 bg-fail/5 border border-fail/30 rounded space-y-1.5 max-h-36 overflow-y-auto">
-            <div className="text-[11px] text-gray-500">以下缺失项就地填写，仅对本次执行生效（不改配置文件）：</div>
+            <div className="text-fs-body text-gray-500">以下缺失项就地填写，仅对本次执行生效（不改配置文件）：</div>
             {preflight.missing_accounts.map(g => (
-              <div key={g.account} className="text-[11px]">
+              <div key={g.account} className="text-fs-body">
                 <div className="text-fail">
                   🔑 账号 <span className="font-mono">{g.account}</span> 未配置
                   <span className="text-gray-500">（{g.scenarios.join('、')} → 将 SKIP）</span>
@@ -372,21 +372,21 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
                   value={overrideInputs[`account::${g.account}`] || ''}
                   onChange={e => setOverrideInputs(prev => ({ ...prev, [`account::${g.account}`]: e.target.value }))}
                   placeholder="输入 AD 账号（或 ad:工号）替代配置"
-                  className="mt-0.5 w-full bg-surface-3 border border-border rounded px-2 py-0.5 text-[11px] font-mono text-gray-200 focus:border-info outline-none" />
+                  className="mt-0.5 w-full bg-surface-3 border border-border rounded px-2 py-0.5 text-fs-body font-mono text-gray-200 focus:border-info outline-none" />
               </div>
             ))}
             {preflight.missing_env.map(g => (
-              <div key={g.key} className="text-[11px]">
+              <div key={g.key} className="text-fs-body">
                 <div className="text-warn">🌐 环境键 <span className="font-mono">{g.key}</span> 缺失</div>
                 <input
                   value={overrideInputs[`env::${g.key}`] || ''}
                   onChange={e => setOverrideInputs(prev => ({ ...prev, [`env::${g.key}`]: e.target.value }))}
                   placeholder={`输入 ${g.key} 的值`}
-                  className="mt-0.5 w-full bg-surface-3 border border-border rounded px-2 py-0.5 text-[11px] font-mono text-gray-200 focus:border-info outline-none" />
+                  className="mt-0.5 w-full bg-surface-3 border border-border rounded px-2 py-0.5 text-fs-body font-mono text-gray-200 focus:border-info outline-none" />
               </div>
             ))}
             {preflight.unresolved_upstream.map(g => (
-              <div key={g.ref} className="text-[11px] text-warn">
+              <div key={g.ref} className="text-fs-body text-warn">
                 🔗 跨场景引用 <span className="font-mono">{g.ref}</span> 不在本次依赖闭包（{g.scenarios.join('、')}）
               </div>
             ))}
@@ -405,14 +405,14 @@ export default function ScenarioRunDialog({ scenarioId, scenarios, anchorsAvaila
         <div className="mb-3">
           <div className="text-sm mb-1">
             任务号 <span className="font-mono text-info">{runId}</span>
-            <span className={`ml-2 text-xs ${finished ? 'text-pass' : 'text-warn'}`}>
+            <span className={`ml-2 text-fs-body ${finished ? 'text-pass' : 'text-warn'}`}>
               {finished ? '● 已完成' : '● 执行中…'}
             </span>
           </div>
           {progressLines.length > 0 && (
             <div className="bg-surface-1 border border-border rounded p-2 max-h-32 overflow-y-auto">
               {progressLines.map((l, i) => (
-                <div key={i} className="text-[11px] font-mono text-gray-400 whitespace-pre-wrap">{l.line}</div>
+                <div key={i} className="text-fs-body font-mono text-gray-400 whitespace-pre-wrap">{l.line}</div>
               ))}
             </div>
           )}

@@ -189,12 +189,12 @@ export default function GraphPanorama() {
           <h2 className="text-base font-bold">🕸 全景图谱</h2>
           {status && (
             status.stale ? (
-              <span className="flex items-center gap-2 text-xs bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">
+              <span className="flex items-center gap-2 text-fs-body bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">
                 ⚠ 源数据已变更，索引过期
                 <button onClick={handleRebuild} className="underline hover:text-yellow-100">重建</button>
               </span>
             ) : (
-              <span className="text-xs bg-green-900/40 text-green-300 px-2 py-1 rounded">
+              <span className="text-fs-body bg-green-900/40 text-green-300 px-2 py-1 rounded">
                 ✓ 索引新鲜{status.built_at ? ` · ${status.built_at.slice(0, 16).replace('T', ' ')}` : ''}
               </span>
             )
@@ -206,7 +206,7 @@ export default function GraphPanorama() {
               key={l.key}
               onClick={() => setLens(l.key)}
               title={l.hint}
-              className={`px-3 py-1.5 rounded text-xs border transition-colors ${
+              className={`px-3 py-1.5 rounded text-fs-body border transition-colors ${
                 lens === l.key
                   ? `bg-info/10 text-info font-medium ${LENS_COLOR[l.key]}`
                   : 'text-gray-400 border-border hover:text-gray-200'
@@ -218,23 +218,23 @@ export default function GraphPanorama() {
         </div>
       </div>
       {LENSES.find(l => l.key === lens) && (
-        <p className="text-[11px] text-gray-500 -mt-2">{LENSES.find(l => l.key === lens)!.hint}</p>
+        <p className="text-fs-body text-gray-500 -mt-2">{LENSES.find(l => l.key === lens)!.hint}</p>
       )}
 
       {/* ── 里程碑时间轴 + 演化 diff（T-072）── */}
       <div className="rounded-lg bg-surface-2 border border-border p-3 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-gray-300 font-medium">📸 里程碑快照</p>
+          <p className="text-fs-body text-gray-300 font-medium">📸 里程碑快照</p>
           <div className="flex items-center gap-2">
             <input
               value={snapLabel}
               onChange={e => setSnapLabel(e.target.value)}
               placeholder="标签（如 es-acceleration 归档）"
-              className="bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-300 w-56"
+              className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300 w-56"
             />
             <button
               onClick={handleCreateSnapshot}
-              className="text-xs bg-info/10 text-info px-2.5 py-1 rounded hover:bg-info/20"
+              className="text-fs-body bg-info/10 text-info px-2.5 py-1 rounded hover:bg-info/20"
             >
               打快照
             </button>
@@ -253,18 +253,18 @@ export default function GraphPanorama() {
           <select
             value={diffFrom}
             onChange={e => { setDiffFrom(e.target.value); setDiffResult(null); }}
-            className="bg-surface-3 border border-border rounded px-2 py-1 text-xs text-gray-300"
+            className="bg-surface-3 border border-border rounded px-2 py-1 text-fs-body text-gray-300"
           >
             {snapshots.map(s => (
               <option key={s.snapshot_id} value={s.snapshot_id}>{s.label}</option>
             ))}
           </select>
-          <span className="text-xs text-gray-500">→ 当前</span>
-          <button onClick={handleDiff} className="text-xs bg-info/10 text-info px-2.5 py-1 rounded hover:bg-info/20">
+          <span className="text-fs-body text-gray-500">→ 当前</span>
+          <button onClick={handleDiff} className="text-fs-body bg-info/10 text-info px-2.5 py-1 rounded hover:bg-info/20">
             ⇄ 演化 diff
           </button>
           {diffResult && (
-            <span className="text-[11px] text-gray-400">
+            <span className="text-fs-body text-gray-400">
               📸 {diffResult.from.slice(0, 22)} → 当前：
               <b className="text-green-400">+{diffResult.added}</b> 新增 ·
               <b className="text-red-400">-{diffResult.removed}</b> 移除 ·
@@ -284,10 +284,10 @@ export default function GraphPanorama() {
         )}
       </div>
 
-      {error && <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>}
+      {error && <div className="text-fs-body text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>}
 
       {/* 面包屑 */}
-      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+      <div className="flex items-center gap-1.5 text-fs-body text-gray-500">
         <button onClick={backToL0} className="hover:text-info">系统星座图</button>
         {module && (<>
           <span>/</span>
@@ -327,10 +327,10 @@ export default function GraphPanorama() {
           </div>
           {l0.l0edges.length > 0 && (
             <div className="rounded-lg bg-surface-2 border border-border p-3">
-              <p className="text-[11px] text-gray-500 mb-2">跨模块耦合（边粗 = 共享 FR / 跨模块依赖强度）</p>
+              <p className="text-fs-body text-gray-500 mb-2">跨模块耦合（边粗 = 共享 FR / 跨模块依赖强度）</p>
               <div className="flex flex-wrap gap-2">
                 {l0.l0edges.map((e, i) => (
-                  <span key={i} className="text-[11px] bg-surface-3 px-2 py-1 rounded text-gray-400">
+                  <span key={i} className="text-fs-body bg-surface-3 px-2 py-1 rounded text-gray-400">
                     {e.a} ↔ {e.b} <b className="text-gray-300">w:{e.w}</b>
                   </span>
                 ))}
@@ -359,7 +359,7 @@ export default function GraphPanorama() {
                   <span className="text-gray-200 font-medium">{feat.split('/').pop()}</span>
                   {isDebt && <span title="测试债：健康分 <80">❄</span>}
                   {isNew && <span className="text-fs-aux text-gray-500">新功能点（无健康分）</span>}
-                  <span className="ml-auto flex items-center gap-2 text-[11px] text-gray-500">
+                  <span className="ml-auto flex items-center gap-2 text-fs-body text-gray-500">
                     <span className="text-green-400">覆盖 {item.nCov}</span>
                     <span className="text-red-400">缺口 {item.nGap}</span>
                     {health !== null && (
@@ -386,11 +386,11 @@ export default function GraphPanorama() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* FR 列表 */}
           <div className="lg:col-span-1 rounded-lg bg-surface-2 border border-border p-3 space-y-1.5">
-            <p className="text-[11px] text-gray-500 mb-2">FR 邻域（{l2.frs.length}）</p>
+            <p className="text-fs-body text-gray-500 mb-2">FR 邻域（{l2.frs.length}）</p>
             {l2.frs.map(fr => (
               <div
                 key={fr.id}
-                className={`p-2 rounded border text-xs cursor-pointer transition-colors ${
+                className={`p-2 rounded border text-fs-body cursor-pointer transition-colors ${
                   fr.cov === 'ok' ? 'border-green-500/30 bg-green-900/10' : 'border-red-500/30 bg-red-900/10'
                 } hover:border-info/50`}
                 onClick={() => queryBacklink(fr.id)}
@@ -415,9 +415,9 @@ export default function GraphPanorama() {
 
           {/* 场景列表 */}
           <div className="lg:col-span-1 rounded-lg bg-surface-2 border border-border p-3 space-y-1.5">
-            <p className="text-[11px] text-gray-500 mb-2">覆盖场景（{l2.scenarios.length}）</p>
+            <p className="text-fs-body text-gray-500 mb-2">覆盖场景（{l2.scenarios.length}）</p>
             {l2.scenarios.map(sc => (
-              <div key={sc.id} className="p-2 rounded border border-border bg-surface-3 text-xs">
+              <div key={sc.id} className="p-2 rounded border border-border bg-surface-3 text-fs-body">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-cyan-400" />
                   <span className="text-gray-200 font-medium">{sc.id}</span>
@@ -435,17 +435,17 @@ export default function GraphPanorama() {
               </div>
             ))}
             {l2.scenarios.length === 0 && (
-              <p className="text-[11px] text-gray-600">无场景覆盖此功能点（测试债缺口）</p>
+              <p className="text-fs-body text-gray-600">无场景覆盖此功能点（测试债缺口）</p>
             )}
           </div>
 
           {/* backlink 面板 */}
           <div className="lg:col-span-1 rounded-lg bg-surface-2 border border-border p-3">
-            <p className="text-[11px] text-gray-500 mb-2">
+            <p className="text-fs-body text-gray-500 mb-2">
               {backlink ? `反向链接 · ${backlink.node}` : '点 FR 查看反向链接'}
             </p>
             {backlink && (
-              <div className="space-y-2 text-xs">
+              <div className="space-y-2 text-fs-body">
                 <div>
                   <p className="text-gray-500 mb-1">✅ 哪些场景覆盖我（covers）</p>
                   <div className="flex flex-wrap gap-1">
@@ -487,11 +487,11 @@ export default function GraphPanorama() {
             className="w-full max-w-3xl h-[70vh] flex flex-col rounded-lg bg-surface-2 border border-border overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border text-xs">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border text-fs-body">
               <span className="text-gray-300 font-medium">📍 {source.path}{source.line > 0 ? `:${source.line}` : ''}</span>
               <button className="text-gray-500 hover:text-gray-200" onClick={() => setSource(null)}>✕ 关闭</button>
             </div>
-            <div className="flex-1 overflow-auto text-[11px] leading-5 font-mono">
+            <div className="flex-1 overflow-auto text-fs-body leading-5 font-mono">
               {sourceLoading ? (
                 <div className="p-4 text-gray-500">读取中…</div>
               ) : (

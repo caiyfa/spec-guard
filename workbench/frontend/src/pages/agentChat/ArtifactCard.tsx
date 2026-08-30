@@ -30,7 +30,7 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactInfo }) {
         <span className="block text-sm text-gray-200 truncate">{artifact.title}</span>
         <span className="block text-fs-aux text-gray-500 truncate">{metaParts.join(' · ')}</span>
       </span>
-      <span className="text-xs text-info/70 flex-shrink-0 group-hover:text-info">预览 ›</span>
+      <span className="text-fs-body text-info/70 flex-shrink-0 group-hover:text-info">预览 ›</span>
     </button>
   );
 }

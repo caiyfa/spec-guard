@@ -90,7 +90,7 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
   return (
     <div className="flex-1 min-w-0 flex flex-col border-l border-border bg-surface-2/50">
       {/* 标题条 */}
-      <div className="flex-shrink-0 px-3 py-1.5 border-b border-border flex items-center gap-2 text-xs">
+      <div className="flex-shrink-0 px-3 py-1.5 border-b border-border flex items-center gap-2 text-fs-body">
         <span className="text-gray-200">🗄 DB 证据</span>
         <span className="text-fs-aux text-gray-500 truncate">只读查询——仅 SELECT/SHOW/DESCRIBE/EXPLAIN</span>
         <button onClick={onClose} title="关闭 DB 面板，返回主会话"
@@ -99,7 +99,7 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
         {/* schema 切换器 */}
-        <div className="flex items-center gap-2 text-xs flex-wrap">
+        <div className="flex items-center gap-2 text-fs-body flex-wrap">
           <span className="text-gray-500">schema</span>
           {schemasLoaded ? (schemas.length ? schemas.map(s => (
             <button key={s.name}
@@ -130,12 +130,12 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
         <div className="flex items-center gap-3">
           <button onClick={() => runQuery()} disabled={loading}
             title="执行 (Ctrl+Enter)"
-            className="px-3 py-1 text-xs rounded bg-info/20 text-info border border-info/40 hover:bg-info/30 disabled:opacity-50">
+            className="px-3 py-1 text-fs-body rounded bg-info/20 text-info border border-info/40 hover:bg-info/30 disabled:opacity-50">
             {loading ? '查询中…' : '▶ 执行'}
           </button>
           {onHandToAux && (
             <button onClick={() => onHandToAux(sql)} disabled={!sql.trim()}
-              className="px-3 py-1 text-xs rounded border border-border text-gray-400 hover:text-info disabled:opacity-50"
+              className="px-3 py-1 text-fs-body rounded border border-border text-gray-400 hover:text-info disabled:opacity-50"
               title="把当前 SQL 发给左栏辅助助手迭代（解释表关系/设计理由/多轮优化）">
               🤖 交给辅助助手
             </button>
@@ -144,7 +144,7 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
         </div>
 
         {/* 三态分离：错误 / 结果 / 空态 */}
-        {error && <div className="text-xs text-red-400 bg-red-900/10 border border-red-700/20 rounded p-2">❌ {error}</div>}
+        {error && <div className="text-fs-body text-red-400 bg-red-900/10 border border-red-700/20 rounded p-2">❌ {error}</div>}
         {result && (
           <div className="space-y-1">
             <div className="text-fs-aux text-gray-500">{result.elapsed_ms}ms{result.truncated ? ' · 结果超上限已截断' : ''}</div>
@@ -152,17 +152,17 @@ export function DbPanel({ initialSql, onClose, onHandToAux }: {
           </div>
         )}
         {!result && !error && !loading && (
-          <div className="text-xs text-gray-600 py-2">输入 SQL 后执行；结果仅在本面板展示并记录查询历史</div>
+          <div className="text-fs-body text-gray-600 py-2">输入 SQL 后执行；结果仅在本面板展示并记录查询历史</div>
         )}
 
         {/* 查询历史 */}
         {history.length > 0 && (
           <div>
-            <div className="text-xs text-gray-500 mb-1">查询历史（{history.length}）</div>
+            <div className="text-fs-body text-gray-500 mb-1">查询历史（{history.length}）</div>
             <div className="space-y-0.5 max-h-32 overflow-y-auto">
               {history.map((h, i) => (
                 <button key={i} onClick={() => { setSql(h.sql); setSchema(h.schema); }}
-                  className="block w-full text-left text-[11px] font-mono text-gray-500 hover:text-gray-300 truncate"
+                  className="block w-full text-left text-fs-body font-mono text-gray-500 hover:text-gray-300 truncate"
                   title={h.sql}>
                   [{h.schema}] {h.sql}
                 </button>

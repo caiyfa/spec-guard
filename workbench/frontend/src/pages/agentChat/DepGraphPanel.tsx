@@ -133,11 +133,11 @@ export function DepGraphPanel({ draftFiles, onError }: {
 
   return (
     <div className="px-2 py-2 space-y-2">
-      <div className="px-1 text-xs font-medium text-gray-300">🕸 依赖图（会话相关闭包）</div>
+      <div className="px-1 text-fs-body font-medium text-gray-300">🕸 依赖图（会话相关闭包）</div>
       {loading ? (
-        <div className="text-[11px] text-gray-600 text-center py-8">加载中…</div>
+        <div className="text-fs-body text-gray-600 text-center py-8">加载中…</div>
       ) : (!dag && draftNodes.length === 0) || scope.nodes.length === 0 ? (
-        <div className="text-[11px] text-gray-600 text-center py-8 leading-relaxed">
+        <div className="text-fs-body text-gray-600 text-center py-8 leading-relaxed">
           会话还没有草稿 / 场景。<br />Agent 写完草稿后，这里自动显示<br />它与其他测试的依赖关系
         </div>
       ) : (
@@ -163,12 +163,12 @@ export function DepGraphPanel({ draftFiles, onError }: {
                 <Background color={tokens.rfBackground} gap={20} />
               </ReactFlow>
             ) : (
-              <div className="text-[11px] text-gray-600 text-center py-8">布局中…</div>
+              <div className="text-fs-body text-gray-600 text-center py-8">布局中…</div>
             )}
           </div>
           <div className="px-1 pt-1">
             <button onClick={() => navigate('/dag')}
-              className="w-full px-2 py-1.5 rounded border border-border text-[11px] text-info hover:border-info/40">
+              className="w-full px-2 py-1.5 rounded border border-border text-fs-body text-info hover:border-info/40">
               🕸 打开 DAG 编排（选择子集）
             </button>
           </div>

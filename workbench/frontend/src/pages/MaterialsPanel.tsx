@@ -95,20 +95,20 @@ export default function MaterialsPanel() {
   };
 
   const card = 'bg-surface-2 border border-border rounded-lg p-4 mb-4';
-  const label = 'block text-xs text-gray-400 mb-1';
+  const label = 'block text-fs-body text-gray-400 mb-1';
   const input = 'w-full bg-surface-3 border border-border rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-info';
-  const btn = 'px-3 py-1.5 rounded text-xs font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
-  const th = 'text-left text-[11px] text-gray-500 font-normal px-2 py-1 border-b border-border';
-  const td = 'px-2 py-1.5 text-xs text-gray-300 border-b border-border/50 align-top';
+  const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
+  const th = 'text-left text-fs-body text-gray-500 font-normal px-2 py-1 border-b border-border';
+  const td = 'px-2 py-1.5 text-fs-body text-gray-300 border-b border-border/50 align-top';
 
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-bold">📚 材料管理</h1>
-        <div className="text-[11px] text-gray-500">候选确认/入包需 product 角色 · 解析失败可查看 parse_error</div>
+        <div className="text-fs-body text-gray-500">候选确认/入包需 product 角色 · 解析失败可查看 parse_error</div>
       </div>
-      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-xs">{error}</div>}
-      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-xs">{notice}</div>}
+      {error && <div className="mb-3 px-3 py-2 rounded bg-red-500/10 text-red-400 text-fs-body">{error}</div>}
+      {notice && <div className="mb-3 px-3 py-2 rounded bg-green-500/10 text-green-400 text-fs-body">{notice}</div>}
 
       <div className={card}>
         <div className="flex flex-wrap items-end gap-3">
@@ -123,7 +123,7 @@ export default function MaterialsPanel() {
           </div>
           <div className="w-64">
             <span className={label}>上传材料（.md/.docx/.pdf，≤20MB）</span>
-            <input type="file" className={`${input} file:mr-2 file:px-2 file:py-1 file:rounded file:bg-info/15 file:text-info file:text-xs file:border-0`}
+            <input type="file" className={`${input} file:mr-2 file:px-2 file:py-1 file:rounded file:bg-info/15 file:text-info file:text-fs-body file:border-0`}
                    onChange={e => setFile(e.target.files?.[0] || null)} />
           </div>
           <button className={btn} onClick={handleUpload} disabled={busy === 'upload' || !selIv || !file}>
@@ -138,7 +138,7 @@ export default function MaterialsPanel() {
           <button className={btn} onClick={handleReassemble} disabled={!selIv}>六分区重新装配</button>
         </div>
         {materials.length === 0 ? (
-          <div className="text-xs text-gray-500">暂无材料，请上传</div>
+          <div className="text-fs-body text-gray-500">暂无材料，请上传</div>
         ) : (
           <table className="w-full">
             <thead>
@@ -152,20 +152,20 @@ export default function MaterialsPanel() {
                 <tr key={m.mid}>
                   <td className={td}>
                     <div className="font-medium">{m.filename}</div>
-                    <div className="text-[11px] text-gray-500">{m.mid}</div>
+                    <div className="text-fs-body text-gray-500">{m.mid}</div>
                   </td>
                   <td className={td}>{m.fmt}</td>
                   <td className={`${td} ${STATUS_COLOR[m.status] || ''}`}>
                     {m.status}
-                    {m.parse_error && <div className="text-[11px] text-red-400">{m.parse_error}</div>}
+                    {m.parse_error && <div className="text-fs-body text-red-400">{m.parse_error}</div>}
                   </td>
-                  <td className={td}><code className="text-[11px]">{m.sha256_12}</code></td>
+                  <td className={td}><code className="text-fs-body">{m.sha256_12}</code></td>
                   <td className={td}>
                     {m.status === 'indexed' ? (
                       <div className="space-y-1">
                         <button className={btn} onClick={() => loadTopics(m.mid)}>查看候选</button>
                         {(topicsByMid[m.mid] || []).map(t => (
-                          <div key={t.tid} className="flex items-center gap-1.5 text-[11px]">
+                          <div key={t.tid} className="flex items-center gap-1.5 text-fs-body">
                             <span className={t.confirmed ? 'text-green-400' : 'text-gray-400'}>
                               {t.confirmed ? '✓' : '○'} {t.title}
                             </span>
@@ -177,7 +177,7 @@ export default function MaterialsPanel() {
                           </div>
                         ))}
                       </div>
-                    ) : <span className="text-[11px] text-gray-600">解析完成后可取候选</span>}
+                    ) : <span className="text-fs-body text-gray-600">解析完成后可取候选</span>}
                   </td>
                   <td className={td}>
                     <button
@@ -199,7 +199,7 @@ export default function MaterialsPanel() {
             <h2 className="text-sm font-semibold">信息包（info_pack.yaml）</h2>
             <button className={btn} onClick={() => setPackText('')}>收起</button>
           </div>
-          <pre className="text-[11px] text-gray-400 bg-surface-3 rounded p-3 max-h-80 overflow-auto whitespace-pre-wrap">{packText}</pre>
+          <pre className="text-fs-body text-gray-400 bg-surface-3 rounded p-3 max-h-80 overflow-auto whitespace-pre-wrap">{packText}</pre>
         </div>
       )}
 

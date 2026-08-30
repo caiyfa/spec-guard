@@ -81,7 +81,7 @@ export default function LineageStory() {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <h2 className="text-base font-bold">🔗 血缘链</h2>
-        <span className="text-[11px] text-gray-500">审计动线：Q1 场景为什么存在 / Q2 需求被验证了吗（确定性图遍历，无 LLM）</span>
+        <span className="text-fs-body text-gray-500">审计动线：Q1 场景为什么存在 / Q2 需求被验证了吗（确定性图遍历，无 LLM）</span>
       </div>
 
       {/* 追溯输入 */}
@@ -95,33 +95,33 @@ export default function LineageStory() {
         />
         <button
           onClick={() => runTrace('up')}
-          className="text-xs bg-purple-900/50 text-purple-200 px-3 py-1.5 rounded hover:bg-purple-900/70"
+          className="text-fs-body bg-purple-900/50 text-purple-200 px-3 py-1.5 rounded hover:bg-purple-900/70"
           title="审计 Q1：这个场景为什么存在？"
         >
           Q1 向上追溯 ⬆
         </button>
         <button
           onClick={() => runTrace('down')}
-          className="text-xs bg-cyan-900/50 text-cyan-200 px-3 py-1.5 rounded hover:bg-cyan-900/70"
+          className="text-fs-body bg-cyan-900/50 text-cyan-200 px-3 py-1.5 rounded hover:bg-cyan-900/70"
           title="审计 Q2：这个需求被验证了吗？"
         >
           Q2 向下追溯 ⬇
         </button>
         <button
           onClick={() => runTrace('both')}
-          className="text-xs bg-surface-3 text-gray-300 px-3 py-1.5 rounded hover:bg-surface-3/70"
+          className="text-fs-body bg-surface-3 text-gray-300 px-3 py-1.5 rounded hover:bg-surface-3/70"
         >
           双向 ↕
         </button>
-        {loading && <span className="text-xs text-gray-500">追溯中…</span>}
+        {loading && <span className="text-fs-body text-gray-500">追溯中…</span>}
       </div>
 
-      {error && <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>}
+      {error && <div className="text-fs-body text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>}
 
       {/* 四阶段分带 */}
       {trace && (
         <div className="space-y-3">
-          <p className="text-[11px] text-gray-500">
+          <p className="text-fs-body text-gray-500">
             {trace.direction === 'up' && `⬆ 向上追溯链（Q1：${trace.root} 为什么存在）`}
             {trace.direction === 'down' && `⬇ 向下追溯链（Q2：${trace.root} 被验证了吗）`}
             {trace.direction === 'both' && `↕ 双向追溯链（${trace.root}）`}
@@ -133,7 +133,7 @@ export default function LineageStory() {
             const meta = STAGE_META[stage];
             return (
               <div key={stage} className={`rounded-lg border p-3 ${meta.bg}`}>
-                <p className={`text-[11px] font-medium mb-2 ${meta.color}`}>
+                <p className={`text-fs-body font-medium mb-2 ${meta.color}`}>
                   {meta.label}（{nodes.length}）
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -148,7 +148,7 @@ export default function LineageStory() {
                           </span>
                         )}
                         <span
-                          className={`text-xs px-2 py-1 rounded border ${
+                          className={`text-fs-body px-2 py-1 rounded border ${
                             n.external
                               ? 'border-dashed border-gray-500/60 text-gray-400 bg-gray-900/40'
                               : n.type === 'fr' || n.type === 'ac'
@@ -175,8 +175,8 @@ export default function LineageStory() {
 
           {/* 追溯链文本 */}
           <div className="rounded-lg bg-surface-2 border border-border p-3">
-            <p className="text-[11px] text-gray-500 mb-1.5">追溯链文本</p>
-            <p className="text-xs text-gray-300 break-all font-mono">
+            <p className="text-fs-body text-gray-500 mb-1.5">追溯链文本</p>
+            <p className="text-fs-body text-gray-300 break-all font-mono">
               {trace.path.map(n => (n.external ? `${n.id}（外部锚点）` : n.id)).join(' → ')}
             </p>
           </div>
@@ -186,18 +186,18 @@ export default function LineageStory() {
       {/* 断链检查（T-074） */}
       <div className="rounded-lg bg-surface-2 border border-border p-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-300 font-medium">⚠ 断链检查（BL-01~BL-06 · 落笔即挂链纪律）</p>
+          <p className="text-fs-body text-gray-300 font-medium">⚠ 断链检查（BL-01~BL-06 · 落笔即挂链纪律）</p>
           <button
             onClick={() => runCheck(true)}
-            className="text-xs bg-info/10 text-info px-2.5 py-1 rounded hover:bg-info/20"
+            className="text-fs-body bg-info/10 text-info px-2.5 py-1 rounded hover:bg-info/20"
           >
             重跑校验
           </button>
         </div>
-        {checkError && <p className="text-[11px] text-yellow-400 mt-2">{checkError}</p>}
+        {checkError && <p className="text-fs-body text-yellow-400 mt-2">{checkError}</p>}
         {checkResult && (
           <div className="mt-2">
-            <p className="text-[11px] text-gray-500">
+            <p className="text-fs-body text-gray-500">
               {checkResult.warnings.length === 0
                 ? '✓ 无断链（全部产物已挂链）'
                 : `发现 ${checkResult.warnings.length} 处断链（WARNING 级，不阻断流水线）`}
@@ -205,7 +205,7 @@ export default function LineageStory() {
             {checkResult.warnings.length > 0 && (
               <div className="mt-2 space-y-1">
                 {checkResult.warnings.map((w, i) => (
-                  <div key={i} className="flex items-start gap-2 text-[11px] bg-red-900/10 border border-red-500/20 rounded px-2 py-1">
+                  <div key={i} className="flex items-start gap-2 text-fs-body bg-red-900/10 border border-red-500/20 rounded px-2 py-1">
                     <span className="text-red-300 font-mono whitespace-nowrap">{w.rule}</span>
                     <span className="text-gray-300 font-mono whitespace-nowrap">{w.node}</span>
                     <span className="text-gray-500">{w.message}</span>
@@ -219,7 +219,7 @@ export default function LineageStory() {
 
       {/* 使用说明 */}
       {!trace && (
-        <div className="rounded-lg bg-surface-2 border border-border p-3 text-[11px] text-gray-500 space-y-1">
+        <div className="rounded-lg bg-surface-2 border border-border p-3 text-fs-body text-gray-500 space-y-1">
           <p>💡 审计动线示例：</p>
           <p>· Q1 从场景 ID 向上：<b className="text-gray-300">PP-RC-005</b> → FR → delta → 决策 D-xxx → 面试 IV-xxx（场景存在的理由 = 那轮面试的那个 P0 决策）</p>
           <p>· Q2 从 FR ID 向下：<b className="text-gray-300">FR-012</b> → 场景 → 计划 → 执行报告 → SPQ（需求被验证了吗，失败是否已反哺）</p>

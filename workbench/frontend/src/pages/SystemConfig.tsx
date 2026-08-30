@@ -51,7 +51,7 @@ export default function SystemConfig({ role }: { role: string }) {
     <div className="h-full flex flex-col">
       <div className="mb-3 flex-shrink-0">
         <h2 className="text-lg font-bold text-gray-200">🧩 系统配置</h2>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-fs-body text-gray-500 mt-0.5">
           栏1 注册/选择系统 → 栏2 注册/管理工作区 → 栏3 环境配置（通用配置含 sso/internal_token，本系统配置含网关/账号池/数据库）
         </p>
       </div>

@@ -84,7 +84,7 @@ export default function StepFormCard({
       >
         <span className="text-fs-aux text-gray-600 w-4">{index + 1}</span>
         <span>{meta.icon}</span>
-        <span className="text-[11px] font-medium text-gray-300">{meta.label}</span>
+        <span className="text-fs-body font-medium text-gray-300">{meta.label}</span>
         <span className="text-fs-aux text-gray-500 truncate flex-1">{summary}</span>
         {saveName && (
           <code className="text-fs-aux font-mono text-pass/70 bg-pass/10 px-1.5 rounded">→ {saveName}</code>
@@ -101,7 +101,7 @@ export default function StepFormCard({
             <select
               value={step.type}
               onChange={(e) => onChange(index, { type: e.target.value, body: { save: b.save } })}
-              className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-[11px]"
+              className="bg-surface-3 border border-border rounded px-1.5 py-0.5 text-fs-body"
             >
               {Object.entries(STEP_META).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
             </select>
@@ -117,13 +117,13 @@ export default function StepFormCard({
             <>
               <Row label="角色" required>
                 <select value={(b.role as string) || ''} onChange={(e) => set('role', e.target.value)}
-                  className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]">
+                  className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body">
                   <option value="">选择…</option>
                   {empRoles.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
                 </select>
               </Row>
               <Row label="独占">
-                <label className="flex items-center gap-1 text-[11px] text-gray-400">
+                <label className="flex items-center gap-1 text-fs-body text-gray-400">
                   <input type="checkbox" checked={!!b.exclusive}
                     onChange={(e) => set('exclusive', e.target.checked || undefined)} />
                   exclusive
@@ -136,7 +136,7 @@ export default function StepFormCard({
           {step.type === 'fetch_permission' && (
             <Row label="账号" required>
               <select value={(b.account as string) || 'default'} onChange={(e) => set('account', e.target.value)}
-                className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]">
+                className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body">
                 {accounts.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </Row>
@@ -148,13 +148,13 @@ export default function StepFormCard({
               <div className="flex gap-2">
                 <Row label="账号" className="w-20">
                   <select value={(b.as as string) || 'default'} onChange={(e) => set('as', e.target.value)}
-                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                     {accounts.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
                 </Row>
                 <Row label="方法" className="w-20">
                   <select value={(b.method as string) || 'GET'} onChange={(e) => set('method', e.target.value)}
-                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                     {['GET', 'POST', 'PUT', 'DELETE'].map((m) => <option key={m}>{m}</option>)}
                   </select>
                 </Row>
@@ -172,7 +172,7 @@ export default function StepFormCard({
               <Row label="Body 类型">
                 <select value={(b.body_type as string) || 'json'}
                   onChange={(e) => set('body_type', e.target.value === 'json' ? undefined : e.target.value)}
-                  className="bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                  className="bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                   {['json', 'form', 'urlencoded', 'raw', 'binary'].map((t) => <option key={t}>{t}</option>)}
                 </select>
               </Row>
@@ -193,12 +193,12 @@ export default function StepFormCard({
                   <Row label="Raw 文本">
                     <textarea value={(b.raw as string) || ''} onChange={(e) => set('raw', e.target.value)}
                       rows={3} placeholder="原始文本 body"
-                      className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono" />
+                      className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono" />
                   </Row>
                   <Row label="Content-Type">
                     <input value={(b.content_type as string) || 'text/plain'}
                       onChange={(e) => set('content_type', e.target.value)}
-                      className="w-48 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono" />
+                      className="w-48 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono" />
                   </Row>
                 </>
               )}
@@ -216,7 +216,7 @@ export default function StepFormCard({
             <>
               <Row label="类型" required>
                 <select value={(b.type as string) || 'number'} onChange={(e) => set('type', e.target.value)}
-                  className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                  className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                   <option value="number">随机整数</option>
                   <option value="float">随机浮点数</option>
                   <option value="text">随机文本（词库）</option>
@@ -228,11 +228,11 @@ export default function StepFormCard({
                 <div className="grid grid-cols-2 gap-2">
                   <Row label="最小值">
                     <input type="number" value={(b.min as number) || 1} onChange={(e) => set('min', Number(e.target.value))}
-                      className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]" />
+                      className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body" />
                   </Row>
                   <Row label="最大值">
                     <input type="number" value={(b.max as number) || 100} onChange={(e) => set('max', Number(e.target.value))}
-                      className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]" />
+                      className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body" />
                   </Row>
                 </div>
               )}
@@ -240,7 +240,7 @@ export default function StepFormCard({
                 <>
                   <Row label="词库" required>
                     <select value={(b.pool as string) || ''} onChange={(e) => set('pool', e.target.value)}
-                      className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                      className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                       <option value="">选择词库…</option>
                       <option value="activity_name">盘点活动名</option>
                       <option value="department">部门名</option>
@@ -251,7 +251,7 @@ export default function StepFormCard({
                     </select>
                   </Row>
                   <Row label="随机后缀">
-                    <label className="flex items-center gap-1 text-[11px] text-gray-400">
+                    <label className="flex items-center gap-1 text-fs-body text-gray-400">
                       <input type="checkbox" checked={!!b.suffix}
                         onChange={(e) => set('suffix', e.target.checked || undefined)} />
                       加随机数字后缀（如"张超-482"）
@@ -264,7 +264,7 @@ export default function StepFormCard({
                   <input value={((b.items as string[]) || []).join(', ')}
                     onChange={(e) => set('items', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
                     placeholder="选项1, 选项2, 选项3"
-                    className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-[11px]" />
+                    className="w-full bg-surface-3 border border-border rounded px-2 py-1 text-fs-body" />
                 </Row>
               )}
             </>
@@ -280,17 +280,17 @@ export default function StepFormCard({
                 <Row label="间隔(ms)">
                   <input type="number" value={(b.interval_ms as number) || 2000}
                     onChange={(e) => set('interval_ms', Number(e.target.value))}
-                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]" />
+                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body" />
                 </Row>
                 <Row label="超时(ms)">
                   <input type="number" value={(b.timeout_ms as number) || 60000}
                     onChange={(e) => set('timeout_ms', Number(e.target.value))}
-                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]" />
+                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body" />
                 </Row>
                 <Row label="超时处理">
                   <select value={(b.on_timeout as string) || 'fail'}
                     onChange={(e) => set('on_timeout', e.target.value)}
-                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-[11px]">
+                    className="w-full bg-surface-3 border border-border rounded px-1.5 py-1 text-fs-body">
                     <option value="fail">fail</option>
                     <option value="skip">skip</option>
                   </select>
@@ -308,7 +308,7 @@ export default function StepFormCard({
               </Row>
               <Row label="租户">
                 <input value={(b.tenant as string) || 'COREHR'} onChange={(e) => set('tenant', e.target.value)}
-                  className="w-28 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]" />
+                  className="w-28 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body" />
               </Row>
             </>
           )}
@@ -322,7 +322,7 @@ export default function StepFormCard({
               </Row>
               <Row label="输出目录">
                 <input value={(b.output_dir as string) || 'downloads'} onChange={(e) => set('output_dir', e.target.value)}
-                  className="w-28 bg-surface-3 border border-border rounded px-2 py-1 text-[11px]" />
+                  className="w-28 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body" />
               </Row>
             </>
           )}
@@ -339,7 +339,7 @@ export default function StepFormCard({
             <Row label="SQL" required>
               <textarea value={(b.sql as string) || ''} onChange={(e) => set('sql', e.target.value)}
                 rows={2} placeholder="SELECT …"
-                className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono" />
+                className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono" />
             </Row>
             <div className="flex items-center gap-2 mt-1">
               <button type="button" onClick={runTryout} disabled={tryout?.loading}
@@ -351,8 +351,8 @@ export default function StepFormCard({
             </div>
             {tryout && (
               <div className="mt-1 border border-border rounded p-2 bg-surface-2">
-                {tryout.loading && <div className="text-xs text-gray-500">查询中…</div>}
-                {tryout.error && <div className="text-xs text-red-400">❌ {tryout.error}</div>}
+                {tryout.loading && <div className="text-fs-body text-gray-500">查询中…</div>}
+                {tryout.error && <div className="text-fs-body text-red-400">❌ {tryout.error}</div>}
                 {tryout.result && <SqlResultTable rows={tryout.result.rows} row_count={tryout.result.row_count} truncated={tryout.result.truncated} />}
                 <button type="button" onClick={() => setTryout(null)} className="text-fs-aux text-gray-500 hover:text-gray-300 mt-1">关闭</button>
               </div>
@@ -366,7 +366,7 @@ export default function StepFormCard({
               <Row label="Python 脚本" required>
                 <textarea value={(b.script as string) || ''} onChange={(e) => set('script', e.target.value)}
                   rows={7} placeholder={"rows = ns['rows']\noutput = [r for r in rows if r['score'] is None]\nprint(f'过滤出 {len(output)} 行')"}
-                  className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono leading-snug" />
+                  className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono leading-snug" />
               </Row>
               <div className="text-fs-aux text-gray-600 bg-surface-3/40 rounded px-2 py-1.5 space-y-0.5">
                 <div>可用：<code className="text-info/70">ns</code>（读写变量）、<code className="text-info/70">save(k,v)</code>、<code className="text-info/70">output</code>（配合 save 输出）、<code className="text-info/70">http(account)</code>、<code className="text-info/70">db</code>、<code className="text-info/70">fn.date()</code>、<code className="text-info/70">json/re/time/datetime/uuid</code></div>
@@ -379,7 +379,7 @@ export default function StepFormCard({
             <Row label="输出 save" required>
               <input value={saveName} onChange={(e) => set('save', e.target.value || undefined)}
                 placeholder="变量名"
-                className="w-32 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono text-pass" />
+                className="w-32 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono text-pass" />
               {saveName && <OutputHints type={step.type} name={saveName} />}
             </Row>
           </div>
@@ -433,7 +433,7 @@ function VarInput({ value, onChange, placeholder, vp }: {
   return (
     <div className="flex items-center flex-1">
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-[11px] font-mono" />
+        className="flex-1 bg-surface-3 border border-border rounded px-2 py-1 text-fs-body font-mono" />
       {vp}
     </div>
   );

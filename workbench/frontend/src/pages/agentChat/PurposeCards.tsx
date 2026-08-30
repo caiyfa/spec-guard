@@ -28,7 +28,7 @@ export function PurposeCards({ purposes, onPick }: { purposes: PurposeCardDef[];
               className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-xl border-2 ${style.border} ${style.bg} hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer text-center`}>
               <span className="text-3xl">{p.icon}</span>
               <span className={`text-base font-bold ${style.text}`}>{p.title}</span>
-              <p className="text-[11px] text-gray-400 leading-relaxed">{p.description}</p>
+              <p className="text-fs-body text-gray-400 leading-relaxed">{p.description}</p>
               {p.chips && p.chips.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 justify-center mt-1">
                   {p.chips.map((chip, ci) => (
@@ -36,7 +36,7 @@ export function PurposeCards({ purposes, onPick }: { purposes: PurposeCardDef[];
                   ))}
                 </div>
               )}
-              <span className="text-xs text-gray-500 mt-2 border-t border-border/50 pt-2 w-full text-center">点击卡片直接开启会话</span>
+              <span className="text-fs-body text-gray-500 mt-2 border-t border-border/50 pt-2 w-full text-center">点击卡片直接开启会话</span>
             </button>
           );
         })}

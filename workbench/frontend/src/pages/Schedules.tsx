@@ -177,7 +177,7 @@ export default function Schedules() {
         <div className="bg-surface-2 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-gray-500 text-xs">
+              <tr className="border-b border-border text-gray-500 text-fs-body">
                 <th className="px-3 py-2 text-left">名称</th>
                 <th className="px-3 py-2 text-left">计划</th>
                 <th className="px-3 py-2 text-left font-mono">Cron</th>
@@ -200,16 +200,16 @@ export default function Schedules() {
                       {plan ? plan.name : job.plan_id}
                       {plan && <span className="text-fs-aux text-gray-600 ml-1">({plan.scenario_count} 场景)</span>}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-gray-400">{job.cron}</td>
+                    <td className="px-3 py-2 font-mono text-fs-body text-gray-400">{job.cron}</td>
                     <td className="px-3 py-2">
                       {job.enabled ? (
-                        <span className="text-green-500 text-xs">✅ 启用</span>
+                        <span className="text-green-500 text-fs-body">✅ 启用</span>
                       ) : (
-                        <span className="text-gray-500 text-xs">⏸️ 暂停</span>
+                        <span className="text-gray-500 text-fs-body">⏸️ 暂停</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <div className={`text-xs ${statusInfo.color}`}>{statusInfo.text}</div>
+                      <div className={`text-fs-body ${statusInfo.color}`}>{statusInfo.text}</div>
                       {job.last_run_at && (
                         <div className="text-fs-aux text-gray-600">{job.last_run_at}</div>
                       )}
@@ -218,27 +218,27 @@ export default function Schedules() {
                       <button
                         onClick={() => handleRun(job.id)}
                         disabled={running === job.id}
-                        className="text-xs px-2 py-0.5 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40"
+                        className="text-fs-body px-2 py-0.5 rounded bg-info/10 text-info hover:bg-info/20 disabled:opacity-40"
                         title="立即运行"
                       >
                         {running === job.id ? '⏳' : '▶️ 运行'}
                       </button>
                       <button
                         onClick={() => handleToggle(job)}
-                        className="text-xs px-2 py-0.5 rounded bg-surface-3 text-gray-400 hover:text-gray-200"
+                        className="text-fs-body px-2 py-0.5 rounded bg-surface-3 text-gray-400 hover:text-gray-200"
                         title={job.enabled ? '暂停' : '启用'}
                       >
                         {job.enabled ? '⏸️' : '▶️'}
                       </button>
                       <button
                         onClick={() => handleEdit(job)}
-                        className="text-xs px-2 py-0.5 rounded bg-surface-3 text-gray-400 hover:text-gray-200"
+                        className="text-fs-body px-2 py-0.5 rounded bg-surface-3 text-gray-400 hover:text-gray-200"
                       >
                         ✏️
                       </button>
                       <button
                         onClick={() => handleDelete(job.id)}
-                        className="text-xs px-2 py-0.5 rounded bg-surface-3 text-red-500/70 hover:text-red-400"
+                        className="text-fs-body px-2 py-0.5 rounded bg-surface-3 text-red-500/70 hover:text-red-400"
                       >
                         🗑️
                       </button>
@@ -262,7 +262,7 @@ export default function Schedules() {
             <div className="space-y-3">
               {/* 任务名称 */}
               <div>
-                <label className="text-xs text-gray-500 block mb-1">任务名称</label>
+                <label className="text-fs-body text-gray-500 block mb-1">任务名称</label>
                 <input
                   value={formName}
                   onChange={e => setFormName(e.target.value)}
@@ -273,7 +273,7 @@ export default function Schedules() {
 
               {/* 选择计划 */}
               <div>
-                <label className="text-xs text-gray-500 block mb-1">测试计划</label>
+                <label className="text-fs-body text-gray-500 block mb-1">测试计划</label>
                 <select
                   value={formPlanId}
                   onChange={e => setFormPlanId(e.target.value)}
@@ -293,7 +293,7 @@ export default function Schedules() {
 
               {/* Cron 预设 */}
               <div>
-                <label className="text-xs text-gray-500 block mb-1">调度频率</label>
+                <label className="text-fs-body text-gray-500 block mb-1">调度频率</label>
                 <div className="flex gap-1 flex-wrap mb-1">
                   {CRON_PRESETS.map(preset => (
                     <button
@@ -320,7 +320,7 @@ export default function Schedules() {
 
               {/* 通知配置（可选） */}
               <div>
-                <label className="text-xs text-gray-500 block mb-1">通知配置（可选）</label>
+                <label className="text-fs-body text-gray-500 block mb-1">通知配置（可选）</label>
                 <input
                   value={formNotifyConfigId}
                   onChange={e => setFormNotifyConfigId(e.target.value)}
@@ -337,7 +337,7 @@ export default function Schedules() {
                   onChange={e => setFormEnabled(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-xs text-gray-400">创建后立即启用</span>
+                <span className="text-fs-body text-gray-400">创建后立即启用</span>
               </div>
             </div>
 
