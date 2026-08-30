@@ -151,7 +151,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
     ? messages.filter(m => selIds.has(m.message_id)).length : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-6"
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-6"
       onClick={onClose}>
       <div className="w-[1080px] max-w-[96vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
@@ -215,7 +215,7 @@ export default function TopicEditModal({ topic, onClose, onSaved, tagReg }: {
                 return (
                   <div key={`${m.message_id}-${i}`}
                     className={`text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
-                      on ? 'bg-info/20' : 'hover:bg-black/20'}`}
+                      on ? 'bg-info/20' : 'hover:bg-overlay/20'}`}
                     onClick={() => canRelate && toggleSel(m.message_id)}>
                     <div className="flex items-baseline gap-1.5">
                       {canRelate && (

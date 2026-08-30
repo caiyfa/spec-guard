@@ -340,7 +340,7 @@ export default function FeishuWatchSettings({ onSaved }: { onSaved?: () => void 
       <button className={btn} onClick={openWatch}>⚙ 同步设置</button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 py-6"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50 py-6"
           onClick={() => setOpen(false)}>
           {/* T-1008：固定高度弹层——页头/页脚固定，页签内容区独立滚动 */}
           <div className="w-[720px] max-w-[92vw] max-h-[88vh] flex flex-col border border-border rounded-lg p-4 bg-surface-2"

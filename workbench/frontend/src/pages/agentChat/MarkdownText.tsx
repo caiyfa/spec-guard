@@ -27,7 +27,7 @@ function PreBlock({ children }: { children?: ReactNode }) {
         </div>
       );
     } catch {
-      return <pre className="text-fs-body bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-fail whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
+      return <pre className="text-fs-body bg-overlay/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-fail whitespace-pre-wrap">gate-card JSON 解析失败：{text}</pre>;
     }
   }
   // GateDock 三期：```gate-exec 围栏 → 代执行确认卡（白名单硬编码，人确认才执行）
@@ -50,7 +50,7 @@ function PreBlock({ children }: { children?: ReactNode }) {
     }
   }
   return (
-    <pre className="text-fs-body bg-black/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-gray-400 whitespace-pre-wrap">{children}</pre>
+    <pre className="text-fs-body bg-overlay/30 rounded p-3 overflow-x-auto max-h-80 my-2.5 text-gray-400 whitespace-pre-wrap">{children}</pre>
   );
 }
 
@@ -80,7 +80,7 @@ const MD_COMPONENTS: Components = {
   code: ({ className, children }: { className?: string; children?: ReactNode }) => {
     const inline = !className && !String(children).includes('\n');
     return inline
-      ? <code className="text-fs-body text-warn/80 bg-black/30 rounded px-0.5">{children}</code>
+      ? <code className="text-fs-body text-warn/80 bg-overlay/30 rounded px-0.5">{children}</code>
       : <code className="block">{children}</code>;
   },
   blockquote: ({ children }: { children?: ReactNode }) => (

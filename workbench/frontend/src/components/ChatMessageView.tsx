@@ -165,7 +165,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
               title="图片加载失败（当前飞书账号无该图权限或下载失败，刷新页面重试）">加载失败</span>
           ) : (
             <span className="inline-block w-16 h-16 leading-[4rem] text-center rounded
-              border border-border bg-black/30 text-fs-aux text-gray-600 align-top">加载中…</span>
+              border border-border bg-overlay/30 text-fs-aux text-gray-600 align-top">加载中…</span>
           )}
           {captions[key] && (
             <div className={capCls}>{captions[key]}</div>
@@ -193,7 +193,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
       // 旧快照无附件信息（T-952a 前落盘）——提示重拉而非静默无响应
       return (
         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded mt-1
-          bg-black/20 border border-border"
+          bg-overlay/20 border border-border"
           title="旧快照无附件下载信息——点「↻ 更新本群」重新同步后可下载">
           <span className="text-fs-lead">📎</span>
           <span className="text-gray-300">{msg.file_name || '文件'}</span>
@@ -205,7 +205,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
       // T-955：附件可下载（blob 拉取 + a.download；失败如实提示）
       <button
         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded mt-1
-          ${highlight ? 'bg-info/15' : 'bg-black/20 border border-border hover:border-info/50'}`}
+          ${highlight ? 'bg-info/15' : 'bg-overlay/20 border border-border hover:border-info/50'}`}
         title="点击下载附件"
         onClick={e => {
           e.stopPropagation();
@@ -234,7 +234,7 @@ export function MessageBody({ msg, imgUrls, imgFailed, captions, highlight, onIm
       return <span className="whitespace-pre-wrap break-all">{msg.content}</span>;
     }
     return (
-      <div className="mt-1 rounded border border-border/60 bg-black/20 px-2 py-1.5">
+      <div className="mt-1 rounded border border-border/60 bg-overlay/20 px-2 py-1.5">
         <div className="text-fs-aux text-gray-500 mb-1">合并转发 {subs.length} 条</div>
         <div className="space-y-1.5">
           {subs.map((s) => {

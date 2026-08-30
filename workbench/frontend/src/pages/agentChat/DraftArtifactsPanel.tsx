@@ -360,7 +360,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
 
       {/* 入库弹窗（模块选择 + 覆盖勾选 + 冲突预检提示） */}
       {dialog.open && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+        <div className="fixed inset-0 z-50 bg-overlay/60 flex items-center justify-center"
           onClick={() => !promoting && setDialog({ file: '', open: false })}>
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[440px] max-w-[92vw] shadow-2xl"
             onClick={e => e.stopPropagation()}>

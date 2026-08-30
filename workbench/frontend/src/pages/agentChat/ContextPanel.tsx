@@ -31,7 +31,7 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
         </div>
       )}
       {/* 堆叠条形图 */}
-      <div className="h-2 w-full rounded-full bg-black/40 overflow-hidden flex">
+      <div className="h-2 w-full rounded-full bg-overlay/40 overflow-hidden flex">
         {roles.map(r => {
           const w = (breakdown[r.key] / ctxLimit) * 100;
           return w > 0 ? (

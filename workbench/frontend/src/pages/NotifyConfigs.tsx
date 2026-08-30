@@ -194,7 +194,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
 
       {/* 新建/编辑表单 */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <h3 className="text-fs-lead font-bold text-gray-200 mb-3">{editing ? '编辑配置' : '新建通知配置'}</h3>
 

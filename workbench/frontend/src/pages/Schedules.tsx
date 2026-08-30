@@ -253,7 +253,7 @@ export default function Schedules() {
 
       {/* 新建/编辑表单 */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50">
           <div className="bg-surface-1 rounded-lg p-6 w-96 max-w-[90vw]">
             <h2 className="text-fs-lead font-semibold text-gray-200 mb-4">
               {editingJob ? '编辑任务' : '新建定时任务'}

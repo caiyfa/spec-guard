@@ -126,14 +126,14 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
         <div className="px-2 pb-2 space-y-1.5">
           <div>
             <div className="text-gray-600 text-fs-aux mb-0.5">参数</div>
-            <div className="text-fs-body bg-black/30 rounded p-1.5 overflow-x-auto max-h-60">
+            <div className="text-fs-body bg-overlay/30 rounded p-1.5 overflow-x-auto max-h-60">
               <KeyValueView text={tool.args} />
             </div>
           </div>
           {hasResult && (
             <div>
               <div className="text-gray-600 text-fs-aux mb-0.5">结果</div>
-              <div className={`text-fs-body bg-black/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-fail' : ''}`}>
+              <div className={`text-fs-body bg-overlay/30 rounded p-1.5 overflow-x-auto max-h-72 ${isError ? 'text-fail' : ''}`}>
                 {(() => {
                   // G3：attribution(db_evidence) 结果含 rows → 表格化（设计 2026-08-25 §A5）
                   const dbData = tool.name === 'attribution' ? parseDbEvidenceResult(tool.result!) : null;

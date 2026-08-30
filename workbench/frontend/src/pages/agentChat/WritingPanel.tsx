@@ -73,7 +73,7 @@ export function DiffOverlay({ item, onClose }: { item: DocWriteItem; onClose: ()
   }, [item.path]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-overlay/60 flex items-center justify-center" onClick={onClose}>
       <div className="bg-surface-2 border border-border rounded-xl w-[760px] max-w-[92vw] max-h-[80vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border flex-shrink-0">

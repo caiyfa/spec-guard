@@ -352,7 +352,7 @@ export default function WorkspacesPanel({ system, systems, role }: Props) {
 
       {/* 注册工作区弹层（登录即可；z-40 让 DirectoryPicker 的 z-50 浮在上层） */}
       {showRegister && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40" onClick={() => setShowRegister(false)}>
+        <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-40" onClick={() => setShowRegister(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-fs-lead font-bold text-gray-200 mb-1">注册工作区</h3>
             <div className="text-fs-body text-gray-500 mb-3">注册人即归属人，系统包未建可先用待接入态</div>

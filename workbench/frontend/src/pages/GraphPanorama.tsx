@@ -482,7 +482,7 @@ export default function GraphPanorama() {
 
       {/* ── 源头文件查看器 ── */}
       {source && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setSource(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60 p-6" onClick={() => setSource(null)}>
           <div
             className="w-full max-w-3xl h-[70vh] flex flex-col rounded-lg bg-surface-2 border border-border overflow-hidden"
             onClick={e => e.stopPropagation()}

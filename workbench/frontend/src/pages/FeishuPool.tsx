@@ -364,7 +364,7 @@ export default function FeishuPool() {
 
       {/* 材料详情弹层（原文 + 图片内嵌） */}
       {detail && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-8"
           onClick={() => setDetail(null)}>
           <div className="w-[860px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>

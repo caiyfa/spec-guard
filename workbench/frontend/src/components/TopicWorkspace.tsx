@@ -572,7 +572,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                   className={`text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded transition-colors ${
                     highlightIdx.has(i) || pickedIds.has(m.message_id)
                       ? 'bg-info/20'
-                      : 'hover:bg-black/20'
+                      : 'hover:bg-overlay/20'
                   }`}>
                   {/* T-955：两行制排版——头行「昵称 · 时间」（昵称按发送人稳定配色），
                       正文独立成行，消息可读性与 IM 应用一致；
@@ -814,7 +814,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
       )}
       {/* T-993：跨群推荐面板（预筛清单 + 可选模型精筛 + 关联/忽略） */}
       {crossOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-8"
           onClick={() => setCrossOpen(false)}>
           <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
@@ -879,7 +879,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
       )}
       {/* T-1014：材料推荐面板（话题↔文档/妙记候选；确认/忽略写 references 边） */}
       {matSuggOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-8"
           onClick={() => setMatSuggOpen(false)}>
           <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>
@@ -923,7 +923,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
       )}
       {/* T-993：关联抽屉（多群证据并排 + 跳原文 + 解除关联） */}
       {relateDrawer && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-8"
           onClick={() => setRelateDrawer(null)}>
           <div className="w-[760px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
             onClick={e => e.stopPropagation()}>

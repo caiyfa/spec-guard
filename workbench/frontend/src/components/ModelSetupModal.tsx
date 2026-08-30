@@ -69,7 +69,7 @@ export default function ModelSetupModal({ purpose, onClose, onConfigured }: {
   const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50"
       onClick={onClose}>
       <div className="w-[440px] max-w-[92vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>

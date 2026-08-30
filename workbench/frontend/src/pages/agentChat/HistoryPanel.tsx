@@ -166,7 +166,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
 
       {/* 补 token 弹窗 */}
       {showTokenDialog && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+        <div className="fixed inset-0 z-50 bg-overlay/60 flex items-center justify-center"
           onClick={() => !saving && setShowTokenDialog(false)}>
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[440px] max-w-[92vw] shadow-2xl"
             onClick={e => e.stopPropagation()}>

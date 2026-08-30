@@ -80,7 +80,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
   const btn = 'px-3 py-1.5 rounded text-fs-body font-medium bg-info/15 text-info hover:bg-info/25 disabled:opacity-40';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-6"
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-6"
       onClick={onClose}>
       <div className="w-[960px] max-w-[96vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>
@@ -104,7 +104,7 @@ export default function ComposeTopicModal({ chatSha8, days, picked, onClose,
                 <div className="text-fs-body text-gray-500">已全部移除——至少保留一条才能生成</div>
               ) : msgs.map((m, i) => (
                 <div key={`${m.message_id}-${i}`}
-                  className="text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded hover:bg-black/20 group">
+                  className="text-fs-body leading-relaxed px-1.5 py-1 mb-0.5 rounded hover:bg-overlay/20 group">
                   <div className="flex items-baseline gap-1.5">
                     <span className="font-medium"
                       style={{ color: senderColor(m.sender_id || m.sender_name || '') }}>

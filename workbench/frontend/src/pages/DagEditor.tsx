@@ -537,7 +537,7 @@ export default function DagEditor() {
 
       {/* K-xxx：场景子集选择弹层（模块分组勾选，画布实时预览闭包） */}
       {subsetOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+        <div className="fixed inset-0 z-50 bg-overlay/60 flex items-center justify-center"
           onClick={() => setSubsetOpen(false)}>
           <div className="bg-surface-2 border border-border rounded-xl p-4 w-[620px] max-w-[92vw] max-h-[80vh] flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}>

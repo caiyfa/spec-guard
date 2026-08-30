@@ -191,7 +191,7 @@ export default function SystemsPanel({ systems, selected, onSelect, isAdmin, onC
 
       {/* 注册弹层 */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
+        <div className="fixed inset-0 bg-overlay/50 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
           <div className="bg-surface-1 rounded-lg border border-border p-4 w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <h3 className="text-fs-lead font-bold text-gray-200 mb-3">注册系统</h3>
             <div className="space-y-3">

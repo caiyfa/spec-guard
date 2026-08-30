@@ -53,7 +53,7 @@ export default function TagRegistryModal({ registry, onClose, onChanged }: {
   const act = 'px-1.5 py-0.5 rounded border border-border text-fs-aux text-gray-400 hover:border-gray-500 disabled:opacity-40 shrink-0';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8"
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/50 overflow-y-auto py-8"
       onClick={onClose}>
       <div className="w-[720px] max-w-[94vw] border border-border rounded-lg p-4 bg-surface-2"
         onClick={e => e.stopPropagation()}>

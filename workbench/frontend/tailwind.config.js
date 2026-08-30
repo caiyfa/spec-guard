@@ -34,6 +34,7 @@ export default {
         railDot: v('--rail-dot'),
         pinnedBg: v('--pinned-bg'),
         warn: v('--warn'),
+        overlay: v('--overlay'),  // T-1044：弹层遮罩/固定黑叠层归一（bg-black/NN 逃逸清剿）
         // gray 阶 = 文字层级变量（深主题浅文字、浅主题深文字，语义映射非真实灰）
         gray: {
           100: v('--gray-100'),
