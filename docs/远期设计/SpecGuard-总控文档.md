@@ -347,6 +347,12 @@ T-601~T-606 全部完成（2026-08-10，sess-slim-dev / sess-slim-v2），明细
 
 | 文件路径 | 会话ID | 登记时间 | 修改前hash | 修改后hash | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| evals/flowpath.py | sess-agent-eval | 2026-08-30 | NEW | 9800735fd790 | 已完成 | T-1042 路径重放：§16.1 flow 图编码为可执行 golden flow（12 阶段必选/可选+两条硬顺序约束），单会话逐节点比对四态判定（in_order/out_of_order/missing/skipped）+着色 mermaid 路径图+差异明细表（带步号证据）+计划外工具单列（benign 剔除）+批量 trace_all 索引按差异数降序 |
+| test_specstd/test_evals_flowpath.py | sess-agent-eval | 2026-08-30 | NEW | 9b8fcaae7beb | 已完成 | T-1042 路径重放单测 13 例（全绿路径/乱序双约束/缺失/可选跳过/计划外与 benign/新形态基名+action/promote 归段/mermaid 渲染/批量索引排序，含非空转翻案） |
+| evals/baseline.py | sess-agent-eval | 2026-08-30 | 939f28ba6cf4 | 4e4dc5a3759c | 已完成 | T-1042 路径重放地基：SessionScan 增 tool_calls_raw（名字+解析参数原始序）——T-982 后新会话 LLM 发基名+arguments.action，仅凭名字丢 action |
+| evals/replay.py | sess-agent-eval | 2026-08-30 | a06b67520edd | 56e624b34cbe | 已完成 | T-1042 工具名归一重构：normalize_tool_unit 三形态统一（助记 spec(action=read)/legacy read_spec 经 tool_meta.legacy_owner/新形态基名+参数）→（基名, action）单元，阶段表全改单元候选；主库生成会话识别 28→38（修复新形态漏识别）；_stage_hit/_check_sequence/is_generate/score 全切单元 |
+| evals/run_replay.py | sess-agent-eval | 2026-08-30 | e48c36b138bc | 736139738af2 | 已完成 | T-1042 CLI 扩 --trace（单会话路径重放打印）/--trace-all（批量落盘 traces/ + 索引） |
+| evals/README.md | sess-agent-eval | 2026-08-30 | d8c2f66a8f4a | e280cfe79a28 | 已完成 | T-1042：README 增「路径重放：flow 图逐节点比对」段（四态/硬顺序两条/计划外/三形态归一 28→38）+CLI 补 --trace/--trace-all |
 | evals/baseline.py | sess-agent-eval | 2026-08-30 | NEW | 939f28ba6cf4 | 已完成 | T-1042 Phase 0：七指标基线聚合器（会话 JSONL/metrics/audit 三表 → §十五.5 报告，smoke 分离/legacy 标注/诚实空态） |
 | evals/run_baseline.py | sess-agent-eval | 2026-08-30 | NEW | 26f4f5ed44ff | 已完成 | T-1042 Phase 0：基线仪表盘 CLI（控制台+落盘 evals/results/，退出码恒 0 只读报告） |
 | evals/replay.py | sess-agent-eval | 2026-08-30 | NEW | a06b67520edd | 已完成 | T-1042 通道 A：生产会话轨迹重放打分（§16.2 generate-scenario 基线比对+五维信号 D2/D3/D5/D1/D4，legacy 工具名兼容） |

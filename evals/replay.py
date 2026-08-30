@@ -11,6 +11,13 @@
   - 通道 A（本模块）：吃真实生产会话，重放轨迹打分（回顾性度量）
   两者共享工具结果成败判定（harness._RESULT_ERROR_PREFIXES）。
 
+工具名归一（本模块的地基，flowpath 路径重放同源消费）：
+会话里同一能力有三种调用形态，全部归一到（基名, action）单元再比对——
+  ① 助记形态 spec(action=read)（文档/技能/旧 golden case 里的写法）
+  ② legacy 逻辑 id read_spec（T-982 收敛前旧会话，经 tool_meta.legacy_owner）
+  ③ 基名+参数 spec + arguments.action（T-982 后新会话 LLM 的真实发送形态）
+只匹配名字会把新会话的 scenario(action=list) 误判成「未命中 find_reference」。
+
 五维信号硬度排序（先全确定性，LLM-judge 主观维度留 Phase 3 不做）：
   D3 任务终局   validate 通过/三闸 → 最硬，免 judge
   D5 安全护栏   白名单拒绝/纯读副作用/熔断 → 硬编码护栏本就确定性
@@ -26,41 +33,113 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from evals.baseline import (
-    _VALIDATE_TOOL_NAMES,
     SessionScan,
     scan_session,
 )
 
 # ══════════════════════════════════════════════════════════
-# generate-scenario 期望轨迹基线（§16.2，与技能 depends_tools 对齐）
+# 工具调用归一：三种形态 →（基名, action）单元
 # ══════════════════════════════════════════════════════════
 
-# 关键工具按「取数链阶段」分组；工具名同时覆盖两种形态：
-#   - 合并工具 action 参数化（T-982 后）：scenario(action=next_id) / draft(action=write)
-#   - legacy 逻辑 id（T-982 前旧会话）：next_scenario_id / write_draft / read_spec …
-# 基线 §四明确「原声明逐字保留为 legacy 逻辑 id」，生产会话两形态并存，都要命中。
-GENERATE_SCENARIO_STAGES: dict[str, tuple[str, ...]] = {
-    "read_skill": ("knowledge", "knowledge(action=skill)", "read_skill"),
-    "read_requirement": (
-        "info_pack", "info_pack(action=read)", "read_info_pack",
-        "spec", "spec(action=read)", "read_spec", "list_spec_files",
-    ),
-    "get_id": ("scenario(action=next_id)", "next_scenario_id"),
-    "query_registry": ("query_registry",),
-    "find_reference": (
-        "scenario(action=list)", "scenario(action=read)",
-        "list_scenarios", "read_scenario",
-    ),
-    "validate": _VALIDATE_TOOL_NAMES,
-    "write_draft": ("draft(action=write)", "write_draft"),
-    "suggest_deps": ("scenario(action=suggest_deps)", "suggest_deps", "check_dag"),
+_TOOL_META_READY = False
+
+
+def _ensure_tool_meta() -> None:
+    """填充 tool_meta._TOOL_META（legacy_owner 依赖；幂等，失败静默降级）。"""
+    global _TOOL_META_READY
+    if _TOOL_META_READY:
+        return
+    try:
+        from mcp_server import server as _srv
+        _srv.build_tool_modules()
+    except Exception:
+        pass
+    _TOOL_META_READY = True
+
+
+def normalize_tool_unit(name: str, args: dict | None = None) -> tuple[str, str]:
+    """任意形态工具名 →（基名, action）。
+
+    runtime._tool_map 键是合并基名，action 经 arguments.action 派发——这是
+    LLM 调用的真实形态；spec(action=read) 只是文档助记写法；read_spec 是
+    T-982 前旧会话的 legacy 逻辑 id。未识别名原样返回（诚实暴露，不猜）。
+    """
+    args = args or {}
+    name = str(name or "")
+    # ① 助记形态 name(action=x[, ...])
+    if "(" in name and name.endswith(")"):
+        base = name.split("(", 1)[0].strip()
+        inner = name[name.index("(") + 1:-1]
+        act = ""
+        for part in inner.split(","):
+            part = part.strip()
+            if part.startswith("action="):
+                act = part.split("=", 1)[1].strip().strip('"').strip("'")
+        return base, act
+    _ensure_tool_meta()
+    try:
+        from mcp_server.tools import tool_meta as tm
+        meta = tm._TOOL_META.get(name)
+        if meta is not None:
+            # 注册工具：合并工具取 arguments.action；单体工具无 action
+            act = str(args.get("action") or "") if getattr(meta, "actions", None) else ""
+            return name, act
+        owner = tm.legacy_owner(name)  # ② legacy 逻辑 id →（基名, action）
+        if owner:
+            return owner
+    except Exception:
+        pass
+    # ③ 未注册名：原样保留（action 取参数里的，可能为空）
+    return name, str(args.get("action") or "")
+
+
+def _units_of(items) -> list[tuple[str, str]]:
+    """名字列表/单元列表 → 归一单元列表（元组原样，字符串归一）。"""
+    out: list[tuple[str, str]] = []
+    for it in items:
+        if isinstance(it, tuple):
+            out.append(it)
+        else:
+            out.append(normalize_tool_unit(it))
+    return out
+
+
+def scan_units(scan: SessionScan) -> list[tuple[str, str]]:
+    """会话扫描 → 按调用序归一的工具单元列表（tool_calls_raw 优先，含 action）。"""
+    if scan.tool_calls_raw:
+        return [normalize_tool_unit(n, a) for n, a in scan.tool_calls_raw]
+    return _units_of(scan.tools_used)  # 旧调用方只塞了名字（无参数）
+
+
+# ══════════════════════════════════════════════════════════
+# generate-scenario 期望轨迹基线（§16.2，与技能 depends_tools 对齐）
+# 阶段候选一律是（基名, action）单元；action="" 表示该基名任意 action；
+# legacy 名单列一份兜底（owner 解析失败时仍可命中，不静默丢阶段）
+# ══════════════════════════════════════════════════════════
+
+GENERATE_SCENARIO_STAGES: dict[str, list[tuple[str, str]]] = {
+    "read_skill": [("knowledge", ""), ("read_skill", "")],
+    "read_requirement": [
+        ("info_pack", ""), ("read_info_pack", ""),
+        ("spec", "read"), ("spec", "list"), ("spec", "search"),
+        ("read_spec", ""), ("list_spec_files", ""),
+    ],
+    "get_id": [("scenario", "next_id"), ("next_scenario_id", "")],
+    "query_registry": [("query_registry", "")],
+    "find_reference": [
+        ("scenario", "list"), ("scenario", "read"),
+        ("list_scenarios", ""), ("read_scenario", ""),
+    ],
+    "validate": [("validate", ""), ("spec_validate", "")],
+    "write_draft": [("draft", "write"), ("write_draft", "")],
+    "suggest_deps": [("scenario", "suggest_deps"), ("suggest_deps", "")],
 }
 
 # 生成用例流程里**不应在草稿阶段绕过**的写工具。注意：promote/promote_batch 是
 # 用户确认后的合法入库路径（自带三闸），不算违规——D5 真正要抓的是「绕过三闸的
 # 直接写」与「外部写红线」。当前红线为空集（基线 §四 external-write 无红线），
 # 故此集留作占位，真实越权由 sf_mcp_call_audit 的 denied-whitelist 口径承载。
-FORBIDDEN_IN_GENERATE: tuple[str, ...] = ()
+FORBIDDEN_IN_GENERATE: set[tuple[str, str]] = set()
 
 # 阶段「建议顺序」（用于序列合理性评分）：前面的阶段应先于后面出现
 _STAGE_ORDER = [
@@ -69,24 +148,13 @@ _STAGE_ORDER = [
 ]
 
 
-def _norm_tool(name: str) -> str:
-    """工具名归一：合并工具的 action 形态归到基名（scenario(action=list) → scenario）。
-
-    用于「是否调用了某类工具」的粗判；精确 action 匹配另走 stage 命中。
-    """
-    return name.split("(")[0].strip()
-
-
-def _stage_hit(stage: str, tools_used: list[str]) -> bool:
-    """该阶段的任一候选工具是否在会话里被调用过（精确匹配 name 或 name(action=..)）。"""
+def _stage_hit(stage: str, items) -> bool:
+    """该阶段的任一候选单元是否被调用过（items：名字列表或单元列表）。"""
     candidates = GENERATE_SCENARIO_STAGES[stage]
-    used = set(tools_used)
-    for cand in candidates:
-        if cand in used:
-            return True
-        # 候选是 base 名时，匹配任何 name(action=...) 形态
-        if "(" not in cand and any(t == cand or t.startswith(cand + "(") for t in used):
-            return True
+    for unit in _units_of(items):
+        for cb, ca in candidates:
+            if unit[0] == cb and (ca == "" or unit[1] == ca):
+                return True
     return False
 
 
@@ -120,18 +188,17 @@ class TrajectoryScore:
 def is_generate_scenario_session(scan: SessionScan) -> bool:
     """判定该会话是否为「创建测试用例」任务（通道 A 的目标子集）。
 
-    判据（确定性）：调用了 write_draft / draft(action=write)，或同时出现
+    判据（确定性，单元归一后匹配）：调用了 draft.write（写草稿），或同时出现
     validate + (next_id 或 suggest_deps)——生成场景的强特征。只读问答/
     排查会话不会写草稿。
     """
-    used = set(scan.tools_used)
-    if _stage_hit("write_draft", list(used)):
+    units = scan_units(scan)
+    if any(u in GENERATE_SCENARIO_STAGES["write_draft"] for u in units):
         return True
-    has_validate = any(t in _VALIDATE_TOOL_NAMES for t in used)
-    has_gen_anchor = ("scenario(action=next_id)" in used
-                      or "next_scenario_id" in used
-                      or "scenario(action=suggest_deps)" in used
-                      or "suggest_deps" in used)
+    has_validate = any(u in GENERATE_SCENARIO_STAGES["validate"] for u in units)
+    has_gen_anchor = any(u in GENERATE_SCENARIO_STAGES["get_id"]
+                         or u in GENERATE_SCENARIO_STAGES["suggest_deps"]
+                         for u in units)
     return has_validate and has_gen_anchor
 
 
@@ -141,24 +208,25 @@ def score_trajectory(scan: SessionScan, tool_results: dict | None = None) -> Tra
     tool_results：可选的 {tool_call_id: result_text}——细粒度护栏判定用；
     缺省时从 SessionScan 的聚合计数近似（白名单拒绝数无法从聚合还原，置 0）。
     """
-    used = scan.tools_used
+    units = scan_units(scan)
     sc = TrajectoryScore(session_id=scan.session_id)
     sc.is_generate_scenario = is_generate_scenario_session(scan)
 
     # ── D2 多轮轨迹：阶段覆盖 + 序列合理 + 禁用工具 ──
     for stage in _STAGE_ORDER:
-        (sc.stages_hit if _stage_hit(stage, used) else sc.stages_missing).append(stage)
+        (sc.stages_hit if _stage_hit(stage, units) else sc.stages_missing).append(stage)
     relevant = [s for s in _STAGE_ORDER if s != "suggest_deps"]  # suggest_deps 可选
     sc.stage_coverage = round(
         sum(1 for s in relevant if s in sc.stages_hit) / len(relevant), 4)
-    sc.sequence_ok = _check_sequence(used)
-    sc.forbidden_hit = [t for t in used if t in FORBIDDEN_IN_GENERATE]
+    sc.sequence_ok = _check_sequence(units)
+    sc.forbidden_hit = [f"{b}({a})" if a else b for b, a in units
+                        if (b, a) in FORBIDDEN_IN_GENERATE]
 
     # ── D3 任务终局 ──
     if scan.validate_calls > 0:
         sc.validate_passed = scan.validate_first_pass if scan.validate_calls == 1 \
             else (scan.validate_pass > 0)
-    sc.draft_written = _stage_hit("write_draft", used)
+    sc.draft_written = _stage_hit("write_draft", units)
 
     # ── D5 安全护栏 ──
     sc.fused = scan.fused
@@ -171,25 +239,26 @@ def score_trajectory(scan: SessionScan, tool_results: dict | None = None) -> Tra
                 sc.side_effect_violation += 1
 
     # ── D1 / D4 ──
-    sc.n_distinct_tools = len(set(used))
+    sc.n_distinct_tools = len({b for b, _ in units})
     sc.n_tool_calls = scan.n_tool_calls
     sc.total_tokens = scan.total_tokens
     return sc
 
 
-def _check_sequence(used: list[str]) -> bool | None:
+def _check_sequence(used) -> bool | None:
     """关键阶段的出现顺序是否符合基线建议序。
 
     取各阶段在工具序列里的**首次**下标，检查 read_requirement < write_draft
     且 validate < write_draft（生成前必读需求、写草稿前必校验——§16 硬约束）。
-    序列信息不足（缺关键阶段）返回 None。
+    序列信息不足（缺关键阶段）返回 None。used：名字列表或单元列表。
     """
+    units = _units_of(used)
     first_idx: dict[str, int] = {}
-    for i, t in enumerate(used):
+    for i, unit in enumerate(units):
         for stage in _STAGE_ORDER:
             if stage in first_idx:
                 continue
-            if _stage_hit(stage, [t]):
+            if _stage_hit(stage, [unit]):
                 first_idx[stage] = i
     # 只在读需求/校验/写草稿三者都出现时判顺序
     need = ("read_requirement", "validate", "write_draft")

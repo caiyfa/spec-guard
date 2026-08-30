@@ -71,6 +71,7 @@ class SessionScan:
     total_tokens: int = 0
     model: str = ""
     tools_used: list = field(default_factory=list)
+    tool_calls_raw: list = field(default_factory=list)  # [(name, args_dict)] 原始序——路径重放按（基名, action）归一时用
 
 
 def _tool_result_ok(result: str) -> bool:
@@ -142,6 +143,18 @@ def scan_session(path: str | Path) -> SessionScan | None:
                 scan.n_tool_calls += 1
                 call_id_to_tool[tc.get("id", "")] = name
                 scan.tools_used.append(name)
+                # 原始调用对（名字+参数）——T-982 后新会话 LLM 发基名+arguments.action，
+                # 路径重放需按（基名, action）归一，仅凭名字会丢 action
+                raw_args = fn.get("arguments", "{}")
+                if isinstance(raw_args, str):
+                    try:
+                        args_obj = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        args_obj = {}
+                else:
+                    args_obj = raw_args
+                scan.tool_calls_raw.append(
+                    (name, args_obj if isinstance(args_obj, dict) else {}))
                 if name in _VALIDATE_TOOL_NAMES:
                     scan.validate_calls += 1
         elif rtype == "tool":

@@ -37,6 +37,8 @@ python evals/run_baseline.py --limit 50 --no-write   # 快速试跑不落盘
 # ── 通道 A（T-1042）：生产会话轨迹重放打分 ──
 python evals/run_replay.py --sessions-root <主库agent/sessions>
 python evals/run_replay.py --only-generate           # 只看「创建测试用例」会话
+python evals/run_replay.py --trace <会话.jsonl>      # 单会话路径重放（§16.1 flow 图比对，着色 mermaid+差异表）
+python evals/run_replay.py --trace-all               # 全部生成会话批量路径重放 → traces/index.md（按差异数降序）
 
 # ── 反向导出（T-1042）：真实会话 → golden case ──
 python evals/run_replay.py --export <会话.jsonl> --export-out evals/cases/GC-PROD-xxx.json
@@ -169,6 +171,24 @@ D5 安全护栏（白名单拒绝/纯读副作用/熔断）、D1 工具选择、
 LLM-judge 主观维度（诚实性/SKIP 语义）留 Phase 3 不做。主库实测：306 会话识别
 28 个生成会话，D2 阶段覆盖 74.4%、序列合理率 56.25%（暴露过半会话写草稿前未先
 校验/读需求——正是通道 A 要度量的行为问题）。
+
+## 路径重放：flow 图逐节点比对（T-1042，evals/flowpath.py）
+
+聚合指标回答「总体怎么样」，路径重放回答「**这个会话具体哪步跑偏**」——把 §16.1
+flow 图编码为可执行 golden flow（12 阶段，必选/可选 + 两条硬顺序约束：
+读需求<写草稿、校验<写草稿），对单会话逐节点比对：
+
+- **四态判定**：in_order 顺序正确（🟩）/ out_of_order 乱序（🟨）/ missing 缺失必需（🟥）/
+  skipped 跳过可选（⬜ 虚线）；差异句带步号证据（「写草稿（第 2 步）先于 validate 校验（第 3 步）」）
+- **计划外工具**：基线外旁支单列（benign 元工具剔除）——旁支不等于违规，但精力去向可见
+- **产出**：着色 mermaid 路径图 + 差异明细表（`--trace` 单会话打印；`--trace-all` 批量
+  落盘 `traces/{sid}.md` + 索引按差异数降序，最跑偏的排最前）
+- **工具名归一**：三种调用形态（助记 `spec(action=read)` / legacy `read_spec` /
+  T-982 后新形态 基名+`arguments.action`）统一归一到（基名, action）再比对——
+  新旧会话同一基线可比；主库实测生成会话识别 28→38（修复新形态漏识别）
+
+主库 38 个生成会话批量重放实证：差异数 0~5 分布，头部会话缺 5 个必需阶段；
+教材级会话（20260727_193934）全绿 0 差异——好路径与跑偏路径在同一基线下立判。
 
 ## 反向导出（T-1042，L1 样本层）
 
