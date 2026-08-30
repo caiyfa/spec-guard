@@ -156,7 +156,7 @@ export default function Attribution() {
   return (
     <div className="flex flex-col h-full">
       <div className="mb-4">
-        <h2 className="text-fs-title font-bold text-gray-200">🔍 失败归因</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">🔍 失败归因</h2>
         <p className="text-fs-body text-gray-500 mt-1">读取运行报告，分析失败场景的断言差异与根因分类</p>
       </div>
 

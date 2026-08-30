@@ -57,7 +57,7 @@ export default function SpecValidation() {
 
   return (
     <div className="h-full flex flex-col space-y-4">
-      <h2 className="text-fs-title font-semibold">🛡 Spec 校验</h2>
+      <h2 className="font-display text-fs-title font-semibold">🛡 Spec 校验</h2>
 
       {/* 控制面板 */}
       <div className="flex items-center gap-3 flex-wrap">

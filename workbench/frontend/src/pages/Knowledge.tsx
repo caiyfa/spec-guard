@@ -129,7 +129,7 @@ export default function Knowledge() {
 
   return (
     <div className="page">
-      <h2>📚 知识</h2>
+      <h2 className="font-display text-fs-title font-semibold text-gray-200">📚 知识</h2>
       <p className="text-dim" style={{ marginTop: -8 }}>
         语义词典 / 环境叙事 / 经验审核——知识按工作区与系统隔离，触景分发不堆提示词
       </p>

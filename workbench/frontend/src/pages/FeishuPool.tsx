@@ -205,7 +205,7 @@ export default function FeishuPool() {
       {!focusMode && (
         <>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-fs-title font-bold">🪺 飞书话题</h1>
+        <h1 className="font-display text-fs-title font-semibold">🪺 飞书话题</h1>
         <div className="flex items-center gap-2">
           <span className="text-fs-body text-gray-500">为 agent 对话提供背景信息源 · 复核建边在「材料管理」页</span>
           <button className={btn} onClick={syncNow} disabled={busy === 'sync'}>

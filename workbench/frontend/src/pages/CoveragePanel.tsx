@@ -114,7 +114,7 @@ export default function CoveragePanel() {
   return (
     <div className="flex flex-col h-full gap-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-fs-title font-bold text-gray-200">🧭 覆盖缺口</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">🧭 覆盖缺口</h2>
         <input
           value={moduleFilter}
           onChange={e => setModuleFilter(e.target.value)}

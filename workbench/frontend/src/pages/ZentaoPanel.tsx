@@ -180,7 +180,7 @@ export default function ZentaoPanel() {
   return (
     <div className="p-4 max-w-[1200px] mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-fs-title font-bold">🔗 禅道集成</h1>
+        <h1 className="font-display text-fs-title font-semibold">🔗 禅道集成</h1>
         <div className="text-fs-body text-gray-500">
           写动作需 product/tester 角色 · 创建故事仅 product · Agent 产出草案需人确认
         </div>

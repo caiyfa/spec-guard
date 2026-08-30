@@ -104,7 +104,7 @@ export default function MaterialsPanel() {
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-fs-title font-bold">📚 材料管理</h1>
+        <h1 className="font-display text-fs-title font-semibold">📚 材料管理</h1>
         <div className="text-fs-body text-gray-500">候选确认/入包需 product 角色 · 解析失败可查看 parse_error</div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}

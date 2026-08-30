@@ -186,7 +186,7 @@ export default function GraphPanorama() {
       {/* 顶栏：状态 + 三镜头 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-fs-title font-bold">🕸 全景图谱</h2>
+          <h2 className="font-display text-fs-title font-semibold">🕸 全景图谱</h2>
           {status && (
             status.stale ? (
               <span className="flex items-center gap-2 text-fs-body bg-warn/12 text-warn px-2 py-1 rounded">

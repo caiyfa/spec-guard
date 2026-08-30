@@ -135,7 +135,7 @@ export default function NotifyConfigs({ embedded = false }: { embedded?: boolean
       {!embedded && (
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-fs-title font-bold text-gray-200">🔔 通知配置</h2>
+            <h2 className="font-display text-fs-title font-semibold text-gray-200">🔔 通知配置</h2>
             <p className="text-fs-body text-gray-500 mt-1">配置钉钉/飞书群聊 webhook，接收漏洞和任务失败通知</p>
           </div>
           <button onClick={openCreate} className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90">

@@ -33,7 +33,7 @@ export default function MenuRoles() {
   return (
     <div className="max-w-5xl">
       <div className="mb-4">
-        <h2 className="text-fs-title font-bold text-gray-200">🗂 菜单与角色授权</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">🗂 菜单与角色授权</h2>
         <p className="text-fs-body text-gray-500 mt-1">
           菜单树入库可配置；角色授权控制页面可见性与后端接口访问（前后端双控）。
         </p>

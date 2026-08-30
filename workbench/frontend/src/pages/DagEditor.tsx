@@ -419,7 +419,7 @@ export default function DagEditor() {
   return (
     <div className="h-full flex flex-col space-y-3">
       <div className="flex items-center gap-3">
-        <h2 className="text-fs-title font-semibold">🔀 DAG 编排</h2>
+        <h2 className="font-display text-fs-title font-semibold">🔀 DAG 编排</h2>
         {!dagValid && <span className="text-fs-body text-fail bg-fail/10 px-2 py-1 rounded">⚠️ 循环依赖</span>}
         {cycleItems.length > 0 && (
           <button

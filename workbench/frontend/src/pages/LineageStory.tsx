@@ -80,7 +80,7 @@ export default function LineageStory() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-fs-title font-bold">🔗 血缘链</h2>
+        <h2 className="font-display text-fs-title font-semibold">🔗 血缘链</h2>
         <span className="text-fs-body text-gray-500">审计动线：Q1 场景为什么存在 / Q2 需求被验证了吗（确定性图遍历，无 LLM）</span>
       </div>
 

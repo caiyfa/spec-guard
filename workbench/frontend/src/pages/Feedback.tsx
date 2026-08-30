@@ -79,7 +79,7 @@ export default function Feedback() {
   return (
     <div className="flex flex-col h-full max-w-4xl">
       <div className="mb-4">
-        <h2 className="text-fs-title font-bold text-gray-200">🔄 反哺闭环</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">🔄 反哺闭环</h2>
         <p className="text-fs-body text-gray-500 mt-1">SPQ 台账管理 + 群聊 webhook 通知配置（用例级 fail/drift/skip 与计划级事件统一在此维护）</p>
       </div>
 

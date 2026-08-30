@@ -20,7 +20,7 @@ export default function Skills() {
   return (
     <div className="max-w-4xl">
       <div className="mb-4">
-        <h2 className="text-fs-title font-bold text-gray-200">Skill 注册表</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">Skill 注册表</h2>
         <p className="text-fs-body text-gray-500 mt-1">
           Agent 技能清单（{skills.length} 个技能，仅只读查询）
         </p>

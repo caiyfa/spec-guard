@@ -151,7 +151,7 @@ export default function Schedules() {
   return (
     <div className="p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-fs-title font-semibold text-gray-200">定时任务调度</h1>
+        <h1 className="font-display text-fs-title font-semibold text-gray-200">定时任务调度</h1>
         <button
           onClick={handleCreate}
           className="px-3 py-1.5 bg-info text-white rounded text-fs-lead hover:bg-info/90 transition-colors"

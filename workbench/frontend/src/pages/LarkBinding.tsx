@@ -97,7 +97,7 @@ export default function LarkBinding() {
     <div className="h-full flex flex-col p-6 max-w-2xl">
       <div className="flex items-center gap-2 mb-6">
         <span className="text-xl">🐦</span>
-        <h2 className="text-fs-title font-semibold">绑定飞书账号</h2>
+        <h2 className="font-display text-fs-title font-semibold">绑定飞书账号</h2>
       </div>
 
       {/* 状态卡片 */}

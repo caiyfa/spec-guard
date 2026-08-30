@@ -202,7 +202,7 @@ function RunRecords() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <div className="flex items-center gap-3">
-        <h2 className="text-fs-title font-semibold">🗂 执行记录</h2>
+        <h2 className="font-display text-fs-title font-semibold">🗂 执行记录</h2>
         <button
           onClick={() => setShowFailures(!showFailures)}
           className={`text-fs-body px-2.5 py-1 rounded border ${

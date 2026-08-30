@@ -73,7 +73,7 @@ export default function AdminUsers() {
   return (
     <div className="max-w-5xl">
       <div className="mb-4">
-        <h2 className="text-fs-title font-bold text-gray-200">👥 用户与授权</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">👥 用户与授权</h2>
         <p className="text-fs-body text-gray-500 mt-1">
           用户首次登录自动建档（默认只读角色）；工作区由高权限人员注册后在此开通给用户。
         </p>

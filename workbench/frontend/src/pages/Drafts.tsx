@@ -283,7 +283,7 @@ export default function Drafts() {
       {/* 左：草稿列表 */}
       <div className="w-80 flex-shrink-0 flex flex-col">
         <div className="mb-3">
-          <h2 className="text-fs-title font-bold text-gray-200">📝 草稿评审</h2>
+          <h2 className="font-display text-fs-title font-semibold text-gray-200">📝 草稿评审</h2>
           <p className="text-fs-body text-gray-500 mt-1">
             Agent 产物三道闸：人工评审（可微调）→ 格式校验 → 发布门禁，缺一不入库。
           </p>

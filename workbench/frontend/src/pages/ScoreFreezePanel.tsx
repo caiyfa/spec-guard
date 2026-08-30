@@ -138,7 +138,7 @@ export default function ScoreFreezePanel() {
   return (
     <div className="p-4 max-w-[1100px] mx-auto">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-fs-title font-bold">⭐ 评分与冻结</h1>
+        <h1 className="font-display text-fs-title font-semibold">⭐ 评分与冻结</h1>
         <div className="text-fs-body text-gray-500">评分确认/闸①确认/冻结需 product 角色 · 三闸全过才可冻结</div>
       </div>
       {error && <div className="mb-3 px-3 py-2 rounded bg-fail/12 text-fail text-fs-body">{error}</div>}

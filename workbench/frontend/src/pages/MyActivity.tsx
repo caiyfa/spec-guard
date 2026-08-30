@@ -78,7 +78,7 @@ export default function MyActivity() {
   return (
     <div className="flex flex-col h-full max-w-5xl">
       <div className="mb-4">
-        <h2 className="text-fs-title font-bold text-gray-200">🧭 我的活动</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">🧭 我的活动</h2>
         <p className="text-fs-body text-gray-500 mt-1">我的产出/会话/工具调用/执行历史（仅本人数据，产出可溯源到产出会话）</p>
       </div>
 

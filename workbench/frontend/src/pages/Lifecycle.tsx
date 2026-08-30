@@ -125,7 +125,7 @@ function LifecycleBoard() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-fs-title font-bold text-gray-200">🧬 测试生命周期</h2>
+          <h2 className="font-display text-fs-title font-semibold text-gray-200">🧬 测试生命周期</h2>
           <p className="text-fs-body text-gray-500 mt-0.5">
             一条测试的完整历程：草稿 → 入库 → 执行 → 失败 → 修复闭环（台账聚合，文件仍是真相源）
           </p>

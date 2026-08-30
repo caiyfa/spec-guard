@@ -142,7 +142,7 @@ export default function Scenarios() {
   return (
     <div className="h-full flex flex-col">
       <div className="mb-3">
-        <h2 className="text-fs-title font-bold text-gray-200">🧩 场景管理</h2>
+        <h2 className="font-display text-fs-title font-semibold text-gray-200">🧩 场景管理</h2>
         <p className="text-fs-body text-gray-500 mt-0.5">
           输入名称 → 选择文件（支持搜索）→ 启动 Agent 生成；场景内容编辑与依赖编排在「DAG 编排」页
         </p>

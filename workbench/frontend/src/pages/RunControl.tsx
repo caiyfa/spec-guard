@@ -298,7 +298,7 @@ export default function RunControl() {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <h2 className="text-fs-title font-semibold">▶️ 执行控制</h2>
+      <h2 className="font-display text-fs-title font-semibold">▶️ 执行控制</h2>
 
       {/* 触发面板（K-050：选择优先，无计划耦合，高级范围模式折叠） */}
       <div className="flex items-center gap-3 flex-wrap">

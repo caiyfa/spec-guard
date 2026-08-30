@@ -44,7 +44,7 @@ function McpAudit() {
 
   return (
     <div className="max-w-6xl">
-      <h2 className="text-fs-title font-bold mb-4">MCP 调用审计日志</h2>
+      <h2 className="font-display text-fs-title font-semibold mb-4">MCP 调用审计日志</h2>
 
       {/* 过滤栏 */}
       <div className="flex flex-wrap items-center gap-3 mb-4">

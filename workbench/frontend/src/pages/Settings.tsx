@@ -24,7 +24,7 @@ export default function Settings() {
     <div className="h-full flex flex-col">
       {/* 顶栏 */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-fs-title font-semibold">⚙️ 基础设置</h2>
+        <h2 className="font-display text-fs-title font-semibold">⚙️ 基础设置</h2>
         <span className="text-fs-aux text-gray-600">SpecGuard 运行基础信息 · 被测系统配置见「🧩 系统配置」</span>
       </div>
 
