@@ -273,7 +273,7 @@ specguard/
 ├── graph_index/                # 图谱索引（链接关系物化为 nodes+边，派生物可重建）
 ├── integrations/zentao/        # 禅道集成单包（story/bug 读写唯一通道）
 ├── agent/                      # 智能层薄 Harness（runtime/session/llm_client/skills×13/purposes）
-├── mcp_server/                 # MCP 工具层（stdio；T-982 收敛后对内 24 合并工具 + open 15）
+├── mcp_server/                 # MCP 工具层（stdio；T-982 收敛后对内 25 合并工具 + open 15；T-1042 增 flow 自检）
 ├── feedback/                   # 反哺闭环（ledger SPQ 台账 + notify 通知出口）
 ├── skills/                     # 飞书 CLI 宿主侧技能包（lark-* 27 域）
 ├── evals/                      # Agent 评测（T-980 golden case 基建：run_evals.py + cases/）

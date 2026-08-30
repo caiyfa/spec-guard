@@ -1,15 +1,20 @@
 ---
 name: generate-scenario
 description: 从需求文档生成 SpecGuard 测试场景 YAML
-version: 1.1.0
+version: 1.2.0
 author: platform-team
-depends_tools: [info_pack(action=read), spec(action=read), scenario(action=next_id), query_registry, scenario(action=list), scenario(action=read), validate, draft(action=write), scenario(action=suggest_deps)]
+depends_tools: [info_pack(action=read), spec(action=read), scenario(action=next_id), query_registry, scenario(action=list), scenario(action=read), validate, draft(action=write), scenario(action=suggest_deps), flow(action=status)]
 trigger: 用户需要创建新的测试场景、从 Spec 文件生成用例、或使用场景创建向导时
 keywords: [生成, 创建, 新建, 新场景, 写个场景, 写场景, 写一个, 用例生成, 生成测试, 场景 YAML, 场景草稿, 覆盖这个需求]
 ---
 ## 场景生成技能
 
 ### 核心流程
+
+> **进度自检（T-1042）**：可随时调用 `flow` 工具（纯读）查看 golden flow 基线与
+> 当前会话实际走径的逐节点比对（顺序正确/乱序/缺失/跳过 + 跑偏点带步号证据）——
+> 怀疑漏了步骤或被纠正提示命中时，先自查再继续。自检仅供参考：如属用户明确
+> 要求的路径，向用户说明即可，无需强行对齐基线。
 
 1. **读取需求**：使用 `info_pack(action=read)`（如有 scenario_id）或 `spec(action=read)` 读取需求文档（spec(action=read) 支持 `anchor=FR-xxx`/`section=章节` 参数只取关键章节，省 token）
 2. **获取 ID**：使用 `scenario(action=next_id)` 获取下一个可用场景 ID

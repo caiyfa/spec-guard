@@ -48,6 +48,9 @@ _CORRECTION_KEYWORDS = ("不对", "错了", "应该是", "不应", "你搞错", 
 # validate 工具名（合并工具 action 参数化后的调用名候选）
 _VALIDATE_TOOL_NAMES = ("validate", "spec_validate")
 
+# flow 纠正提示落盘标记（T-1042 三期，sg_core.flow_nudge 单一事实源）
+from sg_core.flow_nudge import NUDGE_MARKER  # noqa: E402
+
 
 @dataclass
 class SessionScan:
@@ -72,6 +75,8 @@ class SessionScan:
     model: str = ""
     tools_used: list = field(default_factory=list)
     tool_calls_raw: list = field(default_factory=list)  # [(name, args_dict)] 原始序——路径重放按（基名, action）归一时用
+    nudge_fires: int = 0                # [flow-nudge] 触发次数（T-1042 三期 EDD 指标）
+    nudge_corrected: bool | None = None  # 首次 nudge 后出现 validate → True；未触发 nudge → None
 
 
 def _tool_result_ok(result: str) -> bool:
@@ -132,6 +137,7 @@ def scan_rows(rows: list, session_id: str = "", smoke: bool = False) -> SessionS
     # tool_call_id → tool_name（assistant 声明），用于把 tool 结果行归到具体工具
     call_id_to_tool: dict[str, str] = {}
     validate_results: list[str | None] = []
+    nudge_seen = False  # 首个 [flow-nudge] 出现后，其后 validate PASS 记纠正（EDD）
 
     for o in rows:
         rtype = o.get("_type") or o.get("role")
@@ -177,9 +183,18 @@ def scan_rows(rows: list, session_id: str = "", smoke: bool = False) -> SessionS
                 scan.n_tool_ok += 1
             else:
                 scan.n_tool_fail += 1
+            # T-1042 三期 EDD：[flow-nudge] 触发计数 + 触发后 validate 记纠正
+            if NUDGE_MARKER in result:
+                scan.nudge_fires += 1
+                nudge_seen = True
             tool_name = call_id_to_tool.get(o.get("tool_call_id", ""), "")
             if tool_name in _VALIDATE_TOOL_NAMES:
-                validate_results.append(_validate_verdict(result))
+                verdict = _validate_verdict(result)
+                validate_results.append(verdict)
+                if nudge_seen and verdict == "PASS":
+                    scan.nudge_corrected = True
+                elif nudge_seen and scan.nudge_corrected is None:
+                    scan.nudge_corrected = False
         elif rtype == "system":
             content = str(o.get("content", ""))
             if "[FUSE]" in content:
@@ -329,6 +344,13 @@ def build_baseline_report(sessions_root: str | Path, db_path: str | Path,
     n_val_scored = sum(1 for s in with_validate if s.validate_first_pass is not None)
     # 6. 纠正触发率
     n_correction = sum(1 for s in prod if s.had_correction)
+    # 8. flow nudge（T-1042 三期 EDD：触发会话占比 + 触发后纠正率）
+    nudge_sessions = sum(1 for s in prod if s.nudge_fires > 0)
+    nudge_total_fires = sum(s.nudge_fires for s in prod)
+    nudge_corrected = [s.nudge_corrected for s in prod if s.nudge_fires > 0]
+    nudge_corrected_rate = (
+        round(sum(1 for c in nudge_corrected if c) / len(nudge_corrected), 4)
+        if nudge_corrected else None)
     # 7. 每任务 token（会话级汇总行）
     tokens = sorted(s.total_tokens for s in prod if s.total_tokens > 0)
 
@@ -393,6 +415,15 @@ def build_baseline_report(sessions_root: str | Path, db_path: str | Path,
                     "per_turn_metrics": metrics_agg,
                 },
             },
+            "8_flow_nudge_fires": {
+                "value": round(nudge_sessions / n, 4) if n else None,
+                "detail": {
+                    "sessions_with_nudge": nudge_sessions,
+                    "total_fires": nudge_total_fires,
+                    "corrected_rate": nudge_corrected_rate,
+                    "note": "T-1042 三期 EDD 指标：触发会话占比；corrected_rate=触发后出现 validate PASS 的占比",
+                },
+            },
         },
         "distributions": {
             "purposes": purposes,
@@ -430,7 +461,7 @@ def render_markdown(report: dict) -> str:
         f"**生产会话 {src['production_sessions']} 个**（已排除 smoke 隔离区 {src['smoke_sessions_excluded']} 个）；"
         f"审计库 `{src['db_path']}`",
         "",
-        "## 七指标基线（§十五.5，仅生产会话口径）",
+        "## 基线指标（§十五.5 七指标 + T-1042 三期 EDD 附加，仅生产会话口径）",
         "",
         "| # | 指标 | 数值 | 备注 |",
         "|---|------|------|------|",
@@ -450,6 +481,9 @@ def render_markdown(report: dict) -> str:
          f"纠正会话 {ind['6_correction_trigger_rate']['detail']['corrected_sessions']}/{ind['6_correction_trigger_rate']['detail']['total_sessions']}"),
         ("7", "每任务 token（均值）", fmtnum(ind["7_avg_tokens_per_task"]["value"]),
          f"p50={fmtnum(ind['7_avg_tokens_per_task']['detail']['p50'])} p95={fmtnum(ind['7_avg_tokens_per_task']['detail']['p95'])}"),
+        ("8", "flow nudge 触发占比", fmt(ind["8_flow_nudge_fires"]["value"]),
+         f"触发 {ind['8_flow_nudge_fires']['detail']['sessions_with_nudge']} 会话/{ind['8_flow_nudge_fires']['detail']['total_fires']} 次，"
+         f"纠正率 {fmt(ind['8_flow_nudge_fires']['detail']['corrected_rate'])}"),
     ]
     for r in rows:
         lines.append(f"| {r[0]} | {r[1]} | **{r[2]}** | {r[3]} |")

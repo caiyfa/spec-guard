@@ -585,6 +585,16 @@ class AgentRuntime:
                         if llm_messages and llm_messages[-1].get("role") == "tool":
                             llm_messages[-1]["content"] = tool_msg["content"]
 
+                # T-1042 三期：flow 路径纠正提示（图在看、提示不打断）——draft write
+                # 落 .yaml 场景草稿且硬前置缺失时，结果尾部追加一次性 nudge
+                # （不改结果成败、不打断、不熔断；整会话至多一次，核在 sg_core.flow_nudge）
+                if not result.startswith(("[SIDE_EFFECT_VIOLATION]", "[越权拒绝]", "[拒绝]")):
+                    flow_nudge = self._flow_nudge_for_tool(tc, messages)
+                    if flow_nudge:
+                        tool_msg["content"] = tool_msg["content"] + "\n\n" + flow_nudge
+                        if llm_messages and llm_messages[-1].get("role") == "tool":
+                            llm_messages[-1]["content"] = tool_msg["content"]
+
             # 增量保存会话
             if session and session_id:
                 session.save(session_id, messages, todos=self._todos)
@@ -623,6 +633,58 @@ class AgentRuntime:
             except Exception:
                 pass
         return self._knowledge_nudger
+
+    def _flow_nudge_for_tool(self, tc: dict, messages: list) -> str:
+        """flow 路径纠正提示（T-1042 三期，「图在看、提示不打断」）。
+
+        draft write 落 .yaml 场景草稿时，对本调用之前的会话内工具单元序列检查
+        两条硬顺序前置（读需求/validate），缺失且本会话未提示过 → 返回一次性
+        nudge 文本（追加到工具结果尾部，不改结果成败、不打断、不熔断）。
+        设计：docs/superpowers/specs/2026-08-30-Agent路径自检与纠正提示-design.md §三。
+        判定与文案核在 sg_core.flow_nudge（agent/evals 共同事实源，防漂移）。
+        """
+        try:
+            from sg_core.flow_nudge import (
+                build_flow_nudge,
+                draft_write_prereq_gaps,
+                has_nudge_in_history,
+            )
+            from sg_core.tool_units import normalize_tool_unit
+        except Exception:
+            return ""
+        fn = tc.get("function") or {}
+        args = _parse_tc_arguments(tc)
+        if not isinstance(args, dict):
+            return ""
+        unit = normalize_tool_unit(fn.get("name", ""), args)
+        if unit != ("draft", "write"):
+            return None
+        filename = str(args.get("filename", "") or "")
+        if not filename.endswith(".yaml"):
+            return ""  # .sql 等其他草稿不走 generate-scenario 纪律
+        if has_nudge_in_history(messages):
+            return ""  # 整会话至多一次（防唠叨/防 Goodhart）
+        # 本调用之前的工具单元序列（跳过当前 tc 自身）
+        tc_id = tc.get("id", "")
+        prior: list[tuple[str, str]] = []
+        for m in messages:
+            if m.get("role") != "assistant":
+                continue
+            for c in (m.get("tool_calls") or []):
+                if c.get("id", "") == tc_id:
+                    continue
+                cfn = c.get("function") or {}
+                cargs = cfn.get("arguments", "{}")
+                if isinstance(cargs, str):
+                    try:
+                        cargs = json.loads(cargs)
+                    except json.JSONDecodeError:
+                        cargs = {}
+                if isinstance(cargs, dict):
+                    prior.append(normalize_tool_unit(cfn.get("name", ""), cargs))
+        gaps = draft_write_prereq_gaps(prior)
+        return build_flow_nudge(gaps)
+
 
     def _nudge_for_user(self, user_message: str) -> str:
         """用户消息入口知识 nudge（T-508 通道二 + T-510 经验检索注入）。

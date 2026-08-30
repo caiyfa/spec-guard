@@ -112,7 +112,7 @@ specguard/                        # 仓库根（独立，无外层前缀）
 │   └── sessions/                 #   会话产物（.jsonl，不入 git）
 │
 ├── mcp_server/                   # MCP 工具层（stdio，Agent 通过工具操作仓库）
-│   ├── server.py                 #   stdio 入口（T-982 收敛：对内 24 合并工具+open 15，见 tools/tool_meta.py）
+│   ├── server.py                 #   stdio 入口（T-982 收敛：对内 25 合并工具+open 15，见 tools/tool_meta.py；T-1042 增 flow 路径自检）
 │   └── tools/                    #   合并工具模块（spec/scenario/draft/attribution/audit/specflow×5/
 │       │                         #   feishu_read/lark_auth/lark_run/graph/lineage/knowledge/info_pack/
 │       │                         #   registry_query/validator/meta/open×15…元数据见 tool_meta.py）

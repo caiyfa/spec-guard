@@ -45,6 +45,7 @@ from mcp_server.tools import (  # noqa: E402
     gate_dock,
     topic_query,
     parent_tool,
+    flow_status,
 )
 from mcp_server.tools.open import (  # noqa: E402  S8 对外开放面（T-083/T-085，L0 只读）
     specflow_refs as open_specflow_refs,
@@ -93,6 +94,8 @@ def build_tool_modules(include_info_pack: bool = False) -> list:
         gate_dock,
         # 飞书话题通用召回（T-1011，纯读 meta 域常驻）
         topic_query,
+        # golden flow 路径自检（T-1042 三期，纯读 meta 域常驻）
+        flow_status,
         # 辅助会话限界读取父会话脉络（T-1032 方案③，纯读 aux 域）
         parent_tool,
         # S8 对外开放面（T-083/T-085）：L0 五模块，全部 side_effect: none

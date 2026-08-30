@@ -40,68 +40,11 @@ from evals.baseline import (
 # ══════════════════════════════════════════════════════════
 # 工具调用归一：三种形态 →（基名, action）单元
 # ══════════════════════════════════════════════════════════
-
-_TOOL_META_READY = False
-
-
-def _ensure_tool_meta() -> None:
-    """填充 tool_meta._TOOL_META（legacy_owner 依赖；幂等，失败静默降级）。"""
-    global _TOOL_META_READY
-    if _TOOL_META_READY:
-        return
-    try:
-        from mcp_server import server as _srv
-        _srv.build_tool_modules()
-    except Exception:
-        pass
-    _TOOL_META_READY = True
-
-
-def normalize_tool_unit(name: str, args: dict | None = None) -> tuple[str, str]:
-    """任意形态工具名 →（基名, action）。
-
-    runtime._tool_map 键是合并基名，action 经 arguments.action 派发——这是
-    LLM 调用的真实形态；spec(action=read) 只是文档助记写法；read_spec 是
-    T-982 前旧会话的 legacy 逻辑 id。未识别名原样返回（诚实暴露，不猜）。
-    """
-    args = args or {}
-    name = str(name or "")
-    # ① 助记形态 name(action=x[, ...])
-    if "(" in name and name.endswith(")"):
-        base = name.split("(", 1)[0].strip()
-        inner = name[name.index("(") + 1:-1]
-        act = ""
-        for part in inner.split(","):
-            part = part.strip()
-            if part.startswith("action="):
-                act = part.split("=", 1)[1].strip().strip('"').strip("'")
-        return base, act
-    _ensure_tool_meta()
-    try:
-        from mcp_server.tools import tool_meta as tm
-        meta = tm._TOOL_META.get(name)
-        if meta is not None:
-            # 注册工具：合并工具取 arguments.action；单体工具无 action
-            act = str(args.get("action") or "") if getattr(meta, "actions", None) else ""
-            return name, act
-        owner = tm.legacy_owner(name)  # ② legacy 逻辑 id →（基名, action）
-        if owner:
-            return owner
-    except Exception:
-        pass
-    # ③ 未注册名：原样保留（action 取参数里的，可能为空）
-    return name, str(args.get("action") or "")
-
-
-def _units_of(items) -> list[tuple[str, str]]:
-    """名字列表/单元列表 → 归一单元列表（元组原样，字符串归一）。"""
-    out: list[tuple[str, str]] = []
-    for it in items:
-        if isinstance(it, tuple):
-            out.append(it)
-        else:
-            out.append(normalize_tool_unit(it))
-    return out
+# 工具名归一自 evals 下沉 sg_core/tool_units（T-1042 三期，T-975 转发模式）——
+# agent runtime 的 flow nudge 也要归一，共享一份实现防漂移；此处再导出保持
+# 存量 import（from evals.replay import normalize_tool_unit）零改动。
+from sg_core.tool_units import normalize_tool_unit  # noqa: E402, I001
+from sg_core.tool_units import units_of as _units_of
 
 
 def scan_units(scan: SessionScan) -> list[tuple[str, str]]:
@@ -180,6 +123,9 @@ class TrajectoryScore:
     n_distinct_tools: int = 0
     n_tool_calls: int = 0
     total_tokens: int = 0
+    # flow 纪律（T-1042 三期 EDD：nudge 触发与纠正）
+    nudge_fires: int = 0
+    nudge_corrected: bool | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -242,6 +188,8 @@ def score_trajectory(scan: SessionScan, tool_results: dict | None = None) -> Tra
     sc.n_distinct_tools = len({b for b, _ in units})
     sc.n_tool_calls = scan.n_tool_calls
     sc.total_tokens = scan.total_tokens
+    sc.nudge_fires = getattr(scan, "nudge_fires", 0)
+    sc.nudge_corrected = getattr(scan, "nudge_corrected", None)
     return sc
 
 
@@ -349,6 +297,12 @@ def replay_report(sessions_root: str | Path, only_generate: bool = False,
                 "avg_tool_calls": _avg([s.n_tool_calls for s in scores]),
                 "avg_tokens": _avg([s.total_tokens for s in scores if s.total_tokens > 0]),
             },
+            "flow_discipline": {
+                "nudge_fires_total": sum(s.nudge_fires for s in scores),
+                "nudge_sessions": sum(1 for s in scores if s.nudge_fires > 0),
+                "corrected_rate": _rate(lambda s: s.nudge_corrected is True,
+                                        [s for s in scores if s.nudge_fires > 0]),
+            },
         },
         "per_session": [s.to_dict() for s in scores],
     }
@@ -390,6 +344,8 @@ def render_replay_markdown(report: dict) -> str:
         f"| D1 工具选择 | 平均每会话不同工具数 | {num(d['D1_tool_selection']['avg_distinct_tools'])} |",
         f"| D4 效率成本 | 平均工具步数 | {num(d['D4_cost']['avg_tool_calls'])} |",
         f"| D4 | 平均 token | {num(d['D4_cost']['avg_tokens'])} |",
+        f"| flow 纪律 | [flow-nudge] 触发会话数 | {d['flow_discipline']['nudge_sessions']} |",
+        f"| flow 纪律 | 触发后纠正率（出现 validate） | {pct(d['flow_discipline']['corrected_rate'])} |",
         "",
         "> 说明：D2 阶段覆盖/序列仅对「创建测试用例」会话有意义（其他类型会话的",
         "> generate-scenario 基线不适用）；LLM-judge 主观维度（诚实性/SKIP 语义）留 Phase 3。",
