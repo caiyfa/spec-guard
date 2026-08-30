@@ -8,15 +8,15 @@ import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useJsTokens } from '../theme';
 
 export const CATEGORY_META: Record<string, { icon: string; label: string; color: string }> = {
-  producer: { icon: '📤', label: '产出', color: '#3fb950' },
-  modifier: { icon: '✏️', label: '修改', color: '#f0883e' },
-  query: { icon: '🔍', label: '查询', color: '#58a6ff' },
-  validator: { icon: '✅', label: '校验', color: '#8957e5' },
+  producer: { icon: '📤', label: '产出', color: 'rgb(var(--pass))' },
+  modifier: { icon: '✏️', label: '修改', color: 'rgb(var(--warn))' },
+  query: { icon: '🔍', label: '查询', color: 'rgb(var(--info))' },
+  validator: { icon: '✅', label: '校验', color: 'rgb(var(--blocked))' },
 };
 
 const VERDICT_COLORS: Record<string, string> = {
-  PASS: '#3fb950', FAIL: '#f85149', SKIP: '#d29922', BLOCKED: '#8957e5',
-  DRIFT: '#d29922', ORPHANED: '#f85149',
+  PASS: 'rgb(var(--pass))', FAIL: 'rgb(var(--fail))', SKIP: 'rgb(var(--skip))', BLOCKED: 'rgb(var(--blocked))',
+  DRIFT: 'rgb(var(--skip))', ORPHANED: 'rgb(var(--fail))',
 };
 
 export type ScenarioNodeType = Node<{
@@ -33,7 +33,7 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
   const cat = CATEGORY_META[data.category || 'validator'] || CATEGORY_META.validator;
   // 草稿节点固定黄框（区别于库内场景的类型色/verdict 色）
   const borderColor = data.isDraft
-    ? '#d29922'
+    ? 'rgb(var(--skip))'
     : ((data.verdict && VERDICT_COLORS[data.verdict]) || cat.color + '66');
   const tokens = useJsTokens();  // K-043：节点配色跟随主题
   return (
@@ -43,7 +43,7 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
         width: 220,
         minHeight: 88,
         background: tokens.nodeBg,
-        border: `2px solid ${selected ? '#58a6ff' : borderColor}`,
+        border: `2px solid ${selected ? 'rgb(var(--info))' : borderColor}`,
         color: tokens.nodeText,
         fontSize: 11,
         boxShadow: selected ? '0 0 0 2px rgba(88,166,255,0.25)' : undefined,

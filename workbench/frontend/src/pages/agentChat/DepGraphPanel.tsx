@@ -14,9 +14,9 @@ const nodeTypes = { scenario: ScenarioNode };
 /** 边状态配色（与 DagEditor 一致：match 低调灰 / minor 蓝 / major 琥珀 / orphan 红虚线） */
 const EDGE_STATUS_STYLE: Record<string, { stroke: string; dash?: string }> = {
   match: { stroke: '' },
-  minor_drift: { stroke: '#58a6ff' },
-  major_drift: { stroke: '#d29922' },
-  orphan: { stroke: '#f85149', dash: '6 4' },
+  minor_drift: { stroke: 'rgb(var(--info))' },
+  major_drift: { stroke: 'rgb(var(--skip))' },
+  orphan: { stroke: 'rgb(var(--fail))', dash: '6 4' },
 };
 
 export function DepGraphPanel({ draftFiles, onError }: {

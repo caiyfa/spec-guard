@@ -28,9 +28,9 @@ const nodeTypes = { scenario: ScenarioNode };
 /** 边状态配色（match 低调灰 / minor 蓝 / major 琥珀 / orphan 红虚线） */
 const EDGE_STATUS_STYLE: Record<string, { stroke: string; dash?: string }> = {
   match: { stroke: '' },  // match 走 tokens.edgeStroke（K-043）
-  minor_drift: { stroke: '#58a6ff' },
-  major_drift: { stroke: '#d29922' },
-  orphan: { stroke: '#f85149', dash: '6 4' },
+  minor_drift: { stroke: 'rgb(var(--info))' },
+  major_drift: { stroke: 'rgb(var(--skip))' },
+  orphan: { stroke: 'rgb(var(--fail))', dash: '6 4' },
 };
 
 /** DFS 可达性：从 from 沿 edges（source→target 方向）能否到达 to（环预检） */
@@ -425,7 +425,7 @@ export default function DagEditor() {
           <button
             onClick={() => setShowDrift(!showDrift)}
             className="text-fs-body px-2 py-1 rounded hover:opacity-80"
-            style={{ color: '#f85149', background: '#f8514915' }}
+            style={{ color: 'rgb(var(--fail))', background: 'rgb(var(--fail) / 0.06)' }}
             title="点击展开环清单">
             ⛔ {cycleItems.length} 条依赖环（已降级显示）{showDrift ? '▲' : '▼'}
           </button>
@@ -434,7 +434,7 @@ export default function DagEditor() {
           <button
             onClick={() => setShowDrift(!showDrift)}
             className="text-fs-body px-2 py-1 rounded hover:opacity-80"
-            style={{ color: '#d29922', background: '#d2992215' }}
+            style={{ color: 'rgb(var(--skip))', background: 'rgb(var(--skip) / 0.06)' }}
             title="点击展开漂移报告">
             ⚠️ {driftCount} 条版本漂移 {showDrift ? '▲' : '▼'}
           </button>
@@ -587,13 +587,13 @@ export default function DagEditor() {
 
       {/* 漂移报告面板（DRIFT/ORPHANED 清单 + T-101 依赖环清单） */}
       {showDrift && (driftCount > 0 || cycleItems.length > 0) && (
-        <div className="border rounded-lg px-4 py-3 space-y-1.5" style={{ borderColor: '#d2992240', background: '#d2992208' }}>
+        <div className="border rounded-lg px-4 py-3 space-y-1.5" style={{ borderColor: 'rgb(var(--skip) / 0.35)', background: 'rgb(var(--skip) / 0.10)' }}>
           {cycleItems.length > 0 && (
             <>
-              <div className="text-fs-body font-medium" style={{ color: '#f85149' }}>依赖环（DAG 仲裁已降级，请修正后重载）</div>
+              <div className="text-fs-body font-medium" style={{ color: 'rgb(var(--fail))' }}>依赖环（DAG 仲裁已降级，请修正后重载）</div>
               {cycleItems.map((c, idx) => (
                 <div key={idx} className="flex items-start gap-2 text-fs-body font-mono">
-                  <span style={{ color: '#f85149' }}>⛔</span>
+                  <span className="w-2 h-2 rounded-full bg-fail mt-1.5 flex-shrink-0" />
                   <span>{c.join(' → ')}</span>
                 </div>
               ))}
@@ -601,12 +601,10 @@ export default function DagEditor() {
           )}
           {driftCount > 0 && (
             <>
-              <div className="text-fs-body font-medium" style={{ color: '#d29922' }}>版本漂移报告（归档前必须清零）</div>
+              <div className="text-fs-body font-medium" style={{ color: 'rgb(var(--skip))' }}>版本漂移报告（归档前必须清零）</div>
               {driftItems.filter((i) => i.status === 'major_drift' || i.status === 'orphan').map((i, idx) => (
                 <div key={idx} className="flex items-start gap-2 text-fs-body">
-                  <span style={{ color: i.status === 'orphan' ? '#f85149' : '#d29922' }}>
-                    {i.status === 'orphan' ? '✗' : '⚠'}
-                  </span>
+                  <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${i.status === 'orphan' ? 'bg-fail' : 'bg-skip'}`} />
                   <span className="font-mono">{i.consumer} → {i.id}</span>
                   <span className="text-gray-500">
                     期望 {i.expected || '(未声明)'} / 实际 {i.actual || '缺失'}
