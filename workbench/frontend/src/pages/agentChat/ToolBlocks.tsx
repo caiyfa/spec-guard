@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ToolItem } from './types';
 import { isToolError, tryParseJson } from './utils';
 import { SqlResultTable, parseDbEvidenceResult } from '../../components/SqlResultTable';
+import { StatusBadge } from '../../components/ui/StatusBadge';
 
 /** 长文本截断 + 展开/收起 */
 function TruncText({ text, limit = 120, className = 'text-gray-400' }: { text: string; limit?: number; className?: string }) {
@@ -101,25 +102,22 @@ function ToolCallBlock({ tool }: { tool: ToolItem }) {
 
   return (
     <div className="border border-border rounded text-fs-body">
-      {/* 工具头部 - 始终可见（状态 + 名称 + 结果摘要同一行） */}
+      {/* 工具头部（T-1044 U3 P2：固定 grid 列 图标/名称/摘要/状态/折叠符——
+          状态退出 emoji 改 StatusBadge；🔧 保留为类型图标） */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-3 transition-colors text-left"
+        className="w-full grid grid-cols-[16px_minmax(0,auto)_1fr_auto_14px] items-center gap-2 px-2 py-1 hover:bg-surface-3 transition-colors text-left"
         title={hasResult ? (isError ? '执行失败，点击查看详情' : '执行成功，点击查看详情') : '执行中…'}
       >
-        <span className="text-gray-600 text-fs-aux">{expanded ? '▼' : '▶'}</span>
-        <span className="text-warn/80 font-mono">🔧</span>
-        <span className="text-gray-400 font-mono">{tool.name}</span>
-        {hasResult && (
-          <span className={isError ? 'text-fail' : 'text-pass/70'}>
-            {isError ? '❌' : '✅'}
-          </span>
-        )}
-        {!hasResult && <span className="text-warn/50 animate-pulse">⏳</span>}
-        {/* 结果摘要内联（代替原第二行预览） */}
-        {hasResult && resultPreview && (
-          <span className={`flex-1 truncate text-fs-aux ${isError ? 'text-fail/80' : 'text-gray-500'}`}>{resultPreview}</span>
-        )}
+        <span className="text-warn/80 font-mono text-center">🔧</span>
+        <span className="text-gray-400 font-mono truncate">{tool.name}</span>
+        {hasResult && resultPreview ? (
+          <span className={`truncate text-fs-aux ${isError ? 'text-fail/80' : 'text-gray-500'}`}>{resultPreview}</span>
+        ) : <span />}
+        {hasResult
+          ? <StatusBadge size="sm" status={isError ? 'fail' : 'pass'} label={isError ? 'FAIL' : 'OK'} />
+          : <StatusBadge size="sm" status="warn" label="执行中" />}
+        <span className="text-gray-600 text-fs-aux text-center">{expanded ? '▼' : '▶'}</span>
       </button>
       {/* 展开内容（K-024：键值化友好渲染，不再直接甩原始 JSON） */}
       {expanded && (
@@ -166,25 +164,25 @@ export function ToolGroupBlock({ tools, stepLabel }: { tools: ToolItem[]; stepLa
 
   return (
     <div className="mb-3">
-      {/* 工具组标题栏（可折叠整个组） */}
+      {/* 工具组标题栏（T-1044 U3 P2：grid 列对齐 + StatusBadge 组态） */}
       <button
         onClick={() => setGroupExpanded(!groupExpanded)}
-        className="w-full flex items-center gap-2 px-2 py-1 text-fs-body text-gray-500 hover:text-gray-300 transition-colors text-left"
+        className="w-full grid grid-cols-[minmax(0,auto)_1fr_auto_auto_14px] items-center gap-2 px-2 py-1 text-fs-body text-gray-500 hover:text-gray-300 transition-colors text-left"
       >
-        <span className="text-fs-aux">{groupExpanded ? '▼' : '▶'}</span>
-        <span className="text-gray-400 font-mono">{toolLabel}</span>
-        {stepLabel && stepLabel !== toolLabel && (
-          <span className="text-fs-aux text-gray-600">· {stepLabel}</span>
-        )}
-        <span className="text-fs-aux text-gray-600">
+        <span className="text-gray-400 font-mono truncate">
+          {toolLabel}
+          {stepLabel && stepLabel !== toolLabel && (
+            <span className="text-fs-aux text-gray-600"> · {stepLabel}</span>
+          )}
+        </span>
+        <span />
+        <span className="text-fs-aux text-gray-600 whitespace-nowrap">
           {allDone ? `${successCount}/${tools.length} 工具` : `${tools.length} 工具 执行中…`}
         </span>
-        {allDone && (
-          <span className={hasError ? 'text-fail text-fs-aux' : 'text-pass/70 text-fs-aux'}>
-            {hasError ? '⚠️' : '✅'}
-          </span>
-        )}
-        {!allDone && <span className="text-warn/50 text-fs-aux animate-pulse">⏳</span>}
+        {allDone
+          ? <StatusBadge size="sm" status={hasError ? 'fail' : 'pass'} label={hasError ? '有失败' : 'OK'} />
+          : <StatusBadge size="sm" status="warn" label="执行中" />}
+        <span className="text-fs-aux text-center">{groupExpanded ? '▼' : '▶'}</span>
       </button>
       {/* 展开时显示各工具调用（思考文本已在组外独立展示，K-024） */}
       {groupExpanded && (
