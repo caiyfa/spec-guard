@@ -175,7 +175,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
         <div className="border-t border-border/60 px-2.5 py-2 space-y-2.5">
           {/* 失败/跳过分析（FAIL 归类 + 原因；SKIP 原因） */}
           {detail?.failure?.message && (
-            <div className="rounded bg-fail/12 border border-red-800/40 px-2 py-1.5 text-fs-body">
+            <div className="rounded bg-fail/12 border border-fail/35 px-2 py-1.5 text-fs-body">
               <div className="text-fail">
                 <span className="font-mono text-fs-micro px-1 py-0.5 rounded bg-fail/12 mr-1">{detail.failure.category || 'fail'}</span>
                 {detail.failure.message}
@@ -187,7 +187,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
             </div>
           )}
           {!detail?.failure?.message && detail?.skip_reason && (
-            <div className="rounded bg-warn/12 border border-yellow-800/40 px-2 py-1.5 text-fs-body text-warn">
+            <div className="rounded bg-warn/12 border border-warn/35 px-2 py-1.5 text-fs-body text-warn">
               SKIP（{detail.skip_category || 'uncategorized'}）：{detail.skip_reason}
             </div>
           )}
@@ -358,12 +358,12 @@ export function TrialRunDetailModal({ trial, onClose }: { trial: TrialRunResult;
           </div>
         )}
         {!pass && trial.error && (
-          <div className="rounded bg-fail/12 border border-red-800/40 px-2.5 py-2 text-fs-body text-fail break-all">
+          <div className="rounded bg-fail/12 border border-fail/35 px-2.5 py-2 text-fs-body text-fail break-all">
             {trial.error}
           </div>
         )}
         {loadError && (
-          <div className="rounded bg-fail/12 border border-red-800/40 px-2.5 py-2 text-fs-body text-fail">
+          <div className="rounded bg-fail/12 border border-fail/35 px-2.5 py-2 text-fs-body text-fail">
             报告读取失败：{loadError}（任务号 {runId} 可发给 Agent 排查）
           </div>
         )}

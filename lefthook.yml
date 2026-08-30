@@ -1,6 +1,14 @@
 # lefthook.yml — git hooks 即代码；克隆后需 npx lefthook install 一次
 # 策略：lint 类工具处于报告模式（基线报告见 docs/质量基线/），清零前不进 pre-commit；
 # pre-push 挂不依赖存量基线的两道门禁，失败即拒绝推送。
+# T-1044 U4：UI 散点 ratchet 已清零（A 字号/B 原生色/D hex 硬零、C 手写弹层计数闸），
+# 按既有 ratchet 纪律以 glob+staged_files 挂 pre-commit——新代码必须干净，旧代码慢慢还。
+pre-commit:
+  parallel: false
+  commands:
+    ui-ratchet:
+      glob: "workbench/frontend/src/**/*.{ts,tsx}"
+      run: python workbench/frontend/scripts/ui_ratchet_check.py --staged {staged_files}
 pre-push:
   parallel: false
   commands:

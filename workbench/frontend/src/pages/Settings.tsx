@@ -200,7 +200,7 @@ function ModelsTab() {
                   {probing ? '探测中...' : '🔌 探测'}
                 </button>
                 <button onClick={handleSetDefault}
-                  className="text-fs-aux px-2 py-1 rounded bg-yellow-600/20 text-warn hover:bg-yellow-600/30">
+                  className="text-fs-aux px-2 py-1 rounded bg-warn/12 text-warn hover:bg-warn/20">
                   ★ 设为默认
                 </button>
                 <button onClick={handleDelete}

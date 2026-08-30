@@ -183,7 +183,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
     <div className="px-2 py-2 space-y-2">
       <div className="px-1 text-fs-body font-medium text-gray-300">📝 草稿产物（Agent 会话内评审）</div>
       {loadError && (
-        <div className="flex items-center gap-2 rounded border border-red-800/50 bg-fail/12 px-2 py-1.5 text-fs-body text-fail">
+        <div className="flex items-center gap-2 rounded border border-fail/35 bg-fail/12 px-2 py-1.5 text-fs-body text-fail">
           <span className="flex-1">草稿列表加载失败：{loadError}</span>
           <button onClick={refresh} className="px-1.5 py-0.5 rounded bg-fail/12 hover:bg-fail/12">重试</button>
         </div>

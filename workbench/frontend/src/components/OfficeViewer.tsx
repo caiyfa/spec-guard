@@ -43,7 +43,7 @@ function DocxHtml({ buf }: { buf: ArrayBuffer }) {
         // mammoth 浏览器构建（Vite 打包，避免 node 专属模块）
         const mammoth = await import('mammoth/mammoth.browser');
         const result = await mammoth.convertToHtml({ arrayBuffer: buf });
-        if (alive) setHtml(result.value || '<p style="color:#666">（无文本内容）</p>');
+        if (alive) setHtml(result.value || '<p style="color:rgb(var(--gray-500))">（无文本内容）</p>');
       } catch (e: any) {
         if (alive) setError(`docx 解析失败：${e?.message || e}`);
       }

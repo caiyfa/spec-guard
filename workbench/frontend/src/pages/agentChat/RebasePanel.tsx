@@ -68,7 +68,7 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
   const remaining = status.conflicts.length;
 
   return (
-    <div className="rounded-lg border border-red-800/50 bg-fail/12 p-2 space-y-2">
+    <div className="rounded-lg border border-fail/35 bg-fail/12 p-2 space-y-2">
       <div className="flex items-center gap-1.5">
         <span className="text-fs-body font-medium text-fail flex-1">⚠️ rebase 中断（onto {status.onto || '?'}）</span>
         <button onClick={handleAbort} disabled={!!busy}
