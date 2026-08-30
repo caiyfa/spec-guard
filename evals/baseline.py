@@ -28,9 +28,8 @@ from __future__ import annotations
 
 import glob
 import json
-import os
 import sqlite3
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # ── 与 harness.py 同源的工具结果错误前缀（单一事实，复制保持判定一致）──

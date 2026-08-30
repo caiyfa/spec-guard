@@ -14,18 +14,15 @@ import json
 import sqlite3
 from pathlib import Path
 
-import pytest
-
 from evals.baseline import (
+    _tool_result_ok,
+    _validate_verdict,
     build_baseline_report,
     render_markdown,
     scan_audit,
     scan_metrics_files,
     scan_session,
-    _tool_result_ok,
-    _validate_verdict,
 )
-
 
 # ── 工具函数：合成会话 JSONL ─────────────────────────────────────────────
 
