@@ -153,17 +153,17 @@ def load_flow(name: str = DEFAULT_FLOW_NAME) -> FlowDef:
 
 def flow_def_to_mermaid(defn: FlowDef) -> str:
     """渲染 golden flow 本体（无会话着色，重建后可视化用）。"""
-    lines = ["flowchart TD"]
+    lines = [_MERMAID_INIT, "flowchart TD"]
     n = len(defn.stages)
     for i, st in enumerate(defn.stages, start=1):
         mark = "必选" if st.required else "可选"
         cls = "req" if st.required else "opt"
-        lines.append(f'    S{i}["{i}. {st.label}（{mark}）"]:::{cls}')
+        lines.append(f'    S{i}("{i}. {st.label}<br/>{mark}"):::{cls}')
         if i < n:
             lines.append(f"    S{i} --> S{i + 1}")
     lines += [
-        "    classDef req fill:#d4edda,stroke:#28a745,color:#155724",
-        "    classDef opt fill:#e9ecef,stroke:#6c757d,color:#6c757d,stroke-dasharray: 5 5",
+        f"    classDef req {_CLS_HIT}",
+        f"    classDef opt {_CLS_SKIP}",
     ]
     return "\n".join(lines)
 
@@ -311,22 +311,50 @@ _STATUS_CN = {"in_order": "顺序正确", "out_of_order": "乱序", "missing": "
               "skipped": "跳过（可选）"}
 
 
+# mermaid 图共享样式（面板/报告两生成器同源）：
+# 淡透明填充 + 状态色描边 + 文字色继承主题——K-041 按 dark/default 双主题渲染时都融合，
+# 不写死 color/fill 实色（旧实色卡片在深色面板下是突兀浅块，验收反馈「样式粗糙」）
+_MERMAID_INIT = (
+    '%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 14, "rankSpacing": 26, '
+    '"padding": 6}, "themeVariables": {"fontSize": "13px", '
+    "\"fontFamily\": \"-apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif\"}}}%%"
+)
+# mermaid classDef 按逗号切分属性，rgba() 函数形式的逗号会触发 Parse error——
+# 透明度用 8 位 hex 尾两位表达（#RRGGBBAA）
+_CLS_HIT = "fill:#34c77b29,stroke:#34c77b,stroke-width:1.6px"
+_CLS_WARN = "fill:#f0b42926,stroke:#f0b429,stroke-width:2px"
+_CLS_MISSING = "fill:#eb57572b,stroke:#eb5757,stroke-width:2px"
+_CLS_SKIP = "fill:#94a3b81a,stroke:#94a3b8,stroke-width:1.2px,stroke-dasharray:4 4"
+
+
 def render_flow_mermaid(trace: FlowTrace) -> str:
-    """把重放结果着色回 golden flow 阶段图（🟩对 🟨乱序 🟥缺失 ⬜跳过）。"""
+    """把重放结果着色回 golden flow 阶段图（🟩对 🟨乱序 🟥缺失 ⬜跳过）。
+
+    节点两行徽章：行 1 编号+阶段名，行 2 证据（次数·步号+状态符）；
+    圆角矩形 + 淡填描边，四态由 classDef 表达（色即语义，与列表同色）。
+    """
     cls = {"in_order": "hit", "out_of_order": "warn", "missing": "missing", "skipped": "skip"}
-    lines = ["flowchart TD"]
-    for i, st in enumerate(trace.stages, start=1):
+
+    def _evidence(st: StageState) -> str:
+        if st.status == "missing":
+            return "✗ 未调用"
+        if st.status == "skipped":
+            return "－ 可跳过"
         cnt = f" ×{st.times}" if st.times > 1 else ""
-        step = f"（第{st.first_step}步）" if st.first_step else ""
-        label = f"{st.label}{cnt}{step} {_STATUS_GLYPH[st.status]}"
-        lines.append(f'    S{i}["{i}. {label}"]:::{cls[st.status]}')
+        step = f"第{st.first_step}步" if st.first_step else ""
+        sep = " · " if cnt and step else ""
+        return f"{cnt}{sep}{step} {_STATUS_GLYPH[st.status]}".strip()
+
+    lines = [_MERMAID_INIT, "flowchart TD"]
+    for i, st in enumerate(trace.stages, start=1):
+        lines.append(f'    S{i}("{i}. {st.label}<br/>{_evidence(st)}"):::{cls[st.status]}')
     for i in range(len(trace.stages) - 1):
         lines.append(f"    S{i + 1} --> S{i + 2}")
     lines += [
-        "    classDef hit fill:#d4edda,stroke:#28a745,color:#155724",
-        "    classDef warn fill:#fff3cd,stroke:#856404,color:#856404",
-        "    classDef missing fill:#f8d7da,stroke:#dc3545,color:#721c24",
-        "    classDef skip fill:#e9ecef,stroke:#6c757d,color:#6c757d,stroke-dasharray: 5 5",
+        f"    classDef hit {_CLS_HIT}",
+        f"    classDef warn {_CLS_WARN}",
+        f"    classDef missing {_CLS_MISSING}",
+        f"    classDef skip {_CLS_SKIP}",
     ]
     return "\n".join(lines)
 
