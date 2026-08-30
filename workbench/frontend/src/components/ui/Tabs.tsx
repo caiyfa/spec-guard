@@ -12,16 +12,20 @@ export interface TabItem {
   icon?: ReactNode;
   count?: number;         // 0/undefined 不显示
   title?: string;
+  closable?: boolean;     // 文件页签类：显示 ✕（点击触发 onClose，不触发选中）
+  onClose?: () => void;
 }
 
-export function Tabs({ items, activeId, onChange, className = '' }: {
+export function Tabs({ items, activeId, onChange, bordered = true, className = '' }: {
   items: TabItem[];
   activeId: string;
   onChange: (id: string) => void;
+  /** 底部分割线（拼接多条页签带时关闭，由外层统一描线） */
+  bordered?: boolean;
   className?: string;
 }) {
   return (
-    <div role="tablist" className={`flex items-center border-b border-border ${className}`}>
+    <div role="tablist" className={`flex items-center ${bordered ? 'border-b border-border' : ''} ${className}`}>
       {items.map(t => {
         const on = t.id === activeId;
         return (
@@ -36,12 +40,20 @@ export function Tabs({ items, activeId, onChange, className = '' }: {
               ${on ? 'border-gray-100 text-gray-100 font-semibold' : 'border-transparent text-gray-500 hover:text-gray-200'}`}
           >
             {t.icon && <span className="inline-flex w-3 h-3 items-center justify-center">{t.icon}</span>}
-            {t.label}
+            <span className="max-w-[140px] truncate">{t.label}</span>
             {!!t.count && t.count > 0 && (
               <span className={`text-fs-micro rounded-full px-1.5 py-px leading-none
                 ${on ? 'bg-info/12 text-info' : 'bg-gray-600/15 text-gray-400'}`}>
                 {t.count > 99 ? '99+' : t.count}
               </span>
+            )}
+            {t.closable && (
+              <span
+                role="button"
+                aria-label={`关闭 ${t.title || t.label}`}
+                onClick={e => { e.stopPropagation(); t.onClose?.(); }}
+                className="text-gray-600 hover:text-fail ml-0.5 leading-none"
+              >✕</span>
             )}
           </button>
         );

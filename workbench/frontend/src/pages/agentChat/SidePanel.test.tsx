@@ -85,7 +85,9 @@ test('T-1026 Escape 关闭菜单；再次「更多」可重开', () => {
 test('T-1026 活动低频签暂显条内（含计数），内容区渲染对应面板', () => {
   render(<SidePanel {...baseProps} activeTab="reading"
     readingFeed={[readItem('a.md'), readItem('b.md'), readItem('c.md')]} />);
-  expect(screen.getByText('📖 阅读(3)')).toBeTruthy();   // 暂显签
+  // T-1044 U2：计数从 label 拆为 Tabs 原语底丸（label 与计数分列断言）
+  const readingTab = screen.getByRole('tab', { name: /📖 阅读/ });
+  expect(readingTab.textContent).toContain('3');
   expect(screen.getByTitle('更多面板（低频页签聚合）').className).toContain('text-info');
   expect(screen.getByText('查阅 a.md')).toBeTruthy();   // ReadingPanel 就地渲染足迹卡片
 });

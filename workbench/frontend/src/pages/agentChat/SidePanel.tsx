@@ -18,6 +18,9 @@ import { InfoPackPanel } from './InfoPackPanel';
 import { WritingPanel } from './WritingPanel';
 import { FlowPanel } from './FlowPanel';
 import { DraftArtifactsPanel } from './DraftArtifactsPanel';
+import { Tabs, type TabItem } from '../../components/ui/Tabs';
+import { IconButton } from '../../components/ui/IconButton';
+import { Icon } from '../../components/ui/icons';
 import { DepGraphPanel } from './DepGraphPanel';
 import { MaterialsRefPanel } from './MaterialsRefPanel';
 import { HistoryPanel } from './HistoryPanel';
@@ -105,14 +108,13 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
   const overflowTabs = visibleTabs.filter(t => t.lowFreq);
   const activeOverflow = overflowTabs.find(t => t.id === activeTab);
   const [moreOpen, setMoreOpen] = useState(false);
-  const labelOf = (id: string) => {
-    if (id === 'reading' && readingFeed.length > 0) return `📖 阅读(${readingFeed.length})`;
-    if (id === 'drafts' && draftFiles.length > 0) return `📝 草稿产物(${draftFiles.length})`;
-    if (id === 'writing' && writingFeed.length > 0) return `✏️ 更新足迹(${writingFeed.length})`;
-    if (id === 'pack' && scenarioMeta) return `📦 信息包(${scenarioMeta.info_pack.length})`;
-    return SIDE_TABS.find(t => t.id === id)?.label || id;
-  };
-  // T-1026：「更多」卡片用——label 拆 emoji/名称 + 足迹计数徽标（与 labelOf 同源口径）
+  // T-1044 U2：计数从 label 拆出（Tabs 原语底丸口径——选中 info 淡填/未选灰底）
+  const tabCountOf = (id: string) =>
+    id === 'reading' ? readingFeed.length
+      : id === 'drafts' ? draftFiles.length
+        : id === 'writing' ? writingFeed.length
+          : id === 'pack' && scenarioMeta ? scenarioMeta.info_pack.length : 0;
+  // T-1026：「更多」卡片用——label 拆 emoji/名称 + 足迹计数徽标
   const emojiNameOf = (label: string) => {
     const i = label.indexOf(' ');
     return i > 0 ? { emoji: label.slice(0, i), name: label.slice(i + 1) } : { emoji: '▢', name: label };
@@ -128,37 +130,30 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
     if (hidden) onSelectTab('todos');
   }, [activeTab, purposePanelSet, onSelectTab]);
 
-  const tabBtn = (id: string, label: string, closable = false, path = '') => (
-    <button
-      key={id}
-      onClick={() => onSelectTab(id)}
-      className={`flex items-center gap-1 px-2.5 py-1.5 text-fs-body border-b-2 whitespace-nowrap transition-colors ${
-        activeTab === id
-          ? 'border-info text-gray-200 bg-surface-3/50'
-          : 'border-transparent text-gray-500 hover:text-gray-300'
-      }`}
-      title={path || label}
-    >
-      <span className="max-w-[120px] truncate">{label}</span>
-      {closable && (
-        <span
-          onClick={(e) => { e.stopPropagation(); onCloseTab(path); }}
-          className="text-gray-600 hover:text-fail ml-0.5"
-        >✕</span>
-      )}
-    </button>
-  );
+  // T-1044 U2：页签迁移 Tabs 原语——高频签 + 活动低频暂显签 + 文件签（closable）独立槽位右对齐
+  const mainTabItems: TabItem[] = [
+    ...primaryTabs.map(t => ({ id: t.id, label: t.label, count: tabCountOf(t.id) })),
+    ...(activeOverflow ? [{ id: activeOverflow.id, label: activeOverflow.label, count: tabCountOf(activeOverflow.id) }] : []),
+  ];
+  const fileTabItems: TabItem[] = fileTabs.map(t => ({
+    id: `file:${t.path}`, label: `📄 ${t.path.split('/').pop()}`, title: t.path,
+    closable: true, onClose: () => onCloseTab(t.path),
+  }));
 
   return (
     <div
       className="flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col min-h-0"
       style={{ width }}
-    >      {/* 页签条（K-032：参考编辑器页签样式；T-932 注册表装配；T-1026 低频签聚合「更多」） */}
+    >      {/* 页签条（K-032：参考编辑器页签样式；T-932 注册表装配；T-1026 低频签聚合「更多」；
+              T-1044 U2：迁移 Tabs 原语，文件签独立槽位右对齐） */}
       <div className="relative flex-shrink-0">
-        <div className="flex items-center border-b border-border overflow-x-auto flex-shrink-0">
-          {primaryTabs.map(t => tabBtn(t.id, labelOf(t.id)))}
-          {activeOverflow && tabBtn(activeOverflow.id, labelOf(activeOverflow.id))}
-          {fileTabs.map(t => tabBtn(`file:${t.path}`, `📄 ${t.path.split('/').pop()}`, true, t.path))}
+        <div className="flex items-center border-b border-border flex-shrink-0">
+          <Tabs items={mainTabItems} activeId={activeTab} onChange={onSelectTab}
+            bordered={false} className="flex-1 min-w-0 overflow-x-auto" />
+          {fileTabItems.length > 0 && (
+            <Tabs items={fileTabItems} activeId={activeTab} onChange={onSelectTab}
+              bordered={false} className="flex-shrink-0 max-w-[45%] overflow-x-auto border-l border-border/60 pl-1" />
+          )}
           <div className="ml-auto flex items-center flex-shrink-0">
             {overflowTabs.length > 0 && (
               <button onClick={() => setMoreOpen(v => !v)} title="更多面板（低频页签聚合）"
@@ -169,16 +164,14 @@ export function SidePanel({ ctxUsage, planItems, structuredTodos, loading, messa
               </button>
             )}
             {onToggleMaximize && (
-              <button onClick={onToggleMaximize} title={maximized ? '还原面板' : '最大化面板（占满会话区）'}
-                className="px-2 py-1.5 text-fs-body text-gray-600 hover:text-info flex-shrink-0">
-                {maximized ? '⤡' : '⤢'}
-              </button>
+              <IconButton label={maximized ? '还原面板' : '最大化面板（占满会话区）'} onClick={onToggleMaximize}>
+                <Icon name={maximized ? 'minimize' : 'maximize'} size={12} />
+              </IconButton>
             )}
             {onCollapse && (
-              <button onClick={onCollapse} title="收起面板"
-                className="px-2 py-1.5 text-fs-body text-gray-600 hover:text-info flex-shrink-0">
-                »
-              </button>
+              <IconButton label="收起面板" onClick={onCollapse}>
+                <Icon name="collapseRight" size={12} />
+              </IconButton>
             )}
           </div>
         </div>

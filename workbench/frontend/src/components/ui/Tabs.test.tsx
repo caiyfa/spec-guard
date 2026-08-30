@@ -31,4 +31,13 @@ describe('Tabs（T-1044 U1：唯一下划线页签·B 形态）', () => {
     fireEvent.click(screen.getByRole('tab', { name: /覆盖率/ }));
     expect(fn).toHaveBeenCalledWith('cov');
   });
+
+  test('closable 文件签：✕ 触发 onClose 且不冒泡选中', () => {
+    const change = vi.fn(), close = vi.fn();
+    render(<Tabs items={[{ id: 'file:a.yaml', label: '📄 a.yaml', closable: true, onClose: close }]}
+      activeId="file:a.yaml" onChange={change} />);
+    fireEvent.click(screen.getByLabelText(/关闭/));
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(change).not.toHaveBeenCalled();
+  });
 });
