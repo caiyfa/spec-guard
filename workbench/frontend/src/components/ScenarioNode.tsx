@@ -61,7 +61,7 @@ export default function ScenarioNode({ data, selected }: NodeProps<ScenarioNodeT
         )}
         {data.version && (
           <span
-            className="ml-auto text-[9px] px-1 py-px rounded font-mono"
+            className="ml-auto text-fs-micro px-1 py-px rounded font-mono"
             style={{ color: tokens.nodeSubText, background: tokens.nodeSubBg, border: `1px solid ${tokens.edgeStroke}` }}
             title={`契约版本 v${data.version}`}
           >

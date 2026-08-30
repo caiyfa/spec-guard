@@ -172,7 +172,7 @@ export default function GateCardView({ card: c, onAskAgent, onDone, onError }: G
       <div className="flex items-center gap-1.5 mb-1">
         <span>{KIND_ICON[c.kind] || '🔧'}</span>
         <span className="text-xs font-medium text-gray-200 flex-1 truncate">{c.title}</span>
-        <span className={`text-[9px] px-1 py-0.5 rounded border ${
+        <span className={`text-fs-micro px-1 py-0.5 rounded border ${
           c.level === 'L3'
             ? 'text-green-400 border-green-500/40'
             : 'text-yellow-400 border-yellow-500/40'}`}
@@ -272,7 +272,7 @@ export function GateExecCard({ text, onDone }: { text: string; onDone?: () => vo
       <div className="flex items-center gap-1.5 mb-1">
         <span>🤖</span>
         <span className="text-xs font-medium text-gray-200 flex-1">Agent 代执行提议（可逆操作）</span>
-        <span className="text-[9px] px-1 py-0.5 rounded border text-green-400 border-green-500/40">L3 白名单</span>
+        <span className="text-fs-micro px-1 py-0.5 rounded border text-green-400 border-green-500/40">L3 白名单</span>
       </div>
       <div className="text-[11px] text-gray-400 mb-2">{spec.describe(params)}</div>
       {state === 'pending' && (

@@ -130,7 +130,7 @@ export function HistoryPanel({ onError }: { onError: (msg: string) => void }) {
                 onClick={() => setExpanded(prev => ({ ...prev, [c.sha]: !prev[c.sha] }))}>
                 <span className="text-[10px] font-mono text-info">{c.short_sha}</span>
                 <span className="text-[11px] text-gray-200 truncate flex-1" title={c.message}>{c.message}</span>
-                <span className="text-[9px] text-gray-600 flex-shrink-0">{expanded[c.sha] ? '▲' : '▼'}</span>
+                <span className="text-fs-micro text-gray-600 flex-shrink-0">{expanded[c.sha] ? '▲' : '▼'}</span>
               </div>
               <div className="text-[10px] text-gray-600 mt-0.5">
                 {c.author} · {c.date.slice(0, 16).replace('T', ' ')}

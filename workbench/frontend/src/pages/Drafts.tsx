@@ -281,13 +281,13 @@ export default function Drafts() {
                 <div className="text-sm text-gray-200 font-mono">
                   {d.scenario_id || d.filename}
                   {d.stale && (
-                    <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-normal"
+                    <span className="ml-1.5 text-fs-micro px-1 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-normal"
                       title={`来源信息包（${d.source_meta}）存在已变更/已删除文件，草稿内容可能过时`}>
                       ⚠️ 信息包已变更
                     </span>
                   )}
                   {sugCount > 0 && (
-                    <span className="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-info/20 text-info font-normal"
+                    <span className="ml-1.5 text-fs-micro px-1 py-0.5 rounded bg-info/20 text-info font-normal"
                       title="确定性引擎检测到可连线的依赖建议">
                       💡 {sugCount} 条建议
                     </span>
@@ -300,17 +300,17 @@ export default function Drafts() {
                 {/* T-061：三闸状态徽章 */}
                 {d.gates && (
                   <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    <span className={`text-[9px] px-1 py-0.5 rounded ${d.gates.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : d.gates.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g1 === 'approved' ? 'bg-green-900/40 text-green-400' : d.gates.g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
                       ① {d.gates.g1 === 'approved' ? '已评审' : d.gates.g1 === 'rejected' ? '已驳回' : '待评审'}
                     </span>
-                    <span className={`text-[9px] px-1 py-0.5 rounded ${d.gates.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g2 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g2 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
                       ② {d.gates.g2 === 'pass' ? '校验✓' : d.gates.g2 === 'fail' ? '校验✗' : '待校验'}
                     </span>
-                    <span className={`text-[9px] px-1 py-0.5 rounded ${d.gates.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g3 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
+                    <span className={`text-fs-micro px-1 py-0.5 rounded ${d.gates.g3 === 'pass' ? 'bg-green-900/40 text-green-400' : d.gates.g3 === 'fail' ? 'bg-red-900/40 text-red-400' : 'bg-surface-3 text-gray-500'}`}>
                       ③ {d.gates.g3 === 'pass' ? '门禁✓' : d.gates.g3 === 'fail' ? '门禁✗' : '门禁⏸'}
                     </span>
                     {d.source_delta && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-info/15 text-info/90" title="血缘挂链：来源 delta">
+                      <span className="text-fs-micro px-1 py-0.5 rounded bg-info/15 text-info/90" title="血缘挂链：来源 delta">
                         ← {d.source_delta}
                       </span>
                     )}

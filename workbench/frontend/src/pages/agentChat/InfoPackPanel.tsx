@@ -56,10 +56,10 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
           <span>
             📦 基础信息包（{meta.info_pack.length}）
             {freshness && freshness.stale_count > 0 && (
-              <span className="text-yellow-400 text-[9px] ml-1">⚠️ {freshness.stale_count} 项已变更</span>
+              <span className="text-yellow-400 text-fs-micro ml-1">⚠️ {freshness.stale_count} 项已变更</span>
             )}
           </span>
-          <span className="text-[9px] text-gray-600">{open ? '▲' : '▼'}</span>
+          <span className="text-fs-micro text-gray-600">{open ? '▲' : '▼'}</span>
         </button>
         {/* K-033：直接上传材料到信息包（不再只能 git 拉取） */}
         <button
@@ -102,7 +102,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
           {/* K-013: git 变更发现——信息包外的相关变更/新增文件，一键补入 */}
           {outside.length > 0 && (
             <div className="mt-2 pt-2 border-t border-border/50">
-              <div className="text-[9px] text-yellow-400/80 mb-1">
+              <div className="text-fs-micro text-yellow-400/80 mb-1">
                 ⚠️ {outside.length} 个相关文件已变更/新增（{freshness?.base_commit}→{freshness?.head_commit}），未在信息包中：
               </div>
               <div className="max-h-24 overflow-y-auto space-y-0.5">
@@ -111,7 +111,7 @@ export function InfoPackPanel({ meta, onUpdate, onError, onViewFile, defaultOpen
                     <span onClick={() => onViewFile(p)}
                       className="text-[10px] font-mono text-gray-500 flex-1 truncate cursor-pointer hover:text-info">{p}</span>
                     <button onClick={() => handleAddOutside(p)}
-                      className="text-[9px] text-info hover:underline flex-shrink-0">+ 补入</button>
+                      className="text-fs-micro text-info hover:underline flex-shrink-0">+ 补入</button>
                   </div>
                 ))}
               </div>

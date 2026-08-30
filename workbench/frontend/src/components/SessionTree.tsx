@@ -55,7 +55,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-sm">
           ＋
         </button>
-        <span className="text-[9px] text-gray-600 mt-1" style={{ writingMode: 'vertical-rl' }}>会话列表</span>
+        <span className="text-fs-micro text-gray-600 mt-1" style={{ writingMode: 'vertical-rl' }}>会话列表</span>
       </div>
     );
   }
@@ -151,16 +151,16 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           <div className="truncate flex items-center gap-1">
             <span className="truncate">{s.title || s.id}</span>
             {s.smoke && (
-              <span className="text-gray-500 text-[8px] flex-shrink-0" title="smoke 隔离区冒烟会话（验收/调试产物）">🧪</span>
+              <span className="text-gray-500 text-fs-micro flex-shrink-0" title="smoke 隔离区冒烟会话（验收/调试产物）">🧪</span>
             )}
             {s.workspace && s.workspace !== currentWorkspace && (
-              <span className="text-gray-600 text-[8px] flex-shrink-0">[{s.workspace}]</span>
+              <span className="text-gray-600 text-fs-micro flex-shrink-0">[{s.workspace}]</span>
             )}
             {batchMode && !own && (
-              <span className="text-gray-600 text-[8px] flex-shrink-0" title="他人会话，仅创建者可管理">🔒</span>
+              <span className="text-gray-600 text-fs-micro flex-shrink-0" title="他人会话，仅创建者可管理">🔒</span>
             )}
           </div>
-          <div className="text-gray-600 text-[9px] font-mono">{_formatTime(s.modified)}</div>
+          <div className="text-gray-600 text-fs-micro font-mono">{_formatTime(s.modified)}</div>
         </button>
       </div>
     );
@@ -230,7 +230,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
             <button
               onClick={() => setShowArchived(v => !v)}
               className="w-full flex items-center gap-1 px-2 py-1.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-surface-3 transition-colors">
-              <span className="text-gray-600 text-[9px]">{showArchived ? '▼' : '▶'}</span>
+              <span className="text-gray-600 text-fs-micro">{showArchived ? '▼' : '▶'}</span>
               <span>🗄 已归档</span>
               <span className="text-gray-600 ml-auto">{allArchived.length}</span>
             </button>

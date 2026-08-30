@@ -68,7 +68,7 @@ export default function ReadingPanel({ items, onOpen, onRefresh }: {
               {item.label}
             </span>
             {item.reads > 1 && (
-              <span className="text-[9px] text-info bg-info/10 rounded px-1 flex-shrink-0">×{item.reads}</span>
+              <span className="text-fs-micro text-info bg-info/10 rounded px-1 flex-shrink-0">×{item.reads}</span>
             )}
           </div>
           {/* 文件路径 */}

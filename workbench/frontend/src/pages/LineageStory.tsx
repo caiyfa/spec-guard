@@ -162,7 +162,7 @@ export default function LineageStory() {
                             <a href={n.url} target="_blank" rel="noreferrer" className="ml-1 text-info">↗</a>
                           )}
                           {!n.external && n.status && (
-                            <span className="ml-1 text-[9px] text-gray-500">[{n.status}]</span>
+                            <span className="ml-1 text-fs-micro text-gray-500">[{n.status}]</span>
                           )}
                         </span>
                       </div>

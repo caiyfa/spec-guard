@@ -182,7 +182,7 @@ function ModelsTab() {
               {m.is_default && <span className="text-yellow-500 text-[10px]">★</span>}
               <span className="text-xs font-medium truncate">{m.name || '(未命名)'}</span>
             </div>
-            <div className="text-[9px] text-gray-600 font-mono truncate">{m.model || '(未配置)'}</div>
+            <div className="text-fs-micro text-gray-600 font-mono truncate">{m.model || '(未配置)'}</div>
           </button>
         ))}
         {models.length === 0 && <p className="text-[10px] text-gray-600 text-center py-4">暂无模型配置</p>}

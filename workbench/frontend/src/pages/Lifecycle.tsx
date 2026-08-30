@@ -188,7 +188,7 @@ function LifecycleBoard() {
                     <span className="text-sm font-mono text-gray-200">{it.id}</span>
                     <StatusBadge item={it} />
                     {it.closed_loops > 0 && (
-                      <span className="text-[9px] text-pass" title={`${it.closed_loops} 次失败修复闭环`}>🔄×{it.closed_loops}</span>
+                      <span className="text-fs-micro text-pass" title={`${it.closed_loops} 次失败修复闭环`}>🔄×{it.closed_loops}</span>
                     )}
                     <VerdictDots verdicts={it.recent_verdicts} />
                     <span className="ml-auto text-[10px] text-gray-600 whitespace-nowrap">
@@ -278,7 +278,7 @@ function LifecycleBoard() {
                         )}
                       </div>
                       {e.detail && <div className="text-[10px] text-gray-600 truncate" title={e.detail}>{e.detail}</div>}
-                      <div className="text-[9px] text-gray-700">{fmtAt(e.at || '')}</div>
+                      <div className="text-fs-micro text-gray-700">{fmtAt(e.at || '')}</div>
                     </div>
                   </div>
                 ))}

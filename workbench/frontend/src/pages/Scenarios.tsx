@@ -192,7 +192,7 @@ export default function Scenarios() {
                     />
                     <span className="truncate flex-1 font-mono text-[10px]">{r.path}</span>
                     {r.match_type === 'content' && r.line && (
-                      <span className="text-[9px] text-gray-600">L{r.line}</span>
+                      <span className="text-fs-micro text-gray-600">L{r.line}</span>
                     )}
                   </div>
                   {r.preview && (

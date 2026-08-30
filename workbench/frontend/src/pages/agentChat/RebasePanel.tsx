@@ -85,20 +85,20 @@ export function RebasePanel({ onChanged }: { onChanged: () => void }) {
               <div className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer hover:bg-surface-3/50"
                 onClick={() => openDetail(c.path)}>
                 <span className="text-[10px] font-mono text-gray-300 truncate flex-1">{c.path}</span>
-                <span className="text-[9px] text-warn flex-shrink-0">{c.segments} 段冲突</span>
-                <span className="text-[9px] text-gray-600">{detail?.path === c.path ? '▲' : '▼'}</span>
+                <span className="text-fs-micro text-warn flex-shrink-0">{c.segments} 段冲突</span>
+                <span className="text-fs-micro text-gray-600">{detail?.path === c.path ? '▲' : '▼'}</span>
               </div>
               {detail?.path === c.path && (
                 <div className="px-2 pb-2 space-y-2 border-t border-border">
                   {detail.segments.map((seg, i) => (
                     <div key={i} className="mt-2">
-                      <div className="text-[9px] text-gray-500 mb-0.5">冲突段 {i + 1}</div>
+                      <div className="text-fs-micro text-gray-500 mb-0.5">冲突段 {i + 1}</div>
                       <div className="rounded bg-blue-900/20 px-1.5 py-1 mb-1">
-                        <div className="text-[9px] text-blue-400 mb-0.5">远端版本（rebase 目标）</div>
+                        <div className="text-fs-micro text-blue-400 mb-0.5">远端版本（rebase 目标）</div>
                         <pre className="text-[10px] font-mono text-blue-200/80 whitespace-pre-wrap break-all max-h-32 overflow-auto">{seg.ours.trim()}</pre>
                       </div>
                       <div className="rounded bg-green-900/20 px-1.5 py-1">
-                        <div className="text-[9px] text-green-400 mb-0.5">本地提交版本</div>
+                        <div className="text-fs-micro text-green-400 mb-0.5">本地提交版本</div>
                         <pre className="text-[10px] font-mono text-green-200/80 whitespace-pre-wrap break-all max-h-32 overflow-auto">{seg.theirs.trim()}</pre>
                       </div>
                     </div>

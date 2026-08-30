@@ -1376,7 +1376,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
             {item.references && item.references.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1">
                 {item.references.map((r, i) => (
-                  <span key={i} className="text-[9px] px-1 py-0.5 rounded bg-info/15 border border-info/30 font-mono text-info/80">
+                  <span key={i} className="text-fs-micro px-1 py-0.5 rounded bg-info/15 border border-info/30 font-mono text-info/80">
                     {r.type === 'info_pack' ? '📦' : r.type === 'draft' ? '📝' : '📄'} {r.label || r.path}
                   </span>
                 ))}
@@ -1627,7 +1627,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
           <div className="w-9 flex-shrink-0 border-r border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
             <button onClick={() => setDbExplore(false)} title="返回主会话（主对话区已最小化，WS/滚动状态保留）"
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs">💬</button>
-            <span className="text-[9px] text-gray-600" style={{ writingMode: 'vertical-rl' }}>主会话</span>
+            <span className="text-fs-micro text-gray-600" style={{ writingMode: 'vertical-rl' }}>主会话</span>
           </div>
         )}
 
@@ -1646,21 +1646,21 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
               📖
               {readingFeed.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{readingFeed.length}</span>
+                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{readingFeed.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('drafts')} title={`草稿产物（${sessionDrafts.length}）`}
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
               📝
               {sessionDrafts.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{sessionDrafts.length}</span>
+                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{sessionDrafts.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('writing')} title={`更新足迹（${writingFeed.length}）`}
               className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
               ✏️
               {writingFeed.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{writingFeed.length}</span>
+                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{writingFeed.length}</span>
               )}
             </button>
             <button onClick={() => expandSideTo('history')} title="提交历史 / 推送远端"
@@ -1678,7 +1678,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
                 title={`文件页签（${fileTabs.length}）`}
                 className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-xs relative">
                 📄
-                <span className="absolute -top-0.5 -right-0.5 text-[8px] text-info">{fileTabs.length}</span>
+                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{fileTabs.length}</span>
               </button>
             )}
           </div>

@@ -112,22 +112,22 @@ function StepItem({ index, s }: { index: number; s: CaseStep }) {
         {!!s.duration_ms && <span className="text-gray-600 flex-shrink-0">{s.duration_ms}ms</span>}
       </div>
       {s.trace_id && (
-        <div className="pl-7 text-[9px] text-gray-600 font-mono truncate" title={s.trace_id}>trace: {s.trace_id}</div>
+        <div className="pl-7 text-fs-micro text-gray-600 font-mono truncate" title={s.trace_id}>trace: {s.trace_id}</div>
       )}
       {hasDetail && (
         <details className="pl-7">
-          <summary className="cursor-pointer text-[9px] text-gray-500 hover:text-gray-300 select-none">请求/响应详情</summary>
+          <summary className="cursor-pointer text-fs-micro text-gray-500 hover:text-gray-300 select-none">请求/响应详情</summary>
           <div className="mt-1 space-y-1">
             {Object.keys(req).length > 0 && (
               <div>
-                <div className="text-[9px] text-gray-500">请求</div>
+                <div className="text-fs-micro text-gray-500">请求</div>
                 <pre className="px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
                   style={{ background: 'rgb(var(--code-bg))' }}>{pretty(req)}</pre>
               </div>
             )}
             {(s.body_excerpt != null || s.response_body != null) && (
               <div>
-                <div className="text-[9px] text-gray-500">响应</div>
+                <div className="text-fs-micro text-gray-500">响应</div>
                 <pre className="px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
                   style={{ background: 'rgb(var(--code-bg))' }}>{pretty(s.body_excerpt ?? s.response_body)}</pre>
               </div>
@@ -159,15 +159,15 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {brief.title || detail?.title || ''}
         </span>
         {!!detail?.upstream_of && (
-          <span className="text-[9px] text-gray-600 flex-shrink-0" title={`作为 ${detail.upstream_of} 的上游执行（${detail.dep_mode || 'shared'}）`}>
+          <span className="text-fs-micro text-gray-600 flex-shrink-0" title={`作为 ${detail.upstream_of} 的上游执行（${detail.dep_mode || 'shared'}）`}>
             上游
           </span>
         )}
         {!!(detail?.instance_no && detail.instance_no > 1) && (
-          <span className="text-[9px] text-gray-600 flex-shrink-0">#{detail.instance_no}</span>
+          <span className="text-fs-micro text-gray-600 flex-shrink-0">#{detail.instance_no}</span>
         )}
         {!!(brief.duration_ms || detail?.duration_ms) && (
-          <span className="text-[9px] text-gray-600 flex-shrink-0">{((brief.duration_ms || detail?.duration_ms || 0) / 1000).toFixed(1)}s</span>
+          <span className="text-fs-micro text-gray-600 flex-shrink-0">{((brief.duration_ms || detail?.duration_ms || 0) / 1000).toFixed(1)}s</span>
         )}
         <span className="text-gray-500 text-[10px] flex-shrink-0">{open ? '▾' : '▸'}</span>
       </button>
@@ -177,7 +177,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {detail?.failure?.message && (
             <div className="rounded bg-red-900/20 border border-red-800/40 px-2 py-1.5 text-[11px]">
               <div className="text-red-400">
-                <span className="font-mono text-[9px] px-1 py-0.5 rounded bg-red-900/50 mr-1">{detail.failure.category || 'fail'}</span>
+                <span className="font-mono text-fs-micro px-1 py-0.5 rounded bg-red-900/50 mr-1">{detail.failure.category || 'fail'}</span>
                 {detail.failure.message}
               </div>
               {detail.failure.evidence != null && (
@@ -195,7 +195,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {/* 原始内容（doc 层给人看） */}
           {(detail?.doc?.given || detail?.doc?.when || detail?.doc?.then) && (
             <div className="text-[11px] space-y-0.5">
-              <div className="text-gray-500 text-[9px]">原始内容</div>
+              <div className="text-gray-500 text-fs-micro">原始内容</div>
               {detail.doc?.given && <div className="text-gray-400"><span className="text-gray-600">Given </span>{detail.doc.given}</div>}
               {detail.doc?.when && <div className="text-gray-400"><span className="text-gray-600">When </span>{detail.doc.when}</div>}
               {detail.doc?.then && <div className="text-gray-400"><span className="text-gray-600">Then </span>{detail.doc.then}</div>}
@@ -209,7 +209,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {/* 执行过程（步骤轨迹） */}
           {steps.length > 0 && (
             <div>
-              <div className="text-gray-500 text-[9px] mb-0.5">执行过程（{steps.length} 步）</div>
+              <div className="text-gray-500 text-fs-micro mb-0.5">执行过程（{steps.length} 步）</div>
               <div className="rounded border border-border/60 px-2 py-1">
                 {steps.map((s, i) => <StepItem key={i} index={i + 1} s={s} />)}
               </div>
@@ -221,7 +221,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {/* 权限预言 */}
           {oracles.length > 0 && (
             <div>
-              <div className="text-gray-500 text-[9px] mb-0.5">权限预言（{oracles.length}）</div>
+              <div className="text-gray-500 text-fs-micro mb-0.5">权限预言（{oracles.length}）</div>
               <div className="space-y-1">
                 {oracles.map((o, i) => (
                   <div key={i} className="rounded border border-border/60 px-2 py-1 text-[10px] font-mono">
@@ -237,7 +237,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {/* DB 校对 */}
           {dbTraces.length > 0 && (
             <div>
-              <div className="text-gray-500 text-[9px] mb-0.5">DB 校对（{dbTraces.length}）</div>
+              <div className="text-gray-500 text-fs-micro mb-0.5">DB 校对（{dbTraces.length}）</div>
               <div className="space-y-2">
                 {dbTraces.map((d, i) => (
                   <div key={i} className="rounded border border-border/60 px-2 py-1.5">
@@ -257,7 +257,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {/* 断言明细 */}
           {assertions.length > 0 && (
             <div>
-              <div className="text-gray-500 text-[9px] mb-0.5">断言（{assertions.length}）</div>
+              <div className="text-gray-500 text-fs-micro mb-0.5">断言（{assertions.length}）</div>
               <div className="space-y-0.5">
                 {assertions.map((a, i) => (
                   <div key={i} className="text-[11px] flex items-start gap-1.5">
@@ -281,7 +281,7 @@ function CaseCard({ brief, detail, loading, open, onToggle }: {
           {/* 变量快照（save 产出，排查插值用） */}
           {Object.keys(savedVars).length > 0 && (
             <details>
-              <summary className="cursor-pointer text-[9px] text-gray-500 hover:text-gray-300 select-none">💾 变量快照（{Object.keys(savedVars).length} 个）</summary>
+              <summary className="cursor-pointer text-fs-micro text-gray-500 hover:text-gray-300 select-none">💾 变量快照（{Object.keys(savedVars).length} 个）</summary>
               <pre className="mt-1 px-2 py-1 rounded text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-48 overflow-y-auto"
                 style={{ background: 'rgb(var(--code-bg))' }}>{pretty(savedVars)}</pre>
             </details>

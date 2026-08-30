@@ -85,17 +85,17 @@ export default function CoveragePanel() {
             onClick={() => showBacklink(it.fr)}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-mono text-gray-200">{it.fr}</span>
-              <span className={`text-[9px] px-1 py-0.5 rounded ${color}`}>{it.reason ? (REASON_LABEL[it.reason] || it.reason) : '已覆盖'}</span>
+              <span className={`text-fs-micro px-1 py-0.5 rounded ${color}`}>{it.reason ? (REASON_LABEL[it.reason] || it.reason) : '已覆盖'}</span>
             </div>
             <div className="text-[10px] text-gray-500 truncate mt-0.5">{it.name}</div>
             {it.draft_id && (
               <div className="flex items-center gap-1 mt-1 flex-wrap">
-                <span className="text-[9px] font-mono text-gray-400">d:{it.draft_id}</span>
+                <span className="text-fs-micro font-mono text-gray-400">d:{it.draft_id}</span>
                 {it.gates && (
                   <>
-                    <span className={`text-[9px] px-1 rounded ${GATE_BADGE[it.gates.g1]?.cls || ''}`}>{GATE_BADGE[it.gates.g1]?.label}</span>
-                    <span className={`text-[9px] px-1 rounded ${GATE_BADGE[it.gates.g2]?.cls || ''}`}>{GATE_BADGE[it.gates.g2]?.label}</span>
-                    <span className={`text-[9px] px-1 rounded ${GATE_BADGE[it.gates.g3]?.cls || ''}`}>{GATE_BADGE[it.gates.g3]?.label}</span>
+                    <span className={`text-fs-micro px-1 rounded ${GATE_BADGE[it.gates.g1]?.cls || ''}`}>{GATE_BADGE[it.gates.g1]?.label}</span>
+                    <span className={`text-fs-micro px-1 rounded ${GATE_BADGE[it.gates.g2]?.cls || ''}`}>{GATE_BADGE[it.gates.g2]?.label}</span>
+                    <span className={`text-fs-micro px-1 rounded ${GATE_BADGE[it.gates.g3]?.cls || ''}`}>{GATE_BADGE[it.gates.g3]?.label}</span>
                   </>
                 )}
               </div>

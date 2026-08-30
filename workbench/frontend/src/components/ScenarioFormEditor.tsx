@@ -240,9 +240,9 @@ export default function ScenarioFormEditor({
                     : 'text-gray-500 hover:text-gray-300'
                 }`}>
                 {t.icon} {t.label}
-                {t.key === 'flow' && flowSteps.length > 0 && <span className="ml-1 text-[9px] text-gray-600">({flowSteps.length})</span>}
-                {t.key === 'verify' && verifyItems.length > 0 && <span className="ml-1 text-[9px] text-gray-600">({verifyItems.length})</span>}
-                {t.key === 'teardown' && teardownSteps.length > 0 && <span className="ml-1 text-[9px] text-gray-600">({teardownSteps.length})</span>}
+                {t.key === 'flow' && flowSteps.length > 0 && <span className="ml-1 text-fs-micro text-gray-600">({flowSteps.length})</span>}
+                {t.key === 'verify' && verifyItems.length > 0 && <span className="ml-1 text-fs-micro text-gray-600">({verifyItems.length})</span>}
+                {t.key === 'teardown' && teardownSteps.length > 0 && <span className="ml-1 text-fs-micro text-gray-600">({teardownSteps.length})</span>}
               </button>
             ))}
           </div>

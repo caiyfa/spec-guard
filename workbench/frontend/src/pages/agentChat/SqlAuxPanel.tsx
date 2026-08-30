@@ -427,7 +427,7 @@ function ArtifactRow({ artifact, onPreview, actions, compact }: {
       <span className="min-w-0 flex-1 truncate font-mono text-gray-300" title={artifact.fileName}>
         {artifact.title !== artifact.fileName ? `${artifact.title}（${artifact.fileName}）` : artifact.fileName}
       </span>
-      {metaParts.length > 0 && <span className="text-[9px] text-gray-600 flex-shrink-0">{metaParts.join(' · ')}</span>}
+      {metaParts.length > 0 && <span className="text-fs-micro text-gray-600 flex-shrink-0">{metaParts.join(' · ')}</span>}
       <button onClick={() => onPreview?.(artifact.fileName!, 'draft')}
         disabled={!onPreview || !artifact.fileName}
         className="text-[10px] text-info/80 hover:text-info flex-shrink-0 disabled:opacity-40"

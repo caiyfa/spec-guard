@@ -4,9 +4,9 @@ import type { ChatReference } from './types';
 
 // ── 新鲜度徽标 ──
 export function FreshBadge({ status }: { status: string }) {
-  if (status === 'fresh') return <span className="text-pass text-[9px]" title="与引用时一致">✓</span>;
-  if (status === 'stale') return <span className="text-yellow-400 text-[9px]" title="内容已变更">⚠️</span>;
-  if (status === 'missing') return <span className="text-fail text-[9px]" title="文件已删除">✗</span>;
+  if (status === 'fresh') return <span className="text-pass text-fs-micro" title="与引用时一致">✓</span>;
+  if (status === 'stale') return <span className="text-yellow-400 text-fs-micro" title="内容已变更">⚠️</span>;
+  if (status === 'missing') return <span className="text-fail text-fs-micro" title="文件已删除">✗</span>;
   return null;
 }
 
@@ -45,7 +45,7 @@ export function RefPanel({ refs, onView }: {
       <button onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between text-xs font-medium text-gray-300 hover:text-gray-100">
         <span>🔗 引用（{refs.length}）</span>
-        <span className="text-[9px] text-gray-600">{open ? '▲' : '▼'}</span>
+        <span className="text-fs-micro text-gray-600">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="mt-1.5 max-h-40 overflow-y-auto space-y-0.5">

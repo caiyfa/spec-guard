@@ -213,10 +213,10 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-mono text-gray-200 truncate flex-1" title={file}>{file}</span>
               {meta?.stale && (
-                <span className="text-[9px] text-yellow-400 flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
+                <span className="text-fs-micro text-yellow-400 flex-shrink-0" title="来源信息包存在已变更文件，草稿可能过时">⚠️</span>
               )}
               {meta && suggCount[meta.scenario_id] > 0 && !st.promotedTo && (
-                <span className="text-[9px] text-info flex-shrink-0" title={`${suggCount[meta.scenario_id]} 条依赖建议——到草稿评审页可一键采纳`}>
+                <span className="text-fs-micro text-info flex-shrink-0" title={`${suggCount[meta.scenario_id]} 条依赖建议——到草稿评审页可一键采纳`}>
                   💡{suggCount[meta.scenario_id]}
                 </span>
               )}
@@ -237,7 +237,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
 
             {/* 三闸状态（T-061）：① 人工评审 / ② 格式校验（③ 发布门禁在入库时自动跑） */}
             {meta?.gates && !libHit && !gone && !loadError && (
-              <div className="flex items-center gap-1.5 mt-1 text-[9px]">
+              <div className="flex items-center gap-1.5 mt-1 text-fs-micro">
                 <span className={`px-1 py-0.5 rounded ${g1 === 'approved' ? 'bg-green-900/40 text-green-400' : g1 === 'rejected' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
                   ① {g1 === 'approved' ? '已评审' : g1 === 'rejected' ? '已驳回' : '待评审'}
                 </span>
@@ -290,7 +290,7 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                   </button>
                 )}
                 {st.trial.run_id && (
-                  <div className="mt-0.5 text-[9px] opacity-75 font-mono select-all">
+                  <div className="mt-0.5 text-fs-micro opacity-75 font-mono select-all">
                     任务号 {st.trial.run_id}（发给 Agent 可排查：日志/断言差异/DB 证据）
                   </div>
                 )}
@@ -306,12 +306,12 @@ export function DraftArtifactsPanel({ draftFiles, onViewFile, onError }: {
                   title="入库不是终点：到 DAG 编排里查看节点 / 连线 / 执行">
                   🕸 DAG 编排
                 </button>
-                <span className="ml-auto text-[9px] text-gray-600">
+                <span className="ml-auto text-fs-micro text-gray-600">
                   试跑/校验请到执行控制页选中该场景运行
                 </span>
               </div>
             ) : gone ? (
-              <div className="mt-2 text-[9px] text-gray-600">
+              <div className="mt-2 text-fs-micro text-gray-600">
                 如需重新生成，请让 Agent 用 next_scenario_id 取新 ID
               </div>
             ) : loadError ? (

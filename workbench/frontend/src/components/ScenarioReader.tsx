@@ -39,7 +39,7 @@ function Section({ icon, title, count, children }: {
   return (
     <div>
       <div className="text-[11px] font-medium text-gray-400 mb-1.5">
-        {icon} {title}{count != null && <span className="ml-1 text-[9px] text-gray-600">({count})</span>}
+        {icon} {title}{count != null && <span className="ml-1 text-fs-micro text-gray-600">({count})</span>}
       </div>
       {children}
     </div>
@@ -82,7 +82,7 @@ function AnchorChip({ aid, anchor, open, onToggle }: {
       <span className="font-mono">{aid}</span>
       <span className="ml-1 text-gray-400">{m.title.replace(/^[A-Z]+-[\w-]+[：:]\s*/, '').slice(0, 24)}</span>
       {anchor.matches.length > 1 && (
-        <span className="ml-1 text-[9px] text-yellow-500/80" title="该编号跨模块同号，展开后可切换候选">
+        <span className="ml-1 text-fs-micro text-yellow-500/80" title="该编号跨模块同号，展开后可切换候选">
           {anchor.matches.length}处
         </span>
       )}
@@ -107,7 +107,7 @@ function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
   return (
     <div className="mt-1 rounded border border-info/20 bg-surface-2/60 overflow-hidden">
       {anchor.matches.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1 px-2 py-1 border-b border-border/50 text-[9px]">
+        <div className="flex flex-wrap items-center gap-1 px-2 py-1 border-b border-border/50 text-fs-micro">
           <span className="text-gray-600 py-0.5">
             {relevant.length > 0 ? `相关候选 ${relevant.length} 处：` : `同号候选 ${anchor.matches.length} 处：`}
           </span>
@@ -126,7 +126,7 @@ function AnchorSourcePanel({ anchor, onOpenDoc, onOpenFile }: {
           )}
         </div>
       )}
-      <div className="flex items-center gap-2 px-2 py-1 text-[9px] text-gray-600 border-b border-border/30">
+      <div className="flex items-center gap-2 px-2 py-1 text-fs-micro text-gray-600 border-b border-border/30">
         <span className="flex-1 min-w-0 truncate">
           {m.module}/{m.feature} · {m.rel}:{m.start}-{m.end}
         </span>
@@ -203,7 +203,7 @@ function SpecDocModal({ aid, match, onClose }: { aid: string; match: AnchorMatch
   return (
     <Modal open onClose={onClose} width={860}
       title={`${aid} · ${match.module}/${match.feature} · ${match.rel}`}>
-      <div className="px-2 py-1 text-[9px] text-gray-600 border-b border-border/30 sticky top-0 bg-surface-2 z-10">
+      <div className="px-2 py-1 text-fs-micro text-gray-600 border-b border-border/30 sticky top-0 bg-surface-2 z-10">
         {match.title} · 行 {match.start}-{match.end}（高亮段）
       </div>
       <div ref={containerRef} style={{ height: '66vh' }} className="overflow-y-auto">
@@ -431,7 +431,7 @@ export default function ScenarioReader({ data, rawYaml, filePath, onOpenFile }: 
                         <span className="text-gray-500 flex-shrink-0">{d.typeLabel}</span>
                         <span className="text-gray-200 font-mono text-[11px] break-all">{d.title}</span>
                         {d.save && (
-                          <span className="ml-auto text-[9px] text-gray-600 flex-shrink-0"
+                          <span className="ml-auto text-fs-micro text-gray-600 flex-shrink-0"
                             title={`结果存为变量，后续步骤以 {{${d.save}.…}} 引用`}>→ {d.save}</span>
                         )}
                       </div>

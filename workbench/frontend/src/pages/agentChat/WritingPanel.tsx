@@ -4,10 +4,10 @@ import type { DocWriteItem } from './types';
 
 function verdictBadge(v: string | null) {
   switch (v) {
-    case 'PASS': return <span className="text-[9px] px-1 py-0.5 rounded bg-green-900/25 text-green-400 flex-shrink-0">✅ 校验通过</span>;
-    case 'REJECT': return <span className="text-[9px] px-1 py-0.5 rounded bg-red-900/25 text-red-400 flex-shrink-0">❌ 校验未过</span>;
-    case 'ERROR': return <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-900/25 text-yellow-400 flex-shrink-0">⚠️ 校验异常</span>;
-    case 'SKIP': return <span className="text-[9px] px-1 py-0.5 rounded bg-gray-700/40 text-gray-400 flex-shrink-0">⏭ 门禁跳过</span>;
+    case 'PASS': return <span className="text-fs-micro px-1 py-0.5 rounded bg-green-900/25 text-green-400 flex-shrink-0">✅ 校验通过</span>;
+    case 'REJECT': return <span className="text-fs-micro px-1 py-0.5 rounded bg-red-900/25 text-red-400 flex-shrink-0">❌ 校验未过</span>;
+    case 'ERROR': return <span className="text-fs-micro px-1 py-0.5 rounded bg-yellow-900/25 text-yellow-400 flex-shrink-0">⚠️ 校验异常</span>;
+    case 'SKIP': return <span className="text-fs-micro px-1 py-0.5 rounded bg-gray-700/40 text-gray-400 flex-shrink-0">⏭ 门禁跳过</span>;
     default: return null;
   }
 }
@@ -125,7 +125,7 @@ function WritingCard({ item, onOpen, onDiff, onAskAgent }: {
         <span className="text-[11px] font-mono text-gray-200 truncate flex-1 cursor-pointer hover:text-info"
           onClick={() => onOpen(item)} title={item.path || item.ref || ''}>{item.label}</span>
         {item.writes > 1 && (
-          <span className="text-[9px] text-gray-500 flex-shrink-0" title="同文件累计更新次数">×{item.writes}</span>
+          <span className="text-fs-micro text-gray-500 flex-shrink-0" title="同文件累计更新次数">×{item.writes}</span>
         )}
         {verdictBadge(item.verdict)}
       </div>
