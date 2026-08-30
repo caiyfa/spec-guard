@@ -10,11 +10,11 @@ import {
 import FeishuReviewPanel from '../components/FeishuReviewPanel';
 
 const STATUS_COLOR: Record<string, string> = {
-  uploaded: 'text-blue-400',
+  uploaded: 'text-info',
   parsing: 'text-warn',
   parsed: 'text-pass',
   indexed: 'text-pass',
-  packed: 'text-emerald-400',
+  packed: 'text-pass',
   failed: 'text-fail',
 };
 

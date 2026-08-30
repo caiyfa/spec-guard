@@ -148,7 +148,7 @@ export default function LarkBinding() {
               <p>③ 授权完成后页面自动刷新</p>
             </div>
             <button onClick={handleLogin}
-              className="px-4 py-2 text-fs-lead bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+              className="px-4 py-2 text-fs-lead bg-info text-white rounded hover:bg-info transition-colors">
               🔗 绑定飞书
             </button>
           </div>
@@ -175,7 +175,7 @@ export default function LarkBinding() {
               <p className="text-gray-500 mb-1">授权 URL:</p>
               <a href={loginResult.verification_url} target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-400 hover:underline">
+                className="text-info hover:underline">
                 {loginResult.verification_url}
               </a>
             </div>

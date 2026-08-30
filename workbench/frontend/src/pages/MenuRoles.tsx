@@ -91,7 +91,7 @@ function MenuTab({ menus, onChanged, flash, setError }: {
         <div key={g.menu_key} className="bg-surface-2 border border-border rounded-lg p-3">
           <div className="flex items-center gap-2 text-fs-lead text-gray-200 font-medium">
             <span>{g.icon}</span><span>{g.label}</span>
-            {g.is_system ? <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统</span> : null}
+            {g.is_system ? <span className="text-fs-aux bg-blocked/12 text-blocked rounded px-1">系统</span> : null}
             <button onClick={() => setAdding(g.menu_key)} className="ml-auto text-fs-body text-gray-500 hover:text-gray-300">＋ 新增菜单</button>
           </div>
           <div className="mt-1 space-y-1 pl-4 border-l border-border/50">
@@ -191,7 +191,7 @@ function RolesTab({ roles, onChanged, flash, setError }: {
           ) : (
             <>
               <span className="text-gray-200">{r.label}</span>
-              {r.is_builtin && <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">内置</span>}
+              {r.is_builtin && <span className="text-fs-aux bg-blocked/12 text-blocked rounded px-1">内置</span>}
               {!r.is_builtin && (
                 <>
                   <button onClick={() => { setEditing(r.role_key); setLabel(r.label); }} className="ml-auto text-gray-500 hover:text-gray-300">重命名</button>
@@ -287,7 +287,7 @@ function GrantsTab({ roles, menus, flash, setError }: {
                           disabled={(i.is_system && selRole === 'admin') || !!i.is_public}
                           onChange={() => toggle(i.menu_key, !!i.is_system, !!i.is_public)} />
                         {i.label}
-                        {i.is_system && <span className="text-fs-aux bg-purple-900/50 text-purple-300 rounded px-1">系统保底</span>}
+                        {i.is_system && <span className="text-fs-aux bg-blocked/12 text-blocked rounded px-1">系统保底</span>}
                         {i.is_public && <span className="text-fs-aux bg-pass/12 text-pass rounded px-1">公开 · 登录即用</span>}
                       </label>
                     ))}

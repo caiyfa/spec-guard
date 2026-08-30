@@ -9,9 +9,9 @@ export function ContextPanel({ ctxUsage, messages, ctxLimit, stats }: { ctxUsage
   const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n);
   const promptTotal = Object.values(breakdown).reduce((a, b) => a + b, 0) || 1;
   const roles = [
-    { key: 'system' as const, color: 'bg-blue-500', label: '系统' },
+    { key: 'system' as const, color: 'bg-info', label: '系统' },
     { key: 'user' as const, color: 'bg-pass', label: '用户' },
-    { key: 'assistant' as const, color: 'bg-purple-500', label: '助手' },
+    { key: 'assistant' as const, color: 'bg-blocked', label: '助手' },
     { key: 'tool' as const, color: 'bg-warn', label: '工具' },
   ];
   return (

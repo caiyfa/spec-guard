@@ -10,7 +10,7 @@ export interface PurposeCardDef {
 
 const PURPOSE_COLORS: Record<string, { border: string; bg: string; text: string; badge: string }> = {
   test: { border: 'border-info/40', bg: 'bg-info/5', text: 'text-info', badge: 'bg-info/15 text-info' },
-  req: { border: 'border-purple-500/40', bg: 'bg-purple-900/10', text: 'text-purple-300', badge: 'bg-purple-900/30 text-purple-300' },
+  req: { border: 'border-blocked/35', bg: 'bg-blocked/12', text: 'text-blocked', badge: 'bg-blocked/12 text-blocked' },
 };
 
 function getPurposeStyle(colorKey: string) {

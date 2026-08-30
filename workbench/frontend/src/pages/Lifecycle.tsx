@@ -17,7 +17,7 @@ const FAILURE_VERDICTS = ['FAIL', 'ERROR', 'BLOCKED'];
 const STATUS_STYLE: Record<string, string> = {
   in_library: 'bg-pass/12 text-pass border-pass/35',
   draft_pending: 'bg-warn/12 text-warn border-warn/35',
-  draft_updating: 'bg-blue-900/40 text-blue-400 border-blue-700/50',
+  draft_updating: 'bg-info/12 text-info border-info/35',
   discarded: 'bg-gray-700/40 text-gray-400 border-gray-600',
   unknown: 'bg-gray-700/40 text-gray-500 border-gray-600',
 };
@@ -116,7 +116,7 @@ function LifecycleBoard() {
     { label: '测试总数', value: summary?.total || 0, filter: 'all' },
     { label: '已入库', value: summary?.in_library || 0, filter: 'in_library' },
     { label: '草稿待评审', value: summary?.draft_pending || 0, cls: 'text-warn', filter: 'draft' },
-    { label: '更新中', value: summary?.draft_updating || 0, cls: 'text-blue-400', filter: 'updating' },
+    { label: '更新中', value: summary?.draft_updating || 0, cls: 'text-info', filter: 'updating' },
     { label: '7 天内失败', value: summary?.recent_failed_7d || 0, cls: 'text-fail', filter: 'failed' },
     { label: '修复闭环', value: summary?.closed_loops || 0, cls: 'text-pass', filter: 'loop' },
   ];

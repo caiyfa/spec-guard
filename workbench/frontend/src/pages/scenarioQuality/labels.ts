@@ -6,7 +6,7 @@ export const GRADE_LABEL: Record<QualityGrade, string> = {
 };
 export const GRADE_CLS: Record<QualityGrade, string> = {
   deep: 'bg-pass/12 text-pass',
-  medium: 'bg-blue-900/40 text-blue-400',
+  medium: 'bg-info/12 text-info',
   shallow: 'bg-warn/12 text-warn',
   'no-verify': 'bg-fail/12 text-fail',
 };

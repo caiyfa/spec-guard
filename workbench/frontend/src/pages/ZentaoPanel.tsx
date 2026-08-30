@@ -18,7 +18,7 @@ const SEVERITIES = [
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'text-warn',
-  running: 'text-blue-400',
+  running: 'text-info',
   succeeded: 'text-pass',
   failed: 'text-fail',
   rolled_back: 'text-gray-400',
@@ -26,7 +26,7 @@ const STATUS_COLOR: Record<string, string> = {
   created: 'text-pass',
   cancelled: 'text-gray-400',
   suggested: 'text-warn',
-  confirmed: 'text-blue-400',
+  confirmed: 'text-info',
   written_back: 'text-pass',
   rejected: 'text-gray-400',
 };

@@ -5,7 +5,7 @@ import type { ChatReference } from './types';
 
 // T-933：材料状态徽标配色（与独立材料管理页语义一致）
 const MAT_STATUS_COLOR: Record<string, string> = {
-  uploaded: 'text-gray-500', parsing: 'text-warn', parsed: 'text-blue-400',
+  uploaded: 'text-gray-500', parsing: 'text-warn', parsed: 'text-info',
   indexed: 'text-pass', packed: 'text-info', failed: 'text-fail',
 };
 

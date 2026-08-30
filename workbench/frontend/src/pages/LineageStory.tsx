@@ -6,9 +6,9 @@ import { useEffect, useState } from 'react';
 import { lineageApi, type LineageTrace, type LineageNode } from '../api';
 
 const STAGE_META: Record<string, { label: string; color: string; bg: string }> = {
-  req: { label: '① 需求 specflow', color: 'text-purple-300', bg: 'bg-purple-900/30 border-purple-500/30' },
+  req: { label: '① 需求 specflow', color: 'text-blocked', bg: 'bg-blocked/12 border-blocked/35' },
   dev_ext: { label: '② 研发·边界外', color: 'text-gray-400', bg: 'bg-gray-800/60 border-gray-600/40' },
-  test: { label: '③ 验证 测试侧', color: 'text-cyan-300', bg: 'bg-cyan-900/30 border-cyan-500/30' },
+  test: { label: '③ 验证 测试侧', color: 'text-info', bg: 'bg-info/12 border-info/35' },
   feedback: { label: '④ 反哺 feedback', color: 'text-warn', bg: 'bg-warn/12 border-warn/35' },
 };
 
@@ -95,14 +95,14 @@ export default function LineageStory() {
         />
         <button
           onClick={() => runTrace('up')}
-          className="text-fs-body bg-purple-900/50 text-purple-200 px-3 py-1.5 rounded hover:bg-purple-900/70"
+          className="text-fs-body bg-blocked/12 text-blocked px-3 py-1.5 rounded hover:bg-blocked/12"
           title="审计 Q1：这个场景为什么存在？"
         >
           Q1 向上追溯 ⬆
         </button>
         <button
           onClick={() => runTrace('down')}
-          className="text-fs-body bg-cyan-900/50 text-cyan-200 px-3 py-1.5 rounded hover:bg-cyan-900/70"
+          className="text-fs-body bg-info/12 text-info px-3 py-1.5 rounded hover:bg-info/12"
           title="审计 Q2：这个需求被验证了吗？"
         >
           Q2 向下追溯 ⬇
@@ -152,7 +152,7 @@ export default function LineageStory() {
                             n.external
                               ? 'border-dashed border-gray-500/60 text-gray-400 bg-gray-900/40'
                               : n.type === 'fr' || n.type === 'ac'
-                                ? 'border-purple-500/40 text-purple-200 bg-purple-900/30'
+                                ? 'border-blocked/35 text-blocked bg-blocked/12'
                                 : 'border-border text-gray-300 bg-surface-3'
                           }`}
                           title={`${n.type} · ${n.title || ''}`}

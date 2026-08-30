@@ -1487,7 +1487,7 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
               if (!pt) return null;
               const isReq = pickedPurpose === 'requirement_interview';
               return (
-                <span className={`text-fs-aux px-1.5 py-0.5 rounded ${isReq ? 'bg-purple-900/30 text-purple-300' : 'bg-info/15 text-info'}`}>
+                <span className={`text-fs-aux px-1.5 py-0.5 rounded ${isReq ? 'bg-blocked/12 text-blocked' : 'bg-info/15 text-info'}`}>
                   {pt}
                 </span>
               );

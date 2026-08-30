@@ -66,7 +66,7 @@ export default function Feedback() {
 
   const statusColor = (s: string) => ({
     pending: 'text-warn',
-    in_progress: 'text-blue-400',
+    in_progress: 'text-info',
     closed: 'text-pass',
   }[s] || 'text-gray-400');
 
@@ -121,7 +121,7 @@ export default function Feedback() {
               {e.scenario_id && <div className="text-fs-body text-gray-600 mt-1">场景: {e.scenario_id}</div>}
               <div className="text-fs-body text-gray-600 mt-1">来源: {e.source === 'loop_a' ? '循环 A' : '循环 B'} · 创建: {e.created_at}</div>
               <div className="flex gap-1 mt-2">
-                {e.status === 'pending' && <button onClick={() => transition(e.spq_id, 'in_progress')} className="px-2 py-0.5 text-fs-body bg-blue-900/30 text-blue-400 rounded">→ 研发修改中</button>}
+                {e.status === 'pending' && <button onClick={() => transition(e.spq_id, 'in_progress')} className="px-2 py-0.5 text-fs-body bg-info/12 text-info rounded">→ 研发修改中</button>}
                 {e.status === 'in_progress' && <button onClick={() => transition(e.spq_id, 'closed')} className="px-2 py-0.5 text-fs-body bg-pass/12 text-pass rounded">→ 已闭环</button>}
                 {e.status !== 'pending' && <button onClick={() => transition(e.spq_id, 'pending')} className="px-2 py-0.5 text-fs-body bg-warn/12 text-warn rounded">→ 待讨论</button>}
               </div>

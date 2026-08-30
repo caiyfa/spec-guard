@@ -17,7 +17,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 // 与 App.tsx 顶栏角色徽章同一套配色
 const ROLE_BADGE: Record<string, string> = {
-  admin: 'bg-purple-900/50 text-purple-300',
+  admin: 'bg-blocked/12 text-blocked',
   tester: 'bg-info/15 text-info',
   product: 'bg-warn/12 text-warn',
   viewer: 'bg-gray-700 text-gray-400',

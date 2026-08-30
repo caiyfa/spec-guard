@@ -245,7 +245,7 @@ export default function SessionTree({ sessions, currentSessionId, currentWorkspa
           <span className="text-fs-aux text-gray-400 flex-shrink-0">已选 {selectedCount}</span>
           <button
             onClick={toggleShowSmoke}
-            className={`text-fs-aux px-1.5 py-1 rounded flex-shrink-0 transition-colors ${showSmoke ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}
+            className={`text-fs-aux px-1.5 py-1 rounded flex-shrink-0 transition-colors ${showSmoke ? 'bg-blocked/12 text-blocked' : 'bg-surface-3 text-gray-400 hover:text-gray-200'}`}
             title={showSmoke ? 'smoke 隔离会话展示中：点击隐藏' : '显示 smoke 隔离区冒烟会话（验收/调试产物，可勾选批量归档）'}>
             🧪 smoke{showSmoke ? ' ✓' : ''}
           </button>

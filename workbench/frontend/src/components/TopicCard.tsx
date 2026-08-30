@@ -27,7 +27,7 @@ const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
   chat: { label: '闲聊', cls: 'bg-gray-600/30 text-gray-500' },
   routine: { label: '沟通', cls: 'bg-sky-500/15 text-sky-400' },
   requirement: { label: '需求', cls: 'bg-warn/12 text-warn' },
-  test: { label: '测试', cls: 'bg-blue-500/15 text-blue-400' },
+  test: { label: '测试', cls: 'bg-info/12 text-info' },
   solution: { label: '方案', cls: 'bg-violet-500/15 text-violet-400' },
 };
 
@@ -140,7 +140,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
           </span>
         )}
         {!draft && (relatedCount || 0) > 0 && (
-          <button className="text-fs-aux shrink-0 text-emerald-400 hover:underline"
+          <button className="text-fs-aux shrink-0 text-pass hover:underline"
             title="跨群关联（点击查看多群证据并排）"
             onClick={e => { e.stopPropagation(); onOpenRelations?.(); }}>
             🔗 {(relatedCount || 0) + 1} 群
@@ -175,7 +175,7 @@ export default function TopicCard({ topic: t, draft, selected, onRefresh,
           )}
           {/* T-992：功能模块（FR 锚点派生，拍板②——非自由字段；留空不显示） */}
           {(t.modules || []).map(m => (
-            <span key={m} className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-fs-aux text-emerald-400"
+            <span key={m} className="px-1.5 py-0.5 rounded bg-pass/12 border border-pass/35 text-fs-aux text-pass"
               title="功能模块：由已确认的话题→FR 关联边派生（FR 模块目录）">
               🏷 {m}
             </span>

@@ -7,8 +7,8 @@ import { systemsApi, type SystemEntry } from '../../api';
 
 const TIER_BADGE: Record<string, string> = {
   config: 'bg-pass/12 text-pass',
-  template: 'bg-cyan-900/30 text-cyan-400',
-  code: 'bg-purple-900/30 text-purple-400',
+  template: 'bg-info/12 text-info',
+  code: 'bg-blocked/12 text-blocked',
 };
 
 // T-1011：接入分级人话解释（注册弹层选项下随选随显）

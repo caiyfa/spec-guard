@@ -27,11 +27,11 @@ const LENSES: { key: Lens; label: string; hint: string }[] = [
 ];
 
 const LENS_COLOR: Record<Lens, string> = {
-  topic: 'border-purple-500/60',
-  debt: 'border-cyan-500/60',
+  topic: 'border-blocked/35',
+  debt: 'border-info/35',
   map: 'border-gray-500/60',
   network: 'border-warn/35',
-  lineage: 'border-blue-500/60',
+  lineage: 'border-info/35',
 };
 
 // M-03：展示文案长度守卫
@@ -419,7 +419,7 @@ export default function GraphPanorama() {
             {l2.scenarios.map(sc => (
               <div key={sc.id} className="p-2 rounded border border-border bg-surface-3 text-fs-body">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                  <span className="w-2 h-2 rounded-full bg-info" />
                   <span className="text-gray-200 font-medium">{sc.id}</span>
                 </div>
                 <p className="text-gray-400 mt-1 line-clamp-1">{maxLen(sc.title)}</p>
@@ -450,7 +450,7 @@ export default function GraphPanorama() {
                   <p className="text-gray-500 mb-1">✅ 哪些场景覆盖我（covers）</p>
                   <div className="flex flex-wrap gap-1">
                     {backlink.data.covered_by.map(id => (
-                      <span key={id} className="bg-cyan-900/40 text-cyan-300 px-1.5 py-0.5 rounded">{id}</span>
+                      <span key={id} className="bg-info/12 text-info px-1.5 py-0.5 rounded">{id}</span>
                     ))}
                     {backlink.data.covered_by.length === 0 && <span className="text-gray-600">无</span>}
                   </div>
@@ -459,7 +459,7 @@ export default function GraphPanorama() {
                   <p className="text-gray-500 mb-1">🔄 哪些 delta 改过我（contains）</p>
                   <div className="flex flex-wrap gap-1">
                     {backlink.data.modified_by.map(id => (
-                      <span key={id} className="bg-purple-900/40 text-purple-300 px-1.5 py-0.5 rounded">{id}</span>
+                      <span key={id} className="bg-blocked/12 text-blocked px-1.5 py-0.5 rounded">{id}</span>
                     ))}
                     {backlink.data.modified_by.length === 0 && <span className="text-gray-600">无</span>}
                   </div>

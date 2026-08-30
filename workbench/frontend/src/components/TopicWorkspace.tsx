@@ -861,14 +861,14 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                     )}
                     {!pairRelated ? (
                       <span className="ml-auto flex gap-2">
-                        <button className="text-emerald-400 hover:underline"
+                        <button className="text-pass hover:underline"
                           onClick={() => relate(c.src, c.dst, true)}>🔗 关联</button>
                         <button className="text-gray-500 hover:text-fail"
                           title="忽略（留痕，不再重复推荐）"
                           onClick={() => relate(c.src, c.dst, false)}>忽略</button>
                       </span>
                     ) : (
-                      <span className="ml-auto text-emerald-400">已关联 ✓</span>
+                      <span className="ml-auto text-pass">已关联 ✓</span>
                     )}
                   </div>
                 </div>
@@ -909,7 +909,7 @@ const relateMaterial = async (topicId: string, materialId: string, confirmed: bo
                     {c.reasons.join('；')} · 分 {c.score}
                   </span>
                   <span className="flex gap-2 shrink-0">
-                    <button className="text-emerald-400 hover:underline"
+                    <button className="text-pass hover:underline"
                       onClick={() => relateMaterial(c.src, c.dst, true)}>🔗 关联</button>
                     <button className="text-gray-500 hover:text-fail"
                       title="忽略（留痕，不再重复推荐）"
