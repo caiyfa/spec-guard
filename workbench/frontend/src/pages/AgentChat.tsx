@@ -26,6 +26,9 @@ import { ChatInput } from './agentChat/ChatInput';
 import { SidePanel } from './agentChat/SidePanel';
 import { DiffOverlay } from './agentChat/WritingPanel';
 import { _store, ensureSideStore } from './agentChat/sessionStore';
+import { StatusBadge } from '../components/ui/StatusBadge';
+import { IconButton } from '../components/ui/IconButton';
+import { Icon } from '../components/ui/icons';
 
 export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string }) {
   const [searchParams] = useSearchParams();
@@ -1472,54 +1475,57 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
       <div className="flex-1 flex min-w-0">
         {/* 对话区（K-039：面板最大化 / SQL 探索模式时 display:none 隐藏——不卸载，WS/滚动/输入状态全保留） */}
         <div className={`flex-1 flex flex-col min-w-0 ${sideMax || dbExplore ? 'hidden' : ''}`}>
-          {/* 顶部信息栏 */}
-          <div className="flex-shrink-0 px-4 py-1.5 border-b border-border flex items-center gap-3 text-fs-aux text-gray-500">
-            {/* K-037：会话列表切换（细条收起时的另一入口） */}
-            <button onClick={toggleSessCollapsed} title={sessCollapsed ? '展开会话列表' : '收起会话列表'}
-              className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
-              {sessCollapsed ? '»' : '«'} 会话
-            </button>
-            <span className={wsState === 'open' ? 'text-pass' : 'text-fail'}>
-              {wsState === 'open' ? '●' : '○'}
-            </span>
-            {pickedPurpose && (() => {
-              const pt = purposes.find(p => p.id === pickedPurpose)?.title || PURPOSE_TITLE_FALLBACK[pickedPurpose];
-              if (!pt) return null;
-              const isReq = pickedPurpose === 'requirement_interview';
-              return (
-                <span className={`text-fs-aux px-1.5 py-0.5 rounded ${isReq ? 'bg-blocked/12 text-blocked' : 'bg-info/15 text-info'}`}>
-                  {pt}
-                </span>
-              );
-            })()}
-            {sessionTitle && <span className="text-gray-300 font-medium">{sessionTitle}</span>}
-            {sessionId && (
-              <>
-              <span className="font-mono text-gray-600">{sessionId}</span>
-              <button onClick={handleExportSession} className="text-gray-500 hover:text-info transition-colors" title="导出会话 JSON">
-                📥 导出
-              </button>
-              </>
-            )}
-            {stats && (
-              <>
-                <span>·</span>
-                <span className={stats.is_mock ? 'text-warn' : 'text-pass'}>
-                  {stats.is_mock ? 'MOCK' : 'LIVE'} ({stats.model})
-                </span>
-              </>
-            )}
-            <div className="ml-auto">{turnInfo}</div>
-            {/* K-039：专注模式（一键收起两侧，会话区占满；再点恢复原布局） */}
-            <button onClick={toggleFocusMode} title={focusMode ? '退出专注，恢复两侧面板' : '专注模式：收起两侧，会话区占满'}
-              className={`transition-colors px-1 rounded hover:bg-surface-3 ${focusMode ? 'text-info' : 'text-gray-500 hover:text-info'}`}>
-              {focusMode ? '⤡ 退出专注' : '⤢ 专注'}
-            </button>
-            {/* K-037：右侧面板切换 */}
-            <button onClick={toggleSideCollapsed} title={sideCollapsed ? '展开面板（待办/信息包/文件）' : '收起面板'}
-              className="text-gray-500 hover:text-info transition-colors px-1 rounded hover:bg-surface-3">
-              面板 {sideCollapsed ? '«' : '»'}
-            </button>
+          {/* 顶部信息栏（T-1044 U2 P1：三段分组——左「会话上下文」· 中「标题+mono ID」· 右「操作区」，
+              操作区图标按钮统一 ghost 档，动作图标退出 emoji） */}
+          <div className="flex-shrink-0 px-3 py-1.5 border-b border-border flex items-center gap-2.5 text-fs-aux text-gray-500">
+            {/* 左：会话上下文（K-037 列表开关 + WS 状态点 + purpose 徽章） */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <IconButton label={sessCollapsed ? '展开会话列表' : '收起会话列表'} onClick={toggleSessCollapsed}>
+                <Icon name={sessCollapsed ? 'collapseRight' : 'collapseLeft'} size={13} />
+              </IconButton>
+              <span
+                title={wsState === 'open' ? 'WS 已连接' : 'WS 未连接'}
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${wsState === 'open' ? 'bg-pass' : 'bg-fail'}`}
+              />
+              {pickedPurpose && (() => {
+                const pt = purposes.find(p => p.id === pickedPurpose)?.title || PURPOSE_TITLE_FALLBACK[pickedPurpose];
+                if (!pt) return null;
+                const isReq = pickedPurpose === 'requirement_interview';
+                return (
+                  <span className={`text-fs-aux font-semibold px-2 py-0.5 rounded-full ${isReq ? 'bg-blocked/12 text-blocked' : 'bg-info/12 text-info'}`}>
+                    {pt}
+                  </span>
+                );
+              })()}
+            </div>
+            {/* 中：标题 + mono ID + 模型状态徽章（溢出截断，不挤占两侧） */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {sessionTitle && <span className="text-gray-100 font-semibold truncate">{sessionTitle}</span>}
+              {sessionId && <span className="font-mono text-fs-micro text-gray-600 truncate">{sessionId}</span>}
+              {stats && (
+                <StatusBadge size="sm" status={stats.is_mock ? 'warn' : 'pass'}
+                  label={`${stats.is_mock ? 'MOCK' : 'LIVE'} · ${stats.model}`} />
+              )}
+            </div>
+            {/* 右：操作区（轮次信息 + 导出/专注/面板 ghost 图标按钮） */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {turnInfo && <span className="text-fs-micro text-gray-600 mr-1">{turnInfo}</span>}
+              {sessionId && (
+                <IconButton label="导出会话 JSON" onClick={handleExportSession}>
+                  <Icon name="export" size={13} />
+                </IconButton>
+              )}
+              {/* K-039：专注模式（一键收起两侧，会话区占满；再点恢复原布局） */}
+              <IconButton label={focusMode ? '退出专注，恢复两侧面板' : '专注模式：收起两侧，会话区占满'}
+                onClick={toggleFocusMode} active={focusMode}>
+                <Icon name="focus" size={13} />
+              </IconButton>
+              {/* K-037：右侧面板切换 */}
+              <IconButton label={sideCollapsed ? '展开面板（待办/信息包/文件）' : '收起面板'}
+                onClick={toggleSideCollapsed} active={!sideCollapsed}>
+                <Icon name="panel" size={13} />
+              </IconButton>
+            </div>
           </div>
 
           {/* 多轮会话导航：最近一条用户消息置顶（可收起，新消息到达自动恢复） */}
@@ -1624,63 +1630,44 @@ export default function AgentChat({ fixedPurpose = '' }: { fixedPurpose?: string
 
         {/* SQL 探索模式：主会话最小化为细条（K-037 细条同款视觉语言；点击恢复主对话区） */}
         {dbExplore && (
-          <div className="w-9 flex-shrink-0 border-r border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
+          <div className="w-10 flex-shrink-0 border-r border-border bg-surface-2/50 flex flex-col items-center py-2 gap-2">
             <button onClick={() => setDbExplore(false)} title="返回主会话（主对话区已最小化，WS/滚动状态保留）"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">💬</button>
+              className="w-7 h-7 rounded-md text-gray-500 hover:text-gray-100 hover:bg-surface-3 text-fs-body inline-flex items-center justify-center">💬</button>
             <span className="text-fs-micro text-gray-600" style={{ writingMode: 'vertical-rl' }}>主会话</span>
           </div>
         )}
 
-        {/* K-037：右侧面板（可收起为细条；收起时拖拽柄隐藏；SQL 探索模式强制完整展开居左） */}
+        {/* K-037：右侧面板（可收起为细条；收起时拖拽柄隐藏；SQL 探索模式强制完整展开居左）
+            T-1044 U2 P1：细条图标尺寸/间距统一（w-7 h-7 + gap-2），计数徽标 12% 淡填底丸（不贴边裸字） */}
         {sideCollapsed && !dbExplore ? (
-          <div className="w-9 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col items-center py-2 gap-1.5">
-            <button onClick={toggleSideCollapsed} title="展开面板"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
-              «
-            </button>
-            <button onClick={() => expandSideTo('todos')} title="待办"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
-              📋
-            </button>
-            <button onClick={() => expandSideTo('reading')} title={`阅读足迹（${readingFeed.length}）`}
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
-              📖
-              {readingFeed.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{readingFeed.length}</span>
-              )}
-            </button>
-            <button onClick={() => expandSideTo('drafts')} title={`草稿产物（${sessionDrafts.length}）`}
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
-              📝
-              {sessionDrafts.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{sessionDrafts.length}</span>
-              )}
-            </button>
-            <button onClick={() => expandSideTo('writing')} title={`更新足迹（${writingFeed.length}）`}
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
-              ✏️
-              {writingFeed.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{writingFeed.length}</span>
-              )}
-            </button>
-            <button onClick={() => expandSideTo('history')} title="提交历史 / 推送远端"
-              className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
-              📜
-            </button>
-            {scenarioMeta && (
-              <button onClick={() => expandSideTo('pack')} title={`信息包（${scenarioMeta.info_pack.length}）`}
-                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body">
-                📦
-              </button>
-            )}
-            {fileTabs.length > 0 && (
-              <button onClick={() => expandSideTo(activeSideTab.startsWith('file:') ? activeSideTab : `file:${fileTabs[fileTabs.length - 1].path}`)}
-                title={`文件页签（${fileTabs.length}）`}
-                className="w-6 h-6 rounded text-gray-500 hover:text-info hover:bg-surface-3 text-fs-body relative">
-                📄
-                <span className="absolute -top-0.5 -right-0.5 text-fs-micro text-info">{fileTabs.length}</span>
-              </button>
-            )}
+          <div className="w-10 flex-shrink-0 border-l border-border bg-surface-2/50 flex flex-col items-center py-2 gap-2">
+            {(() => {
+              const railBtn = (onClick: () => void, title: string, glyph: React.ReactNode, count = 0) => (
+                <button onClick={onClick} title={title}
+                  className="relative w-7 h-7 rounded-md text-gray-500 hover:text-gray-100 hover:bg-surface-3 text-fs-body inline-flex items-center justify-center">
+                  {glyph}
+                  {count > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[15px] px-0.5 rounded-full bg-info/15 text-info text-fs-micro leading-4 text-center">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </button>
+              );
+              return (
+                <>
+                  {railBtn(toggleSideCollapsed, '展开面板', <Icon name="collapseLeft" size={13} />)}
+                  {railBtn(() => expandSideTo('todos'), '待办', '📋')}
+                  {railBtn(() => expandSideTo('reading'), `阅读足迹（${readingFeed.length}）`, '📖', readingFeed.length)}
+                  {railBtn(() => expandSideTo('drafts'), `草稿产物（${sessionDrafts.length}）`, '📝', sessionDrafts.length)}
+                  {railBtn(() => expandSideTo('writing'), `更新足迹（${writingFeed.length}）`, '✏️', writingFeed.length)}
+                  {railBtn(() => expandSideTo('history'), '提交历史 / 推送远端', '📜')}
+                  {scenarioMeta && railBtn(() => expandSideTo('pack'), `信息包（${scenarioMeta.info_pack.length}）`, '📦')}
+                  {fileTabs.length > 0 && railBtn(
+                    () => expandSideTo(activeSideTab.startsWith('file:') ? activeSideTab : `file:${fileTabs[fileTabs.length - 1].path}`),
+                    `文件页签（${fileTabs.length}）`, '📄', fileTabs.length)}
+                </>
+              );
+            })()}
           </div>
         ) : (
           <>
