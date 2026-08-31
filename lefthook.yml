@@ -3,11 +3,13 @@
 # pre-push 挂不依赖存量基线的两道门禁，失败即拒绝推送。
 # T-1044 U4：UI 散点 ratchet 已清零（A 字号/B 原生色/D hex 硬零、C 手写弹层计数闸），
 # 按既有 ratchet 纪律以 glob+staged_files 挂 pre-commit——新代码必须干净，旧代码慢慢还。
+# glob 注意：lefthook v2.1.10 Windows 下带目录前缀的模式匹配不到暂存文件（08-31 主库验收
+# 探针实证），必须用 **/*.{ts,tsx} 形态；src 外仅 vite/vitest.config.ts 两配置文件，已预检不触闸。
 pre-commit:
   parallel: false
   commands:
     ui-ratchet:
-      glob: "workbench/frontend/src/**/*.{ts,tsx}"
+      glob: "**/*.{ts,tsx}"
       run: python workbench/frontend/scripts/ui_ratchet_check.py --staged {staged_files}
 pre-push:
   parallel: false
